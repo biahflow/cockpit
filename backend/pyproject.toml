@@ -1,0 +1,53 @@
+[project]
+name = "biahflow-api"
+version = "0.1.0"
+description = "API do portal Biahflow"
+requires-python = ">=3.12"
+dependencies = [
+  "Django>=5.1,<5.3",
+  "django-cors-headers>=4.9.0",
+  "djangorestframework>=3.15,<3.17",
+  "drf-spectacular>=0.28,<0.29",
+  "google-api-python-client>=2.198.0",
+  "google-auth>=2.56.2",
+  "openai>=2.52.1",
+  "psycopg[binary]>=3.2,<3.3",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.3,<10",
+  "pytest-django>=4.9,<5",
+  "pytest-cov>=6,<7",
+  "factory-boy>=3.3,<4",
+  "ruff>=0.9,<1",
+  "mypy>=1.14,<2",
+  "django-stubs>=5.1,<6",
+  "pip-audit>=2.8,<3",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+addopts = "--strict-markers --cov=apps.core --cov-config=.coveragerc --cov-report=term-missing --cov-fail-under=90"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+exclude = "(^apps/core/tests/|^tests/)"
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["*.migrations.*"]
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings"

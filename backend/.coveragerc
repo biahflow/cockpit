@@ -1,0 +1,8 @@
+[run]
+branch = true
+omit =
+    */migrations/*
+    */tests/*
+
+[report]
+skip_empty = true

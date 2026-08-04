@@ -1,0 +1,5391 @@
+openapi: 3.0.3
+info:
+  title: Biahflow API
+  version: 1.0.0
+paths:
+  /api/v1/agents/{key}/:
+    post:
+      operationId: v1_agents_create
+      description: Chat com um agente de IA especializado por área (revisão humana
+        obrigatória).
+      parameters:
+      - in: path
+        name: key
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AgentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AgentRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+          description: ''
+  /api/v1/ai/feedback/:
+    post:
+      operationId: v1_ai_feedback_create
+      description: Avaliação 👍/👎 de uma resposta da IA (só o dono da interação avalia).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiFeedback'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AiFeedback'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AiFeedback'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ai/metrics/:
+    get:
+      operationId: v1_ai_metrics_retrieve
+      description: Métricas de uso/qualidade da IA (admin) — base da avaliação contínua.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiMetrics'
+          description: ''
+  /api/v1/analytics/:
+    get:
+      operationId: v1_analytics_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsResponse'
+          description: ''
+  /api/v1/auth/csrf/:
+    get:
+      operationId: v1_auth_csrf_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfResponse'
+          description: ''
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/booking/book/:
+    post:
+      operationId: v1_booking_book_create
+      description: Reserva um horário para o lead qualificado.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BookingCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BookingCreate'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingCreateResponse'
+          description: ''
+  /api/v1/booking/slots/:
+    get:
+      operationId: v1_booking_slots_retrieve
+      description: Horários livres para um lead qualificado (autoriza por intake token
+        + booking token).
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingSlotsResponse'
+          description: ''
+  /api/v1/clients/:
+    get:
+      operationId: v1_clients_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Client'
+          description: ''
+    post:
+      operationId: v1_clients_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Client'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Client'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Client'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+          description: ''
+  /api/v1/clients/{id}/:
+    get:
+      operationId: v1_clients_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este client.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+          description: ''
+    put:
+      operationId: v1_clients_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este client.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Client'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Client'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Client'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+          description: ''
+    patch:
+      operationId: v1_clients_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este client.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClient'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClient'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClient'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+          description: ''
+    delete:
+      operationId: v1_clients_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este client.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/config/:
+    get:
+      operationId: v1_config_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+          description: ''
+    patch:
+      operationId: v1_config_partial_update
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedConfigPatch'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedConfigPatch'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedConfigPatch'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigFlag'
+          description: ''
+  /api/v1/config/sync-calendar/:
+    post:
+      operationId: v1_config_sync_calendar_create
+      description: Dispara manualmente a sincronização de eventos do calendário em
+        tarefas (admin).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarSyncResponse'
+          description: ''
+  /api/v1/contacts/:
+    get:
+      operationId: v1_contacts_list
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contact'
+          description: ''
+    post:
+      operationId: v1_contacts_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Contact'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Contact'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+  /api/v1/contacts/{id}/:
+    get:
+      operationId: v1_contacts_retrieve
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este contact.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+    put:
+      operationId: v1_contacts_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este contact.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Contact'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Contact'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+    patch:
+      operationId: v1_contacts_partial_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este contact.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedContact'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedContact'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedContact'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+          description: ''
+    delete:
+      operationId: v1_contacts_destroy
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este contact.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/:
+    get:
+      operationId: v1_dashboard_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+          description: ''
+  /api/v1/documents/:
+    get:
+      operationId: v1_documents_list
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+          description: ''
+    post:
+      operationId: v1_documents_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Document'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Document'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Document'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+  /api/v1/documents/{id}/:
+    get:
+      operationId: v1_documents_retrieve
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+    put:
+      operationId: v1_documents_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Document'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Document'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Document'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+    patch:
+      operationId: v1_documents_partial_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDocument'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDocument'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDocument'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+    delete:
+      operationId: v1_documents_destroy
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/documents/{id}/download/:
+    get:
+      operationId: v1_documents_download_retrieve
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+  /api/v1/documents/{id}/mark-signed/:
+    post:
+      operationId: v1_documents_mark_signed_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Document'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Document'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Document'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+  /api/v1/documents/{id}/remind-signature/:
+    post:
+      operationId: v1_documents_remind_signature_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Document'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Document'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Document'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+  /api/v1/documents/{id}/request-signature/:
+    post:
+      operationId: v1_documents_request_signature_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Document'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Document'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Document'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+  /api/v1/invitations/:
+    get:
+      operationId: v1_invitations_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invitation'
+          description: ''
+    post:
+      operationId: v1_invitations_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invitation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Invitation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Invitation'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+          description: ''
+  /api/v1/invitations/accept/:
+    post:
+      operationId: v1_invitations_accept_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitation'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/journey-phases/:
+    get:
+      operationId: v1_journey_phases_list
+      description: Template configurável das fases da jornada (admin). Espelha PipelineStage.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JourneyPhase'
+          description: ''
+    post:
+      operationId: v1_journey_phases_create
+      description: Template configurável das fases da jornada (admin). Espelha PipelineStage.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JourneyPhase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JourneyPhase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JourneyPhase'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyPhase'
+          description: ''
+  /api/v1/journey-phases/{id}/:
+    get:
+      operationId: v1_journey_phases_retrieve
+      description: Template configurável das fases da jornada (admin). Espelha PipelineStage.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este journey phase.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyPhase'
+          description: ''
+    put:
+      operationId: v1_journey_phases_update
+      description: Template configurável das fases da jornada (admin). Espelha PipelineStage.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este journey phase.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JourneyPhase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JourneyPhase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JourneyPhase'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyPhase'
+          description: ''
+    patch:
+      operationId: v1_journey_phases_partial_update
+      description: Template configurável das fases da jornada (admin). Espelha PipelineStage.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este journey phase.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedJourneyPhase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedJourneyPhase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedJourneyPhase'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyPhase'
+          description: ''
+    delete:
+      operationId: v1_journey_phases_destroy
+      description: Template configurável das fases da jornada (admin). Espelha PipelineStage.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este journey phase.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/leads/:
+    get:
+      operationId: v1_leads_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Lead'
+          description: ''
+    post:
+      operationId: v1_leads_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Lead'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Lead'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Lead'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+          description: ''
+  /api/v1/leads/{id}/:
+    get:
+      operationId: v1_leads_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este lead.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+          description: ''
+    put:
+      operationId: v1_leads_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este lead.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Lead'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Lead'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Lead'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+          description: ''
+    patch:
+      operationId: v1_leads_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este lead.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLead'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLead'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLead'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+          description: ''
+    delete:
+      operationId: v1_leads_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este lead.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/leads/{id}/convert/:
+    post:
+      operationId: v1_leads_convert_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este lead.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Lead'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Lead'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Lead'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lead'
+          description: ''
+  /api/v1/leads/intake/:
+    post:
+      operationId: v1_leads_intake_create
+      description: |-
+        Entrada pública de leads (formulário do site). Autentica por token compartilhado.
+
+        Qualifica o lead pela IA (FDD 013); se passar do corte e o calendário estiver ligado, devolve
+        um `booking_token` efêmero que autoriza o agendamento.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadIntake'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LeadIntake'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LeadIntake'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadIntakeResponse'
+          description: ''
+  /api/v1/meetings/:
+    get:
+      operationId: v1_meetings_list
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meeting'
+          description: ''
+    post:
+      operationId: v1_meetings_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
+  /api/v1/meetings/{id}/:
+    get:
+      operationId: v1_meetings_retrieve
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
+    put:
+      operationId: v1_meetings_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
+    patch:
+      operationId: v1_meetings_partial_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMeeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMeeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMeeting'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
+    delete:
+      operationId: v1_meetings_destroy
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/meetings/{id}/assessment/:
+    post:
+      operationId: v1_meetings_assessment_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
+  /api/v1/meetings/{id}/discovery/:
+    post:
+      operationId: v1_meetings_discovery_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
+  /api/v1/milestones/:
+    get:
+      operationId: v1_milestones_list
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Milestone'
+          description: ''
+    post:
+      operationId: v1_milestones_create
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+  /api/v1/milestones/{id}/:
+    get:
+      operationId: v1_milestones_retrieve
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este milestone.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+    put:
+      operationId: v1_milestones_update
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este milestone.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+    patch:
+      operationId: v1_milestones_partial_update
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este milestone.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMilestone'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMilestone'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMilestone'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+    delete:
+      operationId: v1_milestones_destroy
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este milestone.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/milestones/{id}/add-to-calendar/:
+    post:
+      operationId: v1_milestones_add_to_calendar_create
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este milestone.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Milestone'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Milestone'
+          description: ''
+  /api/v1/notifications/:
+    get:
+      operationId: v1_notifications_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/notifications/{id}/:
+    get:
+      operationId: v1_notifications_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/notifications/{id}/read/:
+    post:
+      operationId: v1_notifications_read_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Notification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Notification'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/notifications/read-all/:
+    post:
+      operationId: v1_notifications_read_all_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Notification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Notification'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/opportunities/:
+    get:
+      operationId: v1_opportunities_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Opportunity'
+          description: ''
+    post:
+      operationId: v1_opportunities_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+  /api/v1/opportunities/{id}/:
+    get:
+      operationId: v1_opportunities_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+    put:
+      operationId: v1_opportunities_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+    patch:
+      operationId: v1_opportunities_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOpportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOpportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOpportunity'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+    delete:
+      operationId: v1_opportunities_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/opportunities/{id}/contract/:
+    post:
+      operationId: v1_opportunities_contract_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+  /api/v1/opportunities/{id}/convert-to-project/:
+    post:
+      operationId: v1_opportunities_convert_to_project_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+  /api/v1/opportunities/{id}/proposal/:
+    post:
+      operationId: v1_opportunities_proposal_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+  /api/v1/opportunities/{id}/summary/:
+    post:
+      operationId: v1_opportunities_summary_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Opportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+  /api/v1/pendencias/:
+    get:
+      operationId: v1_pendencias_list
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pendencia'
+          description: ''
+    post:
+      operationId: v1_pendencias_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pendencia'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Pendencia'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Pendencia'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pendencia'
+          description: ''
+  /api/v1/pendencias/{id}/:
+    get:
+      operationId: v1_pendencias_retrieve
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pendencia.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pendencia'
+          description: ''
+    put:
+      operationId: v1_pendencias_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pendencia.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pendencia'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Pendencia'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Pendencia'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pendencia'
+          description: ''
+    patch:
+      operationId: v1_pendencias_partial_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pendencia.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPendencia'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPendencia'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPendencia'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pendencia'
+          description: ''
+    delete:
+      operationId: v1_pendencias_destroy
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pendencia.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/phase-deliverables/:
+    get:
+      operationId: v1_phase_deliverables_list
+      description: Template dos entregáveis de cada fase (admin).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PhaseDeliverable'
+          description: ''
+    post:
+      operationId: v1_phase_deliverables_create
+      description: Template dos entregáveis de cada fase (admin).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhaseDeliverable'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PhaseDeliverable'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhaseDeliverable'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseDeliverable'
+          description: ''
+  /api/v1/phase-deliverables/{id}/:
+    get:
+      operationId: v1_phase_deliverables_retrieve
+      description: Template dos entregáveis de cada fase (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase deliverable.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseDeliverable'
+          description: ''
+    put:
+      operationId: v1_phase_deliverables_update
+      description: Template dos entregáveis de cada fase (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase deliverable.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhaseDeliverable'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PhaseDeliverable'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhaseDeliverable'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseDeliverable'
+          description: ''
+    patch:
+      operationId: v1_phase_deliverables_partial_update
+      description: Template dos entregáveis de cada fase (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase deliverable.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPhaseDeliverable'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPhaseDeliverable'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPhaseDeliverable'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseDeliverable'
+          description: ''
+    delete:
+      operationId: v1_phase_deliverables_destroy
+      description: Template dos entregáveis de cada fase (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase deliverable.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pipeline-stages/:
+    get:
+      operationId: v1_pipeline_stages_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PipelineStage'
+          description: ''
+    post:
+      operationId: v1_pipeline_stages_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PipelineStage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PipelineStage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PipelineStage'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineStage'
+          description: ''
+  /api/v1/pipeline-stages/{id}/:
+    get:
+      operationId: v1_pipeline_stages_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pipeline stage.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineStage'
+          description: ''
+    put:
+      operationId: v1_pipeline_stages_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pipeline stage.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PipelineStage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PipelineStage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PipelineStage'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineStage'
+          description: ''
+    patch:
+      operationId: v1_pipeline_stages_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pipeline stage.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPipelineStage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPipelineStage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPipelineStage'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineStage'
+          description: ''
+    delete:
+      operationId: v1_pipeline_stages_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pipeline stage.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/portal/projects/{id}/snapshot/:
+    get:
+      operationId: v1_portal_projects_snapshot_retrieve
+      description: |-
+        Snapshot read-only de um projeto para o portal do cliente (ADR 0003).
+
+        Autenticado por service token (Bearer) fora do fluxo de sessão/RBAC interno, para uso
+        servidor-a-servidor no backfill/reconciliação. Só expõe dados do projeto — nada comercial.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/project-deliverables/:
+    get:
+      operationId: v1_project_deliverables_list
+      description: Entregáveis por projeto — a equipe marca como entregue (delivery/admin).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectDeliverable'
+          description: ''
+    post:
+      operationId: v1_project_deliverables_create
+      description: Entregáveis por projeto — a equipe marca como entregue (delivery/admin).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectDeliverable'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectDeliverable'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectDeliverable'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDeliverable'
+          description: ''
+  /api/v1/project-deliverables/{id}/:
+    get:
+      operationId: v1_project_deliverables_retrieve
+      description: Entregáveis por projeto — a equipe marca como entregue (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project deliverable.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDeliverable'
+          description: ''
+    put:
+      operationId: v1_project_deliverables_update
+      description: Entregáveis por projeto — a equipe marca como entregue (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project deliverable.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectDeliverable'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectDeliverable'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectDeliverable'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDeliverable'
+          description: ''
+    patch:
+      operationId: v1_project_deliverables_partial_update
+      description: Entregáveis por projeto — a equipe marca como entregue (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project deliverable.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectDeliverable'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectDeliverable'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectDeliverable'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDeliverable'
+          description: ''
+    delete:
+      operationId: v1_project_deliverables_destroy
+      description: Entregáveis por projeto — a equipe marca como entregue (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project deliverable.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/project-phases/:
+    get:
+      operationId: v1_project_phases_list
+      description: Estado da jornada por projeto (leitura para todos; equipe edita
+        `target_date`).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectPhase'
+          description: ''
+    post:
+      operationId: v1_project_phases_create
+      description: Estado da jornada por projeto (leitura para todos; equipe edita
+        `target_date`).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPhase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectPhase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectPhase'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPhase'
+          description: ''
+  /api/v1/project-phases/{id}/:
+    get:
+      operationId: v1_project_phases_retrieve
+      description: Estado da jornada por projeto (leitura para todos; equipe edita
+        `target_date`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project phase.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPhase'
+          description: ''
+    put:
+      operationId: v1_project_phases_update
+      description: Estado da jornada por projeto (leitura para todos; equipe edita
+        `target_date`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project phase.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPhase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectPhase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectPhase'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPhase'
+          description: ''
+    patch:
+      operationId: v1_project_phases_partial_update
+      description: Estado da jornada por projeto (leitura para todos; equipe edita
+        `target_date`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project phase.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectPhase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectPhase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectPhase'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPhase'
+          description: ''
+    delete:
+      operationId: v1_project_phases_destroy
+      description: Estado da jornada por projeto (leitura para todos; equipe edita
+        `target_date`).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project phase.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/projects/:
+    get:
+      operationId: v1_projects_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+          description: ''
+    post:
+      operationId: v1_projects_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Project'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Project'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/:
+    get:
+      operationId: v1_projects_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    put:
+      operationId: v1_projects_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Project'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Project'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    patch:
+      operationId: v1_projects_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProject'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProject'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProject'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    delete:
+      operationId: v1_projects_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/projects/{id}/advance-phase/:
+    post:
+      operationId: v1_projects_advance_phase_create
+      description: Conclui a fase ativa da jornada e ativa a próxima (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectPhase'
+          description: ''
+  /api/v1/projects/{id}/assistant/:
+    post:
+      operationId: v1_projects_assistant_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Project'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Project'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/next-steps/:
+    post:
+      operationId: v1_projects_next_steps_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Project'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Project'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/risk/:
+    get:
+      operationId: v1_projects_risk_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/projects/{id}/summary/:
+    post:
+      operationId: v1_projects_summary_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Project'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Project'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/recommendations/:
+    get:
+      operationId: v1_recommendations_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationsResponse'
+          description: ''
+  /api/v1/risk/:
+    get:
+      operationId: v1_risk_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskResponse'
+          description: ''
+  /api/v1/services/:
+    get:
+      operationId: v1_services_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+          description: ''
+    post:
+      operationId: v1_services_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Service'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Service'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Service'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+          description: ''
+  /api/v1/services/{id}/:
+    get:
+      operationId: v1_services_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este service.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+          description: ''
+    put:
+      operationId: v1_services_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este service.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Service'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Service'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Service'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+          description: ''
+    patch:
+      operationId: v1_services_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este service.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedService'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedService'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedService'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+          description: ''
+    delete:
+      operationId: v1_services_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este service.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tasks/:
+    get:
+      operationId: v1_tasks_list
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+          description: ''
+    post:
+      operationId: v1_tasks_create
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Task'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Task'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Task'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+  /api/v1/tasks/{id}/:
+    get:
+      operationId: v1_tasks_retrieve
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    put:
+      operationId: v1_tasks_update
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Task'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Task'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Task'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    patch:
+      operationId: v1_tasks_partial_update
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTask'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTask'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTask'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    delete:
+      operationId: v1_tasks_destroy
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tasks/{id}/add-to-calendar/:
+    post:
+      operationId: v1_tasks_add_to_calendar_create
+      description: Ação para lançar o item (marco/tarefa) no Google Calendar (atrás
+        de flag).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Task'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Task'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Task'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+  /api/v1/tasks/{id}/link-external/:
+    post:
+      operationId: v1_tasks_link_external_create
+      description: Vincula a tarefa a uma issue já existente no fornecedor (Linear/GitHub).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkExternal'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LinkExternal'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LinkExternal'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+  /api/v1/tasks/{id}/push-external/:
+    post:
+      operationId: v1_tasks_push_external_create
+      description: Cria a issue no fornecedor e vincula a tarefa ao id retornado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkExternal'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LinkExternal'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LinkExternal'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+  /api/v1/tasks/sync/:
+    post:
+      operationId: v1_tasks_sync_create
+      description: Entrada da sincronia de tarefas (Linear/GitHub → Biahflow). Autentica
+        por token.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskSync'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskSync'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskSync'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/users/:
+    get:
+      operationId: v1_users_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/users/{id}/:
+    get:
+      operationId: v1_users_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este usuário.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+components:
+  schemas:
+    AcceptInvitation:
+      type: object
+      properties:
+        token:
+          type: string
+          format: uuid
+        username:
+          type: string
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+      required:
+      - password
+      - token
+      - username
+    AgentRequest:
+      type: object
+      properties:
+        question:
+          type: string
+      required:
+      - question
+    AgentResponse:
+      type: object
+      properties:
+        text:
+          type: string
+        interaction:
+          type: integer
+      required:
+      - interaction
+      - text
+    AiFeedback:
+      type: object
+      properties:
+        interaction:
+          type: integer
+        rating:
+          type: integer
+      required:
+      - interaction
+      - rating
+    AiFitEnum:
+      enum:
+      - high
+      - medium
+      - low
+      type: string
+      description: |-
+        * `high` - Alto
+        * `medium` - Médio
+        * `low` - Baixo
+    AiMetrics:
+      type: object
+      properties:
+        total:
+          type: integer
+        positive_rate:
+          type: number
+          format: double
+          nullable: true
+        by_feature:
+          type: array
+          items: {}
+      required:
+      - by_feature
+      - positive_rate
+      - total
+    AnalyticsResponse:
+      type: object
+      properties:
+        funnel:
+          type: object
+          additionalProperties: {}
+        win_rate:
+          type: number
+          format: double
+          nullable: true
+        avg_ticket:
+          type: number
+          format: double
+        avg_cycle_days:
+          type: number
+          format: double
+          nullable: true
+        pipeline:
+          type: array
+          items: {}
+        roi:
+          type: object
+          additionalProperties: {}
+      required:
+      - avg_cycle_days
+      - avg_ticket
+      - funnel
+      - pipeline
+      - roi
+      - win_rate
+    BookingCreate:
+      type: object
+      properties:
+        token:
+          type: string
+        slot_start:
+          type: string
+          format: date-time
+      required:
+      - slot_start
+      - token
+    BookingCreateResponse:
+      type: object
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        link:
+          type: string
+      required:
+      - link
+      - starts_at
+    BookingSlotsResponse:
+      type: object
+      properties:
+        slots:
+          type: array
+          items:
+            type: string
+            format: date-time
+      required:
+      - slots
+    CalendarSyncResponse:
+      type: object
+      properties:
+        created:
+          type: integer
+        skipped:
+          type: integer
+      required:
+      - created
+      - skipped
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        tax_id:
+          type: string
+          maxLength: 32
+        owner:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ClientStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - owner
+      - status
+      - updated_at
+    ClientStatusEnum:
+      enum:
+      - prospect
+      - active
+      type: string
+      description: |-
+        * `prospect` - Prospect
+        * `active` - Ativo
+    ConfigFlag:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+        configured:
+          type: boolean
+        toggleable:
+          type: boolean
+      required:
+      - configured
+      - enabled
+      - key
+      - label
+      - toggleable
+    ConfigResponse:
+      type: object
+      properties:
+        ai_enabled:
+          type: boolean
+        calendar_enabled:
+          type: boolean
+        esign_enabled:
+          type: boolean
+        integrations:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - ai_enabled
+      - calendar_enabled
+      - esign_enabled
+      - integrations
+    Contact:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 32
+        job_title:
+          type: string
+          maxLength: 128
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client
+      - created_at
+      - id
+      - name
+      - updated_at
+    CsrfResponse:
+      type: object
+      properties:
+        csrfToken:
+          type: string
+      required:
+      - csrfToken
+    DashboardResponse:
+      type: object
+      properties:
+        active_projects:
+          type: integer
+        overdue_count:
+          type: integer
+        pipeline:
+          type: array
+          items: {}
+        upcoming_tasks:
+          type: array
+          items: {}
+      required:
+      - active_projects
+      - overdue_count
+      - pipeline
+      - upcoming_tasks
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+          nullable: true
+        opportunity:
+          type: integer
+          nullable: true
+        project:
+          type: integer
+          nullable: true
+        file:
+          type: string
+          format: uri
+        drive_link:
+          type: string
+          format: uri
+          readOnly: true
+        original_name:
+          type: string
+          readOnly: true
+        uploaded_by:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        signature_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignatureRequest'
+          readOnly: true
+      required:
+      - created_at
+      - drive_link
+      - id
+      - original_name
+      - signature_requests
+      - uploaded_by
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        accepted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - accepted_at
+      - created_at
+      - email
+      - expires_at
+      - id
+      - role
+    JourneyPhase:
+      type: object
+      description: Fase do template da Jornada de Transformação (config admin, vocabulário
+        editável).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        description:
+          type: string
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deliverables:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhaseDeliverable'
+          readOnly: true
+      required:
+      - deliverables
+      - id
+      - name
+    KindEnum:
+      enum:
+      - open
+      - won
+      - lost
+      type: string
+      description: |-
+        * `open` - Aberta
+        * `won` - Ganho
+        * `lost` - Perdido
+    Lead:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        company:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 32
+        message:
+          type: string
+        source:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/LeadStatusEnum'
+        ai_fit:
+          allOf:
+          - $ref: '#/components/schemas/AiFitEnum'
+          readOnly: true
+        ai_score:
+          type: integer
+          readOnly: true
+          nullable: true
+        ai_summary:
+          type: string
+          readOnly: true
+        ai_recommended_action:
+          type: string
+          readOnly: true
+        qualified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        client:
+          type: integer
+          readOnly: true
+          nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_fit
+      - ai_recommended_action
+      - ai_score
+      - ai_summary
+      - client
+      - created_at
+      - email
+      - id
+      - name
+      - opportunity
+      - qualified_at
+      - source
+      - updated_at
+    LeadIntake:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+        company:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 32
+        message:
+          type: string
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+        website:
+          type: string
+      required:
+      - email
+      - name
+    LeadIntakeResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        qualified:
+          type: boolean
+        booking_available:
+          type: boolean
+        booking_token:
+          type: string
+          nullable: true
+      required:
+      - booking_available
+      - booking_token
+      - detail
+      - qualified
+    LeadStatusEnum:
+      enum:
+      - new
+      - contacted
+      - qualified
+      - discarded
+      type: string
+      description: |-
+        * `new` - Novo
+        * `contacted` - Contatado
+        * `qualified` - Qualificado
+        * `discarded` - Descartado
+    LinkExternal:
+      type: object
+      description: Vincula uma Task a uma issue existente no fornecedor.
+      properties:
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        external_id:
+          type: string
+          maxLength: 128
+      required:
+      - external_id
+      - source
+    Login:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - username
+    Meeting:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        date:
+          type: string
+          format: date
+        recording_url:
+          type: string
+          format: uri
+          maxLength: 200
+        transcript:
+          type: string
+        status:
+          $ref: '#/components/schemas/MeetingStatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - date
+      - id
+      - project
+      - title
+      - updated_at
+    MeetingStatusEnum:
+      enum:
+      - scheduled
+      - held
+      type: string
+      description: |-
+        * `scheduled` - Agendada
+        * `held` - Realizada
+    Milestone:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        status:
+          $ref: '#/components/schemas/WorkItemStatusEnum'
+        is_overdue:
+          type: boolean
+          readOnly: true
+        party:
+          $ref: '#/components/schemas/PartyEnum'
+        source:
+          type: string
+          readOnly: true
+          default: biahflow
+        external_id:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - completed_at
+      - created_at
+      - due_date
+      - external_id
+      - id
+      - is_overdue
+      - owner
+      - project
+      - source
+      - title
+      - updated_at
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        kind:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        url:
+          type: string
+          readOnly: true
+        read:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - kind
+      - message
+      - read
+      - url
+    Opportunity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        contact:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 255
+        scope:
+          type: string
+        estimated_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        stage:
+          type: integer
+        stage_name:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+        expected_close_date:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client
+      - created_at
+      - estimated_value
+      - expected_close_date
+      - id
+      - owner
+      - stage
+      - stage_name
+      - title
+      - updated_at
+    PartyEnum:
+      enum:
+      - provider
+      - client
+      type: string
+      description: |-
+        * `provider` - Fornecedor
+        * `client` - Cliente
+    PatchedClient:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        tax_id:
+          type: string
+          maxLength: 32
+        owner:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ClientStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedConfigPatch:
+      type: object
+      properties:
+        key:
+          type: string
+        enabled:
+          type: boolean
+    PatchedContact:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 32
+        job_title:
+          type: string
+          maxLength: 128
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+          nullable: true
+        opportunity:
+          type: integer
+          nullable: true
+        project:
+          type: integer
+          nullable: true
+        file:
+          type: string
+          format: uri
+        drive_link:
+          type: string
+          format: uri
+          readOnly: true
+        original_name:
+          type: string
+          readOnly: true
+        uploaded_by:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        signature_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignatureRequest'
+          readOnly: true
+    PatchedJourneyPhase:
+      type: object
+      description: Fase do template da Jornada de Transformação (config admin, vocabulário
+        editável).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        description:
+          type: string
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        deliverables:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhaseDeliverable'
+          readOnly: true
+    PatchedLead:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        company:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 32
+        message:
+          type: string
+        source:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/LeadStatusEnum'
+        ai_fit:
+          allOf:
+          - $ref: '#/components/schemas/AiFitEnum'
+          readOnly: true
+        ai_score:
+          type: integer
+          readOnly: true
+          nullable: true
+        ai_summary:
+          type: string
+          readOnly: true
+        ai_recommended_action:
+          type: string
+          readOnly: true
+        qualified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        client:
+          type: integer
+          readOnly: true
+          nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedMeeting:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        date:
+          type: string
+          format: date
+        recording_url:
+          type: string
+          format: uri
+          maxLength: 200
+        transcript:
+          type: string
+        status:
+          $ref: '#/components/schemas/MeetingStatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedMilestone:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        status:
+          $ref: '#/components/schemas/WorkItemStatusEnum'
+        is_overdue:
+          type: boolean
+          readOnly: true
+        party:
+          $ref: '#/components/schemas/PartyEnum'
+        source:
+          type: string
+          readOnly: true
+          default: biahflow
+        external_id:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedOpportunity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        contact:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 255
+        scope:
+          type: string
+        estimated_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        stage:
+          type: integer
+        stage_name:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+        expected_close_date:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedPendencia:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/PendenciaStatusEnum'
+        party:
+          $ref: '#/components/schemas/PartyEnum'
+        owner:
+          type: integer
+          readOnly: true
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedPhaseDeliverable:
+      type: object
+      description: Entregável do template de uma fase (config admin).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        phase:
+          type: integer
+        name:
+          type: string
+          maxLength: 160
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+    PatchedPipelineStage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+    PatchedProject:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        opportunity:
+          type: integer
+          readOnly: true
+          nullable: true
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/ProjectStatusEnum'
+        service:
+          type: integer
+          nullable: true
+        actual_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        is_overdue:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedProjectDeliverable:
+      type: object
+      description: Entregável de um projeto — só `status`/`document` são editáveis
+        (marcar entregue).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project_phase:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ProjectDeliverableStatusEnum'
+        document:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+          readOnly: true
+        delivered_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedProjectPhase:
+      type: object
+      description: Fase da jornada de um projeto (estado). Só `target_date` é editável
+        pela equipe.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        phase:
+          type: integer
+          readOnly: true
+        phase_name:
+          type: string
+          readOnly: true
+        phase_description:
+          type: string
+          readOnly: true
+        phase_position:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProjectPhaseStatusEnum'
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        target_date:
+          type: string
+          format: date
+          nullable: true
+        deliverables:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectDeliverable'
+          readOnly: true
+    PatchedService:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedTask:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        status:
+          $ref: '#/components/schemas/WorkItemStatusEnum'
+        is_overdue:
+          type: boolean
+          readOnly: true
+        party:
+          $ref: '#/components/schemas/PartyEnum'
+        source:
+          type: string
+          readOnly: true
+          default: biahflow
+        external_id:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        milestone:
+          type: integer
+          nullable: true
+    Pendencia:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/PendenciaStatusEnum'
+        party:
+          $ref: '#/components/schemas/PartyEnum'
+        owner:
+          type: integer
+          readOnly: true
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - owner
+      - project
+      - resolved_at
+      - title
+      - updated_at
+    PendenciaStatusEnum:
+      enum:
+      - open
+      - resolved
+      type: string
+      description: |-
+        * `open` - Aberta
+        * `resolved` - Resolvida
+    PhaseDeliverable:
+      type: object
+      description: Entregável do template de uma fase (config admin).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        phase:
+          type: integer
+        name:
+          type: string
+          maxLength: 160
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - id
+      - name
+      - phase
+    PipelineStage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - id
+      - name
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        opportunity:
+          type: integer
+          readOnly: true
+          nullable: true
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/ProjectStatusEnum'
+        service:
+          type: integer
+          nullable: true
+        actual_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        is_overdue:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client
+      - created_at
+      - due_date
+      - id
+      - is_overdue
+      - name
+      - opportunity
+      - owner
+      - start_date
+      - updated_at
+    ProjectDeliverable:
+      type: object
+      description: Entregável de um projeto — só `status`/`document` são editáveis
+        (marcar entregue).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project_phase:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ProjectDeliverableStatusEnum'
+        document:
+          type: integer
+          nullable: true
+        position:
+          type: integer
+          readOnly: true
+        delivered_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - delivered_at
+      - id
+      - name
+      - position
+      - project_phase
+      - updated_at
+    ProjectDeliverableStatusEnum:
+      enum:
+      - pending
+      - delivered
+      type: string
+      description: |-
+        * `pending` - Pendente
+        * `delivered` - Entregue
+    ProjectPhase:
+      type: object
+      description: Fase da jornada de um projeto (estado). Só `target_date` é editável
+        pela equipe.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        phase:
+          type: integer
+          readOnly: true
+        phase_name:
+          type: string
+          readOnly: true
+        phase_description:
+          type: string
+          readOnly: true
+        phase_position:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProjectPhaseStatusEnum'
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        target_date:
+          type: string
+          format: date
+          nullable: true
+        deliverables:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectDeliverable'
+          readOnly: true
+      required:
+      - completed_at
+      - deliverables
+      - id
+      - phase
+      - phase_description
+      - phase_name
+      - phase_position
+      - project
+      - started_at
+      - status
+    ProjectPhaseStatusEnum:
+      enum:
+      - locked
+      - active
+      - done
+      type: string
+      description: |-
+        * `locked` - Bloqueada
+        * `active` - Em andamento
+        * `done` - Concluída
+    ProjectStatusEnum:
+      enum:
+      - planning
+      - active
+      - on_hold
+      - completed
+      type: string
+      description: |-
+        * `planning` - Planejamento
+        * `active` - Ativo
+        * `on_hold` - Em espera
+        * `completed` - Concluído
+    RecommendationsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {}
+      required:
+      - items
+    RiskResponse:
+      type: object
+      properties:
+        projects:
+          type: array
+          items: {}
+      required:
+      - projects
+    RoleEnum:
+      enum:
+      - admin
+      - sales
+      - delivery
+      type: string
+      description: |-
+        * `admin` - Administrador
+        * `sales` - Vendas
+        * `delivery` - Entrega
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    SignatureRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        signer_email:
+          type: string
+          format: email
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SignatureRequestStatusEnum'
+          readOnly: true
+        reminded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        signed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - reminded_at
+      - signed_at
+      - signer_email
+      - status
+    SignatureRequestStatusEnum:
+      enum:
+      - pending
+      - signed
+      - declined
+      type: string
+      description: |-
+        * `pending` - Pendente
+        * `signed` - Assinado
+        * `declined` - Recusado
+    SourceEnum:
+      enum:
+      - linear
+      - github
+      type: string
+      description: |-
+        * `linear` - linear
+        * `github` - github
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+        due_date:
+          type: string
+          format: date
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        status:
+          $ref: '#/components/schemas/WorkItemStatusEnum'
+        is_overdue:
+          type: boolean
+          readOnly: true
+        party:
+          $ref: '#/components/schemas/PartyEnum'
+        source:
+          type: string
+          readOnly: true
+          default: biahflow
+        external_id:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        milestone:
+          type: integer
+          nullable: true
+      required:
+      - completed_at
+      - created_at
+      - due_date
+      - external_id
+      - id
+      - is_overdue
+      - owner
+      - project
+      - source
+      - title
+      - updated_at
+    TaskSync:
+      type: object
+      description: Entrada do webhook de sincronia (Linear/GitHub → Biahflow).
+      properties:
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        external_id:
+          type: string
+          maxLength: 128
+        external_status:
+          type: string
+          maxLength: 64
+      required:
+      - external_id
+      - external_status
+      - source
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: Usuário
+          description: Obrigatório. 150 caracteres ou menos. Letras, números e @/./+/-/_
+            apenas.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          title: Primeiro nome
+          maxLength: 150
+        last_name:
+          type: string
+          title: Último nome
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Endereço de email
+          maxLength: 254
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+      required:
+      - id
+      - username
+    WorkItemStatusEnum:
+      enum:
+      - todo
+      - in_progress
+      - done
+      type: string
+      description: |-
+        * `todo` - A fazer
+        * `in_progress` - Em andamento
+        * `done` - Concluído
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

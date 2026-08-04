@@ -1,0 +1,196 @@
+"""Integração com Google Calendar (atrás da flag `CALENDAR_ENABLED`).
+
+Reusa as credenciais de conta de serviço do Drive. Desligado por padrão. Dois sentidos:
+
+- **Outbound**: `create_event(...)` lança um marco/tarefa no calendário (via `CalendarActionMixin`).
+- **Inbound**: `sync_calendar()` lê eventos do calendário compartilhado e cria tarefas no projeto
+  indicado por um marcador `#proj-<id>` no título/descrição do evento (FDD 012). Idempotente via
+  `Task.source`/`external_id`; ignora eventos que nós mesmos criamos (carimbados com `biahflow_origin`).
+
+A chamada real à API do Google fica fora da cobertura (`# pragma: no cover`); o mapeamento e a
+orquestração são puros/testáveis.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import date, datetime, timedelta
+
+from django.conf import settings
+from django.utils import timezone
+
+from . import flags
+
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
+
+# Marcador que amarra um evento a um projeto: "#proj-42" no título ou na descrição.
+PROJECT_MARKER = re.compile(r"#proj-(\d+)")
+# Chave em extendedProperties.private que marca eventos originados no próprio Biahflow (anti-loop).
+ORIGIN_KEY = "biahflow_origin"
+# Origem gravada em Task.source para as tarefas nascidas de eventos do calendário.
+CALENDAR_TASK_SOURCE = "calendar"
+# Janela (dias a partir de hoje) varrida a cada sincronização.
+SYNC_WINDOW_DAYS = 30
+
+
+def is_enabled() -> bool:
+    return flags.is_enabled("calendar")
+
+
+def _service():  # pragma: no cover - I/O com a API do Google
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+
+    if settings.GOOGLE_SERVICE_ACCOUNT_INFO:
+        import json
+
+        info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_INFO)
+        credentials = service_account.Credentials.from_service_account_info(info, scopes=[CALENDAR_SCOPE])
+    else:
+        credentials = service_account.Credentials.from_service_account_file(
+            settings.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=[CALENDAR_SCOPE]
+        )
+    return build("calendar", "v3", credentials=credentials, cache_discovery=False)
+
+
+def create_event(summary: str, day: date, description: str = "", origin: str = "") -> str:  # pragma: no cover - I/O
+    service = _service()
+    body: dict = {
+        "summary": summary,
+        "description": description,
+        "start": {"date": day.isoformat()},
+        "end": {"date": day.isoformat()},
+    }
+    if origin:
+        body["extendedProperties"] = {"private": {ORIGIN_KEY: origin}}
+    created = service.events().insert(calendarId=settings.GOOGLE_CALENDAR_ID, body=body).execute()
+    return created.get("htmlLink", "")
+
+
+def create_timed_event(
+    summary: str, start: datetime, end: datetime, description: str = "",
+    attendee_email: str = "", origin: str = "",
+) -> tuple[str, str]:  # pragma: no cover - I/O
+    """Cria um evento com horário (não all-day), opcionalmente convidando o lead. Retorna (id, link)."""
+    service = _service()
+    body: dict = {
+        "summary": summary,
+        "description": description,
+        "start": {"dateTime": start.isoformat()},
+        "end": {"dateTime": end.isoformat()},
+    }
+    if attendee_email:
+        body["attendees"] = [{"email": attendee_email}]
+    if origin:
+        body["extendedProperties"] = {"private": {ORIGIN_KEY: origin}}
+    calendar_id = settings.GOOGLE_BOOKING_CALENDAR_ID or settings.GOOGLE_CALENDAR_ID
+    created = service.events().insert(calendarId=calendar_id, body=body).execute()
+    return created.get("id", ""), created.get("htmlLink", "")
+
+
+def freebusy(time_min: datetime, time_max: datetime) -> list[tuple[datetime, datetime]]:  # pragma: no cover - I/O
+    """Períodos ocupados do calendário de reservas no intervalo dado."""
+    from datetime import datetime as _dt
+
+    service = _service()
+    calendar_id = settings.GOOGLE_BOOKING_CALENDAR_ID or settings.GOOGLE_CALENDAR_ID
+    result = service.freebusy().query(body={
+        "timeMin": time_min.isoformat(),
+        "timeMax": time_max.isoformat(),
+        "items": [{"id": calendar_id}],
+    }).execute()
+    busy = result.get("calendars", {}).get(calendar_id, {}).get("busy", [])
+    return [(_dt.fromisoformat(b["start"]), _dt.fromisoformat(b["end"])) for b in busy]
+
+
+def list_events(time_min: datetime, time_max: datetime) -> list[dict]:  # pragma: no cover - I/O
+    service = _service()
+    result = (
+        service.events()
+        .list(
+            calendarId=settings.GOOGLE_CALENDAR_ID,
+            timeMin=time_min.isoformat(),
+            timeMax=time_max.isoformat(),
+            singleEvents=True,
+            orderBy="startTime",
+        )
+        .execute()
+    )
+    return result.get("items", [])
+
+
+def _event_day(event: dict) -> date | None:
+    """Data do evento: all-day (`start.date`) ou com horário (`start.dateTime`)."""
+    start = event.get("start", {})
+    if start.get("date"):
+        return date.fromisoformat(start["date"])
+    if start.get("dateTime"):
+        return datetime.fromisoformat(start["dateTime"]).date()
+    return None
+
+
+def event_to_taskspec(event: dict) -> dict | None:
+    """Mapeia um evento do Google Calendar para os dados de uma tarefa, ou `None` se deve ignorar.
+
+    Ignora: eventos originados no Biahflow (evita loop), sem marcador `#proj-<id>`, sem id, ou sem data.
+    """
+    private = event.get("extendedProperties", {}).get("private", {})
+    if private.get(ORIGIN_KEY):
+        return None
+    external_id = event.get("id")
+    if not external_id:
+        return None
+    summary = event.get("summary", "")
+    match = PROJECT_MARKER.search(f"{summary}\n{event.get('description', '')}")
+    if not match:
+        return None
+    day = _event_day(event)
+    if day is None:
+        return None
+    title = PROJECT_MARKER.sub("", summary).strip() or "Evento do calendário"
+    return {
+        "project_id": int(match.group(1)),
+        "title": title,
+        "due_date": day,
+        "external_id": external_id,
+    }
+
+
+def sync_calendar(window_days: int = SYNC_WINDOW_DAYS) -> tuple[int, int]:
+    """Cria tarefas a partir dos eventos do calendário. Retorna (criadas, ignoradas).
+
+    No-op (0, 0) quando a integração está desligada. Idempotente: reprocessar os mesmos eventos
+    não duplica tarefas (constraint única em `source`/`external_id`).
+    """
+    if not is_enabled():
+        return (0, 0)
+
+    from .models import Project, Task
+
+    now = timezone.now()
+    events = list_events(now, now + timedelta(days=window_days))
+    created = skipped = 0
+    for event in events:
+        spec = event_to_taskspec(event)
+        if spec is None:
+            skipped += 1
+            continue
+        project = Project.objects.filter(id=spec["project_id"], archived_at__isnull=True).first()
+        if project is None:
+            skipped += 1
+            continue
+        _, was_created = Task.objects.get_or_create(
+            source=CALENDAR_TASK_SOURCE,
+            external_id=spec["external_id"],
+            defaults={
+                "project": project,
+                "title": spec["title"],
+                "owner": project.owner,
+                "due_date": spec["due_date"],
+            },
+        )
+        if was_created:
+            created += 1
+        else:
+            skipped += 1
+    return (created, skipped)
