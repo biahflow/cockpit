@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import cast
@@ -536,9 +537,10 @@ class DocumentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         signer_email = str(request.data.get("signer_email", "")).strip()
         if not signer_email:
             return Response({"detail": "Informe o e-mail do signatário."}, status=400)
-        provider_ref = esign.send_for_signature(document, signer_email)
+        provider_ref, document_ref = esign.send_for_signature(document, signer_email)
         signature = SignatureRequest.objects.create(
-            document=document, signer_email=signer_email, provider_ref=provider_ref,
+            document=document, signer_email=signer_email,
+            provider_ref=provider_ref, document_ref=document_ref,
         )
         return Response({"id": signature.id, "status": signature.status}, status=status.HTTP_201_CREATED)
 
@@ -811,6 +813,42 @@ class TaskSyncIntakeView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response({"detail": "Sincronizado.", "task": task.pk})
+
+
+class EsignWebhookView(APIView):
+    """Entrada do fornecedor de assinatura (ADR 0007). Autentica pelo HMAC do corpo cru.
+
+    Eventos desconhecidos ou sem solicitação correspondente respondem 200 "ignorado" — um
+    erro faria o fornecedor reentregar para sempre.
+    """
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "esign_webhook"
+
+    @extend_schema(request=None, responses={200: SignatureRequestSerializer})
+    def post(self, request: Request) -> Response:
+        if not esign.is_enabled():
+            return Response(
+                {"detail": "Assinatura eletrônica desativada."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        body = request.body  # o HMAC é sobre os bytes originais, então nada de request.data
+        provider = esign.get_provider()
+        if not provider.verify(body, request.headers):
+            return Response({"detail": "Assinatura inválida."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            payload = json.loads(body or b"{}")
+        except ValueError:
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(payload, dict):
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        event = provider.parse_event(payload)
+        signature = esign.apply_event(event) if event else None
+        if signature is None:
+            return Response({"detail": "Evento ignorado."})
+        return Response(SignatureRequestSerializer(signature).data)
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):

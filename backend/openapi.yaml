@@ -1021,6 +1021,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Document'
           description: ''
+  /api/v1/esign/webhook/:
+    post:
+      operationId: v1_esign_webhook_create
+      description: |-
+        Entrada do fornecedor de assinatura (ADR 0007). Autentica pelo HMAC do corpo cru.
+
+        Eventos desconhecidos ou sem solicitação correspondente respondem 200 "ignorado" — um
+        erro faria o fornecedor reentregar para sempre.
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignatureRequest'
+          description: ''
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve

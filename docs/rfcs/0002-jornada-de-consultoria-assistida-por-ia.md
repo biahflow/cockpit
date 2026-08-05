@@ -25,8 +25,8 @@ Atualizado em 05/08/2026. Salvo onde marcado, todas as etapas já têm primitivo
 - Discovery e Assessment → `Meeting` + transcrição, com extração por IA (`ai.py`, FDD 007) e
   **AI Score** de maturidade/oportunidade gravado no `Project` (`ai_score.py`, FDD 014).
 - Proposta → ação IA `proposal`. Contrato → geração por IA a partir de modelo + lembrete de quem
-  falta assinar (`esign` + `SignatureRequest`, FDD 009). **Falta** o adaptador de provedor
-  homologado (Clicksign/DocuSign) com webhook de status — hoje `mark-signed` é ação interna.
+  falta assinar + **assinatura no provedor homologado** (`esign` com adaptador Clicksign e webhook
+  de status assinado por HMAC, idempotente — FDD 009, ADR 0007); `mark-signed` vira fallback manual.
 - **Nível de produto → `Service.tier` (FDD 015).** Discovery Express (grátis), Discovery +
   Assessment e Implantação estruturam o catálogo: a `Opportunity` carrega o nível vendido, o
   projeto o herda na conversão, e ele define o cronograma de kickoff e o escopo/preço da proposta.
