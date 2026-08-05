@@ -11,11 +11,13 @@ Satisfação, bugs e "acessos liberados" ficam de fora até existir onde registr
 
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import Project
+    from .models import Milestone, Pendencia, Project, Task
 
 
 def _level(score: int) -> str:
@@ -26,16 +28,30 @@ def _level(score: int) -> str:
     return "crítico"
 
 
-def assess_project_health(project: Project) -> dict[str, Any]:
+def assess_project_health(
+    project: Project,
+    *,
+    milestones: Sequence[Milestone] | None = None,
+    tasks: Sequence[Task] | None = None,
+    missed_meetings: int | None = None,
+    open_pendencias: Sequence[Pendencia] | None = None,
+) -> dict[str, Any]:
+    """Avalia a saúde de um projeto. Os argumentos nomeados aceitam dado já carregado.
+
+    Omitidos, a função consulta o banco — quatro queries, irrelevantes no detalhe de um
+    projeto. Quem avalia uma lista usa `assess_projects_health` (FDD 022).
+    """
     from .models import Meeting, Milestone, Pendencia, Task, WorkItem
 
     today = date.today()
     signals: list[dict[str, Any]] = []
     score = 100
 
-    items = list(Milestone.objects.filter(project=project, archived_at__isnull=True)) + list(
-        Task.objects.filter(project=project, archived_at__isnull=True)
-    )
+    if milestones is None:
+        milestones = list(Milestone.objects.filter(project=project, archived_at__isnull=True))
+    if tasks is None:
+        tasks = list(Task.objects.filter(project=project, archived_at__isnull=True))
+    items: list[Any] = [*milestones, *tasks]
     overdue = [item for item in items if item.is_overdue]
     if overdue:
         weight = min(30, len(overdue) * 8)
@@ -50,17 +66,23 @@ def assess_project_health(project: Project) -> dict[str, Any]:
         score -= weight
         signals.append({"label": "Entregues fora do prazo", "detail": f"{len(late_done)} item(ns) concluído(s) com atraso", "weight": weight})
 
-    missed = Meeting.objects.filter(
-        project=project, archived_at__isnull=True, status=Meeting.Status.SCHEDULED, date__lt=today
-    ).count()
+    missed = missed_meetings
+    if missed is None:
+        missed = Meeting.objects.filter(
+            project=project, archived_at__isnull=True,
+            status=Meeting.Status.SCHEDULED, date__lt=today,
+        ).count()
     if missed:
         weight = min(20, missed * 10)
         score -= weight
         signals.append({"label": "Reuniões não realizadas", "detail": f"{missed} reunião(ões) agendada(s) e vencida(s)", "weight": weight})
 
-    open_pendencias = list(
-        Pendencia.objects.filter(project=project, archived_at__isnull=True, status=Pendencia.Status.OPEN)
-    )
+    if open_pendencias is None:
+        open_pendencias = list(
+            Pendencia.objects.filter(
+                project=project, archived_at__isnull=True, status=Pendencia.Status.OPEN
+            )
+        )
     if open_pendencias:
         blocking_client = sum(1 for pendencia in open_pendencias if pendencia.party == WorkItem.Party.CLIENT)
         weight = min(25, len(open_pendencias) * 5 + blocking_client * 3)
@@ -83,3 +105,48 @@ def assess_project_health(project: Project) -> dict[str, Any]:
         "level": _level(score),
         "signals": signals,
     }
+
+
+def assess_projects_health(projects: Iterable[Project]) -> list[dict[str, Any]]:
+    """Avalia a saúde de uma lista com um número **constante** de queries.
+
+    São quatro modelos por projeto (marco, tarefa, reunião perdida, pendência aberta): a
+    versão projeto a projeto custava a `/health/` e à visão multi-cliente quatro queries por
+    projeto da casa. Aqui são quatro no total, distribuídas em memória (FDD 022).
+    """
+    from .models import Meeting, Milestone, Pendencia, Task
+
+    items = list(projects)
+    if not items:
+        return []
+    today = date.today()
+    ids = [project.pk for project in items]
+
+    milestones: dict[int, list[Milestone]] = defaultdict(list)
+    for milestone in Milestone.objects.filter(project_id__in=ids, archived_at__isnull=True):
+        milestones[milestone.project_id].append(milestone)
+    tasks: dict[int, list[Task]] = defaultdict(list)
+    for task in Task.objects.filter(project_id__in=ids, archived_at__isnull=True):
+        tasks[task.project_id].append(task)
+    missed: dict[int, int] = defaultdict(int)
+    for project_id in Meeting.objects.filter(
+        project_id__in=ids, archived_at__isnull=True,
+        status=Meeting.Status.SCHEDULED, date__lt=today,
+    ).values_list("project_id", flat=True):
+        missed[project_id] += 1
+    pendencias: dict[int, list[Pendencia]] = defaultdict(list)
+    for pendencia in Pendencia.objects.filter(
+        project_id__in=ids, archived_at__isnull=True, status=Pendencia.Status.OPEN
+    ):
+        pendencias[pendencia.project_id].append(pendencia)
+
+    return [
+        assess_project_health(
+            project,
+            milestones=milestones[project.pk],
+            tasks=tasks[project.pk],
+            missed_meetings=missed[project.pk],
+            open_pendencias=pendencias[project.pk],
+        )
+        for project in items
+    ]

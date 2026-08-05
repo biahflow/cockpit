@@ -20,12 +20,12 @@ export function AcceptInvitePage() {
       {done ? <div className="text-center">
         <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-mint text-ocean"><CheckCircle2 className="size-6" /></span>
         <h1 className="mt-4 text-2xl font-semibold tracking-tight text-ink">Acesso ativado</h1>
-        <p className="mt-2 text-sm text-slate-500">Sua conta foi criada. Você já pode entrar no portal.</p>
+        <p className="mt-2 text-sm text-slate-600">Sua conta foi criada. Você já pode entrar no portal.</p>
         <a href="/" className="mt-6 inline-flex items-center justify-center rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink">Ir para o login</a>
       </div> : <>
         <p className="text-sm font-semibold text-ocean">Bem-vindo</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">Ative seu acesso</h1>
-        <p className="mt-2 text-sm text-slate-500">Defina seu usuário e senha para entrar no Portal Biahflow.</p>
+        <p className="mt-2 text-sm text-slate-600">Defina seu usuário e senha para entrar no Portal Biahflow.</p>
         {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
         <form className="mt-6 grid gap-4" onSubmit={event => void submit(event)}>
           <label className="grid gap-2 text-sm font-medium text-slate-700">Token do convite<input className="field" value={form.token} onChange={event => setForm({ ...form, token: event.target.value })} placeholder="Cole o token recebido por e-mail" required /></label>

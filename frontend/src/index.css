@@ -5,14 +5,30 @@
   --color-ocean: #0d5f5a;
   --color-mint: #eaf7f2;
   --color-sand: #f7f8f5;
-  --color-signal: #d05d45;
+  /* Escurecido de #d05d45 para passar em AA (FDD 022). O tom antigo dava 3,9:1 sobre branco,
+     e a marca aparece como **texto**: prazo vencido, mensagem de erro, contador de
+     notificação. O mesmo ajuste conserta o contador, que é branco sobre `bg-signal` e
+     também reprovava. Continua o mesmo clay laranja, um degrau mais fundo. */
+  --color-signal: #bd4a30;
   --font-sans: "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
   * { @apply border-slate-200; }
   body { @apply min-h-screen bg-sand font-sans text-slate-800 antialiased; }
-  button, input, select { @apply focus:outline-none; }
+  /* Foco visível (WCAG 2.4.7). Aqui havia `button, input, select { @apply focus:outline-none }`,
+     que apagava o indicador de foco de **todo** controle: alguns campos recompunham com
+     `focus:ring`, nenhum botão recompunha, e navegar de teclado pelo portal era navegar às
+     cegas. A supressão saiu inteira, por dois motivos — FDD 022:
+
+     1. Ela não é mais necessária. Browser moderno já só desenha o anel padrão em
+        `:focus-visible`, isto é, no foco por teclado; suprimir `:focus` era resolver um
+        problema que deixou de existir e, de quebra, apagar o foco de quem depende dele.
+     2. Ela impedia a correção. `outline-none` do Tailwind v4 não só zera o contorno: grava
+        `--tw-outline-style: none` no elemento. Como `outline-2` desenha com
+        `outline-style: var(--tw-outline-style)`, qualquer regra de `:focus-visible` escrita
+        depois resolvia para `none` e não aparecia — silenciosamente. */
+  :focus-visible { @apply outline-2 outline-offset-2 outline-ocean; }
 }
 
 @utility field {

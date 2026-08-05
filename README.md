@@ -31,3 +31,5 @@ O mesmo compose sobe um sidecar de **backup**: banco e documentos, agendado, com
 ## Qualidade
 
 Execute `cd backend && uv run pytest`, `cd backend && uv run mypy apps config`, `cd frontend && npm test`, `cd frontend && npm run build` e `cd frontend && npm run e2e` antes de abrir um pull request. Veja [AGENTS.md](AGENTS.md) e `docs/runbooks/`.
+
+O `npm run e2e` roda quatro projetos do Playwright: `e2e` (fluxo, desktop) e `mobile`/`tablet`/`desktop`, que percorrem a **matriz** de 17 telas — varredura do axe nas tags WCAG A e AA, ausência de rolagem horizontal, navegação alcançável, alvo de toque e foco de teclado visível (FDD 022). Tela nova entra por uma linha em `frontend/e2e/matrix.ts`. O `pytest` inclui o **orçamento de query** dos agregadores, que reprova N+1 comparando a mesma rota com duas bases de tamanhos diferentes (ADR 0014). Teste de carga com k6 é procedimento operado, fora do CI: [`docs/runbooks/testes-de-carga.md`](docs/runbooks/testes-de-carga.md).

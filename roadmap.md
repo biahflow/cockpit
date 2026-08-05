@@ -71,8 +71,27 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
       agregadores. Nasce a **equipe do projeto** (`ProjectMember`), que passa a ser o critério
       único de acesso, com backfill que preserva o que existia. Mudança **incompatível em
       semântica** para consumidores autenticados como Entrega.
-- [ ] Ampliar a matriz de testes: acessibilidade, responsividade e carga (há `loadtests/dashboard.js`,
-      um script k6 de um endpoint só, fora do CI).
+- [x] Ampliar a matriz de testes: acessibilidade, responsividade e carga — FDD 022, ADR 0014.
+      Fecha o bloco. Nasce uma **matriz dirigida por tabela** (`frontend/e2e/matrix.ts`): 17 telas ×
+      3 larguras (390/768/1280), varridas pelo axe nas tags WCAG A e AA e conferidas contra rolagem
+      horizontal, navegação alcançável e alvo de toque — tela nova entra por **uma linha**. Ela
+      acendeu defeito real: o portal apagava o próprio indicador de foco (`focus:outline-none` sem
+      substituto, WCAG 2.4.7), o contraste reprovava em três tons de uma vez (`text-slate-400` a
+      2,5:1, `text-slate-500` a 4,47:1 sobre o fundo do próprio portal e a **cor da marca** a 3,9:1
+      como texto), quatro controles do detalhe do projeto não tinham nome acessível, o kanban e a
+      tabela de projetos rolavam sem receber foco, a linha de projeto só respondia a mouse, o login
+      ficava **sem `h1`** no celular e o detalhe do projeto estourava a horizontal em duas frentes.
+      Do lado da carga, o CI ganha um gate **determinístico** em vez de cronômetro (ADR 0014):
+      mede-se a mesma rota com 3 e com 12 clientes e cobra-se que a contagem de queries não mude —
+      o que reprovou três agregadores de saída (`/clients/overview/` ia de 43 a 169 queries,
+      `/risk/` de 13 a 49, `/health/` de 25 a 97) e agora protege `/analytics/`, que é caro mas
+      **constante**. O k6 sai do limbo: sessão por VU (o script anterior mandava um cookie só para
+      20 VUs contra um teto de ≈0,55 req/s — não podia passar), cenário de leitura, cenário de
+      escrita e runbook próprio. Sabotagem deliberada em cada gate revelou o que mais importa: o
+      **axe não vê foco visível** (2.4.7 é verificação manual), então a correção de foco ficaria sem
+      rede — daí um teste explícito de teclado. E a primeira tentativa de corrigir o foco não
+      funcionou, porque `outline-none` do Tailwind v4 envenena `--tw-outline-style`; só o teste
+      mostrou.
 
 ## Versão 2 — Assistente de IA (essencialmente entregue)
 

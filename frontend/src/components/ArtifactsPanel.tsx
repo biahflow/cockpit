@@ -66,17 +66,20 @@ export function ArtifactsPanel({ opportunity, project, reloadToken, onChange }: 
 
   return <div className="mt-6 border-t pt-5">
     <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Sparkles className="size-4 text-ocean" />Artefatos da jornada</h3>
-    <p className="mt-1 text-xs text-slate-400">Rascunhos gerados pela IA ficam registrados aqui até a revisão humana e a decisão do cliente.</p>
+    <p className="mt-1 text-xs text-slate-600">Rascunhos gerados pela IA ficam registrados aqui até a revisão humana e a decisão do cliente.</p>
     {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
     <div className="mt-3 grid gap-3">{artifacts.map(artifact => {
       const content = drafts[artifact.id] ?? artifact.content;
       const dirty = content !== artifact.content;
-      return <article className="rounded-xl border bg-white p-4" key={artifact.id}>
+      // `min-w-0`: item de grade não encolhe abaixo do próprio conteúdo, e o `cols` padrão do
+      // `<textarea>` abaixo dá a este cartão um min-content de ~525px — largo demais para a
+      // coluna no celular, o que fazia a página inteira rolar na horizontal.
+      return <article className="min-w-0 rounded-xl border bg-white p-4" key={artifact.id}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-lg bg-mint px-2 py-0.5 text-[11px] font-semibold text-ocean">{artifact.kind_display}</span>
           <span className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[artifact.status]}`}>{artifact.status_display}</span>
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{artifact.title}</p>
-          {artifact.document && <span className="inline-flex items-center gap-1 text-xs text-slate-400"><FileText className="size-3.5" />Documento salvo</span>}
+          {artifact.document && <span className="inline-flex items-center gap-1 text-xs text-slate-600"><FileText className="size-3.5" />Documento salvo</span>}
         </div>
         <textarea
           className="field mt-3 min-h-32"

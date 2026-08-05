@@ -160,6 +160,6 @@ mandar para fora do host: **`backup-e-restauracao.md`**.
 
 ## Pendências deste bloco do roadmap
 
-Ainda aberta: a matriz de testes de acessibilidade, responsividade e carga. Monitoramento saiu da
-fila (FDD 020, ADR 0012 — ver `monitoramento.md`) e backup também (FDD 021, ADR 0013 — ver
-`backup-e-restauracao.md`).
+Nenhuma. O bloco fechou: monitoramento (FDD 020, ADR 0012 — ver `monitoramento.md`), backup
+(FDD 021, ADR 0013 — ver `backup-e-restauracao.md`) e a matriz de testes de acessibilidade,
+responsividade e carga (FDD 022, ADR 0014 — ver `testes-de-carga.md`).

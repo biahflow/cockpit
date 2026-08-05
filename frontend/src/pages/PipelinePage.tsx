@@ -35,7 +35,7 @@ export function PipelinePage() {
 
   return <section className="space-y-7">
     <a href="/comercial" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para o Comercial</a>
-    <header><p className="text-sm font-semibold text-ocean">Comercial</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Etapas do pipeline</h1><p className="mt-2 text-sm text-slate-500">Ordene e nomeie as etapas. Só pode haver uma etapa "Ganho" e uma "Perdido".</p></header>
+    <header><p className="text-sm font-semibold text-ocean">Comercial</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Etapas do pipeline</h1><p className="mt-2 text-sm text-slate-600">Ordene e nomeie as etapas. Só pode haver uma etapa "Ganho" e uma "Perdido".</p></header>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
 
     <section className="overflow-hidden rounded-2xl border bg-white">
@@ -46,7 +46,7 @@ export function PipelinePage() {
         <select className="field w-32" value={stage.kind} onChange={event => updateLocal(stage.id, { kind: event.target.value as PipelineStage["kind"] })} aria-label={`Tipo da etapa ${stage.id}`}>{Object.entries(kindLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <input className="field w-20" type="number" value={stage.position} onChange={event => updateLocal(stage.id, { position: Number(event.target.value) })} aria-label={`Ordem da etapa ${stage.id}`} />
         <button className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void save(stage)}><Save className="size-4" />Salvar</button>
-        <button className="grid size-9 place-items-center rounded-xl border text-slate-400 hover:bg-red-50 hover:text-signal" aria-label={`Excluir etapa ${stage.name}`} onClick={() => void remove(stage.id)}><Trash2 className="size-4" /></button>
+        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir etapa ${stage.name}`} onClick={() => void remove(stage.id)}><Trash2 className="size-4" /></button>
       </div>)}</div>
     </section>
 
