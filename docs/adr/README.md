@@ -10,4 +10,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0006 — Motor de agentes de IA (especializados, RBAC, auditoria e avaliação)
 - 0007 — Assinatura eletrônica: provedor homologado e webhook de status
 - 0008 — Artefatos da jornada como entidade (um modelo com `kind`, estado próprio)
+- 0009 — Visibilidade por função e limites de requisição
 

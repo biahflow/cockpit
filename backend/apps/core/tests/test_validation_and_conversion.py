@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Milestone, PipelineStage, Service, User
+from apps.core.models import Document, Milestone, PipelineStage, Service, User
 
 from .factories import (
     ClientFactory,
@@ -110,6 +110,65 @@ def test_document_rejects_multiple_links_and_excessive_size() -> None:
     assert linked_twice.status_code == 400
     assert oversized.status_code == 400
     assert "file" in oversized.data
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_document_rejects_file_types_outside_the_allowlist() -> None:
+    """Nome de arquivo é entrada do usuário e viaja para o Drive e para o fornecedor de assinatura."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    linked = ClientFactory(owner=admin)
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    for name in ("payload.html", "icone.svg", "instalador.exe", "sem-extensao"):
+        rejected = client.post(reverse("document-list"), {
+            "client": linked.id,
+            "file": SimpleUploadedFile(name, b"conteudo"),
+        })
+        assert rejected.status_code == 400, name
+        assert "file" in rejected.data
+
+    for name in ("proposta.pdf", "planilha.XLSX", "notas.txt", "print.png"):
+        accepted = client.post(reverse("document-list"), {
+            "client": linked.id,
+            "file": SimpleUploadedFile(name, b"conteudo"),
+        })
+        assert accepted.status_code == 201, name
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_document_original_name_never_carries_a_path() -> None:
+    """`original_name` é repassado cru ao Drive, ao fornecedor de assinatura e ao portal."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    linked = ClientFactory(owner=admin)
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    response = client.post(reverse("document-list"), {
+        "client": linked.id,
+        "file": SimpleUploadedFile("../../etc/passwd.pdf", b"conteudo"),
+    })
+
+    assert response.status_code == 201
+    original_name = Document.objects.get(id=response.data["id"]).original_name
+    assert "/" not in original_name and ".." not in original_name
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("../../etc/passwd.pdf", "passwd.pdf"),
+    (r"C:\Users\alguem\contrato.pdf", "contrato.pdf"),
+    ("nota\r\nfiscal.pdf", "notafiscal.pdf"),
+    (".oculto.pdf", "oculto.pdf"),
+    ("", "documento"),
+    (None, "documento"),
+])
+def test_safe_original_name(raw: str | None, expected: str) -> None:
+    """Casos que o multipart não consegue carregar, mas o Drive e o e-sign conseguem."""
+    from apps.core.serializers import _safe_original_name
+
+    assert _safe_original_name(raw) == expected
 
 
 @pytest.mark.django_db

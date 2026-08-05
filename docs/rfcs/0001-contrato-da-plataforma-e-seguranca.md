@@ -12,3 +12,5 @@ Campos obrigatórios novos, remoção ou mudança de semântica exigem nova vers
 
 Credenciais ficam somente em variáveis de ambiente; uploads são privados e os testes devem cobrir tentativa de acesso entre usuários e funções.
 
+O arquivo de um documento sai por uma única porta autenticada (`/api/v1/documents/<id>/download/`) — nenhum ambiente serve `MEDIA_ROOT`. A visibilidade por função é aplicada nas duas camadas do RBAC (queryset e permissão de objeto), não só na leitura. Toda a API tem teto de requisições: `anon`/`user` como padrão e escopo nomeado nas portas de autenticação e nas rotas públicas. Ver FDD 017 e ADR 0009.
+

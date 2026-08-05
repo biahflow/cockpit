@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from .models import Document, Opportunity, Project, User
+from .models import Artifact, Document, Opportunity, Project, User
 
 
 class RolePermission(BasePermission):
@@ -41,7 +41,12 @@ class RolePermission(BasePermission):
                 return request.method in {"GET", "HEAD", "OPTIONS"}
             if isinstance(obj, Opportunity):
                 return obj.is_won and request.method in {"GET", "HEAD", "OPTIONS"}
+            # As duas camadas precisam concordar: o queryset já esconde o que é comercial,
+            # e aqui a permissão de objeto diz o mesmo, para um caminho novo não reabrir o
+            # que o outro fechou. Ver FDD 017 / ADR 0009.
             if isinstance(obj, Document):
-                return True
+                return obj.project_id is not None
+            if isinstance(obj, Artifact):
+                return obj.project_id is not None
             return True
         return False

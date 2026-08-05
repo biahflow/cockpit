@@ -113,6 +113,33 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 - **Testar:** mudar o status da issue vinculada → a tarefa muda no portal (e repropaga ao portal do
   cliente); mudar a tarefa no portal → a issue é atualizada. A entrada nunca gera loop (guard de eco).
 
+## Limites de requisição
+
+Toda a API tem teto (FDD 017, ADR 0009). `anon`/`user` são a rede de baixo; os escopos nomeados
+protegem as portas específicas. Todos vêm do `.env` — mexa só se um limite estorvar uso legítimo.
+
+| Escopo | Variável | Default | Protege |
+| --- | --- | --- | --- |
+| `anon` | `ANON_RATE` | `60/min` | toda a API para quem não está autenticado |
+| `user` | `USER_RATE` | `2000/hour` | toda a API para quem está autenticado |
+| `login` | `LOGIN_RATE` | `10/min` | força bruta de senha em `/auth/login/` |
+| `invitation_accept` | `INVITATION_ACCEPT_RATE` | `20/hour` | criação de usuário sem autenticação |
+| `portal_read` | `PORTAL_READ_RATE` | `120/hour` | adivinhação do `PORTAL_READ_TOKEN` no snapshot |
+| `lead_intake` | `LEAD_INTAKE_RATE` | `20/hour` | formulário do site |
+| `booking` | `BOOKING_RATE` | `60/hour` | horários livres e reserva |
+| `task_sync` | `TASK_SYNC_RATE` | `60/hour` | webhook de Linear/GitHub |
+| `esign_webhook` | `ESIGN_WEBHOOK_RATE` | `120/hour` | webhook do fornecedor de assinatura |
+
+Dois avisos para produção:
+
+- **Proxy.** O limite de anônimo é por IP, e o IP que o Django vê é o do último salto. Configure
+  `NUM_PROXIES` com o número de proxies confiáveis do ingress; sem isso, todo mundo que passa pelo
+  mesmo proxy divide um balde. No compose de desenvolvimento é o caso — o SPA fala com a API pelo
+  container do Vite.
+- **Cache.** O contador vive no cache. Sem cache compartilhado configurado, o Django usa
+  `LocMemCache`, que é por processo: com N workers, o limite efetivo é N vezes o configurado.
+  Um Redis resolve, e entra com o item de infraestrutura.
+
 ## Qualidade / CI
 Antes de promover: `cd backend && uv run pytest && uv run mypy apps config && uv run ruff check .`
 e `cd frontend && npm run lint && npm test && npm run build`. O workflow `.github/workflows/quality.yml`
