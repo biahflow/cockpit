@@ -6,6 +6,7 @@ Todas as mudanças relevantes deste projeto serão registradas neste arquivo.
 
 ### Adicionado
 
+- Três níveis de produto sobre o catálogo de `Service` (Discovery Express gratuito, Discovery + Assessment e Implantação, um ativo por nível): a oportunidade carrega o nível vendido, o lead convertido entra pela porta gratuita, a conversão em projeto herda o nível, o kickoff semeia um cronograma por nível, a proposta gerada por IA respeita escopo e preço de tabela, e Indicadores ganha o funil de conversão por nível — FDD 015, RFC 0002.
 - AI Score: índice de maturidade/oportunidade de IA por cliente, gerado por IA a partir da transcrição de uma reunião (Discovery/Assessment) e gravado no projeto como rascunho; após revisão humana e publicação, cruza ao portal do cliente pelo snapshot e agrega na visão multi-cliente — FDD 014, RFC 0002.
 - Agendamento: qualificação de leads por IA no intake do site e **booking automático** por leads qualificados — horários livres reais (free/busy do Google) e reunião agendada com evento no calendário + confirmação; endpoints públicos `booking/slots/` e `booking/book/` atrás de token efêmero, e widget de agendamento no site — FDD 013, RFC 0002.
 - Calendário → tarefas: eventos do Google Calendar compartilhado com um marcador `#proj-<id>` viram tarefas do projeto (command `manage.py sync_calendar` e ação admin "Sincronizar agora"), idempotente e atrás da flag `calendar` — FDD 012, RFC 0002.
@@ -22,6 +23,7 @@ Todas as mudanças relevantes deste projeto serão registradas neste arquivo.
 
 ### Alterado
 
+- Documentação alinhada ao estado atual: o `PRD.md` deixa de descrever apenas o MVP e passa a cobrir a jornada assistida por IA (com o que segue fora de escopo), o mapa etapa → primitivo do RFC 0002 deixa de apontar como pendentes etapas já entregues, e `docs/architecture.md` descreve o armazenamento real de documentos (Drive ou disco local) e registra que o MinIO do compose está provisionado mas não conectado.
 - Conversão de lead: o lead é arquivado e o cliente nasce como "prospect", promovido a "ativo" quando a oportunidade é ganha.
 - Flags de integração (IA, Drive, Calendário, Assinatura, Sincronia de tarefas) passam a ser ligáveis/desligáveis em runtime; o `.env` segue como default e casa dos segredos.
 

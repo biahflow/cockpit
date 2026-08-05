@@ -12,13 +12,18 @@ const stages = [
   { id: 1, name: "Prospecção", kind: "open", position: 0 },
   { id: 2, name: "Ganho", kind: "won", position: 50 },
 ];
-const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31" };
+const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31", service: 10, service_name: "Discovery Express", service_tier: "discovery_express" };
+const services = [
+  { id: 10, name: "Discovery Express", active: true, tier: "discovery_express", tier_display: "Discovery Express", list_price: "0.00", summary: "Diagnóstico gratuito." },
+  { id: 11, name: "Implantação", active: true, tier: "implantacao", tier_display: "Implantação", list_price: "90000.00", summary: "Funcionários digitais." },
+];
 
 function stub() {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     const method = options?.method?.toUpperCase() ?? "GET";
     if (path === "/pipeline-stages/") return Promise.resolve(stages);
     if (path === "/opportunities/" && method === "GET") return Promise.resolve([opp]);
+    if (path === "/services/") return Promise.resolve(services);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
     if (path.startsWith("/documents/?opportunity")) return Promise.resolve([{ id: 9, client: null, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
@@ -92,9 +97,46 @@ test("cria uma nova oportunidade pelo compositor", async () => {
   await user.click(screen.getByRole("button", { name: "Nova oportunidade" }));
   const dialog = await screen.findByRole("dialog", { name: "Nova oportunidade" });
   await user.type(within(dialog).getByLabelText("Título"), "Nova Op");
-  await user.selectOptions(within(dialog).getByRole("combobox"), "1");
+  await user.selectOptions(within(dialog).getByLabelText("Cliente"), "1");
   await user.type(within(dialog).getByLabelText("Valor estimado"), "5000");
   fireEvent.change(within(dialog).getByLabelText("Previsão de fechamento"), { target: { value: "2026-10-01" } });
   await user.click(within(dialog).getByRole("button", { name: "Adicionar ao pipeline" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/", expect.objectContaining({ method: "POST" })));
+});
+
+test("mostra o nível de produto no card do pipeline", async () => {
+  render(<CommercialPage />);
+  await screen.findByText("Oport X");
+  expect(screen.getByText("Discovery Express")).toBeInTheDocument();
+});
+
+test("cria a oportunidade com o nível de produto escolhido", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await screen.findByText("Oport X");
+  await user.click(screen.getByRole("button", { name: "Nova oportunidade" }));
+  const dialog = await screen.findByRole("dialog", { name: "Nova oportunidade" });
+  await user.type(within(dialog).getByLabelText("Título"), "Nova Op");
+  await user.selectOptions(within(dialog).getByLabelText("Cliente"), "1");
+  await user.selectOptions(within(dialog).getByLabelText("Nível de produto"), "11");
+  await user.type(within(dialog).getByLabelText("Valor estimado"), "5000");
+  fireEvent.change(within(dialog).getByLabelText("Previsão de fechamento"), { target: { value: "2026-10-01" } });
+  await user.click(within(dialog).getByRole("button", { name: "Adicionar ao pipeline" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/", expect.objectContaining({
+    method: "POST", body: expect.stringContaining('"service":11'),
+  })));
+});
+
+test("altera o nível de produto pelo detalhe da oportunidade", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+  await user.selectOptions(screen.getByLabelText("Nível de produto"), "11");
+  await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({
+    method: "PATCH", body: expect.stringContaining('"service":11'),
+  })));
 });

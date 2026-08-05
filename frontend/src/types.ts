@@ -1,14 +1,17 @@
 export type PipelineStage = { id: number; name: string; kind: "open" | "won" | "lost"; position: number; opportunity_count?: number; estimated_total?: string | null };
-export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string };
+export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier };
 export type AiScoreDimension = { label: string; score: number };
 export type Project = { id: number; name: string; description: string; client: number; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean };
-export type Service = { id: number; name: string; active: boolean };
+export type ServiceTier = "discovery_express" | "discovery_assessment" | "implantacao" | "";
+export type Service = { id: number; name: string; active: boolean; tier: ServiceTier; tier_display: string; list_price: string; summary: string };
+export type TierFunnelRow = { tier: ServiceTier; label: string; total: number; open: number; won: number; lost: number; estimated_total: number; win_rate: number | null };
 export type RoiRow = { label: string; revenue: number; cost: number; roi: number | null };
 export type Analytics = {
   funnel: {
     leads: { total: number; by_status: Record<string, number> };
     opportunities: { open: number; won: number; lost: number };
     projects: { total: number; by_status: Record<string, number> };
+    by_tier: TierFunnelRow[];
   };
   win_rate: number | null;
   avg_ticket: number;

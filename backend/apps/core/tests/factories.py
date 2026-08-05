@@ -4,7 +4,7 @@ from decimal import Decimal
 import factory
 from django.utils import timezone
 
-from apps.core.models import Client, Meeting, Opportunity, PipelineStage, Project, User
+from apps.core.models import Client, Meeting, Opportunity, PipelineStage, Project, Service, User
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -38,6 +38,17 @@ class PipelineStageFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"Etapa {n}")
     kind = PipelineStage.Kind.OPEN
     position = factory.Sequence(lambda n: n + 100)
+
+
+class ServiceFactory(factory.django.DjangoModelFactory):
+    """Serviço avulso por padrão. Os três níveis vêm semeados pela migração 0020 —
+    busque-os com `Service.objects.get(tier=...)` em vez de criar duplicatas."""
+
+    class Meta:
+        model = Service
+
+    name = factory.Sequence(lambda n: f"Serviço {n}")
+    tier = ""
 
 
 class OpportunityFactory(factory.django.DjangoModelFactory):

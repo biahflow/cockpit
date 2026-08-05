@@ -106,6 +106,10 @@ class Opportunity(TimestampedModel):
     stage = models.ForeignKey(PipelineStage, on_delete=models.PROTECT, related_name="opportunities")
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="owned_opportunities")
     expected_close_date = models.DateField()
+    # Nível de produto sendo vendido; herdado pelo projeto na conversão e usado na proposta.
+    service = models.ForeignKey(
+        "Service", on_delete=models.SET_NULL, null=True, blank=True, related_name="opportunities"
+    )
 
     class Meta:
         ordering = ["expected_close_date", "id"]
@@ -380,14 +384,39 @@ class Booking(TimestampedModel):
 
 
 class Service(TimestampedModel):
+    """Catálogo de serviços e, quando `tier` estiver preenchido, os níveis de produto.
+
+    Os três níveis da metodologia (Discovery Express grátis, Discovery + Assessment pago e
+    Implantação) são registros semeados com `tier`; serviços avulsos ficam com `tier` vazio.
+    """
+
+    class Tier(models.TextChoices):
+        DISCOVERY_EXPRESS = "discovery_express", "Discovery Express"
+        DISCOVERY_ASSESSMENT = "discovery_assessment", "Discovery + Assessment"
+        IMPLEMENTATION = "implantacao", "Implantação"
+
     name = models.CharField(max_length=120)
     active = models.BooleanField(default=True)
+    tier = models.CharField(max_length=32, choices=Tier.choices, blank=True, default="")
+    list_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    summary = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tier"],
+                condition=~Q(tier="") & Q(archived_at__isnull=True),
+                name="one_active_service_per_tier",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def is_free(self) -> bool:
+        return self.list_price == 0
 
 
 class SignatureRequest(models.Model):

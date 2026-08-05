@@ -4,9 +4,9 @@ import pytest
 from django.utils import timezone
 
 from apps.core import kickoff
-from apps.core.models import Milestone, Notification, Task
+from apps.core.models import Milestone, Notification, Service, Task
 
-from .factories import ProjectFactory, UserFactory
+from .factories import ProjectFactory, ServiceFactory, UserFactory
 
 
 @pytest.mark.django_db
@@ -32,6 +32,45 @@ def test_seed_work_items_clamps_due_dates_to_short_window():
                              due_date=timezone.localdate() + timedelta(days=3))
     kickoff.seed_work_items(project)
     assert all(m.due_date <= project.due_date for m in Milestone.objects.filter(project=project))
+
+
+@pytest.mark.django_db
+def test_discovery_express_gets_the_short_schedule():
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS))
+
+    milestones, _ = kickoff.seed_work_items(project)
+
+    assert milestones == 1
+    assert Milestone.objects.get(project=project).title == "Discovery"
+
+
+@pytest.mark.django_db
+def test_discovery_assessment_gets_two_milestones():
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT))
+
+    milestones, _ = kickoff.seed_work_items(project)
+
+    assert milestones == 2
+    titles = list(Milestone.objects.filter(project=project).values_list("title", flat=True))
+    assert "Assessment e recomendações" in titles
+
+
+@pytest.mark.django_db
+def test_implementation_keeps_the_default_schedule():
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.IMPLEMENTATION))
+
+    milestones, _ = kickoff.seed_work_items(project)
+
+    assert milestones == len(kickoff.KICKOFF_TEMPLATE)
+
+
+@pytest.mark.django_db
+def test_project_without_tier_falls_back_to_the_default_schedule():
+    without_service = ProjectFactory()
+    loose_service = ProjectFactory(service=ServiceFactory())
+
+    assert kickoff.template_for(without_service) is kickoff.KICKOFF_TEMPLATE
+    assert kickoff.template_for(loose_service) is kickoff.KICKOFF_TEMPLATE
 
 
 @pytest.mark.django_db

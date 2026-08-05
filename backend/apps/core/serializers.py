@@ -118,12 +118,15 @@ class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
 
 class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
     stage_name = serializers.CharField(source="stage.name", read_only=True)
+    service_name = serializers.CharField(source="service.name", read_only=True)
+    service_tier = serializers.CharField(source="service.tier", read_only=True)
 
     class Meta:
         model = Opportunity
         fields = [
             "id", "client", "contact", "title", "scope", "estimated_value", "stage", "stage_name",
-            "owner", "expected_close_date", "created_at", "updated_at",
+            "owner", "expected_close_date", "service", "service_name", "service_tier",
+            "created_at", "updated_at",
         ]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
 
@@ -256,9 +259,14 @@ class DocumentSerializer(serializers.ModelSerializer[Document]):
 
 
 class ServiceSerializer(serializers.ModelSerializer[Service]):
+    tier_display = serializers.CharField(source="get_tier_display", read_only=True)
+
     class Meta:
         model = Service
-        fields = ["id", "name", "active", "created_at", "updated_at"]
+        fields = ["id", "name", "active", "tier", "tier_display", "list_price", "summary",
+                  "created_at", "updated_at"]
+        # A unicidade do `tier` ativo vem da UniqueConstraint do modelo; o DRF a deriva
+        # sozinho (respeitando a condição), como no `PipelineStage`.
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
