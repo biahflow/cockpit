@@ -70,6 +70,10 @@ services:
       # desenvolve é hostil de ler; produção tem um coletor que indexa campo. O `SENTRY_*` vem do
       # `.env` pelo `env_file`; vazio = rastreamento de erro desligado.
       DJANGO_LOG_FORMAT: ${DJANGO_LOG_FORMAT:-json}
+      # Backup (FDD 021). A API não faz backup nenhum — só lê o carimbo que o sidecar deixa, para
+      # o `manage.py backup_status` poder dizer se o backup parou de rodar.
+      BACKUP_ROOT: /var/lib/biahflow/backups
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
     volumes:
       - media_data:/var/lib/biahflow/media
     depends_on:
@@ -90,6 +94,10 @@ services:
     # primeiro deploy.
     volumes:
       - media_data:/var/lib/biahflow/media
+      # Só-leitura, e só pelo carimbo: quem escreve aqui é o sidecar `backup`. Montar rw daria ao
+      # processo que atende a internet permissão de apagar as cópias — que é exatamente o que um
+      # ransomware procura depois de entrar pela aplicação.
+      - backup_data:/var/lib/biahflow/backups:ro
     healthcheck:
       # `/readyz` e não `/healthz`: aqui a pergunta é "pode entrar no balanceador?", e um container
       # que subiu sem alcançar o banco não pode. A sonda de liveness (`/healthz`) é a do
@@ -136,6 +144,59 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Backup do banco e dos documentos (FDD 021, ADR 0013).
+  #
+  # Imagem própria e não a da API: `pg_dump` recusa rodar contra um servidor de major maior que a
+  # dele, e a imagem da API é Debian bookworm (postgresql-client 15) contra um servidor 16. Aqui a
+  # base é o mesmo `postgres:16-alpine` do serviço `db` — trocar a major de um obriga a trocar do
+  # outro. De quebra, o backup não depende do build da aplicação: API quebrada, ainda se restaura.
+  #
+  # Restauração é manual e destrutiva, pelo mesmo container:
+  #   docker compose -f docker-compose.prod.yml stop api web
+  #   docker compose -f docker-compose.prod.yml exec backup restore.sh --latest --yes
+  # Passo a passo em docs/runbooks/backup-e-restauracao.md.
+  backup:
+    build:
+      context: ./ops/backup
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Variáveis padrão do libpq: a senha vai por ambiente e nunca na linha de comando, que
+      # qualquer `ps` no host mostraria.
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:?defina POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER:?defina POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      BACKUP_ROOT: /backups
+      BACKUP_MEDIA_ROOT: /media
+      # Padrão diário, 03:15 no fuso do container. `TZ` vem do `.env` se houver.
+      BACKUP_CRON: ${BACKUP_CRON:-15 3 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      # Offsite opt-in: vazio, o backup é só local — que é melhor que nenhum, mas não sobrevive
+      # ao host. Preenchido, cada cópia sobe para o bucket. Ver o runbook.
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_PREFIX: ${BACKUP_S3_PREFIX:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-}
+      BACKUP_S3_PROVIDER: ${BACKUP_S3_PROVIDER:-Other}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:-}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:-}
+    volumes:
+      - backup_data:/backups
+      # Leitura e escrita, apesar de o backup só ler: a **restauração** roda neste mesmo container
+      # e precisa devolver os arquivos. Separar em dois serviços para ganhar o `:ro` no caminho
+      # feliz custaria uma imagem duplicada e um serviço que ninguém lembra de manter.
+      - media_data:/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   media_data:
+  # As cópias. Volume próprio de propósito: um `down -v` leva junto, e é o que o runbook avisa
+  # antes de mandar rodar qualquer coisa com `-v`.
+  backup_data:

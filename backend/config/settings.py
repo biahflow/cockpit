@@ -300,6 +300,14 @@ SENTRY_ENVIRONMENT = os.getenv("SENTRY_ENVIRONMENT", "")
 # um erro de browser e um de API caírem na mesma release.
 SENTRY_RELEASE = os.getenv("SENTRY_RELEASE", "")
 SENTRY_TRACES_SAMPLE_RATE = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0") or 0)
+
+# Backup (FDD 021, ADR 0013). O portal não faz backup — quem faz é o sidecar `backup`, em outro
+# container. O que a aplicação lê é o carimbo que ele deixa, e só para o `manage.py backup_status`
+# poder reprovar quando o agendamento parou. Vazio (o default fora do compose de produção) = o
+# comando diz que não há nada configurado, em vez de fingir que está tudo bem.
+BACKUP_ROOT = os.getenv("BACKUP_ROOT", "")
+# 26 h: folga sobre o backup diário, sem deixar passar um dia inteiro sem cópia.
+BACKUP_MAX_AGE_HOURS = _env_int("BACKUP_MAX_AGE_HOURS", 26)
 CSRF_TRUSTED_ORIGINS = _env_list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:19173,http://127.0.0.1:19173",

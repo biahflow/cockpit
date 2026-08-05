@@ -14,4 +14,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0010 — Equipe do projeto como fronteira de acesso
 - 0011 — Processo de produção e TLS na borda (gunicorn, checks de deploy, cofre de segredos)
 - 0012 — Observabilidade: identidade de requisição, sondas e rastreamento de erro
+- 0013 — Backup lógico em container próprio, com restauração exercitada no CI
 
