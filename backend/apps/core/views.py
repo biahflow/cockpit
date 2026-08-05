@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import json
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import cast
@@ -65,11 +66,13 @@ from .models import (
     PipelineStage,
     Project,
     ProjectDeliverable,
+    ProjectMember,
     ProjectPhase,
     Service,
     SignatureRequest,
     Task,
     User,
+    project_scope_q,
 )
 from .permissions import RolePermission
 from .serializers import (
@@ -94,6 +97,7 @@ from .serializers import (
     PhaseDeliverableSerializer,
     PipelineStageSerializer,
     ProjectDeliverableSerializer,
+    ProjectMemberSerializer,
     ProjectPhaseSerializer,
     ProjectSerializer,
     ServiceSerializer,
@@ -102,19 +106,6 @@ from .serializers import (
     TaskSyncSerializer,
     UserSerializer,
 )
-
-
-def _acts_on_project(user: User, project: Project) -> bool:
-    """Se a pessoa atua no projeto — dona dele ou de algum marco/tarefa dele.
-
-    Não existe modelo de equipe no domínio; essa é a única expressão de "faz parte" que o
-    schema oferece hoje. Ver ADR 0009.
-    """
-    return (
-        project.owner_id == user.pk
-        or Milestone.objects.filter(project=project, owner=user).exists()
-        or Task.objects.filter(project=project, owner=user).exists()
-    )
 
 
 class ArchiveModelViewSet(viewsets.ModelViewSet):
@@ -127,12 +118,64 @@ class ArchiveModelViewSet(viewsets.ModelViewSet):
         instance.archive()
 
 
-class QueryParamFilterMixin:
-    """Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+# Confina o recurso aos projetos de que a pessoa participa (RFC 0003, ADR 0010).
+#
+# `project_path` é o caminho até o projeto a partir do modelo consultado — `""` no próprio
+# `Project`, `"project"` na maioria, `"project_phase__project"` no entregável.
+#
+# Cobre leitura e escrita no mesmo lugar de propósito. Só a leitura seria contornável em uma
+# requisição: criar uma tarefa em projeto alheio bastava para virar dono dela e, pelo critério
+# antigo, ganhar acesso ao projeto. E `perform_update` fecha o caminho inverso — **mover** um
+# objeto próprio para um projeto de terceiros.
+#
+# Sem docstring de propósito: o drf-spectacular usa o docstring da classe como `description` de
+# cada endpoint, e um mixin no topo da MRO vaza o próprio texto para dezenas de rotas alheias.
+class ProjectScopedMixin:
 
-    `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-    que não passam pelo teste de dígito das chaves estrangeiras.
-    """
+    project_path = "project"
+    scope_payload_field = "project"  # a chave do corpo que amarra o objeto a um projeto
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()  # type: ignore[misc]
+        scope = project_scope_q(self.request.user, self.project_path)  # type: ignore[attr-defined]
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def scoped_project(self, validated_data: dict) -> Project | None:
+        """De onde sai o projeto do payload. Sobrescrito por quem não o carrega direto."""
+        return validated_data.get("project")
+
+    def _assert_in_scope(self, project: Project | None) -> None:
+        user = self.request.user  # type: ignore[attr-defined]
+        if user.is_admin_role or user.role != User.Role.DELIVERY:
+            return
+        if project is None or not Project.objects.visible_to(user).filter(pk=project.pk).exists():
+            raise PermissionDenied("Você não participa deste projeto.")
+
+    def create_kwargs(self) -> dict:
+        """Campos derivados da sessão gravados na criação (ex.: `owner`).
+
+        Existe como hook para que os viewsets não precisem reimplementar `perform_create` —
+        era assim que a guarda de escopo passava despercebida, porque o método do viewset
+        vencia o do mixin na MRO.
+        """
+        return {}
+
+    def perform_create(self, serializer) -> None:  # type: ignore[no-untyped-def]
+        self._assert_in_scope(self.scoped_project(serializer.validated_data))
+        serializer.save(**self.create_kwargs())
+
+    def perform_update(self, serializer) -> None:  # type: ignore[no-untyped-def]
+        # Só quando o corpo tenta *mudar* o vínculo; um PATCH de status não reavalia nada.
+        if self.scope_payload_field in serializer.validated_data:
+            self._assert_in_scope(self.scoped_project(serializer.validated_data))
+        super().perform_update(serializer)  # type: ignore[misc]
+
+
+# Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+# `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
+# que não passam pelo teste de dígito das chaves estrangeiras.
+# Comentário, e não docstring, pelo mesmo motivo do `ProjectScopedMixin` acima.
+class QueryParamFilterMixin:
 
     filter_fields: tuple[str, ...] = ()
     filter_exact_fields: tuple[str, ...] = ()
@@ -192,14 +235,22 @@ def _ai_run(  # type: ignore[no-untyped-def]
     return Response(payload)
 
 
-def build_client_overview(client: Client) -> dict[str, object]:
+def build_client_overview(
+    client: Client, projects: Iterable[Project] | None = None
+) -> dict[str, object]:
     """Agrega o estado de um cliente para a visão multi-cliente 🟢🟡🔴 e o painel do detalhe.
 
     Semáforo = pior saúde entre os projetos ativos (é onde agir). Fase/risco vêm desse mesmo
-    projeto-foco; o ROI soma todos os projetos do cliente (padrão de `AnalyticsView`).
+    projeto-foco; o ROI soma os projetos considerados (padrão de `AnalyticsView`).
+
+    `projects` existe porque o agregado é **por cliente**: estreitar a lista de clientes não
+    basta: quem participa de um projeto do cliente X veria ROI, saúde e AI Score dos outros
+    projetos de X. Quem chama passa o recorte que enxerga (RFC 0003).
     """
     today = timezone.localdate()
-    projects = list(client.projects.filter(archived_at__isnull=True))
+    if projects is None:
+        projects = client.projects.filter(archived_at__isnull=True)
+    projects = list(projects)
     active = [project for project in projects if project.status != Project.Status.COMPLETED]
     revenue = sum((project.actual_value for project in projects), Decimal("0"))
     cost = sum((project.cost for project in projects), Decimal("0"))
@@ -258,18 +309,29 @@ class ClientViewSet(ArchiveModelViewSet):
         status_param = self.request.query_params.get("status")
         if status_param in {Client.Status.PROSPECT, Client.Status.ACTIVE}:
             queryset = queryset.filter(status=status_param)
-        return queryset
+        # Entrega só conhece o cliente para quem trabalha (RFC 0003).
+        scope = project_scope_q(self.request.user, "projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def _visible_projects(self, client: Client):  # type: ignore[no-untyped-def]
+        return Project.objects.visible_to(self.request.user).filter(
+            client=client, archived_at__isnull=True
+        )
 
     @extend_schema(responses=inline_serializer("ClientOverviewList", {"clients": serializers.ListField()}))
     @action(detail=False, methods=["get"])
     def overview(self, request: Request) -> Response:
         """Lista agregada p/ o grid de clientes (honra `?status=`)."""
-        return Response({"clients": [build_client_overview(client) for client in self.get_queryset()]})
+        return Response({"clients": [
+            build_client_overview(client, projects=self._visible_projects(client))
+            for client in self.get_queryset()
+        ]})
 
     @extend_schema(responses=inline_serializer("ClientOverviewDetail", {}))
     @action(detail=True, methods=["get"], url_path="overview")
     def overview_detail(self, request: Request, pk: str | None = None) -> Response:
-        return Response(build_client_overview(self.get_object()))
+        client = self.get_object()
+        return Response(build_client_overview(client, projects=self._visible_projects(client)))
 
 
 class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
@@ -277,6 +339,12 @@ class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     queryset = Contact.objects.select_related("client").all()
     serializer_class = ContactSerializer
     filter_fields = ("client",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        # Sem isto, as pessoas dos clientes que acabaram de sumir continuariam listadas.
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
 
 
 class PipelineStageViewSet(viewsets.ModelViewSet):
@@ -298,8 +366,13 @@ class OpportunityViewSet(ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
+        # Ganha **e** convertida num projeto da equipe: a oportunidade é o outro lado do
+        # projeto, e deixá-la aberta reabriria pelo comercial o que o recorte fechou.
         if self.request.user.role == User.Role.DELIVERY and not self.request.user.is_admin_role:
-            return queryset.filter(stage__kind=PipelineStage.Kind.WON)
+            return queryset.filter(
+                project_scope_q(self.request.user, "project"),
+                stage__kind=PipelineStage.Kind.WON,
+            ).distinct()
         return queryset
 
     @action(detail=True, methods=["post"], url_path="convert-to-project")
@@ -367,12 +440,16 @@ class OpportunityViewSet(ArchiveModelViewSet):
         )
 
 
-class ProjectViewSet(ArchiveModelViewSet):
+class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
     resource = "project"
+    project_path = ""  # o recorte é sobre o próprio projeto
     queryset = Project.objects.select_related("client", "opportunity", "owner").all()
     serializer_class = ProjectSerializer
 
     def perform_create(self, serializer: ProjectSerializer) -> None:
+        # Sem `_assert_in_scope`: criar projeto novo não é acessar dado de terceiro, e o signal
+        # `_owner_is_always_a_member` já coloca quem criou na equipe. Entrega não chega aqui —
+        # `RolePermission` só lhe dá leitura e edição de projeto.
         serializer.save(owner=self.request.user)
 
     @action(detail=True, methods=["post"])
@@ -445,7 +522,7 @@ class PhaseDeliverableViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     filter_fields = ("phase",)
 
 
-class ProjectPhaseViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class ProjectPhaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """Estado da jornada por projeto (leitura para todos; equipe edita `target_date`)."""
 
     resource = "project_phase"
@@ -458,44 +535,73 @@ class ProjectPhaseViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
         # Materializa de forma preguiçosa a jornada de projetos antigos ao consultá-la.
+        # O projeto vem de `visible_to`, não de `Project.objects`: senão um `?project=` de
+        # projeto alheio dispararia uma **escrita** (a materialização) fora do escopo.
         project_id = self.request.query_params.get("project")
         if project_id and project_id.isdigit():
-            project = Project.objects.filter(pk=project_id, archived_at__isnull=True).first()
+            project = (
+                Project.objects.visible_to(self.request.user)
+                .filter(pk=project_id, archived_at__isnull=True)
+                .first()
+            )
             if project and not queryset.filter(project=project).exists():
                 journey.materialize_journey(project)
                 queryset = super().get_queryset().filter(project=project)
         return queryset
 
 
-class ProjectDeliverableViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class ProjectDeliverableViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """Entregáveis por projeto — a equipe marca como entregue (delivery/admin)."""
 
     resource = "project_deliverable"
+    project_path = "project_phase__project"  # o entregável não carrega o projeto direto
+    scope_payload_field = "project_phase"
     queryset = ProjectDeliverable.objects.select_related(
         "project_phase", "project_phase__project"
     )
     serializer_class = ProjectDeliverableSerializer
     filter_fields = ("project_phase",)
 
+    def scoped_project(self, validated_data: dict) -> Project | None:
+        phase = validated_data.get("project_phase")
+        return phase.project if phase is not None else None
 
-class MilestoneViewSet(CalendarActionMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+
+class ProjectMemberViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """Equipe do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+    Escrita só de admin (`RolePermission`): quem monta a equipe concede acesso a dado de
+    projeto, e essa caneta fica com uma função só. Entrega e Vendas leem a equipe dos projetos
+    que já enxergam, porque precisam saber quem toca a conta.
+    """
+
+    resource = "project_member"
+    queryset = ProjectMember.objects.select_related("project", "user", "added_by").all()
+    serializer_class = ProjectMemberSerializer
+    filter_fields = ("project", "user")
+
+    def create_kwargs(self) -> dict:
+        return {"added_by": self.request.user}
+
+
+class MilestoneViewSet(ProjectScopedMixin, CalendarActionMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "milestone"
     queryset = Milestone.objects.select_related("project", "owner").all()
     serializer_class = MilestoneSerializer
     filter_fields = ("project",)
 
-    def perform_create(self, serializer: MilestoneSerializer) -> None:
-        serializer.save(owner=self.request.user)
+    def create_kwargs(self) -> dict:
+        return {"owner": self.request.user}
 
 
-class TaskViewSet(CalendarActionMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+class TaskViewSet(ProjectScopedMixin, CalendarActionMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "task"
     queryset = Task.objects.select_related("project", "milestone", "owner").all()
     serializer_class = TaskSerializer
     filter_fields = ("project", "milestone")
 
-    def perform_create(self, serializer: TaskSerializer) -> None:
-        serializer.save(owner=self.request.user)
+    def create_kwargs(self) -> dict:
+        return {"owner": self.request.user}
 
     @extend_schema(request=LinkExternalSerializer, responses={200: TaskSerializer})
     @action(detail=True, methods=["post"], url_path="link-external")
@@ -548,14 +654,14 @@ class TaskViewSet(CalendarActionMixin, QueryParamFilterMixin, ArchiveModelViewSe
         return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
 
-class DigitalEmployeeViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class DigitalEmployeeViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "digital_employee"
     queryset = DigitalEmployee.objects.select_related("project").all()
     serializer_class = DigitalEmployeeSerializer
     filter_fields = ("project",)
 
 
-class ArtifactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """Artefatos da jornada (Discovery, Assessment, Proposta, Contrato) — FDD 016."""
 
     resource = "artifact"
@@ -566,17 +672,13 @@ class ArtifactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     filter_fields = ("opportunity", "project")
     filter_exact_fields = ("kind", "status")
 
-    def get_queryset(self):  # type: ignore[no-untyped-def]
-        queryset = super().get_queryset()
-        # Proposta e contrato carregam valor e condição comercial; Entrega só vê o que é do projeto.
-        if self.request.user.role == User.Role.DELIVERY and not self.request.user.is_admin_role:
-            queryset = queryset.filter(project__isnull=False)
-        return queryset
+    def create_kwargs(self) -> dict:
+        return {"created_by": self.request.user}
 
     def perform_create(self, serializer: ArtifactSerializer) -> None:  # type: ignore[override]
-        # A criação não passa por `has_object_permission`, então a guarda de escrita mora
-        # aqui: até agora a segregação da FDD 016 existia só na leitura, e Entrega conseguia
-        # gravar um artefato comercial que sumia da própria lista em seguida.
+        # O mixin já exige que o projeto seja da equipe. Aqui fica a regra da FDD 016 que
+        # sobrevive a ela: proposta e contrato carregam valor e condição comercial, então
+        # Entrega não vincula artefato a oportunidade nenhuma.
         user = self.request.user
         if (
             user.role == User.Role.DELIVERY
@@ -584,42 +686,22 @@ class ArtifactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             and serializer.validated_data.get("opportunity") is not None
         ):
             raise PermissionDenied("Entrega não vincula artefatos a oportunidades.")
-        serializer.save(created_by=user)
+        super().perform_create(serializer)
 
 
-class DocumentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
+
+    Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+    nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+    """
+
     resource = "document"
     queryset = Document.objects.select_related(
         "client", "opportunity", "project", "uploaded_by"
     ).prefetch_related("signature_requests").all()
     serializer_class = DocumentSerializer
     filter_fields = ("client", "opportunity", "project")
-
-    def get_queryset(self):  # type: ignore[no-untyped-def]
-        queryset = super().get_queryset()
-        # Proposta e contrato salvos pelo painel de artefatos nascem ligados à oportunidade e
-        # carregam valor e condição comercial: Entrega só vê o documento do projeto em que
-        # atua. Não há modelo de equipe — "atuar" é ser dono do projeto ou de um item dele.
-        # Ver FDD 017 e ADR 0009; espelha o recorte do `ArtifactViewSet` (FDD 016).
-        if self.request.user.role == User.Role.DELIVERY and not self.request.user.is_admin_role:
-            queryset = queryset.filter(
-                Q(project__owner=self.request.user)
-                | Q(project__milestone_items__owner=self.request.user)
-                | Q(project__task_items__owner=self.request.user)
-            ).distinct()
-        return queryset
-
-    def perform_create(self, serializer: DocumentSerializer) -> None:  # type: ignore[override]
-        # Espelha `get_queryset` na escrita: sem isso, Entrega criaria um documento que
-        # desaparece da própria lista no instante seguinte.
-        user = self.request.user
-        if user.role == User.Role.DELIVERY and not user.is_admin_role:
-            project = serializer.validated_data.get("project")
-            if project is None or not _acts_on_project(user, project):
-                raise PermissionDenied(
-                    "Entrega só vincula documentos a projetos em que atua."
-                )
-        serializer.save()
 
     @action(detail=True, methods=["get"])
     def download(self, request: Request, pk: str | None = None) -> FileResponse:
@@ -665,7 +747,7 @@ class DocumentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         return Response(SignatureRequestSerializer(signature).data)
 
 
-class MeetingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "meeting"
     queryset = Meeting.objects.select_related("project").all()
     serializer_class = MeetingSerializer
@@ -720,14 +802,14 @@ class MeetingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         return Response(ai_score.score_meeting(meeting, user=request.user))
 
 
-class PendenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class PendenciaViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "pendencia"
     queryset = Pendencia.objects.select_related("project", "owner").all()
     serializer_class = PendenciaSerializer
     filter_fields = ("project",)
 
-    def perform_create(self, serializer: PendenciaSerializer) -> None:
-        serializer.save(owner=self.request.user)
+    def create_kwargs(self) -> dict:
+        return {"owner": self.request.user}
 
 
 class LeadViewSet(ArchiveModelViewSet):
@@ -1113,7 +1195,9 @@ class RiskView(APIView):
 
     @extend_schema(responses=inline_serializer("RiskResponse", {"projects": serializers.ListField()}))
     def get(self, request: Request) -> Response:
-        projects = Project.objects.filter(archived_at__isnull=True).exclude(status=Project.Status.COMPLETED)
+        projects = Project.objects.visible_to(request.user).filter(
+            archived_at__isnull=True
+        ).exclude(status=Project.Status.COMPLETED)
         assessments = sorted((risk.assess_project(p) for p in projects), key=lambda a: a["score"], reverse=True)
         return Response({"projects": assessments})
 
@@ -1124,7 +1208,9 @@ class HealthView(APIView):
 
     @extend_schema(responses=inline_serializer("HealthResponse", {"projects": serializers.ListField()}))
     def get(self, request: Request) -> Response:
-        projects = Project.objects.filter(archived_at__isnull=True).exclude(status=Project.Status.COMPLETED)
+        projects = Project.objects.visible_to(request.user).filter(
+            archived_at__isnull=True
+        ).exclude(status=Project.Status.COMPLETED)
         # pior primeiro: menor score de saúde no topo, para a equipe agir onde dói.
         assessments = sorted((health.assess_project_health(p) for p in projects), key=lambda a: a["score"])
         return Response({"projects": assessments})
@@ -1162,7 +1248,7 @@ class AgentView(APIView):
         question = str(request.data.get("question", "")).strip()
         if not question:
             return Response({"detail": "Informe uma pergunta."}, status=status.HTTP_400_BAD_REQUEST)
-        prompt = f"{agent.build_context()}\n\nPergunta: {question}"
+        prompt = f"{agent.build_context(request.user)}\n\nPergunta: {question}"
         return _ai_run(request, f"agent_{key}", agent.system, prompt)
 
 
@@ -1237,24 +1323,33 @@ class DashboardView(APIView):
     )
     def get(self, request: Request) -> Response:
         today = timezone.localdate()
-        stages = PipelineStage.objects.annotate(
+        is_delivery = (
+            request.user.role == User.Role.DELIVERY and not request.user.is_admin_role
+        )
+        # O funil traz valor estimado de **todas** as oportunidades, inclusive as não-ganhas,
+        # que o `OpportunityViewSet` já esconde de Entrega. O painel não pode ser o canal
+        # lateral disso. O campo permanece (a forma do contrato não muda), vazio.
+        stages = [] if is_delivery else list(PipelineStage.objects.annotate(
             opportunity_count=Count("opportunities"), estimated_total=Sum("opportunities__estimated_value")
-        ).values("id", "name", "kind", "position", "opportunity_count", "estimated_total")
-        projects = Project.objects.filter(archived_at__isnull=True).exclude(status=Project.Status.COMPLETED)
-        overdue_milestones = Milestone.objects.filter(archived_at__isnull=True, due_date__lt=today).exclude(
-            status=Milestone.Status.DONE
-        )
-        overdue_tasks = Task.objects.filter(archived_at__isnull=True, due_date__lt=today).exclude(
-            status=Task.Status.DONE
-        )
+        ).values("id", "name", "kind", "position", "opportunity_count", "estimated_total"))
+        visible = Project.objects.visible_to(request.user).filter(archived_at__isnull=True)
+        projects = visible.exclude(status=Project.Status.COMPLETED)
+        overdue_milestones = Milestone.objects.filter(
+            project__in=visible, archived_at__isnull=True, due_date__lt=today
+        ).exclude(status=Milestone.Status.DONE)
+        overdue_tasks = Task.objects.filter(
+            project__in=visible, archived_at__isnull=True, due_date__lt=today
+        ).exclude(status=Task.Status.DONE)
         upcoming = list(
-            Task.objects.filter(archived_at__isnull=True, due_date__gte=today)
+            Task.objects.filter(
+                project__in=visible, archived_at__isnull=True, due_date__gte=today
+            )
             .exclude(status=Task.Status.DONE)
             .order_by("due_date")[:5]
             .values("id", "title", "due_date", "project_id")
         )
         return Response({
-            "pipeline": list(stages),
+            "pipeline": stages,
             "active_projects": projects.count(),
             "overdue_count": overdue_milestones.count() + overdue_tasks.count(),
             "upcoming_tasks": upcoming,

@@ -11,6 +11,7 @@ from apps.core.models import (
     Opportunity,
     PipelineStage,
     Project,
+    ProjectMember,
     Service,
     User,
 )
@@ -82,6 +83,17 @@ class ProjectFactory(factory.django.DjangoModelFactory):
     owner = factory.SubFactory(UserFactory)
     start_date = factory.LazyFunction(timezone.localdate)
     due_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=30))
+
+
+class ProjectMemberFactory(factory.django.DjangoModelFactory):
+    """Participação numa equipe de projeto — o que dá acesso a quem é da Entrega (RFC 0003)."""
+
+    class Meta:
+        model = ProjectMember
+        django_get_or_create = ("project", "user")
+
+    project = factory.SubFactory(ProjectFactory)
+    user = factory.SubFactory(UserFactory)
 
 
 class MeetingFactory(factory.django.DjangoModelFactory):

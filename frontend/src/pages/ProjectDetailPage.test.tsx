@@ -4,8 +4,12 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { ProjectDetailPage } from "./ProjectDetailPage";
 
-const mocks = vi.hoisted(() => ({ api: vi.fn(), auth: { aiEnabled: true } as { aiEnabled: boolean; user?: { role: string } } }));
-vi.mock("../api", () => ({ api: mocks.api }));
+const mocks = vi.hoisted(() => ({
+  api: vi.fn(),
+  auth: { aiEnabled: true } as { aiEnabled: boolean; user?: { role: string } },
+  people: [] as { id: number; username: string; first_name: string; role: string }[],
+}));
+vi.mock("../api", () => ({ api: mocks.api, listUsers: () => Promise.resolve(mocks.people) }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 const artifact = () => ({
@@ -28,11 +32,12 @@ function stub() {
     if (path.startsWith("/tasks")) return Promise.resolve([{ id: 1, project: 1, title: "Tarefa 1", description: "", owner: 1, due_date: "2026-08-10", completed_at: null, status: "todo", party: "provider", is_overdue: false, milestone: null }]);
     if (path.startsWith("/meetings")) return Promise.resolve([{ id: 1, project: 1, title: "Kickoff", date: "2026-08-05", recording_url: "https://rec/1", transcript: "Cliente descreveu suas dores.", status: "held" }]);
     if (path.startsWith("/pendencias")) return Promise.resolve([{ id: 1, project: 1, title: "Aprovar escopo", description: "", status: "open", party: "client", owner: null, resolved_at: null }]);
+    if (path.startsWith("/project-members")) return Promise.resolve([{ id: 7, project: 1, user: 3, user_name: "Ana Lima", user_username: "ana", user_role: "delivery", added_by: 1, created_at: "2026-08-05T10:00:00Z" }]);
     return Promise.resolve([]);
   });
 }
 
-beforeEach(() => { mocks.api.mockReset(); mocks.auth = { aiEnabled: true }; stub(); });
+beforeEach(() => { mocks.api.mockReset(); mocks.auth = { aiEnabled: true }; mocks.people = []; stub(); });
 afterEach(cleanup);
 
 test("mostra projeto com marcos e tarefas", async () => {
@@ -187,4 +192,29 @@ test("publica o AI Score ao cliente (revisão)", async () => {
 
   await user.click(screen.getByLabelText("Publicar ao cliente (revisado)"));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ ai_score_reviewed: true }) })));
+});
+
+
+test("mostra a equipe do projeto e deixa só o admin mexer nela", async () => {
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  render(<ProjectDetailPage id={1} />);
+
+  expect(await screen.findByText("Equipe do projeto")).toBeInTheDocument();
+  expect(screen.getByText("Ana Lima")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Adicionar à equipe")).not.toBeInTheDocument();
+});
+
+test("admin adiciona alguém à equipe", async () => {
+  const user = userEvent.setup();
+  mocks.auth = { aiEnabled: true, user: { role: "admin" } };
+  mocks.people = [{ id: 9, username: "bruno", first_name: "Bruno", role: "delivery" }];
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Equipe do projeto");
+
+  await user.selectOptions(await screen.findByLabelText("Pessoa a adicionar"), "9");
+  await user.click(screen.getByLabelText("Adicionar à equipe"));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/project-members/", expect.objectContaining({
+    method: "POST", body: JSON.stringify({ project: 1, user: 9 }),
+  })));
 });

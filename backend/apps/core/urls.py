@@ -35,6 +35,7 @@ from .views import (
     PipelineStageViewSet,
     PortalProjectSnapshotView,
     ProjectDeliverableViewSet,
+    ProjectMemberViewSet,
     ProjectPhaseViewSet,
     ProjectViewSet,
     RecommendationsView,
@@ -56,6 +57,7 @@ router.register("journey-phases", JourneyPhaseViewSet)
 router.register("phase-deliverables", PhaseDeliverableViewSet)
 router.register("project-phases", ProjectPhaseViewSet)
 router.register("project-deliverables", ProjectDeliverableViewSet)
+router.register("project-members", ProjectMemberViewSet)
 router.register("digital-employees", DigitalEmployeeViewSet)
 router.register("milestones", MilestoneViewSet)
 router.register("tasks", TaskViewSet)

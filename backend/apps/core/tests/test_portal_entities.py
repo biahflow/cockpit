@@ -5,13 +5,14 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Meeting, Pendencia, User
 
-from .factories import ProjectFactory, UserFactory
+from .factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 
 @pytest.mark.django_db
 def test_delivery_creates_and_lists_meetings_filtered_by_project() -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
     other = ProjectFactory()
     Meeting.objects.create(project=other, title="Outra", date=timezone.localdate())
     client = APIClient()
@@ -47,6 +48,7 @@ def test_sales_cannot_manage_pendencias() -> None:
 def test_resolving_pendencia_sets_resolved_at() -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
     pendencia = Pendencia.objects.create(project=project, title="Aprovar escopo", owner=delivery)
     assert pendencia.resolved_at is None
     client = APIClient()
@@ -67,6 +69,7 @@ def test_resolving_pendencia_sets_resolved_at() -> None:
 def test_pendencia_owner_is_set_to_request_user() -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
     client = APIClient()
     client.force_authenticate(delivery)
     resp = client.post(

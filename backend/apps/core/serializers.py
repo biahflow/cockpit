@@ -30,6 +30,7 @@ from .models import (
     PipelineStage,
     Project,
     ProjectDeliverable,
+    ProjectMember,
     ProjectPhase,
     Service,
     SignatureRequest,
@@ -290,6 +291,29 @@ class DocumentSerializer(serializers.ModelSerializer[Document]):
             document.file = uploaded_file
         document.save()
         return document
+
+
+class ProjectMemberSerializer(serializers.ModelSerializer[ProjectMember]):
+    user_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    user_username = serializers.CharField(source="user.username", read_only=True)
+    user_role = serializers.CharField(source="user.role", read_only=True)
+
+    class Meta:
+        model = ProjectMember
+        fields = ["id", "project", "user", "user_name", "user_username", "user_role",
+                  "added_by", "created_at"]
+        read_only_fields = ["id", "added_by", "created_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        # A constraint do banco é condicional ao arquivamento; aqui é só para o erro sair
+        # como mensagem de campo em vez de 500.
+        project = cast(Project | None, attrs.get("project"))
+        user = cast(User | None, attrs.get("user"))
+        if ProjectMember.objects.filter(
+            project=project, user=user, archived_at__isnull=True
+        ).exists():
+            raise serializers.ValidationError("Esta pessoa já está na equipe do projeto.")
+        return attrs
 
 
 class ServiceSerializer(serializers.ModelSerializer[Service]):

@@ -119,6 +119,34 @@ class Opportunity(TimestampedModel):
         return self.stage.kind == PipelineStage.Kind.WON
 
 
+class ProjectQuerySet(models.QuerySet["Project"]):
+    def visible_to(self, user: User) -> ProjectQuerySet:
+        """Projetos que a pessoa pode ver — a fronteira de acesso da Entrega.
+
+        Admin e Vendas enxergam tudo (o comercial precisa acompanhar a carteira inteira);
+        Entrega vê só aquilo de que participa. É a **única** expressão da regra: viewsets,
+        agregadores e permissão de objeto derivam daqui, para não repetir o critério em SQL
+        num lugar e em Python no outro. Ver RFC 0003 e ADR 0010.
+        """
+        if user.is_admin_role or user.role != User.Role.DELIVERY:
+            return self
+        return self.filter(members__user=user, members__archived_at__isnull=True)
+
+
+def project_scope_q(user: User, path: str = "project") -> models.Q:
+    """O mesmo recorte, para quem filtra *através* de um projeto (ex.: `Task`).
+
+    `path` é o caminho até o projeto a partir do modelo consultado (`""` no próprio `Project`).
+    """
+    if user.is_admin_role or user.role != User.Role.DELIVERY:
+        return models.Q()
+    prefix = f"{path}__" if path else ""
+    return models.Q(**{
+        f"{prefix}members__user": user,
+        f"{prefix}members__archived_at__isnull": True,
+    })
+
+
 class Project(TimestampedModel):
     class Status(models.TextChoices):
         PLANNING = "planning", "Planejamento"
@@ -155,6 +183,8 @@ class Project(TimestampedModel):
         "Meeting", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
 
+    objects = ProjectQuerySet.as_manager()
+
     class Meta:
         ordering = ["due_date", "id"]
 
@@ -170,6 +200,42 @@ class Project(TimestampedModel):
             .order_by("phase__position", "id")
             .first()
         )
+
+
+class ProjectMember(TimestampedModel):
+    """Quem participa do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+    Antes não havia como dizer "esta pessoa é deste projeto": a única ligação pessoa↔trabalho
+    era `owner`, sempre igual a quem criou o registro e read-only na API. Sem isso, restringir
+    Entrega aos seus projetos deixaria todo mundo sem ver nada, porque na conversão o dono do
+    projeto e de todos os marcos/tarefas é o vendedor.
+
+    Sem papel dentro do projeto de propósito: quem é da equipe, é. O papel de produto já vive
+    em `User.role`, e um segundo eixo agora seria adivinhar requisito.
+    """
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="members")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="project_memberships")
+    # Conceder acesso é ato de segurança: sem isto não há cadeia de quem colocou quem.
+    # Nulo quando a linha veio do backfill da migração 0025, que não tem autor.
+    added_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["user__first_name", "user__username", "id"]
+        constraints = [
+            # Condicional ao arquivamento: sair da equipe e voltar depois é rotina, e uma
+            # constraint cega sobre as linhas arquivadas travaria a readmissão.
+            models.UniqueConstraint(
+                fields=["project", "user"],
+                condition=models.Q(archived_at__isnull=True),
+                name="unique_active_project_member",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} @ {self.project}"
 
 
 class WorkItem(TimestampedModel):

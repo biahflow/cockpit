@@ -31,6 +31,12 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
       arquivo, 400 em vez de 500 no aceite de convite e dependências de frontend fixadas.
       CSRF, CORS, endpoints públicos e XSS no frontend foram verificados e estavam corretos.
       O hardening de transporte (HSTS, SSL redirect, `check --deploy`) depende do item abaixo.
+- [x] **Visibilidade de projeto por participação** — RFC 0003, ADR 0010, FDD 018. Fecha a
+      assimetria que a ADR 0009 havia registrado como aceita: Entrega via todos os projetos e
+      tudo o que pende deles, além do risco, da saúde e do ROI de toda a base pelos
+      agregadores. Nasce a **equipe do projeto** (`ProjectMember`), que passa a ser o critério
+      único de acesso, com backfill que preserva o que existia. Mudança **incompatível em
+      semântica** para consumidores autenticados como Entrega.
 - [ ] Ampliar a matriz de testes: acessibilidade, responsividade e carga (há `backend/loadtests/`).
 
 ## Versão 2 — Assistente de IA (essencialmente entregue)

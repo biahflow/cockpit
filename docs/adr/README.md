@@ -11,4 +11,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0007 — Assinatura eletrônica: provedor homologado e webhook de status
 - 0008 — Artefatos da jornada como entidade (um modelo com `kind`, estado próprio)
 - 0009 — Visibilidade por função e limites de requisição
+- 0010 — Equipe do projeto como fronteira de acesso
 

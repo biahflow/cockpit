@@ -113,6 +113,23 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 - **Testar:** mudar o status da issue vinculada → a tarefa muda no portal (e repropaga ao portal do
   cliente); mudar a tarefa no portal → a issue é atualizada. A entrada nunca gera loop (guard de eco).
 
+## Equipe do projeto e visibilidade
+
+Quem é da **Entrega** vê apenas os projetos de que participa — e tudo o que pende deles
+(marcos, tarefas, reuniões, pendências, documentos, artefatos), mais os clientes que atende.
+O critério é a **equipe do projeto** (`ProjectMember`); ser dono de um marco ou tarefa não
+basta. Ver RFC 0003, ADR 0010 e FDD 018.
+
+- **Quem monta a equipe:** só admin, no painel **"Equipe do projeto"** dentro do projeto.
+- **Atenção na conversão:** quando **Vendas** converte uma oportunidade, o projeto nasce sem
+  equipe e fica **invisível para a Entrega** até um admin incluir alguém. Se alguém disser que
+  "o projeto sumiu", é quase sempre isto.
+- **No deploy desta versão**, a migração `0025` monta as equipes a partir de quem era dono do
+  projeto, de um marco ou de uma tarefa — ninguém perde acesso. Mas esse acesso herdado é o
+  antigo, que era largo demais: **revise as alocações** depois de subir.
+- **Tirar alguém da equipe corta o acesso na hora.** Readmitir depois é permitido.
+- Admin e Vendas continuam enxergando tudo.
+
 ## Limites de requisição
 
 Toda a API tem teto (FDD 017, ADR 0009). `anon`/`user` são a rede de baixo; os escopos nomeados

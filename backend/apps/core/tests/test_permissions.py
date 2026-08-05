@@ -7,7 +7,13 @@ from rest_framework.test import APIClient
 
 from apps.core.models import PipelineStage, Project, User
 
-from .factories import ClientFactory, OpportunityFactory, ProjectFactory, UserFactory
+from .factories import (
+    ClientFactory,
+    OpportunityFactory,
+    ProjectFactory,
+    ProjectMemberFactory,
+    UserFactory,
+)
 
 
 @pytest.fixture
@@ -49,8 +55,12 @@ def test_sales_operates_crm_but_cannot_create_or_edit_projects(client: APIClient
 
 @pytest.mark.django_db
 def test_delivery_only_sees_won_opportunities_and_cannot_edit_crm(client: APIClient) -> None:
+    """Ganha **e** convertida num projeto da equipe (RFC 0003) — antes bastava estar ganha."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     won = OpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
+    project = ProjectFactory(opportunity=won, client=won.client)
+    ProjectMemberFactory(project=project, user=delivery)
+    OpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
     OpportunityFactory()
     client.force_authenticate(delivery)
 
@@ -70,6 +80,7 @@ def test_delivery_only_sees_won_opportunities_and_cannot_edit_crm(client: APICli
 def test_delivery_can_manage_project_execution(client: APIClient) -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
     client.force_authenticate(delivery)
 
     response = client.patch(

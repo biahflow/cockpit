@@ -63,11 +63,13 @@ Por IP, o custo do ataque cresce com a necessidade de rede.
 Uma pessoa de Entrega deixa de ver documentos que via ontem — os de cliente, os de oportunidade e
 os de projetos em que não atua. É uma quebra de expectativa deliberada, e é o ponto da mudança.
 
-Fica uma **assimetria conhecida e aceita**: Entrega continua enxergando todos os projetos, mas só
-os documentos dos seus. Estender "projetos em que atua" a `Project`/`Milestone`/`Task` muda o
-modelo de acesso da área inteira e mexe em várias telas — é trabalho de RFC próprio, não desta
-entrega. Enquanto isso, a tela de projeto mostra o projeto sem os arquivos, o que é estranho e
-preferível ao vazamento.
+Ficou uma **assimetria conhecida e aceita**: Entrega continuava enxergando todos os projetos,
+mas só os documentos dos seus. Estender "projetos em que atua" a `Project`/`Milestone`/`Task`
+mudava o modelo de acesso da área inteira, então virou trabalho de RFC próprio.
+
+> **Fechada.** O RFC 0003 e a ADR 0010 substituíram "atuar no projeto" por "participar da
+> equipe" (`ProjectMember`) e estenderam o recorte a todos os recursos de projeto e aos
+> agregadores. O critério `_acts_on_project` descrito acima deixou de existir.
 
 Atrás de proxy, `AnonRateThrottle` chaveia pelo IP que chega ao Django. Sem `NUM_PROXIES`
 configurado, todo o tráfego que passa por um mesmo proxy compartilha um balde e o limite por IP

@@ -61,6 +61,9 @@ export type AiScore = { maturity: number | null; opportunity: number | null; dim
 export type AgentReply = { text: string; interaction: number };
 export type Recommendation = { kind: string; label: string; detail: string; url: string };
 export type Notification = { id: number; kind: string; message: string; url: string; read: boolean; created_at: string };
+/** Participação numa equipe de projeto — é o que dá acesso a quem é da Entrega (RFC 0003). */
+export type ProjectMember = { id: number; project: number; user: number; user_name: string; user_username: string; user_role: Role; added_by: number | null; created_at: string };
+
 export type DigitalEmployeeStatus = "building" | "active" | "paused";
 export type DigitalEmployee = { id: number; project: number; name: string; area: string; description: string; status: DigitalEmployeeStatus; kpi_label: string; kpi_value: string; hours_saved_month: string; roi_month: string };
 export type JourneyPhaseStatus = "locked" | "active" | "done";

@@ -17,6 +17,7 @@ from .models import (
     Opportunity,
     Pendencia,
     Project,
+    ProjectMember,
     Task,
     User,
 )
@@ -34,6 +35,21 @@ def _materialize_project_journey(
     """Ao nascer um projeto, instancia sua Jornada de Transformação a partir do template."""
     if created:
         journey.materialize_journey(instance)
+
+
+@receiver(post_save, sender=Project)
+def _owner_is_always_a_member(
+    sender: type[Project], instance: Project, **kwargs: Any
+) -> None:
+    """Invariante: quem responde pelo projeto participa dele (RFC 0003, ADR 0010).
+
+    Fica no signal, e não no `perform_create` da view, porque precisa valer nos três caminhos
+    que criam projeto — API, admin do Django e as factories dos testes. Sem isso, transferir a
+    titularidade deixaria o novo dono sem acesso ao próprio projeto.
+    """
+    ProjectMember.objects.get_or_create(
+        project=instance, user_id=instance.owner_id, archived_at=None
+    )
 
 
 @receiver(post_save, sender=Milestone)

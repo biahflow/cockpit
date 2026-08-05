@@ -15,6 +15,7 @@ from apps.core.tests.factories import (
     ArtifactFactory,
     OpportunityFactory,
     ProjectFactory,
+    ProjectMemberFactory,
     UserFactory,
 )
 
@@ -22,9 +23,14 @@ pytestmark = pytest.mark.django_db
 
 
 def _delivery_client() -> APIClient:
+    return _delivery_client_and_user()[0]
+
+
+def _delivery_client_and_user() -> tuple[APIClient, User]:
+    user = UserFactory(role=User.Role.DELIVERY)
     api = APIClient()
-    api.force_authenticate(UserFactory(role=User.Role.DELIVERY))
-    return api
+    api.force_authenticate(user)
+    return api, user
 
 
 def test_delivery_cannot_create_an_artifact_linked_to_an_opportunity() -> None:
@@ -42,9 +48,11 @@ def test_delivery_cannot_create_an_artifact_linked_to_an_opportunity() -> None:
 
 
 def test_delivery_still_creates_artifacts_linked_to_a_project() -> None:
+    api, user = _delivery_client_and_user()
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=user)
 
-    response = _delivery_client().post(reverse("artifact-list"), {
+    response = api.post(reverse("artifact-list"), {
         "kind": Artifact.Kind.DISCOVERY,
         "title": "Discovery",
         "content": "Processo manual de faturamento.",
