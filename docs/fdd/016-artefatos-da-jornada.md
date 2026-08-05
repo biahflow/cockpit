@@ -41,6 +41,8 @@ O artefato apenas o referencia quando o rascunho revisado vira documento.
   artefatos **ligados a projeto** — proposta e contrato carregam valor e condição comercial, então
   ficam fora da consulta de quem é da entrega, como já acontece com as oportunidades não ganhas.
   Indicadores segue restrito a admin/comercial, então o funil por etapa não vaza.
+  A segregação valia só na leitura (`get_queryset`) até a FDD 017 fechá-la também na escrita — e a
+  mesma regra passou a valer para o `Document`, que é onde o texto revisado vai parar.
 - **Contrato assinado fecha sozinho:** ao aplicar o evento do fornecedor (`esign.apply_event`), os
   artefatos de contrato do documento acompanham a decisão — `signed → accepted`,
   `declined → rejected`. A idempotência vem do retorno antecipado que já existia: a reentrega do

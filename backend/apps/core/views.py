@@ -20,6 +20,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -101,6 +102,19 @@ from .serializers import (
     TaskSyncSerializer,
     UserSerializer,
 )
+
+
+def _acts_on_project(user: User, project: Project) -> bool:
+    """Se a pessoa atua no projeto — dona dele ou de algum marco/tarefa dele.
+
+    Não existe modelo de equipe no domínio; essa é a única expressão de "faz parte" que o
+    schema oferece hoje. Ver ADR 0009.
+    """
+    return (
+        project.owner_id == user.pk
+        or Milestone.objects.filter(project=project, owner=user).exists()
+        or Task.objects.filter(project=project, owner=user).exists()
+    )
 
 
 class ArchiveModelViewSet(viewsets.ModelViewSet):
@@ -361,12 +375,6 @@ class ProjectViewSet(ArchiveModelViewSet):
     def perform_create(self, serializer: ProjectSerializer) -> None:
         serializer.save(owner=self.request.user)
 
-    def get_queryset(self):  # type: ignore[no-untyped-def]
-        queryset = super().get_queryset()
-        if self.request.user.role == User.Role.SALES and not self.request.user.is_admin_role:
-            return queryset
-        return queryset
-
     @action(detail=True, methods=["post"])
     def assistant(self, request: Request, pk: str | None = None) -> Response:
         project = self.get_object()
@@ -566,7 +574,17 @@ class ArtifactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         return queryset
 
     def perform_create(self, serializer: ArtifactSerializer) -> None:  # type: ignore[override]
-        serializer.save(created_by=self.request.user)
+        # A criação não passa por `has_object_permission`, então a guarda de escrita mora
+        # aqui: até agora a segregação da FDD 016 existia só na leitura, e Entrega conseguia
+        # gravar um artefato comercial que sumia da própria lista em seguida.
+        user = self.request.user
+        if (
+            user.role == User.Role.DELIVERY
+            and not user.is_admin_role
+            and serializer.validated_data.get("opportunity") is not None
+        ):
+            raise PermissionDenied("Entrega não vincula artefatos a oportunidades.")
+        serializer.save(created_by=user)
 
 
 class DocumentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
@@ -576,6 +594,32 @@ class DocumentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     ).prefetch_related("signature_requests").all()
     serializer_class = DocumentSerializer
     filter_fields = ("client", "opportunity", "project")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        # Proposta e contrato salvos pelo painel de artefatos nascem ligados à oportunidade e
+        # carregam valor e condição comercial: Entrega só vê o documento do projeto em que
+        # atua. Não há modelo de equipe — "atuar" é ser dono do projeto ou de um item dele.
+        # Ver FDD 017 e ADR 0009; espelha o recorte do `ArtifactViewSet` (FDD 016).
+        if self.request.user.role == User.Role.DELIVERY and not self.request.user.is_admin_role:
+            queryset = queryset.filter(
+                Q(project__owner=self.request.user)
+                | Q(project__milestone_items__owner=self.request.user)
+                | Q(project__task_items__owner=self.request.user)
+            ).distinct()
+        return queryset
+
+    def perform_create(self, serializer: DocumentSerializer) -> None:  # type: ignore[override]
+        # Espelha `get_queryset` na escrita: sem isso, Entrega criaria um documento que
+        # desaparece da própria lista no instante seguinte.
+        user = self.request.user
+        if user.role == User.Role.DELIVERY and not user.is_admin_role:
+            project = serializer.validated_data.get("project")
+            if project is None or not _acts_on_project(user, project):
+                raise PermissionDenied(
+                    "Entrega só vincula documentos a projetos em que atua."
+                )
+        serializer.save()
 
     @action(detail=True, methods=["get"])
     def download(self, request: Request, pk: str | None = None) -> FileResponse:
@@ -1296,6 +1340,8 @@ def csrf(request: Request) -> Response:
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"  # sem teto, adivinhar senha era só questão de tempo
 
     @extend_schema(request=LoginSerializer, responses=UserSerializer)
 
@@ -1368,6 +1414,8 @@ class InvitationView(APIView):
 
 class AcceptInvitationView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "invitation_accept"  # cria usuário sem autenticação
 
     @extend_schema(request=AcceptInvitationSerializer, responses={201: UserSerializer})
     def post(self, request: Request) -> Response:
@@ -1398,6 +1446,8 @@ class PortalProjectSnapshotView(APIView):
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "portal_read"  # sem teto, o Bearer vira oráculo de força bruta
 
     def get(self, request: Request, pk: int) -> Response:
         expected = settings.PORTAL_READ_TOKEN

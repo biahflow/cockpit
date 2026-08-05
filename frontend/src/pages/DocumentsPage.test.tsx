@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { DocumentsPage } from "./DocumentsPage";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
-const authState = vi.hoisted(() => ({ esignEnabled: false }));
+const authState = vi.hoisted(() => ({ esignEnabled: false, user: { role: "admin" } as { role: string } }));
 vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v1/documents/${id}/download/` }));
 vi.mock("../auth", () => ({ useAuth: () => authState }));
 
@@ -17,8 +17,18 @@ function stub(signatureRequests: object[] = []) {
   });
 }
 
-beforeEach(() => { mocks.api.mockReset(); authState.esignEnabled = false; stub(); });
+beforeEach(() => { mocks.api.mockReset(); authState.esignEnabled = false; authState.user = { role: "admin" }; stub(); });
 afterEach(cleanup);
+
+test("entrega só pode vincular documento a projeto", async () => {
+  authState.user = { role: "delivery" };
+  render(<DocumentsPage />);
+  await screen.findByText("contrato.pdf");
+
+  const linkType = screen.getAllByRole("combobox")[0];
+  expect(Array.from(linkType.querySelectorAll("option")).map(option => option.value)).toEqual(["project"]);
+  expect(mocks.api).not.toHaveBeenCalledWith("/opportunities/");
+});
 
 test("lista documentos com vínculo e link de download", async () => {
   render(<DocumentsPage />);

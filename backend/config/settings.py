@@ -85,12 +85,27 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Teto de requisições (FDD 017, ADR 0009). `anon`/`user` são a rede de baixo, que vale
+    # para toda a API; os escopos nomeados protegem as portas específicas. Tudo por env para
+    # afrouxar em produção sem redeploy de código.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
     "DEFAULT_THROTTLE_RATES": {
+        "anon": os.getenv("ANON_RATE", "60/min"),
+        "user": os.getenv("USER_RATE", "2000/hour"),
+        "login": os.getenv("LOGIN_RATE", "10/min"),
+        "invitation_accept": os.getenv("INVITATION_ACCEPT_RATE", "20/hour"),
+        "portal_read": os.getenv("PORTAL_READ_RATE", "120/hour"),
         "lead_intake": os.getenv("LEAD_INTAKE_RATE", "20/hour"),
         "task_sync": os.getenv("TASK_SYNC_RATE", "60/hour"),
         "booking": os.getenv("BOOKING_RATE", "60/hour"),
         "esign_webhook": os.getenv("ESIGN_WEBHOOK_RATE", "120/hour"),
     },
+    # Atrás de proxy, sem isso todo mundo compartilha o IP do container e o limite por IP
+    # vira um limite global. Ver docs/operacao.md.
+    "NUM_PROXIES": int(os.environ["NUM_PROXIES"]) if os.getenv("NUM_PROXIES") else None,
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": "Biahflow API",

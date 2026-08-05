@@ -23,7 +23,14 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - [ ] Domínio, HTTPS, variáveis de produção e segredos em cofre apropriado.
 - [ ] Monitoramento: logs centralizados, alertas, health checks e rastreamento de erros.
 - [ ] Retenção, backup testado e restauração do banco e dos documentos.
-- [ ] Revisão de segurança completa (RBAC, CSRF, rate limiting amplo, upload, dependências).
+- [x] Revisão de segurança **de aplicação** (RBAC, CSRF, rate limiting amplo, upload, dependências)
+      — FDD 017, ADR 0009. Fechou três vazamentos: Entrega baixava proposta e contrato ligados a
+      oportunidade (agora só vê documento de projeto em que atua), o login não tinha teto de
+      tentativas (agora `anon`/`user` + escopos nomeados) e o Django servia `MEDIA_ROOT` sob
+      `DEBUG`, que é o default do compose. Mais allowlist de upload, sanitização do nome do
+      arquivo, 400 em vez de 500 no aceite de convite e dependências de frontend fixadas.
+      CSRF, CORS, endpoints públicos e XSS no frontend foram verificados e estavam corretos.
+      O hardening de transporte (HSTS, SSL redirect, `check --deploy`) depende do item abaixo.
 - [ ] Ampliar a matriz de testes: acessibilidade, responsividade e carga (há `backend/loadtests/`).
 
 ## Versão 2 — Assistente de IA (essencialmente entregue)

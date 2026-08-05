@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 from datetime import date
 from typing import cast
 
@@ -225,6 +227,28 @@ class SignatureRequestSerializer(serializers.ModelSerializer[SignatureRequest]):
         read_only_fields = fields
 
 
+# Tipos aceitos no upload de documento (FDD 017). O download já força `as_attachment`, mas o
+# arquivo também segue para o Drive e para o fornecedor de assinatura — lugares onde um
+# `.html`/`.svg` volta a ser servido como página.
+ALLOWED_DOCUMENT_EXTENSIONS = frozenset({
+    ".pdf", ".doc", ".docx", ".odt", ".xls", ".xlsx", ".ods", ".ppt", ".pptx", ".odp",
+    ".txt", ".md", ".csv", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".zip",
+})
+
+_UNSAFE_NAME_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _safe_original_name(name: str | None) -> str:
+    """Nome de arquivo é entrada do usuário e viaja para o Drive, o e-sign e o portal do cliente.
+
+    O download não é o risco (o Django já faz `basename` e escapa o header); os outros
+    consumidores é que recebem o valor cru.
+    """
+    cleaned = _UNSAFE_NAME_CHARS.sub("", (name or "").replace("\\", "/"))
+    cleaned = os.path.basename(cleaned).strip().lstrip(".")
+    return cleaned[:255] or "documento"
+
+
 class DocumentSerializer(serializers.ModelSerializer[Document]):
     signature_requests = SignatureRequestSerializer(many=True, read_only=True)
 
@@ -245,13 +269,19 @@ class DocumentSerializer(serializers.ModelSerializer[Document]):
             raise serializers.ValidationError({"file": "Envie um arquivo."})
         if (uploaded_file.size or 0) > 10 * 1024 * 1024:
             raise serializers.ValidationError({"file": "O arquivo excede o limite de 10 MB."})
+        extension = os.path.splitext(uploaded_file.name or "")[1].lower()
+        if extension not in ALLOWED_DOCUMENT_EXTENSIONS:
+            raise serializers.ValidationError({
+                "file": "Tipo de arquivo não aceito. Aceitos: "
+                        f"{', '.join(sorted(ALLOWED_DOCUMENT_EXTENSIONS))}."
+            })
         return attrs
 
     def create(self, validated_data: dict[str, object]) -> Document:
         uploaded_file = cast(UploadedFile, validated_data.pop("file"))
         document = Document(
             **validated_data,
-            original_name=uploaded_file.name or "documento",
+            original_name=_safe_original_name(uploaded_file.name),
             uploaded_by=self.context["request"].user,
         )
         if drive.is_enabled():
@@ -382,6 +412,12 @@ class AcceptInvitationSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+
+    def validate_username(self, value: str) -> str:
+        # Sem isso o `create_user` da view estourava `IntegrityError` — 500 em vez de 400.
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Este nome de usuário já está em uso.")
+        return value
 
     def validate_password(self, value: str) -> str:
         try:

@@ -4,6 +4,16 @@ Todas as mudanças relevantes deste projeto serão registradas neste arquivo.
 
 ## Não lançado
 
+### Segurança
+
+- Revisão de segurança de aplicação (RBAC, rate limiting, upload, dependências) — FDD 017, ADR 0009, RFC 0001:
+  - **Documentos por função:** Entrega passa a ver apenas o documento do projeto em que atua (dona do projeto ou de um marco/tarefa dele) e não vincula documento a cliente ou oportunidade. Antes, proposta e contrato salvos como `.txt` pelo painel de artefatos ficavam ligados à oportunidade e qualquer pessoa da Entrega os baixava — o mesmo conteúdo que a FDD 016 tinha acabado de esconder dela no `Artifact`. A segregação dos artefatos, que valia só na leitura, passa a valer também na escrita, e as duas camadas do RBAC (queryset e permissão de objeto) agora concordam.
+  - **Teto de requisições:** `anon`/`user` como padrão do DRF, mais escopo próprio em `login`, `invitation_accept` e `portal_read`. Errar a senha deixa de ser ilimitado e o Bearer do snapshot deixa de ser um oráculo de força bruta. Todas as taxas por variável de ambiente (`docs/operacao.md`).
+  - **Arquivo privado de verdade:** o Django não serve mais `MEDIA_ROOT` em ambiente nenhum. Servi-lo sob `if DEBUG` — com `DJANGO_DEBUG=true` sendo o default do `.env.example` e do compose — deixava contrato e proposta acessíveis por URL adivinhável, contornando o gate de acesso.
+  - **Upload:** allowlist de tipos de arquivo e sanitização do nome antes de gravar (o nome segue cru para o Drive, o fornecedor de assinatura e o snapshot do portal).
+  - **Aceite de convite** com username já em uso responde 400 em vez de estourar 500.
+  - **Dependências:** `pip-audit` e `npm audit` limpos; as 17 dependências de frontend declaradas como `"latest"` foram fixadas nas versões do lockfile.
+
 ### Adicionado
 
 - Artefatos da jornada como entidade: Discovery, Assessment, Proposta e Contrato viram `Artifact` (um modelo com `kind`) com conteúdo, estado próprio (`rascunho → em revisão → enviado → aceito/recusado`) e carimbos de tempo. O texto gerado pela IA deixa de ser efêmero — as quatro actions passam a registrá-lo em rascunho para revisão humana, ligado ao `AiInteraction` que o auditou e à reunião de origem (antes, Discovery e Assessment sumiam ao recarregar a página, e proposta e contrato só sobreviviam como `.txt` salvo à mão). Contrato assinado no fornecedor fecha o artefato sozinho pelo webhook, e Indicadores ganha o funil de conversão por etapa da jornada — FDD 016, ADR 0008, RFC 0002.

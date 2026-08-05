@@ -9,12 +9,15 @@ type LinkType = "client" | "opportunity" | "project";
 const linkLabel: Record<LinkType, string> = { client: "Cliente", opportunity: "Oportunidade", project: "Projeto" };
 
 export function DocumentsPage() {
-  const { esignEnabled } = useAuth();
+  const { esignEnabled, user } = useAuth();
+  // Entrega só enxerga o documento do projeto em que atua (FDD 017): oferecer cliente ou
+  // oportunidade aqui produziria um upload que o backend recusa com 403.
+  const isDelivery = user?.role === "delivery";
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [linkType, setLinkType] = useState<LinkType>("client");
+  const [linkType, setLinkType] = useState<LinkType>(isDelivery ? "project" : "client");
   const [target, setTarget] = useState("");
   const [error, setError] = useState("");
   const [isUploading, setUploading] = useState(false);
@@ -23,11 +26,11 @@ export function DocumentsPage() {
   const load = useCallback(() => Promise.all([
     api<DocumentEntry[]>("/documents/"),
     api<Client[]>("/clients/"),
-    api<Opportunity[]>("/opportunities/"),
+    isDelivery ? Promise.resolve<Opportunity[]>([]) : api<Opportunity[]>("/opportunities/"),
     api<Project[]>("/projects/"),
   ]).then(([loadedDocuments, loadedClients, loadedOpportunities, loadedProjects]) => {
     setDocuments(loadedDocuments); setClients(loadedClients); setOpportunities(loadedOpportunities); setProjects(loadedProjects);
-  }).catch((cause: Error) => setError(cause.message)), []);
+  }).catch((cause: Error) => setError(cause.message)), [isDelivery]);
   useEffect(() => { void load(); }, [load]);
 
   const targets: { id: number; label: string }[] = linkType === "client"
@@ -83,7 +86,7 @@ export function DocumentsPage() {
     <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
       <form className="space-y-4 rounded-2xl border bg-white p-5 sm:p-6" onSubmit={event => void upload(event)}>
         <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-mint text-ocean"><UploadCloud className="size-5" /></span><div><h2 className="font-semibold text-ink">Enviar documento</h2><p className="text-sm text-slate-500">Vincule a exatamente um recurso.</p></div></div>
-        <label className="grid gap-2 text-sm font-medium text-slate-700">Vincular a<select className="field" value={linkType} onChange={event => { setLinkType(event.target.value as LinkType); setTarget(""); }}><option value="client">Cliente</option><option value="opportunity">Oportunidade</option><option value="project">Projeto</option></select></label>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">Vincular a<select className="field" value={linkType} onChange={event => { setLinkType(event.target.value as LinkType); setTarget(""); }}>{!isDelivery && <option value="client">Cliente</option>}{!isDelivery && <option value="opportunity">Oportunidade</option>}<option value="project">Projeto</option></select></label>
         <label className="grid gap-2 text-sm font-medium text-slate-700">{linkLabel[linkType]}<select className="field" value={target} onChange={event => setTarget(event.target.value)} required><option value="">Selecione</option>{targets.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
         <label className="grid gap-2 text-sm font-medium text-slate-700">Arquivo<input className="field file:mr-3 file:rounded-lg file:border-0 file:bg-mint file:px-3 file:py-1 file:text-ocean" type="file" ref={fileInput} /></label>
         <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" type="submit" disabled={isUploading}><UploadCloud className="size-4" />{isUploading ? "Enviando…" : "Enviar documento"}</button>
