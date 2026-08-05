@@ -1,6 +1,17 @@
+import { reportError, setLastRequestId } from "./observability";
 import type { AgentReply, AppConfig, IntegrationFlag, Invitation, Notification, SessionUser } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
+
+// Erro de API que carrega o `X-Request-ID` da resposta — o mesmo id que está na linha de log do
+// servidor e na tag do evento do Sentry (FDD 020). É o que transforma "deu erro" em uma
+// requisição localizável.
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly requestId: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 async function csrf(): Promise<string> {
   const response = await fetch(`${baseUrl}/auth/csrf/`, { credentials: "include" });
@@ -21,9 +32,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       ...options.headers,
     },
   });
+  const requestId = response.headers.get("X-Request-ID") ?? "";
+  if (requestId) setLastRequestId(requestId);
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
-    throw new Error(detail.detail || "Não foi possível concluir a operação.");
+    const erro = new ApiError(detail.detail || "Não foi possível concluir a operação.", response.status, requestId);
+    // Só 5xx: 400/403/404 são o app funcionando (validação, permissão, item removido) e
+    // encheriam o Sentry de ruído que já está na tela do usuário.
+    if (response.status >= 500) reportError(erro, { requestId, status: response.status, path });
+    throw erro;
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

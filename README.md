@@ -24,6 +24,8 @@ Para executar fora do Docker, use `uv sync` em `backend/` e `npm install` em `fr
 
 Produção é outro compose: `docker compose -f docker-compose.prod.yml up -d --build` sobe nginx + gunicorn + Redis, sem dev server. O TLS é terminado por um proxy na frente. Configuração insegura não sobe — o container roda `manage.py check --deploy` antes do gunicorn. Variáveis obrigatórias, primeira subida, ordem de ativação do HSTS e rollback: [`docs/runbooks/producao.md`](docs/runbooks/producao.md).
 
+As sondas são `GET /healthz` (o processo responde) e `GET /readyz` (banco e cache respondem; 503 quando não). Toda requisição carrega um `X-Request-ID` que volta na resposta e aparece no log do nginx, do gunicorn e da aplicação — em produção o log sai em JSON. Rastreamento de erro (Sentry) é opcional e nasce desligado. Como achar uma requisição pelo código, ligar o Sentry e quais alertas criar: [`docs/runbooks/monitoramento.md`](docs/runbooks/monitoramento.md).
+
 ## Qualidade
 
 Execute `cd backend && uv run pytest`, `cd backend && uv run mypy apps config`, `cd frontend && npm test`, `cd frontend && npm run build` e `cd frontend && npm run e2e` antes de abrir um pull request. Veja [AGENTS.md](AGENTS.md) e `docs/runbooks/`.

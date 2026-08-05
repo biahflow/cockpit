@@ -65,7 +65,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 # A migração é um serviço próprio e roda antes da API; confira que terminou bem:
 docker compose -f docker-compose.prod.yml logs api-migrate
 
-docker compose -f docker-compose.prod.yml ps          # api e web precisam ficar "healthy"
+docker compose -f docker-compose.prod.yml ps          # o api precisa ficar "healthy" (sonda /readyz)
 docker compose -f docker-compose.prod.yml exec api python manage.py createsuperuser
 ```
 
@@ -78,6 +78,8 @@ numérica ou parecida com o nome de usuário é recusada.
 curl -I http://SEU-DOMINIO/                       # 301 para https://
 curl -I https://SEU-DOMINIO/                      # 200, SPA
 curl -sI https://SEU-DOMINIO/api/v1/auth/csrf/ | grep -i strict-transport
+curl -s  https://SEU-DOMINIO/healthz              # {"status": "ok"}
+curl -s  https://SEU-DOMINIO/readyz               # checks de banco e cache (FDD 020)
 ```
 
 No navegador: login → **Configurações** abre → `/admin/` abre **com CSS** (prova o
@@ -123,9 +125,10 @@ docker compose -f docker-compose.prod.yml exec api \
   python manage.py check --deploy --fail-level WARNING --tag security
 ```
 
-**Log:** `docker compose -f docker-compose.prod.yml logs -f api`. Tudo vai para stderr, incluindo
-traceback de 500 — antes ele ia para `mail_admins` sem `ADMINS`, isto é, para lugar nenhum. Log
-centralizado, alertas e rastreamento de erro são o próximo item do roadmap.
+**Log e sondas:** `docker compose -f docker-compose.prod.yml logs -f api`. Em produção o formato é
+JSON e toda linha carrega o `request_id`, o mesmo que volta na resposta e aparece no log do nginx e
+do gunicorn. As sondas são `GET /healthz` (vivo) e `GET /readyz` (pronto: banco + cache). Como
+achar uma requisição pelo código, ligar o Sentry e quais alertas criar: **`monitoramento.md`**.
 
 ## 7. Quando algo dá errado
 
@@ -143,6 +146,6 @@ centralizado, alertas e rastreamento de erro são o próximo item do roadmap.
 
 ## Pendências deste bloco do roadmap
 
-Ainda abertos, na ordem: monitoramento (log centralizado, alertas, rastreamento de erro e um
-`/healthz` de verdade — hoje o healthcheck usa `/api/v1/auth/csrf/`); retenção, backup testado e
-restauração; e a matriz de testes de acessibilidade, responsividade e carga.
+Ainda abertos, na ordem: retenção, backup testado e restauração do banco e dos documentos; e a
+matriz de testes de acessibilidade, responsividade e carga. Monitoramento saiu da fila (FDD 020,
+ADR 0012) — ver `monitoramento.md`.

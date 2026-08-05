@@ -10,6 +10,7 @@ afirma nada sobre `django.conf.settings` — o que o manteria verdadeiro por con
 import importlib
 import os
 from collections.abc import Iterator
+from pathlib import Path
 from types import ModuleType
 from unittest import mock
 
@@ -131,3 +132,61 @@ def test_smtp_de_producao() -> None:
 
     assert cfg.EMAIL_USE_TLS is True
     assert cfg.EMAIL_TIMEOUT == 20
+
+
+# Monitoramento (FDD 020)
+
+
+def test_log_em_json_e_opcional_e_o_request_id_nunca_e() -> None:
+    """JSON no terminal de quem desenvolve é hostil; o request-id vale nos dois formatos."""
+    texto = _reload({})
+    assert texto.LOGGING["handlers"]["stderr"]["formatter"] == "padrao"
+    assert "{request_id}" in texto.LOGGING["formatters"]["padrao"]["format"]
+
+    json_ = _reload({**PROD_ENV, "DJANGO_LOG_FORMAT": "json"})
+    assert json_.LOGGING["handlers"]["stderr"]["formatter"] == "json"
+    assert json_.LOGGING["handlers"]["stderr"]["filters"] == ["request_id"]
+
+
+def test_sentry_nasce_desligado_e_vem_todo_do_ambiente() -> None:
+    """O fornecedor é opcional: sem DSN nada é inicializado (ADR 0012)."""
+    assert _reload({}).SENTRY_DSN == ""
+
+    cfg = _reload(
+        {
+            **PROD_ENV,
+            "SENTRY_DSN": "https://chave@o0.ingest.sentry.io/1",
+            "SENTRY_ENVIRONMENT": "producao",
+            "SENTRY_RELEASE": "2026.08.05",
+            "SENTRY_TRACES_SAMPLE_RATE": "0.1",
+        }
+    )
+    assert cfg.SENTRY_ENVIRONMENT == "producao"
+    assert cfg.SENTRY_RELEASE == "2026.08.05"
+    assert cfg.SENTRY_TRACES_SAMPLE_RATE == 0.1
+
+
+def test_tracing_do_sentry_nasce_em_zero() -> None:
+    """Amostrar requisição saudável custa cota e não é o problema deste item."""
+    assert _reload(PROD_ENV).SENTRY_TRACES_SAMPLE_RATE == 0.0
+
+
+def test_whitenoise_fica_logo_depois_do_middleware_de_seguranca(tmp_path: Path) -> None:
+    """Os middlewares da FDD 020 passaram na frente: um `insert(1)` fixo serviria estático
+    **antes** do `SecurityMiddleware`, sem os headers de segurança."""
+    (tmp_path / "algo.css").write_text("body{}")
+    cfg = _reload({**PROD_ENV, "DJANGO_STATIC_ROOT": str(tmp_path)})
+
+    seguranca = cfg.MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
+    assert cfg.MIDDLEWARE[seguranca + 1] == "whitenoise.middleware.WhiteNoiseMiddleware"
+    assert cfg.MIDDLEWARE[0] == "apps.core.middleware.RequestIdMiddleware"
+
+
+def test_log_de_acesso_da_aplicacao_pode_ser_desligado() -> None:
+    """Quem já coleta o access log do gunicorn ou do ingress dispensa o daqui."""
+    assert "apps.core.middleware.RequestLogMiddleware" in _reload({}).MIDDLEWARE
+    desligado = _reload({**PROD_ENV, "DJANGO_LOG_REQUESTS": "false"})
+    assert "apps.core.middleware.RequestLogMiddleware" not in desligado.MIDDLEWARE
+    # A sonda e o request-id não são opcionais.
+    assert "apps.core.middleware.RequestIdMiddleware" in desligado.MIDDLEWARE
+    assert "apps.core.middleware.HealthProbeMiddleware" in desligado.MIDDLEWARE

@@ -24,3 +24,8 @@ max_requests_jitter = 100
 # stdout/stderr, que é onde o runtime de container coleta log.
 accesslog = "-"
 errorlog = "-"
+
+# O access log da aplicação (FDD 020) não substitui este: o gunicorn enxerga o que morre antes do
+# Django — timeout de worker, corpo inválido, requisição abortada. Os dois se cruzam pelo mesmo
+# `X-Request-ID`, que é o motivo de ele entrar no formato aqui.
+access_log_format = '%(h)s "%(r)s" %(s)s %(b)s %(M)sms "%(a)s" req=%({x-request-id}i)s'

@@ -12,6 +12,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@sentry/react": "^10.69.0",
     "@vitejs/plugin-react": "^6.0.5",
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
+    "@sentry/vite-plugin": "^4.9.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",

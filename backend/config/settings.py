@@ -52,7 +52,13 @@ INSTALLED_APPS = [
     "corsheaders",
     "apps.core",
 ]
+# Observabilidade na frente de tudo (FDD 020). O request-id precisa existir antes do primeiro
+# middleware que pode recusar a requisição, e a sonda precisa responder antes de `ALLOWED_HOSTS`
+# e do redirect de https — o porquê de cada um está em `apps/core/middleware.py`.
 MIDDLEWARE = [
+    "apps.core.middleware.RequestIdMiddleware",
+    "apps.core.middleware.HealthProbeMiddleware",
+    "apps.core.middleware.RequestLogMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -62,6 +68,10 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+# Quem já coleta o access log do gunicorn ou do ingress pode dispensar o da aplicação. O
+# request-id e a sonda não são opcionais; este é.
+if not _env_bool("DJANGO_LOG_REQUESTS", True):
+    MIDDLEWARE.remove("apps.core.middleware.RequestLogMiddleware")
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -129,8 +139,14 @@ STORAGES = {
 # Só quando o `collectstatic` já rodou: sem o diretório ele avisa a cada boot, e em desenvolvimento
 # (e na suíte) o `runserver` já dá conta. Na imagem de produção o `collectstatic` roda no build, e
 # um check de deploy recusa subir sem ele.
+#
+# A posição é calculada, e não fixa: o WhiteNoise precisa vir **logo depois** do
+# `SecurityMiddleware` (senão serve estático sem os headers de segurança). Um `insert(1)` literal
+# valia enquanto o `SecurityMiddleware` era o primeiro da lista — os middlewares de
+# observabilidade da FDD 020 passaram na frente dele e quebrariam essa premissa em silêncio.
 if STATIC_ROOT.is_dir():
-    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
+    _security = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
+    MIDDLEWARE.insert(_security + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
 MEDIA_URL = "/media/"
 # Documento é recurso privado e o Django nunca serve este diretório (ADR 0002, FDD 017). Em
 # produção ele precisa ser um volume próprio: dentro da árvore de código, um deploy o levaria.
@@ -243,16 +259,30 @@ SECURE_PROXY_SSL_HEADER = (
 # único que este projeto escolhe não ouvir. Ver ADR 0011 e docs/runbooks/producao.md.
 SILENCED_SYSTEM_CHECKS = ["security.W021"]
 
-# O default do Django manda o traceback de 500 para `mail_admins` e só: sem `ADMINS`, com
-# `DEBUG=False`, o erro não aparece em lugar nenhum. Atrás do gunicorn isso é um deploy cego, então
-# o mínimo é jogar tudo em stderr, que é o que o runtime de container coleta. Log estruturado,
-# request-id, alertas e rastreamento de erro são o item de monitoramento do roadmap, não este.
+# Log (FDD 020). O default do Django manda o traceback de 500 para `mail_admins` e só: sem
+# `ADMINS`, com `DEBUG=False`, o erro não aparece em lugar nenhum. Tudo vai para stderr, que é o
+# que o runtime de container coleta.
+#
+# `json` é opção e não default: JSON no terminal de quem desenvolve é hostil de ler, e o formato
+# só rende quando existe um coletor que indexa campo. O `docker-compose.prod.yml` liga o JSON.
+# Nos dois formatos o `request_id` sai em toda linha — é ele que liga o erro que o usuário viu
+# (o SPA mostra o id) à requisição no log e ao evento do Sentry.
+# Minúsculo de propósito: é um detalhe do `LOGGING` abaixo, não uma setting que alguém deva ler.
+_log_format = "json" if os.getenv("DJANGO_LOG_FORMAT", "texto").strip().lower() == "json" else "padrao"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {"padrao": {"format": "{levelname} {asctime} {name} {message}", "style": "{"}},
+    "filters": {"request_id": {"()": "apps.core.observability.RequestIdFilter"}},
+    "formatters": {
+        "padrao": {"format": "{levelname} {asctime} {name} [{request_id}] {message}", "style": "{"},
+        "json": {"()": "apps.core.observability.JsonFormatter"},
+    },
     "handlers": {
-        "stderr": {"class": "logging.StreamHandler", "formatter": "padrao"},
+        "stderr": {
+            "class": "logging.StreamHandler",
+            "formatter": _log_format,
+            "filters": ["request_id"],
+        },
     },
     "root": {"handlers": ["stderr"], "level": os.getenv("DJANGO_LOG_LEVEL", "INFO")},
     "loggers": {
@@ -260,6 +290,16 @@ LOGGING = {
         "django.request": {"handlers": ["stderr"], "level": "ERROR", "propagate": False},
     },
 }
+
+# Rastreamento de erro (ADR 0012). Sem `SENTRY_DSN` o SDK nunca é inicializado e nada sai daqui —
+# o fornecedor é opcional, como toda integração deste portal. O DSN não é segredo (ele identifica
+# o projeto e só aceita escrita), mas mora no ambiente junto com o resto.
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+SENTRY_ENVIRONMENT = os.getenv("SENTRY_ENVIRONMENT", "")
+# Marca a versão que gerou o erro. O compose de produção passa o mesmo valor ao build do SPA, para
+# um erro de browser e um de API caírem na mesma release.
+SENTRY_RELEASE = os.getenv("SENTRY_RELEASE", "")
+SENTRY_TRACES_SAMPLE_RATE = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0") or 0)
 CSRF_TRUSTED_ORIGINS = _env_list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:19173,http://127.0.0.1:19173",
@@ -324,3 +364,10 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "")  # formato "owner/repo"
 LEAD_INTAKE_TOKEN = os.getenv("LEAD_INTAKE_TOKEN", "")
 CORS_URLS_REGEX = r"^/api/v1/leads/intake/$"
 CORS_ALLOWED_ORIGINS = _env_list("CORS_ALLOWED_ORIGINS")
+
+# Por último, com a configuração toda montada. Aqui e não em `AppConfig.ready()` porque erro de
+# import de app e de configuração acontece **antes** do `ready()` — e são justamente os que
+# ninguém enxerga atrás do gunicorn. No-op sem `SENTRY_DSN` (ADR 0012).
+from apps.core.observability import init_sentry  # noqa: E402  (precisa das settings acima)
+
+init_sentry(SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE, SENTRY_TRACES_SAMPLE_RATE)

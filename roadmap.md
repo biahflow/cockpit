@@ -31,7 +31,18 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
       configuração insegura **deixa de subir**: sete system checks de deploy recusam o segredo do
       repositório, SQLite efêmero, cache por processo, `ALLOWED_HOSTS` de localhost e origem
       `http://` — rodados pelo entrypoint da imagem e pelo CI.
-- [ ] Monitoramento: logs centralizados, alertas, health checks e rastreamento de erros.
+- [x] Monitoramento: logs centralizados, alertas, health checks e rastreamento de erros — FDD 020,
+      ADR 0012. Fecha o que a FDD 019 tinha adiado nominalmente. Toda requisição ganha um
+      **`X-Request-ID`** que nasce na borda, entra em toda linha de log, vira tag no Sentry e volta
+      na resposta — o SPA mostra o código na tela de erro, e é por ele que se acha a requisição nos
+      três logs (nginx, gunicorn, aplicação). Log estruturado em **JSON** em produção, texto em
+      desenvolvimento. **Sondas de verdade**: `/healthz` (vivo, não toca em nada) e `/readyz`
+      (pronto: banco + cache, 503 quando algum falha), como middleware — porque precisam responder
+      antes de `ALLOWED_HOSTS` e do redirect de https. **Sentry** atrás de flag nos dois lados, sem
+      PII; desligado, não sobra um byte do SDK no bundle do SPA. E um defeito de deploy corrigido de
+      carona: a sonda anterior mandava `Host: 127.0.0.1` e levava **400** assim que
+      `DJANGO_ALLOWED_HOSTS` virava o domínio real — o container nunca ficava saudável e o `web`
+      nunca subia. Alertas ficam no fornecedor (`docs/runbooks/monitoramento.md`).
 - [ ] Retenção, backup testado e restauração do banco e dos documentos.
 - [x] Revisão de segurança **de aplicação** (RBAC, CSRF, rate limiting amplo, upload, dependências)
       — FDD 017, ADR 0009. Fechou três vazamentos: Entrega baixava proposta e contrato ligados a
