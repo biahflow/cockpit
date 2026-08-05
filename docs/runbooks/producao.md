@@ -1,0 +1,148 @@
+# Runbook — produção (domínio, HTTPS e segredos)
+
+Primeira subida e operação do portal em produção (FDD 019, ADR 0011). O que é ativação de
+integração está em `docs/operacao.md`; desenvolvimento e release, em
+`desenvolvimento-e-release.md`.
+
+O portal **se recusa a subir** com configuração insegura: o entrypoint da imagem roda
+`manage.py check --deploy --fail-level WARNING --tag security` antes do gunicorn, e a mensagem de
+erro nomeia a variável que falta. Errar aqui derruba o deploy em vez de silenciosamente rodar em
+SQLite efêmero ou triplicar os tetos de requisição.
+
+## Topologia
+
+```
+internet → [terminador de TLS: proxy do provedor]     ← HTTPS acaba aqui
+              ↓  http, com X-Forwarded-Proto: https
+           [web]  nginx: serve o SPA, faz proxy de /api, /admin, /static
+              ↓
+           [api]  gunicorn (3 workers) + WhiteNoise
+              ↓
+           [db] postgres      [redis] cache do teto de requisição
+```
+
+O `docker-compose.prod.yml` sobe `web`, `api`, `db` e `redis`. **Não** sobe o terminador de TLS: é o
+proxy do provedor, ou um nginx/Caddy seu na frente. `db` e `redis` não publicam porta, e a `api`
+também não — o único caminho até o gunicorn é o nginx, e é isso que torna seguro confiar no
+`X-Forwarded-Proto`.
+
+## 1. Antes de subir
+
+- [ ] **Domínio** apontando (registro A/AAAA ou CNAME) para o host.
+- [ ] **TLS** terminado na borda, com renovação automática. O proxy precisa **sobrescrever**
+      `X-Forwarded-Proto` — se ele apenas repassar o que o cliente mandou, não ligue
+      `TRUST_X_FORWARDED_PROTO` (ver ADR 0011).
+- [ ] **Segredo da instalação**, no cofre da plataforma (nunca no repositório):
+      ```bash
+      python -c 'import secrets; print(secrets.token_urlsafe(64))'
+      ```
+- [ ] **Postgres** provisionado, com backup. Retenção e restauração testada são o próximo item do
+      roadmap — até então, confirme o backup do provedor antes de qualquer migração.
+- [ ] **SMTP** real (convite de usuário e lembrete de assinatura saem por e-mail).
+
+## 2. Variáveis obrigatórias
+
+Do bloco "Produção" do `.env.example`. As quatro primeiras são recusadas pelo check se faltarem:
+
+| Variável | Por que o deploy recusa sem ela |
+| --- | --- |
+| `DJANGO_SECRET_KEY` | sem ela vale o segredo que está no repositório |
+| `DATABASE_URL` | sem ela o portal sobe em SQLite: atende, migra e perde tudo no restart |
+| `REDIS_URL` | sem ela o teto de requisição vale 3× (um balde por worker) |
+| `DJANGO_ALLOWED_HOSTS` | só localhost significa que a variável não foi definida |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | origem `http://` é o default de desenvolvimento |
+
+Mais: `DJANGO_DEBUG=false`, `FRONTEND_ORIGIN`, `DJANGO_MEDIA_ROOT`, o SMTP (`EMAIL_HOST`,
+`EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`) e,
+se houver proxy próprio na frente do `web`, ajustar `NUM_PROXIES`.
+
+## 3. Primeira subida
+
+```bash
+cp .env.example .env          # preencha o bloco "Produção"
+docker compose -f docker-compose.prod.yml up -d --build
+
+# A migração é um serviço próprio e roda antes da API; confira que terminou bem:
+docker compose -f docker-compose.prod.yml logs api-migrate
+
+docker compose -f docker-compose.prod.yml ps          # api e web precisam ficar "healthy"
+docker compose -f docker-compose.prod.yml exec api python manage.py createsuperuser
+```
+
+O `createsuperuser` agora exige senha forte: os quatro validadores estão ligados, então senha
+numérica ou parecida com o nome de usuário é recusada.
+
+## 4. Smoke test
+
+```bash
+curl -I http://SEU-DOMINIO/                       # 301 para https://
+curl -I https://SEU-DOMINIO/                      # 200, SPA
+curl -sI https://SEU-DOMINIO/api/v1/auth/csrf/ | grep -i strict-transport
+```
+
+No navegador: login → **Configurações** abre → `/admin/` abre **com CSS** (prova o
+`collectstatic`/WhiteNoise) → subir um documento em um projeto e baixá-lo. Depois
+`docker compose -f docker-compose.prod.yml down && up -d`: o documento tem de continuar lá (é o
+volume `media_data`).
+
+## 5. HSTS, na ordem — e só nesta ordem
+
+HSTS diz ao navegador "nunca mais fale http comigo". Ligar antes de o https estar sólido tranca o
+acesso, e **o navegador não esquece** antes do prazo.
+
+1. `DJANGO_SSL_REDIRECT=true` e confirme que todo o portal funciona em https por alguns dias.
+2. `DJANGO_HSTS_SECONDS=300` (cinco minutos). Se algo quebrar, baixar para `0` e esperar cinco
+   minutos resolve.
+3. Suba para `31536000` (um ano).
+4. `DJANGO_HSTS_INCLUDE_SUBDOMAINS=true` — **só** quando todo subdomínio do domínio falar https.
+5. `DJANGO_HSTS_PRELOAD=true` e submissão à lista: **último passo, e praticamente irreversível.** O
+   preload é compilado no binário do navegador; sair leva meses e não depende de você. O portal
+   nasce com ele desligado de propósito.
+
+Nunca faça o caminho inverso às pressas: desligar HSTS não desfaz o que os navegadores já
+guardaram.
+
+## 6. Operação
+
+**Aplicar mudança de `.env`:**
+`docker compose -f docker-compose.prod.yml up -d api` (recria o container lendo o arquivo).
+
+**Deploy de nova versão:**
+```bash
+git pull
+docker compose -f docker-compose.prod.yml up -d --build
+```
+A migração roda no serviço one-shot antes da API subir. Confirme o backup do banco antes.
+
+**Rollback:** volte o código (`git checkout <tag-anterior>`) e refaça o `up -d --build`. Migração
+aplicada **não** volta sozinha: restaure o banco somente conforme o plano da migração.
+
+**Conferir a configuração de um ambiente já no ar:**
+```bash
+docker compose -f docker-compose.prod.yml exec api \
+  python manage.py check --deploy --fail-level WARNING --tag security
+```
+
+**Log:** `docker compose -f docker-compose.prod.yml logs -f api`. Tudo vai para stderr, incluindo
+traceback de 500 — antes ele ia para `mail_admins` sem `ADMINS`, isto é, para lugar nenhum. Log
+centralizado, alertas e rastreamento de erro são o próximo item do roadmap.
+
+## 7. Quando algo dá errado
+
+| Sintoma | Causa provável |
+| --- | --- |
+| container reinicia sem servir | o check de deploy recusou: `logs api` diz qual variável falta |
+| laço infinito de redirect | `TRUST_X_FORWARDED_PROTO` desligado com TLS terminado fora, ou o proxy não manda `X-Forwarded-Proto` |
+| 429 antes do esperado | mais de um proxy na frente: ajuste `NUM_PROXIES` (ADR 0009) |
+| 500 em rotas com teto | Redis inalcançável. `REDIS_URL` definido e Redis fora é **queda**; `REDIS_URL` vazio é degradação |
+| admin sem CSS | `collectstatic` não rodou (a imagem faz no build; um `STATIC_ROOT` remontado por volume apaga isso) |
+| documento desapareceu no deploy | `DJANGO_MEDIA_ROOT` fora do volume `media_data` |
+| upload falha com "permission denied" | `DJANGO_MEDIA_ROOT` apontando para um caminho que não existe na imagem: um volume nomeado herda o dono do diretório que cobre, e fora de `/var/lib/biahflow/media` (ou `/app/media`) o ponto de montagem nasce do root, enquanto o processo roda como uid 10001 |
+| `web` não sobe: "host not found in upstream" | não deve acontecer — o `proxy_pass` usa variável para adiar a resolução. Se acontecer, o `resolver` do `nginx.conf` não é o DNS da sua rede |
+| "o projeto sumiu" para a Entrega | não é produção: é equipe do projeto vazia (FDD 018) |
+
+## Pendências deste bloco do roadmap
+
+Ainda abertos, na ordem: monitoramento (log centralizado, alertas, rastreamento de erro e um
+`/healthz` de verdade — hoje o healthcheck usa `/api/v1/auth/csrf/`); retenção, backup testado e
+restauração; e a matriz de testes de acessibilidade, responsividade e carga.

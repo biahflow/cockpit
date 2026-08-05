@@ -11,3 +11,9 @@ Copie `.env.example` para `.env`, execute `docker compose up --build` e aplique 
 3. Publique artefato versionado, execute smoke tests e acompanhe health checks.
 4. Se houver falha, reverta a aplicação e restaure o banco somente conforme o plano de migração.
 
+## Produção
+
+Subida em produção, variáveis obrigatórias, ordem de ativação do HSTS e rollback: `producao.md`.
+O compose de produção é outro arquivo (`docker-compose.prod.yml`) — o daqui é de desenvolvimento e
+roda `runserver`.
+

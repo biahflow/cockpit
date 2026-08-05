@@ -20,6 +20,10 @@ Portas expostas pelo `docker compose` (faixa alta para evitar conflito com outro
 
 Para executar fora do Docker, use `uv sync` em `backend/` e `npm install` em `frontend/`. Nesse modo a API roda na porta padrão `8000` e o frontend em `5173` (o Vite faz proxy de `/api` para `http://localhost:8000`).
 
+## Produção
+
+Produção é outro compose: `docker compose -f docker-compose.prod.yml up -d --build` sobe nginx + gunicorn + Redis, sem dev server. O TLS é terminado por um proxy na frente. Configuração insegura não sobe — o container roda `manage.py check --deploy` antes do gunicorn. Variáveis obrigatórias, primeira subida, ordem de ativação do HSTS e rollback: [`docs/runbooks/producao.md`](docs/runbooks/producao.md).
+
 ## Qualidade
 
 Execute `cd backend && uv run pytest`, `cd backend && uv run mypy apps config`, `cd frontend && npm test`, `cd frontend && npm run build` e `cd frontend && npm run e2e` antes de abrir um pull request. Veja [AGENTS.md](AGENTS.md) e `docs/runbooks/`.

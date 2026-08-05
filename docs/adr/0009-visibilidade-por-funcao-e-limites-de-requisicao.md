@@ -80,3 +80,9 @@ defaults foram escolhidos folgados o bastante para não estorvar uso legítimo m
 O contador de throttle vive no cache. Com `LocMemCache` ele é por processo: com vários workers, o
 limite efetivo é o configurado multiplicado pelo número de processos. Um cache compartilhado
 (Redis) resolve, e entra junto do item de infraestrutura do roadmap.
+
+> **Fechada.** A FDD 019 e a ADR 0011 trouxeram o `REDIS_URL` como cache compartilhado, e um
+> `check --deploy` recusa subir em produção com `LocMemCache` — justamente porque a mesma entrega
+> introduz o gunicorn com três workers, que é o que faria o teto valer o triplo. O aviso sobre
+> `NUM_PROXIES` **continua valendo**: é um número por instalação, que ninguém pode decidir no
+> repositório. O que existe agora é um check que recusa confiar no `X-Forwarded-Proto` sem ele.

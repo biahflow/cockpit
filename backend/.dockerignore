@@ -1,0 +1,19 @@
+# Sem isto, o `COPY . .` da imagem leva o `.venv` do host (binários de macOS, inúteis no Linux),
+# o banco de desenvolvimento e — o que importa — os documentos reais de cliente que estão em
+# `media/`. Arquivo privado de cliente não entra em imagem que vai para um registry.
+.venv/
+media/
+staticfiles/
+*.sqlite3
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.git/
+.gitignore

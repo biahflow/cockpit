@@ -28,8 +28,19 @@ services:
       - "19025:8025"
 
   api:
-    build: ./backend
+    build:
+      context: ./backend
+      target: dev
     command: sh -c "uv sync --no-dev && uv run python manage.py migrate && uv run python manage.py runserver 0.0.0.0:8000"
+    # O `.env` inteiro entra no container. Antes, esta lista repetia ~26 das ~60 variáveis que o
+    # `settings.py` lê, e as que faltavam (`FRONTEND_ORIGIN`, `PORTAL_*`, `TASKSYNC_*`,
+    # `NUM_PROXIES`, todos os `*_RATE`) eram descartadas em silêncio — daí o "botei no .env e não
+    # aconteceu nada". `required: false` porque quem só roda `docker compose config` (o CI) não
+    # tem `.env`.
+    env_file:
+      - path: .env
+        required: false
+    # Só o que é interno ao compose e não pode vir do `.env`. `environment` vence o `env_file`.
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-biahflow}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-biahflow}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-unsafe-development-key}
@@ -39,23 +50,6 @@ services:
       EMAIL_HOST: mailpit
       EMAIL_PORT: 1025
       MINIO_ENDPOINT: http://minio:9000
-      GOOGLE_DRIVE_ENABLED: ${GOOGLE_DRIVE_ENABLED:-false}
-      GOOGLE_SERVICE_ACCOUNT_INFO: ${GOOGLE_SERVICE_ACCOUNT_INFO:-}
-      GOOGLE_DRIVE_ROOT_FOLDER_ID: ${GOOGLE_DRIVE_ROOT_FOLDER_ID:-}
-      LEAD_INTAKE_TOKEN: ${LEAD_INTAKE_TOKEN:-}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
-      AI_ENABLED: ${AI_ENABLED:-false}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
-      CALENDAR_ENABLED: ${CALENDAR_ENABLED:-false}
-      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
-      ESIGN_ENABLED: ${ESIGN_ENABLED:-false}
-      ESIGN_PROVIDER: ${ESIGN_PROVIDER:-}
-      ESIGN_API_TOKEN: ${ESIGN_API_TOKEN:-}
-      ESIGN_API_BASE: ${ESIGN_API_BASE:-}
-      ESIGN_SANDBOX: ${ESIGN_SANDBOX:-true}
-      ESIGN_DELIVERY: ${ESIGN_DELIVERY:-email}
-      ESIGN_WEBHOOK_SECRET: ${ESIGN_WEBHOOK_SECRET:-}
     volumes:
       - ./backend:/app
       - api_venv:/app/.venv
@@ -66,7 +60,9 @@ services:
         condition: service_healthy
 
   web:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: dev
     command: npm run dev -- --host 0.0.0.0 --port 19173
     environment:
       VITE_PROXY_TARGET: http://api:8000
