@@ -12,6 +12,7 @@ const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vend
 const projectStatusLabel: Record<string, string> = { planning: "Planejamento", active: "Ativo", on_hold: "Em espera", completed: "Concluído" };
 const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_progress: "Em andamento", done: "Concluído" };
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
+const blankMeeting = { title: "", date: "", meeting_url: "", recording_url: "", transcript: "" };
 
 function formatDate(value: string): string { return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR"); }
 
@@ -31,7 +32,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [error, setError] = useState("");
   const [milestoneDraft, setMilestoneDraft] = useState({ title: "", due_date: "" });
   const [taskDraft, setTaskDraft] = useState({ title: "", due_date: "", milestone: "" });
-  const [meetingDraft, setMeetingDraft] = useState({ title: "", date: "", recording_url: "", transcript: "" });
+  const [meetingDraft, setMeetingDraft] = useState(blankMeeting);
   const [pendenciaDraft, setPendenciaDraft] = useState<{ title: string; party: Party }>({ title: "", party: "provider" });
   const [services, setServices] = useState<Service[]>([]);
   const [risk, setRisk] = useState<RiskAssessment>();
@@ -88,13 +89,19 @@ export function ProjectDetailPage({ id }: { id: number }) {
     try { await api("/tasks/", { method: "POST", body: JSON.stringify({ project: id, title: taskDraft.title, due_date: taskDraft.due_date, milestone: taskDraft.milestone ? Number(taskDraft.milestone) : null }) }); setTaskDraft({ title: "", due_date: "", milestone: "" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
-  async function complete(resource: "milestones" | "tasks", itemId: number) {
-    try { await api(`/${resource}/${itemId}/`, { method: "PATCH", body: JSON.stringify({ status: "done" }) }); await load(); }
+  // Alterna em vez de só concluir: marcar por engano acontece, e o modelo já sabe reabrir —
+  // `WorkItem.save` limpa o `completed_at` quando o status sai de "done".
+  async function toggleWorkItem(resource: "milestones" | "tasks", itemId: number, isDone: boolean) {
+    try { await api(`/${resource}/${itemId}/`, { method: "PATCH", body: JSON.stringify({ status: isDone ? "todo" : "done" }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function createMeeting(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    try { await api("/meetings/", { method: "POST", body: JSON.stringify({ project: id, ...meetingDraft }) }); setMeetingDraft({ title: "", date: "", recording_url: "", transcript: "" }); await load(); }
+    try { await api("/meetings/", { method: "POST", body: JSON.stringify({ project: id, ...meetingDraft }) }); setMeetingDraft(blankMeeting); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function toggleMeeting(meeting: Meeting) {
+    try { await api(`/meetings/${meeting.id}/`, { method: "PATCH", body: JSON.stringify({ status: meeting.status === "held" ? "scheduled" : "held" }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function runMeetingAi(meeting: Meeting, kind: "discovery" | "assessment") {
@@ -140,8 +147,8 @@ export function ProjectDetailPage({ id }: { id: number }) {
     try { await api(`/project-members/${memberId}/`, { method: "DELETE" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
-  async function resolvePendencia(pendenciaId: number) {
-    try { await api(`/pendencias/${pendenciaId}/`, { method: "PATCH", body: JSON.stringify({ status: "resolved" }) }); await load(); }
+  async function togglePendencia(pendenciaId: number, isResolved: boolean) {
+    try { await api(`/pendencias/${pendenciaId}/`, { method: "PATCH", body: JSON.stringify({ status: isResolved ? "open" : "resolved" }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function addToCalendar(resource: "milestones" | "tasks", itemId: number) {
@@ -261,7 +268,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
           <input className="field" placeholder="Novo marco" value={milestoneDraft.title} onChange={event => setMilestoneDraft({ ...milestoneDraft, title: event.target.value })} required />
           <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Prazo do marco" value={milestoneDraft.due_date} onChange={event => setMilestoneDraft({ ...milestoneDraft, due_date: event.target.value })} required /><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar marco" type="submit"><Plus className="size-4" /></button></div>
         </form>
-        <WorkList items={milestones} onComplete={itemId => void complete("milestones", itemId)} onCalendar={calendarEnabled ? itemId => void addToCalendar("milestones", itemId) : undefined} emptyLabel="Nenhum marco cadastrado." />
+        <WorkList items={milestones} onToggle={(itemId, isDone) => void toggleWorkItem("milestones", itemId, isDone)} onCalendar={calendarEnabled ? itemId => void addToCalendar("milestones", itemId) : undefined} emptyLabel="Nenhum marco cadastrado." />
       </WorkColumn>
 
       <WorkColumn icon={<ListTodo className="size-4" />} title="Tarefas" count={tasks.length}>
@@ -269,7 +276,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
           <input className="field" placeholder="Nova tarefa" value={taskDraft.title} onChange={event => setTaskDraft({ ...taskDraft, title: event.target.value })} required />
           <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Prazo da tarefa" value={taskDraft.due_date} onChange={event => setTaskDraft({ ...taskDraft, due_date: event.target.value })} required /><select className="field min-w-0 flex-1" aria-label="Marco da tarefa" value={taskDraft.milestone} onChange={event => setTaskDraft({ ...taskDraft, milestone: event.target.value })}><option value="">Sem marco</option>{milestones.map(milestone => <option key={milestone.id} value={milestone.id}>{milestone.title}</option>)}</select><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar tarefa" type="submit"><Plus className="size-4" /></button></div>
         </form>
-        <WorkList items={tasks} onComplete={itemId => void complete("tasks", itemId)} onCalendar={calendarEnabled ? itemId => void addToCalendar("tasks", itemId) : undefined} emptyLabel="Nenhuma tarefa cadastrada." />
+        <WorkList items={tasks} onToggle={(itemId, isDone) => void toggleWorkItem("tasks", itemId, isDone)} onCalendar={calendarEnabled ? itemId => void addToCalendar("tasks", itemId) : undefined} emptyLabel="Nenhuma tarefa cadastrada." />
       </WorkColumn>
     </div>
 
@@ -277,15 +284,16 @@ export function ProjectDetailPage({ id }: { id: number }) {
       <WorkColumn icon={<Video className="size-4" />} title="Reuniões" count={meetings.length}>
         <form className="grid gap-3" onSubmit={event => void createMeeting(event)}>
           <input className="field" placeholder="Título da reunião" value={meetingDraft.title} onChange={event => setMeetingDraft({ ...meetingDraft, title: event.target.value })} required />
-          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Data da reunião" value={meetingDraft.date} onChange={event => setMeetingDraft({ ...meetingDraft, date: event.target.value })} required /><input className="field min-w-0 flex-1" type="url" placeholder="Link da gravação (opcional)" value={meetingDraft.recording_url} onChange={event => setMeetingDraft({ ...meetingDraft, recording_url: event.target.value })} /><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar reunião" type="submit"><Plus className="size-4" /></button></div>
+          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Data da reunião" value={meetingDraft.date} onChange={event => setMeetingDraft({ ...meetingDraft, date: event.target.value })} required /><input className="field min-w-0 flex-1" type="url" aria-label="Link da reunião" placeholder="Link da reunião (opcional)" value={meetingDraft.meeting_url} onChange={event => setMeetingDraft({ ...meetingDraft, meeting_url: event.target.value })} /><input className="field min-w-0 flex-1" type="url" aria-label="Link da gravação" placeholder="Link da gravação (opcional)" value={meetingDraft.recording_url} onChange={event => setMeetingDraft({ ...meetingDraft, recording_url: event.target.value })} /><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar reunião" type="submit"><Plus className="size-4" /></button></div>
           <textarea className="field min-h-20" placeholder="Transcrição da reunião (para Discovery/Assessment por IA)" value={meetingDraft.transcript} onChange={event => setMeetingDraft({ ...meetingDraft, transcript: event.target.value })} />
         </form>
         {meetings.length ? <div className="divide-y">{meetings.map(meeting => <div className="py-3" key={meeting.id}>
           <div className="flex items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><Video className="size-4" /></span>
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{meeting.title}</p><p className="mt-0.5 text-xs text-slate-600">{formatDate(meeting.date)}</p></div>
+            {meeting.meeting_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-ocean" href={meeting.meeting_url} target="_blank" rel="noreferrer" aria-label={`Abrir reunião de ${meeting.title}`}><Video className="size-4" /></a>}
             {meeting.recording_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-ocean" href={meeting.recording_url} target="_blank" rel="noreferrer" aria-label={`Abrir gravação de ${meeting.title}`}><ExternalLink className="size-4" /></a>}
-            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${meeting.status === "held" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{meeting.status === "held" ? "Realizada" : "Agendada"}</span>
+            <button type="button" onClick={() => void toggleMeeting(meeting)} aria-label={meeting.status === "held" ? `Marcar ${meeting.title} como agendada` : `Marcar ${meeting.title} como realizada`} className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition hover:ring-2 hover:ring-ocean/30 ${meeting.status === "held" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{meeting.status === "held" ? "Realizada" : "Agendada"}</button>
           </div>
           {aiEnabled && meeting.transcript.trim() && <div className="mt-2 flex gap-2 pl-12">
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-ocean disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "discovery")}><Sparkles className="size-3.5 text-ocean" />Discovery</button>
@@ -304,7 +312,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
         {pendencias.length ? <div className="divide-y">{pendencias.map(pendencia => {
           const resolved = pendencia.status === "resolved";
           return <div className="flex items-center gap-3 py-3" key={pendencia.id}>
-            <button className={`shrink-0 ${resolved ? "text-emerald-600" : "text-slate-300 hover:text-ocean"}`} aria-label={resolved ? "Resolvida" : "Resolver"} disabled={resolved} onClick={() => void resolvePendencia(pendencia.id)}>{resolved ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
+            <button className={`shrink-0 ${resolved ? "text-emerald-600 hover:text-ink" : "text-slate-300 hover:text-ocean"}`} aria-label={resolved ? `Reabrir ${pendencia.title}` : `Resolver ${pendencia.title}`} onClick={() => void togglePendencia(pendencia.id, resolved)}>{resolved ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
             <div className="min-w-0 flex-1"><p className={`truncate text-sm font-medium ${resolved ? "text-slate-600 line-through" : "text-ink"}`}>{pendencia.title}</p><p className="mt-0.5 text-xs text-slate-600">{partyLabel[pendencia.party]}</p></div>
             <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${resolved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{resolved ? "Resolvida" : "Aberta"}</span>
           </div>;
@@ -392,12 +400,12 @@ function WorkColumn({ icon, title, count, children }: { icon: ReactNode; title: 
   return <section className="min-w-0 space-y-4 rounded-2xl border bg-white p-5 sm:p-6"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean">{icon}</span><div><h2 className="font-semibold text-ink">{title}</h2><p className="text-sm text-slate-600">{count} {count === 1 ? "item" : "itens"}</p></div></div>{children}</section>;
 }
 
-function WorkList({ items, onComplete, onCalendar, emptyLabel }: { items: (Milestone | Task)[]; onComplete: (id: number) => void; onCalendar?: (id: number) => void; emptyLabel: string }) {
+function WorkList({ items, onToggle, onCalendar, emptyLabel }: { items: (Milestone | Task)[]; onToggle: (id: number, isDone: boolean) => void; onCalendar?: (id: number) => void; emptyLabel: string }) {
   if (!items.length) return <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">{emptyLabel}</p>;
   return <div className="divide-y">{items.map(item => {
     const done = item.status === "done";
     return <div className="flex items-center gap-3 py-3" key={item.id}>
-      <button className={`shrink-0 ${done ? "text-emerald-600" : "text-slate-300 hover:text-ocean"}`} aria-label={done ? "Concluído" : "Concluir"} disabled={done} onClick={() => onComplete(item.id)}>{done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
+      <button className={`shrink-0 ${done ? "text-emerald-600 hover:text-ink" : "text-slate-300 hover:text-ocean"}`} aria-label={done ? `Reabrir ${item.title}` : `Concluir ${item.title}`} onClick={() => onToggle(item.id, done)}>{done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
       <div className="min-w-0 flex-1"><p className={`truncate text-sm font-medium ${done ? "text-slate-600 line-through" : "text-ink"}`}>{item.title}</p><p className={`mt-0.5 flex items-center gap-1.5 text-xs ${item.is_overdue ? "font-semibold text-signal" : "text-slate-600"}`}>{item.is_overdue && <AlertTriangle className="size-3.5" />}{formatDate(item.due_date)}</p></div>
       {onCalendar && <button className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-ocean" aria-label={`Adicionar ${item.title} ao calendário`} onClick={() => onCalendar(item.id)}><CalendarPlus className="size-4" /></button>}
       <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${done ? "bg-emerald-50 text-emerald-700" : item.status === "in_progress" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{workStatusLabel[item.status]}</span>

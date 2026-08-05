@@ -9,6 +9,11 @@ Portal interno para conduzir oportunidades comerciais até a execução de proje
 3. Crie o primeiro administrador com `docker compose exec api uv run python manage.py createsuperuser`.
 4. Abra `http://localhost:19173` e entre pela tela de login.
 
+O `createsuperuser` cria um superusuário, mas `User.role` nasce como `delivery` e o menu do SPA é
+filtrado pelo papel — ajuste para `admin` antes de explorar. Esse acerto e o percurso completo do
+produto (cliente → oportunidade → conversão → projeto → equipe → indicadores) estão em
+[`docs/runbooks/roteiro-de-teste.md`](docs/runbooks/roteiro-de-teste.md).
+
 Portas expostas pelo `docker compose` (faixa alta para evitar conflito com outros serviços):
 
 | Serviço | URL |

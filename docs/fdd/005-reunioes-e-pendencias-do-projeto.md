@@ -10,6 +10,11 @@ o snapshot do projeto passa a trazer reuniões, pendências e um resumo de resul
 ## Regras
 
 - Reunião e pendência pertencem a um projeto e usam soft delete (arquivamento), como os demais itens.
+- Reunião tem **dois links, para dois momentos**: `meeting_url` é a sala/convite do que ainda vai
+  acontecer e `recording_url` é o registro do que aconteceu. O ciclo é `scheduled` → `held`, e o
+  selo de status alterna nos dois sentidos. Ao portal do cliente vai só a gravação (ADR 0003/0005).
+- **Nada nesta tela é de mão única.** Concluir marco/tarefa e resolver pendência são reversíveis:
+  reabrir limpa `completed_at`/`resolved_at`, e marcar por engano se desfaz com o mesmo clique.
 - Pendência tem `status` (aberta/resolvida) e `party` (fornecedor/cliente); ao resolver, grava
   `resolved_at` automaticamente (padrão do `WorkItem`).
 - Gerenciamento é de entrega/admin (vendas não acessa), coerente com marcos/tarefas.

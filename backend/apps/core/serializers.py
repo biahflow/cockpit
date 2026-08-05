@@ -8,6 +8,7 @@ from typing import Any, cast
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.uploadedfile import UploadedFile
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from . import drive
@@ -50,7 +51,24 @@ class ClientSerializer(serializers.ModelSerializer[Client]):
     class Meta:
         model = Client
         fields = ["id", "name", "legal_name", "tax_id", "owner", "status", "created_at", "updated_at"]
-        read_only_fields = ["id", "owner", "status", "created_at", "updated_at"]
+        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    def validate_status(self, value: str) -> str:
+        """`status` é afirmado por quem cadastra, mas o que o sistema observou não se desdiz.
+
+        Prospect vira ativo pelo signal `_promote_client_on_won`. Deixar um PATCH devolver o
+        cliente para prospect apagaria esse fato — e o signal só promove na transição, então ele
+        não corrigiria de volta. O critério de "ganha" é o mesmo de `Opportunity.is_won`.
+        """
+        if value != Client.Status.PROSPECT or self.instance is None:
+            return value
+        if Opportunity.objects.filter(
+            client=self.instance, stage__kind=PipelineStage.Kind.WON, archived_at__isnull=True
+        ).exists():
+            raise serializers.ValidationError(
+                "O cliente tem oportunidade ganha e não volta a ser prospect."
+            )
+        return value
 
 
 class ContactSerializer(serializers.ModelSerializer[Contact]):
@@ -125,15 +143,27 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
     stage_name = serializers.CharField(source="stage.name", read_only=True)
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_tier = serializers.CharField(source="service.tier", read_only=True)
+    project = serializers.SerializerMethodField()
 
     class Meta:
         model = Opportunity
         fields = [
             "id", "client", "contact", "title", "scope", "estimated_value", "stage", "stage_name",
-            "owner", "expected_close_date", "service", "service_name", "service_tier",
+            "owner", "expected_close_date", "service", "service_name", "service_tier", "project",
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_project(self, obj: Opportunity) -> int | None:
+        """Id do projeto que saiu desta oportunidade, ou `None` se ela ainda não foi convertida.
+
+        Sem isto a tela do pipeline não tem como saber que já converteu, e continua oferecendo
+        "Criar projeto" numa oportunidade que só pode responder 409. O `getattr` com default dá
+        conta do reverso 1-1 porque `RelatedObjectDoesNotExist` herda de `AttributeError`.
+        """
+        project = getattr(obj, "project", None)
+        return project.pk if project else None
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
@@ -193,8 +223,8 @@ class MilestoneSerializer(WorkItemSerializer):
 class MeetingSerializer(serializers.ModelSerializer[Meeting]):
     class Meta:
         model = Meeting
-        fields = ["id", "project", "title", "date", "recording_url", "transcript", "status",
-                  "created_at", "updated_at"]
+        fields = ["id", "project", "title", "date", "meeting_url", "recording_url", "transcript",
+                  "status", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 

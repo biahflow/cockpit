@@ -653,3 +653,55 @@ def test_dashboard_ignores_completed_items_and_returns_upcoming_tasks(
 
     assert response.data["overdue_count"] == 0
     assert [task["title"] for task in response.data["upcoming_tasks"]] == ["Próxima"]
+
+
+@pytest.mark.django_db
+def test_client_status_is_declared_on_creation(api_client: APIClient, admin_user: User):
+    api_client.force_authenticate(admin_user)
+    url = reverse("client-list")
+
+    declared = api_client.post(url, {"name": "Já é cliente", "status": "active"}, format="json")
+    omitted = api_client.post(url, {"name": "Ainda não é"}, format="json")
+
+    assert declared.status_code == 201
+    assert declared.data["status"] == "active"
+    # Sem o campo, o cadastro não alega uma venda que não houve.
+    assert omitted.status_code == 201
+    assert omitted.data["status"] == "prospect"
+
+
+@pytest.mark.django_db
+def test_opportunity_exposes_the_project_it_became(api_client: APIClient, admin_user: User):
+    won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
+    converted = OpportunityFactory(stage=won, owner=admin_user)
+    pending = OpportunityFactory(stage=won, owner=admin_user)
+    api_client.force_authenticate(admin_user)
+    api_client.post(
+        reverse("opportunity-convert-to-project", args=[converted.pk]),
+        {"client": converted.client_id, "name": "Projeto", "start_date": "2026-08-01",
+         "due_date": "2026-09-01", "status": "planning"},
+        format="json",
+    )
+
+    rows = {row["id"]: row["project"] for row in api_client.get(reverse("opportunity-list")).data}
+
+    # Sem este campo a tela do pipeline não sabe que já converteu e oferece "Criar projeto" de novo.
+    assert rows[converted.pk] == Project.objects.get(opportunity=converted).pk
+    assert rows[pending.pk] is None
+
+
+@pytest.mark.django_db
+def test_meeting_keeps_room_link_and_recording_apart(api_client: APIClient, admin_user: User):
+    project = ProjectFactory(owner=admin_user)
+    api_client.force_authenticate(admin_user)
+
+    response = api_client.post(
+        reverse("meeting-list"),
+        {"project": project.pk, "title": "Kickoff", "date": "2026-08-20",
+         "meeting_url": "https://meet.example/abc", "recording_url": "https://rec.example/abc"},
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.data["meeting_url"] == "https://meet.example/abc"
+    assert response.data["recording_url"] == "https://rec.example/abc"
