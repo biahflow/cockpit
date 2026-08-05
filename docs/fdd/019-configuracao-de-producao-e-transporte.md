@@ -102,7 +102,11 @@ contrato dentro de uma entrega de segurança. Por isso o gate roda com `--tag se
 
 Fora do recorte mas corrigido por bloquear a entrega: o `frontend/package-lock.json` estava fora de
 sinc com o `package.json`, então `npm ci` falhava — o job `frontend` do CI estava vermelho em todos
-os merges recentes e a imagem do SPA não construía.
+os merges recentes e a imagem do SPA não construía. Consertar isso descobriu um segundo defeito
+atrás dele: o `playwright.config.ts` desligava o `webServer` quando `CI` estava definido, sem nada
+subir o Vite no lugar, então **os cinco testes e2e nunca poderiam ter passado no CI** — ficava
+invisível porque o job quebrava antes de chegar lá. Agora o Playwright sobe o servidor também no
+CI, e só o dispensa se `E2E_BASE_URL` apontar para um ambiente já no ar.
 
 ## Aceite
 
