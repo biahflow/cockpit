@@ -6,5 +6,6 @@ class CoreConfig(AppConfig):
     name = "apps.core"
 
     def ready(self) -> None:
-        from . import signals  # noqa: F401  (registra os receivers do portal)
+        # `signals` registra os receivers do portal; `checks`, as verificações de `check --deploy`.
+        from . import checks, signals  # noqa: F401
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 from datetime import date
-from typing import cast
+from typing import Any, cast
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -443,12 +443,21 @@ class AcceptInvitationSerializer(serializers.Serializer):
             raise serializers.ValidationError("Este nome de usuário já está em uso.")
         return value
 
-    def validate_password(self, value: str) -> str:
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # A validação é de objeto, não de campo, porque o `UserAttributeSimilarityValidator`
+        # desiste sem um `user` — passar só a senha o tornaria decorativo. O usuário aqui é
+        # instanciado e não salvo, só para o validador ter o que comparar. O e-mail fica de fora:
+        # ele vem do `Invitation`, que só é resolvido na view.
+        candidate = User(
+            username=attrs["username"],
+            first_name=attrs.get("first_name", ""),
+            last_name=attrs.get("last_name", ""),
+        )
         try:
-            validate_password(value)
+            validate_password(attrs["password"], user=candidate)
         except DjangoValidationError as exc:
-            raise serializers.ValidationError(list(exc.messages)) from exc
-        return value
+            raise serializers.ValidationError({"password": list(exc.messages)}) from exc
+        return attrs
 
 
 class LoginSerializer(serializers.Serializer):

@@ -20,7 +20,17 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 > Bloco adiado a pedido, para priorizar a jornada assistida por IA. Retomar antes de ir a produção.
 
 - [x] Pipeline de CI (lint, tipos, testes, cobertura mínima, build e E2E) — `quality.yml`.
-- [ ] Domínio, HTTPS, variáveis de produção e segredos em cofre apropriado.
+- [x] Domínio, HTTPS, variáveis de produção e segredos em cofre apropriado — FDD 019, ADR 0011.
+      O recorte de **código, configuração e runbook**: comprar domínio, terminar TLS, escolher
+      provedor e popular o cofre seguem manuais, agora documentados em
+      `docs/runbooks/producao.md`. Fecha os quatro itens que a FDD 017 adiou (SSL redirect, HSTS,
+      header de proxy, expiração de sessão, validadores de senha e `check --deploy` no CI) e a
+      ressalva de `LocMemCache` da ADR 0009. Nasce um caminho de produção de fato:
+      `docker-compose.prod.yml` com nginx + gunicorn + Redis, imagem em dois estágios com
+      `uv.lock`, `collectstatic` e usuário sem privilégio, documentos em volume nomeado. E
+      configuração insegura **deixa de subir**: sete system checks de deploy recusam o segredo do
+      repositório, SQLite efêmero, cache por processo, `ALLOWED_HOSTS` de localhost e origem
+      `http://` — rodados pelo entrypoint da imagem e pelo CI.
 - [ ] Monitoramento: logs centralizados, alertas, health checks e rastreamento de erros.
 - [ ] Retenção, backup testado e restauração do banco e dos documentos.
 - [x] Revisão de segurança **de aplicação** (RBAC, CSRF, rate limiting amplo, upload, dependências)
@@ -37,7 +47,8 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
       agregadores. Nasce a **equipe do projeto** (`ProjectMember`), que passa a ser o critério
       único de acesso, com backfill que preserva o que existia. Mudança **incompatível em
       semântica** para consumidores autenticados como Entrega.
-- [ ] Ampliar a matriz de testes: acessibilidade, responsividade e carga (há `backend/loadtests/`).
+- [ ] Ampliar a matriz de testes: acessibilidade, responsividade e carga (há `loadtests/dashboard.js`,
+      um script k6 de um endpoint só, fora do CI).
 
 ## Versão 2 — Assistente de IA (essencialmente entregue)
 

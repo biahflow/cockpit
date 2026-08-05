@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose --env-file .env.example config --quiet
+      - run: docker compose -f docker-compose.prod.yml --env-file .env.example config --quiet
 
   backend:
     runs-on: ubuntu-latest
@@ -29,6 +30,34 @@ jobs:
       - run: uv run pytest
       - run: uv run python manage.py spectacular --file openapi.yaml --validate
       - run: git diff --exit-code -- openapi.yaml
+      # Gate de produção (FDD 019), o que a FDD 017 tinha deixado pendente. Simula o ambiente que o
+      # cofre de segredos vai entregar e cobra que `check --deploy` saia limpo.
+      #
+      # Por último de propósito: o `collectstatic` cria o `staticfiles/`, e é a existência dele que
+      # liga o WhiteNoise no MIDDLEWARE. Antes do `pytest`, a suíte rodaria em uma configuração
+      # diferente da local.
+      #
+      # `--tag security` porque `check --deploy` cru também levanta avisos de schema do
+      # drf-spectacular, e este gate é sobre estar pronto para produção, não sobre o OpenAPI. O
+      # segredo é gerado no shell: literal de 50 caracteres em workflow é fumaça para varredor de
+      # segredo, e este não precisa ser estável.
+      - name: check --deploy (produção simulada)
+        env:
+          DJANGO_DEBUG: "false"
+          DJANGO_ALLOWED_HOSTS: portal.exemplo.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://portal.exemplo.com
+          FRONTEND_ORIGIN: https://portal.exemplo.com
+          DJANGO_SSL_REDIRECT: "true"
+          DJANGO_HSTS_SECONDS: "31536000"
+          TRUST_X_FORWARDED_PROTO: "true"
+          NUM_PROXIES: "1"
+          # `check --tag security` não abre conexão: basta a URL existir para não cair no SQLite.
+          DATABASE_URL: postgresql://biahflow:x@db:5432/biahflow
+          REDIS_URL: redis://redis:6379/0
+        run: |
+          uv run python manage.py collectstatic --noinput
+          DJANGO_SECRET_KEY="$(openssl rand -base64 48)" \
+            uv run python manage.py check --deploy --fail-level WARNING --tag security
 
   frontend:
     runs-on: ubuntu-latest

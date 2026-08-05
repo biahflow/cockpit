@@ -147,15 +147,47 @@ protegem as portas específicas. Todos vêm do `.env` — mexa só se um limite 
 | `task_sync` | `TASK_SYNC_RATE` | `60/hour` | webhook de Linear/GitHub |
 | `esign_webhook` | `ESIGN_WEBHOOK_RATE` | `120/hour` | webhook do fornecedor de assinatura |
 
-Dois avisos para produção:
+Dois avisos para produção, agora com trava:
 
 - **Proxy.** O limite de anônimo é por IP, e o IP que o Django vê é o do último salto. Configure
   `NUM_PROXIES` com o número de proxies confiáveis do ingress; sem isso, todo mundo que passa pelo
   mesmo proxy divide um balde. No compose de desenvolvimento é o caso — o SPA fala com a API pelo
-  container do Vite.
-- **Cache.** O contador vive no cache. Sem cache compartilhado configurado, o Django usa
-  `LocMemCache`, que é por processo: com N workers, o limite efetivo é N vezes o configurado.
-  Um Redis resolve, e entra com o item de infraestrutura.
+  container do Vite. O `docker-compose.prod.yml` põe `NUM_PROXIES=1` (o nginx é o único salto), e um
+  check de deploy recusa confiar no `X-Forwarded-Proto` sem essa variável.
+- **Cache.** O contador vive no cache. Sem cache compartilhado, o Django usa `LocMemCache`, que é
+  por processo: com N workers, o limite efetivo é N vezes o configurado. Resolvido pelo `REDIS_URL`
+  (FDD 019) — e, como produção agora roda com três workers de gunicorn, o `check --deploy` recusa
+  subir sem ele.
+
+## Produção: domínio, HTTPS e segredos
+
+Desenvolvimento e produção são **composes diferentes**: `docker-compose.yml` roda `runserver` e
+`docker-compose.prod.yml` roda gunicorn + nginx + Redis. O passo a passo (variáveis obrigatórias,
+primeira subida, smoke test, ordem de ativação do HSTS, rollback e diagnóstico) está em
+**`docs/runbooks/producao.md`**. O resumo:
+
+```bash
+cp .env.example .env      # preencha o bloco "Produção"
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Três coisas que mudam a operação (FDD 019, ADR 0011):
+
+- **Configuração insegura não sobe.** O entrypoint da imagem roda
+  `manage.py check --deploy --fail-level WARNING --tag security` antes do gunicorn. Faltando
+  `DJANGO_SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `DJANGO_ALLOWED_HOSTS` ou com origem `http://`
+  em `DJANGO_CSRF_TRUSTED_ORIGINS`, o container recusa subir e o log nomeia o problema. É
+  deliberado: sem isso, o portal subiria em SQLite efêmero parecendo saudável.
+- **Nada de transporte seguro é ligado por default.** `DJANGO_SSL_REDIRECT` e `DJANGO_HSTS_SECONDS`
+  vêm do ambiente porque `DEBUG=false` também é o modo da suíte de testes. O compose de produção já
+  os liga; quem sobe fora dele precisa pôr no `.env`. **HSTS preload nasce desligado** e é quase
+  irreversível — ligue por último, seguindo a ordem do runbook.
+- **Sessão expira em 12 h de inatividade** (`SESSION_COOKIE_AGE`), deslizante: quem está usando não
+  é deslogado no meio do trabalho.
+
+O `.env` inteiro agora chega ao container (`env_file`). Antes, o compose repetia à mão parte das
+variáveis e as ausentes eram descartadas em silêncio — se você já passou por "botei no `.env` e não
+aconteceu nada", era isto.
 
 ## Qualidade / CI
 Antes de promover: `cd backend && uv run pytest && uv run mypy apps config && uv run ruff check .`

@@ -2,12 +2,42 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
+
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key")
-DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,api").split(",")
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    return default if raw is None else raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        # Sem isto, um `SESSION_COOKIE_AGE=meia-hora` estoura um traceback de `int()` que não diz
+        # qual variável está errada.
+        raise ImproperlyConfigured(f"{name} precisa ser um inteiro, e veio {raw!r}.") from exc
+
+
+def _env_list(name: str, default: str = "") -> list[str]:
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
+# O default é o segredo de desenvolvimento; um system check de deploy recusa subir com ele
+# (apps/core/checks.py). Não é `raise` aqui porque a suíte roda sem `DJANGO_SECRET_KEY`.
+INSECURE_SECRET_KEY = "unsafe-development-key"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", INSECURE_SECRET_KEY)
+DEBUG = _env_bool("DJANGO_DEBUG", False)
+# `_env_list` apara espaço: `DJANGO_ALLOWED_HOSTS="portal.exemplo.com, www.portal.exemplo.com"`
+# gerava um host com espaço na frente, que não casa com nada e devolve 400 sem explicação.
+ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,api")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_ORIGIN", "http://localhost:19173")
 
 INSTALLED_APPS = [
@@ -48,6 +78,12 @@ WSGI_APPLICATION = "config.wsgi.application"
 database_url = os.getenv("DATABASE_URL")
 if database_url:
     parsed = urlparse(database_url)
+    # A query string da URL era descartada, então `...?sslmode=require` não fazia nada — e é
+    # exatamente assim que um Postgres gerenciado costuma entregar a credencial. `DB_SSLMODE`
+    # vence a URL. Sem nenhum dos dois, vale o default do libpq (o compose local não fala TLS).
+    options = {key: value for key, value in parse_qsl(parsed.query)}
+    if os.getenv("DB_SSLMODE"):
+        options["sslmode"] = os.environ["DB_SSLMODE"]
     DATABASES = {"default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": parsed.path.lstrip("/"),
@@ -55,6 +91,12 @@ if database_url:
         "PASSWORD": parsed.password,
         "HOST": parsed.hostname,
         "PORT": parsed.port or 5432,
+        # Conexão persistente: com gunicorn, abrir uma conexão por requisição é o gargalo
+        # mais barato de remover. `CONN_HEALTH_CHECKS` descarta a conexão morta em vez de
+        # devolver erro na primeira query depois de um restart do banco.
+        "CONN_MAX_AGE": _env_int("DB_CONN_MAX_AGE", 60),
+        "CONN_HEALTH_CHECKS": True,
+        "OPTIONS": options,
     }}
 else:
     DATABASES = {
@@ -62,21 +104,47 @@ else:
     }
 
 AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 LANGUAGE_CODE = "pt-br"
 TIME_ZONE = "America/Sao_Paulo"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
+# `collectstatic` roda no build da imagem de produção; em desenvolvimento o `runserver` serve
+# o estático do admin sozinho e este diretório nem existe (está no `.gitignore`).
+STATIC_ROOT = Path(os.getenv("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles")))
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # Comprimido, mas **não** `Manifest`: a variante com manifesto levanta em runtime se um
+    # `{% static %}` não estiver no `staticfiles.json`, que só existe depois do `collectstatic`.
+    # Com `DEBUG=False` na suíte, qualquer template renderizado (API navegável, Swagger) estouraria.
+    # O preço é perder o hash no nome de um punhado de arquivos do admin.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
+# Atrás do gunicorn não há `runserver` para servir o estático do admin, então o WhiteNoise entra.
+# Só quando o `collectstatic` já rodou: sem o diretório ele avisa a cada boot, e em desenvolvimento
+# (e na suíte) o `runserver` já dá conta. Na imagem de produção o `collectstatic` roda no build, e
+# um check de deploy recusa subir sem ele.
+if STATIC_ROOT.is_dir():
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# Documento é recurso privado e o Django nunca serve este diretório (ADR 0002, FDD 017). Em
+# produção ele precisa ser um volume próprio: dentro da árvore de código, um deploy o levaria.
+MEDIA_ROOT = Path(os.getenv("DJANGO_MEDIA_ROOT", str(BASE_DIR / "media")))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "core.User"
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "1025"))
+EMAIL_PORT = _env_int("EMAIL_PORT", 1025)
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", False)
+# Sem timeout, um SMTP que não responde pendura o worker que está mandando o e-mail.
+EMAIL_TIMEOUT = _env_int("EMAIL_TIMEOUT", 10)
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@biahflow.local")
 # Notificações por e-mail + digest diário (Go-live/Hypercare) — atrás de flag, desligado por padrão.
 EMAIL_NOTIFICATIONS_ENABLED = os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false").lower() == "true"
@@ -107,6 +175,21 @@ REST_FRAMEWORK = {
     # vira um limite global. Ver docs/operacao.md.
     "NUM_PROXIES": int(os.environ["NUM_PROXIES"]) if os.getenv("NUM_PROXIES") else None,
 }
+# Cache compartilhado. O contador do throttle vive aqui: com `LocMemCache`, que é um dicionário
+# por processo, N workers de gunicorn fazem cada teto valer N vezes o configurado — a ressalva que
+# a ADR 0009 registrou como pendente. Sessão continua no banco de propósito: no cache, uma queda
+# do Redis deslogaria todo mundo. Vazio = `LocMemCache` (desenvolvimento e suíte de testes).
+REDIS_URL = os.getenv("REDIS_URL", "")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
+    }
+else:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Biahflow API",
     "VERSION": "1.0.0",
@@ -120,14 +203,67 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
-CSRF_TRUSTED_ORIGINS = [
-    origin
-    for origin in os.getenv(
-        "DJANGO_CSRF_TRUSTED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:19173,http://127.0.0.1:19173",
-    ).split(",")
-    if origin
-]
+# Expiração deslizante: 12h de inatividade encerram a sessão, mas quem está trabalhando não é
+# deslogado no meio do expediente porque cada requisição renova o cookie.
+SESSION_COOKIE_AGE = _env_int("SESSION_COOKIE_AGE", 12 * 60 * 60)
+SESSION_SAVE_EVERY_REQUEST = True
+
+# Transporte (FDD 019) — o que a FDD 017 deixou pendente esperando domínio e HTTPS.
+#
+# Nada aqui é derivado de `DEBUG`: **`DEBUG=False` não significa produção neste repo**. A suíte e
+# o CI rodam com `DJANGO_DEBUG` ausente, e com `SECURE_SSL_REDIRECT` ligado o `SecurityMiddleware`
+# devolve 301 para toda requisição do test client — a suíte inteira fica vermelha. Quem garante
+# que isto está ligado em produção é o `check --deploy` (o gate do CI), não um default esperto.
+#
+# `SECURE_CONTENT_TYPE_NOSNIFF`, `SECURE_REFERRER_POLICY` e `X_FRAME_OPTIONS` não aparecem porque
+# os defaults do Django 5 já são os seguros; repetir default só convida a divergência.
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SSL_REDIRECT", False)
+# Rotas isentas do redirect, por regex (sem a barra inicial). Serve para a sonda HTTP de um
+# balanceador que não fala https com o container.
+SECURE_REDIRECT_EXEMPT = _env_list("DJANGO_SSL_REDIRECT_EXEMPT")
+SECURE_HSTS_SECONDS = _env_int("DJANGO_HSTS_SECONDS", 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("DJANGO_HSTS_INCLUDE_SUBDOMAINS", True)
+# Preload nasce desligado de propósito: entrar na lista é compilado no browser e sair leva meses.
+# Ligue só depois de o domínio e todos os subdomínios estarem estáveis em https (ver runbook).
+SECURE_HSTS_PRELOAD = _env_bool("DJANGO_HSTS_PRELOAD", False)
+# Atrás de um proxy que termina o TLS, o Django só sabe que a requisição era https pelo header.
+# É opt-in porque confiar nele sem um proxy que o **sobrescreva** deixa qualquer cliente afirmar
+# "já é https" e derrubar o redirect e o `Secure` do cookie. Ver ADR 0011.
+# É booleano, e não o nome do header, de propósito: um nome livre transforma erro de digitação em
+# buraco de spoofing, e o único par que faz sentido aqui é este.
+TRUST_X_FORWARDED_PROTO = _env_bool("TRUST_X_FORWARDED_PROTO", False)
+# `None` é o default do Django e diz "não confie em header nenhum" — explícito em vez de ausente.
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https") if TRUST_X_FORWARDED_PROTO else None
+)
+
+# `security.W021` cobra `SECURE_HSTS_PRELOAD=True`, e o gate do CI roda com `--fail-level WARNING`.
+# Silenciado porque a recusa é deliberada: preload é submissão a uma lista compilada no binário do
+# navegador, que nenhum deploy desfaz. Ligue `DJANGO_HSTS_PRELOAD` quando quiser — o aviso é o
+# único que este projeto escolhe não ouvir. Ver ADR 0011 e docs/runbooks/producao.md.
+SILENCED_SYSTEM_CHECKS = ["security.W021"]
+
+# O default do Django manda o traceback de 500 para `mail_admins` e só: sem `ADMINS`, com
+# `DEBUG=False`, o erro não aparece em lugar nenhum. Atrás do gunicorn isso é um deploy cego, então
+# o mínimo é jogar tudo em stderr, que é o que o runtime de container coleta. Log estruturado,
+# request-id, alertas e rastreamento de erro são o item de monitoramento do roadmap, não este.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"padrao": {"format": "{levelname} {asctime} {name} {message}", "style": "{"}},
+    "handlers": {
+        "stderr": {"class": "logging.StreamHandler", "formatter": "padrao"},
+    },
+    "root": {"handlers": ["stderr"], "level": os.getenv("DJANGO_LOG_LEVEL", "INFO")},
+    "loggers": {
+        # Sem isto o traceback de 500 continuaria indo só para `mail_admins`.
+        "django.request": {"handlers": ["stderr"], "level": "ERROR", "propagate": False},
+    },
+}
+CSRF_TRUSTED_ORIGINS = _env_list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:19173,http://127.0.0.1:19173",
+)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
 
@@ -187,6 +323,4 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "")  # formato "owner/repo"
 # Captação de leads pelo site: token compartilhado e CORS restrito ao endpoint de intake.
 LEAD_INTAKE_TOKEN = os.getenv("LEAD_INTAKE_TOKEN", "")
 CORS_URLS_REGEX = r"^/api/v1/leads/intake/$"
-CORS_ALLOWED_ORIGINS = [
-    origin for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin
-]
+CORS_ALLOWED_ORIGINS = _env_list("CORS_ALLOWED_ORIGINS")

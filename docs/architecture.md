@@ -20,12 +20,29 @@ Hoje há dois destinos, escolhidos pela flag `GOOGLE_DRIVE_ENABLED`:
 
 - **Google Drive** (Shared Drive, via service account) quando a flag está ligada — o arquivo não
   toca o disco da API; guardamos `drive_file_id` e `drive_link`.
-- **Disco local** (`MEDIA_ROOT`) quando desligada, que é o padrão em desenvolvimento.
+- **Disco local** (`MEDIA_ROOT`) quando desligada, que é o padrão em desenvolvimento. Em produção
+  `MEDIA_ROOT` precisa ser um volume próprio (`DJANGO_MEDIA_ROOT`): dentro da árvore de código, um
+  deploy leva os documentos embora. Como consequência, storage local restringe a API a uma réplica —
+  escalar exige volume compartilhado ou o Drive ligado (ADR 0011).
 
 > O `docker-compose.yml` ainda sobe um **MinIO** e passa `MINIO_ENDPOINT` para a API, mas o
 > `settings.py` não lê essa variável e não há cliente S3 nas dependências: o serviço está
 > provisionado e **não conectado**. Migrar os blobs para S3/MinIO — ou remover o serviço do compose —
 > continua pendente e merece um ADR quando for decidido.
+
+## Topologia em produção
+
+Desenvolvimento roda `runserver` + dev server do Vite; produção é outro compose
+(`docker-compose.prod.yml`, ADR 0011):
+
+```
+internet → [terminador de TLS, fora do compose] → [nginx: SPA + proxy] → [gunicorn] → [postgres]
+                                                                              ↓
+                                                                      [redis: teto de requisição]
+```
+
+O TLS termina antes do compose, e o Django só acredita no `X-Forwarded-Proto` com opt-in explícito.
+O nginx é a borda **da aplicação**, não o terminador. Ver `docs/runbooks/producao.md`.
 
 ## Integrações
 

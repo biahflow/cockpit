@@ -1,0 +1,132 @@
+# Topologia de produção (FDD 019, ADR 0011). Autônomo de propósito, **não** um override do
+# `docker-compose.yml`: override não remove um bind mount nem um serviço herdado, então herdar
+# levaria a árvore de código, o Mailpit e o MinIO para produção.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# O TLS é terminado por um proxy **na frente** deste compose (o do provedor, ou um nginx/Caddy
+# seu). Ele precisa sobrescrever `X-Forwarded-Proto` — ver o aviso na ADR 0011.
+# Passo a passo em docs/runbooks/producao.md.
+
+# Nome de projeto próprio. Sem isto, o compose usa o nome do diretório para os dois arquivos, e
+# produção acabaria anexada ao **mesmo volume de banco** do ambiente de desenvolvimento — além de um
+# `down` aqui poder mexer nos containers de lá.
+name: biahflow-prod
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    # Sem porta publicada: o banco só é alcançável pela rede interna do compose.
+
+  redis:
+    image: redis:7-alpine
+    # `--save ""` desliga a persistência: aqui o Redis só guarda contador de teto de requisição,
+    # que pode ser perdido sem consequência. Perder o dado é degradação; perder o Redis é queda.
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Migração como passo próprio, não embutida no boot do servidor: com mais de uma réplica, N
+  # processos correndo `migrate` ao mesmo tempo é problema, e um `migrate` que falha precisa
+  # aparecer como falha em vez de virar um servidor que subiu pela metade.
+  api-migrate:
+    build:
+      context: ./backend
+      target: prod
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    env_file:
+      - path: .env
+        required: false
+    environment: &api_env
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_DEBUG: "false"
+      DJANGO_MEDIA_ROOT: /var/lib/biahflow/media
+      # Transporte: nada disto é ligado por default no código, justamente porque `DEBUG=False`
+      # também é o modo da suíte de testes. Aqui é produção, então liga.
+      DJANGO_SSL_REDIRECT: ${DJANGO_SSL_REDIRECT:-true}
+      DJANGO_HSTS_SECONDS: ${DJANGO_HSTS_SECONDS:-31536000}
+      # O nginx do serviço `web` é o único salto interno; se houver proxy do provedor na frente,
+      # aumente o número.
+      TRUST_X_FORWARDED_PROTO: ${TRUST_X_FORWARDED_PROTO:-true}
+      NUM_PROXIES: ${NUM_PROXIES:-1}
+    volumes:
+      - media_data:/var/lib/biahflow/media
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      target: prod
+    env_file:
+      - path: .env
+        required: false
+    environment: *api_env
+    # `MEDIA_ROOT` em volume nomeado. No compose de desenvolvimento ele mora dentro do bind mount
+    # da árvore de código — em produção isso significaria perder todo documento de cliente no
+    # primeiro deploy.
+    volumes:
+      - media_data:/var/lib/biahflow/media
+    healthcheck:
+      # Manda o `X-Forwarded-Proto` porque com `DJANGO_SSL_REDIRECT` ligado uma sonda http levaria
+      # 301 e o container pareceria doente. O endpoint é público e barato (ainda não há `/healthz`:
+      # é o próximo item do roadmap).
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request as r
+          q = r.Request("http://127.0.0.1:8000/api/v1/auth/csrf/",
+                        headers={"X-Forwarded-Proto": "https", "Host": "127.0.0.1"})
+          assert r.urlopen(q, timeout=5).status == 200
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # Sem porta publicada: quem fala com o gunicorn é o nginx do serviço `web`. Publicar aqui
+    # daria um caminho que não passa pelo proxy — e é justamente o que torna
+    # `TRUST_X_FORWARDED_PROTO` perigoso (ADR 0011).
+
+  web:
+    build:
+      context: ./frontend
+      target: prod
+    ports:
+      # Só HTTP: o terminador de TLS fica na frente. Não exponha esta porta à internet direto.
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  media_data:
