@@ -8,4 +8,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0004 — Gestão de tarefas: espelho vs. sistema de registro externo
 - 0005 — Alimentação do portal: reuniões, pendências e resultados
 - 0006 — Motor de agentes de IA (especializados, RBAC, auditoria e avaliação)
+- 0007 — Assinatura eletrônica: provedor homologado e webhook de status
 

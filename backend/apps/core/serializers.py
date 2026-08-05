@@ -217,7 +217,9 @@ class TaskSerializer(WorkItemSerializer):
 class SignatureRequestSerializer(serializers.ModelSerializer[SignatureRequest]):
     class Meta:
         model = SignatureRequest
-        fields = ["id", "signer_email", "status", "reminded_at", "signed_at", "created_at"]
+        fields = [
+            "id", "signer_email", "status", "sign_url", "reminded_at", "signed_at", "created_at",
+        ]
         read_only_fields = fields
 
 

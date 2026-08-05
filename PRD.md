@@ -43,8 +43,8 @@ Sincronia de tarefas) e API versionada `/api/v1/`.
 
 - **Consumo** do portal do cliente — o Biahflow emite webhook e snapshot; a interface do cliente é
   o repositório `portal_cliente`, em trilho separado (ADR 0003).
-- **Assinatura eletrônica com provedor homologado** — há o esqueleto agnóstico e o lembrete manual;
-  o adaptador Clicksign/DocuSign com webhook de status ainda não foi construído.
+- **Outros provedores de assinatura** — o adaptador homologado é o Clicksign (ADR 0007); DocuSign e
+  afins entram como novas classes do mesmo protocolo, ainda não construídas.
 - **Ações autônomas de IA** — nenhum agente executa efeito colateral sozinho; memória multi-turno e
   ferramentas de ação ficam para decisão futura (ADR 0006).
 - **Dados comerciais no portal do cliente** — valor, custo e margem nunca cruzam a fronteira.

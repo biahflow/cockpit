@@ -428,7 +428,11 @@ class SignatureRequest(models.Model):
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="signature_requests")
     signer_email = models.EmailField()
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
-    provider_ref = models.CharField(max_length=128, blank=True, default="")
+    # Referências do fornecedor (ADR 0007): `provider_ref` casa 1:1 com o signatário e é a
+    # chave de busca do webhook; `document_ref` é o fallback junto com o e-mail.
+    provider_ref = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    document_ref = models.CharField(max_length=128, blank=True, default="")
+    sign_url = models.URLField(blank=True, default="")  # link do signatário, vai no lembrete
     reminded_at = models.DateTimeField(null=True, blank=True)
     signed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -89,6 +89,7 @@ REST_FRAMEWORK = {
         "lead_intake": os.getenv("LEAD_INTAKE_RATE", "20/hour"),
         "task_sync": os.getenv("TASK_SYNC_RATE", "60/hour"),
         "booking": os.getenv("BOOKING_RATE", "60/hour"),
+        "esign_webhook": os.getenv("ESIGN_WEBHOOK_RATE", "120/hour"),
     },
 }
 SPECTACULAR_SETTINGS = {
@@ -142,8 +143,19 @@ GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "")
 GOOGLE_BOOKING_CALENDAR_ID = os.getenv("GOOGLE_BOOKING_CALENDAR_ID", "")
 BOOKING_MIN_FIT = os.getenv("BOOKING_MIN_FIT", "medium")
 BOOKING_SLOT_MINUTES = int(os.getenv("BOOKING_SLOT_MINUTES", "45"))
+# Assinatura eletrônica (ADR 0007): fornecedor homologado + webhook de status assinado.
+# `ESIGN_WEBHOOK_SECRET` é o segredo do HMAC da entrega; sem ele o webhook responde 401.
 ESIGN_ENABLED = os.getenv("ESIGN_ENABLED", "false").lower() == "true"
 ESIGN_PROVIDER = os.getenv("ESIGN_PROVIDER", "")
+ESIGN_API_TOKEN = os.getenv("ESIGN_API_TOKEN", "")
+# Vazio = cada adaptador usa a própria URL padrão (`Provider.DEFAULT_BASE`).
+ESIGN_API_BASE = os.getenv("ESIGN_API_BASE", "")
+ESIGN_WEBHOOK_SECRET = os.getenv("ESIGN_WEBHOOK_SECRET", "")
+# Documentos de teste: não consomem crédito e são apagados pelo fornecedor em poucos dias.
+ESIGN_SANDBOX = os.getenv("ESIGN_SANDBOX", "true").lower() == "true"
+# Quem avisa o signatário: "email" (o fornecedor manda o convite, padrão) ou "link" (o
+# fornecedor devolve o link de assinatura e o portal se encarrega de entregar).
+ESIGN_DELIVERY = os.getenv("ESIGN_DELIVERY", "email").lower()
 
 # Sincronia de tarefas com ferramentas externas (Linear/GitHub) atrás de flag (ADR 0004).
 # Token compartilhado para o webhook de entrada; credenciais/estados por fornecedor.

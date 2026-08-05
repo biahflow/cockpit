@@ -1,6 +1,6 @@
 # Roadmap — Portal Biahflow
 
-Atualizado em 04/08/2026. Separa o que já compõe a plataforma do que falta, e aponta o norte
+Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e aponta o norte
 (jornada de consultoria assistida por IA). Marcações: `[x]` entregue, `[~]` parcial, `[ ]` pendente.
 
 ## Base atual — entregue
@@ -37,7 +37,9 @@ Atualizado em 04/08/2026. Separa o que já compõe a plataforma do que falta, e 
 
 - [x] Calendário: add ao Google Calendar + **criação automática de tarefas a partir de eventos** (marcador `#proj-<id>`, idempotente, atrás de flag — FDD 012).
 - [x] Notificações por e-mail (espelho das in-app) + digest diário por IA, atrás de flag (FDD 010).
-- [~] Assinatura eletrônica: `esign` + `SignatureRequest` + **lembrete de pendentes e registro de assinatura** (FDD 009); [ ] adaptador de provedor homologado (webhook de status).
+- [x] Assinatura eletrônica: `esign` + `SignatureRequest` + lembrete de pendentes + **adaptador
+      de provedor homologado (Clicksign) e webhook de status assinado (HMAC), idempotente**
+      (FDD 009, ADR 0007); `mark-signed` fica como fallback manual.
 - [x] Portal do cliente: **alimentação** pelo Biahflow (webhook + snapshot, ADR 0003/0005).
       [ ] Consumo no repo `portal_cliente` (isolado por organização) — trilho separado.
 
@@ -56,7 +58,8 @@ Go-live → Hypercare → Operação. Próximas etapas a construir:
 
 - [x] Agendamento: qualificação por IA no intake do site + booking automático por leads qualificados (free/busy do Google — FDD 013).
 - [x] Discovery → Assessment automáticos sobre a transcrição da reunião (FDD 007).
-- [x] Contrato: geração por IA a partir de modelo + lembrete de quem falta assinar (FDD 009). [ ] Adaptador de provedor homologado (webhook de status).
+- [x] Contrato: geração por IA a partir de modelo + lembrete de quem falta assinar + adaptador
+      de provedor homologado com webhook de status (FDD 009, ADR 0007).
 - [x] Kickoff automático: marcos/tarefas/pasta/e-mail a partir do `convert-to-project` (FDD 008).
 - [x] Go-live/Hypercare: notificações por e-mail + digest diário por IA (FDD 010).
 
