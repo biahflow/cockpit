@@ -115,8 +115,18 @@ acordar alguém. O mínimo a configurar:
 | Balanceador/uptime | `/readyz` != 200 por 2 checagens | banco ou Redis fora |
 | Uptime externo | `GET /` de fora da rede | pega o que morre antes da borda: DNS, TLS, provedor |
 | Provedor | certificado a <14 dias do vencimento | HSTS transforma TLS vencido em portal inacessível |
+| Agendador (cron/CI) | `manage.py backup_status` saindo com código 1 | backup que parou de rodar só aparece no dia em que se precisa dele (FDD 021) |
 
-Um alerta que ninguém investiga é pior que nenhum: comece por estes cinco.
+Um alerta que ninguém investiga é pior que nenhum: comece por estes seis.
+
+O de backup é o único que não vem de uma requisição: rode o comando de fora, uma vez ao dia, e
+trate a saída diferente de zero como incidente.
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T api python manage.py backup_status
+```
+
+O que ele confere, o que fazer quando reprova e como restaurar: **`backup-e-restauracao.md`**.
 
 ## Quando algo dá errado
 

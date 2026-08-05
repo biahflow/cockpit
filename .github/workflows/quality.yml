@@ -13,6 +13,18 @@ jobs:
       - run: docker compose --env-file .env.example config --quiet
       - run: docker compose -f docker-compose.prod.yml --env-file .env.example config --quiet
 
+  # Teste de mesa da restauração (FDD 021, ADR 0013). Backup que ninguém nunca restaurou não é
+  # backup, é fé — então o repositório restaura a cada PR: semeia dado real na topologia de
+  # produção, faz a cópia, **destrói banco e documentos**, restaura e confere que voltaram.
+  #
+  # Job próprio e não um passo do `compose`: aquele valida sintaxe em segundos, este sobe
+  # containers e leva alguns minutos.
+  backup-drill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash .github/scripts/backup-drill.sh
+
   backend:
     runs-on: ubuntu-latest
     defaults:

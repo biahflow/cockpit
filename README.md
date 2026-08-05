@@ -26,6 +26,8 @@ Produção é outro compose: `docker compose -f docker-compose.prod.yml up -d --
 
 As sondas são `GET /healthz` (o processo responde) e `GET /readyz` (banco e cache respondem; 503 quando não). Toda requisição carrega um `X-Request-ID` que volta na resposta e aparece no log do nginx, do gunicorn e da aplicação — em produção o log sai em JSON. Rastreamento de erro (Sentry) é opcional e nasce desligado. Como achar uma requisição pelo código, ligar o Sentry e quais alertas criar: [`docs/runbooks/monitoramento.md`](docs/runbooks/monitoramento.md).
 
+O mesmo compose sobe um sidecar de **backup**: banco e documentos, agendado, com retenção e envio opcional para fora do host. A restauração não é promessa — o CI destrói banco e mídia e restaura a cada PR (`.github/scripts/backup-drill.sh`). Como conferir, restaurar e recuperar em um host novo: [`docs/runbooks/backup-e-restauracao.md`](docs/runbooks/backup-e-restauracao.md).
+
 ## Qualidade
 
 Execute `cd backend && uv run pytest`, `cd backend && uv run mypy apps config`, `cd frontend && npm test`, `cd frontend && npm run build` e `cd frontend && npm run e2e` antes de abrir um pull request. Veja [AGENTS.md](AGENTS.md) e `docs/runbooks/`.

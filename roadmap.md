@@ -43,7 +43,20 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
       carona: a sonda anterior mandava `Host: 127.0.0.1` e levava **400** assim que
       `DJANGO_ALLOWED_HOSTS` virava o domínio real — o container nunca ficava saudável e o `web`
       nunca subia. Alertas ficam no fornecedor (`docs/runbooks/monitoramento.md`).
-- [ ] Retenção, backup testado e restauração do banco e dos documentos.
+- [x] Retenção, backup testado e restauração do banco e dos documentos — FDD 021, ADR 0013. Fecha
+      o último item que bloqueava ir ao ar. O portal ganha um **sidecar `backup`** que sobe junto
+      com a stack (quem faz `up -d` já tem backup) e copia as **duas metades** do estado — Postgres
+      (`pg_dump --format=custom`) e os documentos do `MEDIA_ROOT` —, com retenção por dias e envio
+      **offsite opt-in** para storage compatível com S3. Ele é construído da mesma imagem do `db`
+      porque `pg_dump` de major menor **recusa rodar**, e a imagem da API é bookworm (cliente 15)
+      contra um servidor 16. Mas a entrega central não é a cópia: é o **teste de mesa**
+      (`.github/scripts/backup-drill.sh`), que a cada PR sobe a topologia de produção, semeia dado,
+      faz backup, **destrói banco e mídia**, restaura e confere que voltaram — inclusive que a
+      destruição foi real, senão o drill passaria por não ter destruído nada. Ele já pegou dois
+      defeitos: um `compose run` que reaproveitava a imagem antiga (e aprovou um `restore.sh`
+      sabotado) e a cópia de boot que, em host novo, gravaria um dump vazio por cima do desastre. A
+      aplicação não faz backup — só reclama: `manage.py backup_status` sai com código 1 quando a
+      última cópia passa de 26 h, e é o gancho do alerta que faltava à FDD 020.
 - [x] Revisão de segurança **de aplicação** (RBAC, CSRF, rate limiting amplo, upload, dependências)
       — FDD 017, ADR 0009. Fechou três vazamentos: Entrega baixava proposta e contrato ligados a
       oportunidade (agora só vê documento de projeto em que atua), o login não tinha teto de

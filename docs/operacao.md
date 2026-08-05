@@ -35,6 +35,8 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
 | Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
 | Rastreamento de erro (Sentry) | `SENTRY_DSN` (API) e `VITE_SENTRY_DSN` (SPA, build arg) | conta Sentry | Pronto (desligado) |
+| Backup do banco e dos documentos | — (sidecar do compose de produção) | — | **Sempre ligado** em produção ✅ — agendado por `BACKUP_CRON` |
+| Envio do backup para fora do host | `BACKUP_S3_*` | bucket compatível com S3 | Pronto (desligado) — **recomendado**: cópia no mesmo host morre com o host |
 
 > As integrações com flag booleana (IA, Drive, Calendário, Assinatura, Sincronia de tarefas)
 > podem ser ligadas/desligadas em runtime por um admin na tela **Configurações** (`/configuracoes`),

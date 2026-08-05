@@ -44,6 +44,14 @@ internet → [terminador de TLS, fora do compose] → [nginx: SPA + proxy] → [
 O TLS termina antes do compose, e o Django só acredita no `X-Forwarded-Proto` com opt-in explícito.
 O nginx é a borda **da aplicação**, não o terminador. Ver `docs/runbooks/producao.md`.
 
+**Backup** (FDD 021, ADR 0013): um sidecar `backup`, construído da **mesma imagem do `db`** porque
+`pg_dump` de major menor recusa rodar, copia banco (`pg_dump --format=custom`) e documentos (`tar`
+do `MEDIA_ROOT`) em volume próprio, com retenção por dias e envio offsite opt-in para storage
+compatível com S3. A aplicação não faz backup — só lê o carimbo da última cópia
+(`manage.py backup_status`) para o alerta. A restauração é exercitada **a cada PR** por
+`.github/scripts/backup-drill.sh`, que destrói banco e mídia e traz os dois de volta. Ver
+`docs/runbooks/backup-e-restauracao.md`.
+
 **Observabilidade** (FDD 020, ADR 0012): o `X-Request-ID` nasce no nginx e atravessa todo o
 caminho — log da borda, access log do gunicorn, log estruturado da aplicação, tag no Sentry e o
 header da resposta que o SPA mostra na tela de erro. `/healthz` e `/readyz` respondem em middleware,

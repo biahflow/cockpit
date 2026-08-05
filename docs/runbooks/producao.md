@@ -21,7 +21,8 @@ internet → [terminador de TLS: proxy do provedor]     ← HTTPS acaba aqui
            [db] postgres      [redis] cache do teto de requisição
 ```
 
-O `docker-compose.prod.yml` sobe `web`, `api`, `db` e `redis`. **Não** sobe o terminador de TLS: é o
+O `docker-compose.prod.yml` sobe `web`, `api`, `db`, `redis` e o sidecar `backup` (FDD 021).
+**Não** sobe o terminador de TLS: é o
 proxy do provedor, ou um nginx/Caddy seu na frente. `db` e `redis` não publicam porta, e a `api`
 também não — o único caminho até o gunicorn é o nginx, e é isso que torna seguro confiar no
 `X-Forwarded-Proto`.
@@ -36,8 +37,9 @@ também não — o único caminho até o gunicorn é o nginx, e é isso que torn
       ```bash
       python -c 'import secrets; print(secrets.token_urlsafe(64))'
       ```
-- [ ] **Postgres** provisionado, com backup. Retenção e restauração testada são o próximo item do
-      roadmap — até então, confirme o backup do provedor antes de qualquer migração.
+- [ ] **Postgres** provisionado. O backup do portal sobe junto com a stack (FDD 021) — o que falta
+      decidir aqui é o **offsite**: um bucket compatível com S3 e uma credencial só dele, porque
+      cópia no mesmo host morre com o host. Ver `backup-e-restauracao.md`.
 - [ ] **SMTP** real (convite de usuário e lembrete de assinatura saem por e-mail).
 
 ## 2. Variáveis obrigatórias
@@ -114,10 +116,16 @@ guardaram.
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
-A migração roda no serviço one-shot antes da API subir. Confirme o backup do banco antes.
+A migração roda no serviço one-shot antes da API subir. Tire uma cópia antes — migração aplicada
+não volta sozinha:
+
+```bash
+docker compose -f docker-compose.prod.yml exec backup backup.sh
+```
 
 **Rollback:** volte o código (`git checkout <tag-anterior>`) e refaça o `up -d --build`. Migração
-aplicada **não** volta sozinha: restaure o banco somente conforme o plano da migração.
+aplicada **não** volta sozinha: restaure o banco somente conforme o plano da migração
+(**`backup-e-restauracao.md`** — restaurar substitui tudo o que entrou desde a cópia).
 
 **Conferir a configuração de um ambiente já no ar:**
 ```bash
@@ -129,6 +137,10 @@ docker compose -f docker-compose.prod.yml exec api \
 JSON e toda linha carrega o `request_id`, o mesmo que volta na resposta e aparece no log do nginx e
 do gunicorn. As sondas são `GET /healthz` (vivo) e `GET /readyz` (pronto: banco + cache). Como
 achar uma requisição pelo código, ligar o Sentry e quais alertas criar: **`monitoramento.md`**.
+
+**Backup:** o sidecar `backup` roda sozinho (03:15 por padrão) e copia banco **e** documentos.
+`exec api python manage.py backup_status` diz de quando é a última cópia; restaurar, conferir e
+mandar para fora do host: **`backup-e-restauracao.md`**.
 
 ## 7. Quando algo dá errado
 
@@ -143,9 +155,11 @@ achar uma requisição pelo código, ligar o Sentry e quais alertas criar: **`mo
 | upload falha com "permission denied" | `DJANGO_MEDIA_ROOT` apontando para um caminho que não existe na imagem: um volume nomeado herda o dono do diretório que cobre, e fora de `/var/lib/biahflow/media` (ou `/app/media`) o ponto de montagem nasce do root, enquanto o processo roda como uid 10001 |
 | `web` não sobe: "host not found in upstream" | não deve acontecer — o `proxy_pass` usa variável para adiar a resolução. Se acontecer, o `resolver` do `nginx.conf` não é o DNS da sua rede |
 | "o projeto sumiu" para a Entrega | não é produção: é equipe do projeto vazia (FDD 018) |
+| `backup_status` reprova | o sidecar parou: `logs backup`. Detalhe em `backup-e-restauracao.md` |
+| as cópias sumiram | alguém rodou `down -v`, que leva o volume `backup_data` junto — é para isso que serve o offsite |
 
 ## Pendências deste bloco do roadmap
 
-Ainda abertos, na ordem: retenção, backup testado e restauração do banco e dos documentos; e a
-matriz de testes de acessibilidade, responsividade e carga. Monitoramento saiu da fila (FDD 020,
-ADR 0012) — ver `monitoramento.md`.
+Ainda aberta: a matriz de testes de acessibilidade, responsividade e carga. Monitoramento saiu da
+fila (FDD 020, ADR 0012 — ver `monitoramento.md`) e backup também (FDD 021, ADR 0013 — ver
+`backup-e-restauracao.md`).
