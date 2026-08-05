@@ -12,7 +12,7 @@ const stages = [
   { id: 1, name: "Prospecção", kind: "open", position: 0 },
   { id: 2, name: "Ganho", kind: "won", position: 50 },
 ];
-const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31", service: 10, service_name: "Discovery Express", service_tier: "discovery_express" };
+const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31", service: 10, service_name: "Discovery Express", service_tier: "discovery_express", project: null as number | null };
 const services = [
   { id: 10, name: "Discovery Express", active: true, tier: "discovery_express", tier_display: "Discovery Express", list_price: "0.00", summary: "Diagnóstico gratuito." },
   { id: 11, name: "Implantação", active: true, tier: "implantacao", tier_display: "Implantação", list_price: "90000.00", summary: "Funcionários digitais." },
@@ -35,6 +35,7 @@ function stub() {
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
     if (path.startsWith("/documents/?opportunity")) return Promise.resolve([{ id: 9, client: null, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
+    if (path.includes("/convert-to-project/")) return Promise.resolve({ id: 7, name: "Oport X" });
     if (path.includes("/proposal/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4, artifact: proposalArtifact });
     if (path.includes("/summary/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4 });
     if (path.startsWith("/artifacts/?")) return Promise.resolve(artifacts);
@@ -87,6 +88,25 @@ test("converte a oportunidade ganha em projeto pelo detalhe", async () => {
   fireEvent.change(dates[1], { target: { value: "2026-09-01" } });
   await user.click(within(dialog).getByRole("button", { name: "Criar projeto" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/convert-to-project/", expect.objectContaining({ method: "POST" })));
+  // Converter sem retorno nenhum deixava a dúvida "criou?". O aviso responde e leva ao projeto.
+  const aviso = await screen.findByRole("status");
+  expect(within(aviso).getByRole("link", { name: /Abrir projeto/ })).toHaveAttribute("href", "/projetos/7");
+});
+
+test("oportunidade já convertida oferece ver o projeto, não criá-lo de novo", async () => {
+  // Sem isto o card segue oferecendo "Criar projeto" numa oportunidade que só pode responder 409.
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/pipeline-stages/") return Promise.resolve(stages);
+    if (path === "/opportunities/") return Promise.resolve([{ ...opp, project: 7 }]);
+    if (path === "/services/") return Promise.resolve(services);
+    if (path === "/clients/") return Promise.resolve([]);
+    return Promise.resolve([]);
+  });
+  render(<CommercialPage />);
+  await screen.findByText("Oport X");
+
+  expect(screen.getByRole("link", { name: /Ver projeto/ })).toHaveAttribute("href", "/projetos/7");
+  expect(screen.queryByRole("button", { name: /Criar projeto/ })).not.toBeInTheDocument();
 });
 
 test("a proposta gerada por IA fica registrada como artefato em rascunho", async () => {

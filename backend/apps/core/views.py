@@ -421,8 +421,10 @@ class PipelineStageViewSet(viewsets.ModelViewSet):
 
 class OpportunityViewSet(ArchiveModelViewSet):
     resource = "opportunity"
+    # `project` é o reverso 1-1 lido por `OpportunitySerializer.get_project`: sem ele aqui, a
+    # listagem do pipeline faz uma query por card (ADR 0014).
     queryset = Opportunity.objects.select_related(
-        "client", "contact", "stage", "owner", "service"
+        "client", "contact", "stage", "owner", "service", "project"
     ).all()
     serializer_class = OpportunitySerializer
 

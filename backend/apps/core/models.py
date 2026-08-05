@@ -50,9 +50,11 @@ class Client(TimestampedModel):
     tax_id = models.CharField(max_length=32, blank=True)
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="owned_clients")
     drive_folder_id = models.CharField(max_length=128, blank=True, default="")
-    # Nasce "active" quando cadastrado direto; um cliente vindo de conversão de lead nasce
-    # "prospect" e é promovido a "active" quando a oportunidade é ganha (ver signals).
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    # Quem cadastra afirma o status (a SPA oferece a escolha); o default é o mais conservador,
+    # porque um POST que omite o campo não deve alegar uma venda que não houve. O cliente vindo de
+    # conversão de lead também nasce "prospect", e vira "active" pelo signal quando a oportunidade
+    # é ganha — promoção que um PATCH não desfaz (ver `ClientSerializer.validate_status`).
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PROSPECT)
 
     class Meta:
         ordering = ["name"]
@@ -330,6 +332,10 @@ class Meeting(TimestampedModel):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="meetings")
     title = models.CharField(max_length=255)
     date = models.DateField()
+    # Dois links, porque são dois momentos: `meeting_url` é a sala/convite de uma reunião que
+    # ainda vai acontecer; `recording_url` é o registro do que aconteceu. Um campo só obrigaria
+    # a escolher entre agendar e arquivar. O portal do cliente recebe só a gravação (ADR 0005).
+    meeting_url = models.URLField(blank=True, default="")
     recording_url = models.URLField(blank=True, default="")
     transcript = models.TextField(blank=True, default="")  # texto ou URL
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.SCHEDULED)

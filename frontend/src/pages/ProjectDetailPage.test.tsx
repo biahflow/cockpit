@@ -91,8 +91,27 @@ test("cria marco e tarefa e conclui um item", async () => {
   await user.click(screen.getByLabelText("Adicionar tarefa"));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/tasks/", expect.objectContaining({ method: "POST" })));
 
-  await user.click(screen.getAllByLabelText("Concluir")[0]);
+  await user.click(screen.getByLabelText("Concluir Marco 1"));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/milestones/1/", expect.objectContaining({ method: "PATCH" })));
+});
+
+test("reabre o que foi concluído por engano", async () => {
+  // Antes o círculo era `disabled` depois de concluir: marcação errada não tinha volta pela tela.
+  stub();
+  const base = mocks.api.getMockImplementation()!;
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) =>
+    path.startsWith("/tasks") && !options?.method
+      ? Promise.resolve([{ id: 2, project: 1, title: "Tarefa feita", description: "", owner: 1, due_date: "2026-08-20", completed_at: "2026-08-06T12:00:00Z", status: "done", party: "provider", is_overdue: false, milestone: null }])
+      : base(path, options));
+  const user = userEvent.setup();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Tarefa feita");
+
+  await user.click(screen.getByLabelText("Reabrir Tarefa feita"));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/tasks/2/", expect.objectContaining({
+    method: "PATCH", body: expect.stringContaining("\"status\":\"todo\""),
+  })));
 });
 
 test("cria reunião e resolve pendência", async () => {
@@ -108,8 +127,21 @@ test("cria reunião e resolve pendência", async () => {
   await user.click(screen.getByLabelText("Adicionar reunião"));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/meetings/", expect.objectContaining({ method: "POST" })));
 
-  await user.click(screen.getByLabelText("Resolver"));
+  await user.click(screen.getByLabelText("Resolver Aprovar escopo"));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/pendencias/1/", expect.objectContaining({ method: "PATCH" })));
+});
+
+test("alterna a reunião entre agendada e realizada", async () => {
+  // O selo de status não tinha controle nenhum: toda reunião nascia "Agendada" e ficava assim.
+  const user = userEvent.setup();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Kickoff");
+
+  await user.click(screen.getByLabelText("Marcar Kickoff como agendada"));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/meetings/1/", expect.objectContaining({
+    method: "PATCH", body: expect.stringContaining("\"status\":\"scheduled\""),
+  })));
 });
 
 test("gera discovery e assessment da reunião por IA", async () => {

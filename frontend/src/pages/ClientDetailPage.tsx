@@ -3,7 +3,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 
 import { api } from "../api";
 import { HealthBadge } from "../components/StatusDot";
-import type { Client, ClientOverview, Contact } from "../types";
+import type { Client, ClientOverview, ClientStatus, Contact } from "../types";
 
 const blankContact = { name: "", email: "", phone: "", job_title: "" };
 
@@ -11,7 +11,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [client, setClient] = useState<Client>();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [overview, setOverview] = useState<ClientOverview>();
-  const [form, setForm] = useState({ name: "", legal_name: "", tax_id: "" });
+  const [form, setForm] = useState<{ name: string; legal_name: string; tax_id: string; status: ClientStatus }>({ name: "", legal_name: "", tax_id: "", status: "prospect" });
   const [contactDraft, setContactDraft] = useState(blankContact);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -22,7 +22,7 @@ export function ClientDetailPage({ id }: { id: number }) {
     api<ClientOverview>(`/clients/${id}/overview/`),
   ]).then(([loadedClient, loadedContacts, loadedOverview]) => {
     setClient(loadedClient); setContacts(loadedContacts); setOverview(loadedOverview);
-    setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id });
+    setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -74,6 +74,9 @@ export function ClientDetailPage({ id }: { id: number }) {
         <Field label="Nome"><input className="field" value={form.name} onChange={event => { setForm({ ...form, name: event.target.value }); setSaved(false); }} required /></Field>
         <Field label="Razão social"><input className="field" value={form.legal_name} onChange={event => { setForm({ ...form, legal_name: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>
         <Field label="CNPJ / CPF"><input className="field" value={form.tax_id} onChange={event => { setForm({ ...form, tax_id: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>
+        {/* Corrige o que foi digitado errado no cadastro. Voltar para prospect é recusado pela API
+            quando o cliente já tem oportunidade ganha — o que o sistema observou não se desdiz. */}
+        <Field label="Situação"><select className="field" value={form.status} onChange={event => { setForm({ ...form, status: event.target.value as ClientStatus }); setSaved(false); }}><option value="prospect">Prospect — ainda não fechou</option><option value="active">Cliente ativo — já fechou</option></select></Field>
         <button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar alterações</button>
         {saved && <p className="text-sm font-medium text-emerald-700">Dados atualizados.</p>}
       </form>

@@ -3,6 +3,10 @@
 Guia prático do que ligar, em que ordem, e como testar. Tudo que depende de terceiros está
 atrás de **flag**: desligado, o portal funciona normalmente. Ligue conforme tiver contas/keys.
 
+Este documento é sobre **configuração**. Para percorrer o produto de ponta a ponta — entrar, criar
+cliente, oportunidade, converter em projeto, montar equipe e conferir os indicadores — o roteiro é
+[`runbooks/roteiro-de-teste.md`](runbooks/roteiro-de-teste.md).
+
 ## Subir o portal
 
 ```bash
@@ -125,9 +129,10 @@ O critério é a **equipe do projeto** (`ProjectMember`); ser dono de um marco o
 basta. Ver RFC 0003, ADR 0010 e FDD 018.
 
 - **Quem monta a equipe:** só admin, no painel **"Equipe do projeto"** dentro do projeto.
-- **Atenção na conversão:** quando **Vendas** converte uma oportunidade, o projeto nasce sem
-  equipe e fica **invisível para a Entrega** até um admin incluir alguém. Se alguém disser que
-  "o projeto sumiu", é quase sempre isto.
+- **Atenção na conversão:** quando **Vendas** converte uma oportunidade, o projeto nasce com uma
+  única pessoa na equipe — quem converteu, por invariante ("quem responde pelo projeto participa
+  dele"). Como essa pessoa é de Vendas ou Admin, o projeto fica **invisível para a Entrega** até um
+  admin incluir alguém. Se alguém disser que "o projeto sumiu", é quase sempre isto.
 - **No deploy desta versão**, a migração `0025` monta as equipes a partir de quem era dono do
   projeto, de um marco ou de uma tarefa — ninguém perde acesso. Mas esse acesso herdado é o
   antigo, que era largo demais: **revise as alocações** depois de subir.

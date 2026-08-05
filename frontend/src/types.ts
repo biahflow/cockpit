@@ -1,5 +1,5 @@
 export type PipelineStage = { id: number; name: string; kind: "open" | "won" | "lost"; position: number; opportunity_count?: number; estimated_total?: string | null };
-export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier };
+export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier; project: number | null };
 export type AiScoreDimension = { label: string; score: number };
 export type Project = { id: number; name: string; description: string; client: number; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean };
 export type ServiceTier = "discovery_express" | "discovery_assessment" | "implantacao" | "";
@@ -28,7 +28,7 @@ export type WorkItemStatus = "todo" | "in_progress" | "done";
 export type Party = "provider" | "client";
 export type Milestone = { id: number; project: number; title: string; description: string; owner: number; due_date: string; completed_at: string | null; status: WorkItemStatus; party: Party; is_overdue: boolean };
 export type Task = Milestone & { milestone: number | null };
-export type Meeting = { id: number; project: number; title: string; date: string; recording_url: string; transcript: string; status: "scheduled" | "held" };
+export type Meeting = { id: number; project: number; title: string; date: string; meeting_url: string; recording_url: string; transcript: string; status: "scheduled" | "held" };
 export type Pendencia = { id: number; project: number; title: string; description: string; status: "open" | "resolved"; party: Party; owner: number | null; resolved_at: string | null };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 export type DocumentEntry = { id: number; client: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };

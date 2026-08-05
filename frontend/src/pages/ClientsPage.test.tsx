@@ -29,3 +29,35 @@ test("mostra o semáforo de saúde e filtra clientes por prospect", async () => 
   await user.click(screen.getByRole("button", { name: "Prospects" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/overview/?status=prospect"));
 });
+
+test("cadastro declara a situação do cliente, e o default é prospect", async () => {
+  const user = userEvent.setup();
+  render(<ClientsPage />);
+  await screen.findByText("Acme");
+  // Default conservador: cadastrar sem pensar não alega uma venda que não houve.
+  expect(screen.getByLabelText("Situação")).toHaveValue("prospect");
+
+  await user.type(screen.getByLabelText("Nome do cliente"), "Nova Empresa");
+  await user.selectOptions(screen.getByLabelText("Situação"), "active");
+  await user.click(screen.getByRole("button", { name: "Cadastrar cliente" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/", expect.objectContaining({
+    method: "POST", body: expect.stringContaining("\"status\":\"active\""),
+  })));
+});
+
+test("filtro sem resultado explica o filtro, não manda cadastrar o primeiro cliente", async () => {
+  // A base tem cliente; só o filtro está vazio. Dizer "sua base começa aqui" aqui é falso — e
+  // manda fazer algo (cadastrar) que nasceria ativo e não encheria a aba de prospects.
+  mocks.api.mockImplementation((path: string) => Promise.resolve(
+    path === "/clients/overview/?status=prospect"
+      ? { clients: [] }
+      : { clients: [{ client_id: 1, name: "Acme", status: "active", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null }] },
+  ));
+  const user = userEvent.setup();
+  render(<ClientsPage />);
+  await screen.findByText("Acme");
+  await user.click(screen.getByRole("button", { name: "Prospects" }));
+  expect(await screen.findByText("Nenhum prospect")).toBeInTheDocument();
+  expect(screen.queryByText("Sua base começa aqui")).not.toBeInTheDocument();
+});

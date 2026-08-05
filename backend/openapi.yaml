@@ -4415,9 +4415,7 @@ components:
           type: integer
           readOnly: true
         status:
-          allOf:
-          - $ref: '#/components/schemas/ClientStatusEnum'
-          readOnly: true
+          $ref: '#/components/schemas/ClientStatusEnum'
         created_at:
           type: string
           format: date-time
@@ -4431,7 +4429,6 @@ components:
       - id
       - name
       - owner
-      - status
       - updated_at
     ClientOverviewList:
       type: object
@@ -4882,6 +4879,10 @@ components:
         date:
           type: string
           format: date
+        meeting_url:
+          type: string
+          format: uri
+          maxLength: 200
         recording_url:
           type: string
           format: uri
@@ -5041,6 +5042,10 @@ components:
         service_tier:
           type: string
           readOnly: true
+        project:
+          type: integer
+          nullable: true
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -5056,6 +5061,7 @@ components:
       - expected_close_date
       - id
       - owner
+      - project
       - service_name
       - service_tier
       - stage
@@ -5148,9 +5154,7 @@ components:
           type: integer
           readOnly: true
         status:
-          allOf:
-          - $ref: '#/components/schemas/ClientStatusEnum'
-          readOnly: true
+          $ref: '#/components/schemas/ClientStatusEnum'
         created_at:
           type: string
           format: date-time
@@ -5370,6 +5374,10 @@ components:
         date:
           type: string
           format: date
+        meeting_url:
+          type: string
+          format: uri
+          maxLength: 200
         recording_url:
           type: string
           format: uri
@@ -5472,6 +5480,10 @@ components:
           readOnly: true
         service_tier:
           type: string
+          readOnly: true
+        project:
+          type: integer
+          nullable: true
           readOnly: true
         created_at:
           type: string
