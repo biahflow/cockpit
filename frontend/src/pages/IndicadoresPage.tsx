@@ -33,7 +33,7 @@ export function IndicadoresPage() {
   const opp = data.funnel.opportunities;
 
   return <section className="space-y-7">
-    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-ocean">Gestão</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Indicadores</h1><p className="mt-2 text-sm text-slate-500">Comercial, entrega e ROI da operação.</p></div>{user?.role === "admin" && <a href="/servicos" className="inline-flex items-center gap-2 self-start rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:border-ocean sm:self-auto"><SlidersHorizontal className="size-4 text-ocean" />Gerir serviços</a>}</header>
+    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-ocean">Gestão</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Indicadores</h1><p className="mt-2 text-sm text-slate-600">Comercial, entrega e ROI da operação.</p></div>{user?.role === "admin" && <a href="/servicos" className="inline-flex items-center gap-2 self-start rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:border-ocean sm:self-auto"><SlidersHorizontal className="size-4 text-ocean" />Gerir serviços</a>}</header>
 
     <div className="grid gap-4 md:grid-cols-4">
       <Kpi icon={<Target className="size-4" />} label="Taxa de ganho" value={pct(data.win_rate)} />
@@ -56,10 +56,10 @@ export function IndicadoresPage() {
       <section className="rounded-2xl border bg-white p-5 sm:p-6">
         <h2 className="font-semibold text-ink">Financeiro</h2>
         <div className="mt-5 grid grid-cols-2 gap-4">
-          <div><p className="text-xs text-slate-500">Receita realizada</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(data.roi.revenue)}</p></div>
-          <div><p className="text-xs text-slate-500">Custo</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(data.roi.cost)}</p></div>
-          <div><p className="text-xs text-slate-500">Pipeline estimado</p><p className="mt-1 text-2xl font-semibold text-ocean">{money.format(pipelineValue)}</p></div>
-          <div className="flex items-center gap-2"><PiggyBank className="size-5 text-ocean" /><span className="text-sm text-slate-500">ROI = (receita − custo) / custo</span></div>
+          <div><p className="text-xs text-slate-600">Receita realizada</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(data.roi.revenue)}</p></div>
+          <div><p className="text-xs text-slate-600">Custo</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(data.roi.cost)}</p></div>
+          <div><p className="text-xs text-slate-600">Pipeline estimado</p><p className="mt-1 text-2xl font-semibold text-ocean">{money.format(pipelineValue)}</p></div>
+          <div className="flex items-center gap-2"><PiggyBank className="size-5 text-ocean" /><span className="text-sm text-slate-600">ROI = (receita − custo) / custo</span></div>
         </div>
       </section>
     </div>
@@ -68,7 +68,7 @@ export function IndicadoresPage() {
       <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><Layers className="size-4 text-ocean" /><h2 className="font-semibold text-ink">Conversão por nível de produto</h2></div>
       <div className="divide-y">{data.funnel.by_tier.map(row => <div className="px-5 py-3 sm:px-6" key={row.tier}>
         <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium text-ink">{row.label}</span><span className="font-semibold text-ocean">Ganho {pct(row.win_rate)}</span></div>
-        <p className="mt-1 text-xs text-slate-500">{row.total} oportunidade(s) · {row.open} aberta(s) · {row.won} ganha(s) · {row.lost} perdida(s) · {money.format(Number(row.estimated_total))} estimados</p>
+        <p className="mt-1 text-xs text-slate-600">{row.total} oportunidade(s) · {row.open} aberta(s) · {row.won} ganha(s) · {row.lost} perdida(s) · {money.format(Number(row.estimated_total))} estimados</p>
       </div>)}</div>
     </section>
 
@@ -76,7 +76,7 @@ export function IndicadoresPage() {
       <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><Sparkles className="size-4 text-ocean" /><h2 className="font-semibold text-ink">Conversão por etapa da jornada</h2></div>
       <div className="divide-y">{data.funnel.by_stage.map(row => <div className="px-5 py-3 sm:px-6" key={row.kind}>
         <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium text-ink">{row.label}</span><span className="font-semibold text-ocean">{row.reached} cliente(s)</span></div>
-        <p className="mt-1 text-xs text-slate-500">{row.total} artefato(s) · {row.sent} enviado(s) · {row.accepted} aceito(s) · {row.rejected} recusado(s) · aceitação {pct(row.acceptance_rate)}</p>
+        <p className="mt-1 text-xs text-slate-600">{row.total} artefato(s) · {row.sent} enviado(s) · {row.accepted} aceito(s) · {row.rejected} recusado(s) · aceitação {pct(row.acceptance_rate)}</p>
       </div>)}</div>
     </section>
 
@@ -89,32 +89,32 @@ export function IndicadoresPage() {
       <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><AlertTriangle className="size-4 text-signal" /><h2 className="font-semibold text-ink">Riscos de atraso</h2></div>
       {risks.length ? <div className="divide-y">{risks.slice(0, 8).map(assessment => <a href={`/projetos/${assessment.project_id}`} className="block px-5 py-3 hover:bg-slate-50/70 sm:px-6" key={assessment.project_id}>
         <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-ink">{assessment.name}</span><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${riskCls[assessment.level] || "bg-slate-100 text-slate-600"}`}>Risco {assessment.level}</span></div>
-        {assessment.signals.length > 0 && <p className="mt-1 text-xs text-slate-500">{assessment.signals.map(signal => `${signal.label} (${signal.detail})`).join(" · ")}</p>}
-        {assessment.forecast && <p className={`mt-1 text-xs font-medium ${assessment.forecast.delay_days > 0 ? "text-signal" : "text-slate-500"}`}>Previsão: término em {new Date(`${assessment.forecast.predicted_finish_date}T12:00:00`).toLocaleDateString("pt-BR")}{assessment.forecast.delay_days > 0 ? ` · atraso previsto de ${assessment.forecast.delay_days} dia(s)` : " · dentro do prazo"}</p>}
-      </a>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-400">Nenhum projeto ativo em risco.</p>}
+        {assessment.signals.length > 0 && <p className="mt-1 text-xs text-slate-600">{assessment.signals.map(signal => `${signal.label} (${signal.detail})`).join(" · ")}</p>}
+        {assessment.forecast && <p className={`mt-1 text-xs font-medium ${assessment.forecast.delay_days > 0 ? "text-signal" : "text-slate-600"}`}>Previsão: término em {new Date(`${assessment.forecast.predicted_finish_date}T12:00:00`).toLocaleDateString("pt-BR")}{assessment.forecast.delay_days > 0 ? ` · atraso previsto de ${assessment.forecast.delay_days} dia(s)` : " · dentro do prazo"}</p>}
+      </a>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Nenhum projeto ativo em risco.</p>}
     </section>
 
     <section className="overflow-hidden rounded-2xl border bg-white">
       <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><HeartPulse className="size-4 text-ocean" /><h2 className="font-semibold text-ink">Saúde dos projetos</h2></div>
       {healths.length ? <div className="divide-y">{healths.slice(0, 8).map(assessment => <a href={`/projetos/${assessment.project_id}`} className="block px-5 py-3 hover:bg-slate-50/70 sm:px-6" key={assessment.project_id}>
         <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-ink">{assessment.name}</span><HealthBadge level={assessment.level} score={assessment.score} /></div>
-        {assessment.signals.length > 0 && <p className="mt-1 text-xs text-slate-500">{assessment.signals.map(signal => `${signal.label} (${signal.detail})`).join(" · ")}</p>}
-      </a>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-400">Nenhum projeto ativo.</p>}
+        {assessment.signals.length > 0 && <p className="mt-1 text-xs text-slate-600">{assessment.signals.map(signal => `${signal.label} (${signal.detail})`).join(" · ")}</p>}
+      </a>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Nenhum projeto ativo.</p>}
     </section>
 
     <section className="overflow-hidden rounded-2xl border bg-white">
-      <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><Lightbulb className="size-4 text-ocean" /><h2 className="font-semibold text-ink">Recomendações</h2><span className="text-xs text-slate-400">revise antes de agir</span></div>
-      {recommendations.length ? <div className="divide-y">{recommendations.map((rec, index) => <a href={rec.url} className="block px-5 py-3 hover:bg-slate-50/70 sm:px-6" key={`${rec.kind}-${index}`}><p className="text-sm font-semibold text-ink">{rec.label}</p><p className="mt-0.5 text-xs text-slate-500">{rec.detail}</p></a>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-400">Sem recomendações no momento.</p>}
+      <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><Lightbulb className="size-4 text-ocean" /><h2 className="font-semibold text-ink">Recomendações</h2><span className="text-xs text-slate-600">revise antes de agir</span></div>
+      {recommendations.length ? <div className="divide-y">{recommendations.map((rec, index) => <a href={rec.url} className="block px-5 py-3 hover:bg-slate-50/70 sm:px-6" key={`${rec.kind}-${index}`}><p className="text-sm font-semibold text-ink">{rec.label}</p><p className="mt-0.5 text-xs text-slate-600">{rec.detail}</p></a>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Sem recomendações no momento.</p>}
     </section>
   </section>;
 }
 
 function Kpi({ icon, label, value, accent = "default" }: { icon: ReactNode; label: string; value: string; accent?: "default" | "danger" }) {
-  return <article className="rounded-2xl border bg-white p-5 shadow-sm shadow-slate-200/50"><div className="flex items-start justify-between"><span className="text-sm font-medium text-slate-500">{label}</span><span className={`grid size-9 place-items-center rounded-xl ${accent === "danger" ? "bg-red-50 text-signal" : "bg-mint text-ocean"}`}>{icon}</span></div><strong className={`mt-6 block text-3xl font-semibold tracking-tight ${accent === "danger" ? "text-signal" : "text-ink"}`}>{value}</strong></article>;
+  return <article className="rounded-2xl border bg-white p-5 shadow-sm shadow-slate-200/50"><div className="flex items-start justify-between"><span className="text-sm font-medium text-slate-600">{label}</span><span className={`grid size-9 place-items-center rounded-xl ${accent === "danger" ? "bg-red-50 text-signal" : "bg-mint text-ocean"}`}>{icon}</span></div><strong className={`mt-6 block text-3xl font-semibold tracking-tight ${accent === "danger" ? "text-signal" : "text-ink"}`}>{value}</strong></article>;
 }
 
 function FunnelRow({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "win" | "lost" }) {
-  const color = tone === "win" ? "text-emerald-700" : tone === "lost" ? "text-slate-400" : "text-ink";
+  const color = tone === "win" ? "text-emerald-700" : tone === "lost" ? "text-slate-600" : "text-ink";
   return <div className="flex items-center justify-between text-sm"><span className="text-slate-600">{label}</span><span className={`font-semibold ${color}`}>{value}</span></div>;
 }
 
@@ -125,7 +125,7 @@ function RoiTable({ title, rows }: { title: string; rows: RoiRow[] }) {
     {rows.length ? <div className="divide-y">{rows.map(row => <div className="px-5 py-3 sm:px-6" key={row.label}>
       <div className="flex items-center justify-between text-sm"><span className="font-medium text-ink">{row.label}</span><span className={`font-semibold ${row.roi != null && row.roi < 0 ? "text-signal" : "text-ocean"}`}>ROI {row.roi == null ? "—" : `${Math.round(row.roi * 100)}%`}</span></div>
       <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-ocean" style={{ width: `${Math.max(4, row.revenue / max * 100)}%` }} /></div>
-      <div className="mt-1 flex justify-between text-xs text-slate-500"><span>Receita {money.format(row.revenue)}</span><span>Custo {money.format(row.cost)}</span></div>
-    </div>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-400">Sem dados financeiros ainda. Preencha receita/custo nos projetos.</p>}
+      <div className="mt-1 flex justify-between text-xs text-slate-600"><span>Receita {money.format(row.revenue)}</span><span>Custo {money.format(row.cost)}</span></div>
+    </div>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Sem dados financeiros ainda. Preencha receita/custo nos projetos.</p>}
   </section>;
 }

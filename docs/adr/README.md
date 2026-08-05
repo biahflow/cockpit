@@ -15,4 +15,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0011 — Processo de produção e TLS na borda (gunicorn, checks de deploy, cofre de segredos)
 - 0012 — Observabilidade: identidade de requisição, sondas e rastreamento de erro
 - 0013 — Backup lógico em container próprio, com restauração exercitada no CI
+- 0014 — Gate de carga por custo de query no CI, k6 como procedimento operado
 

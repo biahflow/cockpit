@@ -7,11 +7,13 @@ uma decisão futura.
 
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import Project
+    from .models import Milestone, Project, Task
 
 
 def _level(score: int) -> str:
@@ -22,16 +24,29 @@ def _level(score: int) -> str:
     return "baixo"
 
 
-def assess_project(project: Project) -> dict[str, Any]:
+def assess_project(
+    project: Project,
+    *,
+    milestones: Sequence[Milestone] | None = None,
+    tasks: Sequence[Task] | None = None,
+) -> dict[str, Any]:
+    """Avalia um projeto. `milestones`/`tasks` permitem passar o que já foi carregado.
+
+    Sem eles a função consulta o banco por conta própria — o caminho do detalhe de um projeto
+    (`GET /projects/{id}/risk/`), onde duas queries a mais não custam nada. Quem avalia uma
+    lista usa `assess_projects`, que carrega tudo de uma vez (FDD 022).
+    """
     from .models import Milestone, Task
 
     today = date.today()
     signals: list[dict[str, Any]] = []
     score = 0
 
-    milestones = list(Milestone.objects.filter(project=project, archived_at__isnull=True))
-    tasks = list(Task.objects.filter(project=project, archived_at__isnull=True))
-    overdue = [item for item in milestones + tasks if item.is_overdue]
+    if milestones is None:
+        milestones = list(Milestone.objects.filter(project=project, archived_at__isnull=True))
+    if tasks is None:
+        tasks = list(Task.objects.filter(project=project, archived_at__isnull=True))
+    overdue = [item for item in [*milestones, *tasks] if item.is_overdue]
     if overdue:
         weight = min(40, len(overdue) * 10)
         score += weight
@@ -83,3 +98,28 @@ def assess_project(project: Project) -> dict[str, Any]:
         "signals": signals,
         "forecast": forecast,
     }
+
+
+def assess_projects(projects: Iterable[Project]) -> list[dict[str, Any]]:
+    """Avalia uma lista de projetos com um número **constante** de queries.
+
+    `/risk/` agrega sobre toda a base visível; avaliar projeto a projeto custava duas queries
+    por projeto, e o custo do endpoint crescia junto com a casa. Aqui marcos e tarefas vêm em
+    duas queries no total e são distribuídos em memória (FDD 022).
+    """
+    from .models import Milestone, Task
+
+    items = list(projects)
+    if not items:
+        return []
+    ids = [project.pk for project in items]
+    milestones: dict[int, list[Milestone]] = defaultdict(list)
+    for milestone in Milestone.objects.filter(project_id__in=ids, archived_at__isnull=True):
+        milestones[milestone.project_id].append(milestone)
+    tasks: dict[int, list[Task]] = defaultdict(list)
+    for task in Task.objects.filter(project_id__in=ids, archived_at__isnull=True):
+        tasks[task.project_id].append(task)
+    return [
+        assess_project(project, milestones=milestones[project.pk], tasks=tasks[project.pk])
+        for project in items
+    ]

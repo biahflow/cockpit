@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hmac
 import json
+from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import cast
+from typing import Any, cast
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
@@ -235,8 +237,57 @@ def _ai_run(  # type: ignore[no-untyped-def]
     return Response(payload)
 
 
+@dataclass(frozen=True)
+class OverviewContext:
+    """Tudo o que `build_client_overview` precisa do banco, carregado em lote.
+
+    Existe porque a visão multi-cliente é um laço sobre clientes e cada cliente é um laço
+    sobre projetos: consultar lá dentro custava ~14 queries por cliente, e o endpoint ficava
+    mais lento na exata medida em que a Biahflow crescesse. Com o contexto, `/clients/overview/`
+    emite o mesmo número de queries para 3 ou 300 clientes (FDD 022).
+    """
+
+    health: dict[int, dict[str, Any]]
+    risk: dict[int, dict[str, Any]]
+    phases: dict[int, ProjectPhase]
+    next_meetings: dict[int, Meeting]
+
+
+def build_overview_context(projects: Iterable[Project]) -> OverviewContext:
+    """Carrega saúde, risco, fase corrente e próxima reunião de todos os projetos de uma vez."""
+    active = [
+        project for project in projects if project.status != Project.Status.COMPLETED
+    ]
+    if not active:
+        return OverviewContext(health={}, risk={}, phases={}, next_meetings={})
+    ids = [project.pk for project in active]
+    phases: dict[int, ProjectPhase] = {}
+    # `ordering` do modelo é ["phase__position", "id"], então o primeiro de cada projeto que
+    # aparecer é o mesmo que `Project.current_phase` escolheria.
+    for phase in (
+        ProjectPhase.objects.filter(
+            project_id__in=ids, status=ProjectPhase.Status.ACTIVE, archived_at__isnull=True
+        ).select_related("phase")
+    ):
+        phases.setdefault(phase.project_id, phase)
+    next_meetings: dict[int, Meeting] = {}
+    for meeting in Meeting.objects.filter(
+        project_id__in=ids, archived_at__isnull=True,
+        status=Meeting.Status.SCHEDULED, date__gte=timezone.localdate(),
+    ).order_by("date", "id"):
+        next_meetings.setdefault(meeting.project_id, meeting)
+    return OverviewContext(
+        health={item["project_id"]: item for item in health.assess_projects_health(active)},
+        risk={item["project_id"]: item for item in risk.assess_projects(active)},
+        phases=phases,
+        next_meetings=next_meetings,
+    )
+
+
 def build_client_overview(
-    client: Client, projects: Iterable[Project] | None = None
+    client: Client,
+    projects: Iterable[Project] | None = None,
+    context: OverviewContext | None = None,
 ) -> dict[str, object]:
     """Agrega o estado de um cliente para a visão multi-cliente 🟢🟡🔴 e o painel do detalhe.
 
@@ -246,11 +297,16 @@ def build_client_overview(
     `projects` existe porque o agregado é **por cliente**: estreitar a lista de clientes não
     basta: quem participa de um projeto do cliente X veria ROI, saúde e AI Score dos outros
     projetos de X. Quem chama passa o recorte que enxerga (RFC 0003).
+
+    `context` é o mesmo dado carregado em lote para vários clientes; quem agrega uma lista o
+    monta uma vez com `build_overview_context` (FDD 022). Omitido, monta-se um só para este
+    cliente — o caminho do detalhe.
     """
-    today = timezone.localdate()
     if projects is None:
         projects = client.projects.filter(archived_at__isnull=True)
     projects = list(projects)
+    if context is None:
+        context = build_overview_context(projects)
     active = [project for project in projects if project.status != Project.Status.COMPLETED]
     revenue = sum((project.actual_value for project in projects), Decimal("0"))
     cost = sum((project.cost for project in projects), Decimal("0"))
@@ -268,21 +324,18 @@ def build_client_overview(
     if not active:
         return overview
 
-    scored = [(health.assess_project_health(project), project) for project in active]
+    scored = [(context.health[project.pk], project) for project in active]
     assessment, focus = min(scored, key=lambda pair: (pair[0]["score"], -pair[1].pk))
     overview["health"] = {"score": assessment["score"], "level": assessment["level"], "project_id": focus.pk}
-    overview["risk_level"] = risk.assess_project(focus)["level"]
-    phase = focus.current_phase
+    overview["risk_level"] = context.risk[focus.pk]["level"]
+    phase = context.phases.get(focus.pk)
     if phase is not None:
         overview["phase"] = {"name": phase.phase.name, "status": phase.status}
-    meeting = (
-        Meeting.objects.filter(
-            project__in=active, archived_at__isnull=True,
-            status=Meeting.Status.SCHEDULED, date__gte=today,
-        )
-        .order_by("date", "id")
-        .first()
-    )
+    upcoming = [
+        context.next_meetings[project.pk] for project in active
+        if project.pk in context.next_meetings
+    ]
+    meeting = min(upcoming, key=lambda item: (item.date, item.pk), default=None)
     if meeting is not None:
         overview["next_meeting"] = {"title": meeting.title, "date": meeting.date.isoformat()}
     # AI Score do cliente = o mais recente já revisado entre os projetos ativos (FDD 014).
@@ -322,9 +375,21 @@ class ClientViewSet(ArchiveModelViewSet):
     @action(detail=False, methods=["get"])
     def overview(self, request: Request) -> Response:
         """Lista agregada p/ o grid de clientes (honra `?status=`)."""
+        clients = list(self.get_queryset())
+        # Um `_visible_projects` por cliente somava ~14 queries por linha do grid. Aqui os
+        # projetos visíveis de todos os clientes vêm juntos e o contexto é montado uma vez —
+        # o custo do endpoint deixa de crescer com o tamanho da carteira (FDD 022).
+        by_client: dict[int, list[Project]] = defaultdict(list)
+        for project in Project.objects.visible_to(request.user).filter(
+            client__in=clients, archived_at__isnull=True
+        ):
+            by_client[project.client_id].append(project)
+        context = build_overview_context(
+            [project for projects in by_client.values() for project in projects]
+        )
         return Response({"clients": [
-            build_client_overview(client, projects=self._visible_projects(client))
-            for client in self.get_queryset()
+            build_client_overview(client, projects=by_client[client.pk], context=context)
+            for client in clients
         ]})
 
     @extend_schema(responses=inline_serializer("ClientOverviewDetail", {}))
@@ -1198,7 +1263,7 @@ class RiskView(APIView):
         projects = Project.objects.visible_to(request.user).filter(
             archived_at__isnull=True
         ).exclude(status=Project.Status.COMPLETED)
-        assessments = sorted((risk.assess_project(p) for p in projects), key=lambda a: a["score"], reverse=True)
+        assessments = sorted(risk.assess_projects(projects), key=lambda a: a["score"], reverse=True)
         return Response({"projects": assessments})
 
 
@@ -1212,7 +1277,7 @@ class HealthView(APIView):
             archived_at__isnull=True
         ).exclude(status=Project.Status.COMPLETED)
         # pior primeiro: menor score de saúde no topo, para a equipe agir onde dói.
-        assessments = sorted((health.assess_project_health(p) for p in projects), key=lambda a: a["score"])
+        assessments = sorted(health.assess_projects_health(projects), key=lambda a: a["score"])
         return Response({"projects": assessments})
 
 
