@@ -66,6 +66,10 @@ services:
       # aumente o número.
       TRUST_X_FORWARDED_PROTO: ${TRUST_X_FORWARDED_PROTO:-true}
       NUM_PROXIES: ${NUM_PROXIES:-1}
+      # Monitoramento (FDD 020). JSON aqui e não no código porque log em JSON no terminal de quem
+      # desenvolve é hostil de ler; produção tem um coletor que indexa campo. O `SENTRY_*` vem do
+      # `.env` pelo `env_file`; vazio = rastreamento de erro desligado.
+      DJANGO_LOG_FORMAT: ${DJANGO_LOG_FORMAT:-json}
     volumes:
       - media_data:/var/lib/biahflow/media
     depends_on:
@@ -87,18 +91,16 @@ services:
     volumes:
       - media_data:/var/lib/biahflow/media
     healthcheck:
-      # Manda o `X-Forwarded-Proto` porque com `DJANGO_SSL_REDIRECT` ligado uma sonda http levaria
-      # 301 e o container pareceria doente. O endpoint é público e barato (ainda não há `/healthz`:
-      # é o próximo item do roadmap).
-      test:
-        - CMD
-        - python
-        - -c
-        - |
-          import urllib.request as r
-          q = r.Request("http://127.0.0.1:8000/api/v1/auth/csrf/",
-                        headers={"X-Forwarded-Proto": "https", "Host": "127.0.0.1"})
-          assert r.urlopen(q, timeout=5).status == 200
+      # `/readyz` e não `/healthz`: aqui a pergunta é "pode entrar no balanceador?", e um container
+      # que subiu sem alcançar o banco não pode. A sonda de liveness (`/healthz`) é a do
+      # orquestrador que reinicia — reiniciar não traz o Postgres de volta (FDD 020).
+      #
+      # Sem `Host` nem `X-Forwarded-Proto` forjados: a sonda responde antes de `ALLOWED_HOSTS` e do
+      # redirect de https, que é o motivo de ser middleware. A versão anterior sondava
+      # `/api/v1/auth/csrf/` com `Host: 127.0.0.1` e levava 400 assim que
+      # `DJANGO_ALLOWED_HOSTS` virava o domínio real — o container nunca ficava saudável e o `web`
+      # nunca subia.
+      test: ["CMD", "python", "-c", "import urllib.request as r; assert r.urlopen('http://127.0.0.1:8000/readyz', timeout=5).status == 200"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -119,6 +121,13 @@ services:
     build:
       context: ./frontend
       target: prod
+      # O SPA é estático: o que ele sabe do Sentry é decidido no **build**, não em runtime
+      # (`import.meta.env` é substituído por literal). Trocar o DSN exige reconstruir a imagem.
+      # DSN de Sentry é público por desenho — identifica o projeto e só aceita escrita.
+      args:
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+        VITE_SENTRY_RELEASE: ${SENTRY_RELEASE:-}
     ports:
       # Só HTTP: o terminador de TLS fica na frente. Não exponha esta porta à internet direto.
       - "${WEB_PORT:-8080}:80"

@@ -15,6 +15,22 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Sentry do SPA (FDD 020): o Vite substitui `import.meta.env.VITE_*` por literal em tempo de
+# build, então isto precisa ser build arg — não dá para injetar por variável de ambiente do
+# container depois. Vazio (o default) = rastreamento de erro desligado e nenhum byte do SDK no
+# bundle. `SENTRY_AUTH_TOKEN` é opt-in e liga o upload de sourcemap.
+ARG VITE_SENTRY_DSN=""
+ARG VITE_SENTRY_ENVIRONMENT=""
+ARG VITE_SENTRY_RELEASE=""
+ARG SENTRY_AUTH_TOKEN=""
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN \
+    VITE_SENTRY_ENVIRONMENT=$VITE_SENTRY_ENVIRONMENT \
+    VITE_SENTRY_RELEASE=$VITE_SENTRY_RELEASE \
+    SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN \
+    SENTRY_ORG=$SENTRY_ORG \
+    SENTRY_PROJECT=$SENTRY_PROJECT
 RUN npm run build
 
 FROM nginx:alpine AS prod

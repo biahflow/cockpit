@@ -33,6 +33,8 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Assinatura eletrônica | `ESIGN_ENABLED`, `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique | Pronto (desligado) |
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
+| Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
+| Rastreamento de erro (Sentry) | `SENTRY_DSN` (API) e `VITE_SENTRY_DSN` (SPA, build arg) | conta Sentry | Pronto (desligado) |
 
 > As integrações com flag booleana (IA, Drive, Calendário, Assinatura, Sincronia de tarefas)
 > podem ser ligadas/desligadas em runtime por um admin na tela **Configurações** (`/configuracoes`),
@@ -188,6 +190,17 @@ Três coisas que mudam a operação (FDD 019, ADR 0011):
 O `.env` inteiro agora chega ao container (`env_file`). Antes, o compose repetia à mão parte das
 variáveis e as ausentes eram descartadas em silêncio — se você já passou por "botei no `.env` e não
 aconteceu nada", era isto.
+
+## Monitoramento
+
+Toda requisição carrega um `X-Request-ID` que volta na resposta e aparece nos três logs (nginx,
+gunicorn e aplicação) — quando alguém relatar um erro, peça o **código da ocorrência** que a tela
+mostra e procure por ele. As sondas são `GET /healthz` (vivo, não toca em nada) e `GET /readyz`
+(pronto: banco + cache, 503 quando algum falha); aponte a sonda de reinício do orquestrador para a
+primeira e a do balanceador para a segunda. Rastreamento de erro é o Sentry, atrás de `SENTRY_DSN`
+(e `VITE_SENTRY_DSN`, que é **build arg** do SPA): desligado, nada é enviado a lugar nenhum.
+
+Passo a passo, regras de alerta e diagnóstico: **`docs/runbooks/monitoramento.md`** (FDD 020, ADR 0012).
 
 ## Qualidade / CI
 Antes de promover: `cd backend && uv run pytest && uv run mypy apps config && uv run ruff check .`

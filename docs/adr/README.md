@@ -13,4 +13,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0009 — Visibilidade por função e limites de requisição
 - 0010 — Equipe do projeto como fronteira de acesso
 - 0011 — Processo de produção e TLS na borda (gunicorn, checks de deploy, cofre de segredos)
+- 0012 — Observabilidade: identidade de requisição, sondas e rastreamento de erro
 

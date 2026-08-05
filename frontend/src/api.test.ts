@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 
-import { acceptInvitation, createInvitation, documentDownloadUrl, getConfig, listInvitations, listNotifications, listUsers, login, markAllNotificationsRead, markNotificationRead } from "./api";
+import { acceptInvitation, ApiError, createInvitation, documentDownloadUrl, getConfig, listInvitations, listNotifications, listUsers, login, markAllNotificationsRead, markNotificationRead } from "./api";
+import { getLastRequestId } from "./observability";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -55,6 +56,35 @@ test("busca config e notificações via GET", async () => {
 
   expect((await getConfig()).ai_enabled).toBe(true);
   expect(await listNotifications()).toEqual([{ id: 1 }]);
+});
+
+test("o erro carrega o request-id que o backend devolveu", async () => {
+  // É o que liga o "deu erro" da tela à linha exata do log do servidor (FDD 020).
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: "Explodiu." }), {
+    status: 500,
+    headers: { "X-Request-ID": "req-42" },
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  const erro = await listUsers().catch((cause: unknown) => cause);
+
+  expect(erro).toBeInstanceOf(ApiError);
+  expect((erro as ApiError).requestId).toBe("req-42");
+  expect((erro as ApiError).status).toBe(500);
+  expect((erro as Error).message).toBe("Explodiu.");
+  expect(getLastRequestId()).toBe("req-42");
+});
+
+test("guarda o request-id também nas respostas que deram certo", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([]), {
+    status: 200,
+    headers: { "X-Request-ID": "req-ok" },
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  await listUsers();
+
+  expect(getLastRequestId()).toBe("req-ok");
 });
 
 test("marca notificações como lidas via POST", async () => {
