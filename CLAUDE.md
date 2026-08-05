@@ -85,6 +85,11 @@ Key cross-cutting patterns to preserve:
 - **Documents are single-linked.** A `Document` must reference exactly one of
   client/opportunity/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.
+- **Journey artifacts have state.** `Artifact` (one model, `kind` =
+  discovery/assessment/proposal/contract) holds the AI-generated text plus a state machine
+  (`ARTIFACT_TRANSITIONS` in `models.py`), linked to exactly one of opportunity/project. The four
+  AI actions create it in `draft` via `_ai_run(..., artifact_kind=...)`; `Document` stays the file
+  and the e-sign target. Analytics exposes `funnel.by_stage` — see FDD 016 / ADR 0008.
 - **Pipeline invariants.** DB constraints enforce at most one "won" and one "lost"
   `PipelineStage`, and at most one active `Service` per product `tier`. DRF derives the
   serializer validation from these constraints — don't hand-roll a duplicate check.

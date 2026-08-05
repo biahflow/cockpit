@@ -3,6 +3,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { HealthBadge } from "../components/StatusDot";
 import type { DigitalEmployee, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectPhase, RiskAssessment, Service, Task, WorkItemStatus } from "../types";
 
@@ -19,7 +20,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const [meetingAi, setMeetingAi] = useState<{ title: string; text: string }>();
+  const [artifactsToken, setArtifactsToken] = useState(0);
   const [project, setProject] = useState<Project>();
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -92,8 +93,9 @@ export function ProjectDetailPage({ id }: { id: number }) {
     catch (cause) { setError((cause as Error).message); }
   }
   async function runMeetingAi(meeting: Meeting, kind: "discovery" | "assessment") {
-    setAiLoading(true); setMeetingAi(undefined);
-    try { const result = await api<{ text: string }>(`/meetings/${meeting.id}/${kind}/`, { method: "POST" }); setMeetingAi({ title: `${kind === "discovery" ? "Discovery" : "Assessment"} — ${meeting.title}`, text: result.text }); }
+    setAiLoading(true);
+    // O texto agora fica registrado como artefato (FDD 016) em vez de sumir ao recarregar.
+    try { await api(`/meetings/${meeting.id}/${kind}/`, { method: "POST" }); setArtifactsToken(token => token + 1); }
     catch (cause) { setError((cause as Error).message); } finally { setAiLoading(false); }
   }
   async function runAiScore(meeting: Meeting) {
@@ -252,7 +254,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-ocean disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-ocean" />AI Score</button>
           </div>}
         </div>)}</div> : <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-400">Nenhuma reunião registrada.</p>}
-        {meetingAi && <div className="mt-3 rounded-xl bg-slate-50 p-4"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ocean">{meetingAi.title}</p><p className="whitespace-pre-wrap text-sm text-slate-700">{meetingAi.text}</p></div>}
+        <ArtifactsPanel project={Number(id)} reloadToken={artifactsToken} />
       </WorkColumn>
 
       <WorkColumn icon={<Inbox className="size-4" />} title="Pendências" count={pendencias.length}>

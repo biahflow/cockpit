@@ -10,6 +10,8 @@ from rest_framework import serializers
 
 from . import drive
 from .models import (
+    ARTIFACT_TRANSITIONS,
+    Artifact,
     Client,
     Contact,
     DigitalEmployee,
@@ -278,6 +280,41 @@ class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
         fields = ["id", "project", "name", "area", "description", "status", "kpi_label",
                   "kpi_value", "hours_saved_month", "roi_month", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class ArtifactSerializer(serializers.ModelSerializer[Artifact]):
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = Artifact
+        fields = ["id", "kind", "kind_display", "status", "status_display", "title", "content",
+                  "opportunity", "project", "source_meeting", "document", "ai_interaction",
+                  "created_by", "sent_at", "decided_at", "created_at", "updated_at"]
+        read_only_fields = ["id", "kind_display", "status_display", "source_meeting",
+                            "ai_interaction", "created_by", "sent_at", "decided_at",
+                            "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        # Na edição parcial só temos o que veio no corpo; o resto vem da instância.
+        opportunity = attrs.get("opportunity", getattr(self.instance, "opportunity", None))
+        project = attrs.get("project", getattr(self.instance, "project", None))
+        if sum(value is not None for value in [opportunity, project]) != 1:
+            raise serializers.ValidationError(
+                "Vincule o artefato a exatamente uma oportunidade ou projeto."
+            )
+        return attrs
+
+    def validate_status(self, value: str) -> str:
+        if self.instance is None:
+            return value
+        current = self.instance.status
+        if value != current and value not in ARTIFACT_TRANSITIONS[current]:
+            raise serializers.ValidationError(
+                f"Não é possível ir de {self.instance.get_status_display()} para "
+                f"{Artifact.Status(value).label}."
+            )
+        return value
 
 
 class NotificationSerializer(serializers.ModelSerializer[Notification]):

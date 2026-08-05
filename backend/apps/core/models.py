@@ -611,3 +611,84 @@ class DigitalEmployee(TimestampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+# Transições válidas do artefato. Rascunho e revisão vão e voltam enquanto o humano trabalha;
+# depois de enviado ao cliente só resta a decisão dele, que é terminal.
+ARTIFACT_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"review", "sent"},
+    "review": {"draft", "sent"},
+    "sent": {"accepted", "rejected"},
+    "accepted": set(),
+    "rejected": set(),
+}
+
+
+class Artifact(TimestampedModel):
+    """Artefato da jornada comercial: Discovery, Assessment, Proposta ou Contrato (FDD 016).
+
+    Antes disso o texto gerado pela IA era efêmero — a resposta HTTP era o único lugar onde ele
+    existia, e só proposta/contrato sobreviviam se alguém os salvasse à mão como `Document`. Aqui
+    o conteúdo passa a ter registro e estado próprios, o que também permite medir onde a jornada
+    trava entre uma etapa e a seguinte.
+
+    O `Document` continua sendo o arquivo (e o alvo da assinatura eletrônica); o artefato apenas
+    o referencia quando o rascunho vira documento.
+    """
+
+    class Kind(models.TextChoices):
+        DISCOVERY = "discovery", "Discovery"
+        ASSESSMENT = "assessment", "Assessment"
+        PROPOSAL = "proposal", "Proposta"
+        CONTRACT = "contract", "Contrato"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        REVIEW = "review", "Em revisão"
+        SENT = "sent", "Enviado"
+        ACCEPTED = "accepted", "Aceito"
+        REJECTED = "rejected", "Recusado"
+
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    title = models.CharField(max_length=255)
+    content = models.TextField(blank=True, default="")
+    opportunity = models.ForeignKey(
+        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="artifacts"
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="artifacts"
+    )
+    # Reunião de onde o texto foi extraído (Discovery/Assessment); vazio nos demais.
+    source_meeting = models.ForeignKey(
+        Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    document = models.ForeignKey(
+        Document, on_delete=models.SET_NULL, null=True, blank=True, related_name="artifacts"
+    )
+    ai_interaction = models.ForeignKey(
+        "AiInteraction", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="artifacts")
+    sent_at = models.DateTimeField(null=True, blank=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} — {self.title}"
+
+    def clean(self) -> None:
+        links = [self.opportunity_id, self.project_id]
+        if sum(value is not None for value in links) != 1:
+            raise ValidationError(
+                "O artefato deve estar vinculado a uma oportunidade ou a um projeto."
+            )
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        if self.status == self.Status.SENT and self.sent_at is None:
+            self.sent_at = timezone.now()
+        if self.status in {self.Status.ACCEPTED, self.Status.REJECTED} and self.decided_at is None:
+            self.decided_at = timezone.now()
+        super().save(*args, **kwargs)

@@ -18,6 +18,14 @@ const services = [
   { id: 11, name: "Implantação", active: true, tier: "implantacao", tier_display: "Implantação", list_price: "90000.00", summary: "Funcionários digitais." },
 ];
 
+const proposalArtifact = {
+  id: 3, kind: "proposal", kind_display: "Proposta", status: "draft", status_display: "Rascunho",
+  title: "Proposta — Oport X", content: "Rascunho gerado pela IA", opportunity: 1, project: null,
+  source_meeting: null, document: null, ai_interaction: 4, created_by: 1, sent_at: null,
+  decided_at: null, created_at: "2026-08-05T10:00:00Z", updated_at: "2026-08-05T10:00:00Z",
+};
+let artifacts: unknown[] = [];
+
 function stub() {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     const method = options?.method?.toUpperCase() ?? "GET";
@@ -27,12 +35,14 @@ function stub() {
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
     if (path.startsWith("/documents/?opportunity")) return Promise.resolve([{ id: 9, client: null, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
-    if (path.includes("/proposal/") || path.includes("/summary/")) return Promise.resolve({ text: "Rascunho gerado pela IA" });
+    if (path.includes("/proposal/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4, artifact: proposalArtifact });
+    if (path.includes("/summary/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4 });
+    if (path.startsWith("/artifacts/?")) return Promise.resolve(artifacts);
     return Promise.resolve({});
   });
 }
 
-beforeEach(() => { mocks.api.mockReset(); stub(); });
+beforeEach(() => { mocks.api.mockReset(); artifacts = []; stub(); });
 afterEach(cleanup);
 
 test("mostra o pipeline e abre o detalhe da oportunidade", async () => {
@@ -79,14 +89,28 @@ test("converte a oportunidade ganha em projeto pelo detalhe", async () => {
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/convert-to-project/", expect.objectContaining({ method: "POST" })));
 });
 
-test("gera proposta com IA e salva como documento", async () => {
+test("a proposta gerada por IA fica registrada como artefato em rascunho", async () => {
   const user = userEvent.setup();
   render(<CommercialPage />);
   await user.click(await screen.findByText("Oport X"));
+
+  artifacts = [proposalArtifact];  // o POST persiste o rascunho no backend
   await user.click(await screen.findByRole("button", { name: "Gerar proposta" }));
-  const draft = await screen.findByLabelText("Rascunho gerado pela IA");
-  expect(draft).toHaveValue("Rascunho gerado pela IA");
+
+  expect(await screen.findByText("Proposta — Oport X")).toBeInTheDocument();
+  expect(screen.getByLabelText("Conteúdo de Proposta — Oport X")).toHaveValue("Rascunho gerado pela IA");
+  expect(screen.getByText("Rascunho")).toBeInTheDocument();
+});
+
+test("o resumo segue efêmero e pode virar documento", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await user.click(await screen.findByRole("button", { name: "Resumir" }));
+
+  expect(await screen.findByLabelText("Rascunho gerado pela IA")).toHaveValue("Rascunho gerado pela IA");
   await user.click(screen.getByRole("button", { name: "Salvar como documento" }));
+
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/documents/", expect.objectContaining({ method: "POST" })));
 });
 

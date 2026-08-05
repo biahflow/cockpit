@@ -5,6 +5,7 @@ export type Project = { id: number; name: string; description: string; client: n
 export type ServiceTier = "discovery_express" | "discovery_assessment" | "implantacao" | "";
 export type Service = { id: number; name: string; active: boolean; tier: ServiceTier; tier_display: string; list_price: string; summary: string };
 export type TierFunnelRow = { tier: ServiceTier; label: string; total: number; open: number; won: number; lost: number; estimated_total: number; win_rate: number | null };
+export type StageFunnelRow = { kind: ArtifactKind; label: string; total: number; sent: number; accepted: number; rejected: number; acceptance_rate: number | null; reached: number };
 export type RoiRow = { label: string; revenue: number; cost: number; roi: number | null };
 export type Analytics = {
   funnel: {
@@ -12,6 +13,7 @@ export type Analytics = {
     opportunities: { open: number; won: number; lost: number };
     projects: { total: number; by_status: Record<string, number> };
     by_tier: TierFunnelRow[];
+    by_stage: StageFunnelRow[];
   };
   win_rate: number | null;
   avg_ticket: number;
@@ -30,6 +32,9 @@ export type Meeting = { id: number; project: number; title: string; date: string
 export type Pendencia = { id: number; project: number; title: string; description: string; status: "open" | "resolved"; party: Party; owner: number | null; resolved_at: string | null };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 export type DocumentEntry = { id: number; client: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };
+export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";
+export type ArtifactStatus = "draft" | "review" | "sent" | "accepted" | "rejected";
+export type Artifact = { id: number; kind: ArtifactKind; kind_display: string; status: ArtifactStatus; status_display: string; title: string; content: string; opportunity: number | null; project: number | null; source_meeting: number | null; document: number | null; ai_interaction: number | null; created_by: number; sent_at: string | null; decided_at: string | null; created_at: string; updated_at: string };
 export type Dashboard = { pipeline: PipelineStage[]; active_projects: number; overdue_count: number; upcoming_tasks: { id: number; title: string; due_date: string; project_id: number }[] };
 export type SessionUser = { id: number; username: string; first_name: string; last_name: string; email: string; role: "admin" | "sales" | "delivery" };
 export type Role = "admin" | "sales" | "delivery";

@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.models import (
+    Artifact,
     Contact,
     Document,
     Milestone,
@@ -20,6 +21,7 @@ from apps.core.models import (
 )
 
 from .factories import (
+    ArtifactFactory,
     ClientFactory,
     MeetingFactory,
     OpportunityFactory,
@@ -565,6 +567,32 @@ def test_analytics_breaks_the_funnel_down_by_product_tier(api_client: APIClient,
     assert by_tier["discovery_express"]["win_rate"] == 0.5
     assert by_tier["implantacao"]["total"] == 0
     assert by_tier["implantacao"]["win_rate"] is None
+
+
+@pytest.mark.django_db
+def test_analytics_breaks_the_funnel_down_by_journey_stage(api_client: APIClient, admin_user: User):
+    client = ClientFactory(owner=admin_user)
+    # Duas propostas para o mesmo cliente: dois artefatos, um só cliente alcançado.
+    ArtifactFactory(opportunity=OpportunityFactory(client=client, owner=admin_user),
+                    status=Artifact.Status.ACCEPTED)
+    ArtifactFactory(opportunity=OpportunityFactory(client=client, owner=admin_user),
+                    status=Artifact.Status.REJECTED)
+    ArtifactFactory(opportunity=None, project=ProjectFactory(client=client, owner=admin_user),
+                    kind=Artifact.Kind.ASSESSMENT, status=Artifact.Status.SENT)
+    api_client.force_authenticate(admin_user)
+
+    response = api_client.get(reverse("analytics"))
+
+    assert response.status_code == 200
+    by_stage = {row["kind"]: row for row in response.data["funnel"]["by_stage"]}
+    assert set(by_stage) == {kind for kind, _ in Artifact.Kind.choices}
+    assert by_stage["proposal"]["total"] == 2
+    assert by_stage["proposal"]["reached"] == 1
+    assert by_stage["proposal"]["acceptance_rate"] == 0.5
+    assert by_stage["assessment"]["sent"] == 1
+    assert by_stage["assessment"]["acceptance_rate"] is None
+    assert by_stage["contract"]["total"] == 0
+    assert by_stage["contract"]["reached"] == 0
 
 
 @pytest.mark.django_db

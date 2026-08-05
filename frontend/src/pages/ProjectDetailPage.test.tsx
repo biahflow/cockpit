@@ -8,11 +8,19 @@ const mocks = vi.hoisted(() => ({ api: vi.fn(), auth: { aiEnabled: true } as { a
 vi.mock("../api", () => ({ api: mocks.api }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
+const artifact = () => ({
+  id: 5, kind: "discovery", kind_display: "Discovery", status: "draft", status_display: "Rascunho",
+  title: "Discovery — Kickoff", content: "Análise da reunião", opportunity: null, project: 1,
+  source_meeting: 1, document: null, ai_interaction: 9, created_by: 1, sent_at: null,
+  decided_at: null, created_at: "2026-08-05T10:00:00Z", updated_at: "2026-08-05T10:00:00Z",
+});
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path.includes("/assistant/")) return Promise.resolve({ text: "Resposta da IA" });
     if (path.includes("/summary/") || path.includes("/next-steps/")) return Promise.resolve({ text: "Resumo da IA" });
-    if (path.includes("/discovery/") || path.includes("/assessment/")) return Promise.resolve({ text: "Análise da reunião", interaction: 9 });
+    if (path.includes("/discovery/") || path.includes("/assessment/")) return Promise.resolve({ text: "Análise da reunião", interaction: 9, artifact: artifact() });
+    if (path.startsWith("/artifacts")) return Promise.resolve([artifact()]);
     if (path.includes("/risk/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 0, level: "baixo", signals: [] });
     if (path.includes("/health/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 90, level: "saudável", signals: [] });
     if (path.startsWith("/projects/")) return Promise.resolve({ id: 1, name: "Projeto X", description: "", client: 1, owner: 1, start_date: "2026-08-01", due_date: "2026-09-01", status: "active", service: null, actual_value: "0", cost: "0", is_overdue: false, ai_maturity: null, ai_opportunity: null, ai_dimensions: [], ai_score_summary: "", ai_scored_at: null, ai_score_reviewed: false });
@@ -106,10 +114,18 @@ test("gera discovery e assessment da reunião por IA", async () => {
 
   await user.click(screen.getByRole("button", { name: "Discovery" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/meetings/1/discovery/", expect.objectContaining({ method: "POST" })));
-  expect(await screen.findByText("Análise da reunião")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "Assessment" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/meetings/1/assessment/", expect.objectContaining({ method: "POST" })));
+});
+
+test("o texto da reunião fica registrado como artefato, não some da tela", async () => {
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Projeto X");
+
+  expect(await screen.findByText("Discovery — Kickoff")).toBeInTheDocument();
+  expect(screen.getByLabelText("Conteúdo de Discovery — Kickoff")).toHaveValue("Análise da reunião");
+  expect(mocks.api).toHaveBeenCalledWith("/artifacts/?project=1");
 });
 
 test("gera AI Score da reunião por IA", async () => {

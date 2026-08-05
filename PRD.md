@@ -32,7 +32,9 @@ como entidade acompanhada por KPI e ROI.
 
 **Inteligência.** Assistente contextual por projeto e agentes especializados por área
 (Comercial/Entrega/Financeiro), com contexto restrito e auditoria. Discovery, Assessment, AI Score
-de maturidade, propostas e contratos gerados a partir da transcrição das reuniões. Indicadores de
+de maturidade, propostas e contratos gerados a partir da transcrição das reuniões — os quatro
+primeiros ficam **registrados como artefatos** com estado próprio, do rascunho à decisão do
+cliente, sempre com revisão humana pelo caminho. Indicadores de
 ROI, health score, previsão de atrasos com explicação dos sinais e recomendações revisáveis.
 
 **Plataforma.** Convites por e-mail, permissões por função, notificações in-app e por e-mail com
@@ -43,8 +45,9 @@ Sincronia de tarefas) e API versionada `/api/v1/`.
 
 - **Consumo** do portal do cliente — o Biahflow emite webhook e snapshot; a interface do cliente é
   o repositório `portal_cliente`, em trilho separado (ADR 0003).
-- **Outros provedores de assinatura** — o adaptador homologado é o Clicksign (ADR 0007); DocuSign e
-  afins entram como novas classes do mesmo protocolo, ainda não construídas.
+- **Outros provedores de assinatura** — os adaptadores homologados são o Autentique (em uso) e o
+  Clicksign (ADR 0007); DocuSign e afins entram como novas classes do mesmo protocolo, ainda não
+  construídas.
 - **Ações autônomas de IA** — nenhum agente executa efeito colateral sozinho; memória multi-turno e
   ferramentas de ação ficam para decisão futura (ADR 0006).
 - **Dados comerciais no portal do cliente** — valor, custo e margem nunca cruzam a fronteira.
@@ -56,4 +59,5 @@ Sincronia de tarefas) e API versionada `/api/v1/`.
 - Pessoas de Entrega acompanham prazos, itens vencidos, saúde e risco dos projetos em um só lugar.
 - Documentos não podem ser obtidos por usuários sem permissão.
 - Todo artefato gerado por IA é auditável, avaliável e passa por revisão humana antes de sair.
-- É possível medir a conversão entre os níveis de produto e o ROI por cliente, projeto e serviço.
+- É possível medir a conversão entre os níveis de produto, a conversão entre as etapas da jornada
+  (Discovery → Assessment → Proposta → Contrato) e o ROI por cliente, projeto e serviço.
