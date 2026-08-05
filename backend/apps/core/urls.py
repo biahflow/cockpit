@@ -7,6 +7,7 @@ from .views import (
     AiFeedbackView,
     AiMetricsView,
     AnalyticsView,
+    ArtifactViewSet,
     BookingCreateView,
     BookingSlotsView,
     CalendarSyncView,
@@ -61,6 +62,7 @@ router.register("tasks", TaskViewSet)
 router.register("meetings", MeetingViewSet)
 router.register("pendencias", PendenciaViewSet)
 router.register("documents", DocumentViewSet)
+router.register("artifacts", ArtifactViewSet)
 router.register("leads", LeadViewSet)
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("services", ServiceViewSet)

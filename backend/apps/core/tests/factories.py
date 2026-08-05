@@ -4,7 +4,16 @@ from decimal import Decimal
 import factory
 from django.utils import timezone
 
-from apps.core.models import Client, Meeting, Opportunity, PipelineStage, Project, Service, User
+from apps.core.models import (
+    Artifact,
+    Client,
+    Meeting,
+    Opportunity,
+    PipelineStage,
+    Project,
+    Service,
+    User,
+)
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -84,3 +93,16 @@ class MeetingFactory(factory.django.DjangoModelFactory):
     date = factory.LazyFunction(timezone.localdate)
     transcript = "Cliente relatou processo manual de faturamento e atraso nas entregas."
     status = Meeting.Status.HELD
+
+
+class ArtifactFactory(factory.django.DjangoModelFactory):
+    """Artefato de proposta por padrão; passe `project=...`/`opportunity=None` para os de entrega."""
+
+    class Meta:
+        model = Artifact
+
+    kind = Artifact.Kind.PROPOSAL
+    title = "Proposta — Diagnóstico comercial"
+    content = "Rascunho gerado para revisão humana."
+    opportunity = factory.SubFactory(OpportunityFactory)
+    created_by = factory.SubFactory(UserFactory)

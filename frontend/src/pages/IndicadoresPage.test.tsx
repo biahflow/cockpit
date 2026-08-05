@@ -17,6 +17,10 @@ vi.mock("../api", () => ({
           { tier: "discovery_express", label: "Discovery Express", total: 2, open: 1, won: 1, lost: 0, estimated_total: 0, win_rate: 1 },
           { tier: "implantacao", label: "Implantação", total: 0, open: 0, won: 0, lost: 0, estimated_total: 0, win_rate: null },
         ],
+        by_stage: [
+          { kind: "assessment", label: "Assessment", total: 3, sent: 1, accepted: 2, rejected: 0, acceptance_rate: 1, reached: 2 },
+          { kind: "contract", label: "Contrato", total: 0, sent: 0, accepted: 0, rejected: 0, acceptance_rate: null, reached: 0 },
+        ],
       },
       win_rate: 0.5, avg_ticket: 1000, avg_cycle_days: 12,
       pipeline: [{ id: 1, name: "Prospecção", kind: "open", position: 0, opportunity_count: 2, estimated_total: 5000 }],
@@ -44,4 +48,13 @@ test("mostra a conversão por nível de produto", async () => {
   expect(screen.getByText("Discovery Express")).toBeInTheDocument();
   expect(screen.getByText("Ganho 100%")).toBeInTheDocument();
   expect(screen.getByText("Ganho —")).toBeInTheDocument();
+});
+
+test("mostra a conversão por etapa da jornada", async () => {
+  render(<IndicadoresPage />);
+  expect(await screen.findByText("Conversão por etapa da jornada")).toBeInTheDocument();
+  expect(screen.getByText("Assessment")).toBeInTheDocument();
+  expect(screen.getByText("2 cliente(s)")).toBeInTheDocument();
+  expect(screen.getByText(/3 artefato\(s\).*aceitação 100%/)).toBeInTheDocument();
+  expect(screen.getByText(/0 artefato\(s\).*aceitação —/)).toBeInTheDocument();
 });

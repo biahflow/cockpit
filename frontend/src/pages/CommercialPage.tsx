@@ -4,6 +4,7 @@ import { type DragEvent, type FormEvent, type ReactNode, useCallback, useEffect,
 import { api, documentDownloadUrl } from "../api";
 import { useAuth } from "../auth";
 import { AgentPanel } from "../components/AgentPanel";
+import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import type { Client, Contact, DocumentEntry, Opportunity, PipelineStage, Service, ServiceTier } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -12,8 +13,8 @@ const blankDraft = { title: "", client: "", estimated_value: "", stage: "", expe
 export function CommercialPage() {
   const { user, aiEnabled } = useAuth();
   const [aiText, setAiText] = useState("");
-  const [aiKind, setAiKind] = useState<"proposal" | "contract">("proposal");
   const [aiBusy, setAiBusy] = useState(false);
+  const [artifactsToken, setArtifactsToken] = useState(0);
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -62,21 +63,28 @@ export function CommercialPage() {
   function startConversion(item: Opportunity) { setDetail(null); setConverting(item); }
   async function runAi(kind: "summary" | "proposal" | "contract") {
     if (!detail) return; setAiBusy(true); setAiText("");
-    if (kind !== "summary") setAiKind(kind);
-    try { const result = await api<{ text: string }>(`/opportunities/${detail.id}/${kind}/`, { method: "POST" }); setAiText(result.text); }
+    try {
+      const result = await api<{ text: string; artifact?: unknown }>(`/opportunities/${detail.id}/${kind}/`, { method: "POST" });
+      // Proposta e contrato viram artefato registrado (FDD 016); o resumo segue efêmero.
+      if (result.artifact) setArtifactsToken(token => token + 1); else setAiText(result.text);
+    }
     catch (cause) { setError((cause as Error).message); } finally { setAiBusy(false); }
   }
-  async function saveAiAsDocument() {
+  async function saveSummaryAsDocument() {
     if (!detail || !aiText.trim()) return;
     try {
       const body = new FormData();
       body.append("opportunity", String(detail.id));
-      body.append("file", new File([aiText], `${aiKind === "contract" ? "contrato" : "proposta"}-${detail.title}.txt`, { type: "text/plain" }));
+      body.append("file", new File([aiText], `resumo-${detail.title}.txt`, { type: "text/plain" }));
       await api("/documents/", { method: "POST", body });
       setDetailDocs(await api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`));
       setAiText("");
     } catch (cause) { setError((cause as Error).message); }
   }
+  const reloadDetailDocs = useCallback(() => {
+    if (!detail) return;
+    void api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`).then(setDetailDocs).catch(() => undefined);
+  }, [detail]);
 
   const sellableServices = services.filter(service => service.active);
 
@@ -102,8 +110,9 @@ export function CommercialPage() {
       {aiEnabled && <div className="mt-6 border-t pt-5">
         <div className="flex flex-wrap items-center gap-2"><Sparkles className="size-4 text-ocean" /><h3 className="text-sm font-semibold text-ink">IA</h3><button type="button" className="ml-auto rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void runAi("summary")} disabled={aiBusy}>Resumir</button><button type="button" className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void runAi("proposal")} disabled={aiBusy}>Gerar proposta</button><button type="button" className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void runAi("contract")} disabled={aiBusy}>Gerar contrato</button></div>
         {aiBusy && <p className="mt-3 text-sm text-slate-500">Gerando…</p>}
-        {aiText && <div className="mt-3"><textarea className="field min-h-40" value={aiText} onChange={event => setAiText(event.target.value)} aria-label="Rascunho gerado pela IA" /><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-400">Revise antes de salvar — a IA gera um rascunho.</p><button type="button" className="rounded-xl bg-ocean px-4 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveAiAsDocument()}>Salvar como documento</button></div></div>}
+        {aiText && <div className="mt-3"><textarea className="field min-h-40" value={aiText} onChange={event => setAiText(event.target.value)} aria-label="Rascunho gerado pela IA" /><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-400">Revise antes de salvar — a IA gera um rascunho.</p><button type="button" className="rounded-xl bg-ocean px-4 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveSummaryAsDocument()}>Salvar como documento</button></div></div>}
       </div>}
+      <ArtifactsPanel opportunity={detail.id} reloadToken={artifactsToken} onChange={reloadDetailDocs} />
     </Modal>}
   </section>;
 }

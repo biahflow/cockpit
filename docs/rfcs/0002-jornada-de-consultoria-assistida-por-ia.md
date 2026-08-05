@@ -27,6 +27,11 @@ Atualizado em 05/08/2026. Salvo onde marcado, todas as etapas já têm primitivo
 - Proposta → ação IA `proposal`. Contrato → geração por IA a partir de modelo + lembrete de quem
   falta assinar + **assinatura no provedor homologado** (`esign` com adaptador Clicksign e webhook
   de status assinado por HMAC, idempotente — FDD 009, ADR 0007); `mark-signed` vira fallback manual.
+- **Artefatos das etapas → `Artifact` (FDD 016, ADR 0008).** Discovery, Assessment, Proposta e
+  Contrato deixam de ser texto efêmero e viram registro com conteúdo e estado próprio
+  (`rascunho → em revisão → enviado → aceito/recusado`), ligado ao `AiInteraction` que o gerou e à
+  reunião de origem. O contrato acompanha a decisão do signatário pelo webhook, e a conversão
+  **entre etapas** passa a ser medida em `funnel.by_stage`.
 - **Nível de produto → `Service.tier` (FDD 015).** Discovery Express (grátis), Discovery +
   Assessment e Implantação estruturam o catálogo: a `Opportunity` carrega o nível vendido, o
   projeto o herda na conversão, e ele define o cronograma de kickoff e o escopo/preço da proposta.

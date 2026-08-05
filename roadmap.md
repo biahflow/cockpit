@@ -101,8 +101,13 @@ cobre ~70% da visão; abaixo o que falta construir aqui. Prioridade em ordem.
       gratuito, `convert-to-project` herda o nível para o projeto, o kickoff usa um cronograma por
       nível (`kickoff.KICKOFF_TEMPLATES`) e a proposta por IA respeita escopo e preço de tabela.
       Ver FDD 015 e testes em `apps/core/tests/test_services.py`.
-- [ ] **Assessment/Proposta/Contrato de 1ª classe — Fase 4 (opcional).** Hoje são texto de IA
-      + `Document`; promover a entidades com estado próprio para medir conversão entre etapas.
+- [x] **Assessment/Proposta/Contrato de 1ª classe — Fase 4.** Discovery, Assessment, Proposta e
+      Contrato viraram `Artifact` (um modelo com `kind`), com conteúdo, estado próprio
+      (`rascunho → em revisão → enviado → aceito/recusado`) e carimbos de tempo. O texto gerado
+      pela IA deixa de ser efêmero: as quatro actions passam a registrá-lo em rascunho, ligado ao
+      `AiInteraction` e à `Meeting` de origem. Contrato assinado no fornecedor fecha o artefato
+      sozinho pelo webhook, e Indicadores ganha `funnel.by_stage` — clientes distintos por etapa,
+      que é a queda entre elas. Ver FDD 016, ADR 0008 e testes em `apps/core/tests/test_artifacts.py`.
 
 ## Princípios de entrega
 

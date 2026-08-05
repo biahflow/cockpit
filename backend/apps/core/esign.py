@@ -411,6 +411,24 @@ def find_signature(event: Event) -> SignatureRequest | None:
     return None
 
 
+def _close_contract_artifacts(document, signature_status: str) -> None:  # type: ignore[no-untyped-def]
+    """Fecha o artefato de contrato ligado ao documento com a decisão do signatário (FDD 016)."""
+    from .models import Artifact, SignatureRequest
+
+    if signature_status == SignatureRequest.Status.SIGNED:
+        decision = Artifact.Status.ACCEPTED
+    elif signature_status == SignatureRequest.Status.DECLINED:
+        decision = Artifact.Status.REJECTED
+    else:
+        return
+    contracts = document.artifacts.filter(
+        kind=Artifact.Kind.CONTRACT, archived_at__isnull=True
+    ).exclude(status=decision)
+    for contract in contracts:
+        contract.status = decision
+        contract.save(update_fields=["status", "decided_at", "updated_at"])
+
+
 def apply_event(event: Event) -> SignatureRequest | None:
     """Aplica o status do fornecedor à solicitação. Idempotente: reentrega não muda nada.
 
@@ -429,6 +447,9 @@ def apply_event(event: Event) -> SignatureRequest | None:
         signature.signed_at = timezone.now()
     signature.save(update_fields=["status", "signed_at"])
     document = signature.document
+    # O contrato do documento acompanha a decisão do signatário (FDD 016). A idempotência vem
+    # do retorno antecipado acima: reentrega não chega até aqui.
+    _close_contract_artifacts(document, event.status)
     label = "assinou" if event.status == SignatureRequest.Status.SIGNED else "recusou assinar"
     notifications.notify(
         [document.uploaded_by],

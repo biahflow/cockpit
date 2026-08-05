@@ -1,4 +1,4 @@
-import { AlertTriangle, HeartPulse, Layers, Lightbulb, Percent, PiggyBank, SlidersHorizontal, Target, Timer, TrendingUp } from "lucide-react";
+import { AlertTriangle, HeartPulse, Layers, Lightbulb, Percent, PiggyBank, SlidersHorizontal, Sparkles, Target, Timer, TrendingUp } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { api } from "../api";
@@ -69,6 +69,14 @@ export function IndicadoresPage() {
       <div className="divide-y">{data.funnel.by_tier.map(row => <div className="px-5 py-3 sm:px-6" key={row.tier}>
         <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium text-ink">{row.label}</span><span className="font-semibold text-ocean">Ganho {pct(row.win_rate)}</span></div>
         <p className="mt-1 text-xs text-slate-500">{row.total} oportunidade(s) · {row.open} aberta(s) · {row.won} ganha(s) · {row.lost} perdida(s) · {money.format(Number(row.estimated_total))} estimados</p>
+      </div>)}</div>
+    </section>
+
+    <section className="overflow-hidden rounded-2xl border bg-white">
+      <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><Sparkles className="size-4 text-ocean" /><h2 className="font-semibold text-ink">Conversão por etapa da jornada</h2></div>
+      <div className="divide-y">{data.funnel.by_stage.map(row => <div className="px-5 py-3 sm:px-6" key={row.kind}>
+        <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium text-ink">{row.label}</span><span className="font-semibold text-ocean">{row.reached} cliente(s)</span></div>
+        <p className="mt-1 text-xs text-slate-500">{row.total} artefato(s) · {row.sent} enviado(s) · {row.accepted} aceito(s) · {row.rejected} recusado(s) · aceitação {pct(row.acceptance_rate)}</p>
       </div>)}</div>
     </section>
 

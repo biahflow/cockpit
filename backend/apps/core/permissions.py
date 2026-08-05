@@ -17,13 +17,14 @@ class RolePermission(BasePermission):
         if request.user.role == User.Role.SALES:
             if resource in {"project", "project_phase", "project_deliverable", "digital_employee"}:
                 return request.method in {"GET", "HEAD", "OPTIONS"}
-            return resource in {"client", "contact", "opportunity", "document", "lead", "analytics"}
+            return resource in {"client", "contact", "opportunity", "document", "lead",
+                                "analytics", "artifact"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact"}:
                 return request.method in {"GET", "HEAD", "OPTIONS"}
             if resource in {"project", "milestone", "task", "document", "dashboard",
                             "meeting", "pendencia", "project_phase", "project_deliverable",
-                            "digital_employee"}:
+                            "digital_employee", "artifact"}:
                 return True
             return resource == "opportunity" and request.method in {"GET", "HEAD", "OPTIONS"}
         return False

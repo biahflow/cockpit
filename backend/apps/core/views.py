@@ -12,6 +12,7 @@ from django.core import signing
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
@@ -46,6 +47,7 @@ from . import (
 from .models import (
     AiInteraction,
     AppSetting,
+    Artifact,
     Client,
     Contact,
     DigitalEmployee,
@@ -71,6 +73,7 @@ from .models import (
 from .permissions import RolePermission
 from .serializers import (
     AcceptInvitationSerializer,
+    ArtifactSerializer,
     BookingCreateSerializer,
     ClientSerializer,
     ContactSerializer,
@@ -111,15 +114,24 @@ class ArchiveModelViewSet(viewsets.ModelViewSet):
 
 
 class QueryParamFilterMixin:
-    """Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1)."""
+    """Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+
+    `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
+    que não passam pelo teste de dígito das chaves estrangeiras.
+    """
 
     filter_fields: tuple[str, ...] = ()
+    filter_exact_fields: tuple[str, ...] = ()
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()  # type: ignore[misc]
         for field in self.filter_fields:
             value = self.request.query_params.get(field)  # type: ignore[attr-defined]
             if value and value.isdigit():
+                queryset = queryset.filter(**{field: value})
+        for field in self.filter_exact_fields:
+            value = self.request.query_params.get(field)  # type: ignore[attr-defined]
+            if value:
                 queryset = queryset.filter(**{field: value})
         return queryset
 
@@ -137,8 +149,15 @@ class CalendarActionMixin:
         return Response({"link": link})
 
 
-def _ai_run(request, feature, system, user_prompt, project=None, opportunity=None):  # type: ignore[no-untyped-def]
-    """Guarda (flag + limite), executa a IA e registra a auditoria."""
+def _ai_run(  # type: ignore[no-untyped-def]
+    request, feature, system, user_prompt, project=None, opportunity=None,
+    artifact_kind=None, artifact_title="", source_meeting=None,
+):
+    """Guarda (flag + limite), executa a IA e registra a auditoria.
+
+    Com `artifact_kind`, o texto também vira um `Artifact` em rascunho (FDD 016) — antes ele só
+    existia na resposta HTTP. A chave `artifact` é aditiva: `text` e `interaction` seguem iguais.
+    """
     if not ai.is_enabled():
         return Response({"detail": "Recurso de IA está desativado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     if not ai.within_daily_limit(request.user):
@@ -148,7 +167,15 @@ def _ai_run(request, feature, system, user_prompt, project=None, opportunity=Non
         user=request.user, feature=feature, project=project, opportunity=opportunity,
         prompt_tokens=usage.get("prompt_tokens", 0), completion_tokens=usage.get("completion_tokens", 0),
     )
-    return Response({"text": text, "interaction": interaction.id})
+    payload: dict[str, object] = {"text": text, "interaction": interaction.id}
+    if artifact_kind is not None:
+        artifact = Artifact.objects.create(
+            kind=artifact_kind, title=artifact_title, content=text,
+            opportunity=opportunity, project=project, source_meeting=source_meeting,
+            ai_interaction=interaction, created_by=request.user,
+        )
+        payload["artifact"] = ArtifactSerializer(artifact).data
+    return Response(payload)
 
 
 def build_client_overview(client: Client) -> dict[str, object]:
@@ -303,7 +330,11 @@ class OpportunityViewSet(ArchiveModelViewSet):
             "gratuito, deixe isso explícito e não sugira cobrança. Deixe claro que é um rascunho "
             "para revisão humana e use apenas o material fornecido."
         )
-        return _ai_run(request, "proposal", system, ai.build_opportunity_context(opportunity), opportunity=opportunity)
+        return _ai_run(
+            request, "proposal", system, ai.build_opportunity_context(opportunity),
+            opportunity=opportunity, artifact_kind=Artifact.Kind.PROPOSAL,
+            artifact_title=f"Proposta — {opportunity.title}",
+        )
 
     @action(detail=True, methods=["post"])
     def contract(self, request: Request, pk: str | None = None) -> Response:
@@ -315,7 +346,11 @@ class OpportunityViewSet(ArchiveModelViewSet):
             "fornecidos e marque [lacunas] onde faltar informação. É um rascunho para revisão humana; "
             "use apenas o material fornecido."
         )
-        return _ai_run(request, "contract", system, ai.build_opportunity_context(opportunity), opportunity=opportunity)
+        return _ai_run(
+            request, "contract", system, ai.build_opportunity_context(opportunity),
+            opportunity=opportunity, artifact_kind=Artifact.Kind.CONTRACT,
+            artifact_title=f"Contrato — {opportunity.title}",
+        )
 
 
 class ProjectViewSet(ArchiveModelViewSet):
@@ -512,6 +547,28 @@ class DigitalEmployeeViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     filter_fields = ("project",)
 
 
+class ArtifactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """Artefatos da jornada (Discovery, Assessment, Proposta, Contrato) — FDD 016."""
+
+    resource = "artifact"
+    queryset = Artifact.objects.select_related(
+        "opportunity__client", "project__client", "document"
+    ).all()
+    serializer_class = ArtifactSerializer
+    filter_fields = ("opportunity", "project")
+    filter_exact_fields = ("kind", "status")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        # Proposta e contrato carregam valor e condição comercial; Entrega só vê o que é do projeto.
+        if self.request.user.role == User.Role.DELIVERY and not self.request.user.is_admin_role:
+            queryset = queryset.filter(project__isnull=False)
+        return queryset
+
+    def perform_create(self, serializer: ArtifactSerializer) -> None:  # type: ignore[override]
+        serializer.save(created_by=self.request.user)
+
+
 class DocumentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "document"
     queryset = Document.objects.select_related(
@@ -580,7 +637,11 @@ class MeetingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             "um Discovery estruturado: situação atual, dores, objetivos, stakeholders, restrições e "
             "perguntas em aberto. Use APENAS o material fornecido; é um rascunho para revisão humana."
         )
-        return _ai_run(request, "meeting_discovery", system, ai.build_meeting_context(meeting), project=meeting.project)
+        return _ai_run(
+            request, "meeting_discovery", system, ai.build_meeting_context(meeting),
+            project=meeting.project, artifact_kind=Artifact.Kind.DISCOVERY,
+            artifact_title=f"Discovery — {meeting.title}", source_meeting=meeting,
+        )
 
     @action(detail=True, methods=["post"])
     def assessment(self, request: Request, pk: str | None = None) -> Response:
@@ -592,7 +653,11 @@ class MeetingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             "um diagnóstico objetivo e recomendações priorizadas. Use APENAS o material fornecido; é um "
             "rascunho para revisão humana e nunca afirme ter executado ações."
         )
-        return _ai_run(request, "meeting_assessment", system, ai.build_meeting_context(meeting), project=meeting.project)
+        return _ai_run(
+            request, "meeting_assessment", system, ai.build_meeting_context(meeting),
+            project=meeting.project, artifact_kind=Artifact.Kind.ASSESSMENT,
+            artifact_title=f"Assessment — {meeting.title}", source_meeting=meeting,
+        )
 
     @action(detail=True, methods=["post"], url_path="ai-score")
     def ai_score(self, request: Request, pk: str | None = None) -> Response:
@@ -958,12 +1023,36 @@ class AnalyticsView(APIView):
                 "win_rate": tier_won / (tier_won + tier_lost) if (tier_won + tier_lost) else None,
             })
 
+        # Conversão por etapa da jornada: onde ela trava entre Discovery e Contrato (FDD 016).
+        # `reached` conta clientes distintos, não artefatos — é a queda entre etapas que interessa.
+        artifacts = Artifact.objects.filter(active)
+        by_stage = []
+        for kind, label in Artifact.Kind.choices:
+            rows = artifacts.filter(kind=kind)
+            accepted = rows.filter(status=Artifact.Status.ACCEPTED).count()
+            rejected = rows.filter(status=Artifact.Status.REJECTED).count()
+            reached = (
+                rows.annotate(client=Coalesce("opportunity__client_id", "project__client_id"))
+                .values("client").distinct().count()
+            )
+            by_stage.append({
+                "kind": kind,
+                "label": label,
+                "total": rows.count(),
+                "sent": rows.filter(status=Artifact.Status.SENT).count(),
+                "accepted": accepted,
+                "rejected": rejected,
+                "acceptance_rate": accepted / (accepted + rejected) if (accepted + rejected) else None,
+                "reached": reached,
+            })
+
         return Response({
             "funnel": {
                 "leads": {"total": leads.count(), "by_status": leads_by_status},
                 "opportunities": {"open": open_count, "won": won, "lost": lost},
                 "projects": {"total": projects.count(), "by_status": projects_by_status},
                 "by_tier": by_tier,
+                "by_stage": by_stage,
             },
             "win_rate": win_rate,
             "avg_ticket": avg_ticket,
