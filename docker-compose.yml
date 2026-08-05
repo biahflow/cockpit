@@ -51,6 +51,11 @@ services:
       GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-}
       ESIGN_ENABLED: ${ESIGN_ENABLED:-false}
       ESIGN_PROVIDER: ${ESIGN_PROVIDER:-}
+      ESIGN_API_TOKEN: ${ESIGN_API_TOKEN:-}
+      ESIGN_API_BASE: ${ESIGN_API_BASE:-}
+      ESIGN_SANDBOX: ${ESIGN_SANDBOX:-true}
+      ESIGN_DELIVERY: ${ESIGN_DELIVERY:-email}
+      ESIGN_WEBHOOK_SECRET: ${ESIGN_WEBHOOK_SECRET:-}
     volumes:
       - ./backend:/app
       - api_venv:/app/.venv

@@ -54,7 +54,7 @@ test("arquiva um documento", async () => {
 
 test("lembra pendentes e marca assinatura como assinada", async () => {
   authState.esignEnabled = true;
-  stub([{ id: 7, signer_email: "quem@assina.test", status: "pending", reminded_at: null, signed_at: null, created_at: "2026-08-01" }]);
+  stub([{ id: 7, signer_email: "quem@assina.test", status: "pending", sign_url: "", reminded_at: null, signed_at: null, created_at: "2026-08-01" }]);
   const user = userEvent.setup();
   render(<DocumentsPage />);
   await screen.findByText("contrato.pdf");
@@ -65,4 +65,13 @@ test("lembra pendentes e marca assinatura como assinada", async () => {
 
   await user.click(screen.getByRole("button", { name: "Marcar assinado" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/documents/1/mark-signed/", expect.objectContaining({ method: "POST" })));
+});
+
+test("mostra o link de assinatura do fornecedor quando há", async () => {
+  authState.esignEnabled = true;
+  stub([{ id: 7, signer_email: "quem@assina.test", status: "pending", sign_url: "https://assina.ae/abc", reminded_at: null, signed_at: null, created_at: "2026-08-01" }]);
+  render(<DocumentsPage />);
+  await screen.findByText("contrato.pdf");
+
+  expect(screen.getByRole("link", { name: "Abrir link de assinatura de quem@assina.test" })).toHaveAttribute("href", "https://assina.ae/abc");
 });

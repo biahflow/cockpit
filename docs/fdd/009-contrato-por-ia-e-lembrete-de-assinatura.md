@@ -15,17 +15,27 @@ acompanhar o status — que o próprio fornecedor devolve por **webhook** (ADR 0
   em `AiInteraction`. O modelo preenche o contrato só com o material fornecido e marca
   `[lacunas]`; a saída é **rascunho para revisão humana**.
 - **Solicitar/lembrar assinatura** dependem de `ESIGN_ENABLED` (503 quando desligado).
-  `request-signature` chama o adaptador do fornecedor (`ESIGN_PROVIDER`) e guarda as
-  referências devolvidas (`provider_ref` do signatário, `document_ref` do documento);
-  sem fornecedor reconhecido ou sem `ESIGN_API_TOKEN`, a solicitação fica só local.
-  `remind-signature` envia e-mail **apenas** aos signatários com status `pending`
-  (best-effort, `fail_silently`), carimba `reminded_at` e retorna quantos foram lembrados.
+  `request-signature` chama o adaptador do fornecedor (`ESIGN_PROVIDER`) enviando o arquivo
+  de verdade — do Drive ou do storage local, mesma regra do download — e guarda o que voltou
+  (`provider_ref` do signatário, `document_ref` do documento e `sign_url` quando houver).
+  Sem fornecedor reconhecido, sem `ESIGN_API_TOKEN` ou com documento sem conteúdo, a
+  solicitação fica só local. `remind-signature` envia e-mail **apenas** aos signatários com
+  status `pending` (best-effort, `fail_silently`), carimba `reminded_at` e retorna quantos
+  foram lembrados; o link de assinatura entra no corpo quando existe.
+- **Quem avisa o signatário** é `ESIGN_DELIVERY`. Em `email` (padrão) o fornecedor manda o
+  convite oficial e o portal não duplica o aviso — o `sign_url` fica vazio e a tela esconde
+  o botão "Assinar". Em `link`, o fornecedor devolve o link, o portal grava, convida o
+  signatário na hora (`invite_signer`) e repete o link no lembrete. `ESIGN_SANDBOX=true`
+  cria documentos de teste (sem crédito, apagados pelo fornecedor em poucos dias).
 - **Webhook de status** (`POST /api/v1/esign/webhook/`, público, sem sessão):
   - **503** com a flag `esign` desligada; **401** quando falta `ESIGN_WEBHOOK_SECRET` ou o
-    HMAC-SHA256 do **corpo cru** (header `Content-Hmac: sha256=<hex>`) não confere;
-    **400** com corpo que não é um objeto JSON.
-  - De-para explícito de eventos: `sign`/`auto_close`/`document_closed` → `signed`;
-    `refusal`/`cancel` → `declined`; qualquer outro **não move** a assinatura.
+    HMAC-SHA256 do **corpo cru** não confere; **400** com corpo que não é um objeto JSON.
+    O header e o formato são de cada fornecedor: Autentique `x-autentique-signature` com o
+    hex puro; Clicksign `Content-Hmac: sha256=<hex>`. A entrega de um fornecedor não passa
+    quando o `ESIGN_PROVIDER` é outro.
+  - De-para explícito de eventos. Autentique: `signature.accepted` → `signed`,
+    `signature.rejected` → `declined`. Clicksign: `sign`/`auto_close`/`document_closed` →
+    `signed`, `refusal`/`cancel` → `declined`. Qualquer outro **não move** a assinatura.
   - Casa a `SignatureRequest` por `provider_ref`; na falta dele, por `document_ref` +
     e-mail do signatário (case-insensitive).
   - **Idempotente**: reentrega do mesmo evento responde 200 sem recarimbar `signed_at` nem
@@ -43,10 +53,11 @@ acompanhar o status — que o próprio fornecedor devolve por **webhook** (ADR 0
 ## Aceite
 
 Numa oportunidade, "Gerar contrato" retorna um rascunho para revisão e salva como
-documento. Sobre um documento com assinatura pendente, "Lembrar" dispara e-mail aos
-pendentes; quando o signatário assina no fornecedor, o webhook marca "Assinado" sem
-intervenção e notifica quem enviou o documento. "Marcar assinado" segue disponível como
-fallback manual; o status aparece por signatário.
+documento. "Enviar para assinatura" cria o documento no fornecedor com o arquivo real; com
+`ESIGN_DELIVERY=link` o link do signatário aparece como "Assinar" na lista. "Lembrar"
+dispara e-mail aos pendentes (com o link, quando houver); quando o signatário assina no
+fornecedor, o webhook marca "Assinado" sem intervenção e notifica quem enviou o documento.
+"Marcar assinado" segue disponível como fallback manual; o status aparece por signatário.
 
 ## Regressão crítica
 

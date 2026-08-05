@@ -537,11 +537,12 @@ class DocumentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         signer_email = str(request.data.get("signer_email", "")).strip()
         if not signer_email:
             return Response({"detail": "Informe o e-mail do signatário."}, status=400)
-        provider_ref, document_ref = esign.send_for_signature(document, signer_email)
+        ref = esign.send_for_signature(document, signer_email)
         signature = SignatureRequest.objects.create(
             document=document, signer_email=signer_email,
-            provider_ref=provider_ref, document_ref=document_ref,
+            provider_ref=ref.provider_ref, document_ref=ref.document_ref, sign_url=ref.sign_url,
         )
+        esign.invite_signer(document, signature)  # no-op quando o fornecedor é quem convida
         return Response({"id": signature.id, "status": signature.status}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="remind-signature")

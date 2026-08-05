@@ -9,18 +9,22 @@ Dois lados, no mesmo molde do `tasksync.py`:
   transição `pending → signed/declined` de verdade. O `mark-signed` do `DocumentViewSet`
   segue como fallback manual para quando não há provedor configurado.
 
-O provedor homologado é o Clicksign; `ESIGN_PROVIDER` escolhe o adaptador e, sem um
-reconhecido, cai no `NullProvider` (só registra a intenção, comportamento antigo). As
+O fornecedor em uso é o **Autentique**; o Clicksign fica como segundo adaptador.
+`ESIGN_PROVIDER` escolhe qual vale e, sem um reconhecido, cai no `NullProvider` (só registra
+a intenção). Cada fornecedor traz seu próprio esquema de assinatura do webhook — header e
+formato do HMAC diferem —, por isso `verify()` pertence ao adaptador e não à view. As
 chamadas HTTP reais ficam fora da cobertura (`# pragma: no cover`), como em `tasksync.py`.
 """
 
 from __future__ import annotations
 
+import base64
 import hmac
 import json
 import logging
 import urllib.error
 import urllib.request
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
@@ -29,7 +33,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 
-from . import flags, notifications
+from . import drive, flags, notifications
 from .portal import sign
 
 if TYPE_CHECKING:
@@ -52,11 +56,20 @@ class Event:
     signer_email: str = ""
 
 
-class Provider(Protocol):
-    """Contrato do adaptador de fornecedor (Clicksign hoje, DocuSign depois)."""
+@dataclass(frozen=True)
+class SignatureRef:
+    """O que o fornecedor devolve ao criar a solicitação."""
 
-    def send(self, document: Document, signer_email: str) -> tuple[str, str]:
-        """Cria a solicitação e devolve `(provider_ref, document_ref)`."""
+    provider_ref: str = ""  # identifica o signatário; chave de busca do webhook
+    document_ref: str = ""  # identifica o documento; fallback junto com o e-mail
+    sign_url: str = ""  # link para o signatário assinar (vai no lembrete)
+
+
+class Provider(Protocol):
+    """Contrato do adaptador de fornecedor (Autentique e Clicksign hoje)."""
+
+    def send(self, document: Document, signer_email: str) -> SignatureRef:
+        """Cria a solicitação no fornecedor e devolve as referências dela."""
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
         """A entrega veio mesmo do fornecedor?"""
@@ -68,18 +81,139 @@ class Provider(Protocol):
 class NullProvider:
     """Sem fornecedor homologado: registra a intenção e não promete nada."""
 
-    def send(self, document: Document, signer_email: str) -> tuple[str, str]:
+    def send(self, document: Document, signer_email: str) -> SignatureRef:
         logger.info(
             "Solicitação de assinatura sem provedor homologado doc=%s signer=%s",
             document.pk, signer_email,
         )
-        return "", ""
+        return SignatureRef()
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
         return False
 
     def parse_event(self, payload: dict) -> Event | None:
         return None
+
+
+# De-para explícito de eventos do Autentique (o ADR exige não perder informação). Só estes
+# dois movem a assinatura; `signature.viewed`, os biométricos e os de documento
+# (`document.finished` etc.) não mudam o estado de nenhum signatário.
+_AUTENTIQUE_EVENTS: dict[str, str] = {
+    "signature.accepted": "signed",
+    "signature.rejected": "declined",
+}
+
+# `sandbox` é argumento do `createDocument` (não campo do `DocumentInput` — confirmado por
+# introspecção do schema; a documentação sugere o contrário).
+_AUTENTIQUE_CREATE = """
+mutation CreateDocument(
+  $document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!, $sandbox: Boolean!
+) {
+  createDocument(document: $document, signers: $signers, file: $file, sandbox: $sandbox) {
+    id
+    signatures { public_id email link { short_link } }
+  }
+}
+"""
+
+
+def delivers_by_link() -> bool:
+    """O portal entrega o link de assinatura (em vez de o fornecedor mandar o convite)?"""
+    return settings.ESIGN_DELIVERY == "link"
+
+
+def _autentique_signer(signer_email: str) -> dict[str, str]:
+    """Signatário no formato do Autentique, conforme quem avisa (ver `ESIGN_DELIVERY`).
+
+    Na entrega por link o fornecedor não manda convite — e exige `name`, que derivamos do
+    e-mail — mas devolve o `short_link`, que o portal usa no convite e no lembrete.
+    """
+    if not delivers_by_link():
+        return {"email": signer_email, "action": "SIGN"}
+    return {
+        "email": signer_email,
+        "name": signer_email.split("@")[0],
+        "action": "SIGN",
+        "delivery_method": "DELIVERY_METHOD_LINK",
+    }
+
+
+class AutentiqueProvider:
+    """Adaptador Autentique: GraphQL (multipart) na saída, `x-autentique-signature` na entrada."""
+
+    DEFAULT_BASE = "https://api.autentique.com.br/v2/graphql"
+
+    def send(self, document: Document, signer_email: str) -> SignatureRef:
+        if not settings.ESIGN_API_TOKEN:
+            logger.info("Autentique sem ESIGN_API_TOKEN; solicitação só registrada localmente")
+            return SignatureRef()
+        content = _document_bytes(document)
+        if not content:
+            logger.warning("Documento %s sem conteúdo; nada enviado ao Autentique", document.pk)
+            return SignatureRef()
+        operations = json.dumps(
+            {
+                "query": _AUTENTIQUE_CREATE,
+                "variables": {
+                    "document": {"name": document.original_name},
+                    "signers": [_autentique_signer(signer_email)],
+                    "file": None,
+                    "sandbox": bool(settings.ESIGN_SANDBOX),
+                },
+            }
+        )
+        body, content_type = _multipart(
+            {"operations": operations, "map": '{"file": ["variables.file"]}'},
+            document.original_name,
+            content,
+        )
+        data = self._post(body, content_type)
+        return self._parse_created(data, signer_email)
+
+    def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
+        secret = settings.ESIGN_WEBHOOK_SECRET
+        provided = headers.get("x-autentique-signature", "")
+        if not secret or not provided:
+            return False
+        return hmac.compare_digest(provided, sign(secret, body))  # hex puro, sem prefixo
+
+    def parse_event(self, payload: dict) -> Event | None:
+        event = payload.get("event") or {}
+        status = _AUTENTIQUE_EVENTS.get(str(event.get("type", "")).strip().lower())
+        if status is None:
+            return None
+        data = event.get("data") or {}
+        return Event(
+            status=status,
+            provider_ref=str(data.get("public_id", "")),
+            document_ref=str(data.get("document", "")),
+            signer_email=str((data.get("user") or {}).get("email", "")),
+        )
+
+    @staticmethod
+    def _parse_created(data: dict | None, signer_email: str) -> SignatureRef:
+        """Lê a resposta do `createDocument` (separada do I/O para ficar testável)."""
+        created = ((data or {}).get("data") or {}).get("createDocument") or {}
+        signatures = created.get("signatures") or []
+        chosen = next(
+            (s for s in signatures if str(s.get("email", "")).lower() == signer_email.lower()),
+            signatures[0] if signatures else {},
+        )
+        return SignatureRef(
+            provider_ref=str(chosen.get("public_id", "")),
+            document_ref=str(created.get("id", "")),
+            sign_url=str((chosen.get("link") or {}).get("short_link", "")),
+        )
+
+    def _post(self, body: bytes, content_type: str) -> dict | None:  # pragma: no cover - I/O
+        return _http_raw(
+            settings.ESIGN_API_BASE or self.DEFAULT_BASE,
+            body,
+            {
+                "Content-Type": content_type,
+                "Authorization": f"Bearer {settings.ESIGN_API_TOKEN}",
+            },
+        )
 
 
 # De-para explícito de eventos do Clicksign (o ADR exige não perder informação).
@@ -96,11 +230,17 @@ _CLICKSIGN_EVENTS: dict[str, str] = {
 class ClicksignProvider:
     """Adaptador Clicksign: API REST para a saída, webhook `Content-Hmac` para a entrada."""
 
-    def send(self, document: Document, signer_email: str) -> tuple[str, str]:
+    DEFAULT_BASE = "https://sandbox.clicksign.com"
+
+    def send(self, document: Document, signer_email: str) -> SignatureRef:
         if not settings.ESIGN_API_TOKEN:
             logger.info("Clicksign sem ESIGN_API_TOKEN; solicitação só registrada localmente")
-            return "", ""
-        return self._create_signature_request(document, signer_email)
+            return SignatureRef()
+        content = _document_bytes(document)
+        if not content:
+            logger.warning("Documento %s sem conteúdo; nada enviado ao Clicksign", document.pk)
+            return SignatureRef()
+        return self._create_signature_request(document, signer_email, content)
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
         secret = settings.ESIGN_WEBHOOK_SECRET
@@ -131,18 +271,25 @@ class ClicksignProvider:
         )
 
     def _create_signature_request(  # pragma: no cover - I/O com o fornecedor
-        self, document: Document, signer_email: str
-    ) -> tuple[str, str]:
-        base = settings.ESIGN_API_BASE.rstrip("/")
+        self, document: Document, signer_email: str, content: bytes
+    ) -> SignatureRef:
+        base = (settings.ESIGN_API_BASE or self.DEFAULT_BASE).rstrip("/")
         token = settings.ESIGN_API_TOKEN
+        mime = "application/pdf" if document.original_name.lower().endswith(".pdf") else "text/plain"
+        encoded = base64.b64encode(content).decode()
         created = _http(
             f"{base}/api/v1/documents?access_token={token}",
-            {"document": {"path": f"/{document.original_name}", "content_base64": ""}},
+            {
+                "document": {
+                    "path": f"/{document.original_name}",
+                    "content_base64": f"data:{mime};base64,{encoded}",
+                }
+            },
             method="POST",
         )
         document_ref = str(((created or {}).get("document") or {}).get("key", ""))
         if not document_ref:
-            return "", ""
+            return SignatureRef()
         signer = _http(
             f"{base}/api/v1/signers?access_token={token}",
             {"signer": {"email": signer_email, "auths": ["email"]}},
@@ -150,17 +297,24 @@ class ClicksignProvider:
         )
         signer_key = str(((signer or {}).get("signer") or {}).get("key", ""))
         if not signer_key:
-            return "", document_ref
+            return SignatureRef(document_ref=document_ref)
         linked = _http(
             f"{base}/api/v1/lists?access_token={token}",
             {"list": {"document_key": document_ref, "signer_key": signer_key, "sign_as": "sign"}},
             method="POST",
         )
-        provider_ref = str(((linked or {}).get("list") or {}).get("request_signature_key", ""))
-        return provider_ref, document_ref
+        listed = (linked or {}).get("list") or {}
+        return SignatureRef(
+            provider_ref=str(listed.get("request_signature_key", "")),
+            document_ref=document_ref,
+            sign_url=str(listed.get("url", "")),
+        )
 
 
-_PROVIDERS: dict[str, type] = {"clicksign": ClicksignProvider}
+_PROVIDERS: dict[str, type] = {
+    "autentique": AutentiqueProvider,
+    "clicksign": ClicksignProvider,
+}
 
 
 def get_provider() -> Provider:
@@ -172,9 +326,47 @@ def get_provider() -> Provider:
 # --- Saída (Biahflow → fornecedor) ------------------------------------------
 
 
-def send_for_signature(document: Document, signer_email: str) -> tuple[str, str]:
-    """Envia o documento para assinatura e devolve `(provider_ref, document_ref)`."""
+def send_for_signature(document: Document, signer_email: str) -> SignatureRef:
+    """Envia o documento para assinatura e devolve as referências do fornecedor."""
     return get_provider().send(document, signer_email)
+
+
+def _document_bytes(document: Document) -> bytes:
+    """Conteúdo do arquivo, venha ele do Drive ou do storage local (mesma regra do download)."""
+    if document.drive_file_id:
+        return drive.download_document(document).read()
+    if not document.file:
+        return b""
+    with document.file.open("rb") as handle:
+        return handle.read()
+
+
+def _mail_signer(document: Document, signature: SignatureRequest, subject: str, lead: str) -> None:
+    """E-mail do portal ao signatário, com o link quando somos nós que entregamos."""
+    link = f"\nAssine aqui: {signature.sign_url}" if signature.sign_url else ""
+    send_mail(
+        f"{subject} — {document.original_name}",
+        f"{lead}{link}",
+        None,
+        [signature.signer_email],
+        fail_silently=True,
+    )
+
+
+def invite_signer(document: Document, signature: SignatureRequest) -> bool:
+    """Convida o signatário quando a entrega é nossa (`ESIGN_DELIVERY=link`).
+
+    Na entrega por e-mail quem convida é o fornecedor — o portal não duplica o aviso.
+    """
+    if not delivers_by_link() or not signature.sign_url:
+        return False
+    _mail_signer(
+        document,
+        signature,
+        "Documento para assinatura",
+        f"Você tem um documento para assinar: '{document.original_name}'.",
+    )
+    return True
 
 
 def remind_pending(document: Document) -> int:
@@ -188,13 +380,12 @@ def remind_pending(document: Document) -> int:
     pending = document.signature_requests.filter(status=SignatureRequest.Status.PENDING)
     reminded = 0
     for signature in pending:
-        send_mail(
-            f"Lembrete de assinatura — {document.original_name}",
+        _mail_signer(
+            document,
+            signature,
+            "Lembrete de assinatura",
             f"Consta pendente a sua assinatura do documento '{document.original_name}'.\n"
             f"Por favor, conclua a assinatura eletrônica.",
-            None,
-            [signature.signer_email],
-            fail_silently=True,
         )
         signature.reminded_at = timezone.now()
         signature.save(update_fields=["reminded_at"])
@@ -251,12 +442,40 @@ def apply_event(event: Event) -> SignatureRequest | None:
 def _http(  # pragma: no cover - I/O com o fornecedor
     url: str, payload: dict, method: str
 ) -> dict | None:
-    body = json.dumps(payload).encode()
-    request = urllib.request.Request(
-        url, data=body, method=method, headers={"Content-Type": "application/json"}
+    return _http_raw(
+        url, json.dumps(payload).encode(), {"Content-Type": "application/json"}, method=method
     )
+
+
+def _multipart(fields: Mapping[str, str], filename: str, content: bytes) -> tuple[bytes, str]:
+    """Corpo `multipart/form-data` (upload GraphQL) e o Content-Type com o boundary.
+
+    Formato do graphql-multipart-request-spec: os campos `operations` e `map` descrevem a
+    mutation e onde o arquivo entra nas variáveis.
+    """
+    boundary = uuid.uuid4().hex
+    parts: list[bytes] = []
+    for name, value in fields.items():
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'.encode()
+            + value.encode()
+            + b"\r\n"
+        )
+    parts.append(
+        f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n".encode()
+    )
+    parts.append(content + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def _http_raw(  # pragma: no cover - I/O com o fornecedor
+    url: str, body: bytes, headers: Mapping[str, str], method: str = "POST"
+) -> dict | None:
+    request = urllib.request.Request(url, data=body, method=method, headers=dict(headers))
     try:
-        with urllib.request.urlopen(request, timeout=5) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310
             raw = response.read()
         return json.loads(raw) if raw else None
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:

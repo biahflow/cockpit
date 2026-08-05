@@ -5710,6 +5710,10 @@ components:
           allOf:
           - $ref: '#/components/schemas/SignatureRequestStatusEnum'
           readOnly: true
+        sign_url:
+          type: string
+          format: uri
+          readOnly: true
         reminded_at:
           type: string
           format: date-time
@@ -5728,6 +5732,7 @@ components:
       - created_at
       - id
       - reminded_at
+      - sign_url
       - signed_at
       - signer_email
       - status

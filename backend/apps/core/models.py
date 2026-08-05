@@ -432,6 +432,7 @@ class SignatureRequest(models.Model):
     # chave de busca do webhook; `document_ref` é o fallback junto com o e-mail.
     provider_ref = models.CharField(max_length=128, blank=True, default="", db_index=True)
     document_ref = models.CharField(max_length=128, blank=True, default="")
+    sign_url = models.URLField(blank=True, default="")  # link do signatário, vai no lembrete
     reminded_at = models.DateTimeField(null=True, blank=True)
     signed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

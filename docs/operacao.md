@@ -30,7 +30,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Notificações in-app (sino) | — | — | **Sempre ligado** |
 | Calendário (add ao Google Calendar + eventos → tarefas) | `CALENDAR_ENABLED`, `GOOGLE_CALENDAR_ID` | Google + service account | Pronto (desligado) |
 | Agendamento (qualificação IA + booking pelo site) | `AI_ENABLED`+`CALENDAR_ENABLED`, `GOOGLE_BOOKING_CALENDAR_ID`, `BOOKING_MIN_FIT` | OpenAI + Google (free/busy) | Pronto (desligado) |
-| Assinatura eletrônica | `ESIGN_ENABLED`, `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET` | conta Clicksign | Pronto (desligado) |
+| Assinatura eletrônica | `ESIGN_ENABLED`, `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique | Pronto (desligado) |
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
 
@@ -76,14 +76,23 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   `BOOKING_SLOT_MINUTES` (default 45). No site (`biahflow-site/backend/.env`) nada muda além do
   `CRM_INTAKE_URL`/`CRM_INTAKE_TOKEN` já existentes — o relay descobre os endpoints de booking a
   partir do intake. Ver FDD 013.
-- **Assinatura**: `ESIGN_ENABLED=true` + `ESIGN_PROVIDER=clicksign` + `ESIGN_API_TOKEN` (token de
-  acesso da conta) + `ESIGN_API_BASE` (`https://app.clicksign.com` em produção; o default é o
-  sandbox) + `ESIGN_WEBHOOK_SECRET`. No painel do Clicksign, cadastre o webhook apontando para
-  `https://<host>/api/v1/esign/webhook/` com **o mesmo segredo** — a entrega é validada por
-  HMAC-SHA256 do corpo cru (header `Content-Hmac`) e é idempotente, então reentrega não duplica
-  nada. Os eventos `sign`/`auto_close`/`document_closed` marcam "Assinado" e `refusal`/`cancel`
-  marcam "Recusado"; o resto é ignorado com 200. Sem provedor (ou com a integração desligada), o
-  botão "Marcar assinado" segue como fallback manual. Ver FDD 009 e ADR 0007.
+- **Assinatura (Autentique)**: `ESIGN_ENABLED=true` + `ESIGN_PROVIDER=autentique` +
+  `ESIGN_API_TOKEN` (chave de API gerada no painel) + `ESIGN_WEBHOOK_SECRET`. `ESIGN_API_BASE`
+  fica vazio (cada adaptador tem a própria URL padrão). No painel do Autentique, cadastre o
+  webhook apontando para `https://<host>/api/v1/esign/webhook/` com **o mesmo segredo** — a
+  entrega é validada por HMAC-SHA256 do corpo cru (header `x-autentique-signature`, hex puro) e é
+  idempotente, então as reentregas (3 tentativas: 60s, 120s e 300s) não duplicam nada. Só
+  `signature.accepted` e `signature.rejected` movem a assinatura; os demais eventos são ignorados
+  com 200.
+  - `ESIGN_SANDBOX=true` (padrão) cria documentos de teste: não consomem crédito e o fornecedor
+    os apaga em poucos dias. Ponha `false` para valer de verdade.
+  - `ESIGN_DELIVERY=email` (padrão) deixa o Autentique mandar o convite oficial; o portal não
+    recebe link e o botão "Assinar" não aparece. Com `ESIGN_DELIVERY=link`, o portal recebe o
+    `short_link`, convida o signatário por e-mail na hora e repete o link no lembrete — mas o
+    convite passa a sair do portal, não do fornecedor.
+  - Trocar de fornecedor é trocar o `ESIGN_PROVIDER` (`clicksign` também tem adaptador) e o
+    segredo do webhook. Sem provedor (ou com a integração desligada), o botão "Marcar assinado"
+    segue como fallback manual. Ver FDD 009 e ADR 0007.
 - Desligados, os botões não aparecem e as ações retornam 503.
 
 ### 5. Webhook do portal do cliente

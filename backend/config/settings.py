@@ -148,8 +148,14 @@ BOOKING_SLOT_MINUTES = int(os.getenv("BOOKING_SLOT_MINUTES", "45"))
 ESIGN_ENABLED = os.getenv("ESIGN_ENABLED", "false").lower() == "true"
 ESIGN_PROVIDER = os.getenv("ESIGN_PROVIDER", "")
 ESIGN_API_TOKEN = os.getenv("ESIGN_API_TOKEN", "")
-ESIGN_API_BASE = os.getenv("ESIGN_API_BASE", "https://sandbox.clicksign.com")
+# Vazio = cada adaptador usa a própria URL padrão (`Provider.DEFAULT_BASE`).
+ESIGN_API_BASE = os.getenv("ESIGN_API_BASE", "")
 ESIGN_WEBHOOK_SECRET = os.getenv("ESIGN_WEBHOOK_SECRET", "")
+# Documentos de teste: não consomem crédito e são apagados pelo fornecedor em poucos dias.
+ESIGN_SANDBOX = os.getenv("ESIGN_SANDBOX", "true").lower() == "true"
+# Quem avisa o signatário: "email" (o fornecedor manda o convite, padrão) ou "link" (o
+# fornecedor devolve o link de assinatura e o portal se encarrega de entregar).
+ESIGN_DELIVERY = os.getenv("ESIGN_DELIVERY", "email").lower()
 
 # Sincronia de tarefas com ferramentas externas (Linear/GitHub) atrás de flag (ADR 0004).
 # Token compartilhado para o webhook de entrada; credenciais/estados por fornecedor.

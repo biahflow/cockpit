@@ -32,25 +32,35 @@ endpoint dedicado autenticado por segredo compartilhado, integração atrás de 
 
 ## Decisão
 
-Adotamos a **opção C**, com **Clicksign** como primeiro fornecedor homologado (contexto
-brasileiro, autenticação por e‑mail suficiente para contratos de consultoria).
+Adotamos a **opção C**. O fornecedor em uso é o **Autentique** (contexto brasileiro,
+GraphQL com modo sandbox para homologação); o **Clicksign** fica como segundo adaptador.
 
 - `esign.Provider` é um `Protocol` com `send` / `verify` / `parse_event`.
   `ESIGN_PROVIDER` escolhe o adaptador; sem um reconhecido, vale o `NullProvider`, que
-  preserva o comportamento anterior (registra a intenção, não promete nada). DocuSign
-  entra depois como mais uma classe, sem tocar em views.
+  preserva o comportamento anterior (registra a intenção, não promete nada). Trocar de
+  fornecedor é uma classe nova e uma linha no registry — nenhuma view, model ou tela muda.
+- **Cada fornecedor traz o próprio esquema de assinatura do webhook**, e foi isso que
+  validou o `Protocol`: o Autentique manda `x-autentique-signature` com o HMAC em hex puro,
+  o Clicksign manda `Content-Hmac: sha256=<hex>`. Por isso `verify()` mora no adaptador e a
+  view não conhece fornecedor nenhum.
 - **O webhook é a fonte da transição de estado.** `POST /api/v1/esign/webhook/` valida
-  HMAC‑SHA256 do **corpo cru** (header `Content-Hmac`, segredo `ESIGN_WEBHOOK_SECRET`,
-  comparação em tempo constante), normaliza o evento e aplica o status. Reusa
-  `portal.sign()` — o mesmo HMAC do webhook do portal do cliente (ADR 0003).
+  HMAC‑SHA256 do **corpo cru** (segredo `ESIGN_WEBHOOK_SECRET`, comparação em tempo
+  constante), normaliza o evento e aplica o status. Reusa `portal.sign()` — o mesmo HMAC do
+  webhook do portal do cliente (ADR 0003).
+- **Quem avisa o signatário é configurável** (`ESIGN_DELIVERY`). O Autentique só devolve o
+  link de assinatura (`short_link`) quando o signatário é criado com entrega por link — e
+  nesse modo ele não manda o convite. Default `email`: o fornecedor convida e o portal não
+  duplica o aviso. Com `link`: o portal grava o `sign_url`, mostra "Assinar" na tela e
+  entrega convite e lembrete por e‑mail.
 - **Idempotência por construção.** `SignatureRequest` ganha `document_ref` e índice em
   `provider_ref` (migração 0021); o evento casa por `provider_ref` e, na falta dele, por
   `document_ref` + e‑mail. Evento já aplicado é no‑op: não recarimba `signed_at` nem
   renotifica. Fornecedores reentregam até receber 200.
 - **Eventos desconhecidos respondem 200 "ignorado"**, nunca erro — um 4xx/5xx faria o
-  fornecedor reentregar indefinidamente. O de‑para é explícito
-  (`sign`/`auto_close`/`document_closed` → assinado; `refusal`/`cancel` → recusado;
-  o resto não move a assinatura).
+  fornecedor reentregar indefinidamente (o Autentique tenta 3 vezes: 60s, 120s e 300s). O
+  de‑para é explícito e por fornecedor: Autentique `signature.accepted` → assinado e
+  `signature.rejected` → recusado (os outros 13 eventos não movem nada); Clicksign
+  `sign`/`auto_close`/`document_closed` → assinado e `refusal`/`cancel` → recusado.
 - **`mark-signed` continua existindo**, agora como fallback manual declarado: sem
   provedor configurado (ou com assinatura em papel), alguém do time fecha a pendência à
   mão, com a mesma trilha de datas.
@@ -66,4 +76,12 @@ por HMAC sobre o corpo cru, `ScopedRateThrottle` (`esign_webhook`, `120/hour`) e
 Custo: manter o de‑para de eventos e o adaptador por fornecedor. As chamadas HTTP de saída
 seguem o padrão de `tasksync.py` (`urllib`, timeout curto, best‑effort com log) e ficam
 fora da cobertura. Mudanças aditivas: o contrato `/api/v1/` existente é preservado
-(`request-signature`, `remind-signature` e `mark-signed` seguem iguais na resposta).
+(`request-signature`, `remind-signature` e `mark-signed` seguem iguais, agora com `sign_url`
+a mais na resposta).
+
+Homologado contra o sandbox real do Autentique. Duas coisas que a documentação do
+fornecedor descreve de forma enganosa e o teste corrigiu, registradas para quem for mexer:
+**`sandbox` é argumento do `createDocument`**, não campo do `DocumentInput`; e o
+`link { short_link }` só vem preenchido para signatário com entrega por link — daí o
+`ESIGN_DELIVERY`. Quando a API do fornecedor e a documentação divergirem, a introspecção do
+schema é a fonte da verdade.
