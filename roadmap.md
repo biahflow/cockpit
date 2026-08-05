@@ -91,8 +91,13 @@ cobre ~70% da visão; abaixo o que falta construir aqui. Prioridade em ordem.
       pelo snapshot (`apps/core/portal.py` `ai_score_snapshot`) e agrega por cliente em
       `build_client_overview`. Ver `apps/core/ai_score.py` e testes em `tests/test_ai_score.py`
       (FDD 014).
-- [ ] **3 níveis de produto — Fase 4.** Estruturar sobre `Service`: Discovery Express (grátis),
-      Discovery + Assessment (pago) e Implantação — refletindo no pipeline e na proposta.
+- [x] **3 níveis de produto — Fase 4.** Estruturados sobre `Service` (`tier`, `list_price`,
+      `summary`, um ativo por nível): Discovery Express (grátis), Discovery + Assessment (pago) e
+      Implantação, semeados pela migração `0020`. `Opportunity.service` leva o nível no pipeline
+      (selo no card e funil `by_tier` em Indicadores), a conversão de lead entra pelo nível
+      gratuito, `convert-to-project` herda o nível para o projeto, o kickoff usa um cronograma por
+      nível (`kickoff.KICKOFF_TEMPLATES`) e a proposta por IA respeita escopo e preço de tabela.
+      Ver FDD 015 e testes em `apps/core/tests/test_services.py`.
 - [ ] **Assessment/Proposta/Contrato de 1ª classe — Fase 4 (opcional).** Hoje são texto de IA
       + `Document`; promover a entidades com estado próprio para medir conversão entre etapas.
 

@@ -9,9 +9,15 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Milestone, PipelineStage, User
+from apps.core.models import Milestone, PipelineStage, Service, User
 
-from .factories import ClientFactory, OpportunityFactory, ProjectFactory, UserFactory
+from .factories import (
+    ClientFactory,
+    OpportunityFactory,
+    ProjectFactory,
+    ServiceFactory,
+    UserFactory,
+)
 
 
 @pytest.fixture
@@ -156,3 +162,49 @@ def test_conversion_returns_conflict_without_partial_project_on_integrity_error(
 
     assert response.status_code == 409
     assert not hasattr(opportunity, "project")
+
+
+@pytest.mark.django_db
+def test_conversion_inherits_the_opportunity_product_tier() -> None:
+    sales = UserFactory(role=User.Role.SALES)
+    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
+    opportunity = OpportunityFactory(
+        stage=PipelineStage.objects.get(kind="won"), owner=sales, service=express
+    )
+    client = APIClient()
+    client.force_authenticate(sales)
+
+    response = client.post(reverse("opportunity-convert-to-project", args=[opportunity.id]), {
+        "client": opportunity.client_id,
+        "name": "Discovery do cliente",
+        "start_date": str(timezone.localdate()),
+        "due_date": str(timezone.localdate() + timedelta(days=30)),
+    }, format="json")
+
+    assert response.status_code == 201
+    assert response.json()["service"] == express.pk
+    # O cronograma segue o nível, não o template de implantação.
+    assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 1
+
+
+@pytest.mark.django_db
+def test_conversion_payload_overrides_the_inherited_service() -> None:
+    sales = UserFactory(role=User.Role.SALES)
+    chosen = ServiceFactory(name="Serviço combinado")
+    opportunity = OpportunityFactory(
+        stage=PipelineStage.objects.get(kind="won"), owner=sales,
+        service=Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS),
+    )
+    client = APIClient()
+    client.force_authenticate(sales)
+
+    response = client.post(reverse("opportunity-convert-to-project", args=[opportunity.id]), {
+        "client": opportunity.client_id,
+        "name": "Projeto",
+        "start_date": str(timezone.localdate()),
+        "due_date": str(timezone.localdate() + timedelta(days=30)),
+        "service": chosen.pk,
+    }, format="json")
+
+    assert response.status_code == 201
+    assert response.json()["service"] == chosen.pk

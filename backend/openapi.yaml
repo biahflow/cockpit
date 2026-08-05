@@ -339,6 +339,38 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/clients/{id}/overview/:
+    get:
+      operationId: v1_clients_overview_retrieve_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este client.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/clients/overview/:
+    get:
+      operationId: v1_clients_overview_retrieve
+      description: Lista agregada p/ o grid de clientes (honra `?status=`).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientOverviewList'
+          description: ''
   /api/v1/config/:
     get:
       operationId: v1_config_retrieve
@@ -560,6 +592,159 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardResponse'
           description: ''
+  /api/v1/digital-employees/:
+    get:
+      operationId: v1_digital_employees_list
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DigitalEmployee'
+          description: ''
+    post:
+      operationId: v1_digital_employees_create
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployee'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployee'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployee'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployee'
+          description: ''
+  /api/v1/digital-employees/{id}/:
+    get:
+      operationId: v1_digital_employees_retrieve
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployee'
+          description: ''
+    put:
+      operationId: v1_digital_employees_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployee'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployee'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployee'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployee'
+          description: ''
+    patch:
+      operationId: v1_digital_employees_partial_update
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDigitalEmployee'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDigitalEmployee'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDigitalEmployee'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployee'
+          description: ''
+    delete:
+      operationId: v1_digital_employees_destroy
+      description: 'Filtra a lista por chaves estrangeiras informadas em query params
+        (ex.: ?project=1).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/documents/:
     get:
       operationId: v1_documents_list
@@ -835,6 +1020,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Document'
+          description: ''
+  /api/v1/health/:
+    get:
+      operationId: v1_health_retrieve
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
           description: ''
   /api/v1/invitations/:
     get:
@@ -1409,6 +1608,44 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/meetings/{id}/ai-score/:
+    post:
+      operationId: v1_meetings_ai_score_create
+      description: |-
+        Gera o AI Score de maturidade/oportunidade a partir da transcrição (FDD 014).
+
+        Mesmas guardas de `_ai_run` (flag/limite/auditoria), mas persiste o resultado no projeto
+        em vez de só devolver texto. Fica como rascunho (`ai_score_reviewed=False`) até revisão.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
   /api/v1/meetings/{id}/assessment/:
     post:
       operationId: v1_meetings_assessment_create
@@ -2988,6 +3225,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Project'
           description: ''
+  /api/v1/projects/{id}/health/:
+    get:
+      operationId: v1_projects_health_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
   /api/v1/projects/{id}/next-steps/:
     post:
       operationId: v1_projects_next_steps_create
@@ -3668,6 +3926,9 @@ components:
       - pipeline
       - roi
       - win_rate
+    BlankEnum:
+      enum:
+      - ''
     BookingCreate:
       type: object
       properties:
@@ -3747,6 +4008,14 @@ components:
       - owner
       - status
       - updated_at
+    ClientOverviewList:
+      type: object
+      properties:
+        clients:
+          type: array
+          items: {}
+      required:
+      - clients
     ClientStatusEnum:
       enum:
       - prospect
@@ -3853,6 +4122,62 @@ components:
       - overdue_count
       - pipeline
       - upcoming_tasks
+    DigitalEmployee:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        name:
+          type: string
+          maxLength: 120
+        area:
+          type: string
+          maxLength: 80
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/DigitalEmployeeStatusEnum'
+        kpi_label:
+          type: string
+          maxLength: 80
+        kpi_value:
+          type: string
+          maxLength: 80
+        hours_saved_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,1})?$
+        roi_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - project
+      - updated_at
+    DigitalEmployeeStatusEnum:
+      enum:
+      - building
+      - active
+      - paused
+      type: string
+      description: |-
+        * `building` - Em construção
+        * `active` - Ativo
+        * `paused` - Pausado
     Document:
       type: object
       properties:
@@ -3897,6 +4222,14 @@ components:
       - original_name
       - signature_requests
       - uploaded_by
+    HealthResponse:
+      type: object
+      properties:
+        projects:
+          type: array
+          items: {}
+      required:
+      - projects
     Invitation:
       type: object
       properties:
@@ -4284,6 +4617,15 @@ components:
         expected_close_date:
           type: string
           format: date
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+        service_tier:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -4299,6 +4641,8 @@ components:
       - expected_close_date
       - id
       - owner
+      - service_name
+      - service_tier
       - stage
       - stage_name
       - title
@@ -4369,6 +4713,46 @@ components:
         job_title:
           type: string
           maxLength: 128
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedDigitalEmployee:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        name:
+          type: string
+          maxLength: 120
+        area:
+          type: string
+          maxLength: 80
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/DigitalEmployeeStatusEnum'
+        kpi_label:
+          type: string
+          maxLength: 80
+        kpi_value:
+          type: string
+          maxLength: 80
+        hours_saved_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,1})?$
+        roi_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         created_at:
           type: string
           format: date-time
@@ -4606,6 +4990,15 @@ components:
         expected_close_date:
           type: string
           format: date
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+        service_tier:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -4731,6 +5124,28 @@ components:
           type: string
           format: date-time
           readOnly: true
+        ai_maturity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        ai_opportunity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        ai_dimensions: {}
+        ai_score_summary:
+          type: string
+        ai_scored_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ai_score_reviewed:
+          type: boolean
     PatchedProjectDeliverable:
       type: object
       description: Entregável de um projeto — só `status`/`document` são editáveis
@@ -4823,6 +5238,19 @@ components:
           maxLength: 120
         active:
           type: boolean
+        tier:
+          oneOf:
+          - $ref: '#/components/schemas/TierEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        tier_display:
+          type: string
+          readOnly: true
+        list_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        summary:
+          type: string
         created_at:
           type: string
           format: date-time
@@ -5021,7 +5449,30 @@ components:
           type: string
           format: date-time
           readOnly: true
+        ai_maturity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        ai_opportunity:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        ai_dimensions: {}
+        ai_score_summary:
+          type: string
+        ai_scored_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        ai_score_reviewed:
+          type: boolean
       required:
+      - ai_scored_at
       - client
       - created_at
       - due_date
@@ -5199,6 +5650,19 @@ components:
           maxLength: 120
         active:
           type: boolean
+        tier:
+          oneOf:
+          - $ref: '#/components/schemas/TierEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        tier_display:
+          type: string
+          readOnly: true
+        list_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        summary:
+          type: string
         created_at:
           type: string
           format: date-time
@@ -5211,6 +5675,7 @@ components:
       - created_at
       - id
       - name
+      - tier_display
       - updated_at
     SignatureRequest:
       type: object
@@ -5343,6 +5808,16 @@ components:
       - external_id
       - external_status
       - source
+    TierEnum:
+      enum:
+      - discovery_express
+      - discovery_assessment
+      - implantacao
+      type: string
+      description: |-
+        * `discovery_express` - Discovery Express
+        * `discovery_assessment` - Discovery + Assessment
+        * `implantacao` - Implantação
     User:
       type: object
       properties:

@@ -76,11 +76,18 @@ Key cross-cutting patterns to preserve:
   be in the "won" stage, enforces sales/admin role, and uses a `OneToOneField`
   (`Project.opportunity`) + `transaction.atomic` + `IntegrityError` handling to
   guarantee a won opportunity converts exactly once without duplicating the client.
+  It also carries `Opportunity.service` over to `Project.service` (payload wins).
+- **Product tiers live on `Service`.** A `Service` with a `tier`
+  (`discovery_express`/`discovery_assessment`/`implantacao`) is one of the three product
+  levels, seeded by migration `0020`; a blank `tier` is a loose catalog entry. The tier
+  drives the kickoff template (`kickoff.KICKOFF_TEMPLATES`), the proposal prompt context
+  (`ai.build_opportunity_context`) and the `by_tier` funnel in analytics — see FDD 015.
 - **Documents are single-linked.** A `Document` must reference exactly one of
   client/opportunity/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.
 - **Pipeline invariants.** DB constraints enforce at most one "won" and one "lost"
-  `PipelineStage`.
+  `PipelineStage`, and at most one active `Service` per product `tier`. DRF derives the
+  serializer validation from these constraints — don't hand-roll a duplicate check.
 
 **Auth model:** session cookies + CSRF (not tokens). DRF uses
 `SessionAuthentication` and defaults to `IsAuthenticated`. The frontend (`src/api.ts`)

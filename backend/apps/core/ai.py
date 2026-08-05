@@ -87,6 +87,13 @@ def build_opportunity_context(opportunity: Opportunity) -> str:
         lines.append(f"Contato: {opportunity.contact.name}")
     if opportunity.scope:
         lines.append(f"Escopo: {opportunity.scope}")
+    service = opportunity.service
+    if service:
+        label = f"{service.name} ({service.get_tier_display()})" if service.tier else service.name
+        lines.append(f"Nível de produto: {label}")
+        lines.append(f"Preço de tabela: {'gratuito' if service.is_free else service.list_price}")
+        if service.summary:
+            lines.append(f"Escopo do nível: {service.summary}")
     return "\n".join(lines)
 
 

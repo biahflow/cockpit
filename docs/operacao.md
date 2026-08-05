@@ -23,6 +23,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Recurso | Flag/env | Depende de | Estado |
 | --- | --- | --- | --- |
 | CRM, projetos, indicadores, ROI | — | — | **Sempre ligado** |
+| **Níveis de produto** (Discovery Express / Discovery + Assessment / Implantação) | — | — | **Ligado** ✅ — semeados na migração; ajuste nome, preço e escopo em **Indicadores → Gerir serviços** (`/servicos`) |
 | **Captação de leads** | `LEAD_INTAKE_TOKEN`, `CORS_ALLOWED_ORIGINS` | token (você define) | **Ligado** ✅ |
 | Documentos no Google Drive | `GOOGLE_DRIVE_ENABLED` + service account | Google Workspace + Shared Drive | Desligado |
 | IA (assistente/resumos/proposta/próximos passos) | `AI_ENABLED`, `OPENAI_API_KEY` | conta OpenAI | Desligado |

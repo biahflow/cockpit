@@ -1,10 +1,18 @@
+from decimal import Decimal
+
 import pytest
 from django.test import override_settings
 
 from apps.core import ai
-from apps.core.models import AiInteraction
+from apps.core.models import AiInteraction, Service
 
-from .factories import MeetingFactory, OpportunityFactory, ProjectFactory, UserFactory
+from .factories import (
+    MeetingFactory,
+    OpportunityFactory,
+    ProjectFactory,
+    ServiceFactory,
+    UserFactory,
+)
 
 
 @pytest.mark.django_db
@@ -30,6 +38,36 @@ def test_build_opportunity_context_has_client_and_value():
     context = ai.build_opportunity_context(opportunity)
     assert opportunity.client.name in context
     assert opportunity.title in context
+    assert "Nível de produto" not in context  # oportunidade sem nível não inventa um
+
+
+@pytest.mark.django_db
+def test_build_opportunity_context_describes_the_product_tier():
+    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
+    context = ai.build_opportunity_context(OpportunityFactory(service=express))
+
+    assert f"Nível de produto: {express.name} (Discovery Express)" in context
+    assert "Preço de tabela: gratuito" in context
+    assert express.summary in context
+
+
+@pytest.mark.django_db
+def test_build_opportunity_context_prices_a_paid_tier():
+    paid = Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT)
+    paid.list_price = Decimal("18000.00")
+    paid.save(update_fields=["list_price"])
+
+    context = ai.build_opportunity_context(OpportunityFactory(service=paid))
+
+    assert "Preço de tabela: 18000.00" in context
+
+
+@pytest.mark.django_db
+def test_build_opportunity_context_names_a_service_without_tier():
+    context = ai.build_opportunity_context(OpportunityFactory(service=ServiceFactory(name="Avulso")))
+
+    assert "Nível de produto: Avulso" in context
+    assert "()" not in context
 
 
 @pytest.mark.django_db

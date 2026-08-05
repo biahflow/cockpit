@@ -246,7 +246,9 @@ class PipelineStageViewSet(viewsets.ModelViewSet):
 
 class OpportunityViewSet(ArchiveModelViewSet):
     resource = "opportunity"
-    queryset = Opportunity.objects.select_related("client", "contact", "stage", "owner").all()
+    queryset = Opportunity.objects.select_related(
+        "client", "contact", "stage", "owner", "service"
+    ).all()
     serializer_class = OpportunitySerializer
 
     def perform_create(self, serializer: OpportunitySerializer) -> None:
@@ -271,9 +273,13 @@ class OpportunityViewSet(ArchiveModelViewSet):
         serializer.is_valid(raise_exception=True)
         if serializer.validated_data["client"].id != opportunity.client_id:
             return Response({"client": "O projeto deve usar o cliente da oportunidade."}, status=400)
+        # O nível de produto vendido segue para a entrega; o payload pode sobrescrever.
+        service = serializer.validated_data.get("service") or opportunity.service
         try:
             with transaction.atomic():
-                project = serializer.save(opportunity=opportunity, owner=request.user)
+                project = serializer.save(
+                    opportunity=opportunity, owner=request.user, service=service
+                )
                 kickoff.seed_work_items(project)
         except IntegrityError:
             return Response({"detail": "A oportunidade já foi convertida."}, status=409)
@@ -289,7 +295,13 @@ class OpportunityViewSet(ArchiveModelViewSet):
     @action(detail=True, methods=["post"])
     def proposal(self, request: Request, pk: str | None = None) -> Response:
         opportunity = self.get_object()
-        system = "Redija um RASCUNHO de proposta comercial em português a partir dos dados (contexto, escopo sugerido, entregáveis, investimento estimado). Deixe claro que é um rascunho para revisão humana e use apenas o material fornecido."
+        system = (
+            "Redija um RASCUNHO de proposta comercial em português a partir dos dados (contexto, "
+            "escopo sugerido, entregáveis, investimento estimado). Quando houver um nível de "
+            "produto informado, respeite o escopo e o preço de tabela desse nível — se for "
+            "gratuito, deixe isso explícito e não sugira cobrança. Deixe claro que é um rascunho "
+            "para revisão humana e use apenas o material fornecido."
+        )
         return _ai_run(request, "proposal", system, ai.build_opportunity_context(opportunity), opportunity=opportunity)
 
     @action(detail=True, methods=["post"])
@@ -619,6 +631,10 @@ class LeadViewSet(ArchiveModelViewSet):
         stage = PipelineStage.objects.filter(kind=PipelineStage.Kind.OPEN).order_by("position").first()
         if stage is None:
             return Response({"detail": "Nenhuma etapa aberta configurada."}, status=400)
+        # Todo lead entra pela porta de entrada gratuita; Vendas troca o nível depois se for o caso.
+        entry_service = Service.objects.filter(
+            tier=Service.Tier.DISCOVERY_EXPRESS, active=True, archived_at__isnull=True
+        ).first()
         with transaction.atomic():
             client = Client.objects.create(
                 name=lead.company or lead.name,
@@ -633,6 +649,7 @@ class LeadViewSet(ArchiveModelViewSet):
                 stage=stage,
                 owner=request.user,
                 expected_close_date=timezone.localdate() + timedelta(days=30),
+                service=entry_service,
             )
             lead.client = client
             lead.opportunity = opportunity
@@ -885,11 +902,29 @@ class AnalyticsView(APIView):
             for row in projects.values("service__name").annotate(rev=Sum("actual_value"), cost=Sum("cost")).order_by("-rev")
         ]
 
+        # Conversão por nível de produto: onde os três níveis param no pipeline.
+        by_tier = []
+        for tier, label in Service.Tier.choices:
+            tier_opps = opps.filter(service__tier=tier)
+            tier_won = tier_opps.filter(stage__kind=PipelineStage.Kind.WON).count()
+            tier_lost = tier_opps.filter(stage__kind=PipelineStage.Kind.LOST).count()
+            by_tier.append({
+                "tier": tier,
+                "label": label,
+                "total": tier_opps.count(),
+                "open": tier_opps.filter(stage__kind=PipelineStage.Kind.OPEN).count(),
+                "won": tier_won,
+                "lost": tier_lost,
+                "estimated_total": tier_opps.aggregate(v=Sum("estimated_value"))["v"] or 0,
+                "win_rate": tier_won / (tier_won + tier_lost) if (tier_won + tier_lost) else None,
+            })
+
         return Response({
             "funnel": {
                 "leads": {"total": leads.count(), "by_status": leads_by_status},
                 "opportunities": {"open": open_count, "won": won, "lost": lost},
                 "projects": {"total": projects.count(), "by_status": projects_by_status},
+                "by_tier": by_tier,
             },
             "win_rate": win_rate,
             "avg_ticket": avg_ticket,

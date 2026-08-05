@@ -29,13 +29,37 @@ KICKOFF_TEMPLATE: list[dict] = [
      "tasks": ["Revisar entregáveis", "Coletar feedback do cliente"]},
 ]
 
+# Um cronograma por nível de produto: o Discovery Express dura uma semana e não merece os
+# 90 dias da implantação. Projetos sem nível (ou de serviço avulso) caem no template padrão.
+KICKOFF_TEMPLATES: dict[str, list[dict]] = {
+    "discovery_express": [
+        {"title": "Discovery", "offset": 7,
+         "tasks": ["Agendar a sessão de discovery", "Registrar a transcrição da reunião",
+                   "Compartilhar o resumo com os próximos passos"]},
+    ],
+    "discovery_assessment": [
+        {"title": "Discovery", "offset": 7,
+         "tasks": ["Agendar a sessão de discovery", "Registrar a transcrição da reunião"]},
+        {"title": "Assessment e recomendações", "offset": 21,
+         "tasks": ["Gerar o assessment de maturidade", "Priorizar as recomendações",
+                   "Apresentar o plano de ação"]},
+    ],
+    "implantacao": KICKOFF_TEMPLATE,
+}
+
+
+def template_for(project: Project) -> list[dict]:
+    """Escolhe o cronograma inicial pelo nível de produto do projeto."""
+    tier = project.service.tier if project.service else ""
+    return KICKOFF_TEMPLATES.get(tier, KICKOFF_TEMPLATE)
+
 
 def seed_work_items(project: Project) -> tuple[int, int]:
     """Cria marcos e tarefas do template, com prazos limitados à janela do projeto."""
     from .models import Milestone, Task
 
     milestones = tasks = 0
-    for spec in KICKOFF_TEMPLATE:
+    for spec in template_for(project):
         due = min(project.start_date + timedelta(days=spec["offset"]), project.due_date)
         milestone = Milestone.objects.create(
             project=project, title=spec["title"], owner=project.owner, due_date=due
