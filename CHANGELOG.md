@@ -4,6 +4,10 @@ Todas as mudanças relevantes deste projeto serão registradas neste arquivo.
 
 ## Não lançado
 
+### Alterado (incompatível)
+
+- **Entrega vê apenas os projetos de que participa** — RFC 0003, ADR 0010, FDD 018. A FDD 017 tinha tirado dela os documentos comerciais, mas o resto do projeto seguia aberto: todos os projetos, marcos, reuniões, pendências, fases, entregáveis, funcionários digitais e artefatos, mais o risco e a saúde de cada projeto da casa e o ROI de cada cliente por `/clients/overview/`, `/risk/`, `/health/`, `/dashboard/` e o agente de entrega. Agora existe **equipe do projeto** (`ProjectMember`, `/api/v1/project-members/`, com painel no detalhe do projeto): participar é o que dá acesso, e ser dono de um marco ou tarefa deixou de bastar. A escrita fecha junto — Entrega cria e edita só dentro dos seus projetos, não cria nem apaga projeto e não move um objeto próprio para projeto alheio (antes, criar uma tarefa em projeto alheio bastava para virar dona dela e se auto-conceder acesso). A permissão de objeto passou a **negar por padrão**. **A mudança é incompatível em semântica**: para um consumidor autenticado como Entrega, as mesmas rotas devolvem menos linhas e o detalhe de projeto alheio passa de 200 para 404. A migração `0025` faz o backfill a partir de quem era dono de projeto, marco ou tarefa, então ninguém perde acesso no deploy — mas o acesso preservado é justamente o largo demais, e as alocações merecem revisão depois de subir. **Só admin monta a equipe**: quando Vendas converte uma oportunidade, o projeto nasce sem equipe e fica invisível para a Entrega até um admin incluí-la.
+
 ### Segurança
 
 - Revisão de segurança de aplicação (RBAC, rate limiting, upload, dependências) — FDD 017, ADR 0009, RFC 0001:

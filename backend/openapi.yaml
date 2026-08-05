@@ -581,11 +581,6 @@ paths:
   /api/v1/contacts/:
     get:
       operationId: v1_contacts_list
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       security:
@@ -601,11 +596,6 @@ paths:
           description: ''
     post:
       operationId: v1_contacts_create
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       requestBody:
@@ -632,11 +622,6 @@ paths:
   /api/v1/contacts/{id}/:
     get:
       operationId: v1_contacts_retrieve
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -657,11 +642,6 @@ paths:
           description: ''
     put:
       operationId: v1_contacts_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -694,11 +674,6 @@ paths:
           description: ''
     patch:
       operationId: v1_contacts_partial_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -730,11 +705,6 @@ paths:
           description: ''
     delete:
       operationId: v1_contacts_destroy
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -766,11 +736,6 @@ paths:
   /api/v1/digital-employees/:
     get:
       operationId: v1_digital_employees_list
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       security:
@@ -786,11 +751,6 @@ paths:
           description: ''
     post:
       operationId: v1_digital_employees_create
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       requestBody:
@@ -817,11 +777,6 @@ paths:
   /api/v1/digital-employees/{id}/:
     get:
       operationId: v1_digital_employees_retrieve
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -842,11 +797,6 @@ paths:
           description: ''
     put:
       operationId: v1_digital_employees_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -879,11 +829,6 @@ paths:
           description: ''
     patch:
       operationId: v1_digital_employees_partial_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -915,11 +860,6 @@ paths:
           description: ''
     delete:
       operationId: v1_digital_employees_destroy
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -938,10 +878,10 @@ paths:
     get:
       operationId: v1_documents_list
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       tags:
       - v1
       security:
@@ -958,10 +898,10 @@ paths:
     post:
       operationId: v1_documents_create
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       tags:
       - v1
       requestBody:
@@ -988,10 +928,10 @@ paths:
     get:
       operationId: v1_documents_retrieve
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1013,10 +953,10 @@ paths:
     put:
       operationId: v1_documents_update
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1049,10 +989,10 @@ paths:
     patch:
       operationId: v1_documents_partial_update
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1085,10 +1025,10 @@ paths:
     delete:
       operationId: v1_documents_destroy
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1107,10 +1047,10 @@ paths:
     get:
       operationId: v1_documents_download_retrieve
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1133,10 +1073,10 @@ paths:
     post:
       operationId: v1_documents_mark_signed_create
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1170,10 +1110,10 @@ paths:
     post:
       operationId: v1_documents_remind_signature_create
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1207,10 +1147,10 @@ paths:
     post:
       operationId: v1_documents_request_signature_create
       description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
+        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
+        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
+        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
       parameters:
       - in: path
         name: id
@@ -1696,11 +1636,6 @@ paths:
   /api/v1/meetings/:
     get:
       operationId: v1_meetings_list
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       security:
@@ -1716,11 +1651,6 @@ paths:
           description: ''
     post:
       operationId: v1_meetings_create
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       requestBody:
@@ -1747,11 +1677,6 @@ paths:
   /api/v1/meetings/{id}/:
     get:
       operationId: v1_meetings_retrieve
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -1772,11 +1697,6 @@ paths:
           description: ''
     put:
       operationId: v1_meetings_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -1809,11 +1729,6 @@ paths:
           description: ''
     patch:
       operationId: v1_meetings_partial_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -1845,11 +1760,6 @@ paths:
           description: ''
     delete:
       operationId: v1_meetings_destroy
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -1905,11 +1815,6 @@ paths:
   /api/v1/meetings/{id}/assessment/:
     post:
       operationId: v1_meetings_assessment_create
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -1943,11 +1848,6 @@ paths:
   /api/v1/meetings/{id}/discovery/:
     post:
       operationId: v1_meetings_discovery_create
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -2534,11 +2434,6 @@ paths:
   /api/v1/pendencias/:
     get:
       operationId: v1_pendencias_list
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       security:
@@ -2554,11 +2449,6 @@ paths:
           description: ''
     post:
       operationId: v1_pendencias_create
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       tags:
       - v1
       requestBody:
@@ -2585,11 +2475,6 @@ paths:
   /api/v1/pendencias/{id}/:
     get:
       operationId: v1_pendencias_retrieve
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -2610,11 +2495,6 @@ paths:
           description: ''
     put:
       operationId: v1_pendencias_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -2647,11 +2527,6 @@ paths:
           description: ''
     patch:
       operationId: v1_pendencias_partial_update
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -2683,11 +2558,6 @@ paths:
           description: ''
     delete:
       operationId: v1_pendencias_destroy
-      description: |-
-        Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
-
-        `filter_exact_fields` faz o mesmo para campos de texto com valores fechados (ex.: ?kind=proposal),
-        que não passam pelo teste de dígito das chaves estrangeiras.
       parameters:
       - in: path
         name: id
@@ -3148,6 +3018,183 @@ paths:
         schema:
           type: integer
         description: Um valor inteiro único que identifica este project deliverable.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/project-members/:
+    get:
+      operationId: v1_project_members_list
+      description: |-
+        Equipe do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+        Escrita só de admin (`RolePermission`): quem monta a equipe concede acesso a dado de
+        projeto, e essa caneta fica com uma função só. Entrega e Vendas leem a equipe dos projetos
+        que já enxergam, porque precisam saber quem toca a conta.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectMember'
+          description: ''
+    post:
+      operationId: v1_project_members_create
+      description: |-
+        Equipe do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+        Escrita só de admin (`RolePermission`): quem monta a equipe concede acesso a dado de
+        projeto, e essa caneta fica com uma função só. Entrega e Vendas leem a equipe dos projetos
+        que já enxergam, porque precisam saber quem toca a conta.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectMember'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectMember'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectMember'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+          description: ''
+  /api/v1/project-members/{id}/:
+    get:
+      operationId: v1_project_members_retrieve
+      description: |-
+        Equipe do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+        Escrita só de admin (`RolePermission`): quem monta a equipe concede acesso a dado de
+        projeto, e essa caneta fica com uma função só. Entrega e Vendas leem a equipe dos projetos
+        que já enxergam, porque precisam saber quem toca a conta.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project member.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+          description: ''
+    put:
+      operationId: v1_project_members_update
+      description: |-
+        Equipe do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+        Escrita só de admin (`RolePermission`): quem monta a equipe concede acesso a dado de
+        projeto, e essa caneta fica com uma função só. Entrega e Vendas leem a equipe dos projetos
+        que já enxergam, porque precisam saber quem toca a conta.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project member.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectMember'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectMember'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectMember'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+          description: ''
+    patch:
+      operationId: v1_project_members_partial_update
+      description: |-
+        Equipe do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+        Escrita só de admin (`RolePermission`): quem monta a equipe concede acesso a dado de
+        projeto, e essa caneta fica com uma função só. Entrega e Vendas leem a equipe dos projetos
+        que já enxergam, porque precisam saber quem toca a conta.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project member.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectMember'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectMember'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectMember'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMember'
+          description: ''
+    delete:
+      operationId: v1_project_members_destroy
+      description: |-
+        Equipe do projeto — a fronteira de acesso da Entrega (RFC 0003, ADR 0010).
+
+        Escrita só de admin (`RolePermission`): quem monta a equipe concede acesso a dado de
+        projeto, e essa caneta fica com uma função só. Entrega e Vendas leem a equipe dos projetos
+        que já enxergam, porque precisam saber quem toca a conta.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project member.
         required: true
       tags:
       - v1
@@ -5608,6 +5655,33 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedProjectMember:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        user:
+          type: integer
+        user_name:
+          type: string
+          readOnly: true
+        user_username:
+          type: string
+          readOnly: true
+        user_role:
+          type: string
+          readOnly: true
+        added_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedProjectPhase:
       type: object
       description: Fase da jornada de um projeto (estado). Só `target_date` é editável
@@ -5971,6 +6045,42 @@ components:
       description: |-
         * `pending` - Pendente
         * `delivered` - Entregue
+    ProjectMember:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        user:
+          type: integer
+        user_name:
+          type: string
+          readOnly: true
+        user_username:
+          type: string
+          readOnly: true
+        user_role:
+          type: string
+          readOnly: true
+        added_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - added_by
+      - created_at
+      - id
+      - project
+      - user
+      - user_name
+      - user_role
+      - user_username
     ProjectPhase:
       type: object
       description: Fase da jornada de um projeto (estado). Só `target_date` é editável

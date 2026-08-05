@@ -5,8 +5,8 @@ painel de artefatos nascem ligados à **oportunidade**, e a lista de documentos 
 por função — então quem é da Entrega baixava valor, custo e condição comercial pelo
 `download`, exatamente o conteúdo que o `ArtifactViewSet` esconde dela.
 
-Não há modelo de equipe; "atuar no projeto" é ser dono do projeto ou de um item de trabalho
-dele. Admin e Vendas não são afetados.
+"Atuar no projeto" era ser dono dele ou de um item de trabalho; desde o RFC 0003 é participar
+da equipe (`ProjectMember`). Admin e Vendas não são afetados.
 """
 
 import pytest
@@ -19,6 +19,7 @@ from apps.core.tests.factories import (
     ClientFactory,
     OpportunityFactory,
     ProjectFactory,
+    ProjectMemberFactory,
     UserFactory,
 )
 
@@ -66,9 +67,10 @@ def test_delivery_sees_documents_of_the_project_it_owns() -> None:
 
 
 def test_delivery_sees_documents_of_the_project_it_works_on() -> None:
-    """Dono de uma tarefa do projeto conta como quem atua — não só o dono do projeto."""
+    """Participar da equipe é o critério — ser dono de uma tarefa deixou de bastar (RFC 0003)."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
     Task.objects.create(
         project=project, title="Configurar ambiente", owner=delivery,
         due_date=project.due_date,

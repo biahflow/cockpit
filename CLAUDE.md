@@ -68,9 +68,20 @@ Key cross-cutting patterns to preserve:
   `perform_destroy` to archive. New business resources should follow this.
 - **Authorization is two-layered.** `RolePermission` (`permissions.py`) enforces a
   coarse role policy keyed off each viewset's `resource` string attribute
-  (e.g. `resource = "client"`), plus per-object `has_object_permission`. Additionally,
-  some viewsets narrow `get_queryset` by role (e.g. delivery users only see won
-  opportunities). When adding a viewset, set `resource` and update `RolePermission`.
+  (e.g. `resource = "client"`), plus per-object `has_object_permission`, which
+  **denies by default** so a new resource starts closed. When adding a viewset, set
+  `resource` and update `RolePermission`.
+- **Project scope is the delivery boundary.** Delivery users see only the projects they
+  belong to (`ProjectMember`). The single source of the rule is
+  `Project.objects.visible_to(user)` / `project_scope_q(user, path)` in `models.py` —
+  never re-express it. Anything that hangs off a project uses `ProjectScopedMixin`
+  (`views.py`), which covers read **and** write: without the write guard, creating a task
+  in someone else's project would self-grant access. Aggregators that bypass querysets
+  (`/clients/overview/`, `/risk/`, `/health/`, `/dashboard/`, `agents.build_delivery_context`)
+  are narrowed by hand and each has its own test. See RFC 0003, ADR 0010, FDD 018.
+- **Mixins on viewsets must not have docstrings.** drf-spectacular uses the class docstring
+  as each endpoint's `description`, so a mixin at the top of the MRO leaks its own text into
+  dozens of unrelated routes in `openapi.yaml`. Use a comment above the class instead.
 - **Opportunity → Project conversion** is the central business action: the
   `convert-to-project` `@action` on `OpportunityViewSet`. It requires the opportunity
   be in the "won" stage, enforces sales/admin role, and uses a `OneToOneField`

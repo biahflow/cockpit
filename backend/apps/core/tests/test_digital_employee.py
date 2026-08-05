@@ -3,14 +3,16 @@ from rest_framework.test import APIClient
 
 from apps.core.models import DigitalEmployee
 
-from .factories import ProjectFactory, UserFactory
+from .factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 
 @pytest.mark.django_db
 def test_delivery_can_create_and_list_digital_employees():
     project = ProjectFactory()
+    person = UserFactory(role="delivery")
+    ProjectMemberFactory(project=project, user=person)
     client = APIClient()
-    client.force_authenticate(UserFactory(role="delivery"))
+    client.force_authenticate(person)
 
     created = client.post("/api/v1/digital-employees/", {
         "project": project.pk, "name": "Agente Financeiro", "area": "Financeiro",

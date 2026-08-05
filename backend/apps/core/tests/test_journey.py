@@ -11,7 +11,7 @@ from apps.core.models import (
     User,
 )
 
-from .factories import ProjectFactory, UserFactory
+from .factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 
 @pytest.fixture
@@ -38,6 +38,7 @@ def test_project_creation_materializes_the_journey() -> None:
 def test_advance_phase_completes_active_and_activates_next(client: APIClient) -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
     client.force_authenticate(delivery)
 
     response = client.post(reverse("project-advance-phase", args=[project.id]))
@@ -69,6 +70,7 @@ def test_advance_phase_past_last_phase_is_graceful(client: APIClient) -> None:
 def test_mark_deliverable_delivered_sets_timestamp(client: APIClient) -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
     deliverable = ProjectDeliverable.objects.filter(project_phase__project=project).first()
     assert deliverable is not None
     client.force_authenticate(delivery)

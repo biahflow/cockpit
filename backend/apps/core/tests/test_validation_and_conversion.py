@@ -49,10 +49,12 @@ def test_opportunity_rejects_contact_from_different_client(sales_client: tuple[A
 
 @pytest.mark.django_db
 def test_project_rejects_end_date_before_start() -> None:
-    delivery = UserFactory(role=User.Role.DELIVERY)
+    # Criar projeto passou a ser de admin/Vendas (RFC 0003): Entrega recebe 403 antes da
+    # validação de datas, então o caso de borda precisa de quem realmente cria projeto.
+    admin = UserFactory(role=User.Role.ADMIN)
     project_client = ClientFactory()
     client = APIClient()
-    client.force_authenticate(delivery)
+    client.force_authenticate(admin)
 
     response = client.post(reverse("project-list"), {
         "client": project_client.id,

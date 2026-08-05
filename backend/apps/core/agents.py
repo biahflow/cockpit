@@ -26,7 +26,9 @@ class Agent:
     label: str
     roles: tuple[str, ...]
     system: str
-    build_context: Callable[[], str]
+    # Recebe o usuário porque o contexto de entrega é recortado pela equipe do projeto
+    # (RFC 0003): sem isso, o agente lia o nome e o risco de todo projeto ativo da casa.
+    build_context: Callable[[User], str]
 
 
 _BASE = (
@@ -36,7 +38,7 @@ _BASE = (
 )
 
 
-def build_commercial_context() -> str:
+def build_commercial_context(user: User) -> str:
     from .models import Lead, Opportunity, PipelineStage
 
     active = Q(archived_at__isnull=True)
@@ -60,11 +62,13 @@ def build_commercial_context() -> str:
     return "\n".join(lines)
 
 
-def build_delivery_context() -> str:
+def build_delivery_context(user: User) -> str:
     from . import risk
     from .models import Project
 
-    active = Project.objects.filter(archived_at__isnull=True).exclude(status=Project.Status.COMPLETED)
+    active = Project.objects.visible_to(user).filter(archived_at__isnull=True).exclude(
+        status=Project.Status.COMPLETED
+    )
     assessments = sorted(
         (risk.assess_project(project) for project in active), key=lambda a: a["score"], reverse=True
     )
@@ -77,7 +81,7 @@ def build_delivery_context() -> str:
     return "\n".join(lines)
 
 
-def build_finance_context() -> str:
+def build_finance_context(user: User) -> str:
     from .models import Project
 
     active = Project.objects.filter(archived_at__isnull=True)

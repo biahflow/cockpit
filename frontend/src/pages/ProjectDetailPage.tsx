@@ -1,13 +1,14 @@
-import { AlertTriangle, ArrowLeft, Bot, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Sparkles, Trophy, Video, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Sparkles, Trophy, Video, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
-import { api } from "../api";
+import { api, listUsers } from "../api";
 import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { HealthBadge } from "../components/StatusDot";
-import type { DigitalEmployee, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectPhase, RiskAssessment, Service, Task, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
 const projectStatusLabel: Record<string, string> = { planning: "Planejamento", active: "Ativo", on_hold: "Em espera", completed: "Concluído" };
 const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_progress: "Em andamento", done: "Concluído" };
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
@@ -36,6 +37,9 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [risk, setRisk] = useState<RiskAssessment>();
   const [health, setHealth] = useState<HealthAssessment>();
   const [employees, setEmployees] = useState<DigitalEmployee[]>([]);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [people, setPeople] = useState<SessionUser[]>([]);
+  const [memberDraft, setMemberDraft] = useState("");
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", area: "", status: "building" as DigitalEmployeeStatus });
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState({ name: "", description: "", status: "", start_date: "", due_date: "", service: "", actual_value: "", cost: "" });
@@ -51,8 +55,9 @@ export function ProjectDetailPage({ id }: { id: number }) {
     api<ProjectPhase[]>(`/project-phases/?project=${id}`),
     api<HealthAssessment>(`/projects/${id}/health/`),
     api<DigitalEmployee[]>(`/digital-employees/?project=${id}`),
-  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedPhases, loadedHealth, loadedEmployees]) => {
-    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setPhases(loadedPhases); setHealth(loadedHealth); setEmployees(loadedEmployees);
+    api<ProjectMember[]>(`/project-members/?project=${id}`),
+  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedPhases, loadedHealth, loadedEmployees, loadedMembers]) => {
+    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setPhases(loadedPhases); setHealth(loadedHealth); setEmployees(loadedEmployees); setMembers(loadedMembers);
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -115,6 +120,24 @@ export function ProjectDetailPage({ id }: { id: number }) {
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try { await api("/digital-employees/", { method: "POST", body: JSON.stringify({ project: id, ...employeeDraft }) }); setEmployeeDraft({ name: "", area: "", status: "building" }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  // Só admin monta equipe (RFC 0003), e `/users/` também é admin-only — por isso a lista de
+  // pessoas só é buscada quando há como usá-la.
+  const canManageTeam = user?.role === "admin";
+  useEffect(() => {
+    if (!canManageTeam) return;
+    void listUsers().then(setPeople).catch(() => setPeople([]));
+  }, [canManageTeam]);
+
+  async function addMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!memberDraft) return;
+    try { await api("/project-members/", { method: "POST", body: JSON.stringify({ project: id, user: Number(memberDraft) }) }); setMemberDraft(""); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function removeMember(memberId: number) {
+    try { await api(`/project-members/${memberId}/`, { method: "DELETE" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function resolvePendencia(pendenciaId: number) {
@@ -188,6 +211,22 @@ export function ProjectDetailPage({ id }: { id: number }) {
     {health && <div className="flex items-center gap-2 text-sm"><span className="font-medium text-slate-500">Saúde do projeto:</span><HealthBadge level={health.level} score={health.score} />{health.signals.length === 0 && <span className="text-slate-400">sem sinais de alerta</span>}</div>}
 
     {project?.ai_scored_at && <AiScorePanel project={project} canManage={canManageJourney} onTogglePublish={next => void toggleAiScorePublish(next)} />}
+
+    <section className="rounded-2xl border bg-white p-5 sm:p-6">
+      <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><UsersRound className="size-4" /></span><div><h2 className="font-semibold text-ink">Equipe do projeto</h2><p className="text-sm text-slate-500">Quem participa é quem enxerga este projeto e tudo o que pende dele.</p></div></div>
+      {members.length ? <ul className="mt-4 divide-y rounded-xl border">{members.map(member => <li className="flex items-center gap-3 px-4 py-3" key={member.id}>
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-mint text-xs font-bold text-ocean">{(member.user_name || member.user_username).slice(0, 2).toUpperCase()}</span>
+        <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{member.user_name || member.user_username}</p><p className="text-xs text-slate-500">{roleLabel[member.user_role] ?? member.user_role}</p></div>
+        {canManageTeam && <button className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-signal" aria-label={`Remover ${member.user_name || member.user_username} da equipe`} onClick={() => void removeMember(member.id)}><X className="size-4" /></button>}
+      </li>)}</ul> : <p className="mt-4 rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-400">Ninguém na equipe ainda — o projeto está invisível para a Entrega.</p>}
+      {canManageTeam && <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void addMember(event)}>
+        <select className="field flex-1" value={memberDraft} onChange={event => setMemberDraft(event.target.value)} aria-label="Pessoa a adicionar" required>
+          <option value="">Selecione uma pessoa</option>
+          {people.filter(person => !members.some(member => member.user === person.id)).map(person => <option key={person.id} value={person.id}>{person.first_name || person.username} — {roleLabel[person.role] ?? person.role}</option>)}
+        </select>
+        <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar à equipe" type="submit"><Plus className="size-4" /></button>
+      </form>}
+    </section>
 
     <section className="rounded-2xl border bg-white p-5 sm:p-6">
       <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Bot className="size-4" /></span><div><h2 className="font-semibold text-ink">Funcionários Digitais</h2><p className="text-sm text-slate-500">Os agentes de IA entregues neste projeto.</p></div></div>

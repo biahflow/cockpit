@@ -10,6 +10,7 @@ from .factories import (
     MeetingFactory,
     OpportunityFactory,
     ProjectFactory,
+    ProjectMemberFactory,
     UserFactory,
 )
 
@@ -152,8 +153,10 @@ def test_delivery_sees_project_artifacts_but_not_commercial_ones():
     ArtifactFactory(opportunity=None, project=project, kind=Artifact.Kind.ASSESSMENT,
                     title="Assessment — Acme")
     ArtifactFactory(title="Proposta — Acme")  # ligada a oportunidade
+    person = UserFactory(role="delivery")
+    ProjectMemberFactory(project=project, user=person)
     client = APIClient()
-    client.force_authenticate(UserFactory(role="delivery"))
+    client.force_authenticate(person)
 
     titles = [row["title"] for row in client.get("/api/v1/artifacts/").json()]
 
@@ -210,8 +213,10 @@ def test_generating_a_contract_persists_a_draft_artifact(monkeypatch):
 def test_meeting_analysis_survives_the_page(monkeypatch, action, kind):
     _mock_ai(monkeypatch, "Diagnóstico da transcrição.")
     meeting = MeetingFactory()
+    person = UserFactory(role="delivery")
+    ProjectMemberFactory(project=meeting.project, user=person)
     client = APIClient()
-    client.force_authenticate(UserFactory(role="delivery"))
+    client.force_authenticate(person)
 
     response = client.post(f"/api/v1/meetings/{meeting.pk}/{action}/", {}, format="json")
 
