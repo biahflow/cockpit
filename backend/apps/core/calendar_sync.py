@@ -23,6 +23,19 @@ from . import flags
 
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
 
+
+class CalendarProviderError(Exception):
+    """O Calendar recusou: credencial, escopo, agenda inexistente, permissão ou rede.
+
+    Não confundir com `CalendarUnavailable`, logo abaixo: aquela é o free/busy **falhando fechado**
+    (lemos a resposta e ela não permite afirmar nada sobre a agenda, então 503). Esta é o
+    fornecedor recusando a operação, e vira 502.
+
+    Tipo estreito pelo mesmo motivo do `ai.AiProviderError` da rodada 2: envolver só a chamada de
+    rede, para que um defeito nosso logo depois não seja reportado como falha do Google.
+    """
+
+
 # Marcador que amarra um evento a um projeto: "#proj-42" no título ou na descrição.
 PROJECT_MARKER = re.compile(r"#proj-(\d+)")
 # Chave em extendedProperties.private que marca eventos originados no próprio Biahflow (anti-loop).
@@ -76,7 +89,12 @@ def create_event(summary: str, day: date, description: str = "", origin: str = "
     }
     if origin:
         body["extendedProperties"] = {"private": {ORIGIN_KEY: origin}}
-    created = service.events().insert(calendarId=settings.GOOGLE_CALENDAR_ID, body=body).execute()
+    try:
+        created = service.events().insert(
+            calendarId=settings.GOOGLE_CALENDAR_ID, body=body
+        ).execute()
+    except Exception as exc:  # noqa: BLE001 - a família do SDK vira um tipo só
+        raise CalendarProviderError(str(exc) or exc.__class__.__name__) from exc
     return created.get("htmlLink", "")
 
 
@@ -97,7 +115,13 @@ def create_timed_event(
     if origin:
         body["extendedProperties"] = {"private": {ORIGIN_KEY: origin}}
     calendar_id = settings.GOOGLE_BOOKING_CALENDAR_ID or settings.GOOGLE_CALENDAR_ID
-    created = service.events().insert(calendarId=calendar_id, body=body).execute()
+    try:
+        created = service.events().insert(calendarId=calendar_id, body=body).execute()
+    except Exception as exc:  # noqa: BLE001 - a família do SDK vira um tipo só
+        # O caso conhecido é o `forbiddenForServiceAccounts`: conta de serviço não convida
+        # participante sem delegação em todo o domínio (FDD 024). Quem chama decide o que fazer —
+        # em `booking.book`, degradar sem perder a reserva.
+        raise CalendarProviderError(str(exc) or exc.__class__.__name__) from exc
     return created.get("id", ""), created.get("htmlLink", "")
 
 
@@ -132,27 +156,36 @@ def freebusy(time_min: datetime, time_max: datetime) -> list[tuple[datetime, dat
     """Períodos ocupados do calendário de reservas no intervalo dado."""
     service = _service()
     calendar_id = settings.GOOGLE_BOOKING_CALENDAR_ID or settings.GOOGLE_CALENDAR_ID
-    result = service.freebusy().query(body={
-        "timeMin": time_min.isoformat(),
-        "timeMax": time_max.isoformat(),
-        "items": [{"id": calendar_id}],
-    }).execute()
+    try:
+        result = service.freebusy().query(body={
+            "timeMin": time_min.isoformat(),
+            "timeMax": time_max.isoformat(),
+            "items": [{"id": calendar_id}],
+        }).execute()
+    except Exception as exc:  # noqa: BLE001 - a família do SDK vira um tipo só
+        # `CalendarUnavailable` e não `CalendarProviderError`: o `parse_freebusy` já falha fechado
+        # quando a **resposta** não permite afirmar nada sobre a agenda, e uma falha de transporte
+        # é o mesmo caso um passo antes — não sabemos o que há na agenda. Vira 503, como a outra.
+        raise CalendarUnavailable(f"não foi possível consultar {calendar_id}: {exc}") from exc
     return parse_freebusy(result, calendar_id)
 
 
 def list_events(time_min: datetime, time_max: datetime) -> list[dict]:  # pragma: no cover - I/O
     service = _service()
-    result = (
-        service.events()
-        .list(
-            calendarId=settings.GOOGLE_CALENDAR_ID,
-            timeMin=time_min.isoformat(),
-            timeMax=time_max.isoformat(),
-            singleEvents=True,
-            orderBy="startTime",
+    try:
+        result = (
+            service.events()
+            .list(
+                calendarId=settings.GOOGLE_CALENDAR_ID,
+                timeMin=time_min.isoformat(),
+                timeMax=time_max.isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
         )
-        .execute()
-    )
+    except Exception as exc:  # noqa: BLE001 - a família do SDK vira um tipo só
+        raise CalendarProviderError(str(exc) or exc.__class__.__name__) from exc
     return result.get("items", [])
 
 

@@ -9,6 +9,7 @@ A geração de slots é pura/testável; o I/O com o Google fica em `calendar_syn
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import calendar_sync, notifications
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .models import Booking, Lead
@@ -132,22 +135,43 @@ def book(lead: Lead, slot_start: datetime) -> Booking:
             attendee_email=lead.email,
         )
 
-    event_id, link = calendar_sync.create_timed_event(
-        summary=f"Reunião com {lead.name}",
-        start=slot_start, end=slot_end,
-        description=lead.message or "Reunião agendada pelo site.",
-        attendee_email=lead.email,
-        origin=f"booking:{booking.id}",
-    )
+    # A transação já fechou: a `Booking` está gravada e **bloqueia o horário** para todo mundo (é
+    # ela que o teste de conflito acima consulta). Se o Google recusar aqui, desfazer seria pior —
+    # o horário está de fato comprometido — mas deixar a exceção subir era o pior de todos: sobrava
+    # uma reserva sem evento na agenda, sem aviso ao dono e sem confirmação ao lead, e o endpoint
+    # **público** devolvia 500 a quem acabara de agendar. É a "reserva órfã", uma integração
+    # adiante do convite órfão da rodada 1.
+    #
+    # O desenho sempre tratou o evento como best-effort — o `if event_id or link:` abaixo já
+    # tolerava o retorno vazio. O defeito era a *exceção* não ser tolerada como o vazio era. O caso
+    # conhecido é o `forbiddenForServiceAccounts`: conta de serviço não convida participante sem
+    # delegação em todo o domínio (FDD 024), e é justamente esta chamada que convida.
+    evento_falhou = False
+    try:
+        event_id, link = calendar_sync.create_timed_event(
+            summary=f"Reunião com {lead.name}",
+            start=slot_start, end=slot_end,
+            description=lead.message or "Reunião agendada pelo site.",
+            attendee_email=lead.email,
+            origin=f"booking:{booking.id}",
+        )
+    except calendar_sync.CalendarProviderError:
+        logger.exception("reserva %s ficou sem evento na agenda", booking.id)
+        event_id = link = ""
+        evento_falhou = True
     if event_id or link:
         booking.calendar_event_id = event_id
         booking.calendar_link = link
         booking.save(update_fields=["calendar_event_id", "calendar_link", "updated_at"])
 
     if owner:
+        # O aviso diz que o evento não entrou, senão a degradação fica invisível para quem responde
+        # pela reunião — e a pessoa conta com um convite que não existe.
+        ressalva = " **A reunião não entrou na agenda** — inclua manualmente." if evento_falhou else ""
         notifications.notify(
             [owner], "booking",
-            f"{lead.name} agendou uma reunião para {timezone.localtime(slot_start):%d/%m %H:%M}.",
+            f"{lead.name} agendou uma reunião para "
+            f"{timezone.localtime(slot_start):%d/%m %H:%M}.{ressalva}",
             "/leads",
         )
     _send_confirmation(lead, slot_start)

@@ -24,7 +24,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -48,6 +48,12 @@ from . import (
     recommendations,
     risk,
     tasksync,
+)
+from .exceptions import (
+    AiProviderUnavailable,
+    CalendarProviderUnavailable,
+    DriveUnavailable,
+    EmailUndeliverable,
 )
 from .models import (
     AiInteraction,
@@ -111,37 +117,6 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class EmailUndeliverable(APIException):
-    """O SMTP recusou uma mensagem sem a qual a operação não faz sentido.
-
-    502 porque o defeito é do fornecedor de e-mail, não do pedido — e porque o convite **é** o
-    e-mail: quem recebe não tem outro caminho para o token.
-    """
-
-    status_code = 502
-    default_detail = "Não foi possível enviar o e-mail. Verifique o SMTP e tente de novo."
-    default_code = "email_undeliverable"
-
-
-class AiProviderUnavailable(APIException):
-    """A OpenAI recusou, expirou ou não respondeu.
-
-    Irmã da `EmailUndeliverable`, e 502 pelo mesmo motivo que o upload no Drive é 502 desde a FDD
-    024: o defeito é do fornecedor, e quem lê precisa saber que **vale repetir**. Antes era 500 —
-    erro nosso para um problema que não é nosso — nas nove actions que passam pelo `_ai_run` e no
-    AI Score, que tem guarda própria.
-
-    Classe própria em vez de uma genérica porque a mensagem é o produto: o texto que a pessoa lê na
-    tela ao pedir uma proposta não pode falar de SMTP.
-    """
-
-    status_code = 502
-    default_detail = (
-        "O serviço de IA não respondeu. Nada foi cobrado nem gravado — tente de novo em instantes."
-    )
-    default_code = "ai_provider_unavailable"
 
 
 class ArchiveModelViewSet(viewsets.ModelViewSet):
@@ -238,7 +213,11 @@ class CalendarActionMixin:
         if not calendar_sync.is_enabled():
             return Response({"detail": "Calendário desativado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         origin = f"{item._meta.model_name}:{item.id}"
-        link = calendar_sync.create_event(item.title, item.due_date, origin=origin)
+        try:
+            link = calendar_sync.create_event(item.title, item.due_date, origin=origin)
+        except calendar_sync.CalendarProviderError as exc:
+            logger.exception("evento de calendário recusado para %s", origin)
+            raise CalendarProviderUnavailable() from exc
         return Response({"link": link})
 
 
@@ -829,7 +808,13 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         document = self.get_object()
         self.check_object_permissions(request, document)
         if document.drive_file_id:
-            content = drive.download_document(document)
+            # A FDD 024 blindou o upload e deixou esta crua: 500 mudo no caminho em que a pessoa
+            # tenta pegar de volta o **próprio** arquivo.
+            try:
+                content = drive.download_document(document)
+            except drive.DriveProviderError as exc:
+                logger.exception("download do Drive falhou para %s", document.original_name)
+                raise DriveUnavailable() from exc
             return FileResponse(content, as_attachment=True, filename=document.original_name)
         return FileResponse(document.file.open("rb"), as_attachment=True, filename=document.original_name)
 
@@ -1565,7 +1550,11 @@ class CalendarSyncView(APIView):
             return Response({"detail": "Somente administradores."}, status=status.HTTP_403_FORBIDDEN)
         if not calendar_sync.is_enabled():
             return Response({"detail": "Calendário desativado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        created, skipped = calendar_sync.sync_calendar()
+        try:
+            created, skipped = calendar_sync.sync_calendar()
+        except calendar_sync.CalendarProviderError as exc:
+            logger.exception("sincronia de calendário recusada")
+            raise CalendarProviderUnavailable() from exc
         return Response({"created": created, "skipped": skipped})
 
 

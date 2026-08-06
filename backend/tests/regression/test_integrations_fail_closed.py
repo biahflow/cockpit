@@ -10,13 +10,16 @@ não saiu não pode ficar gravado; e a queda de um fornecedor não pode virar er
 calada.
 
 O arquivo cresce por rodada de homologação (FDD 024): calendário e credenciais vieram da auditoria
-inicial, o convite da rodada 1 (e-mail), a superfície de IA da rodada 2.
+inicial, o convite da rodada 1 (e-mail), a superfície de IA da rodada 2, e o Drive/Calendário da
+rodada 3 — que achou o mesmo padrão da 2: a auditoria original blindou **um** ponto por integração
+e deixou os vizinhos crus.
 """
 
 from datetime import date, datetime, timedelta
 
 import pytest
 from django.test import override_settings
+from django.utils import timezone
 
 from apps.core import calendar_sync, flags
 
@@ -537,3 +540,170 @@ def test_desligada_limite_e_fornecedor_sao_tres_respostas_diferentes(
 
     with ovr(AI_ENABLED=False):
         assert client.post(url, {}, format="json").status_code == 503
+
+
+# --- Google: o fornecedor recusa (rodada 3) -----------------------------------------------------
+#
+# Mesmo padrão que a rodada 2 achou na IA: a FDD 024 blindou o **upload** no Drive e deixou crus o
+# download, o evento de calendário, a sincronia manual e — o mais grave — a criação do evento da
+# reserva pública. Os tipos são estreitos (`DriveProviderError`, `CalendarProviderError`) para que
+# um erro de banco depois da chamada não seja reportado como "o Google caiu".
+
+
+def _recusa_do_google(*a: object, **k: object):
+    from apps.core.calendar_sync import CalendarProviderError
+
+    raise CalendarProviderError("forbiddenForServiceAccounts")
+
+
+def _recusa_do_drive(*a: object, **k: object):
+    from apps.core.drive import DriveProviderError
+
+    raise DriveProviderError("404 File not found")
+
+
+@override_settings(CALENDAR_ENABLED=True, GOOGLE_CALENDAR_ID="cal")
+def test_recusa_do_google_nao_deixa_reserva_orfa(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A reserva sobrevive à recusa do Google, e o resto do fluxo **também acontece**.
+
+    `book()` fecha a transação com a `Booking` já gravada e só então cria o evento. Com o Google
+    recusando, sobrava uma reserva que **bloqueia o horário** para todo mundo, sem evento na
+    agenda, sem aviso ao dono e sem confirmação ao lead — e o visitante levava 500 no endpoint
+    público. É a "reserva órfã", uma integração adiante do convite órfão da rodada 1.
+
+    E é o modo de falha mais provável de todos: a FDD 024 já registrava que conta de serviço não
+    convida participante sem delegação em todo o domínio (`forbiddenForServiceAccounts`).
+
+    A correção é **degradar, não desfazer** — o próprio código já tolerava o evento não vir
+    (`if event_id or link:`); o defeito era a exceção não ser tolerada como o retorno vazio era.
+    """
+    from django.core import mail
+
+    from apps.core import booking, calendar_sync
+    from apps.core.models import Booking, Lead, Notification
+    from apps.core.tests.factories import UserFactory
+
+    monkeypatch.setattr(calendar_sync, "freebusy", lambda a, b: [])
+    monkeypatch.setattr(calendar_sync, "create_timed_event", _recusa_do_google)
+    dono = UserFactory()
+    lead = Lead.objects.create(name="Visitante", email="visitante@exemplo.test")
+    quando = timezone.localtime() + timedelta(days=3)
+
+    reserva = booking.book(lead, quando.replace(hour=9, minute=0, second=0, microsecond=0))
+
+    # A reserva vale — o horário está de fato comprometido.
+    assert Booking.objects.filter(status=Booking.Status.SCHEDULED).count() == 1
+    assert reserva.calendar_event_id == ""
+    # E o resto do fluxo aconteceu: sem isto, a degradação seria invisível para quem precisa agir.
+    assert Notification.objects.filter(user=dono, kind="booking").exists()
+    assert any(lead.email in m.to for m in mail.outbox)
+
+
+@override_settings(CALENDAR_ENABLED=True, GOOGLE_CALENDAR_ID="cal")
+def test_dono_fica_sabendo_que_o_evento_nao_entrou_na_agenda(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Degradação silenciosa é meio defeito: quem responde pela reunião precisa saber que ela não
+    está na agenda, senão conta com um convite que não existe."""
+    from apps.core import booking, calendar_sync
+    from apps.core.models import Lead, Notification
+    from apps.core.tests.factories import UserFactory
+
+    monkeypatch.setattr(calendar_sync, "freebusy", lambda a, b: [])
+    monkeypatch.setattr(calendar_sync, "create_timed_event", _recusa_do_google)
+    dono = UserFactory()
+    lead = Lead.objects.create(name="Visitante", email="visitante@exemplo.test")
+    quando = timezone.localtime() + timedelta(days=3)
+
+    booking.book(lead, quando.replace(hour=9, minute=0, second=0, microsecond=0))
+
+    aviso = Notification.objects.get(user=dono, kind="booking")
+    assert "agenda" in aviso.message.lower()
+
+
+@override_settings(GOOGLE_DRIVE_ENABLED=True, GOOGLE_DRIVE_ROOT_FOLDER_ID="raiz")
+def test_download_do_drive_fora_do_ar_vira_502(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A FDD 024 consertou o **upload** (502) e deixou o download cru — o caminho em que a pessoa
+    tenta pegar de volta o próprio arquivo, e levava 500."""
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.core import drive
+    from apps.core.models import Document, User
+    from apps.core.tests.factories import ClientFactory, UserFactory
+
+    monkeypatch.setattr(drive, "download_document", _recusa_do_drive)
+    admin = UserFactory(role=User.Role.ADMIN)
+    documento = Document.objects.create(
+        client=ClientFactory(owner=admin), original_name="proposta.pdf",
+        drive_file_id="arquivo-123", uploaded_by=admin,
+    )
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    resposta = client.get(reverse("document-download", args=[documento.id]))
+
+    assert resposta.status_code == 502
+
+
+@override_settings(CALENDAR_ENABLED=True, GOOGLE_CALENDAR_ID="cal")
+def test_evento_de_calendario_recusado_vira_502(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`add-to-calendar` chamava `create_event` sem guarda."""
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.core import calendar_sync
+    from apps.core.models import Milestone, User
+    from apps.core.tests.factories import ProjectFactory, UserFactory
+
+    monkeypatch.setattr(calendar_sync, "create_event", _recusa_do_google)
+    admin = UserFactory(role=User.Role.ADMIN)
+    projeto = ProjectFactory(owner=admin)
+    marco = Milestone.objects.create(
+        project=projeto, title="Entrega", owner=admin,
+        due_date=timezone.localdate() + timedelta(days=5),
+    )
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    resposta = client.post(reverse("milestone-add-to-calendar", args=[marco.id]), {}, format="json")
+
+    assert resposta.status_code == 502
+
+
+@override_settings(CALENDAR_ENABLED=True, GOOGLE_CALENDAR_ID="cal")
+def test_sincronia_manual_recusada_vira_502(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A sincronia disparada por admin pela tela também levava 500."""
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.core import calendar_sync
+    from apps.core.models import User
+    from apps.core.tests.factories import UserFactory
+
+    monkeypatch.setattr(calendar_sync, "sync_calendar", _recusa_do_google)
+    client = APIClient()
+    client.force_authenticate(UserFactory(role=User.Role.ADMIN))
+
+    resposta = client.post(reverse("config-sync-calendar"), {}, format="json")
+
+    assert resposta.status_code == 502
+
+
+def test_kickoff_sem_pasta_no_drive_deixa_rastro(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Best-effort é a decisão certa — o kickoff não pode falhar porque o Drive caiu. Mas o
+    `except Exception: pass` mudo deixava o projeto sem pasta **e ninguém sabendo**."""
+    import logging
+
+    from apps.core import drive, kickoff
+    from apps.core.tests.factories import ProjectFactory
+
+    monkeypatch.setattr(drive, "ensure_project_folder", _recusa_do_drive)
+    projeto = ProjectFactory()
+
+    with caplog.at_level(logging.ERROR):
+        kickoff.finalize(projeto)  # não levanta: o kickoff segue
+
+    assert any("drive" in r.message.lower() or "pasta" in r.message.lower() for r in caplog.records)
