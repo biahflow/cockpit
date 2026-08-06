@@ -12,7 +12,7 @@ def _lead():
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x", BOOKING_MIN_FIT="medium")
 def test_qualify_persists_and_audits(monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda system, user: (
+    monkeypatch.setattr(ai, "complete", lambda system, user, **_: (
         '{"fit": "high", "score": 88, "summary": "Bom fit", "recommended_action": "Agendar"}',
         {"prompt_tokens": 3, "completion_tokens": 2},
     ))
@@ -34,7 +34,7 @@ def test_qualify_persists_and_audits(monkeypatch):
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x", BOOKING_MIN_FIT="medium")
 def test_low_fit_does_not_qualify_for_booking(monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda s, u: (
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: (
         '{"fit": "low", "score": 10, "summary": "Fora do perfil", "recommended_action": "Descartar"}',
         {"prompt_tokens": 1, "completion_tokens": 1},
     ))
@@ -49,7 +49,7 @@ def test_low_fit_does_not_qualify_for_booking(monkeypatch):
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_qualify_parses_json_inside_code_fence(monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda s, u: (
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: (
         'Claro!\n```json\n{"fit": "medium", "score": 55}\n```',
         {"prompt_tokens": 1, "completion_tokens": 1},
     ))
@@ -63,7 +63,7 @@ def test_qualify_parses_json_inside_code_fence(monkeypatch):
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_qualify_tolerates_garbage_output(monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda s, u: ("desculpe, não sei", {"prompt_tokens": 0, "completion_tokens": 0}))
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: ("desculpe, não sei", {"prompt_tokens": 0, "completion_tokens": 0}))
     lead = _lead()
 
     assert qualification.qualify_lead(lead) is False

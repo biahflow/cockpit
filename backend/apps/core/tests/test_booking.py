@@ -130,7 +130,7 @@ def _booking_token(lead_id: int) -> str:
 def test_intake_returns_booking_token_when_qualified(monkeypatch):
     from apps.core import ai
 
-    monkeypatch.setattr(ai, "complete", lambda s, u: ('{"fit": "high", "score": 90}', {"prompt_tokens": 1, "completion_tokens": 1}))
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: ('{"fit": "high", "score": 90}', {"prompt_tokens": 1, "completion_tokens": 1}))
     resp = APIClient().post(reverse("lead-intake"), {"name": "F", "email": "f@x.com"}, format="json", **INTAKE)
 
     assert resp.status_code == 201

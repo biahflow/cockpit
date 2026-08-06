@@ -167,7 +167,27 @@ def _client():  # pragma: no cover - I/O com a OpenAI
     )
 
 
-def complete(system: str, user: str) -> tuple[str, dict]:
+def completion_kwargs(system: str, user: str, max_tokens: int | None = None) -> dict:
+    """Os argumentos da chamada ao modelo. **Regra, não I/O** — por isso mora fora do `complete`.
+
+    `max_tokens` é opcional de propósito, e não global. A rodada 2 mediu a saída real de cada
+    superfície (média ~225 tokens, máximo 854 no contrato): um teto único ou seria alto demais para
+    servir de teto, ou truncaria um contrato no meio de uma cláusula. Então ele vale só onde a
+    saída tem **forma fixa e pequena** — os dois pontos que consomem JSON curto —, e quem sabe
+    disso é quem escreveu o prompt.
+    """
+    argumentos: dict = {
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+    if max_tokens is not None:
+        argumentos["max_tokens"] = max_tokens
+    return argumentos
+
+
+def complete(system: str, user: str, max_tokens: int | None = None) -> tuple[str, dict]:
     """Chama o modelo e retorna (texto, uso de tokens).
 
     A rede mora em `_client()`, que segue fora da cobertura; o que sobra aqui é a **tradução** de
@@ -177,8 +197,7 @@ def complete(system: str, user: str) -> tuple[str, dict]:
     """
     try:
         response = _client().chat.completions.create(
-            model=settings.AI_MODEL,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            model=settings.AI_MODEL, **completion_kwargs(system, user, max_tokens)
         )
     except Exception as exc:  # noqa: BLE001 - o SDK levanta uma família inteira; aqui vira uma só
         # A mensagem do provedor é o produto: é ela que diz se foi chave, cota ou modelo.

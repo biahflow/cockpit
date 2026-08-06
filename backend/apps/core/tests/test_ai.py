@@ -83,3 +83,33 @@ def test_within_daily_limit_counts_interactions():
 @override_settings(AI_ENABLED=True)
 def test_is_enabled_reflects_setting():
     assert ai.is_enabled() is True
+
+
+# --- teto de tokens por feature ----------------------------------------------
+
+
+def test_completion_kwargs_sem_teto_nao_manda_max_tokens():
+    """Sem teto explícito a chave nem aparece: mandar `max_tokens: None` ao SDK é diferente de não
+    mandar, e a proposta e o contrato dependem de **não** ter teto — truncar um contrato no meio de
+    uma cláusula é pior que o gasto que o teto economizaria."""
+    argumentos = ai.completion_kwargs("sistema", "usuário")
+
+    assert "max_tokens" not in argumentos
+    assert argumentos["messages"] == [
+        {"role": "system", "content": "sistema"},
+        {"role": "user", "content": "usuário"},
+    ]
+
+
+def test_completion_kwargs_com_teto_o_repassa():
+    assert ai.completion_kwargs("s", "u", max_tokens=300)["max_tokens"] == 300
+
+
+def test_teto_vale_so_onde_a_saida_tem_forma_fixa():
+    """A rodada 2 mediu a saída real: média ~225 tokens, máximo 854 no contrato. Um teto global
+    seria alto demais para ser teto, ou truncaria contrato. Então ele existe só nos dois pontos que
+    consomem JSON curto — e este teste trava a escolha contra um "simplifiquemos" futuro."""
+    from apps.core import ai_score, qualification
+
+    assert qualification._MAX_TOKENS < ai_score._MAX_TOKENS  # o JSON do lead é o menor dos dois
+    assert ai_score._MAX_TOKENS >= 2 * 178  # folga sobre o que a rodada 2 mediu de fato
