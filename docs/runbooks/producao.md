@@ -75,6 +75,10 @@ docker compose -f docker-compose.prod.yml exec api python manage.py createsuperu
 O `createsuperuser` agora exige senha forte: os quatro validadores estão ligados, então senha
 numérica ou parecida com o nome de usuário é recusada.
 
+Esse usuário entra como **administrador do portal**, com o menu completo — o comando não pergunta
+papel, e `User.role` fica no default `delivery`, mas o que decide é o `is_superuser`, que a API e a
+tela leem pelo mesmo campo `is_admin` (FDD 017). Os demais papéis saem de **Equipe → convidar**.
+
 ## 4. Smoke test
 
 ```bash

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const user = { id: 1, username: "bia", first_name: "Bia", last_name: "", email: "bia@example.test", role: "admin" };
+const user = { id: 1, username: "bia", first_name: "Bia", last_name: "", email: "bia@example.test", role: "admin", is_admin: true };
 
 test("autentica e libera o painel", async ({ page }) => {
   await page.route("**/api/v1/auth/me/", route => route.fulfill({ status: 403, json: { detail: "Credenciais ausentes." } }));

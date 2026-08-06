@@ -6,7 +6,7 @@ import { CommercialPage } from "./CommercialPage";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v1/documents/${id}/download/` }));
-vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, username: "admin", first_name: "", last_name: "", email: "", role: "admin" }, aiEnabled: true }) }));
+vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, username: "admin", first_name: "", last_name: "", email: "", role: "admin", is_admin: true }, aiEnabled: true }) }));
 
 const stages = [
   { id: 1, name: "Prospecção", kind: "open", position: 0 },

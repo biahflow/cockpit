@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ listUsers: vi.fn(), listInvitations: vi.fn(), 
 vi.mock("../api", () => ({ listUsers: mocks.listUsers, listInvitations: mocks.listInvitations, createInvitation: mocks.createInvitation }));
 
 beforeEach(() => {
-  mocks.listUsers.mockResolvedValue([{ id: 1, username: "bia", first_name: "Bia", last_name: "", email: "bia@x.com", role: "admin" }]);
+  mocks.listUsers.mockResolvedValue([{ id: 1, username: "bia", first_name: "Bia", last_name: "", email: "bia@x.com", role: "admin", is_admin: true }]);
   mocks.listInvitations.mockResolvedValue([{ id: 1, email: "novo@x.com", role: "delivery", expires_at: "2030-01-01T00:00:00Z", accepted_at: null, created_at: "2026-08-01T00:00:00Z" }]);
   mocks.createInvitation.mockResolvedValue({});
 });

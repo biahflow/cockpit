@@ -12,7 +12,9 @@ export function ProjectsPage() {
   // Entrega não converte oportunidade nem cria projeto (RFC 0003) — e a lista vazia dela
   // significa "ninguém te pôs numa equipe ainda", não "não há projetos".
   const { user } = useAuth();
-  const isDelivery = user?.role === "delivery";
+  // "Entrega" aqui quer dizer **Entrega restrita**: um superusuário com papel `delivery` não é,
+  // e mandá-lo "pedir a um administrador" seria mandá-lo pedir a si mesmo.
+  const isDelivery = user?.role === "delivery" && !user.is_admin;
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState("");
   useEffect(() => { api<Project[]>("/projects/").then(setProjects).catch((cause: Error) => setError(cause.message)); }, []);

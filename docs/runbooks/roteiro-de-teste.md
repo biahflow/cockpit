@@ -24,25 +24,27 @@ banco ou o cache não subiram e não adianta seguir.
 | API / documentação | <http://localhost:19000/api/v1/> · <http://localhost:19000/api/docs/> |
 | Caixa de e-mail (Mailpit) | <http://localhost:19025> |
 
-### Crie o primeiro admin — e corrija o papel dele
+### Crie o primeiro admin
 
 ```bash
 docker compose exec api uv run python manage.py createsuperuser
 ```
 
-**`createsuperuser` não cria um administrador do portal.** `User.role` tem default `delivery`
-(`apps/core/models.py`), e o menu do SPA é filtrado só pelo `role`
-(`frontend/src/components/Layout.tsx`) — o `is_superuser`, que a API respeita, o menu ignora. Entrar
-assim mostra um portal capado, sem **Leads**, **Indicadores**, **Jornada**, **Equipe** e
-**Configurações**. E como **Equipe** é justamente a tela que arrumaria o papel, o conserto é por
-linha de comando:
+**Deve acontecer:** você entra e vê o menu inteiro — **Leads**, **Indicadores**, **Jornada**,
+**Equipe** e **Configurações** inclusive —, com o rótulo "Administrador" ao lado do seu nome.
 
-```bash
-docker compose exec api uv run python manage.py shell -c \
-  "from apps.core.models import User; User.objects.filter(username='SEU_USUARIO').update(role='admin')"
-```
+O comando não pergunta o papel, então `User.role` fica no default `delivery`; o que manda é o
+`is_superuser`. A API sempre soube disso (`is_admin_role`), e desde a FDD 017 a tela também: o
+`/auth/me/` devolve **`is_admin`**, o mesmo predicado que autoriza no backend, e o SPA decide por
+ele em vez de por `role`.
 
-Se você já estava logado, saia e entre de novo — o papel vem no login.
+> Até essa correção o menu filtrava só por `role` e escondia aqueles cinco itens de quem acabava de
+> instalar o portal. O roteiro mandava consertar o papel por `manage.py shell` — e dizia que
+> **Equipe** era a tela que arrumaria isso, o que era falso: `UserViewSet` é read-only e papel só se
+> define em convite. Nada disso é mais necessário.
+
+Papel continua sendo coisa de convite: para criar alguém de Vendas ou Entrega, use
+**Equipe → convidar**.
 
 ### O que está desligado de propósito
 

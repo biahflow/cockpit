@@ -6410,8 +6410,12 @@ components:
           maxLength: 254
         role:
           $ref: '#/components/schemas/RoleEnum'
+        is_admin:
+          type: boolean
+          readOnly: true
       required:
       - id
+      - is_admin
       - username
     WorkItemStatusEnum:
       enum:

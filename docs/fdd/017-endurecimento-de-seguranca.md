@@ -42,6 +42,21 @@ Três achados eram vazamento real, dois eram defeito, e a maior parte da superf�
 - **Dependências.** `pip-audit` e `npm audit --omit=dev` rodaram limpos. As 17 dependências de
   frontend declaradas como `"latest"` foram fixadas nas versões do lockfile: o `npm ci` do CI já
   estava protegido, mas `npm install` local puxava versão arbitrária.
+- **A tela decide pelo mesmo critério que a API.** `/auth/me/`, `/auth/login/`, o aceite de convite
+  e `/users/` passam a devolver **`is_admin`**, vindo da propriedade `User.is_admin_role`
+  (`role == ADMIN or is_superuser`) que já autoriza em 14 lugares no backend. O SPA **consome** o
+  predicado; não o reconstrói como `is_superuser || role === "admin"`, que seria uma segunda
+  expressão da mesma regra — o mesmo princípio que a ADR 0010 aplica a `visible_to`.
+
+  O defeito que isto fecha nascia no primeiro comando de qualquer instalação: `createsuperuser` não
+  pergunta papel, então o usuário fica com o default `delivery`, e o SPA — que filtrava só por
+  `role` — escondia **Leads, Indicadores, Jornada, Equipe e Configurações** de quem a API já
+  autorizava em tudo. Não havia conserto pela interface: `UserViewSet` é read-only e papel só se
+  define em convite, então o runbook mandava rodar um `manage.py shell`. Eram **dez** pontos de
+  decisão no SPA, não só o menu — o painel de agentes, o pipeline da Visão geral (que o backend
+  mandava preenchido e a tela descartava), o CTA de Projetos, os vínculos de Documentos e o painel
+  de equipe do projeto. Mudança **aditiva** de contrato: campo novo, `readOnly`, nenhum existente
+  alterado.
 
 ## Fora deste recorte
 

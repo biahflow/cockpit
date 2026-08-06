@@ -3,7 +3,7 @@ import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "../api";
 import { useAuth } from "../auth";
-import type { Notification as NotificationT, Role } from "../types";
+import type { Notification as NotificationT, Role, SessionUser } from "../types";
 
 type NavLink = readonly [string, string, ComponentType<{ className?: string }>, Role[]?];
 
@@ -21,6 +21,10 @@ const links: NavLink[] = [
 ];
 
 const roleLabel = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" } as const;
+
+// O rótulo segue o poder, não o campo: um superusuário com `role="delivery"` manda no portal
+// inteiro, e chamá-lo de "Entrega" é o rótulo mentindo sobre quem está logado.
+const labelFor = (user: SessionUser) => user.is_admin ? roleLabel.admin : roleLabel[user.role];
 
 export function Layout({ children }: { children: ReactNode }) {
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -51,7 +55,10 @@ export function Layout({ children }: { children: ReactNode }) {
   }
 
   const isActive = (to: string) => to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
-  const visibleLinks = links.filter(([, , , roles]) => !roles || roles.includes(user.role));
+  // `is_admin` antes do papel: a API já trata superusuário como admin, e filtrar só por `role`
+  // escondia cinco itens de quem acabou de rodar `createsuperuser` — inclusive Equipe, que é onde
+  // se monta a equipe de projeto.
+  const visibleLinks = links.filter(([, , , roles]) => user.is_admin || !roles || roles.includes(user.role));
   const nav = <nav className="grid gap-1">{visibleLinks.map(([to, label, Icon]) => <a key={to} href={to} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${isActive(to) ? "bg-white text-ocean shadow-sm" : "text-slate-600 hover:bg-white/70 hover:text-ink"}`}><Icon className="size-4" />{label}</a>)}</nav>;
 
   return <div className="min-h-screen bg-sand lg:grid lg:grid-cols-[248px_1fr]">
@@ -66,7 +73,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <p className="hidden text-sm text-slate-600 sm:block">Acompanhe o que importa para a Biahflow.</p>
         <div className="flex items-center gap-3">
           <div className="relative"><button className="relative grid size-10 place-items-center rounded-xl border bg-white text-slate-600 hover:text-ocean" aria-label="Notificações" onClick={() => setBellOpen(open => !open)}><Bell className="size-4" />{unread > 0 && <span className="absolute -right-1 -top-1 grid min-w-[16px] place-items-center rounded-full bg-signal px-1 text-[10px] font-bold text-white">{unread}</span>}</button>{isBellOpen && <><button className="fixed inset-0 z-30 cursor-default" aria-label="Fechar notificações" onClick={() => setBellOpen(false)} /><div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border bg-white p-2 shadow-lg"><div className="flex items-center justify-between px-2 py-1"><span className="text-sm font-semibold text-ink">Notificações</span>{unread > 0 && <button className="text-xs font-semibold text-ocean hover:text-ink" onClick={() => void readAll()}>Marcar todas</button>}</div><div className="max-h-80 divide-y overflow-y-auto">{notifications.length ? notifications.slice(0, 20).map(notification => <button key={notification.id} className={`block w-full px-2 py-2 text-left text-sm hover:bg-slate-50 ${notification.read ? "text-slate-600" : "font-medium text-ink"}`} onClick={() => void readOne(notification)}>{!notification.read && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-ocean align-middle" />}{notification.message}</button>) : <p className="px-2 py-6 text-center text-sm text-slate-600">Sem notificações.</p>}</div></div></>}</div>
-          <div className="relative"><button className="flex items-center gap-2 rounded-xl border bg-white py-1.5 pl-2 pr-3 hover:border-ocean" aria-haspopup="menu" aria-expanded={isUserMenuOpen} onClick={() => setUserMenuOpen(open => !open)}><span className="grid size-8 place-items-center rounded-lg bg-mint text-xs font-bold text-ocean">{displayName.slice(0, 2).toUpperCase()}</span><span className="hidden text-left sm:block"><span className="block text-xs font-semibold text-ink">{displayName}</span><span className="block text-[11px] text-slate-600">{roleLabel[user.role]}</span></span><ChevronDown className={`size-3 text-slate-600 transition ${isUserMenuOpen ? "rotate-180" : ""}`} /></button>{isUserMenuOpen && <><button className="fixed inset-0 z-30 cursor-default" aria-label="Fechar menu" onClick={() => setUserMenuOpen(false)} /><div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border bg-white p-2 shadow-lg" role="menu"><div className="border-b px-3 py-2"><p className="text-sm font-semibold text-ink">{displayName}</p><p className="truncate text-xs text-slate-600">{user.email || roleLabel[user.role]}</p></div><button className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-signal" role="menuitem" onClick={() => void handleLogout()}><LogOut className="size-4" />Sair</button></div></>}</div>
+          <div className="relative"><button className="flex items-center gap-2 rounded-xl border bg-white py-1.5 pl-2 pr-3 hover:border-ocean" aria-haspopup="menu" aria-expanded={isUserMenuOpen} onClick={() => setUserMenuOpen(open => !open)}><span className="grid size-8 place-items-center rounded-lg bg-mint text-xs font-bold text-ocean">{displayName.slice(0, 2).toUpperCase()}</span><span className="hidden text-left sm:block"><span className="block text-xs font-semibold text-ink">{displayName}</span><span className="block text-[11px] text-slate-600">{labelFor(user)}</span></span><ChevronDown className={`size-3 text-slate-600 transition ${isUserMenuOpen ? "rotate-180" : ""}`} /></button>{isUserMenuOpen && <><button className="fixed inset-0 z-30 cursor-default" aria-label="Fechar menu" onClick={() => setUserMenuOpen(false)} /><div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border bg-white p-2 shadow-lg" role="menu"><div className="border-b px-3 py-2"><p className="text-sm font-semibold text-ink">{displayName}</p><p className="truncate text-xs text-slate-600">{user.email || labelFor(user)}</p></div><button className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-signal" role="menuitem" onClick={() => void handleLogout()}><LogOut className="size-4" />Sair</button></div></>}</div>
         </div>
       </header>
       {isMobileMenuOpen && <div className="border-b bg-mint/70 p-4 lg:hidden">{nav}</div>}

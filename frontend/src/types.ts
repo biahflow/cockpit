@@ -36,7 +36,10 @@ export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";
 export type ArtifactStatus = "draft" | "review" | "sent" | "accepted" | "rejected";
 export type Artifact = { id: number; kind: ArtifactKind; kind_display: string; status: ArtifactStatus; status_display: string; title: string; content: string; opportunity: number | null; project: number | null; source_meeting: number | null; document: number | null; ai_interaction: number | null; created_by: number; sent_at: string | null; decided_at: string | null; created_at: string; updated_at: string };
 export type Dashboard = { pipeline: PipelineStage[]; active_projects: number; overdue_count: number; upcoming_tasks: { id: number; title: string; due_date: string; project_id: number }[] };
-export type SessionUser = { id: number; username: string; first_name: string; last_name: string; email: string; role: "admin" | "sales" | "delivery" };
+// `is_admin` vem do backend (`User.is_admin_role`: papel admin **ou** superusuário) em vez de ser
+// derivado aqui. É o mesmo predicado que a API usa para autorizar, então a tela não pode divergir
+// dela — que era exatamente o defeito de `createsuperuser` (FDD 017).
+export type SessionUser = { id: number; username: string; first_name: string; last_name: string; email: string; role: "admin" | "sales" | "delivery"; is_admin: boolean };
 export type Role = "admin" | "sales" | "delivery";
 export type Invitation = { id: number; email: string; role: Role; expires_at: string; accepted_at: string | null; created_at: string };
 export type IntegrationFlag = { key: string; label: string; enabled: boolean; configured: boolean; toggleable: boolean };

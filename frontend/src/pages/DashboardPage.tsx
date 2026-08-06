@@ -16,7 +16,9 @@ export function DashboardPage() {
   // Entrega não recebe o funil (RFC 0003): o backend devolve `pipeline` vazio, e mostrar
   // "R$ 0" com uma seção vazia seria pior do que não mostrar.
   const { user } = useAuth();
-  const showPipeline = user?.role !== "delivery";
+  // O backend já manda o pipeline preenchido para quem é admin (`views.py:151`); filtrar só por
+  // `role` fazia o SPA **descartar dado que chegou** na tela de um superusuário.
+  const showPipeline = !!user?.is_admin || user?.role !== "delivery";
   const [data, setData] = useState<Dashboard>();
   const [error, setError] = useState("");
   useEffect(() => { api<Dashboard>("/dashboard/").then(setData).catch((cause: Error) => setError(cause.message)); }, []);

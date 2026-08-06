@@ -41,10 +41,20 @@ from .models import (
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
+    # O mesmo predicado que o backend usa em 14 lugares (`RolePermission`, `visible_to`,
+    # `agents`...), e não o `is_superuser` cru: assim o SPA **consome** a regra em vez de
+    # reconstruí-la em TypeScript como `is_superuser || role === "admin"`, que seria uma segunda
+    # expressão dela. Sem isto, `createsuperuser` — o primeiro comando de toda instalação — produz
+    # alguém que a API trata como admin e a tela trata como Entrega (FDD 017, ADR 0010).
+    is_admin = serializers.BooleanField(source="is_admin_role", read_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "email", "role"]
-        read_only_fields = ["id"]
+        fields = ["id", "username", "first_name", "last_name", "email", "role", "is_admin"]
+        # `is_admin` explicitamente aqui também: hoje nenhum endpoint de escrita usa este
+        # serializer, mas os demais campos são graváveis, e o dia em que alguém o pendurar num
+        # viewset de escrita não pode ser o dia em que virou caminho de promoção.
+        read_only_fields = ["id", "is_admin"]
 
 
 class ClientSerializer(serializers.ModelSerializer[Client]):
