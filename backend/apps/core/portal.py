@@ -257,8 +257,11 @@ def _post(url: str, body: bytes, signature: str) -> None:
 def emit(event: str, object_type: str, project_id: int | None) -> None:
     """Agenda a entrega de um webhook fino ao portal após o commit da transação.
 
-    Best-effort e não bloqueante: a reconciliação periódica do portal cobre eventuais
-    perdas. Não faz nada quando a integração não está configurada.
+    Best-effort e não bloqueante — mas **sem rede de segurança automática**: o portal tem a task
+    de backfill (`sync_biahflow_project`) e não a agenda, então uma entrega perdida só se recupera
+    pelo próximo evento do mesmo projeto ou por backfill manual. Vale a pena emitir em todo caminho
+    que muda o projeto, e não contar com reconciliação. Não faz nada quando a integração não está
+    configurada.
     """
     url = settings.PORTAL_WEBHOOK_URL
     secret = settings.PORTAL_WEBHOOK_SECRET

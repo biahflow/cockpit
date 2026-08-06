@@ -30,6 +30,11 @@ para carregar seu próprio estado sem que editar o template reescreva o históri
   (read-only na API); só `target_date` ("a prevista") é editável pela equipe.
 - **Template (config):** `journey-phases` e `phase-deliverables` são **admin-only**
   (resource `journey`), como a configuração de pipeline.
+- **Repropaga ao portal do cliente:** avançar de fase e marcar entregável emitem webhook
+  (`project_phase`/`project_deliverable`, ADR 0003) — é a jornada que alimenta a barra "você
+  está aqui" do cliente, e sem emissor ela só chegava lá de carona no próximo salvamento de
+  outro objeto. A **materialização não emite**: o projeto recém-criado já avisa por si, e emitir
+  por fase e entregável criados seria uma rajada redundante no mesmo commit.
 - **Sem quebra de contrato:** nada muda em `convert-to-project`; a jornada é aditiva.
 
 ## Aceite
