@@ -33,6 +33,8 @@ As sondas são `GET /healthz` (o processo responde) e `GET /readyz` (banco e cac
 
 O mesmo compose sobe um sidecar de **backup**: banco e documentos, agendado, com retenção e envio opcional para fora do host. A restauração não é promessa — o CI destrói banco e mídia e restaura a cada PR (`.github/scripts/backup-drill.sh`). Como conferir, restaurar e recuperar em um host novo: [`docs/runbooks/backup-e-restauracao.md`](docs/runbooks/backup-e-restauracao.md).
 
+E um serviço **`scheduler`**, que roda o trabalho periódico da aplicação: digest diário, sincronia de calendário e a conferência que dispara o alerta de backup velho. Antes dele os três dependiam de um cron montado à mão, que ninguém montava — ver [`docs/fdd/023-trabalho-periodico-agendado.md`](docs/fdd/023-trabalho-periodico-agendado.md).
+
 ## Qualidade
 
 Execute `cd backend && uv run pytest`, `cd backend && uv run mypy apps config`, `cd frontend && npm test`, `cd frontend && npm run build` e `cd frontend && npm run e2e` antes de abrir um pull request. Veja [AGENTS.md](AGENTS.md) e `docs/runbooks/`.

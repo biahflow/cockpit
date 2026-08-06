@@ -24,7 +24,9 @@ compartilhado e criar **tarefas** no projeto correspondente, prontas para o dono
   o dono é o **dono do projeto**. A criação dispara notificação ao dono e webhook do portal
   pelos signals já existentes (não há caminho novo de notificação).
 - Janela padrão de varredura: `SYNC_WINDOW_DAYS = 30` dias a partir de hoje.
-- Disparo: management command `sync_calendar` (para cron) ou ação admin
+- Disparo: management command `sync_calendar`, rodado pelo serviço `scheduler` a cada
+  `SCHEDULER_CALENDAR_EVERY_MINUTES` (default 15 min, FDD 023) — antes dela a linha dizia
+  "para cron", e o cron não existia —, ou ação admin
   `POST /api/v1/config/sync-calendar/` (botão "Sincronizar agora" em Configurações). Aditivo
   ao contrato `/api/v1/`.
 
