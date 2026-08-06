@@ -257,9 +257,9 @@ falha alto, ou degrada dizendo o que perdeu.
 
 ## Fora deste recorte
 
-**O Clicksign**, que segue sem homologação — o adaptador existe, e agora também sem `ping`. Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
-três defeitos de calendário e a blindagem do upload no Drive continuam corrigidos **por análise,
-não por observação** — o teste prova a regra, só a credencial real prova a integração.
+**O Clicksign**, que segue sem homologação — o adaptador existe, e agora também sem `ping`. É a
+única superfície desta FDD que continua corrigida **por análise, não por observação**: o teste
+prova a regra, só a credencial real prova a integração.
 
 **O contexto do agente de Entrega.** O achado 4 da rodada 2: ele descreve risco em vez de listar
 o que está atrasado, então a pergunta mais óbvia da área não tem resposta. Ampliar significa mexer
