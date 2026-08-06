@@ -31,6 +31,10 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
   que só apareceriam contra o provedor real — evento de dia inteiro que a API recusa, free/busy que
   falhava **aberto**, digest que contava envio inexistente, e upload/qualificação derrubando o
   pedido do usuário.
+- **Homologação, rodada 1 — e-mail** (FDD 024, runbook `homologacao-de-integracoes.md`): primeira
+  integração exercitada contra infra real. Confirmou a codificação MIME dos assuntos acentuados e a
+  correção da contagem do digest, e achou um defeito novo — o convite órfão quando o SMTP recusa.
+  Faltam IA, Google e assinatura.
 
 > **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
 > de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa
