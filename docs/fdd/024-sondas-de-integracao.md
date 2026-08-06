@@ -187,9 +187,39 @@ num pod a credencial vem do metadata server. `configured()` não tem o que cobra
 "isto funciona?" é a **sonda**. A tese "pergunte ao provedor, não ao ambiente" passou a valer para
 o próprio mecanismo de autenticação.
 
+## Rodada 3 — Google (Drive + Calendário), homologada em 06/08/2026
+
+Terceira integração exercitada contra o provedor real, depois de a primeira tentativa ter sido
+bloqueada pela política e de a autenticação ter sido trocada (ADR 0016). Procedimento e evidência
+no runbook.
+
+**Tudo o que a varredura tinha corrigido por análise foi confirmado**, e a que mais importa é o
+`end.date` exclusivo: o `add-to-calendar` respondeu **200 com link**, contra 100% de falha antes da
+correção. O Drive atravessou inteiro — árvore PARA criada pelo kickoff, upload, e download **byte a
+byte idêntico**. A sincronia inbound criou a tarefa e **não duplicou** ao repetir.
+
+Com o fornecedor recusando, os quatro pontos da varredura devolveram **502** com mensagem legível,
+e a reserva **sobreviveu**: sem evento, mas com o dono avisado da ressalva e sem 500 no endpoint
+público.
+
+**Dois achados:**
+
+- **O `forbiddenForServiceAccounts` não aconteceu.** Esta FDD previa a recusa do convite ao
+  participante, e o runbook dizia "já se sabe que vai falhar". Não falhou: com a credencial de
+  usuário da ADR 0016, o convite foi aceito de primeira. A troca de autenticação — que nasceu de
+  uma política bloqueando a chave — resolveu de carona o defeito funcional que se esperava
+  contornar. A degradação do `booking.book` passou de caminho cotidiano a **rede de segurança**.
+- **A tese desta FDD se provou três vezes numa rodada só, por três motivos diferentes.** A
+  credencial pode estar **ausente** (o refresh token vazio, que o `configured()` nomeou); **presente
+  com o valor errado** (a URL da pasta colada no lugar do id — que o `configured()` **não** pega,
+  porque a variável está preenchida, e que virou correção própria); e **presente e correta com a
+  integração morta mesmo assim** (a API não habilitada no projeto, `403 accessNotConfigured`). A
+  terceira é inalcançável por qualquer verificação de ambiente. As três só apareceram porque alguém
+  perguntou ao provedor.
+
 ## Fora deste recorte
 
-**As rodadas 3 e 4.** Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
+**A rodada 4.** Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
 três defeitos de calendário e a blindagem do upload no Drive continuam corrigidos **por análise,
 não por observação** — o teste prova a regra, só a credencial real prova a integração.
 

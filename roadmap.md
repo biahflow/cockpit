@@ -51,15 +51,20 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
   o código lia **eram** o artefato proibido. O desenho não era subótimo, era inconstruível, e é
   provavelmente por isso que Drive e Calendário nunca foram homologados. Agora a credencial vem de
   **ADC** (que cobre Workload Identity em container/pod, sem segredo no ambiente) ou de **OAuth de
-  usuário**, para o que exige agir como pessoa. Falta a homologação em si.
+  usuário**, para o que exige agir como pessoa.
+- **Homologação, rodada 3 — Google** (FDD 024): Drive e Calendário exercitados contra a conta real.
+  Confirmou as três correções que estavam só na análise — inclusive o `end.date` exclusivo, que
+  fazia o "Adicionar ao calendário" falhar em **100%** das tentativas — e o download voltando byte
+  a byte. O `forbiddenForServiceAccounts` que a FDD 024 previa **não aconteceu**: a troca de auth
+  resolveu de carona o defeito que se esperava contornar. Falta a assinatura.
 
 > **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
 > de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa
 > instalação nova, e quase todo código que fala com provedor externo está atrás de
-> `# pragma: no cover`. Duas integrações já têm homologação registrada — e-mail e IA (FDD 024),
-> mais o Autentique (ADR 0007). O que está ligado por padrão funciona e é testado; **Google e
-> assinatura ainda precisam de uma rodada com credencial real**, e as duas rodadas feitas acharam
-> defeito nas duas vezes.
+> `# pragma: no cover`. Três integrações já têm homologação registrada — e-mail, IA e Google
+> (FDD 024) —, mais o Autentique (ADR 0007). O que está ligado por padrão funciona e é testado;
+> **falta a assinatura**. As três rodadas feitas acharam defeito nas três vezes, e a do Google
+> achou antes mesmo de a credencial funcionar.
 
 ## Prontidão para produção — adiada deliberadamente
 
