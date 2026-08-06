@@ -308,6 +308,20 @@ SENTRY_TRACES_SAMPLE_RATE = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0") or
 BACKUP_ROOT = os.getenv("BACKUP_ROOT", "")
 # 26 h: folga sobre o backup diário, sem deixar passar um dia inteiro sem cópia.
 BACKUP_MAX_AGE_HOURS = _env_int("BACKUP_MAX_AGE_HOURS", 26)
+
+# Agendador de trabalho periódico (FDD 023, ADR 0015). Quem roda é o serviço `scheduler` do
+# compose (`manage.py run_scheduler`), não a API — a imagem é a mesma, o processo é outro.
+# Horários em hora de parede de `TIME_ZONE`, não no `TZ` do container.
+SCHEDULER_TICK_SECONDS = _env_int("SCHEDULER_TICK_SECONDS", 60)
+# Cedo o bastante para o resumo chegar antes do dia começar, tarde o bastante para não ser
+# madrugada de quem o recebe.
+SCHEDULER_DIGEST_AT = os.getenv("SCHEDULER_DIGEST_AT", "07:30")
+# O calendário é a única entrada de fora que vira tarefa: 15 min é o atraso máximo entre marcar
+# uma reunião com `#proj-<id>` e ver a tarefa no portal.
+SCHEDULER_CALENDAR_EVERY_MINUTES = _env_int("SCHEDULER_CALENDAR_EVERY_MINUTES", 15)
+# Depois do backup das 03:15 e depois do digest: o alerta de backup velho é para o horário
+# comercial de quem vai agir sobre ele, não para a madrugada.
+SCHEDULER_BACKUP_CHECK_AT = os.getenv("SCHEDULER_BACKUP_CHECK_AT", "09:00")
 CSRF_TRUSTED_ORIGINS = _env_list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:19173,http://127.0.0.1:19173",

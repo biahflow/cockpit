@@ -52,6 +52,14 @@ compatível com S3. A aplicação não faz backup — só lê o carimbo da últi
 `.github/scripts/backup-drill.sh`, que destrói banco e mídia e traz os dois de volta. Ver
 `docs/runbooks/backup-e-restauracao.md`.
 
+**Trabalho periódico** (FDD 023, ADR 0015): um serviço `scheduler` — a **mesma imagem do `api`**,
+outro processo — roda o digest diário (FDD 010), a sincronia de calendário (FDD 012) e a
+conferência de backup (FDD 021). Processo separado e não thread do gunicorn porque três workers
+mandariam o digest em triplicata. O que venceu é decidido em `apps/core/scheduler.py` contra um
+carimbo durável no banco (`ScheduledJobRun`), e não em memória: sem ele, um restart logo depois do
+digest o reenviaria a todos. Falha é isolada por job e sai como `ERROR`, que vira evento no Sentry
+— é por aí que o alerta de backup velho dispara.
+
 **Observabilidade** (FDD 020, ADR 0012): o `X-Request-ID` nasce no nginx e atravessa todo o
 caminho — log da borda, access log do gunicorn, log estruturado da aplicação, tag no Sentry e o
 header da resposta que o SPA mostra na tela de erro. `/healthz` e `/readyz` respondem em middleware,

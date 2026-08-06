@@ -41,7 +41,7 @@ services:
       - path: .env
         required: false
     # Só o que é interno ao compose e não pode vir do `.env`. `environment` vence o `env_file`.
-    environment:
+    environment: &api_env
       DATABASE_URL: postgresql://${POSTGRES_USER:-biahflow}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-biahflow}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-unsafe-development-key}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
@@ -55,6 +55,28 @@ services:
       - api_venv:/app/.venv
     ports:
       - "19000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Trabalho periódico (FDD 023). Atrás de um profile: em desenvolvimento quase nunca se quer um
+  # relógio rodando ao fundo, e ligá-lo por default mudaria o que `docker compose up` sobe hoje.
+  #   docker compose --profile scheduler up -d scheduler
+  # Para um único tique, sem esperar o relógio, o `api` já basta:
+  #   docker compose exec api uv run python manage.py run_scheduler --once
+  scheduler:
+    profiles: ["scheduler"]
+    build:
+      context: ./backend
+      target: dev
+    command: sh -c "uv sync --no-dev && uv run python manage.py run_scheduler"
+    env_file:
+      - path: .env
+        required: false
+    environment: *api_env
+    volumes:
+      - ./backend:/app
+      - api_venv:/app/.venv
     depends_on:
       db:
         condition: service_healthy

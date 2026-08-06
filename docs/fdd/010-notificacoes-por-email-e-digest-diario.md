@@ -20,8 +20,10 @@ por IA** resume, para cada usuário, o que está atrasado e a vencer.
   reportar (marcos/tarefas atrasados ou a vencer em 7 dias), envia um resumo por e-mail.
   Com `AI_ENABLED`, o texto é redigido pelo modelo e auditado em `AiInteraction`
   (feature `daily_digest`); sem IA, envia o resumo estruturado. No-op quando a flag `email`
-  está desligada. É disparado pelo comando `manage.py send_daily_digest` (agendável por
-  cron diário na infraestrutura).
+  está desligada. É disparado pelo comando `manage.py send_daily_digest`, que o serviço
+  `scheduler` roda todo dia às `SCHEDULER_DIGEST_AT` (default 07:30) — FDD 023. Até a FDD 023
+  esta linha dizia "agendável por cron diário na infraestrutura", e esse cron não existia:
+  na prática o digest nunca saía em produção.
 
 ## Aceite
 

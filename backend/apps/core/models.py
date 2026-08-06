@@ -764,3 +764,34 @@ class Artifact(TimestampedModel):
         if self.status in {self.Status.ACCEPTED, self.Status.REJECTED} and self.decided_at is None:
             self.decided_at = timezone.now()
         super().save(*args, **kwargs)
+
+
+class ScheduledJobRun(models.Model):
+    """Carimbo durável do último ciclo de cada job periódico (FDD 023, ADR 0015).
+
+    É o equivalente, no banco, do `latest.json` que o sidecar de backup deixa em disco — e existe
+    pelo mesmo motivo: sem estado que sobreviva ao processo, um restart do container às 07:31,
+    logo depois do digest das 07:30, mandaria o e-mail de novo para todo mundo.
+
+    **Não** é recurso de negócio: não estende `TimestampedModel`, não entra no soft delete, não tem
+    viewset nem entra no `RolePermission`, e não toca o contrato `/api/v1/`. É registro operacional,
+    lido pelo admin — que é onde o operador já olha.
+    """
+
+    name = models.CharField(max_length=64, unique=True)
+    # O relógio que decide o vencimento é o da **tentativa**, não o do sucesso: um job diário que
+    # falhou não volta a rodar no próximo tique. Os três jobs de hoje são relatórios e alertas, e
+    # tentar de novo a cada minuto trocaria uma falha por uma enxurrada — de e-mail, no caso do
+    # digest, e de evento no Sentry, no caso do `backup_status`.
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    # Guardado só para quem lê: responde "quando isto funcionou pela última vez?", pergunta que
+    # hoje não tem onde ser respondida.
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    ok = models.BooleanField(default=True)
+    detail = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name

@@ -14,6 +14,8 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - **Toggles de integração em runtime** + página de Configurações só-admin.
 - Painel operacional/comercial, indicadores/ROI, API versionada (`/api/v1/`) e docs (ADR/FDD/RFC).
 - Testes unitários, de API, regressão e E2E; **CI** com lint, tipos, testes, cobertura, build e E2E.
+- **Agendador de trabalho periódico** (serviço `scheduler`): digest diário, sincronia de calendário
+  e conferência de backup passam a rodar sozinhos (FDD 023, ADR 0015).
 
 ## Prontidão para produção — adiada deliberadamente
 

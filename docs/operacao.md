@@ -73,8 +73,9 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 - Calendário: `CALENDAR_ENABLED=true` + `GOOGLE_CALENDAR_ID` (reusa a service account do Drive).
   - **Outbound**: botão "Adicionar ao calendário" em marcos/tarefas cria o evento no Google Calendar.
   - **Inbound (eventos → tarefas)**: eventos do calendário compartilhado com um marcador
-    `#proj-<id>` no título ou na descrição viram tarefas do projeto indicado. Rode
-    `docker compose exec api uv run python manage.py sync_calendar` (agende via cron), ou use
+    `#proj-<id>` no título ou na descrição viram tarefas do projeto indicado. Em produção quem
+    roda é o serviço `scheduler`, a cada 15 min (FDD 023); para um tique manual use
+    `docker compose exec api uv run python manage.py run_scheduler --once`, ou
     **Configurações → Calendário → "Sincronizar agora"**. É idempotente (não duplica) e ignora
     eventos criados pelo próprio portal. Ver FDD 012.
 - **Agendamento (qualificação IA + booking)**: com `AI_ENABLED` e `CALENDAR_ENABLED` ligados, o

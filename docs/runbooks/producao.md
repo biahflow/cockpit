@@ -21,7 +21,8 @@ internet → [terminador de TLS: proxy do provedor]     ← HTTPS acaba aqui
            [db] postgres      [redis] cache do teto de requisição
 ```
 
-O `docker-compose.prod.yml` sobe `web`, `api`, `db`, `redis` e o sidecar `backup` (FDD 021).
+O `docker-compose.prod.yml` sobe `web`, `api`, `db`, `redis`, o sidecar `backup` (FDD 021) e o
+`scheduler` (FDD 023).
 **Não** sobe o terminador de TLS: é o
 proxy do provedor, ou um nginx/Caddy seu na frente. `db` e `redis` não publicam porta, e a `api`
 também não — o único caminho até o gunicorn é o nginx, e é isso que torna seguro confiar no
@@ -88,6 +89,30 @@ No navegador: login → **Configurações** abre → `/admin/` abre **com CSS** 
 `collectstatic`/WhiteNoise) → subir um documento em um projeto e baixá-lo. Depois
 `docker compose -f docker-compose.prod.yml down && up -d`: o documento tem de continuar lá (é o
 volume `media_data`).
+
+### O agendador (FDD 023)
+
+Dois containers rodam sozinhos, sem atender requisição: o `backup` (FDD 021) e o `scheduler`.
+O segundo é quem dispara o digest diário, a sincronia de calendário e a conferência de backup —
+até a FDD 023 os três dependiam de um cron que ninguém tinha montado.
+
+```bash
+docker compose -f docker-compose.prod.yml logs scheduler
+```
+
+**Deve acontecer:** uma linha `scheduler: no ar (tique de 60s)` seguida da tabela de horários, e a
+sincronia de calendário no primeiro tique. O digest e a conferência de backup **não** saem na
+subida — job diário nasce armado, para que subir a stack às 23h não mande o resumo do dia para todo
+mundo fora de hora; eles estreiam na próxima âncora.
+
+Para um tique manual, sem esperar o relógio:
+
+```bash
+docker compose -f docker-compose.prod.yml exec api python manage.py run_scheduler --once
+```
+
+Quando cada job rodou pela última vez e se deu certo: admin → **Scheduled job runs**. Horários em
+`SCHEDULER_DIGEST_AT`, `SCHEDULER_CALENDAR_EVERY_MINUTES` e `SCHEDULER_BACKUP_CHECK_AT`.
 
 ## 5. HSTS, na ordem — e só nesta ordem
 
@@ -156,6 +181,8 @@ mandar para fora do host: **`backup-e-restauracao.md`**.
 | `web` não sobe: "host not found in upstream" | não deve acontecer — o `proxy_pass` usa variável para adiar a resolução. Se acontecer, o `resolver` do `nginx.conf` não é o DNS da sua rede |
 | "o projeto sumiu" para a Entrega | não é produção: é equipe do projeto vazia (FDD 018) |
 | `backup_status` reprova | o sidecar parou: `logs backup`. Detalhe em `backup-e-restauracao.md` |
+| digest não sai / calendário não sincroniza | `logs scheduler`. Job diário nasce armado: na primeira subida ele só estreia na próxima âncora (FDD 023) |
+| um job periódico rodou duas vezes | há dois `scheduler` no ar. O serviço é um só de propósito — o carimbo e o `select_for_update` seguram, mas o desenho pressupõe um relógio |
 | as cópias sumiram | alguém rodou `down -v`, que leva o volume `backup_data` junto — é para isso que serve o offsite |
 
 ## Pendências deste bloco do roadmap

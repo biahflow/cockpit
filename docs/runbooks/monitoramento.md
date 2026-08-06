@@ -115,15 +115,26 @@ acordar alguém. O mínimo a configurar:
 | Balanceador/uptime | `/readyz` != 200 por 2 checagens | banco ou Redis fora |
 | Uptime externo | `GET /` de fora da rede | pega o que morre antes da borda: DNS, TLS, provedor |
 | Provedor | certificado a <14 dias do vencimento | HSTS transforma TLS vencido em portal inacessível |
-| Agendador (cron/CI) | `manage.py backup_status` saindo com código 1 | backup que parou de rodar só aparece no dia em que se precisa dele (FDD 021) |
+| Sentry | `ERROR` do logger `apps.core.scheduler` | job periódico falhando — inclui o backup velho, ver abaixo (FDD 023) |
 
 Um alerta que ninguém investiga é pior que nenhum: comece por estes seis.
 
-O de backup é o único que não vem de uma requisição: rode o comando de fora, uma vez ao dia, e
-trate a saída diferente de zero como incidente.
+O de backup é o único que não nasce de uma requisição, e quem o dispara é o serviço **`scheduler`**
+(FDD 023, ADR 0015): ele roda `backup_status` todo dia às `SCHEDULER_BACKUP_CHECK_AT` (default
+09:00) e, quando o comando reprova, loga `ERROR` — que a integração de logging do Sentry manda como
+evento. Não é preciso agendar nada por fora; até a FDD 023 era preciso, e ninguém agendava.
+
+Para conferir na hora, sem esperar o horário:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec -T api python manage.py backup_status
+```
+
+O estado do agendador — quando cada job rodou pela última vez e se deu certo — está no admin, em
+**Scheduled job runs**, e no log do container:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail 50 scheduler
 ```
 
 O que ele confere, o que fazer quando reprova e como restaurar: **`backup-e-restauracao.md`**.

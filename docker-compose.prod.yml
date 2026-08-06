@@ -125,6 +125,37 @@ services:
     # daria um caminho que não passa pelo proxy — e é justamente o que torna
     # `TRUST_X_FORWARDED_PROTO` perigoso (ADR 0011).
 
+  # Trabalho periódico da aplicação (FDD 023, ADR 0015).
+  #
+  # Mesma imagem do `api` — o que muda é o processo. Existe como serviço próprio, e não como thread
+  # dentro do gunicorn, porque com três workers o digest sairia em triplicata; aqui é um container,
+  # logo um relógio. É também o que fecha a lacuna que a FDD 010, a FDD 012 e a FDD 021 deixaram
+  # aberta: todas as três mandavam "agende via cron", e esse cron não existia em lugar nenhum.
+  scheduler:
+    build:
+      context: ./backend
+      target: prod
+    env_file:
+      - path: .env
+        required: false
+    environment: *api_env
+    command: ["python", "manage.py", "run_scheduler"]
+    volumes:
+      # Só o carimbo do backup, e só-leitura, pelo mesmo motivo do `api`: quem apenas lê a data da
+      # última cópia não precisa poder apagá-la.
+      - backup_data:/var/lib/biahflow/backups:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # O laço lê `core_scheduledjobrun` no primeiro tique; sem a migração aplicada ele subiria
+      # só para estourar.
+      api-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    # Sem porta publicada e sem healthcheck HTTP: não atende requisição nenhuma.
+
   web:
     build:
       context: ./frontend
