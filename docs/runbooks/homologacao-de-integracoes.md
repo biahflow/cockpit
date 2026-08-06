@@ -283,7 +283,28 @@ seguiria aparecendo em `/clients/overview/`, `/analytics/` e nas métricas de IA
 - **`oauth`** — `GOOGLE_OAUTH_CLIENT_ID`, `_CLIENT_SECRET`, `_REFRESH_TOKEN`. Necessário para
   **convidar participante** em evento, que exige agir como uma pessoa.
   **Armadilha:** com o app em "Testing" no Google Cloud, o refresh token expira em **7 dias** —
-  precisa estar "In production".
+  precisa estar "In production" (com tipo *Interno*, num Workspace, isso não se aplica).
+
+> **O atalho do `gcloud` não funciona para estes escopos.** `gcloud auth application-default login
+> --scopes=...drive,...calendar` leva **"Este app está bloqueado"**: o cliente OAuth do próprio
+> gcloud não tem permissão para pedir escopos sensíveis. É por isso que o modo `oauth` com client
+> **próprio** é o caminho, e não uma alternativa.
+
+**Obtendo o refresh token** — comando dedicado, rodado **no host** (precisa de navegador):
+
+```bash
+cd backend && uv run python manage.py google_oauth_setup \
+  --client-id <id> --client-secret <segredo>
+```
+
+Ele sobe um servidor efêmero em `http://localhost:8765`, abre o consentimento, troca o código e
+**grava o token direto no `.env`** — nunca o imprime, porque segredo na tela acaba em screenshot e
+em histórico de shell. Se o client for do tipo **App para computador**, não é preciso cadastrar
+URI de redirect nenhuma: o Google aceita `http://localhost` em qualquer porta. Se for **Aplicativo
+da Web**, cadastre exatamente `http://localhost:8765`.
+
+Se o Google não devolver refresh token, é consentimento reaproveitado: revogue em
+<https://myaccount.google.com/permissions> e repita (o comando já pede `prompt=consent`).
 
 A mesma identidade serve às duas flags, mas os escopos são diferentes — por isso as sondas são
 separadas: conceder Drive e esquecer Calendar é o erro comum, e ele passaria batido.
