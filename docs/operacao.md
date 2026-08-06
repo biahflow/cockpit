@@ -69,9 +69,11 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   ativo com itens, todo dia**, e é o único gasto de IA não iniciado por uma pessoa — ele fica
   de fora do `AI_DAILY_LIMIT`, que existe para limitar gente. Se a IA cair, o digest sai em
   texto estruturado em vez de não sair.
-- **Teto por chamada:** `AI_TIMEOUT_SECONDS` (30 s) é o teto de verdade — o cliente vai sem
-  retentativa, senão o SDK triplicaria o tempo por baixo. Ver a rodada 2 em
-  `docs/runbooks/homologacao-de-integracoes.md`.
+- **Teto por chamada:** `AI_TIMEOUT_SECONDS` (30 s) é o teto de **tempo** de verdade — o cliente
+  vai sem retentativa, senão o SDK triplicaria por baixo. O teto de **tokens** é por feature, não
+  global: existe na qualificação de lead (300) e no AI Score (500), que produzem JSON curto, e
+  **não** existe em proposta e contrato, onde truncar cortaria uma cláusula no meio. Ver a rodada 2
+  em `docs/runbooks/homologacao-de-integracoes.md`.
 
 ### 3. Documentos no Google Drive
 - **Ativar a Google Drive API e a Google Calendar API** no projeto do GCP (são duas ativações

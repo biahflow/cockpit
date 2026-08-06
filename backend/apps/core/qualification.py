@@ -36,6 +36,12 @@ _SYSTEM = (
 )
 
 
+# Teto de saída. O JSON daqui é menor que o do AI Score — quatro campos, dois deles curtos — e
+# esta é a única chamada de IA que roda **dentro do POST público** do formulário: teto apertado
+# também limita o tempo que ela segura o worker.
+_MAX_TOKENS = 300
+
+
 def _parse(text: str) -> dict:
     """Extrai o JSON da resposta do modelo, tolerando cercas de código ou texto ao redor."""
     start, end = text.find("{"), text.rfind("}")
@@ -67,7 +73,7 @@ def qualify_lead(lead: Lead, answers: dict | None = None) -> bool:
 
     context = ai.build_lead_context(lead, answers)
     try:
-        text, usage = ai.complete(_SYSTEM, context)
+        text, usage = ai.complete(_SYSTEM, context, max_tokens=_MAX_TOKENS)
     except Exception:  # noqa: BLE001 - o formulário público não pode cair com o fornecedor
         # Isto roda **dentro do POST público** do formulário do site. Sem a guarda, um 429, um
         # timeout ou uma chave vencida da OpenAI viravam 500 para o visitante — e o `Lead` já

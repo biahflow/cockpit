@@ -17,7 +17,7 @@ _GOOD = (
 
 @pytest.mark.django_db
 def test_score_meeting_persists_on_project_and_audits(monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda system, user: (_GOOD, {"prompt_tokens": 5, "completion_tokens": 3}))
+    monkeypatch.setattr(ai, "complete", lambda system, user, **_: (_GOOD, {"prompt_tokens": 5, "completion_tokens": 3}))
     meeting = MeetingFactory()
     user = UserFactory()
 
@@ -48,7 +48,7 @@ def test_score_meeting_clamps_and_drops_invalid_dimensions(monkeypatch):
         '"dimensions": [{"label": "Dados", "score": 200}, {"label": "", "score": 40}, '
         '{"score": 10}, "lixo"], "summary": "x"}'
     )
-    monkeypatch.setattr(ai, "complete", lambda s, u: (payload, {"prompt_tokens": 1, "completion_tokens": 1}))
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: (payload, {"prompt_tokens": 1, "completion_tokens": 1}))
     meeting = MeetingFactory()
 
     ai_score.score_meeting(meeting)
@@ -61,7 +61,7 @@ def test_score_meeting_clamps_and_drops_invalid_dimensions(monkeypatch):
 
 @pytest.mark.django_db
 def test_score_meeting_tolerates_garbage_output(monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda s, u: ("desculpe, não sei", {"prompt_tokens": 0, "completion_tokens": 0}))
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: ("desculpe, não sei", {"prompt_tokens": 0, "completion_tokens": 0}))
     meeting = MeetingFactory()
 
     ai_score.score_meeting(meeting)
@@ -75,7 +75,7 @@ def test_score_meeting_tolerates_garbage_output(monkeypatch):
 
 @pytest.mark.django_db
 def test_parses_json_inside_code_fence(monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda s, u: (
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: (
         'Claro!\n```json\n{"maturity": 20, "opportunity": 60, "dimensions": [], "summary": "ok"}\n```',
         {"prompt_tokens": 1, "completion_tokens": 1},
     ))
@@ -93,7 +93,7 @@ def api_client() -> APIClient:
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_ai_score_action_returns_payload(api_client, monkeypatch):
-    monkeypatch.setattr(ai, "complete", lambda s, u: (_GOOD, {"prompt_tokens": 1, "completion_tokens": 1}))
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: (_GOOD, {"prompt_tokens": 1, "completion_tokens": 1}))
     meeting = MeetingFactory()
     api_client.force_authenticate(UserFactory())
 

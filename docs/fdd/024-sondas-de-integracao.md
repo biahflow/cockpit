@@ -267,10 +267,12 @@ os itens vencidos, com o projeto de cada um. O recorte segue saindo de `visible_
 possível — que deixou de ser o nome do projeto e passou a ser o título do item — ganhou teste de
 regressão próprio.
 
-**Teto de tokens por chamada.** `AI_DAILY_LIMIT` conta chamadas, não custo, e nada limita o
-tamanho de uma resposta. A rodada 2 mediu a ordem de grandeza real (média de ~225 tokens de saída,
-máximo 854 no contrato) e não achou motivo urgente; um teto global truncaria contrato no meio de
-uma cláusula, então, se entrar, é por feature.
+**Teto de tokens — resolvido, e por feature.** `AI_DAILY_LIMIT` conta chamadas, não custo. A
+rodada 2 mediu a saída real (média ~225 tokens, máximo 854 no contrato), e foi essa medição que
+definiu o desenho: teto global seria alto demais para servir de teto, ou truncaria um contrato no
+meio de uma cláusula. Então ele vale só onde a saída tem forma fixa e pequena — qualificação de
+lead (300) e AI Score (500) —, e a regra saiu para `ai.completion_kwargs`, pura e testável sem
+rede.
 
 **Rodar `check_integrations` pelo agendador.** O gancho é natural (o `scheduler` já faz isso com o
 `backup_status`), mas fica para depois de as sondas provarem que não dão falso positivo.

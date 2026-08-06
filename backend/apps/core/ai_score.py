@@ -69,6 +69,12 @@ def _dimensions(raw: Any) -> list[dict[str, Any]]:
     return result
 
 
+# Teto de saída. A rodada 2 mediu **178** tokens de saída contra o modelo real; 500 dá folga de
+# quase 3x para uma transcrição mais rica sem deixar de ser teto. Cabe aqui, e não num teto global,
+# porque a saída tem forma fixa: dois inteiros, uma lista curta de dimensões e um resumo.
+_MAX_TOKENS = 500
+
+
 def score_meeting(meeting: Meeting, user: User | None = None) -> dict[str, Any]:
     """Gera o AI Score a partir da transcrição da reunião, persiste no projeto e audita.
 
@@ -78,7 +84,7 @@ def score_meeting(meeting: Meeting, user: User | None = None) -> dict[str, Any]:
     from .models import AiInteraction
 
     context = ai.build_meeting_context(meeting)
-    text, usage = ai.complete(_SYSTEM, context)
+    text, usage = ai.complete(_SYSTEM, context, max_tokens=_MAX_TOKENS)
     data = _parse(text)
 
     project = meeting.project
