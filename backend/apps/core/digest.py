@@ -1,8 +1,28 @@
 """Resumo diário (digest) por IA — Go-live/Hypercare (RFC 0002, FDD 010).
 
-Reúne os itens do dia de cada usuário (marcos/tarefas atrasados e a vencer) e envia um
-resumo por e-mail. Com a IA ligada, o texto é redigido pelo modelo (auditado em
-`AiInteraction`); desligada, cai no resumo estruturado. Tudo atrás da flag `email`.
+Reúne os itens do dia de cada usuário e envia um resumo por e-mail. Com a IA ligada, o texto é
+redigido pelo modelo (auditado em `AiInteraction`); desligada, cai no resumo estruturado. Tudo
+atrás da flag `email`.
+
+O digest tem **duas seções** (FDD 010, FDD 018):
+
+- **Seus itens** — o que a pessoa possui, atrasado ou a vencer em 7 dias.
+- **Do seu projeto** — o que está atrasado nos projetos de que ela *participa*, de outras pessoas.
+
+A segunda seção existe porque, até aqui, o digest filtrava só por `owner=` e quem entrava numa
+equipe sem ser dono de nada recebia um digest vazio — consequência que a FDD 018 registrou em
+aberto e que só passou a doer quando a FDD 023 fez o digest realmente rodar todo dia.
+
+Duas regras que parecem detalhe e não são:
+
+- **Participação não é visibilidade.** A seção da equipe consulta `ProjectMember` diretamente, e
+  **não** `Project.objects.visible_to()`: esta devolve *tudo* para admin e vendas, e usá-la encheria
+  a caixa de um admin com o portfólio inteiro da casa, todo dia. Visibilidade responde "posso ver?";
+  aqui a pergunta é "isto é meu problema?".
+- **A seção própria passou a respeitar o acesso** (`project_scope_q`). Nada reatribui os itens
+  quando alguém sai de uma equipe, então quem saiu continua `owner` das suas tarefas — e o digest
+  seguia mandando título e vencimento de um projeto que a pessoa já não abre. Para admin e vendas
+  a função devolve `Q()` vazio, então ninguém perde o que recebia.
 """
 
 from __future__ import annotations
@@ -16,34 +36,88 @@ from django.utils import timezone
 from . import ai, flags
 
 if TYPE_CHECKING:
-    from .models import User
+    from .models import User, WorkItem
 
 _SYSTEM = (
     "Você escreve um resumo diário curto e acionável em português a partir dos itens "
-    "fornecidos (marcos e tarefas). Priorize o que está atrasado; use apenas o material dado."
+    "fornecidos (marcos e tarefas). O material vem em duas seções: os itens da própria pessoa e "
+    "os itens atrasados dos projetos de que ela participa, que são de outras pessoas — não "
+    "misture as duas, e não atribua a ela o que está na segunda. Priorize o que está atrasado; "
+    "use apenas o material dado."
 )
+
+# Teto por bloco. Sem ele, um projeto com 80 itens abertos vira uma parede de texto diária para
+# cada pessoa da equipe — e um digest que ninguém lê é o mesmo que digest nenhum.
+_MAX_LINHAS = 10
+
+
+def _linhas(items: list[WorkItem], *, vencido: bool) -> list[str]:
+    """As primeiras `_MAX_LINHAS` de um bloco, com o resto somado em uma linha final."""
+    verbo = "venceu" if vencido else "vence"
+    linhas = [f"- {item.title} ({verbo} {item.due_date})" for item in items[:_MAX_LINHAS]]
+    if len(items) > _MAX_LINHAS:
+        linhas.append(f"- ... e mais {len(items) - _MAX_LINHAS}")
+    return linhas
 
 
 def build_user_digest_context(user: User) -> str:
-    """Itens abertos do usuário: atrasados e a vencer em 7 dias. Vazio se não houver nada."""
-    from .models import Milestone, Task
+    """Monta o material do digest da pessoa. Vazio quando não há nada a reportar."""
+    from .models import Milestone, Project, Task, project_scope_q
 
     today = timezone.localdate()
     soon = today + timedelta(days=7)
-    lines: list[str] = []
-    for label, model in (("Marcos", Milestone), ("Tarefas", Task)):
-        items = list(
-            model.objects.filter(owner=user, archived_at__isnull=True).exclude(status=model.Status.DONE)
-        )
-        overdue = [item for item in items if item.due_date < today]
-        upcoming = [item for item in items if today <= item.due_date <= soon]
+
+    # Projetos de que a pessoa participa — critério de relevância, não de acesso (ver o docstring
+    # do módulo). Materializado uma vez e reusado nos dois modelos: o laço abaixo não pode virar
+    # uma consulta por projeto.
+    member_project_ids = list(
+        Project.objects.filter(
+            members__user=user,
+            members__archived_at__isnull=True,
+            archived_at__isnull=True,
+        ).values_list("id", flat=True)
+    )
+
+    meus: list[str] = []
+    da_equipe: list[str] = []
+
+    # O adjetivo acompanha o gênero do rótulo: "Marcos atrasados", "Tarefas atrasadas". Isto é
+    # texto que chega por e-mail a um cliente interno todo dia — concordância importa.
+    for label, atrasados, model in (
+        ("Marcos", "atrasados", Milestone),
+        ("Tarefas", "atrasadas", Task),
+    ):
+        abertos = model.objects.filter(archived_at__isnull=True).exclude(status=model.Status.DONE)
+
+        # `.distinct()`: o join com `members` dentro de `project_scope_q` multiplica linhas.
+        proprios = list(abertos.filter(project_scope_q(user, "project"), owner=user).distinct())
+        overdue = [item for item in proprios if item.due_date < today]
+        upcoming = [item for item in proprios if today <= item.due_date <= soon]
         if overdue:
-            lines.append(f"{label} atrasados:")
-            lines += [f"- {item.title} (venceu {item.due_date})" for item in overdue]
+            meus.append(f"{label} {atrasados}:")
+            meus += _linhas(overdue, vencido=True)
         if upcoming:
-            lines.append(f"{label} a vencer nos próximos 7 dias:")
-            lines += [f"- {item.title} (vence {item.due_date})" for item in upcoming]
-    return "\n".join(lines)
+            meus.append(f"{label} a vencer nos próximos 7 dias:")
+            meus += _linhas(upcoming, vencido=False)
+
+        # Só atrasados, e só de outras pessoas: o que já apareceu acima não se repete, e "a vencer
+        # em 7 dias" do projeto inteiro seria volume sem sinal.
+        equipe = list(
+            abertos.filter(project_id__in=member_project_ids, due_date__lt=today).exclude(owner=user)
+        )
+        if equipe:
+            da_equipe.append(f"{label} {atrasados}:")
+            da_equipe += _linhas(equipe, vencido=True)
+
+    if not meus and not da_equipe:
+        return ""
+
+    blocos: list[str] = []
+    if meus:
+        blocos.append("\n".join(["Seus itens", *meus]))
+    if da_equipe:
+        blocos.append("\n".join(["Do seu projeto (itens de outras pessoas)", *da_equipe]))
+    return "\n\n".join(blocos)
 
 
 def send_daily_digest() -> int:

@@ -38,6 +38,19 @@ RBAC interno (ADR 0003), e não muda. O digest diário continua filtrando por `o
 um membro que não é dono de nenhum item recebe digest vazio — não é vazamento, é consequência
 a resolver quando o digest evoluir para membership.
 
+> **Fechada.** O digest passou a somar as duas coisas: os itens próprios (agora recortados por
+> `project_scope_q`) e os atrasados dos projetos de que a pessoa **participa** — ver FDD 010.
+> Ficou para depois o **alvo das notificações**: `signals.py` e `tasksync.apply_inbound` ainda
+> notificam `instance.owner` com link fundo para `/projetos/<id>`, que é o último resíduo do
+> `owner=` no repositório.
+>
+> Vale registrar que a consequência acima descrevia só metade do problema. A outra metade era
+> vazamento, e ninguém tinha reparado: como nada reatribui os itens quando alguém sai da equipe,
+> quem foi removido continua `owner` das suas tarefas, e o digest — filtrando só por `owner` —
+> seguia mandando título e vencimento de um projeto que `visible_to` já excluía. Alcançável
+> também pelo Django admin, onde o combo de `owner` de `Milestone`/`Task` lista todo mundo sem
+> filtrar por equipe. As duas metades fecham juntas.
+
 ## Aceite
 
 Um admin abre um projeto e vê o painel **"Equipe do projeto"**, com quem participa e um
