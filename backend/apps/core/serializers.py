@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from datetime import date
@@ -10,6 +11,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.uploadedfile import UploadedFile
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+from rest_framework.exceptions import APIException
 
 from . import drive
 from .models import (
@@ -38,6 +40,17 @@ from .models import (
     Task,
     User,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class DriveUnavailable(APIException):
+    """O Google Drive recusou o upload. 502 porque o defeito é do fornecedor, não do pedido —
+    e porque um 500 mudo fazia o arquivo do usuário desaparecer sem explicação."""
+
+    status_code = 502
+    default_detail = "O Google Drive não aceitou o arquivo agora. Tente de novo em instantes."
+    default_code = "drive_unavailable"
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
@@ -326,7 +339,17 @@ class DocumentSerializer(serializers.ModelSerializer[Document]):
             uploaded_by=self.context["request"].user,
         )
         if drive.is_enabled():
-            document.drive_file_id, document.drive_link = drive.upload_document(document, uploaded_file)
+            try:
+                document.drive_file_id, document.drive_link = drive.upload_document(
+                    document, uploaded_file
+                )
+            except Exception as exc:  # noqa: BLE001 - qualquer falha do Drive, não só HTTP
+                # Era o único ponto de integração num caminho de **escrita** sem tratamento:
+                # credencial errada ou pasta inexistente davam 500 mudo e o arquivo do usuário
+                # sumia. 502 diz de quem é o problema (o fornecedor, não o pedido) e deixa claro
+                # que vale repetir — nada é gravado pela metade, porque o `save()` vem depois.
+                logger.exception("upload ao Drive falhou para %s", document.original_name)
+                raise DriveUnavailable() from exc
         else:
             document.file = uploaded_file
         document.save()

@@ -53,13 +53,26 @@ def _service():  # pragma: no cover - I/O com a API do Google
     return build("calendar", "v3", credentials=credentials, cache_discovery=False)
 
 
+def all_day_range(day: date) -> tuple[str, str]:
+    """`(start.date, end.date)` de um evento de dia inteiro no Google Calendar.
+
+    `end.date` é **exclusivo**: um evento de um dia em 06/08 vai de `2026-08-06` a `2026-08-07`.
+    Com start igual a end o intervalo tem comprimento zero e a API **recusa** — ou seja, o botão
+    "Adicionar ao calendário" falhava em 100% das tentativas. Passou despercebido porque
+    `create_event` é I/O fora da cobertura e o único teste o substitui por um dublê; esta função
+    existe separada justamente para a regra ficar testável sem rede.
+    """
+    return day.isoformat(), (day + timedelta(days=1)).isoformat()
+
+
 def create_event(summary: str, day: date, description: str = "", origin: str = "") -> str:  # pragma: no cover - I/O
     service = _service()
+    inicio, fim = all_day_range(day)
     body: dict = {
         "summary": summary,
         "description": description,
-        "start": {"date": day.isoformat()},
-        "end": {"date": day.isoformat()},
+        "start": {"date": inicio},
+        "end": {"date": fim},
     }
     if origin:
         body["extendedProperties"] = {"private": {ORIGIN_KEY: origin}}
@@ -88,10 +101,35 @@ def create_timed_event(
     return created.get("id", ""), created.get("htmlLink", "")
 
 
+class CalendarUnavailable(RuntimeError):
+    """O calendário não pôde ser consultado — e por isso nada pode ser afirmado sobre ele."""
+
+
+def parse_freebusy(result: dict, calendar_id: str) -> list[tuple[datetime, datetime]]:
+    """Extrai os períodos ocupados da resposta do free/busy. **Falha fechado.**
+
+    Quando a conta de serviço não enxerga o calendário, o Google não devolve erro HTTP: devolve
+    200 com `errors` no lugar de `busy` para aquele id. Ler isso com um `.get("busy", [])` produz
+    "nenhum horário ocupado", ou seja, **tudo livre** — e o site passa a oferecer e marcar reunião
+    por cima da agenda real. Um agendamento que falha aberto é pior que um que não funciona, então
+    aqui a ausência de resposta utilizável vira exceção.
+    """
+    agenda = result.get("calendars", {}).get(calendar_id)
+    if agenda is None:
+        raise CalendarUnavailable(f"o free/busy não devolveu o calendário {calendar_id}")
+    if agenda.get("errors"):
+        motivos = ", ".join(str(e.get("reason", e)) for e in agenda["errors"])
+        raise CalendarUnavailable(f"calendário {calendar_id} inacessível: {motivos}")
+    if "busy" not in agenda:
+        raise CalendarUnavailable(f"resposta de free/busy sem 'busy' para {calendar_id}")
+    return [
+        (datetime.fromisoformat(b["start"]), datetime.fromisoformat(b["end"]))
+        for b in agenda["busy"]
+    ]
+
+
 def freebusy(time_min: datetime, time_max: datetime) -> list[tuple[datetime, datetime]]:  # pragma: no cover - I/O
     """Períodos ocupados do calendário de reservas no intervalo dado."""
-    from datetime import datetime as _dt
-
     service = _service()
     calendar_id = settings.GOOGLE_BOOKING_CALENDAR_ID or settings.GOOGLE_CALENDAR_ID
     result = service.freebusy().query(body={
@@ -99,8 +137,7 @@ def freebusy(time_min: datetime, time_max: datetime) -> list[tuple[datetime, dat
         "timeMax": time_max.isoformat(),
         "items": [{"id": calendar_id}],
     }).execute()
-    busy = result.get("calendars", {}).get(calendar_id, {}).get("busy", [])
-    return [(_dt.fromisoformat(b["start"]), _dt.fromisoformat(b["end"])) for b in busy]
+    return parse_freebusy(result, calendar_id)
 
 
 def list_events(time_min: datetime, time_max: datetime) -> list[dict]:  # pragma: no cover - I/O

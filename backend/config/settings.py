@@ -347,6 +347,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 AI_BASE_URL = os.getenv("AI_BASE_URL", "")
 AI_DAILY_LIMIT = int(os.getenv("AI_DAILY_LIMIT", "50"))
+# O SDK da OpenAI espera 10 min por padrão. Uma destas chamadas roda dentro do POST público do
+# formulário de leads, então sem teto um dia ruim do fornecedor prende o worker e derruba o site
+# junto. 30 s é folgado para uma completion curta e curto para não segurar ninguém.
+AI_TIMEOUT_SECONDS = _env_int("AI_TIMEOUT_SECONDS", 30)
 
 # Calendário (Google) e assinatura eletrônica — esqueletos atrás de flag (desligados).
 CALENDAR_ENABLED = os.getenv("CALENDAR_ENABLED", "false").lower() == "true"

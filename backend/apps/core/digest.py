@@ -27,6 +27,7 @@ Duas regras que parecem detalhe e não são:
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -34,6 +35,8 @@ from django.core.mail import send_mail
 from django.utils import timezone
 
 from . import ai, flags
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .models import User, WorkItem
@@ -142,6 +145,18 @@ def send_daily_digest() -> int:
             )
         else:
             text = context
-        send_mail("Seu resumo diário — Portal Biahflow", text, None, [user.email], fail_silently=True)
+        # `send_mail` devolve quantas mensagens saíram, e com `fail_silently=True` isso é `0`
+        # quando o SMTP recusa ou não existe. Somar 1 aqui fazia o scheduler logar
+        # "Digests enviados: 12" com zero entregues — o mesmo modo de falha do agendador que não
+        # existia, uma camada abaixo: o número dizia que estava tudo bem.
+        #
+        # `fail_silently` continua ligado de propósito: um endereço inválido não pode interromper
+        # o envio para o resto da casa. O que muda é a contagem parar de mentir.
+        enviados = send_mail(
+            "Seu resumo diário — Portal Biahflow", text, None, [user.email], fail_silently=True
+        )
+        if not enviados:
+            logger.warning("digest não entregue a %s (SMTP recusou ou não respondeu)", user.username)
+            continue
         sent += 1
     return sent

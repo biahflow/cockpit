@@ -26,6 +26,17 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
   `is_admin` — o mesmo predicado que autoriza no backend —, e os **dez** pontos de decisão do SPA
   passam a lê-lo em vez de `role`. Some o portal capado da primeira instalação, e com ele o
   `manage.py shell` que o roteiro mandava rodar.
+- **Sondas de integração** (FDD 024): `manage.py check_integrations` pergunta ao provedor se a
+  credencial funciona, em vez de só conferir se a variável está preenchida. Junto, quatro defeitos
+  que só apareceriam contra o provedor real — evento de dia inteiro que a API recusa, free/busy que
+  falhava **aberto**, digest que contava envio inexistente, e upload/qualificação derrubando o
+  pedido do usuário.
+
+> **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
+> de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa
+> instalação nova, e todo código que fala com provedor externo está atrás de `# pragma: no cover` —
+> só o Autentique tem homologação registrada. O que está ligado por padrão funciona e é testado; o
+> resto ainda precisa de uma rodada com credencial real (FDD 024).
 
 ## Prontidão para produção — adiada deliberadamente
 
@@ -117,8 +128,10 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - [x] Calendário: add ao Google Calendar + **criação automática de tarefas a partir de eventos** (marcador `#proj-<id>`, idempotente, atrás de flag — FDD 012).
 - [x] Notificações por e-mail (espelho das in-app) + digest diário por IA, atrás de flag (FDD 010).
 - [x] Assinatura eletrônica: `esign` + `SignatureRequest` + lembrete de pendentes + **adaptador
-      de provedor homologado (Clicksign) e webhook de status assinado (HMAC), idempotente**
-      (FDD 009, ADR 0007); `mark-signed` fica como fallback manual.
+      de provedor homologado (Autentique, contra o sandbox da conta) e webhook de status assinado
+      (HMAC), idempotente** (FDD 009, ADR 0007); o Clicksign é o segundo adaptador, **sem
+      homologação**. `mark-signed` fica como fallback manual — e é o único caminho que funciona
+      sem `ESIGN_PROVIDER` configurado.
 - [x] Portal do cliente: **alimentação** pelo Biahflow (webhook + snapshot, ADR 0003/0005).
       [ ] Consumo no repo `portal_cliente` (isolado por organização) — trilho separado.
 
