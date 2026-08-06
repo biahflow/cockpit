@@ -156,6 +156,18 @@ docker compose -f docker-compose.prod.yml exec backup backup.sh
 aplicada **não** volta sozinha: restaure o banco somente conforme o plano da migração
 (**`backup-e-restauracao.md`** — restaurar substitui tudo o que entrou desde a cópia).
 
+> **Isto só funciona se houver tag**, e por um tempo não houve nenhuma — o rollback estava
+> documentado e não era executável. **Corte a tag antes de subir**, não depois:
+>
+> ```bash
+> # 1. no CHANGELOG.md, feche "Não lançado" como "## [X.Y.Z] — DD/MM/AAAA" e abra uma nova vazia
+> # 2. tag anotada no commit que vai ao ar
+> git tag -a vX.Y.Z -m "vX.Y.Z"
+> git push origin vX.Y.Z
+> ```
+>
+> Sem `-a` a tag não guarda autor nem data, e é justamente isso que se quer saber ao voltar.
+
 **Conferir a configuração de um ambiente já no ar:**
 ```bash
 docker compose -f docker-compose.prod.yml exec api \
