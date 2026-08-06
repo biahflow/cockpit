@@ -142,6 +142,29 @@ propósito; Discovery, Assessment e o chat não o inventaram, e perguntado diret
   itens. **Não corrigido**: é um dos agregadores recortados à mão pela ADR 0010, e ampliá-lo pede
   revisar o escopo com cuidado próprio.
 
+## Varredura do Google — antes da rodada 3
+
+A rodada 2 ensinou a lição: **a auditoria original desta FDD foi parcial**. Ela blindou 1 dos 4
+pontos que chamavam a OpenAI. A varredura equivalente do Google, feita antes de apontar credencial,
+achou o mesmo padrão — o **upload** no Drive estava protegido, e seis vizinhos não:
+
+- **A reserva órfã** (`booking.book`), a mais grave e no caminho público: a `Booking` é gravada e a
+  transação **fecha** antes de o evento ser criado. Recusa do Google deixava a reserva bloqueando o
+  horário, sem evento, sem aviso ao dono, sem confirmação ao lead, e 500 para o visitante. Corrigida
+  por **degradação**, que é o que o próprio código já fazia com o retorno vazio (`if event_id or
+  link:`) — o defeito era a exceção não ser tolerada como o vazio era.
+- **O download do Drive** (na action de documento e no `request-signature`), o `add-to-calendar` e a
+  sincronia disparada pela tela: **502**, como o upload.
+- **O transporte do free/busy**: o `parse_freebusy` falha fechado desde esta FDD, mas uma falha de
+  rede um passo antes escapava crua. Vira **503** pela `CalendarUnavailable` que já existe — ali a
+  pergunta é "o que há na agenda?", e a resposta honesta é "não sei".
+- **O `kickoff.finalize`**, que engolia a falha do Drive com `pass` mudo: o projeto ficava sem pasta
+  e ninguém sabendo.
+
+Tipos estreitos (`DriveProviderError`, `CalendarProviderError`), pelo mesmo motivo da rodada 2. E
+nasce `apps/core/exceptions.py`, porque a regra "falha de fornecedor é 502" já estava expressa em
+três módulos e ia para quatro — *uma regra, uma expressão* (ADR 0010).
+
 ## Fora deste recorte
 
 **As rodadas 3 e 4.** Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os

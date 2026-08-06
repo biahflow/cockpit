@@ -41,3 +41,7 @@ notificado. Rodar a sincronização de novo não cria duplicatas.
 Reprocessar o mesmo evento não duplica a tarefa; eventos sem marcador, de projeto
 arquivado/inexistente, ou originados no próprio portal (`biahflow_origin`) são ignorados;
 com a flag desligada, `sync_calendar()` é no-op `(0, 0)` e a ação manual retorna 503.
+Quando o **fornecedor recusa** (credencial, escopo ou agenda inexistente), tanto
+`add-to-calendar` quanto a sincronia manual retornam **502** — antes eram 500, erro nosso
+para um problema que não é nosso. São status diferentes de propósito: 503 é "um admin
+desligou", 502 é "o Google recusou, vale repetir".

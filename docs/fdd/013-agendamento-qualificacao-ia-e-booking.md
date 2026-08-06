@@ -50,5 +50,13 @@ lead recebe a confirmação. Lead de fit fraco (ou `ai` desligado) não recebe o
 ## Regressão crítica
 
 Reservar o mesmo horário duas vezes retorna 409 (sem `Booking` duplicada); `slots`/`book` recusam
+**A reserva sobrevive à recusa do Google.** `book()` grava a `Booking` e fecha a transação antes
+de criar o evento; se o Google recusar (o caso conhecido é `forbiddenForServiceAccounts`, que conta
+de serviço leva ao convidar participante sem delegação em todo o domínio), a reserva **vale** — o
+horário está de fato comprometido —, o dono é avisado **com a ressalva de que a reunião não entrou
+na agenda**, o lead recebe a confirmação e o visitante vê 201. Antes a exceção subia: sobrava uma
+reserva bloqueando o horário, sem evento, sem aviso e sem confirmação, e o endpoint público
+devolvia 500.
+
 `booking_token` inválido ou expirado; com `calendar` desligado os endpoints retornam 503; a
 qualificação tolera saída não-JSON do modelo sem quebrar o intake.

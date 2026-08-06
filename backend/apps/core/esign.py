@@ -34,6 +34,7 @@ from django.core.mail import send_mail
 from django.utils import timezone
 
 from . import drive, flags, notifications
+from .exceptions import DriveUnavailable
 from .portal import sign
 
 if TYPE_CHECKING:
@@ -334,7 +335,11 @@ def send_for_signature(document: Document, signer_email: str) -> SignatureRef:
 def _document_bytes(document: Document) -> bytes:
     """Conteúdo do arquivo, venha ele do Drive ou do storage local (mesma regra do download)."""
     if document.drive_file_id:
-        return drive.download_document(document).read()
+        # Mesmo download da action de documento, mesmo tratamento: falha do Drive é do fornecedor.
+        try:
+            return drive.download_document(document).read()
+        except drive.DriveProviderError as exc:
+            raise DriveUnavailable() from exc
     if not document.file:
         return b""
     with document.file.open("rb") as handle:

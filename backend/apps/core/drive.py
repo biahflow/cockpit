@@ -22,6 +22,15 @@ if TYPE_CHECKING:
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
+
+class DriveProviderError(Exception):
+    """O Drive recusou: credencial, escopo, pasta inexistente, cota ou rede.
+
+    Tipo **estreito** de propósito, como o `ai.AiProviderError` da rodada 2: quem chama envolve só
+    a chamada de rede, e um erro de banco logo depois continua sendo 500 em vez de virar "o Google
+    caiu" — que é exatamente o tipo de mentira que a FDD 024 existe para evitar.
+    """
+
 PROJECT_BUCKET = "1-Projetos"
 CLIENT_BUCKET = "2-Áreas"
 OPPORTUNITY_BUCKET = "3-Recursos"
@@ -157,15 +166,22 @@ def upload_document(document: Document, uploaded_file) -> tuple[str, str]:  # pr
 
 
 def download_document(document: Document) -> io.BytesIO:  # pragma: no cover - I/O
-    """Baixa o conteúdo do arquivo pela conta de serviço, preservando o RBAC do app."""
+    """Baixa o conteúdo do arquivo pela conta de serviço, preservando o RBAC do app.
+
+    Traduz qualquer falha para `DriveProviderError`. A FDD 024 blindou o **upload** e deixou esta
+    crua: era 500 mudo no caminho em que a pessoa tenta pegar de volta o próprio arquivo.
+    """
     from googleapiclient.http import MediaIoBaseDownload
 
-    service = _service()
-    request = service.files().get_media(fileId=document.drive_file_id, supportsAllDrives=True)
-    buffer = io.BytesIO()
-    downloader = MediaIoBaseDownload(buffer, request)
-    done = False
-    while not done:
-        _, done = downloader.next_chunk()
+    try:
+        service = _service()
+        request = service.files().get_media(fileId=document.drive_file_id, supportsAllDrives=True)
+        buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+    except Exception as exc:  # noqa: BLE001 - a família do SDK vira um tipo só
+        raise DriveProviderError(str(exc) or exc.__class__.__name__) from exc
     buffer.seek(0)
     return buffer

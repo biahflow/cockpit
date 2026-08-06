@@ -42,6 +42,11 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
   hoje, e o prompt proibia raciocinar), `AI_TIMEOUT_SECONDS` valia **três vezes** o que prometia
   porque o SDK retenta por baixo, e o digest cobrava a cota de IA de quem nem pediu. Confirmou o
   antivazamento e a proposta respeitando o nível gratuito. Faltam Google e assinatura.
+- **Varredura de falhar-fechado do Google** (FDD 024): feita antes de apontar credencial, achou o
+  mesmo padrão da rodada 2 — o upload no Drive estava blindado e **seis vizinhos não**. O mais grave
+  é público: uma recusa do Google deixava a **reserva órfã**, bloqueando o horário sem reunião na
+  agenda, sem aviso ao dono e sem confirmação ao lead. A homologação do Google em si depende da
+  conta de serviço.
 
 > **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
 > de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa

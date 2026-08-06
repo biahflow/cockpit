@@ -8,12 +8,15 @@ Nada aqui bloqueia a conversão — os efeitos externos são tolerantes a falha.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.core.mail import send_mail
 
 from . import drive, notifications
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .models import Project
@@ -94,8 +97,10 @@ def finalize(project: Project) -> None:
     """Efeitos externos best-effort do kickoff (executar após o commit da conversão)."""
     try:
         drive.ensure_project_folder(project)
-    except Exception:  # pragma: no cover - efeito externo é best-effort
-        pass
+    except Exception:  # noqa: BLE001 - best-effort: o kickoff não falha porque o Drive caiu
+        # Best-effort é a decisão certa; o `pass` mudo é que não era. Sem log, o projeto ficava
+        # **sem pasta e ninguém sabendo** — e a pasta é onde a entrega guarda tudo depois.
+        logger.exception("kickoff: pasta do Drive não criada para o projeto %s", project.pk)
     _send_kickoff_email(project)
     notifications.notify(
         [project.owner], "kickoff",
