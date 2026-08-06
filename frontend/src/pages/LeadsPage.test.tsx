@@ -31,3 +31,22 @@ test("converte um lead em oportunidade", async () => {
   await user.click(screen.getByRole("button", { name: /Converter em oportunidade/ }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/leads/1/convert/", expect.objectContaining({ method: "POST" })));
 });
+
+
+test("lista e restaura leads arquivados", async () => {
+  // O diálogo de arquivar promete restauração; sem esta aba a promessa era falsa (FDD 025).
+  const user = userEvent.setup();
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/leads/?archived=1") return Promise.resolve([{ ...lead, id: 2, name: "Arquivado" }]);
+    if (path === "/leads/") return Promise.resolve([lead]);
+    return Promise.resolve({});
+  });
+  render(<LeadsPage />);
+  await screen.findByText("Fulano");
+
+  await user.click(screen.getByRole("button", { name: "Arquivados" }));
+  expect(await screen.findByText("Arquivado")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: /Restaurar/ }));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/leads/2/unarchive/", expect.objectContaining({ method: "POST" })));
+});

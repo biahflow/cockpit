@@ -158,13 +158,14 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_tier = serializers.CharField(source="service.tier", read_only=True)
     project = serializers.SerializerMethodField()
+    project_archived = serializers.SerializerMethodField()
 
     class Meta:
         model = Opportunity
         fields = [
             "id", "client", "contact", "title", "scope", "estimated_value", "stage", "stage_name",
             "owner", "expected_close_date", "service", "service_name", "service_tier", "project",
-            "created_at", "updated_at",
+            "project_archived", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
 
@@ -178,6 +179,18 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         """
         project = getattr(obj, "project", None)
         return project.pk if project else None
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_project_archived(self, obj: Opportunity) -> bool:
+        """O projeto convertido está arquivado?
+
+        `project` continua preenchido nesse caso, de propósito: anulá-lo faria a tela voltar a
+        oferecer "Criar projeto", e a conversão responderia 409 porque o `OneToOneField` segue
+        ocupado — trocaria um link morto por um botão morto. Com este campo a tela mostra o estado
+        em vez de oferecer uma ação que não existe (FDD 025).
+        """
+        project = getattr(obj, "project", None)
+        return project is not None and project.archived_at is not None
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))

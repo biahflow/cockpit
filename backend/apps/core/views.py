@@ -523,16 +523,22 @@ class OpportunityViewSet(ArchiveModelViewSet):
         serializer.save(owner=self.request.user)
 
     def perform_destroy(self, instance: Opportunity) -> None:
-        """Recusa arquivar oportunidade já convertida: ela é o outro lado de um projeto vivo.
+        """Recusa arquivar oportunidade cujo projeto ainda está **ativo**.
 
         `Project.opportunity` é `OneToOneField` com `PROTECT`, e o projeto lê a oportunidade para
-        montar o próprio histórico comercial. Arquivá-la deixaria o projeto apontando para um
-        registro que a interface esconde — e não há caminho de volta pela conversão, que só roda
-        uma vez.
+        montar o próprio histórico comercial. Arquivá-la sob um projeto vivo deixaria o projeto
+        apontando para um registro que a interface esconde.
+
+        A condição é o estado do projeto, e não a existência da relação: `hasattr` continua
+        verdadeiro com o projeto arquivado, porque o reverso não some com o `archived_at`. Testando
+        só a existência, a recusa não tinha saída — a própria mensagem manda arquivar o projeto, e
+        isso não desbloqueava nada; a oportunidade também não reconverte (o `OneToOneField` segue
+        ocupado) e, viva, ainda bloqueava o cliente. Ver FDD 025.
         """
-        if hasattr(instance, "project"):
+        projeto = getattr(instance, "project", None)
+        if projeto is not None and projeto.archived_at is None:
             raise ArchiveConflict(
-                f"Esta oportunidade já virou o projeto \"{instance.project.name}\". "
+                f"Esta oportunidade já virou o projeto \"{projeto.name}\". "
                 "Arquive o projeto se quiser encerrar este trabalho."
             )
         instance.archive()
@@ -555,8 +561,19 @@ class OpportunityViewSet(ArchiveModelViewSet):
             return Response({"detail": "Somente Vendas pode converter oportunidades."}, status=403)
         if not opportunity.is_won:
             return Response({"detail": "A oportunidade deve estar na etapa Ganho."}, status=400)
-        if hasattr(opportunity, "project"):
-            return Response({"detail": "A oportunidade já foi convertida."}, status=409)
+        existente = getattr(opportunity, "project", None)
+        if existente is not None:
+            # A conversão roda uma vez só: `Project.opportunity` é `OneToOneField` sem condição de
+            # arquivamento, então o slot continua ocupado mesmo com o projeto arquivado. Dizer só
+            # "já foi convertida" nesse caso manda a pessoa procurar um projeto que a interface
+            # esconde — daí nomear o estado e o caminho de volta.
+            detalhe = (
+                f"Esta oportunidade já virou o projeto \"{existente.name}\", que está arquivado. "
+                "Restaure o projeto para retomar este trabalho."
+                if existente.archived_at is not None
+                else "A oportunidade já foi convertida."
+            )
+            return Response({"detail": detalhe}, status=409)
         serializer = ProjectSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         if serializer.validated_data["client"].id != opportunity.client_id:

@@ -12,7 +12,7 @@ const stages = [
   { id: 1, name: "Prospecção", kind: "open", position: 0 },
   { id: 2, name: "Ganho", kind: "won", position: 50 },
 ];
-const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31", service: 10, service_name: "Discovery Express", service_tier: "discovery_express", project: null as number | null };
+const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31", service: 10, service_name: "Discovery Express", service_tier: "discovery_express", project: null as number | null, project_archived: false };
 const services = [
   { id: 10, name: "Discovery Express", active: true, tier: "discovery_express", tier_display: "Discovery Express", list_price: "0.00", summary: "Diagnóstico gratuito." },
   { id: 11, name: "Implantação", active: true, tier: "implantacao", tier_display: "Implantação", list_price: "90000.00", summary: "Funcionários digitais." },
@@ -183,4 +183,62 @@ test("altera o nível de produto pelo detalhe da oportunidade", async () => {
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({
     method: "PATCH", body: expect.stringContaining('"service":11'),
   })));
+});
+
+
+// --- arquivar e restaurar (FDD 025) -------------------------------------------------------------
+//
+// O fluxo "Arquivar de dentro do detalhe" não tinha teste nenhum — foi exatamente onde o
+// empilhamento de modais quebrou em produção.
+
+test("arquiva a oportunidade a partir do detalhe, com confirmação", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+
+  await user.click(screen.getByRole("button", { name: /Arquivar/ }));
+  // A confirmação abre por cima; o detalhe continua montado atrás.
+  expect(screen.getByRole("dialog", { name: "Arquivar oportunidade" })).toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "Detalhe da oportunidade" })).toBeInTheDocument();
+  expect(mocks.api).not.toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({ method: "DELETE" }));
+
+  await user.click(within(screen.getByRole("dialog", { name: "Arquivar oportunidade" })).getByRole("button", { name: "Arquivar" }));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({ method: "DELETE" })));
+});
+
+test("projeto arquivado não vira link nem oferece nova conversão", async () => {
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    const method = options?.method?.toUpperCase() ?? "GET";
+    if (path === "/pipeline-stages/") return Promise.resolve(stages);
+    if (path === "/opportunities/" && method === "GET") return Promise.resolve([{ ...opp, project: 7, project_archived: true }]);
+    if (path === "/services/") return Promise.resolve(services);
+    if (path === "/clients/") return Promise.resolve([]);
+    return Promise.resolve({});
+  });
+  render(<CommercialPage />);
+
+  expect(await screen.findByText("Projeto arquivado")).toBeInTheDocument();
+  // Um link levaria a 404 (o projeto sai do queryset) e "Criar projeto" responderia 409.
+  expect(screen.queryByRole("link", { name: /Ver projeto/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Criar projeto/ })).not.toBeInTheDocument();
+});
+
+test("lista e restaura oportunidades arquivadas", async () => {
+  const user = userEvent.setup();
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/pipeline-stages/") return Promise.resolve(stages);
+    if (path === "/opportunities/?archived=1") return Promise.resolve([{ ...opp, id: 2, title: "Arquivada X" }]);
+    if (path === "/opportunities/") return Promise.resolve([]);
+    if (path === "/services/") return Promise.resolve(services);
+    if (path === "/clients/") return Promise.resolve([]);
+    return Promise.resolve({});
+  });
+  render(<CommercialPage />);
+
+  await user.click(await screen.findByRole("button", { name: "Arquivadas" }));
+  expect(await screen.findByText("Arquivada X")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: /Restaurar/ }));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/2/unarchive/", expect.objectContaining({ method: "POST" })));
 });

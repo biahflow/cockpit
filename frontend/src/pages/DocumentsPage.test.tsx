@@ -86,3 +86,21 @@ test("mostra o link de assinatura do fornecedor quando há", async () => {
 
   expect(screen.getByRole("link", { name: "Abrir link de assinatura de quem@assina.test" })).toHaveAttribute("href", "https://assina.ae/abc");
 });
+
+
+test("lista e restaura documentos arquivados", async () => {
+  const user = userEvent.setup();
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/documents/?archived=1") return Promise.resolve([{ id: 2, client: 1, opportunity: null, project: null, file: "x", original_name: "antigo.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: [] }]);
+    if (path === "/documents/") return Promise.resolve([]);
+    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    return Promise.resolve([]);
+  });
+  render(<DocumentsPage />);
+
+  await user.click(await screen.findByRole("button", { name: "Arquivados" }));
+  expect(await screen.findByText("antigo.pdf")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: /Restaurar/ }));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/documents/2/unarchive/", expect.objectContaining({ method: "POST" })));
+});

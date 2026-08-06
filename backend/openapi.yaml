@@ -5403,6 +5403,9 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        project_archived:
+          type: boolean
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -5419,6 +5422,7 @@ components:
       - id
       - owner
       - project
+      - project_archived
       - service_name
       - service_tier
       - stage
@@ -5841,6 +5845,9 @@ components:
         project:
           type: integer
           nullable: true
+          readOnly: true
+        project_archived:
+          type: boolean
           readOnly: true
         created_at:
           type: string

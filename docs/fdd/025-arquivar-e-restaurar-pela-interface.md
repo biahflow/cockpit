@@ -34,8 +34,19 @@ respondia 204, em silêncio.
   desfazer — não "tem certeza?".
 - **Arquivar não pode deixar órfão visível.** `ClientViewSet.perform_destroy` recusa com **409**
   enquanto houver projeto ou oportunidade ativos, e a mensagem diz quantos: quem tentou precisa
-  saber o que fazer antes. `OpportunityViewSet.perform_destroy` recusa a oportunidade já convertida
-  — ela é o outro lado de um projeto vivo, e a conversão não roda duas vezes.
+  saber o que fazer antes. `OpportunityViewSet.perform_destroy` recusa enquanto o projeto convertido
+  estiver **ativo** — ele é o outro lado dela, e a conversão não roda duas vezes.
+- **Toda recusa precisa ter saída, e a instrução dela precisa ser verdade.** É a outra metade da
+  regra acima, e faltava. A guarda da oportunidade testava `hasattr(instance, "project")`, que
+  continua verdadeiro com o projeto arquivado — a relação reversa não some com o `archived_at`. A
+  mensagem mandava arquivar o projeto e isso não desbloqueava nada; a oportunidade também não
+  reconverte (o `OneToOneField` segue ocupado) e, viva, ainda bloqueava o cliente. Uma recusa cujo
+  caminho de saída não existe é pior que nenhuma recusa: manda a pessoa trabalhar à toa. A condição
+  passou a ser o **estado** do projeto, e a corrente projeto → oportunidade → cliente fecha.
+- **Estado em vez de ação que não existe.** Com o projeto arquivado, `OpportunitySerializer` expõe
+  `project_archived` e o card do pipeline mostra "Projeto arquivado", sem link. `project` continua
+  preenchido de propósito: anulá-lo faria a tela voltar a oferecer "Criar projeto", que responderia
+  409 — trocaria um link morto por um botão morto.
 - **409, não 400.** O pedido está bem formado e a permissão existe; o que impede é o **estado**, e é
   ele que muda para o pedido passar. `ArchiveConflict` em `views.py`.
 - **O contato acompanha em vez de bloquear.** Ninguém lista contato fora do cliente, então ele não
@@ -52,6 +63,18 @@ respondia 204, em silêncio.
 - **A aba Arquivados fala com o viewset, não com o agregador.** Em Clientes ela chama
   `/clients/?archived=1` e não `/clients/overview/`: o overview é montado à mão e não passa pelo
   `get_queryset` do `ArchiveModelViewSet`, então nunca enxergaria o arquivado.
+- **Quem promete restauração precisa oferecê-la.** Os seis recursos arquiváveis pela interface têm
+  caminho de volta: aba em Clientes e Projetos, chip de filtro em Leads, alternador em Documentos e
+  Serviços, e uma lista que substitui o quadro em Comercial — o kanban não comporta uma coluna de
+  arquivadas. Na primeira entrega três diálogos diziam "pode ser restaurada depois" sem que houvesse
+  onde, que é a mesma classe de mentira que a FDD 024 existe para consertar.
+- **Diálogos empilham.** O `Modal` mantém uma pilha por **ordem de abertura** (não por ordem no
+  JSX): o topo recebe o `zIndex` maior e é o único que escuta o `Escape`; os de baixo ficam `inert`.
+  Sem isso, a confirmação aberta de dentro do detalhe da oportunidade pintava atrás dele — mesmo
+  `z-40`, mesmo contexto de empilhamento, empate resolvido por ordem de DOM — e um `Escape` fechava
+  os dois, porque `stopPropagation()` não interrompe outros listeners registrados no **mesmo**
+  `EventTarget` (isso seria `stopImmediatePropagation`) e ambos vivem no `document`. O `inert`
+  resolve de carona os dois `aria-modal="true"` visíveis ao mesmo tempo, que eram inválidos.
 
 ## Fronteira com a retenção (ADR 0017)
 
@@ -71,4 +94,5 @@ O expurgo continua sendo a única operação que destrói de propósito, e conti
   em `ClientDetailPage`, `ProjectDetailPage` e no detalhe da `CommercialPage`; abas Arquivados em
   `ClientsPage` e `ProjectsPage`.
 - Testes: `backend/tests/regression/test_archive_nao_deixa_orfao.py`,
+  `backend/tests/regression/test_arquivar_tem_saida.py`,
   `backend/apps/core/tests/test_archive_restore.py`, `frontend/src/components/Modal.test.tsx`.

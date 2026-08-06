@@ -231,6 +231,33 @@ curl -s -X POST localhost:19000/api/v1/leads/intake/ \
 oportunidade** cria a oportunidade — que entra no pipeline do passo 4. Com o token vazio ou errado o
 intake recusa, e é assim que deve ser.
 
+## 12. Arquivar e restaurar — a corrente inteira
+
+O passo que fecha o ciclo: encerrar um trabalho e desfazer o encerramento. Faça **na ordem**, com o
+cliente, a oportunidade e o projeto criados nos passos 2, 4 e 6.
+
+1. Em **Clientes** → abra o cliente → **Arquivar cliente**.
+   **Deve acontecer:** recusa explicando o que falta ("ainda tem 1 projeto(s) e 1 oportunidade(s) em
+   aberto"). O cliente continua na base — arquivar não pode apagar trabalho sem você ver.
+2. Em **Projetos** → abra o projeto → **Arquivar** → confirme.
+   **Deve acontecer:** volta para a lista, e o projeto aparece na aba **Arquivados**.
+3. Em **Comercial**, olhe o card na coluna Ganho.
+   **Deve acontecer:** onde havia "Ver projeto" agora se lê **"Projeto arquivado"**, sem link — o
+   projeto saiu das listagens e o link daria 404. Também não aparece "Criar projeto": a conversão
+   roda uma vez só.
+4. Abra o card → **Arquivar** (rodapé do detalhe).
+   **Deve acontecer:** a confirmação abre **na frente** do detalhe, que continua visível atrás e não
+   fecha. Um `Escape` fecha só a confirmação; o segundo fecha o detalhe. Com a confirmação aberta,
+   `Tab` não alcança nada do formulário atrás.
+5. Confirme, e volte a **Clientes** → **Arquivar cliente**.
+   **Deve acontecer:** agora vai. O cliente sai da base **com os contatos dele**.
+6. Aba **Arquivados** em Clientes → **Restaurar**.
+   **Deve acontecer:** o cliente volta, com os contatos. Repita em **Projetos**, em **Comercial**
+   (alternador Pipeline/Arquivadas), em **Leads** (chip "Arquivados") e em **Documentos**.
+
+> Tudo que a interface arquiva tem caminho de volta. Se algum diálogo prometer restauração e você
+> não achar onde restaurar, é defeito — foi exatamente assim que a FDD 025 nasceu incompleta.
+
 ## Quando algo não funcionar
 
 - A tela mostra um **código da ocorrência** — é o `X-Request-ID`, e ele está no log:
