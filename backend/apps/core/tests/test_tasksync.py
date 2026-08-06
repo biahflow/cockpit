@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import tasksync
-from apps.core.models import Task, User
+from apps.core.models import Notification, Task, User
 
 from .factories import ProjectFactory, UserFactory
 
@@ -65,6 +65,35 @@ def test_apply_inbound_updates_linked_task() -> None:
     assert result == task
     assert task.status == Task.Status.DONE
     assert task.completed_at is not None
+
+
+def _notificacoes_de_atualizacao(user) -> list[Notification]:  # type: ignore[no-untyped-def]
+    """Só as da sincronia — criar a tarefa já dispara a sua própria notificação (`signals.py`)."""
+    return list(Notification.objects.filter(user=user, message__startswith="Tarefa atualizada"))
+
+
+@pytest.mark.django_db
+def test_apply_inbound_notifies_the_owner() -> None:
+    """O efeito colateral que ninguém cobria — e onde morava o vazamento (FDD 010, FDD 018)."""
+    project = ProjectFactory()
+    task = _task(project, external_id="ENG-11", status=Task.Status.TODO)
+
+    tasksync.apply_inbound("linear", "ENG-11", "completed")
+
+    notificacoes = _notificacoes_de_atualizacao(task.owner)
+    assert len(notificacoes) == 1
+    assert "via linear" in notificacoes[0].message
+    assert notificacoes[0].url == f"/projetos/{project.id}"
+
+
+@pytest.mark.django_db
+def test_apply_inbound_nao_notifica_quando_o_status_nao_muda() -> None:
+    project = ProjectFactory()
+    task = _task(project, external_id="ENG-12", status=Task.Status.DONE)
+
+    tasksync.apply_inbound("linear", "ENG-12", "completed")
+
+    assert _notificacoes_de_atualizacao(task.owner) == []
 
 
 @pytest.mark.django_db
