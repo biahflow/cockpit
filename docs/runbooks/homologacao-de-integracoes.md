@@ -267,10 +267,26 @@ seguiria aparecendo em `/clients/overview/`, `/analytics/` e nas métricas de IA
 
 ## 3. Google (Drive + Calendário) — pendente
 
-**Variáveis:** `GOOGLE_SERVICE_ACCOUNT_INFO` (JSON inline) **ou** `GOOGLE_SERVICE_ACCOUNT_FILE`,
-mais `GOOGLE_DRIVE_ROOT_FOLDER_ID` e `GOOGLE_CALENDAR_ID`. A mesma credencial serve às duas flags,
-mas os escopos são diferentes — por isso as sondas são separadas: conceder Drive e esquecer
-Calendar é o erro comum, e ele passaria batido.
+> **A primeira tentativa desta rodada foi bloqueada, e mudou o desenho.** Não foi possível criar a
+> chave de conta de serviço: a organização aplica
+> `iam.managed.disableServiceAccountKeyCreation`. As duas únicas variáveis que o código sabia ler
+> eram exatamente o artefato proibido — ou seja, o desenho não era subótimo, era **inconstruível**
+> aqui, e é quase certamente por isso que esta integração nunca foi homologada. A autenticação foi
+> trocada (ADR 0016) antes de a rodada seguir.
+
+**Variáveis:** `GOOGLE_DRIVE_ROOT_FOLDER_ID`, `GOOGLE_CALENDAR_ID` e o modo de auth
+(`GOOGLE_AUTH_MODE`, ADR 0016):
+
+- **`adc`** (default) — em container/pod, Workload Identity: **nenhum segredo no ambiente**.
+  Localmente, `gcloud auth application-default login`. Um arquivo de Workload Identity Federation
+  entra por `GOOGLE_APPLICATION_CREDENTIALS`.
+- **`oauth`** — `GOOGLE_OAUTH_CLIENT_ID`, `_CLIENT_SECRET`, `_REFRESH_TOKEN`. Necessário para
+  **convidar participante** em evento, que exige agir como uma pessoa.
+  **Armadilha:** com o app em "Testing" no Google Cloud, o refresh token expira em **7 dias** —
+  precisa estar "In production".
+
+A mesma identidade serve às duas flags, mas os escopos são diferentes — por isso as sondas são
+separadas: conceder Drive e esquecer Calendar é o erro comum, e ele passaria batido.
 
 **Cria artefato na sua conta.** Prefixe tudo com `[homologação]`, use pasta e agenda dedicadas, e
 remova ao fim.

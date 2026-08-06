@@ -18,7 +18,8 @@ API publica somente rotas sob `/api/v1/`.
 
 Hoje há dois destinos, escolhidos pela flag `GOOGLE_DRIVE_ENABLED`:
 
-- **Google Drive** (Shared Drive, via service account) quando a flag está ligada — o arquivo não
+- **Google Drive** (pasta ou Shared Drive; auth por ADC/Workload Identity ou OAuth, ADR 0016 —
+  nunca por chave de conta de serviço) quando a flag está ligada — o arquivo não
   toca o disco da API; guardamos `drive_file_id` e `drive_link`.
 - **Disco local** (`MEDIA_ROOT`) quando desligada, que é o padrão em desenvolvimento. Em produção
   `MEDIA_ROOT` precisa ser um volume próprio (`DJANGO_MEDIA_ROOT`): dentro da árvore de código, um

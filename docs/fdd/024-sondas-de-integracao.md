@@ -165,6 +165,28 @@ Tipos estreitos (`DriveProviderError`, `CalendarProviderError`), pelo mesmo moti
 nasce `apps/core/exceptions.py`, porque a regra "falha de fornecedor é 502" já estava expressa em
 três módulos e ia para quatro — *uma regra, uma expressão* (ADR 0010).
 
+## Rodada 3, primeira tentativa — bloqueada pela política, e o que ela ensinou
+
+Apontar a credencial do Google **não foi possível**: a organização aplica
+`iam.managed.disableServiceAccountKeyCreation`, e as duas únicas variáveis que o código sabia ler
+(`GOOGLE_SERVICE_ACCOUNT_INFO`/`_FILE`) são exatamente o artefato proibido.
+
+Isso é um achado da homologação tanto quanto um defeito seria, e do tipo que só aparece quando
+alguém tenta de verdade: **o desenho não era subótimo, era inconstruível** nesta organização — e o
+`docs/operacao.md` seguia prescrevendo um caminho que ninguém podia tomar, que é a mesma classe de
+mentira que esta FDD existe para consertar. É, quase com certeza, a razão de esta integração nunca
+ter sido homologada.
+
+A autenticação foi trocada antes de a rodada seguir (**ADR 0016**): ADC por padrão — o que cobre
+Workload Identity em container/pod, sem segredo nenhum no ambiente — e OAuth de usuário como modo
+explícito, para o que exige agir como uma pessoa. Com isso a rodada passa a exercitar o desenho que
+vai para produção, em vez de um que seria substituído.
+
+Detalhe que fecha o argumento desta FDD: no modo `adc` **não há variável de ambiente a conferir** —
+num pod a credencial vem do metadata server. `configured()` não tem o que cobrar, e quem responde
+"isto funciona?" é a **sonda**. A tese "pergunte ao provedor, não ao ambiente" passou a valer para
+o próprio mecanismo de autenticação.
+
 ## Fora deste recorte
 
 **As rodadas 3 e 4.** Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os

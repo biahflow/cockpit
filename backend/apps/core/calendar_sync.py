@@ -51,19 +51,14 @@ def is_enabled() -> bool:
 
 
 def _service():  # pragma: no cover - I/O com a API do Google
-    from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
-    if settings.GOOGLE_SERVICE_ACCOUNT_INFO:
-        import json
+    from . import google_auth
 
-        info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_INFO)
-        credentials = service_account.Credentials.from_service_account_info(info, scopes=[CALENDAR_SCOPE])
-    else:
-        credentials = service_account.Credentials.from_service_account_file(
-            settings.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=[CALENDAR_SCOPE]
-        )
-    return build("calendar", "v3", credentials=credentials, cache_discovery=False)
+    return build(
+        "calendar", "v3", credentials=google_auth.credentials([CALENDAR_SCOPE]),
+        cache_discovery=False,
+    )
 
 
 def all_day_range(day: date) -> tuple[str, str]:

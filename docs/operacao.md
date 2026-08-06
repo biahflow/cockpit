@@ -29,10 +29,10 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | CRM, projetos, indicadores, ROI | — | — | **Sempre ligado** |
 | **Níveis de produto** (Discovery Express / Discovery + Assessment / Implantação) | — | — | **Ligado** ✅ — semeados na migração; ajuste nome, preço e escopo em **Indicadores → Gerir serviços** (`/servicos`) |
 | **Captação de leads** | `LEAD_INTAKE_TOKEN`, `CORS_ALLOWED_ORIGINS` | token (você define) | **Ligado** ✅ |
-| Documentos no Google Drive | `GOOGLE_DRIVE_ENABLED` + service account | Google Workspace + Shared Drive | Desligado |
+| Documentos no Google Drive | `GOOGLE_DRIVE_ENABLED` + auth ADC/OAuth (ADR 0016) | Pasta ou Shared Drive acessível à identidade | Desligado |
 | IA (assistente/resumos/proposta/próximos passos) | `AI_ENABLED`, `OPENAI_API_KEY` | conta OpenAI | Desligado |
 | Notificações in-app (sino) | — | — | **Sempre ligado** |
-| Calendário (add ao Google Calendar + eventos → tarefas) | `CALENDAR_ENABLED`, `GOOGLE_CALENDAR_ID` | Google + service account | Pronto (desligado) |
+| Calendário (add ao Google Calendar + eventos → tarefas) | `CALENDAR_ENABLED`, `GOOGLE_CALENDAR_ID` | mesma auth do Drive, **outro escopo** | Pronto (desligado) |
 | Agendamento (qualificação IA + booking pelo site) | `AI_ENABLED`+`CALENDAR_ENABLED`, `GOOGLE_BOOKING_CALENDAR_ID`, `BOOKING_MIN_FIT` | OpenAI + Google (free/busy) | Pronto (desligado) |
 | Assinatura eletrônica | `ESIGN_ENABLED`, `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique | Pronto (desligado) |
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) |
@@ -74,13 +74,21 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   `docs/runbooks/homologacao-de-integracoes.md`.
 
 ### 3. Documentos no Google Drive
-- Criar service account (Drive API) + **Shared Drive** com a conta como Gerente de conteúdo.
-- `.env`: `GOOGLE_DRIVE_ENABLED=true`, `GOOGLE_SERVICE_ACCOUNT_INFO={...json...}`, `GOOGLE_DRIVE_ROOT_FOLDER_ID=<id>`.
+- Habilitar a Drive API e dar à identidade (a do Workload Identity, ou o usuário do OAuth)
+  acesso de escrita à pasta raiz — num **Shared Drive**, como Gerente de conteúdo.
+- `.env`: `GOOGLE_DRIVE_ENABLED=true`, `GOOGLE_DRIVE_ROOT_FOLDER_ID=<id>` e o **modo de auth**
+  (ADR 0016). Em container/pod, `GOOGLE_AUTH_MODE=adc` e Workload Identity — nenhum segredo no
+  ambiente. Localmente, `adc` mais `gcloud auth application-default login`. Use
+  `GOOGLE_AUTH_MODE=oauth` + o trio `GOOGLE_OAUTH_*` quando precisar **agir como uma pessoa**
+  (convidar participante em evento). **Chave de conta de serviço não é caminho**: muitas
+  organizações a proíbem por política, e foi o que bloqueou a homologação do Google.
 - `docker compose up -d --build api`.
 - **Testar:** subir um documento → conferir a estrutura `{Cliente}/{1-Projetos|2-Áreas|3-Recursos}/` no Shared Drive.
 
 ### 4. Calendário e Assinatura
-- Calendário: `CALENDAR_ENABLED=true` + `GOOGLE_CALENDAR_ID` (reusa a service account do Drive).
+- Calendário: `CALENDAR_ENABLED=true` + `GOOGLE_CALENDAR_ID` (mesma identidade do Drive, mas o
+  **escopo é outro** — conceder Drive e esquecer Calendar é o erro comum, e é por isso que as
+  sondas do `check_integrations` são separadas).
   - **Outbound**: botão "Adicionar ao calendário" em marcos/tarefas cria o evento no Google Calendar.
   - **Inbound (eventos → tarefas)**: eventos do calendário compartilhado com um marcador
     `#proj-<id>` no título ou na descrição viram tarefas do projeto indicado. Em produção quem

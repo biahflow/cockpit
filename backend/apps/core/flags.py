@@ -24,13 +24,27 @@ class Flag:
     env_default: Callable[[], bool]
     requires: tuple[str, ...] = field(default_factory=tuple)
     toggleable: bool = True
-    # Grupos "um destes basta" — a credencial do Google chega como JSON inline **ou** como caminho
-    # de arquivo, e exigir os dois recusaria uma instalação legítima.
+    # Grupos "um destes basta": exigir todos recusaria uma instalação legítima.
     requires_any: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
+    # Exigência que depende de outra configuração e não cabe numa lista fixa — hoje só a auth do
+    # Google, cujo conjunto obrigatório muda com o `GOOGLE_AUTH_MODE` (ADR 0016).
+    extra_missing: Callable[[], list[str]] | None = None
 
 
-def _google_service_account() -> tuple[str, ...]:
-    return ("GOOGLE_SERVICE_ACCOUNT_INFO", "GOOGLE_SERVICE_ACCOUNT_FILE")
+def _google_auth_missing() -> list[str]:
+    """O que falta na autenticação com o Google (ADR 0016).
+
+    No modo `oauth`, o trio de credenciais. No modo `adc` — o default — **nada**, e isso é
+    correto, não descuido: num pod com Workload Identity não existe variável de ambiente para
+    conferir, a credencial vem do metadata server. Cobrar uma variável ali recusaria a instalação
+    mais segura das duas.
+
+    Quem responde "isto funciona?" nesse caso é a sonda do `check_integrations`, que pergunta ao
+    provedor em vez de ao ambiente — a tese da FDD 024 aplicada ao próprio mecanismo de auth.
+    """
+    from . import google_auth
+
+    return google_auth.oauth_settings_missing()
 
 
 # `requires` lista o que o código realmente **dereferencia**, não só o que identifica a integração.
@@ -45,13 +59,13 @@ FLAGS: dict[str, Flag] = {
         "Documentos no Google Drive",
         lambda: bool(settings.GOOGLE_DRIVE_ENABLED),
         ("GOOGLE_DRIVE_ROOT_FOLDER_ID",),
-        requires_any=(_google_service_account(),),
+        extra_missing=_google_auth_missing,
     ),
     "calendar": Flag(
         "Calendário (Google)",
         lambda: bool(settings.CALENDAR_ENABLED),
         ("GOOGLE_CALENDAR_ID",),
-        requires_any=(_google_service_account(),),
+        extra_missing=_google_auth_missing,
     ),
     "esign": Flag(
         "Assinatura eletrônica",
@@ -103,12 +117,7 @@ def is_enabled(name: str) -> bool:
 
 def configured(name: str) -> bool:
     """Todas as credenciais exigidas pela integração estão presentes no ambiente?"""
-    flag = FLAGS[name]
-    if not all(getattr(settings, key, "") for key in flag.requires):
-        return False
-    return all(
-        any(getattr(settings, key, "") for key in grupo) for grupo in flag.requires_any
-    )
+    return not missing(name)
 
 
 def missing(name: str) -> list[str]:
@@ -120,6 +129,8 @@ def missing(name: str) -> list[str]:
         for grupo in flag.requires_any
         if not any(getattr(settings, key, "") for key in grupo)
     ]
+    if flag.extra_missing is not None:
+        faltando += flag.extra_missing()
     return faltando
 
 

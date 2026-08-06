@@ -334,12 +334,27 @@ PORTAL_WEBHOOK_URL = os.getenv("PORTAL_WEBHOOK_URL", "")
 PORTAL_WEBHOOK_SECRET = os.getenv("PORTAL_WEBHOOK_SECRET", "")
 PORTAL_READ_TOKEN = os.getenv("PORTAL_READ_TOKEN", "")
 
-# Google Drive como armazenamento de documentos (conta de serviço + Shared Drive).
-# Desligado por padrão: sem credenciais, os documentos usam o storage local.
+# Google Drive como armazenamento de documentos. Desligado por padrão: sem credenciais, os
+# documentos usam o storage local.
 GOOGLE_DRIVE_ENABLED = os.getenv("GOOGLE_DRIVE_ENABLED", "false").lower() == "true"
-GOOGLE_SERVICE_ACCOUNT_INFO = os.getenv("GOOGLE_SERVICE_ACCOUNT_INFO", "")
-GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "")
 GOOGLE_DRIVE_ROOT_FOLDER_ID = os.getenv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "")
+
+# Como o portal se autentica no Google (ADR 0016). **Nunca por chave de conta de serviço**: ela é
+# um segredo de vida longa que vaza em backup, log e imagem, e organizações sérias a proíbem por
+# política (`iam.managed.disableServiceAccountKeyCreation`) — foi o que bloqueou a rodada 3.
+#
+# - `adc` (default): Application Default Credentials. Resolve, nesta ordem, o arquivo apontado por
+#   `GOOGLE_APPLICATION_CREDENTIALS` (que pode ser uma configuração de **Workload Identity
+#   Federation**, sem chave), as credenciais do `gcloud auth application-default login` e, por fim,
+#   o **metadata server** — que é como pod no GKE e serviço no Cloud Run se autenticam sem segredo
+#   nenhum no ambiente. É o caminho para container/pod.
+# - `oauth`: credencial de **usuário**, por refresh token. É o caminho quando o portal precisa agir
+#   *como uma pessoa* — convidar participante em evento, por exemplo, que conta de serviço não faz
+#   sem delegação em todo o domínio.
+GOOGLE_AUTH_MODE = os.getenv("GOOGLE_AUTH_MODE", "adc").strip().lower()
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
+GOOGLE_OAUTH_REFRESH_TOKEN = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "")
 
 # IA (OpenAI) atrás de flag. Desligado = app roda sem o SDK/key.
 AI_ENABLED = os.getenv("AI_ENABLED", "false").lower() == "true"
