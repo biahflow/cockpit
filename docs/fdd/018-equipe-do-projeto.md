@@ -40,9 +40,14 @@ a resolver quando o digest evoluir para membership.
 
 > **Fechada.** O digest passou a somar as duas coisas: os itens próprios (agora recortados por
 > `project_scope_q`) e os atrasados dos projetos de que a pessoa **participa** — ver FDD 010.
-> Ficou para depois o **alvo das notificações**: `signals.py` e `tasksync.apply_inbound` ainda
-> notificam `instance.owner` com link fundo para `/projetos/<id>`, que é o último resíduo do
-> `owner=` no repositório.
+>
+> **E o alvo das notificações fechou junto**, na sequência: `notify` ganhou `project=`, e quem não
+> alcança o projeto é descartado antes de a linha ser gravada — o que derruba o espelho por e-mail
+> no mesmo corte. Com isso **acaba o `owner=` como critério de acesso no repositório**: era o
+> último resíduo para *alvo*, como o digest era para *filtro*. O predicado virou
+> `models.can_access_project`, terceira forma da mesma pergunta ao lado de `visible_to` e
+> `project_scope_q`, e `permissions._participates` passou a delegar a ele — o critério segue com
+> uma expressão só.
 >
 > Vale registrar que a consequência acima descrevia só metade do problema. A outra metade era
 > vazamento, e ninguém tinha reparado: como nada reatribui os itens quando alguém sai da equipe,

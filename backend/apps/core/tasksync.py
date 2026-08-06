@@ -119,6 +119,11 @@ def apply_inbound(source: str, external_id: str, external_status: str) -> Task |
                 "task",
                 f"Tarefa atualizada via {source}: {task.title}",
                 f"/projetos/{task.project_id}",
+                # O caminho que realmente vazava: isto dispara por webhook do fornecedor,
+                # arbitrariamente depois da criação e sem `request.user` para consultar. Quem foi
+                # removido da equipe continua `owner` da tarefa e seguia recebendo o título dela,
+                # com um link que responde 404 (FDD 010, FDD 018).
+                project=task.project,
             )
     return task
 

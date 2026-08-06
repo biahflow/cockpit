@@ -101,4 +101,7 @@ def finalize(project: Project) -> None:
         [project.owner], "kickoff",
         f"Projeto '{project.name}' criado a partir da oportunidade ganha.",
         f"/projetos/{project.id}",
+        # No-op aqui pelo invariante `_owner_is_always_a_member`, mas a regra é "URL de projeto ⇒
+        # guarda": exceção que depende de um invariante alheio é o que apodrece primeiro.
+        project=project,
     )

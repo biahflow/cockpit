@@ -149,6 +149,21 @@ def project_scope_q(user: User, path: str = "project") -> models.Q:
     })
 
 
+def can_access_project(user: User, project: Project) -> bool:
+    """O mesmo recorte, sobre **um** projeto já em mãos.
+
+    A terceira forma da mesma pergunta, e como as outras duas ela deriva de `visible_to` em vez de
+    reescrever o critério: quem filtra queryset usa `visible_to`, quem filtra *através* de um
+    projeto usa `project_scope_q`, e quem tem o projeto na mão usa esta. `permissions._participates`
+    delega aqui depois de resolver o projeto do objeto.
+
+    Serve a quem decide fora de uma view — o alvo de uma notificação, por exemplo, que pode ser
+    escolhido por um webhook ou por um job agendado, onde não há `request.user` nem permissão de
+    DRF para fazer a pergunta (FDD 010, FDD 018).
+    """
+    return Project.objects.visible_to(user).filter(pk=project.pk).exists()
+
+
 class Project(TimestampedModel):
     class Status(models.TextChoices):
         PLANNING = "planning", "Planejamento"

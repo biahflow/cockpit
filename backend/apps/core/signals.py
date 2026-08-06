@@ -114,16 +114,20 @@ def _notify_new_lead(sender: type[Lead], instance: Lead, created: bool, **kwargs
     notifications.notify(recipients, "lead", f"Novo lead: {instance.name}", "/leads")
 
 
+# `project=` na notificação: quando o item nasce pela API o dono é o próprio autor, já validado
+# por `_assert_in_scope`, e a guarda é no-op. Mas `calendar_sync` e `kickoff` criam item com
+# `owner=project.owner` de dentro de um job — dono que ninguém validou e cuja participação pode ter
+# sido arquivada desde então. Ver FDD 010 e FDD 018.
 @receiver(post_save, sender=Task)
 def _notify_task_owner(sender: type[Task], instance: Task, created: bool, **kwargs: Any) -> None:
     if created and instance.owner_id:
-        notifications.notify([instance.owner], "task", f"Nova tarefa: {instance.title}", f"/projetos/{instance.project_id}")
+        notifications.notify([instance.owner], "task", f"Nova tarefa: {instance.title}", f"/projetos/{instance.project_id}", project=instance.project)
 
 
 @receiver(post_save, sender=Milestone)
 def _notify_milestone_owner(sender: type[Milestone], instance: Milestone, created: bool, **kwargs: Any) -> None:
     if created and instance.owner_id:
-        notifications.notify([instance.owner], "milestone", f"Novo marco: {instance.title}", f"/projetos/{instance.project_id}")
+        notifications.notify([instance.owner], "milestone", f"Novo marco: {instance.title}", f"/projetos/{instance.project_id}", project=instance.project)
 
 
 @receiver(post_save, sender=Task)

@@ -16,6 +16,7 @@ from .models import (
     ProjectPhase,
     Task,
     User,
+    can_access_project,
 )
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -100,4 +101,4 @@ def _participates(user: User, obj: Any) -> bool:
     project = PROJECT_OF[type(obj)](obj)
     if project is None:  # documento/artefato de cliente ou oportunidade
         return False
-    return Project.objects.visible_to(user).filter(pk=project.pk).exists()
+    return can_access_project(user, project)

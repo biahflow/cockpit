@@ -19,6 +19,9 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - **Digest por participação** (FDD 010): o resumo diário deixa de filtrar só por `owner=` e passa a
   somar os atrasados dos projetos de que a pessoa participa — fecha a consequência que a FDD 018
   deixou em aberto, e com ela um vazamento não documentado (quem sai da equipe seguia recebendo).
+- **Notificação por participação** (FDD 010, FDD 018): `notify` ganha `project=` e descarta quem não
+  alcança o projeto, e-mail espelhado incluído. Com isso **acaba o `owner=` como critério de acesso**
+  no repositório — era o último resíduo, no alvo, depois de o digest ter fechado o do filtro.
 
 ## Prontidão para produção — adiada deliberadamente
 

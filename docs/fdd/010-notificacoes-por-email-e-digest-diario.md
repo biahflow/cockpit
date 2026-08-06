@@ -16,6 +16,26 @@ por IA** resume, para cada usuário, o que está atrasado e a vencer.
 - **Espelho por e-mail**: `notifications.notify(...)` cria a notificação in-app e, quando a
   flag está ligada, envia a mesma mensagem por e-mail a cada destinatário com endereço
   (best-effort, `fail_silently` — falha de e-mail não quebra o fluxo que notificou).
+- **Alvo por participação**: quem notifica sobre algo de um projeto passa `project=`, e aí
+  `notify` descarta os destinatários que não alcançam aquele projeto — **antes** de gravar, então
+  o espelho por e-mail cai no mesmo corte. A regra prática é *URL de projeto ⇒ guarda*, e vale
+  para tarefa, marco, kickoff e a sincronia com Linear/GitHub.
+
+  Existe porque nada reatribui item quando alguém sai de uma equipe: o `ProjectMember` é arquivado
+  e o `WorkItem.owner` fica. O caminho que de fato vazava era o `tasksync.apply_inbound`, que
+  dispara por **webhook do fornecedor** — muito depois da criação, sem `request.user` para
+  consultar —, e seguia mandando o título da tarefa com um link que responde 404. Havia um segundo,
+  mais silencioso: `calendar_sync` cria tarefa com `owner=project.owner`, dono que ninguém validou,
+  e passou a rodar a cada 15 min desde a FDD 023.
+
+  **Notificação escolhida por papel não leva guarda** — lead novo e booking vão para admin/vendas
+  com url `/leads`, não falam de projeto, e recortá-las por participação quebraria o comercial.
+  O `esign` também fica de fora: a url é `/documentos`, lista já recortada, e `Document.project`
+  é nulável (pode ser de cliente ou oportunidade).
+
+  O predicado é `models.can_access_project(user, project)` — a terceira forma da mesma pergunta,
+  ao lado de `visible_to` (queryset) e `project_scope_q` (filtro através de projeto), e como elas
+  derivada de `visible_to` em vez de reescrever o critério (ADR 0010).
 - **Digest diário** (`digest.send_daily_digest`): para cada usuário ativo com itens a
   reportar, envia um resumo por e-mail. Com `AI_ENABLED`, o texto é redigido pelo modelo e
   auditado em `AiInteraction` (feature `daily_digest`); sem IA, envia o resumo estruturado.
@@ -64,4 +84,15 @@ participa de projeto nenhum e não é dono de nada **não recebe nada**.
 Com a flag desligada, `notify` não envia e-mail e `send_daily_digest` retorna 0; usuário
 sem itens não recebe digest; usuário sem e-mail é ignorado; falha de SMTP não interrompe a
 notificação nem o digest. Quem foi removido de uma equipe deixa de receber os itens daquele
-projeto, mesmo continuando `owner` deles.
+projeto, mesmo continuando `owner` deles — no digest **e** nas notificações, incluindo o e-mail
+espelhado. E o lead novo continua notificando admin/vendas, que é a prova de que a guarda não
+extrapolou (`backend/tests/regression/test_notifications_respect_project_membership.py`).
+
+## Fora deste recorte
+
+As notificações **já gravadas** no sino de quem saiu da equipe continuam visíveis, com o título do
+item e um link que dá 404. É decisão, não esquecimento: notificação é evento datado, legítimo
+quando criado — como e-mail já entregue, não se retrata. Fechá-las exigiria FK `project` em
+`Notification` (que hoje só guarda uma `url`) e migração de dados extraindo o id de
+`/projetos/<id>`. A causa raiz — item que fica órfão quando alguém sai da equipe — é decisão de
+produto ("para quem vai o item?") e provavelmente pede ADR.
