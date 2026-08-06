@@ -20,7 +20,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from . import health
+from . import flags, health
 from .models import (
     DigitalEmployee,
     Document,
@@ -261,8 +261,13 @@ def emit(event: str, object_type: str, project_id: int | None) -> None:
     de backfill (`sync_biahflow_project`) e não a agenda, então uma entrega perdida só se recupera
     pelo próximo evento do mesmo projeto ou por backfill manual. Vale a pena emitir em todo caminho
     que muda o projeto, e não contar com reconciliação. Não faz nada quando a integração não está
-    configurada.
+    configurada nem quando o admin a desligou pela tela.
     """
+    # A flag passou a ser alternável (ADR 0018) e este é o ponto que a aplica: ler as settings direto,
+    # como antes, ignoraria o desligamento feito pela tela — e o portal continuaria recebendo evento
+    # durante o incidente que motivou desligá-lo.
+    if not flags.is_enabled("portal"):
+        return
     url = settings.PORTAL_WEBHOOK_URL
     secret = settings.PORTAL_WEBHOOK_SECRET
     if not url or not secret or not project_id:

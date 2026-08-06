@@ -1,11 +1,11 @@
-import { ArrowRight, CalendarDays, CircleDollarSign, Download, FileText, GripVertical, Plus, Save, SlidersHorizontal, Sparkles, UploadCloud, X } from "lucide-react";
+import { ArrowRight, CalendarDays, CircleDollarSign, Download, FileText, GripVertical, Plus, Save, SlidersHorizontal, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import { useEscape, useFocusTrap } from "../a11y";
 import { api, documentDownloadUrl } from "../api";
 import { useAuth } from "../auth";
 import { AgentPanel } from "../components/AgentPanel";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
+import { ConfirmDialog, Modal } from "../components/Modal";
 import type { Client, Contact, DocumentEntry, Opportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -30,6 +30,8 @@ export function CommercialPage() {
   const [detailDraft, setDetailDraft] = useState({ title: "", scope: "", estimated_value: "", expected_close_date: "", contact: "", stage: "", service: "" });
   const [detailContacts, setDetailContacts] = useState<Contact[]>([]);
   const [detailDocs, setDetailDocs] = useState<DocumentEntry[]>([]);
+  const [archiving, setArchiving] = useState<Opportunity | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const detailFile = useRef<HTMLInputElement>(null);
   const load = useCallback(() => Promise.all([api<PipelineStage[]>("/pipeline-stages/"), api<Opportunity[]>("/opportunities/"), api<Client[]>("/clients/"), api<Service[]>("/services/")]).then(([loadedStages, loadedOpportunities, loadedClients, loadedServices]) => { setStages(loadedStages); setOpportunities(loadedOpportunities); setClients(loadedClients); setServices(loadedServices); if (loadedStages[0]) setDraft(current => current.stage ? current : { ...current, stage: String(loadedStages[0].id) }); }).catch((cause: Error) => setError(cause.message)), []);
   useEffect(() => { void load(); }, [load]);
@@ -83,6 +85,15 @@ export function CommercialPage() {
       setAiText("");
     } catch (cause) { setError((cause as Error).message); }
   }
+  async function archiveOpportunity() {
+    if (!archiving) return;
+    setArchiveBusy(true);
+    try {
+      await api(`/opportunities/${archiving.id}/`, { method: "DELETE" });
+      setArchiving(null); setDetail(null); await load();
+    } catch (cause) { setArchiving(null); setError((cause as Error).message); }
+    finally { setArchiveBusy(false); }
+  }
   const reloadDetailDocs = useCallback(() => {
     if (!detail) return;
     void api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`).then(setDetailDocs).catch(() => undefined);
@@ -100,7 +111,15 @@ export function CommercialPage() {
                 : <button className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-ocean hover:text-ink" onClick={event => { event.stopPropagation(); setConverting(item); }}>Criar projeto <ArrowRight className="size-3.5" /></button>)}</article>)}{!items.length && <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-slate-200 bg-white/40 px-3 text-center text-xs text-slate-600">Arraste uma oportunidade para esta etapa</div>}</div></section>; })}</div>
     {isComposerOpen && <Modal title="Nova oportunidade" onClose={() => setComposerOpen(false)}><form className="grid gap-4" onSubmit={event => void createOpportunity(event)}><Field label="Título"><input className="field" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} required /></Field><Field label="Cliente"><select className="field" value={draft.client} onChange={event => setDraft({ ...draft, client: event.target.value })} required><option value="">Selecione</option>{clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}</select></Field><Field label="Nível de produto"><select className="field" value={draft.service} onChange={event => setDraft({ ...draft, service: event.target.value })}><option value="">Sem nível definido</option>{sellableServices.map(service => <option key={service.id} value={service.id}>{serviceLabel(service)}</option>)}</select></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Valor estimado"><input className="field" type="number" min="0" step="0.01" value={draft.estimated_value} onChange={event => setDraft({ ...draft, estimated_value: event.target.value })} required /></Field><Field label="Previsão de fechamento"><input className="field" type="date" value={draft.expected_close_date} onChange={event => setDraft({ ...draft, expected_close_date: event.target.value })} required /></Field></div><button className="rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit">Adicionar ao pipeline</button></form></Modal>}
     {converting && <Modal title="Criar projeto" onClose={() => setConverting(null)}><p className="mb-5 text-sm text-slate-600">Você está convertendo <strong className="text-ink">{converting.title}</strong>. Defina a janela inicial de entrega.</p><form className="grid gap-4" onSubmit={event => void convert(event)}><div className="grid gap-4 sm:grid-cols-2"><Field label="Início"><input className="field" type="date" value={dates.start_date} onChange={event => setDates({ ...dates, start_date: event.target.value })} required /></Field><Field label="Prazo final"><input className="field" type="date" value={dates.due_date} onChange={event => setDates({ ...dates, due_date: event.target.value })} required /></Field></div><button className="rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit">Criar projeto</button></form></Modal>}
-    {detail && <Modal title="Detalhe da oportunidade" onClose={() => setDetail(null)}>
+    {archiving && <ConfirmDialog
+      title="Arquivar oportunidade"
+      message={<>A oportunidade <strong className="text-ink">{archiving.title}</strong> sai do pipeline e do histórico ativo. Ela continua guardada e pode ser restaurada depois.</>}
+      confirmLabel="Arquivar"
+      busy={archiveBusy}
+      onCancel={() => setArchiving(null)}
+      onConfirm={() => void archiveOpportunity()}
+    />}
+    {detail && <Modal title="Detalhe da oportunidade" width="3xl" onClose={() => setDetail(null)}>
       <form className="grid gap-4" onSubmit={event => void saveDetail(event)}>
         <Field label="Título"><input className="field" value={detailDraft.title} onChange={event => setDetailDraft({ ...detailDraft, title: event.target.value })} required /></Field>
         <Field label="Escopo"><textarea className="field min-h-20" value={detailDraft.scope} onChange={event => setDetailDraft({ ...detailDraft, scope: event.target.value })} placeholder="Descreva o escopo da negociação" /></Field>
@@ -109,7 +128,8 @@ export function CommercialPage() {
         <Field label="Nível de produto"><select className="field" value={detailDraft.service} onChange={event => setDetailDraft({ ...detailDraft, service: event.target.value })}><option value="">Sem nível definido</option>{sellableServices.map(service => <option key={service.id} value={service.id}>{serviceLabel(service)}</option>)}</select></Field>
         <div className="flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar</button>{stages.find(stage => stage.id === detail.stage)?.kind === "won" && (detail.project
           ? <a className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold text-ink hover:border-ocean" href={`/projetos/${detail.project}`}>Ver projeto <ArrowRight className="size-4 text-emerald-600" /></a>
-          : <button type="button" className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold text-ink hover:border-ocean" onClick={() => startConversion(detail)}>Converter em projeto <ArrowRight className="size-4 text-ocean" /></button>)}</div>
+          : <button type="button" className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold text-ink hover:border-ocean" onClick={() => startConversion(detail)}>Converter em projeto <ArrowRight className="size-4 text-ocean" /></button>)}
+          {user?.is_admin && <button type="button" className="ml-auto inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold text-slate-600 hover:border-signal hover:text-signal" onClick={() => setArchiving(detail)}><Trash2 className="size-4" />Arquivar</button>}</div>
       </form>
       <div className="mt-6 border-t pt-5">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><FileText className="size-4 text-ocean" />Documentos</h3>
@@ -119,7 +139,7 @@ export function CommercialPage() {
       {aiEnabled && <div className="mt-6 border-t pt-5">
         <div className="flex flex-wrap items-center gap-2"><Sparkles className="size-4 text-ocean" /><h3 className="text-sm font-semibold text-ink">IA</h3><button type="button" className="ml-auto rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void runAi("summary")} disabled={aiBusy}>Resumir</button><button type="button" className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void runAi("proposal")} disabled={aiBusy}>Gerar proposta</button><button type="button" className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void runAi("contract")} disabled={aiBusy}>Gerar contrato</button></div>
         {aiBusy && <p className="mt-3 text-sm text-slate-600">Gerando…</p>}
-        {aiText && <div className="mt-3"><textarea className="field min-h-40" value={aiText} onChange={event => setAiText(event.target.value)} aria-label="Rascunho gerado pela IA" /><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-600">Revise antes de salvar — a IA gera um rascunho.</p><button type="button" className="rounded-xl bg-ocean px-4 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveSummaryAsDocument()}>Salvar como documento</button></div></div>}
+        {aiText && <div className="mt-3"><textarea className="field min-h-64 resize-y" value={aiText} onChange={event => setAiText(event.target.value)} aria-label="Rascunho gerado pela IA" /><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-600">Revise antes de salvar — a IA gera um rascunho.</p><button type="button" className="rounded-xl bg-ocean px-4 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveSummaryAsDocument()}>Salvar como documento</button></div></div>}
       </div>}
       <ArtifactsPanel opportunity={detail.id} reloadToken={artifactsToken} onChange={reloadDetailDocs} />
     </Modal>}
@@ -137,12 +157,3 @@ function tierBadgeClass(tier: ServiceTier) { return tierBadges[tier] ?? tierBadg
 function serviceLabel(service: Service) { return service.tier ? `${service.name} — ${Number(service.list_price) === 0 ? "gratuito" : money.format(Number(service.list_price))}` : service.name; }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="grid gap-2 text-sm font-medium text-slate-700">{label}{children}</label>; }
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
-  // `aria-modal` promete ao leitor de tela que o resto da página está inerte. Sem prender o `Tab`
-  // e sem fechar no `Escape`, a promessa era falsa: dava para tabular para fora do diálogo sem
-  // fechá-lo, e quem abriu pelo teclado não tinha como sair. O axe não pega isso (FDD 022).
-  const caixa = useRef<HTMLDivElement>(null);
-  useEscape(true, onClose);
-  useFocusTrap(true, caixa);
-  return <div className="fixed inset-0 z-40 grid place-items-center bg-ink/45 p-4" role="dialog" aria-modal="true" aria-label={title} ref={caixa}><div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold text-ink">{title}</h2><button className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Fechar" onClick={onClose}><X className="size-4" /></button></div>{children}</div></div>;
-}

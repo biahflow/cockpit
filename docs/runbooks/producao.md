@@ -41,7 +41,10 @@ também não — o único caminho até o gunicorn é o nginx, e é isso que torn
 - [ ] **Postgres** provisionado. O backup do portal sobe junto com a stack (FDD 021) — o que falta
       decidir aqui é o **offsite**: um bucket compatível com S3 e uma credencial só dele, porque
       cópia no mesmo host morre com o host. Ver `backup-e-restauracao.md`.
-- [ ] **SMTP** real (convite de usuário e lembrete de assinatura saem por e-mail).
+- [ ] **SMTP** real. Deixou de ser opcional: além do convite de usuário e do lembrete de
+      assinatura, as **notificações e o digest diário nascem ligados** (ADR 0018), e o default
+      `localhost:1025` é o Mailpit do compose — fora do dev, lugar nenhum. Para subir sem e-mail,
+      `EMAIL_NOTIFICATIONS_ENABLED=false` explícito.
 
 ## 2. Variáveis obrigatórias
 
@@ -58,6 +61,16 @@ Do bloco "Produção" do `.env.example`. As quatro primeiras são recusadas pelo
 Mais: `DJANGO_DEBUG=false`, `FRONTEND_ORIGIN`, `DJANGO_MEDIA_ROOT`, o SMTP (`EMAIL_HOST`,
 `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`) e,
 se houver proxy próprio na frente do `web`, ajustar `NUM_PROXIES`.
+
+**Duas integrações nascem ligadas** (ADR 0018) e merecem uma decisão explícita antes da subida:
+
+| Flag | Se você não fizer nada | Para desligar |
+| --- | --- | --- |
+| `email` | notificações e digest diário saem pelo SMTP configurado | `EMAIL_NOTIFICATIONS_ENABLED=false` |
+| `esign` | sem `ESIGN_PROVIDER`, roda em registro local ("Marcar assinado" manual) — não chama nem cobra ninguém | `ESIGN_ENABLED=false` |
+
+Rode `manage.py check_integrations --all` antes de abrir para os usuários: ele pergunta a cada
+provedor se a credencial funciona, o que a flag não sabe responder (FDD 024).
 
 ## 3. Primeira subida
 

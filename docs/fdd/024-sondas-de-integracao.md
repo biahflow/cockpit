@@ -6,7 +6,8 @@ O `roadmap.md` tem 33 itens `[x]` e 1 pendente. Só que as quatro entregas anter
 defeitos em features **já marcadas como entregues**, e duas auditorias explicaram por quê:
 
 - **As sete flags de integração nascem `false`**, e com os defaults **cerca de metade do roadmap
-  entregue está apagada** numa instalação nova.
+  entregue está apagada** numa instalação nova. *(Corrigido depois pela ADR 0018: `email` e `esign`
+  passaram a nascer ligadas, e nenhuma flag liga sem as credenciais que exige.)*
 - **Todo código que fala com um provedor externo está atrás de `# pragma: no cover`** — Drive,
   Calendário, OpenAI, e-sign, Linear/GitHub. Os testes param na fronteira do mock, então nenhuma
   dessas linhas jamais executou, nem em teste nem em produção.
@@ -232,6 +233,8 @@ um `ping` no adaptador —, mas nenhum fornecedor o implementava, e o e-sign era
 configurada que respondia "sem sonda disponível". A query `me` do Autentique serve: valida o token,
 é só leitura, não cria documento. Das sete flags, sobram sem sonda apenas as que **não têm como**
 ter uma (`portal`, que é destino de webhook, e `tasksync`, sem credencial nesta instalação).
+*(O `portal` deixou de ser a única flag não-alternável na ADR 0018 — segue sem sonda, mas agora
+pode ser desligado pela tela.)*
 
 **Dois achados:**
 

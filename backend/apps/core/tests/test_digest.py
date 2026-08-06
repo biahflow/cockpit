@@ -39,7 +39,7 @@ def test_build_user_digest_context_empty_without_items():
 
 
 @pytest.mark.django_db
-@override_settings(EMAIL_NOTIFICATIONS_ENABLED=True, AI_ENABLED=True)
+@override_settings(EMAIL_NOTIFICATIONS_ENABLED=True, AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_send_daily_digest_uses_ai_emails_and_audits(mailoutbox, monkeypatch):
     from apps.core import ai
 

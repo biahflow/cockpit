@@ -13,6 +13,18 @@ export class ApiError extends Error {
   }
 }
 
+// O DRF devolve erro de validação por campo (`{"tier": ["Já existe..."]}`), sem a chave `detail`.
+// Lendo só `detail`, toda mensagem específica virava o genérico "Não foi possível concluir a
+// operação." — e quem via não tinha como saber o que corrigir. O caso que denunciou foi o nível de
+// produto duplicado em Serviços, mas vale para qualquer formulário do portal.
+function fieldErrors(payload: unknown): string {
+  if (typeof payload !== "object" || payload === null) return "";
+  return Object.values(payload as Record<string, unknown>)
+    .flatMap(value => Array.isArray(value) ? value : [value])
+    .filter((value): value is string => typeof value === "string")
+    .join(" ");
+}
+
 async function csrf(): Promise<string> {
   const response = await fetch(`${baseUrl}/auth/csrf/`, { credentials: "include" });
   if (!response.ok) throw new Error("Não foi possível iniciar uma sessão segura.");
@@ -36,7 +48,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (requestId) setLastRequestId(requestId);
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
-    const erro = new ApiError(detail.detail || "Não foi possível concluir a operação.", response.status, requestId);
+    const erro = new ApiError(detail.detail || fieldErrors(detail) || "Não foi possível concluir a operação.", response.status, requestId);
     // Só 5xx: 400/403/404 são o app funcionando (validação, permissão, item removido) e
     // encheriam o Sentry de ruído que já está na tela do usuário.
     if (response.status >= 500) reportError(erro, { requestId, status: response.status, path });

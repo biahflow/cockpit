@@ -150,10 +150,13 @@ def probe(name: str) -> ProbeResult:
     enabled = flags.is_enabled(name)
     configured = flags.configured(name)
 
-    if not enabled:
+    # A pergunta aqui é pela **intenção**, não pelo efeito: desde a ADR 0018 uma integração pedida
+    # sem credencial resolve para desligada, e ler `enabled` faria a sonda calar exatamente no caso
+    # que ela existe para denunciar — quem escreveu `ESIGN_ENABLED=true` e esqueceu o token.
+    if not flags.desired(name):
         return ProbeResult(name, flag.label, enabled, configured, None, "desligada")
     if not configured:
-        detalhe = f"ligada, mas falta no ambiente: {_faltando(name)}"
+        detalhe = f"pedida, mas falta no ambiente: {_faltando(name)}"
         return ProbeResult(name, flag.label, enabled, configured, False, detalhe)
 
     ok, detalhe = _executar(name)
@@ -168,7 +171,9 @@ def probe_all(*, incluir_desligadas: bool = False) -> list[ProbeResult]:
 
 def _forcado(name: str) -> ProbeResult:
     """Sonda mesmo desligada — para conferir credencial **antes** de ligar a integração."""
-    if flags.is_enabled(name):
+    # `desired`, não `is_enabled`: a pedida-sem-credencial merece a reprovação nomeada de `probe`,
+    # não o "desligada" genérico daqui.
+    if flags.desired(name):
         return probe(name)
 
     flag = flags.FLAGS[name]

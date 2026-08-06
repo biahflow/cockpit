@@ -97,3 +97,38 @@ test("marca notificações como lidas via POST", async () => {
   expect(fetchMock).toHaveBeenCalledWith("/api/v1/notifications/1/read/", expect.objectContaining({ method: "POST" }));
   expect(fetchMock).toHaveBeenCalledWith("/api/v1/notifications/read-all/", expect.objectContaining({ method: "POST" }));
 });
+
+test("erro de campo do DRF chega ao usuário em vez do texto genérico", async () => {
+  // O DRF devolve validação por campo sem a chave `detail`. Lendo só `detail`, "já existe um
+  // serviço ativo neste nível" virava o inútil "Não foi possível concluir a operação.".
+  const fetchMock = vi.fn().mockResolvedValue(new Response(
+    JSON.stringify({ tier: ["Já existe um serviço ativo neste nível."] }), { status: 400 },
+  ));
+  vi.stubGlobal("fetch", fetchMock);
+
+  const erro = await listUsers().catch((cause: unknown) => cause);
+
+  expect((erro as Error).message).toBe("Já existe um serviço ativo neste nível.");
+});
+
+test("`detail` continua tendo precedência sobre os erros de campo", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(
+    JSON.stringify({ detail: "Este cliente ainda tem 1 projeto(s) em aberto.", tier: ["ignorado"] }),
+    { status: 409 },
+  ));
+  vi.stubGlobal("fetch", fetchMock);
+
+  const erro = await listUsers().catch((cause: unknown) => cause);
+
+  expect((erro as Error).message).toBe("Este cliente ainda tem 1 projeto(s) em aberto.");
+  expect((erro as ApiError).status).toBe(409);
+});
+
+test("corpo sem nada aproveitável cai na mensagem genérica", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 500 }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  const erro = await listUsers().catch((cause: unknown) => cause);
+
+  expect((erro as Error).message).toBe("Não foi possível concluir a operação.");
+});

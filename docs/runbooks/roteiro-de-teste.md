@@ -48,9 +48,14 @@ Papel continua sendo coisa de convite: para criar alguém de Vendas ou Entrega, 
 
 ### O que está desligado de propósito
 
-IA, Google Drive, Calendário, Assinatura eletrônica e Sincronia de tarefas nascem atrás de flag.
+IA, Google Drive, Calendário e Sincronia de tarefas nascem atrás de flag desligada.
 **Desligados, os botões não aparecem** e as ações respondem 503. Ausência não é defeito: confira a
-tabela de estado em [`../operacao.md`](../operacao.md) antes de abrir um chamado. Notificações
+tabela de estado em [`../operacao.md`](../operacao.md) antes de abrir um chamado.
+
+Já **notificações por e-mail e assinatura eletrônica nascem ligadas** (ADR 0018) — a assinatura sem
+`ESIGN_PROVIDER` roda em registro local, com "Marcar assinado" manual. E nenhuma flag liga sem as
+credenciais que exige: `ESIGN_ENABLED=true` com token faltando resolve para desligada, e a tela
+Configurações nomeia a variável ausente. Notificações
 in-app (o sino) e o e-mail do Mailpit funcionam sem configurar nada.
 
 ## 1. Entrar
@@ -58,8 +63,8 @@ in-app (o sino) e o e-mail do Mailpit funcionam sem configurar nada.
 1. Abra <http://localhost:19173>. Sem sessão, cai na tela de login.
 2. Entre com o admin criado acima.
 
-**Deve acontecer:** o menu lateral traz as dez entradas (Visão geral, Comercial, Leads, Clientes,
-Projetos, Documentos, Indicadores, Jornada, Equipe, Configurações) e o canto superior direito mostra
+**Deve acontecer:** o menu lateral traz as onze entradas (Visão geral, Comercial, Leads, Clientes,
+Projetos, Documentos, Indicadores, Serviços, Jornada, Equipe, Configurações) e o canto superior direito mostra
 seu nome com o papel **Administrador**. A sessão é cookie + CSRF: recarregar a página mantém você
 dentro; **Sair** derruba.
 
@@ -91,8 +96,8 @@ produto**, Valor estimado e Previsão de fechamento → **Adicionar ao pipeline*
 
 O seletor de nível traz os três produtos semeados por migração — Discovery Express, Discovery +
 Assessment e Implantação. "Sem nível definido" é permitido, mas **escolha um**: é o nível que decide
-o template de kickoff no passo 6. Nome, preço e escopo de cada um se editam em
-**Indicadores → Gerir serviços** (`/servicos`).
+o template de kickoff no passo 6. Nome, preço e escopo de cada um se editam no menu
+**Serviços** (`/servicos`, visível só para admin).
 
 **Deve acontecer:** um card na primeira coluna do pipeline, com o valor formatado em reais e uma
 etiqueta colorida do nível de produto. O total da coluna, no cabeçalho, soma o card.
@@ -120,7 +125,8 @@ Clique em **Criar projeto**, informe *Início* e *Prazo final* e confirme.
    espremidos dentro da janela que você informou (`apps/core/kickoff.py`).
 3. Um **e-mail de kickoff** chega no Mailpit (<http://localhost:19025>) — desde que o seu usuário
    tenha e-mail cadastrado, já que ele é o destinatário. Este e-mail não depende de
-   `EMAIL_NOTIFICATIONS_ENABLED`.
+   `EMAIL_NOTIFICATIONS_ENABLED`; com a flag ligada (o default desde a ADR 0018) chega **um
+   segundo** e-mail, o espelho da notificação do sino.
 4. O **sino** de notificações mostra "Projeto … criado a partir da oportunidade ganha".
 5. Um **aviso verde** aparece no topo do Comercial, com link "Abrir projeto", e o card da
    oportunidade passa a oferecer **"Ver projeto"** no lugar de "Criar projeto".

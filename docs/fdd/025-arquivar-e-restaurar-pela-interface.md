@@ -1,0 +1,74 @@
+# FDD 025 — Arquivar e restaurar pela interface
+
+## Jornada
+
+O portal arquiva desde sempre: `TimestampedModel.archive()` grava `archived_at`, e
+`ArchiveModelViewSet` esconde o arquivado da listagem. Dezesseis modelos usam esse campo. Mas o
+recurso existia só pela metade, e as três metades que faltavam apareceram juntas quando um admin
+pediu para "excluir um lead, um cliente, um projeto".
+
+**Não havia botão.** Cliente, oportunidade e projeto não tinham como ser arquivados por nenhuma
+tela — o `DELETE` existia na API e ninguém o alcançava. Lead, documento e serviço tinham botão.
+
+**Não havia volta.** `archived_at` não aparece em serializer nenhum, não há endpoint de
+restauração, e o registro some de toda listagem. Desfazer exigia Django admin ou `manage.py shell`.
+Dar botão de arquivar cliente e projeto sem isso seria transformar um clique acidental em problema
+de infraestrutura.
+
+**Não havia confirmação.** Os sete botões de excluir do portal disparavam o `DELETE` no clique.
+
+E havia um defeito silencioso por baixo: o soft delete é por registro, e nada cascateia.
+`ProjectViewSet` e `OpportunityViewSet` filtram o próprio `archived_at` e nunca o do cliente. Então
+arquivar um cliente sumia com ele da tela de Clientes e **mantinha** os projetos e oportunidades
+dele nas listas, cada um exibindo o nome de um cliente que a interface já não mostra. O backend
+respondia 204, em silêncio.
+
+## Regras
+
+- **"Arquivar" ≠ "Excluir".** O portal já usava os dois termos, e agora a distinção é regra:
+  *Arquivar* para soft delete (lead, cliente, oportunidade, projeto, documento, serviço); *Excluir*
+  só onde o `DELETE` é real — etapa do pipeline e fase da jornada, que são `ModelViewSet` sobre
+  modelos sem `archived_at`. Um botão "Excluir" que arquiva ensina a pessoa errada a coisa errada.
+- **Toda ação destrutiva pede confirmação.** `ConfirmDialog` (`components/Modal.tsx`) sobre o mesmo
+  `Modal` que já resolve foco preso e `Escape` (FDD 022). O texto diz o que acontece e se dá para
+  desfazer — não "tem certeza?".
+- **Arquivar não pode deixar órfão visível.** `ClientViewSet.perform_destroy` recusa com **409**
+  enquanto houver projeto ou oportunidade ativos, e a mensagem diz quantos: quem tentou precisa
+  saber o que fazer antes. `OpportunityViewSet.perform_destroy` recusa a oportunidade já convertida
+  — ela é o outro lado de um projeto vivo, e a conversão não roda duas vezes.
+- **409, não 400.** O pedido está bem formado e a permissão existe; o que impede é o **estado**, e é
+  ele que muda para o pedido passar. `ArchiveConflict` em `views.py`.
+- **O contato acompanha em vez de bloquear.** Ninguém lista contato fora do cliente, então ele não
+  produz órfão visível — mas deixá-lo ativo restauraria depois um cliente com contatos vivos pela
+  metade. Arquiva junto, na mesma transação.
+- **Projeto não tem guarda.** Tarefas, marcos, reuniões e pendências só são listados via
+  `?project=`, então não vazam para lugar nenhum.
+- **`?archived=1` e `POST /unarchive/` valem para todo `ArchiveModelViewSet`.** A ação resolve o
+  objeto pela queryset **crua**: `get_object()` passa pelo `get_queryset()`, que esconde justamente
+  o que se quer restaurar, e devolveria 404 em toda restauração. A permissão de objeto continua
+  sendo a mesma do `destroy` — Entrega não restaura projeto de que não participa.
+- **A política de permissão não mudou.** `RolePermission` não distingue `DELETE` de `PATCH`: quem
+  edita, arquiva. A restrição a admin é da interface (`user?.is_admin`), não da API.
+- **A aba Arquivados fala com o viewset, não com o agregador.** Em Clientes ela chama
+  `/clients/?archived=1` e não `/clients/overview/`: o overview é montado à mão e não passa pelo
+  `get_queryset` do `ArchiveModelViewSet`, então nunca enxergaria o arquivado.
+
+## Fronteira com a retenção (ADR 0017)
+
+`retention.py` conta o prazo de expurgo a partir de `archived_at`, para as famílias `lead` e
+`document`. **Restaurar zera esse relógio** — o registro volta a estar ativo e deixa de ser
+candidato ao `purge_archived`. É o comportamento correto, e é intencional: um dado que voltou ao
+uso não deve ser apagado pelo prazo que corria enquanto ele estava fora.
+
+O expurgo continua sendo a única operação que destrói de propósito, e continua inerte por padrão.
+
+## Onde está
+
+- Backend: `ArchiveModelViewSet` (`?archived=1`, `unarchive`), `ArchiveConflict`,
+  `ClientViewSet.perform_destroy`, `OpportunityViewSet.perform_destroy` — todos em
+  `backend/apps/core/views.py`.
+- Frontend: `components/Modal.tsx` (`Modal` extraído da `CommercialPage` + `ConfirmDialog`); botões
+  em `ClientDetailPage`, `ProjectDetailPage` e no detalhe da `CommercialPage`; abas Arquivados em
+  `ClientsPage` e `ProjectsPage`.
+- Testes: `backend/tests/regression/test_archive_nao_deixa_orfao.py`,
+  `backend/apps/core/tests/test_archive_restore.py`, `frontend/src/components/Modal.test.tsx`.

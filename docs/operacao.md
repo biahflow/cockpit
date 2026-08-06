@@ -1,7 +1,10 @@
 # Runbook de operação — Portal Biahflow
 
 Guia prático do que ligar, em que ordem, e como testar. Tudo que depende de terceiros está
-atrás de **flag**: desligado, o portal funciona normalmente. Ligue conforme tiver contas/keys.
+atrás de **flag**, e nenhuma flag liga sem as credenciais que ela exige (ADR 0018) — desligada, a
+integração some da interface e as ações dela respondem 503, com o portal funcionando normalmente.
+Notificações por e-mail e assinatura eletrônica **nascem ligadas**; as demais você liga conforme
+tiver contas e chaves.
 
 Este documento é sobre **configuração**. Para percorrer o produto de ponta a ponta — entrar, criar
 cliente, oportunidade, converter em projeto, montar equipe e conferir os indicadores — o roteiro é
@@ -27,25 +30,31 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Recurso | Flag/env | Depende de | Estado |
 | --- | --- | --- | --- |
 | CRM, projetos, indicadores, ROI | — | — | **Sempre ligado** |
-| **Níveis de produto** (Discovery Express / Discovery + Assessment / Implantação) | — | — | **Ligado** ✅ — semeados na migração; ajuste nome, preço e escopo em **Indicadores → Gerir serviços** (`/servicos`) |
+| **Níveis de produto** (Discovery Express / Discovery + Assessment / Implantação) | — | — | **Ligado** ✅ — semeados na migração; ajuste nome, preço e escopo no menu **Serviços** (`/servicos`, admin) |
 | **Captação de leads** | `LEAD_INTAKE_TOKEN`, `CORS_ALLOWED_ORIGINS` | token (você define) | **Ligado** ✅ |
 | Documentos no Google Drive | `GOOGLE_DRIVE_ENABLED` + auth ADC/OAuth (ADR 0016) | Pasta ou Shared Drive acessível à identidade | Desligado |
 | IA (assistente/resumos/proposta/próximos passos) | `AI_ENABLED`, `OPENAI_API_KEY` | conta OpenAI | Desligado |
 | Notificações in-app (sino) | — | — | **Sempre ligado** |
+| Notificações por e-mail e digest diário | `EMAIL_NOTIFICATIONS_ENABLED` (default `true`), `EMAIL_HOST`/`EMAIL_PORT`, `SCHEDULER_DIGEST_AT` | SMTP acessível (Mailpit no dev) | **Ligado** ✅ — ponha `false` para silenciar |
 | Calendário (add ao Google Calendar + eventos → tarefas) | `CALENDAR_ENABLED`, `GOOGLE_CALENDAR_ID` | mesma auth do Drive, **outro escopo** | Pronto (desligado) |
 | Agendamento (qualificação IA + booking pelo site) | `AI_ENABLED`+`CALENDAR_ENABLED`, `GOOGLE_BOOKING_CALENDAR_ID`, `BOOKING_MIN_FIT` | OpenAI + Google (free/busy) | Pronto (desligado) |
-| Assinatura eletrônica | `ESIGN_ENABLED`, `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique | Pronto (desligado) |
-| Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) |
+| Assinatura eletrônica | `ESIGN_ENABLED` (default `true`), `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `ESIGN_PROVIDER` roda em registro local (`mark-signed` manual); com fornecedor nomeado, exige token e segredo do webhook |
+| Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) — liga sozinho quando as duas variáveis estiverem preenchidas; alternável em Configurações |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
 | Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
 | Rastreamento de erro (Sentry) | `SENTRY_DSN` (API) e `VITE_SENTRY_DSN` (SPA, build arg) | conta Sentry | Pronto (desligado) |
 | Backup do banco e dos documentos | — (sidecar do compose de produção) | — | **Sempre ligado** em produção ✅ — agendado por `BACKUP_CRON` |
 | Envio do backup para fora do host | `BACKUP_S3_*` | bucket compatível com S3 | Pronto (desligado) — **recomendado**: cópia no mesmo host morre com o host |
 
-> As integrações com flag booleana (IA, Drive, Calendário, Assinatura, Sincronia de tarefas)
-> podem ser ligadas/desligadas em runtime por um admin na tela **Configurações** (`/configuracoes`),
-> sem redeploy. O `.env` continua sendo o default e a casa dos segredos; o toggle só não liga uma
-> integração cujas credenciais faltem no ambiente.
+> **As sete integrações** (IA, Drive, Calendário, Assinatura, E-mail, Sincronia de tarefas e
+> Portal do cliente) podem ser ligadas/desligadas em runtime por um admin na tela **Configurações**
+> (`/configuracoes`), sem redeploy. O `.env` continua sendo o default e a casa dos segredos.
+>
+> Desde a ADR 0018, **credencial faltando vence qualquer intenção**: não liga pelo toggle, nem pelo
+> default do `.env`. A tela nomeia a variável que falta ("Falta no ambiente: `ESIGN_API_TOKEN`").
+> Atenção ao placeholder: `flags.missing()` só verifica se a variável está preenchida, então um
+> `ESIGN_WEBHOOK_SECRET=<segredo do painel>` literal conta como configurado e **liga a integração**
+> — quem pega isso é `manage.py check_integrations`, que pergunta ao provedor (FDD 024).
 
 ## Ordem sugerida de ativação
 
@@ -68,7 +77,10 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 - **O custo que não parte de ninguém:** o digest diário chama o modelo **uma vez por usuário
   ativo com itens, todo dia**, e é o único gasto de IA não iniciado por uma pessoa — ele fica
   de fora do `AI_DAILY_LIMIT`, que existe para limitar gente. Se a IA cair, o digest sai em
-  texto estruturado em vez de não sair.
+  texto estruturado em vez de não sair. Repare que isto deixou de ser hipotético: as notificações
+  por e-mail nascem ligadas (ADR 0018), então ligar `AI_ENABLED` já basta para o gasto começar.
+  Para o digest sem IA, mantenha `AI_ENABLED=false`; para nenhum digest,
+  `EMAIL_NOTIFICATIONS_ENABLED=false`.
 - **Teto por chamada:** `AI_TIMEOUT_SECONDS` (30 s) é o teto de **tempo** de verdade — o cliente
   vai sem retentativa, senão o SDK triplicaria por baixo. O teto de **tokens** é por feature, não
   global: existe na qualificação de lead (300) e no AI Score (500), que produzem JSON curto, e
@@ -108,7 +120,9 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   `BOOKING_SLOT_MINUTES` (default 45). No site (`biahflow-site/backend/.env`) nada muda além do
   `CRM_INTAKE_URL`/`CRM_INTAKE_TOKEN` já existentes — o relay descobre os endpoints de booking a
   partir do intake. Ver FDD 013.
-- **Assinatura (Autentique)**: `ESIGN_ENABLED=true` + `ESIGN_PROVIDER=autentique` +
+- **Assinatura (Autentique)**: já vem `ESIGN_ENABLED=true` (ADR 0018). Sem `ESIGN_PROVIDER`, a
+  integração roda no **registro local**: o portal grava a solicitação e espera o "Marcar assinado"
+  manual, sem chamar ninguém e sem credencial nenhuma. Para valer com fornecedor, `ESIGN_PROVIDER=autentique` +
   `ESIGN_API_TOKEN` (chave de API gerada no painel) + `ESIGN_WEBHOOK_SECRET`. `ESIGN_API_BASE`
   fica vazio (cada adaptador tem a própria URL padrão). No painel do Autentique, cadastre o
   webhook apontando para `https://<host>/api/v1/esign/webhook/` com **o mesmo segredo** — a
@@ -125,10 +139,16 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   - Trocar de fornecedor é trocar o `ESIGN_PROVIDER` (`clicksign` também tem adaptador) e o
     segredo do webhook. Sem provedor (ou com a integração desligada), o botão "Marcar assinado"
     segue como fallback manual. Ver FDD 009 e ADR 0007.
-- Desligados, os botões não aparecem e as ações retornam 503.
+- Desligados, os botões não aparecem e as ações retornam 503. E "desligado" inclui **nomear o
+  fornecedor e esquecer o token ou o segredo do webhook**: nesse caso a flag resolve para desligada
+  em vez de deixar a chamada estourar no provedor (ADR 0018). A tela Configurações diz qual variável
+  falta.
 
 ### 5. Webhook do portal do cliente
 - `.env`: `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET`, `PORTAL_READ_TOKEN`.
+- Preenchidas a URL e o segredo, a integração **liga sozinha**. Para pausar a emissão durante um
+  incidente do portal, desligue em **Configurações** — desde a ADR 0018 `portal.emit()` respeita o
+  toggle, e antes disso só um deploy silenciava a entrega.
 - Emite webhooks assinados (HMAC) quando Project/Milestone/Task/Document/**Meeting/Pendencia** mudam.
 - O snapshot (`/api/v1/portal/projects/<id>/snapshot/`) também traz **reuniões, pendências e
   resultados** (KPIs derivados, sem dado comercial) — ver ADR 0005. Sem nova flag: entra no webhook

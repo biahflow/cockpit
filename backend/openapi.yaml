@@ -242,6 +242,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/artifacts/{id}/unarchive/:
+    post:
+      operationId: v1_artifacts_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este artifact.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/auth/csrf/:
     get:
       operationId: v1_auth_csrf_retrieve
@@ -509,6 +531,28 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/clients/{id}/unarchive/:
+    post:
+      operationId: v1_clients_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este client.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/clients/overview/:
     get:
       operationId: v1_clients_overview_retrieve
@@ -719,6 +763,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/contacts/{id}/unarchive/:
+    post:
+      operationId: v1_contacts_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este contact.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/dashboard/:
     get:
       operationId: v1_dashboard_retrieve
@@ -874,6 +940,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/digital-employees/{id}/unarchive/:
+    post:
+      operationId: v1_digital_employees_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/documents/:
     get:
       operationId: v1_documents_list
@@ -1179,6 +1267,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Document'
+          description: ''
+  /api/v1/documents/{id}/unarchive/:
+    post:
+      operationId: v1_documents_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este document.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
           description: ''
   /api/v1/esign/webhook/:
     post:
@@ -1602,6 +1712,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Lead'
           description: ''
+  /api/v1/leads/{id}/unarchive/:
+    post:
+      operationId: v1_leads_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este lead.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/leads/intake/:
     post:
       operationId: v1_leads_intake_create
@@ -1878,6 +2010,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Meeting'
           description: ''
+  /api/v1/meetings/{id}/unarchive/:
+    post:
+      operationId: v1_meetings_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/milestones/:
     get:
       operationId: v1_milestones_list
@@ -2065,6 +2219,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Milestone'
+          description: ''
+  /api/v1/milestones/{id}/unarchive/:
+    post:
+      operationId: v1_milestones_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este milestone.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
           description: ''
   /api/v1/notifications/:
     get:
@@ -2431,6 +2607,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Opportunity'
           description: ''
+  /api/v1/opportunities/{id}/unarchive/:
+    post:
+      operationId: v1_opportunities_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/pendencias/:
     get:
       operationId: v1_pendencias_list
@@ -2572,6 +2770,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/pendencias/{id}/unarchive/:
+    post:
+      operationId: v1_pendencias_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pendencia.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/phase-deliverables/:
     get:
       operationId: v1_phase_deliverables_list
@@ -3026,6 +3246,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/project-deliverables/{id}/unarchive/:
+    post:
+      operationId: v1_project_deliverables_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project deliverable.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/project-members/:
     get:
       operationId: v1_project_members_list
@@ -3203,6 +3445,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/project-members/{id}/unarchive/:
+    post:
+      operationId: v1_project_members_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project member.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/project-phases/:
     get:
       operationId: v1_project_phases_list
@@ -3354,6 +3618,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/project-phases/{id}/unarchive/:
+    post:
+      operationId: v1_project_phases_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project phase.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/projects/:
     get:
       operationId: v1_projects_list
@@ -3660,6 +3946,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/Project'
           description: ''
+  /api/v1/projects/{id}/unarchive/:
+    post:
+      operationId: v1_projects_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/recommendations/:
     get:
       operationId: v1_recommendations_retrieve
@@ -3829,6 +4137,28 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/services/{id}/unarchive/:
+    post:
+      operationId: v1_services_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este service.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/tasks/:
     get:
       operationId: v1_tasks_list
@@ -4084,6 +4414,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
+          description: ''
+  /api/v1/tasks/{id}/unarchive/:
+    post:
+      operationId: v1_tasks_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este task.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
           description: ''
   /api/v1/tasks/sync/:
     post:
@@ -4459,11 +4811,16 @@ components:
           type: boolean
         toggleable:
           type: boolean
+        missing:
+          type: array
+          items:
+            type: string
       required:
       - configured
       - enabled
       - key
       - label
+      - missing
       - toggleable
     ConfigResponse:
       type: object
@@ -6382,6 +6739,13 @@ components:
         * `discovery_express` - Discovery Express
         * `discovery_assessment` - Discovery + Assessment
         * `implantacao` - Implantação
+    Unarchived:
+      type: object
+      properties:
+        id:
+          type: integer
+      required:
+      - id
     User:
       type: object
       properties:

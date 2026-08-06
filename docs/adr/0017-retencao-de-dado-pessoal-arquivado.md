@@ -36,6 +36,15 @@ Entra o **mecanismo**, com os prazos deliberadamente vazios.
   decidiu que aquilo saiu de uso. Linha viva nunca entra — este comando não decide o que sai de
   uso, ele esquece o que já saiu.
 
+## Restaurar zera o relógio (FDD 025)
+
+O prazo conta a partir de `archived_at`. Com a restauração pela interface, `archived_at` volta a
+`NULL` e o registro deixa de ser candidato ao expurgo — o relógio não "continua de onde parou",
+recomeça se ele for arquivado de novo.
+
+É intencional: um lead ou documento que voltou ao uso não deve ser apagado por um prazo que corria
+enquanto ele estava fora. Quem restaura assume o dado de volta.
+
 ## Consequências
 
 - **O mecanismo existe e não faz nada até ser configurado.** É a postura certa para uma operação

@@ -70,6 +70,12 @@ de API. Ver `docs/runbooks/monitoramento.md`.
 ## Integrações
 
 Tudo que depende de terceiros fica **atrás de flag** e, desligado, o portal opera normalmente:
-IA (OpenAI), Drive, Calendário (Google), assinatura eletrônica, sincronia de tarefas
-(Linear/GitHub) e webhook do portal do cliente. As flags booleanas são alternáveis em runtime por
-um admin em Configurações; o `.env` segue como default e casa dos segredos. Ver `docs/operacao.md`.
+IA (OpenAI), Drive, Calendário (Google), assinatura eletrônica, notificações por e-mail, sincronia
+de tarefas (Linear/GitHub) e webhook do portal do cliente. **As sete são alternáveis em runtime** por
+um admin em Configurações; o `.env` segue como default e casa dos segredos.
+
+`flags.is_enabled()` é `configured() and desired()`: a intenção declarada (override do admin ou
+default do ambiente) só vale se as credenciais exigidas estiverem no ambiente — nenhuma flag liga
+sem elas, nem por toggle nem por `.env` (ADR 0018). `email` e `esign` nascem ligadas; as demais,
+desligadas. A pergunta que a flag **não** responde — "a credencial funciona?" — é da sonda do
+`manage.py check_integrations` (FDD 024). Ver `docs/operacao.md`.

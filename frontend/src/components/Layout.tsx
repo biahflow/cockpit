@@ -1,4 +1,4 @@
-import { BarChart3, Bell, ChevronDown, FileText, FolderKanban, Inbox, LayoutDashboard, LogOut, Menu, Route, Settings, Users, UsersRound, WalletCards } from "lucide-react";
+import { BarChart3, Bell, ChevronDown, FileText, FolderKanban, Inbox, LayoutDashboard, LogOut, Menu, Package, Route, Settings, Users, UsersRound, WalletCards } from "lucide-react";
 import { type ComponentType, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useEscape } from "../a11y";
@@ -16,6 +16,7 @@ const links: NavLink[] = [
   ["/projetos", "Projetos", FolderKanban],
   ["/documentos", "Documentos", FileText],
   ["/indicadores", "Indicadores", BarChart3, ["admin", "sales"]],
+  ["/servicos", "Serviços", Package, ["admin"]],
   ["/jornada", "Jornada", Route, ["admin"]],
   ["/equipe", "Equipe", Users, ["admin"]],
   ["/configuracoes", "Configurações", Settings, ["admin"]],

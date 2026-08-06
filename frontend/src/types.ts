@@ -42,7 +42,9 @@ export type Dashboard = { pipeline: PipelineStage[]; active_projects: number; ov
 export type SessionUser = { id: number; username: string; first_name: string; last_name: string; email: string; role: "admin" | "sales" | "delivery"; is_admin: boolean };
 export type Role = "admin" | "sales" | "delivery";
 export type Invitation = { id: number; email: string; role: Role; expires_at: string; accepted_at: string | null; created_at: string };
-export type IntegrationFlag = { key: string; label: string; enabled: boolean; configured: boolean; toggleable: boolean };
+// `missing` traz os nomes das variáveis de ambiente que faltam para a integração poder ligar. Sem
+// eles a tela só sabia dizer "faltam credenciais", e quem ia corrigir tinha de abrir o código.
+export type IntegrationFlag = { key: string; label: string; enabled: boolean; configured: boolean; toggleable: boolean; missing: string[] };
 export type AppConfig = { ai_enabled: boolean; calendar_enabled: boolean; esign_enabled: boolean; integrations: IntegrationFlag[] };
 export type RiskSignal = { label: string; detail: string; weight: number };
 export type RiskForecast = { predicted_finish_date: string; delay_days: number; basis: string };

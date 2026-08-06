@@ -2,6 +2,8 @@ import { ArrowLeft, Briefcase, Mail, Phone, Plus, Save, Trash2, UserRound } from
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
+import { useAuth } from "../auth";
+import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import type { Client, ClientOverview, ClientStatus, Contact } from "../types";
 
@@ -15,6 +17,11 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [contactDraft, setContactDraft] = useState(blankContact);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [removingContact, setRemovingContact] = useState<Contact | null>(null);
+  const [isArchiving, setArchiving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  const canArchive = !!user?.is_admin;
 
   const load = useCallback(() => Promise.all([
     api<Client>(`/clients/${id}/`),
@@ -36,9 +43,23 @@ export function ClientDetailPage({ id }: { id: number }) {
     try { await api("/contacts/", { method: "POST", body: JSON.stringify({ client: id, ...contactDraft }) }); setContactDraft(blankContact); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
-  async function removeContact(contactId: number) {
-    try { await api(`/contacts/${contactId}/`, { method: "DELETE" }); await load(); }
-    catch (cause) { setError((cause as Error).message); }
+  async function removeContact() {
+    if (!removingContact) return;
+    setBusy(true);
+    try { await api(`/contacts/${removingContact.id}/`, { method: "DELETE" }); setRemovingContact(null); await load(); }
+    catch (cause) { setRemovingContact(null); setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function archiveClient() {
+    setBusy(true);
+    try {
+      await api(`/clients/${id}/`, { method: "DELETE" });
+      window.location.assign("/clientes");
+    } catch (cause) {
+      // O 409 das guardas de integridade chega aqui com o motivo ("ainda tem 2 projeto(s)…"),
+      // que é exatamente o que quem tentou precisa ler para saber o que fazer antes.
+      setArchiving(false); setError((cause as Error).message); setBusy(false);
+    }
   }
 
   if (error && !client) return <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-signal">{error}</div>;
@@ -46,7 +67,22 @@ export function ClientDetailPage({ id }: { id: number }) {
 
   return <section className="space-y-7">
     <a href="/clientes" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para clientes</a>
-    <header><p className="text-sm font-semibold text-ocean">Relacionamento</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{client.name}</h1><p className="mt-2 text-sm text-slate-600">Dados cadastrais e contatos do cliente.</p></header>
+    {removingContact && <ConfirmDialog
+      title="Remover contato"
+      message={<>Remover <strong className="text-ink">{removingContact.name}</strong> da lista de contatos deste cliente?</>}
+      confirmLabel="Remover" busy={busy}
+      onCancel={() => setRemovingContact(null)} onConfirm={() => void removeContact()}
+    />}
+    {isArchiving && <ConfirmDialog
+      title="Arquivar cliente"
+      message={<>O cliente <strong className="text-ink">{client.name}</strong> e os contatos dele saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
+      confirmLabel="Arquivar" busy={busy}
+      onCancel={() => setArchiving(false)} onConfirm={() => void archiveClient()}
+    />}
+    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div><p className="text-sm font-semibold text-ocean">Relacionamento</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{client.name}</h1><p className="mt-2 text-sm text-slate-600">Dados cadastrais e contatos do cliente.</p></div>
+      {canArchive && <button type="button" className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:border-signal hover:text-signal sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar cliente</button>}
+    </header>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
 
     {overview && (overview.health
@@ -90,7 +126,7 @@ export function ClientDetailPage({ id }: { id: number }) {
           <input className="field" placeholder="Cargo" value={contactDraft.job_title} onChange={event => setContactDraft({ ...contactDraft, job_title: event.target.value })} />
           <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink sm:col-span-2" type="submit"><Plus className="size-4" />Adicionar contato</button>
         </form>
-        {contacts.length ? <div className="divide-y">{contacts.map(contact => <div className="flex items-start gap-3 py-3" key={contact.id}><span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><UserRound className="size-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink">{contact.name}</p>{contact.job_title && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Briefcase className="size-3" />{contact.job_title}</p>}{contact.email && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Mail className="size-3" />{contact.email}</p>}{contact.phone && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Phone className="size-3" />{contact.phone}</p>}</div><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Remover ${contact.name}`} onClick={() => void removeContact(contact.id)}><Trash2 className="size-4" /></button></div>)}</div> : <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">Nenhum contato cadastrado.</p>}
+        {contacts.length ? <div className="divide-y">{contacts.map(contact => <div className="flex items-start gap-3 py-3" key={contact.id}><span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><UserRound className="size-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink">{contact.name}</p>{contact.job_title && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Briefcase className="size-3" />{contact.job_title}</p>}{contact.email && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Mail className="size-3" />{contact.email}</p>}{contact.phone && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Phone className="size-3" />{contact.phone}</p>}</div><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Remover ${contact.name}`} onClick={() => setRemovingContact(contact)}><Trash2 className="size-4" /></button></div>)}</div> : <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">Nenhum contato cadastrado.</p>}
       </section>
     </div>
   </section>;

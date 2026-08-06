@@ -80,9 +80,11 @@ def test_finalize_sends_email_and_notifies_owner(mailoutbox):
 
     kickoff.finalize(project)
 
-    assert len(mailoutbox) == 1
-    assert project.name in mailoutbox[0].subject
-    assert mailoutbox[0].to == ["dono@example.test"]
+    # Saem dois e-mails desde a ADR 0018: o do kickoff, que ignora a flag `email` por ser parte do
+    # fluxo e não notificação, e o da própria notificação, que passou a ser ligada por padrão. O que
+    # este teste garante é o primeiro — daí procurá-lo pelo assunto em vez de contar a caixa.
+    kickoff_mail = next(mail for mail in mailoutbox if project.name in mail.subject)
+    assert kickoff_mail.to == ["dono@example.test"]
     assert Notification.objects.filter(user=owner, kind="kickoff").count() == 1
 
 

@@ -81,8 +81,10 @@ export function ArtifactsPanel({ opportunity, project, reloadToken, onChange }: 
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{artifact.title}</p>
           {artifact.document && <span className="inline-flex items-center gap-1 text-xs text-slate-600"><FileText className="size-3.5" />Documento salvo</span>}
         </div>
+        {/* 128px não davam conta de uma proposta ou contrato inteiro: o texto nascia num campo do
+            tamanho de um comentário e só se lia rolando. `resize-y` deixa quem revisa esticar. */}
         <textarea
-          className="field mt-3 min-h-32"
+          className="field mt-3 min-h-64 resize-y"
           value={content}
           onChange={event => setDrafts({ ...drafts, [artifact.id]: event.target.value })}
           aria-label={`Conteúdo de ${artifact.title}`}

@@ -162,8 +162,10 @@ EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", False)
 # Sem timeout, um SMTP que não responde pendura o worker que está mandando o e-mail.
 EMAIL_TIMEOUT = _env_int("EMAIL_TIMEOUT", 10)
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@biahflow.local")
-# Notificações por e-mail + digest diário (Go-live/Hypercare) — atrás de flag, desligado por padrão.
-EMAIL_NOTIFICATIONS_ENABLED = os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false").lower() == "true"
+# Notificações por e-mail + digest diário (Go-live/Hypercare) — ligado por padrão (ADR 0018).
+# Esta é a única flag sem credencial obrigatória: o SMTP tem default (o Mailpit do compose), então
+# ligar aqui não pode estourar em lugar nenhum — no pior caso o `send_mail` falha silenciosamente.
+EMAIL_NOTIFICATIONS_ENABLED = os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "true").lower() == "true"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
@@ -385,7 +387,9 @@ BOOKING_MIN_FIT = os.getenv("BOOKING_MIN_FIT", "medium")
 BOOKING_SLOT_MINUTES = int(os.getenv("BOOKING_SLOT_MINUTES", "45"))
 # Assinatura eletrônica (ADR 0007): fornecedor homologado + webhook de status assinado.
 # `ESIGN_WEBHOOK_SECRET` é o segredo do HMAC da entrega; sem ele o webhook responde 401.
-ESIGN_ENABLED = os.getenv("ESIGN_ENABLED", "false").lower() == "true"
+# Ligado por padrão (ADR 0018), mas sem efeito enquanto faltar qualquer uma das três credenciais
+# abaixo: `flags.is_enabled` exige `configured()` antes de considerar o default do ambiente.
+ESIGN_ENABLED = os.getenv("ESIGN_ENABLED", "true").lower() == "true"
 ESIGN_PROVIDER = os.getenv("ESIGN_PROVIDER", "")
 ESIGN_API_TOKEN = os.getenv("ESIGN_API_TOKEN", "")
 # Vazio = cada adaptador usa a própria URL padrão (`Provider.DEFAULT_BASE`).

@@ -22,7 +22,10 @@ acompanhar o status — que o próprio fornecedor devolve por **webhook** (ADR 0
   (`_ai_run`) — depende de `AI_ENABLED` (503), respeita o limite diário (429) e é auditada
   em `AiInteraction`. O modelo preenche o contrato só com o material fornecido e marca
   `[lacunas]`; a saída é **rascunho para revisão humana**.
-- **Solicitar/lembrar assinatura** dependem de `ESIGN_ENABLED` (503 quando desligado).
+- **Solicitar/lembrar assinatura** dependem da flag `esign` (503 quando desligada). Desde a
+  ADR 0018 `ESIGN_ENABLED` nasce `true`, e "desligada" passou a incluir um caso novo: **fornecedor
+  nomeado sem `ESIGN_API_TOKEN` ou sem `ESIGN_WEBHOOK_SECRET`**. Sem `ESIGN_PROVIDER` a flag fica
+  ligada e vale o registro local descrito abaixo — esse modo não precisa de credencial.
   `request-signature` chama o adaptador do fornecedor (`ESIGN_PROVIDER`) enviando o arquivo
   de verdade — do Drive ou do storage local, mesma regra do download — e guarda o que voltou
   (`provider_ref` do signatário, `document_ref` do documento e `sign_url` quando houver).
@@ -36,8 +39,9 @@ acompanhar o status — que o próprio fornecedor devolve por **webhook** (ADR 0
   signatário na hora (`invite_signer`) e repete o link no lembrete. `ESIGN_SANDBOX=true`
   cria documentos de teste (sem crédito, apagados pelo fornecedor em poucos dias).
 - **Webhook de status** (`POST /api/v1/esign/webhook/`, público, sem sessão):
-  - **503** com a flag `esign` desligada; **401** quando falta `ESIGN_WEBHOOK_SECRET` ou o
-    HMAC-SHA256 do **corpo cru** não confere; **400** com corpo que não é um objeto JSON.
+  - **503** com a flag `esign` desligada — o que agora inclui a falta de `ESIGN_WEBHOOK_SECRET`
+    com fornecedor nomeado, que antes caía no 401 (ADR 0018); **401** quando o HMAC-SHA256 do
+    **corpo cru** não confere; **400** com corpo que não é um objeto JSON.
     O header e o formato são de cada fornecedor: Autentique `x-autentique-signature` com o
     hex puro; Clicksign `Content-Hmac: sha256=<hex>`. A entrega de um fornecedor não passa
     quando o `ESIGN_PROVIDER` é outro.

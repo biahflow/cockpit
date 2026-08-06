@@ -1,9 +1,10 @@
-import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Sparkles, Trophy, Video, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Sparkles, Trash2, Trophy, Video, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, listUsers } from "../api";
 import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
+import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import type { DigitalEmployee, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
@@ -23,6 +24,8 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [aiAnswer, setAiAnswer] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [artifactsToken, setArtifactsToken] = useState(0);
+  const [archivingProject, setArchivingProject] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [project, setProject] = useState<Project>();
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -147,6 +150,11 @@ export function ProjectDetailPage({ id }: { id: number }) {
     try { await api(`/project-members/${memberId}/`, { method: "DELETE" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
+  async function archiveProject() {
+    setArchiveBusy(true);
+    try { await api(`/projects/${id}/`, { method: "DELETE" }); window.location.assign("/projetos"); }
+    catch (cause) { setArchivingProject(false); setError((cause as Error).message); setArchiveBusy(false); }
+  }
   async function togglePendencia(pendenciaId: number, isResolved: boolean) {
     try { await api(`/pendencias/${pendenciaId}/`, { method: "PATCH", body: JSON.stringify({ status: isResolved ? "open" : "resolved" }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
@@ -193,8 +201,14 @@ export function ProjectDetailPage({ id }: { id: number }) {
   if (!project) return <div className="animate-pulse space-y-6"><div className="h-10 w-64 rounded-xl bg-slate-200" /><div className="h-56 rounded-2xl bg-white" /></div>;
 
   return <section className="space-y-7">
+    {archivingProject && <ConfirmDialog
+      title="Arquivar projeto"
+      message={<>O projeto <strong className="text-ink">{project.name}</strong> sai das listagens ativas, junto com o que pende dele. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
+      confirmLabel="Arquivar" busy={archiveBusy}
+      onCancel={() => setArchivingProject(false)} onConfirm={() => void archiveProject()}
+    />}
     <a href="/projetos" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para projetos</a>
-    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-ocean">Entrega</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{project.name}</h1><p className="mt-2 flex items-center gap-2 text-sm text-slate-600"><CalendarDays className="size-4" />{formatDate(project.start_date)} — {formatDate(project.due_date)}</p></div><div className="flex items-center gap-3 self-start"><span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${project.status === "active" ? "bg-emerald-50 text-emerald-700" : project.status === "completed" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{projectStatusLabel[project.status] || project.status}</span><button className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-ink hover:border-ocean" onClick={openEdit}><Pencil className="size-4 text-ocean" />Editar</button></div></header>
+    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-ocean">Entrega</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{project.name}</h1><p className="mt-2 flex items-center gap-2 text-sm text-slate-600"><CalendarDays className="size-4" />{formatDate(project.start_date)} — {formatDate(project.due_date)}</p></div><div className="flex items-center gap-3 self-start"><span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${project.status === "active" ? "bg-emerald-50 text-emerald-700" : project.status === "completed" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{projectStatusLabel[project.status] || project.status}</span><button className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-ink hover:border-ocean" onClick={openEdit}><Pencil className="size-4 text-ocean" />Editar</button>{canManageTeam && <button className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:border-signal hover:text-signal" onClick={() => setArchivingProject(true)}><Trash2 className="size-4" />Arquivar</button>}</div></header>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
     {editing && <form className="grid gap-4 rounded-2xl border bg-white p-5 sm:p-6" onSubmit={event => void saveProject(event)}>
       <div className="flex items-center justify-between"><h2 className="font-semibold text-ink">Editar projeto</h2><button type="button" className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Cancelar edição" onClick={() => setEditing(false)}><X className="size-4" /></button></div>

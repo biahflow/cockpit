@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.core import journey, portal
 from apps.core.models import (
+    AppSetting,
     DigitalEmployee,
     Document,
     Meeting,
@@ -125,6 +126,7 @@ def test_build_snapshot_projects_journey_and_roi() -> None:
     assert refreshed["digital_employees"][0]["roi_month"] == 14000.0
 
 
+@pytest.mark.django_db  # `emit` passou a consultar a flag, que lê o override em `AppSetting`
 def test_emit_is_noop_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     scheduled: list = []
     monkeypatch.setattr(portal.transaction, "on_commit", lambda fn: scheduled.append(fn))
@@ -135,6 +137,7 @@ def test_emit_is_noop_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> No
     assert scheduled == []
 
 
+@pytest.mark.django_db
 def test_emit_schedules_signed_delivery_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     posted: dict[str, object] = {}
 
@@ -300,3 +303,20 @@ def test_snapshot_endpoint_denies_when_token_unset() -> None:
     url = reverse("portal-project-snapshot", args=[project.pk])
     with override_settings(PORTAL_READ_TOKEN=""):
         assert client.get(url, HTTP_AUTHORIZATION="Bearer qualquer").status_code == 401
+
+
+@pytest.mark.django_db
+def test_emit_respeita_desligamento_pela_tela(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Desligar o portal em Configurações silencia a emissão sem passar por deploy (ADR 0018).
+
+    Antes, `emit` relia as settings direto e ignorava o override — o portal seguia recebendo evento
+    durante o incidente que motivou desligá-lo.
+    """
+    scheduled: list = []
+    monkeypatch.setattr(portal.transaction, "on_commit", lambda fn: scheduled.append(fn))
+    AppSetting.objects.create(key="portal", enabled=False)
+
+    with override_settings(PORTAL_WEBHOOK_URL="http://portal/hook", PORTAL_WEBHOOK_SECRET="s"):
+        portal.emit("updated", "project", 7)
+
+    assert scheduled == []

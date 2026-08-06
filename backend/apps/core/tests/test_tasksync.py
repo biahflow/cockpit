@@ -116,7 +116,7 @@ def test_apply_inbound_does_not_trigger_outbound(monkeypatch: pytest.MonkeyPatch
     _task(project, external_id="ENG-3", status=Task.Status.TODO)
     calls: list = []
     monkeypatch.setattr(tasksync, "push_update", lambda task: calls.append(task))
-    with override_settings(TASKSYNC_ENABLED=True, TASKSYNC_TOKEN="t"):
+    with override_settings(TASKSYNC_ENABLED=True, TASKSYNC_TOKEN="t", GITHUB_TOKEN="gh"):
         tasksync.apply_inbound("linear", "ENG-3", "started")
     assert calls == []
 
@@ -155,7 +155,7 @@ def test_push_update_schedules_delivery_when_configured(monkeypatch: pytest.Monk
     monkeypatch.setattr(tasksync.threading, "Thread", FakeThread)
     monkeypatch.setattr(tasksync.transaction, "on_commit", lambda fn: callbacks.append(fn))
 
-    with override_settings(TASKSYNC_ENABLED=True, TASKSYNC_TOKEN="t"):
+    with override_settings(TASKSYNC_ENABLED=True, TASKSYNC_TOKEN="t", GITHUB_TOKEN="gh"):
         tasksync.push_update(task)
 
     assert len(callbacks) == 1
@@ -254,7 +254,7 @@ def test_push_external_creates_and_links(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(tasksync, "push_create", lambda t: "NEW-99")
     client = APIClient()
     client.force_authenticate(admin)
-    with override_settings(TASKSYNC_ENABLED=True, TASKSYNC_TOKEN="t"):
+    with override_settings(TASKSYNC_ENABLED=True, TASKSYNC_TOKEN="t", GITHUB_TOKEN="gh"):
         r = client.post(
             reverse("task-push-external", args=[task.pk]), {"source": "github"}, format="json"
         )

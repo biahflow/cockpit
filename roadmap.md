@@ -65,13 +65,17 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
   sempre, impossível de fechar pelo webhook, e ainda cobrada por lembrete a uma pessoa de verdade.
   **As quatro rodadas acharam defeito**, e três acharam a mesma classe.
 
-> **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
-> de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa
-> instalação nova, e quase todo código que fala com provedor externo está atrás de
-> `# pragma: no cover`. **As quatro rodadas de homologação foram feitas** — e-mail, IA, Google e
-> assinatura (FDD 024) — e as quatro acharam defeito. O que sobra apagado numa instalação nova é
-> configuração, não código não exercitado: as flags nascem `false` e cada integração pede a sua
-> credencial. O Clicksign segue sem homologação.
+> **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. **As quatro
+> rodadas de homologação foram feitas** — e-mail, IA, Google e assinatura (FDD 024) — e as quatro
+> acharam defeito. Quase todo código que fala com provedor externo continua atrás de
+> `# pragma: no cover`.
+>
+> O que fica apagado numa instalação nova é **configuração, não código não exercitado** — e desde a
+> ADR 0018 é menos do que era: notificações/digest e assinatura eletrônica nascem ligadas (a
+> assinatura em registro local, sem fornecedor, se não houver credencial), e o portal do cliente liga
+> sozinho quando URL e segredo estiverem preenchidos. IA, Drive, Calendário e Sincronia seguem
+> nascendo `false`, porque têm custo por chamada ou dependem de conta Google. Nenhuma delas liga sem
+> a credencial que exige. O Clicksign segue sem homologação.
 
 ## Prontidão para produção — adiada deliberadamente
 

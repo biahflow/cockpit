@@ -24,7 +24,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -120,14 +120,44 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+class ArchiveConflict(APIException):
+    """Arquivar recusado porque outra coisa ainda depende deste registro.
+
+    409, não 400: o pedido está bem formado e a permissão existe — o que impede é o **estado** do
+    sistema, e é ele que muda para o pedido passar. Um 400 mandaria quem lê procurar erro no corpo.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+
+
 class ArchiveModelViewSet(viewsets.ModelViewSet):
     permission_classes = [RolePermission]
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
+        # `?archived=1` abre a lista do que foi arquivado — é o que torna o arquivamento reversível
+        # pela interface (FDD 025). Sem esse recorte, restaurar exigia Django admin ou shell.
+        if self.request.query_params.get("archived") == "1":
+            return self.queryset.filter(archived_at__isnull=False)
         return self.queryset.filter(archived_at__isnull=True)
 
     def perform_destroy(self, instance) -> None:  # type: ignore[no-untyped-def]
         instance.archive()
+
+    @extend_schema(
+        responses=inline_serializer("Unarchived", {"id": serializers.IntegerField()}),
+        request=None,
+    )
+    @action(detail=True, methods=["post"])
+    def unarchive(self, request: Request, pk: str | None = None) -> Response:
+        """Restaura um registro arquivado, devolvendo-o à listagem ativa."""
+        # `get_object()` passa pelo `get_queryset()`, que sem `?archived=1` esconde justamente o que
+        # se quer restaurar — daí resolver o objeto pela queryset crua e só então aplicar a
+        # permissão de objeto, que continua sendo a mesma do `destroy`.
+        instance = get_object_or_404(self.queryset, pk=pk)
+        self.check_object_permissions(request, instance)
+        instance.archived_at = None
+        instance.save(update_fields=["archived_at", "updated_at"])
+        return Response({"id": instance.pk})
 
 
 # Confina o recurso aos projetos de que a pessoa participa (RFC 0003, ADR 0010).
@@ -222,6 +252,18 @@ class CalendarActionMixin:
         return Response({"link": link})
 
 
+# O destino de todo texto gerado é um `<textarea>` — do rascunho de resumo ao artefato de proposta.
+# Textarea não renderiza marcação, então o markdown que o modelo produzia por hábito chegava cru a
+# quem revisa: `**Recomendação de Próximo Passo:**` com os asteriscos à mostra, e depois seguia
+# assim para dentro do documento salvo. Instruir uma vez aqui cobre as nove actions que usam este
+# helper; renderizar markdown exigiria dependência nova e sanitização de texto vindo de LLM.
+_TEXTO_CORRIDO = (
+    "Responda em texto corrido, sem marcação Markdown: nada de asteriscos para negrito ou itálico, "
+    "cerquilhas de título, crases ou hifens de lista. Para separar seções, use uma linha em branco "
+    "e um título em maiúsculas seguido de dois-pontos."
+)
+
+
 def _ai_run(  # type: ignore[no-untyped-def]
     request, feature, system, user_prompt, project=None, opportunity=None,
     artifact_kind=None, artifact_title="", source_meeting=None,
@@ -240,7 +282,7 @@ def _ai_run(  # type: ignore[no-untyped-def]
     # sem acesso na conta viravam 500 do Django. Nada é gravado antes da resposta chegar, então a
     # falha não consome a cota diária de quem tentou nem deixa artefato pela metade.
     try:
-        text, usage = ai.complete(system, user_prompt)
+        text, usage = ai.complete(f"{system}\n\n{_TEXTO_CORRIDO}", user_prompt)
     except ai.AiProviderError as exc:
         logger.exception("chamada de IA (%s) falhou", feature)
         raise AiProviderUnavailable() from exc
@@ -388,6 +430,33 @@ class ClientViewSet(ArchiveModelViewSet):
         scope = project_scope_q(self.request.user, "projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
+    def perform_destroy(self, instance: Client) -> None:
+        """Arquiva o cliente e, junto, os contatos dele — recusando se ainda houver trabalho aberto.
+
+        Soft delete não cascateia sozinho, e sem estas duas regras arquivar um cliente produzia
+        órfão visível: `ProjectViewSet` e `OpportunityViewSet` filtram o próprio `archived_at` e
+        nunca o do cliente, então projeto e oportunidade continuavam listados apontando para uma
+        linha que sumiu da tela de Clientes. O contato não tem esse problema (ninguém o lista
+        sozinho), então ele acompanha em vez de bloquear.
+        """
+        projetos = Project.objects.filter(client=instance, archived_at__isnull=True).count()
+        oportunidades = Opportunity.objects.filter(client=instance, archived_at__isnull=True).count()
+        if projetos or oportunidades:
+            partes = []
+            if projetos:
+                partes.append(f"{projetos} projeto(s)")
+            if oportunidades:
+                partes.append(f"{oportunidades} oportunidade(s)")
+            raise ArchiveConflict(
+                f"Este cliente ainda tem {' e '.join(partes)} em aberto. "
+                "Arquive esses registros antes de arquivar o cliente."
+            )
+        with transaction.atomic():
+            instance.contacts.filter(archived_at__isnull=True).update(
+                archived_at=timezone.now(), updated_at=timezone.now()
+            )
+            instance.archive()
+
     def _visible_projects(self, client: Client):  # type: ignore[no-untyped-def]
         return Project.objects.visible_to(self.request.user).filter(
             client=client, archived_at__isnull=True
@@ -452,6 +521,21 @@ class OpportunityViewSet(ArchiveModelViewSet):
 
     def perform_create(self, serializer: OpportunitySerializer) -> None:
         serializer.save(owner=self.request.user)
+
+    def perform_destroy(self, instance: Opportunity) -> None:
+        """Recusa arquivar oportunidade já convertida: ela é o outro lado de um projeto vivo.
+
+        `Project.opportunity` é `OneToOneField` com `PROTECT`, e o projeto lê a oportunidade para
+        montar o próprio histórico comercial. Arquivá-la deixaria o projeto apontando para um
+        registro que a interface esconde — e não há caminho de volta pela conversão, que só roda
+        uma vez.
+        """
+        if hasattr(instance, "project"):
+            raise ArchiveConflict(
+                f"Esta oportunidade já virou o projeto \"{instance.project.name}\". "
+                "Arquive o projeto se quiser encerrar este trabalho."
+            )
+        instance.archive()
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
@@ -1517,6 +1601,7 @@ class ConfigView(APIView):
             "enabled": serializers.BooleanField(),
             "configured": serializers.BooleanField(),
             "toggleable": serializers.BooleanField(),
+            "missing": serializers.ListField(child=serializers.CharField()),
         }),
     )
     def patch(self, request: Request) -> Response:

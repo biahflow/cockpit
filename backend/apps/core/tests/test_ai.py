@@ -80,7 +80,7 @@ def test_within_daily_limit_counts_interactions():
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_is_enabled_reflects_setting():
     assert ai.is_enabled() is True
 

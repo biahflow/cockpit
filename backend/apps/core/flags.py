@@ -31,6 +31,27 @@ class Flag:
     extra_missing: Callable[[], list[str]] | None = None
 
 
+def _esign_missing() -> list[str]:
+    """O que falta na assinatura eletrônica — e o conjunto depende de haver fornecedor.
+
+    Sem `ESIGN_PROVIDER` a integração roda no `NullProvider`: registra a intenção de assinatura e
+    espera o `mark-signed` manual, sem chamar ninguém e sem receber webhook. Esse modo não precisa
+    de credencial nenhuma, e cobrá-la aqui desligaria um caminho que funciona — o que passou a
+    importar quando `is_enabled` deixou de ignorar `configured()` (ADR 0018).
+
+    Nomeado o fornecedor, os dois viram obrigatórios: sem token a chamada estoura, e sem o segredo
+    do webhook o retorno de status leva 401 e a assinatura nunca fecha sozinha — a falha mais
+    silenciosa desta integração.
+    """
+    if not settings.ESIGN_PROVIDER:
+        return []
+    return [
+        key
+        for key in ("ESIGN_API_TOKEN", "ESIGN_WEBHOOK_SECRET")
+        if not getattr(settings, key, "")
+    ]
+
+
 def _google_auth_missing() -> list[str]:
     """O que falta na autenticação com o Google (ADR 0016).
 
@@ -70,9 +91,7 @@ FLAGS: dict[str, Flag] = {
     "esign": Flag(
         "Assinatura eletrônica",
         lambda: bool(settings.ESIGN_ENABLED),
-        # O segredo do webhook entra junto: sem ele o retorno de status do fornecedor leva 401 e a
-        # assinatura nunca fecha sozinha — a falha mais silenciosa desta integração.
-        ("ESIGN_PROVIDER", "ESIGN_API_TOKEN", "ESIGN_WEBHOOK_SECRET"),
+        extra_missing=lambda: _esign_missing(),
     ),
     # SMTP tem default (`localhost:1025`, o Mailpit do compose), então não há variável cuja ausência
     # denuncie falta de configuração — em produção esse default é "lugar nenhum". Quem cobra aqui é
@@ -86,12 +105,13 @@ FLAGS: dict[str, Flag] = {
         ("TASKSYNC_TOKEN",),
         requires_any=(("LINEAR_API_KEY", "GITHUB_TOKEN"),),
     ),
-    # Portal do cliente: "ligado" = URL+secret presentes; não é alternável em runtime.
+    # Portal do cliente: o default é "ligado se URL+secret estão presentes", mas o admin pode
+    # desligar pela tela sem mexer no ambiente — parar de emitir num incidente do portal era, antes,
+    # trabalho de deploy. Quem respeita o toggle é `portal.emit`.
     "portal": Flag(
         "Portal do cliente",
         lambda: bool(settings.PORTAL_WEBHOOK_URL and settings.PORTAL_WEBHOOK_SECRET),
         ("PORTAL_WEBHOOK_URL", "PORTAL_WEBHOOK_SECRET"),
-        toggleable=False,
     ),
 }
 
@@ -106,13 +126,27 @@ def _override(name: str) -> bool | None:
     return setting.enabled if setting else None
 
 
-def is_enabled(name: str) -> bool:
+def desired(name: str) -> bool:
+    """A intenção declarada: o que o ambiente (ou o override do admin) **pede**, sem olhar credencial.
+
+    `is_enabled` responde "isto funciona?"; esta responde "alguém pediu isto?". A diferença entre as
+    duas é justamente o diagnóstico da sonda (FDD 024): pedida-e-quebrada não é a mesma coisa que
+    desligada, e quem opera precisa saber qual das duas está vendo.
+    """
     flag = FLAGS[name]
     if flag.toggleable:
         override = _override(name)
         if override is not None:
             return override
     return flag.env_default()
+
+
+def is_enabled(name: str) -> bool:
+    # Sem credencial não existe "ligada" — nem por default do ambiente, nem por override. A tela já
+    # recusava ligar o que não está configurado (`ConfigView.patch`), mas o default do `.env` entrava
+    # sem passar por essa porta: com `ESIGN_ENABLED=true` e nenhum token, o guard de 503 liberava a
+    # ação e a falha só aparecia dentro do adaptador, como erro do fornecedor. Ver ADR 0018.
+    return configured(name) and desired(name)
 
 
 def configured(name: str) -> bool:
@@ -136,12 +170,16 @@ def missing(name: str) -> list[str]:
 
 def status(name: str) -> dict[str, object]:
     flag = FLAGS[name]
+    faltando = missing(name)
     return {
         "key": name,
         "label": flag.label,
         "enabled": is_enabled(name),
-        "configured": configured(name),
+        "configured": not faltando,
         "toggleable": flag.toggleable,
+        # A tela dizia só "faltam credenciais"; quem ia corrigir tinha de abrir o código para
+        # descobrir quais. O nome da variável é o que resolve o problema de quem lê.
+        "missing": faltando,
     }
 
 

@@ -31,7 +31,10 @@ import { abrir, ROUTES } from "./matrix";
 test("o foco de teclado fica visível nos botões", async ({ page }) => {
   await abrir(page, { path: "/", name: "Visão geral", role: "admin" });
 
-  for (let salto = 0; salto < 12; salto++) {
+  // O orçamento de tabulações precisa caber a navegação inteira antes do primeiro `<button>`: são
+  // links até lá, e cada item novo no menu lateral consome um salto. Com 12 ele estourava assim
+  // que "Serviços" entrou na lista.
+  for (let salto = 0; salto < 24; salto++) {
     await page.keyboard.press("Tab");
     const foco = await page.evaluate(() => {
       const alvo = document.activeElement;
