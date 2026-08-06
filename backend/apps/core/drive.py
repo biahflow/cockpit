@@ -10,6 +10,7 @@ cobertura de teste; a lógica de negócio (bucket PARA e cliente-dono) é testad
 from __future__ import annotations
 
 import io
+import re
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -37,8 +38,30 @@ OPPORTUNITY_BUCKET = "3-Recursos"
 ARCHIVE_BUCKET = "4-Arquivo"
 
 
+# O id de uma pasta/Shared Drive só aparece **dentro** da URL, que é de onde a pessoa o copia —
+# então colar a URL inteira é o erro natural, não descuido. Observado na rodada 3 da homologação
+# (FDD 024): sem isto, o valor colado vira um 404 do Drive que se parece com falta de permissão, e
+# manda quem opera depurar a coisa errada.
+_URL_DE_PASTA = re.compile(r"/folders/([A-Za-z0-9_-]+)")
+
+
 def is_enabled() -> bool:
     return flags.is_enabled("drive")
+
+
+def parse_root_folder_id(valor: str) -> str:
+    """Aceita o id da pasta **ou** a URL de onde ele foi copiado.
+
+    O que não casa com o padrão volta como veio: não inventamos id — quem reclama de um valor
+    inválido é a sonda do `check_integrations`, que pergunta ao Drive.
+    """
+    valor = (valor or "").strip()
+    achado = _URL_DE_PASTA.search(valor)
+    return achado.group(1) if achado else valor
+
+
+def root_folder_id() -> str:
+    return parse_root_folder_id(settings.GOOGLE_DRIVE_ROOT_FOLDER_ID)
 
 
 def para_bucket_for(document: Document) -> str:
@@ -107,7 +130,7 @@ def _ensure_subfolder(service, name: str, parent: str) -> str:  # pragma: no cov
 def _ensure_client_folder(service, client: Client) -> str:  # pragma: no cover - I/O
     if client.drive_folder_id:
         return client.drive_folder_id
-    folder_id = _ensure_subfolder(service, client.name, settings.GOOGLE_DRIVE_ROOT_FOLDER_ID)
+    folder_id = _ensure_subfolder(service, client.name, root_folder_id())
     client.drive_folder_id = folder_id
     client.save(update_fields=["drive_folder_id", "updated_at"])
     return folder_id
