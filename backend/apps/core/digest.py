@@ -136,15 +136,27 @@ def send_daily_digest() -> int:
         context = build_user_digest_context(user)
         if not context:
             continue
+        # A redação por IA é enfeite; a entrega é o produto. A chamada ficava crua **dentro deste
+        # laço**: um 429 no terceiro usuário levantava e matava o resto da fila — quem já tinha
+        # sido iterado recebia, o resto não recebia nada, e a contagem se perdia junto. O agendador
+        # não cai (ele isola o job de propósito), e é isso que torna a falha ruim: vira uma linha
+        # de log, o carimbo do dia é gravado assim mesmo e não há retentativa até amanhã.
+        #
+        # A degradação certa já estava escrita aqui: cair no mesmo texto simples do ramo "IA
+        # desligada", que é o desenho que o `qualify_lead` segue desde a FDD 024 — falha de IA
+        # degrada para o comportamento de IA desligada.
+        text = context
         if ai.is_enabled():
-            text, usage = ai.complete(_SYSTEM, context)
-            AiInteraction.objects.create(
-                user=user, feature="daily_digest",
-                prompt_tokens=usage.get("prompt_tokens", 0),
-                completion_tokens=usage.get("completion_tokens", 0),
-            )
-        else:
-            text = context
+            try:
+                text, usage = ai.complete(_SYSTEM, context)
+            except ai.AiProviderError:
+                logger.exception("digest de %s sai sem redação por IA (fornecedor falhou)", user.username)
+            else:
+                AiInteraction.objects.create(
+                    user=user, feature="daily_digest",
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                )
         # `send_mail` devolve quantas mensagens saíram, e com `fail_silently=True` isso é `0`
         # quando o SMTP recusa ou não existe. Somar 1 aqui fazia o scheduler logar
         # "Digests enviados: 12" com zero entregues — o mesmo modo de falha do agendador que não

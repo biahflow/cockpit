@@ -56,6 +56,21 @@ por IA** resume, para cada usuário, o que está atrasado e a vencer.
   por cron diário na infraestrutura", e esse cron não existia: na prática o digest nunca saía
   em produção.
 
+- **A redação por IA é enfeite; a entrega é o produto.** Quando a OpenAI falha, o digest sai no
+  mesmo texto estruturado do modo "IA desligada", com um aviso no log — não interrompe o laço.
+  Antes, a chamada era crua **dentro do `for`**: um 429 no terceiro usuário matava a fila, quem já
+  tinha sido iterado recebia e o resto não. E o agendador não cai (ele isola o job), então o
+  carimbo do dia era gravado assim mesmo e **não havia retentativa até amanhã**. É a mesma regra
+  que o `fail_silently` do envio já seguia — um destinatário ruim não pode calar a casa inteira.
+  Chamada que não completou **não** gera `AiInteraction`. Observado na rodada 2 da FDD 024.
+
+- **O digest não consome a cota diária de ninguém.** Ele audita com `user=user`, e
+  `within_daily_limit` conta essas linhas — então o job das 07:30 tirava 1 das
+  `AI_DAILY_LIMIT` chamadas de cada pessoa, por um e-mail que ninguém pediu, e ao mesmo tempo não
+  consultava o limite (isento dele e cobrando dele). `daily_digest` entrou em
+  `ai.AUTOMATED_FEATURES` e ficou fora da conta: a cota existe para limitar o que uma **pessoa**
+  gasta.
+
 ### O que entra no digest — duas seções
 
 | Seção | O que entra | Janela |

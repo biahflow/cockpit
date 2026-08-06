@@ -27,5 +27,7 @@ texto para revisão, com o id da interação registrado. A saída pode ser avali
 
 ## Regressão crítica
 
-Reunião sem transcrição retorna 400; IA desligada retorna 503; a interação é registrada
+Reunião sem transcrição retorna 400; IA desligada retorna 503; limite diário retorna 429; e
+**fornecedor fora do ar retorna 502** (rodada 2 da FDD 024) — nada é gravado quando a chamada não
+completa, então não sobra artefato pela metade nem interação sem resposta. A interação é registrada
 com a feature correta e vinculada ao projeto da reunião.

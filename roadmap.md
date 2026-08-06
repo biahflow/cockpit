@@ -34,13 +34,22 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - **Homologação, rodada 1 — e-mail** (FDD 024, runbook `homologacao-de-integracoes.md`): primeira
   integração exercitada contra infra real. Confirmou a codificação MIME dos assuntos acentuados e a
   correção da contagem do digest, e achou um defeito novo — o convite órfão quando o SMTP recusa.
-  Faltam IA, Google e assinatura.
+- **Homologação, rodada 2 — IA** (FDD 024): 12 superfícies exercitadas contra a OpenAI real, por
+  **7 115 tokens**. Antes de gastar credencial, fechou a blindagem que a FDD 024 tinha deixado pela
+  metade — a queda do fornecedor virava **500** nas nove actions do `_ai_run` e no AI Score, e
+  matava o digest no meio do laço. Depois, a rodada mostrou o que só o modelo real mostra: o
+  assistente respondia **"Não sei."** a pergunta que o contexto respondia (faltava dizer que dia é
+  hoje, e o prompt proibia raciocinar), `AI_TIMEOUT_SECONDS` valia **três vezes** o que prometia
+  porque o SDK retenta por baixo, e o digest cobrava a cota de IA de quem nem pediu. Confirmou o
+  antivazamento e a proposta respeitando o nível gratuito. Faltam Google e assinatura.
 
 > **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
 > de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa
-> instalação nova, e todo código que fala com provedor externo está atrás de `# pragma: no cover` —
-> só o Autentique tem homologação registrada. O que está ligado por padrão funciona e é testado; o
-> resto ainda precisa de uma rodada com credencial real (FDD 024).
+> instalação nova, e quase todo código que fala com provedor externo está atrás de
+> `# pragma: no cover`. Duas integrações já têm homologação registrada — e-mail e IA (FDD 024),
+> mais o Autentique (ADR 0007). O que está ligado por padrão funciona e é testado; **Google e
+> assinatura ainda precisam de uma rodada com credencial real**, e as duas rodadas feitas acharam
+> defeito nas duas vezes.
 
 ## Prontidão para produção — adiada deliberadamente
 
