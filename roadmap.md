@@ -16,6 +16,9 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - Testes unitários, de API, regressão e E2E; **CI** com lint, tipos, testes, cobertura, build e E2E.
 - **Agendador de trabalho periódico** (serviço `scheduler`): digest diário, sincronia de calendário
   e conferência de backup passam a rodar sozinhos (FDD 023, ADR 0015).
+- **Digest por participação** (FDD 010): o resumo diário deixa de filtrar só por `owner=` e passa a
+  somar os atrasados dos projetos de que a pessoa participa — fecha a consequência que a FDD 018
+  deixou em aberto, e com ela um vazamento não documentado (quem sai da equipe seguia recebendo).
 
 ## Prontidão para produção — adiada deliberadamente
 
