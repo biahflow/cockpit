@@ -45,9 +45,9 @@ const HOJE = "2026-08-05";
 const VENCIDO = "2026-07-01";
 
 const usuarios: Record<Role, unknown> = {
-  admin: { id: 1, username: "ana", first_name: "Ana", last_name: "Souza", email: "ana@example.test", role: "admin" },
-  sales: { id: 2, username: "bruno", first_name: "Bruno", last_name: "Lima", email: "bruno@example.test", role: "sales" },
-  delivery: { id: 3, username: "carla", first_name: "Carla", last_name: "Reis", email: "carla@example.test", role: "delivery" },
+  admin: { id: 1, username: "ana", first_name: "Ana", last_name: "Souza", email: "ana@example.test", role: "admin", is_admin: true },
+  sales: { id: 2, username: "bruno", first_name: "Bruno", last_name: "Lima", email: "bruno@example.test", role: "sales", is_admin: false },
+  delivery: { id: 3, username: "carla", first_name: "Carla", last_name: "Reis", email: "carla@example.test", role: "delivery", is_admin: false },
 };
 
 const serie = <T,>(quantos: number, molde: (indice: number) => T): T[] =>

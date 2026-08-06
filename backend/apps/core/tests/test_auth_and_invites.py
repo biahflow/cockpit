@@ -30,6 +30,43 @@ def test_csrf_login_me_and_logout_round_trip() -> None:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("role", "superuser", "esperado"),
+    [
+        # O caso que motivou o campo: `createsuperuser` deixa o papel no default `delivery`, e sem
+        # `is_admin` o SPA tratava essa pessoa como Entrega — portal capado, sem Equipe nem
+        # Configurações — enquanto a API já a autorizava em tudo (FDD 017, ADR 0010).
+        (User.Role.DELIVERY, True, True),
+        (User.Role.DELIVERY, False, False),
+        (User.Role.ADMIN, False, True),
+        (User.Role.SALES, False, False),
+    ],
+)
+def test_me_expoe_is_admin_com_o_mesmo_criterio_da_api(
+    role: str, superuser: bool, esperado: bool
+) -> None:
+    user = UserFactory(role=role, is_superuser=superuser, password="SenhaSegura123!")
+    client = APIClient()
+    client.force_authenticate(user)
+
+    resposta = client.get(reverse("me"))
+
+    assert resposta.status_code == 200
+    assert resposta.data["is_admin"] is esperado
+    # O SPA consome o predicado; não o reconstrói. Se estes dois divergirem, a tela volta a
+    # discordar da API — que é o defeito inteiro.
+    assert resposta.data["is_admin"] == user.is_admin_role
+
+
+@pytest.mark.django_db
+def test_is_admin_e_somente_leitura() -> None:
+    """Nenhum endpoint de escrita usa o `UserSerializer` hoje; o campo já nasce blindado."""
+    from apps.core.serializers import UserSerializer
+
+    assert UserSerializer().fields["is_admin"].read_only
+
+
+@pytest.mark.django_db
 def test_login_rejects_invalid_credentials() -> None:
     client = APIClient()
     response = client.post(reverse("login"), {"username": "inexistente", "password": "errada"})

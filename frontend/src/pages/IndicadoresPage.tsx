@@ -33,7 +33,7 @@ export function IndicadoresPage() {
   const opp = data.funnel.opportunities;
 
   return <section className="space-y-7">
-    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-ocean">Gestão</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Indicadores</h1><p className="mt-2 text-sm text-slate-600">Comercial, entrega e ROI da operação.</p></div>{user?.role === "admin" && <a href="/servicos" className="inline-flex items-center gap-2 self-start rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:border-ocean sm:self-auto"><SlidersHorizontal className="size-4 text-ocean" />Gerir serviços</a>}</header>
+    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-ocean">Gestão</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Indicadores</h1><p className="mt-2 text-sm text-slate-600">Comercial, entrega e ROI da operação.</p></div>{user?.is_admin && <a href="/servicos" className="inline-flex items-center gap-2 self-start rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-ink hover:border-ocean sm:self-auto"><SlidersHorizontal className="size-4 text-ocean" />Gerir serviços</a>}</header>
 
     <div className="grid gap-4 md:grid-cols-4">
       <Kpi icon={<Target className="size-4" />} label="Taxa de ganho" value={pct(data.win_rate)} />

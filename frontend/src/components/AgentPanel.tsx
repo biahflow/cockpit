@@ -14,7 +14,9 @@ export function AgentPanel({ agentKey, title, roles, placeholder }: { agentKey: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (!aiEnabled || !user || !(user.role === "admin" || roles.includes(user.role))) return null;
+  // Espelha `agents.py:117` (`user.is_admin_role or user.role in agent.roles`): sem `is_admin`, um
+  // superusuário via só o agente do próprio papel, embora a API liberasse os três.
+  if (!aiEnabled || !user || !(user.is_admin || roles.includes(user.role))) return null;
 
   async function ask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

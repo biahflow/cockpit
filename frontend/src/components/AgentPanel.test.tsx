@@ -26,7 +26,15 @@ test("não renderiza sem IA nem para papel não autorizado", () => {
 });
 
 test("admin sempre acessa, mesmo fora dos papéis listados", () => {
-  mocks.useAuth.mockReturnValue({ aiEnabled: true, user: { role: "admin" } });
+  mocks.useAuth.mockReturnValue({ aiEnabled: true, user: { role: "admin", is_admin: true } });
+  render(<AgentPanel agentKey="financeiro" title="Agente Financeiro" roles={[]} />);
+  expect(screen.getByText("Agente Financeiro")).toBeInTheDocument();
+});
+
+test("superusuário de papel Entrega acessa como admin", () => {
+  // `createsuperuser` produz exatamente isto: papel `delivery`, poder de admin. O painel espelha
+  // `agents.py:117`, que já liberava — antes o SPA escondia (FDD 017).
+  mocks.useAuth.mockReturnValue({ aiEnabled: true, user: { role: "delivery", is_admin: true } });
   render(<AgentPanel agentKey="financeiro" title="Agente Financeiro" roles={[]} />);
   expect(screen.getByText("Agente Financeiro")).toBeInTheDocument();
 });

@@ -6,7 +6,7 @@ import { ProjectDetailPage } from "./ProjectDetailPage";
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
-  auth: { aiEnabled: true } as { aiEnabled: boolean; user?: { role: string } },
+  auth: { aiEnabled: true } as { aiEnabled: boolean; user?: { role: string; is_admin?: boolean } },
   people: [] as { id: number; username: string; first_name: string; role: string }[],
 }));
 vi.mock("../api", () => ({ api: mocks.api, listUsers: () => Promise.resolve(mocks.people) }));
@@ -210,7 +210,7 @@ test("mostra painel de AI Score quando o projeto já foi pontuado", async () => 
 });
 
 test("publica o AI Score ao cliente (revisão)", async () => {
-  mocks.auth = { aiEnabled: true, user: { role: "admin" } };
+  mocks.auth = { aiEnabled: true, user: { role: "admin", is_admin: true } };
   mocks.api.mockImplementation((path: string) => {
     if (path.includes("/risk/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 0, level: "baixo", signals: [] });
     if (path.includes("/health/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 90, level: "saudável", signals: [] });
@@ -238,7 +238,7 @@ test("mostra a equipe do projeto e deixa só o admin mexer nela", async () => {
 
 test("admin adiciona alguém à equipe", async () => {
   const user = userEvent.setup();
-  mocks.auth = { aiEnabled: true, user: { role: "admin" } };
+  mocks.auth = { aiEnabled: true, user: { role: "admin", is_admin: true } };
   mocks.people = [{ id: 9, username: "bruno", first_name: "Bruno", role: "delivery" }];
   render(<ProjectDetailPage id={1} />);
   await screen.findByText("Equipe do projeto");

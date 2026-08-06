@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { DocumentsPage } from "./DocumentsPage";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
-const authState = vi.hoisted(() => ({ esignEnabled: false, user: { role: "admin" } as { role: string } }));
+const authState = vi.hoisted(() => ({ esignEnabled: false, user: { role: "admin", is_admin: true } as { role: string; is_admin?: boolean } }));
 vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v1/documents/${id}/download/` }));
 vi.mock("../auth", () => ({ useAuth: () => authState }));
 
@@ -17,7 +17,7 @@ function stub(signatureRequests: object[] = []) {
   });
 }
 
-beforeEach(() => { mocks.api.mockReset(); authState.esignEnabled = false; authState.user = { role: "admin" }; stub(); });
+beforeEach(() => { mocks.api.mockReset(); authState.esignEnabled = false; authState.user = { role: "admin", is_admin: true }; stub(); });
 afterEach(cleanup);
 
 test("entrega só pode vincular documento a projeto", async () => {

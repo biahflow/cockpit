@@ -22,6 +22,10 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - **Notificação por participação** (FDD 010, FDD 018): `notify` ganha `project=` e descarta quem não
   alcança o projeto, e-mail espelhado incluído. Com isso **acaba o `owner=` como critério de acesso**
   no repositório — era o último resíduo, no alvo, depois de o digest ter fechado o do filtro.
+- **`createsuperuser` dá um administrador de verdade** (FDD 017): o `/auth/me/` passa a devolver
+  `is_admin` — o mesmo predicado que autoriza no backend —, e os **dez** pontos de decisão do SPA
+  passam a lê-lo em vez de `role`. Some o portal capado da primeira instalação, e com ele o
+  `manage.py shell` que o roteiro mandava rodar.
 
 ## Prontidão para produção — adiada deliberadamente
 

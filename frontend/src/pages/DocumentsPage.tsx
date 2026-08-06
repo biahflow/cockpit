@@ -12,7 +12,10 @@ export function DocumentsPage() {
   const { esignEnabled, user } = useAuth();
   // Entrega só enxerga o documento do projeto em que atua (FDD 017): oferecer cliente ou
   // oportunidade aqui produziria um upload que o backend recusa com 403.
-  const isDelivery = user?.role === "delivery";
+  // Idem: restrição, não papel. Sem isto o superusuário não anexava documento a cliente nem a
+  // oportunidade — e, porque o fetch de oportunidades era pulado, os já existentes apareciam
+  // como id cru ("Oportunidade: 17").
+  const isDelivery = user?.role === "delivery" && !user.is_admin;
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);

@@ -18,7 +18,7 @@ function formatDate(value: string): string { return new Date(`${value}T12:00:00`
 
 export function ProjectDetailPage({ id }: { id: number }) {
   const { aiEnabled, calendarEnabled, user } = useAuth();
-  const canManageJourney = !!user && (user.role === "admin" || user.role === "delivery");
+  const canManageJourney = !!user && (user.is_admin || user.role === "delivery");
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -131,7 +131,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   }
   // Só admin monta equipe (RFC 0003), e `/users/` também é admin-only — por isso a lista de
   // pessoas só é buscada quando há como usá-la.
-  const canManageTeam = user?.role === "admin";
+  const canManageTeam = !!user?.is_admin;
   useEffect(() => {
     if (!canManageTeam) return;
     void listUsers().then(setPeople).catch(() => setPeople([]));

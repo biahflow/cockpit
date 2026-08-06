@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { IndicadoresPage } from "./IndicadoresPage";
 
-vi.mock("../auth", () => ({ useAuth: () => ({ user: { role: "admin" } }) }));
+vi.mock("../auth", () => ({ useAuth: () => ({ user: { role: "admin", is_admin: true } }) }));
 vi.mock("../api", () => ({
   api: vi.fn((path: string) => {
     if (path === "/risk/") return Promise.resolve({ projects: [{ project_id: 7, name: "Projeto Z", score: 70, level: "alto", signals: [{ label: "Projeto vencido", detail: "3 dias", weight: 30 }] }] });
