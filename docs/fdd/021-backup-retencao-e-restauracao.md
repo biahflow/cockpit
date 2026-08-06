@@ -98,7 +98,11 @@ versionamento e lixeira próprios; o que o portal guarda é o `drive_file_id`, e
 consequência — o `docker-compose.prod.yml` já desliga a persistência dele de propósito.
 
 **Retenção de dado de negócio (LGPD)** — por quanto tempo o portal guarda dado de cliente
-arquivado — é outro assunto, e não tem nada a ver com retenção de cópia.
+arquivado — é outro assunto, e não tem nada a ver com retenção de cópia. **O mecanismo entrou
+depois, na ADR 0017** (`manage.py purge_archived`, ensaio por padrão, retenção `0` = nunca
+expurgar). O que continua em aberto são os **prazos**, que são decisão de negócio com peso
+jurídico — e que precisam ser pensados junto com a janela de retenção das cópias, porque expurgo
+que a cópia desfaz não é expurgo.
 
 **Alertas.** Como na FDD 020, a regra mora no fornecedor; o que o código entrega é o sinal (código
 de saída 1). O mínimo a configurar está em `docs/runbooks/monitoramento.md`.

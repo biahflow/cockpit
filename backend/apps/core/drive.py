@@ -202,3 +202,16 @@ def download_document(document: Document) -> io.BytesIO:  # pragma: no cover - I
         raise DriveProviderError(str(exc) or exc.__class__.__name__) from exc
     buffer.seek(0)
     return buffer
+
+
+def delete_document(document: Document) -> None:  # pragma: no cover - I/O
+    """Apaga o arquivo no Drive. Usado pelo expurgo de retenção (LGPD).
+
+    Traduz a falha para `DriveProviderError` como as demais, e **não** engole: quem chama precisa
+    saber que o conteúdo continua lá, senão apagaria a linha e deixaria o arquivo órfão — que é o
+    pior resultado possível de um expurgo.
+    """
+    try:
+        _service().files().delete(fileId=document.drive_file_id, supportsAllDrives=True).execute()
+    except Exception as exc:  # noqa: BLE001 - a família do SDK vira um tipo só
+        raise DriveProviderError(str(exc) or exc.__class__.__name__) from exc
