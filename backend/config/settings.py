@@ -356,6 +356,14 @@ GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
 GOOGLE_OAUTH_REFRESH_TOKEN = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "")
 
+# Retenção de dado pessoal arquivado (LGPD). **Zero = nunca expurgar**, e é o default de todas as
+# famílias: ninguém perde dado por ter atualizado o portal. O prazo de cada família é decisão de
+# negócio com peso jurídico — o portal entrega o mecanismo, não o número. Ver `apps/core/retention.py`.
+RETENTION_DAYS = {
+    "lead": _env_int("RETENTION_LEAD_DAYS", 0),
+    "document": _env_int("RETENTION_DOCUMENT_DAYS", 0),
+}
+
 # IA (OpenAI) atrás de flag. Desligado = app roda sem o SDK/key.
 AI_ENABLED = os.getenv("AI_ENABLED", "false").lower() == "true"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

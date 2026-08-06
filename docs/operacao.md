@@ -163,6 +163,25 @@ basta. Ver RFC 0003, ADR 0010 e FDD 018.
 - **Tirar alguém da equipe corta o acesso na hora.** Readmitir depois é permitido.
 - Admin e Vendas continuam enxergando tudo.
 
+## Retenção de dado pessoal (LGPD)
+
+O portal arquiva e, desde a ADR 0017, também sabe **esquecer** — mas nasce inerte:
+
+```bash
+docker compose exec api uv run python manage.py purge_archived           # ensaia, não apaga
+docker compose exec api uv run python manage.py purge_archived --apply   # apaga de verdade
+```
+
+`RETENTION_LEAD_DAYS` e `RETENTION_DOCUMENT_DAYS` nascem em **0**, que significa *nunca expurgar*.
+O prazo é decisão de negócio com peso jurídico, não default de engenharia — a ADR 0017 lista o que
+precisa ser decidido. Enquanto ninguém decidir, o comando diz isso em voz alta em vez de fingir que
+rodou e não achou nada.
+
+Duas coisas que valem saber antes de configurar: o expurgo **não é desfeito pelo backup** (se a
+cópia trouxesse de volta, não teria sido expurgo — pense na janela das duas juntas), e `Client`,
+`Project` e `Opportunity` ficam **de fora de propósito**, porque apagá-los cascatearia sobre o
+histórico comercial inteiro.
+
 ## Limites de requisição
 
 Toda a API tem teto (FDD 017, ADR 0009). `anon`/`user` são a rede de baixo; os escopos nomeados
