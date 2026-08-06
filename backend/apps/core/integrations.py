@@ -62,7 +62,7 @@ def _probe_drive() -> tuple[bool, str]:
     """Lista um item da pasta raiz: valida credencial, escopo e existência do Shared Drive."""
     from . import drive
 
-    raiz = settings.GOOGLE_DRIVE_ROOT_FOLDER_ID
+    raiz = drive.root_folder_id()
     drive._service().files().list(
         q=f"'{raiz}' in parents",
         pageSize=1,
