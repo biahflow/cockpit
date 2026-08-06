@@ -62,12 +62,32 @@ def build_commercial_context(user: User) -> str:
     return "\n".join(lines)
 
 
-def build_delivery_context(user: User) -> str:
-    from . import risk
-    from .models import Project
+# Teto por bloco, como no digest: contexto que vira parede de texto custa token e não ajuda o
+# modelo — a linha final diz quantos ficaram de fora.
+_MAX_ATRASADOS = 10
 
-    active = Project.objects.visible_to(user).filter(archived_at__isnull=True).exclude(
-        status=Project.Status.COMPLETED
+
+def build_delivery_context(user: User) -> str:
+    """Contexto do agente de Entrega: o risco de cada projeto **e o que está atrasado**.
+
+    A parte dos itens nasceu da rodada 2 da homologação (FDD 024): perguntado "o que está
+    atrasado?", o agente respondia que não tinha os detalhes — e estava certo, porque o contexto
+    era um resumo de resumos (`risco médio — Itens atrasados`) sem dizer **quais**. A pergunta mais
+    óbvia da área não tinha resposta.
+
+    O recorte é o mesmo de antes e não afrouxa: tudo sai de `visible_to`, que é a única expressão
+    da regra (ADR 0010). O que muda é que o vazamento possível deixou de ser o nome do projeto e
+    passou a ser o título do item — por isso há um teste de regressão para cada um.
+    """
+    from . import risk
+    from .models import Milestone, Project, Task
+
+    # Materializado: `assessments` e a busca de atrasados usam a mesma lista, e iterar o queryset
+    # duas vezes o consultaria duas vezes.
+    active = list(
+        Project.objects.visible_to(user)
+        .filter(archived_at__isnull=True)
+        .exclude(status=Project.Status.COMPLETED)
     )
     assessments = sorted(
         (risk.assess_project(project) for project in active), key=lambda a: a["score"], reverse=True
@@ -78,6 +98,28 @@ def build_delivery_context(user: User) -> str:
         lines.append(f"- {assessment['name']}: risco {assessment['level']} (escore {assessment['score']}) — {signals}")
     if not assessments:
         lines.append("- nenhum projeto ativo")
+
+    hoje = timezone.localdate()
+    ids = [project.pk for project in active]
+    for label, adjetivo, model in (("Marcos", "atrasados", Milestone), ("Tarefas", "atrasadas", Task)):
+        atrasados = list(
+            model.objects.filter(project_id__in=ids, archived_at__isnull=True, due_date__lt=hoje)
+            .exclude(status=model.Status.DONE)
+            .select_related("project")
+            .order_by("due_date")
+        )
+        if not atrasados:
+            continue
+        lines.append(f"{label} {adjetivo}:")
+        # Mesma forma do digest (`- título (venceu data)`) mais o projeto, que aqui é necessário:
+        # o digest fala de um contexto pessoal, este agente olha a carteira inteira e "qual
+        # projeto" é metade da resposta.
+        lines += [
+            f"- {item.title} — {item.project.name} (venceu {item.due_date})"
+            for item in atrasados[:_MAX_ATRASADOS]
+        ]
+        if len(atrasados) > _MAX_ATRASADOS:
+            lines.append(f"- ... e mais {len(atrasados) - _MAX_ATRASADOS}")
     return "\n".join(lines)
 
 
