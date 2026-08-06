@@ -32,7 +32,9 @@ def test_portal_flag_is_not_toggleable() -> None:
 
 
 @pytest.mark.django_db
-@override_settings(TASKSYNC_ENABLED=False, TASKSYNC_TOKEN="t")
+# `LINEAR_API_KEY` entrou no override porque o `requires` passou a cobrar credencial de fornecedor:
+# antes dava para ligar a sincronia só com o segredo de entrada, e a saída ficava muda (FDD 024).
+@override_settings(TASKSYNC_ENABLED=False, TASKSYNC_TOKEN="t", LINEAR_API_KEY="k")
 def test_patch_config_admin_toggles_flag() -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     client = APIClient()

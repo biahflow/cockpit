@@ -11,12 +11,15 @@ O corte para liberar o agendamento é `settings.BOOKING_MIN_FIT` (default: high+
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.utils import timezone
 
 from . import ai
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .models import Lead
@@ -63,7 +66,16 @@ def qualify_lead(lead: Lead, answers: dict | None = None) -> bool:
         return False
 
     context = ai.build_lead_context(lead, answers)
-    text, usage = ai.complete(_SYSTEM, context)
+    try:
+        text, usage = ai.complete(_SYSTEM, context)
+    except Exception:  # noqa: BLE001 - o formulário público não pode cair com o fornecedor
+        # Isto roda **dentro do POST público** do formulário do site. Sem a guarda, um 429, um
+        # timeout ou uma chave vencida da OpenAI viravam 500 para o visitante — e o `Lead` já
+        # tinha sido gravado antes da chamada, então ele via um erro para um cadastro que na
+        # verdade funcionou. Sem qualificação o lead cai na triagem manual, que é o mesmo
+        # comportamento de quando a IA está desligada.
+        logger.exception("qualificação do lead %s falhou; segue para triagem manual", lead.pk)
+        return False
     data = _parse(text)
 
     fit = str(data.get("fit", "")).lower()

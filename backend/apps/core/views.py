@@ -1007,7 +1007,16 @@ class BookingSlotsView(APIView):
             return Response({"detail": "Agendamento desativado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if _lead_from_booking_token(request.query_params.get("token", "")) is None:
             return Response({"detail": "Sessão de agendamento inválida ou expirada."}, status=status.HTTP_403_FORBIDDEN)
-        return Response({"slots": booking.available_slots()})
+        try:
+            slots = booking.available_slots()
+        except calendar_sync.CalendarUnavailable:
+            # Sem enxergar a agenda não dá para dizer o que está livre. Oferecer a grade inteira
+            # seria marcar por cima de reunião real — 503 é a resposta honesta.
+            return Response(
+                {"detail": "Não foi possível consultar a agenda."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"slots": slots})
 
 
 class BookingCreateView(APIView):
@@ -1036,6 +1045,11 @@ class BookingCreateView(APIView):
             created = booking.book(lead, serializer.validated_data["slot_start"])
         except booking.SlotUnavailable:
             return Response({"detail": "Horário indisponível."}, status=status.HTTP_409_CONFLICT)
+        except calendar_sync.CalendarUnavailable:
+            return Response(
+                {"detail": "Não foi possível consultar a agenda."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response(
             {"starts_at": created.starts_at, "link": created.calendar_link},
             status=status.HTTP_201_CREATED,

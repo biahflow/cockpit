@@ -118,9 +118,16 @@ def build_lead_context(lead: Lead, answers: dict | None = None) -> str:
 def _client():  # pragma: no cover - I/O com a OpenAI
     from openai import OpenAI
 
+    # Timeout explícito: o SDK espera 10 min por padrão, e uma destas chamadas roda **dentro do
+    # POST público** do formulário de leads (`qualification.qualify_lead`). Sem teto, um dia ruim
+    # da OpenAI prende o worker do gunicorn e derruba o site inteiro junto — não só a IA.
     if settings.AI_BASE_URL:
-        return OpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.AI_BASE_URL)
-    return OpenAI(api_key=settings.OPENAI_API_KEY)
+        return OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.AI_BASE_URL,
+            timeout=settings.AI_TIMEOUT_SECONDS,
+        )
+    return OpenAI(api_key=settings.OPENAI_API_KEY, timeout=settings.AI_TIMEOUT_SECONDS)
 
 
 def complete(system: str, user: str) -> tuple[str, dict]:  # pragma: no cover - I/O
