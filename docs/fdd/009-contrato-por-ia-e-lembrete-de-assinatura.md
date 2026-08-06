@@ -1,5 +1,13 @@
 # FDD 009 — Contrato por IA e assinatura eletrônica
 
+**A solicitação é o pedido ao fornecedor.** Com fornecedor configurado, se ele não devolver
+referência, `request-signature` responde **502** e **nada é gravado** (FDD 024, rodada 4). Antes,
+uma falha do Autentique virava 201 com uma `SignatureRequest` sem `provider_ref`: pendente para
+sempre, impossível de fechar pelo webhook, e ainda cobrada por lembrete a uma pessoa de verdade.
+Sem fornecedor configurado nada muda — o `NullProvider` registra a intenção e o `mark-signed`
+manual segue valendo.
+
+
 ## Jornada
 
 Etapa **Contrato** da jornada de consultoria assistida por IA (RFC 0002). No detalhe da

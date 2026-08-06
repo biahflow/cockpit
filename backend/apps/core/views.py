@@ -54,6 +54,7 @@ from .exceptions import (
     CalendarProviderUnavailable,
     DriveUnavailable,
     EmailUndeliverable,
+    EsignUnavailable,
 )
 from .models import (
     AiInteraction,
@@ -826,7 +827,11 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         signer_email = str(request.data.get("signer_email", "")).strip()
         if not signer_email:
             return Response({"detail": "Informe o e-mail do signatário."}, status=400)
-        ref = esign.send_for_signature(document, signer_email)
+        try:
+            ref = esign.send_for_signature(document, signer_email)
+        except esign.EsignProviderError as exc:
+            logger.exception("solicitação de assinatura recusada para %s", document.original_name)
+            raise EsignUnavailable() from exc
         signature = SignatureRequest.objects.create(
             document=document, signer_email=signer_email,
             provider_ref=ref.provider_ref, document_ref=ref.document_ref, sign_url=ref.sign_url,

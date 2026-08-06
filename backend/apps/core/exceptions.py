@@ -74,3 +74,18 @@ class CalendarProviderUnavailable(UpstreamUnavailable):
 
     default_detail = "O Google Calendar não respondeu agora. Tente de novo em instantes."
     default_code = "calendar_unavailable"
+
+
+class EsignUnavailable(UpstreamUnavailable):
+    """O fornecedor de assinatura não aceitou a solicitação (rodada 4).
+
+    Aqui o 502 vale por um motivo a mais que nas irmãs: a solicitação **é** o pedido ao fornecedor.
+    Uma linha gravada sem referência dele é uma assinatura que ninguém vai assinar, que o webhook
+    nunca poderá fechar, e sobre a qual o lembrete ainda cobraria uma pessoa de verdade.
+    """
+
+    default_detail = (
+        "O fornecedor de assinatura não aceitou a solicitação. Nada foi registrado — "
+        "tente de novo em instantes."
+    )
+    default_code = "esign_unavailable"

@@ -156,17 +156,28 @@ def test_null_provider_registers_intent_without_refs():
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("provider", ["clicksign", "autentique"])
-def test_send_without_token_keeps_local_only(provider: str):
+def test_send_without_token_fails_instead_of_pretending(provider: str):
+    """Antes isto virava "registrado localmente" — uma solicitação que ninguém assinaria, gravada
+    como se estivesse pendente. Com fornecedor configurado, referência vazia é falha (rodada 4).
+
+    Sem fornecedor nenhum o registro local segue valendo; quem faz a distinção é o `NullProvider`.
+    """
     with override_settings(ESIGN_PROVIDER=provider, ESIGN_API_TOKEN=""):
-        assert esign.send_for_signature(_document(), "quem@x.test") == esign.SignatureRef()
+        with pytest.raises(esign.EsignProviderError):
+            esign.send_for_signature(_document(), "quem@x.test")
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("provider", ["clicksign", "autentique"])
 def test_send_skips_document_without_content(provider: str):
-    """Documento sem arquivo (nem Drive, nem storage local) não vira solicitação no fornecedor."""
+    """Documento sem arquivo (nem Drive, nem storage local) não vira solicitação no fornecedor.
+
+    A intenção não mudou; o que a pessoa vê, sim: antes sobrava uma linha "pendente" que ninguém
+    assinaria, agora o pedido falha alto (rodada 4).
+    """
     with override_settings(ESIGN_PROVIDER=provider, ESIGN_API_TOKEN="tok"):
-        assert esign.send_for_signature(_document(), "quem@x.test") == esign.SignatureRef()
+        with pytest.raises(esign.EsignProviderError):
+            esign.send_for_signature(_document(), "quem@x.test")
 
 
 @pytest.mark.django_db
@@ -249,14 +260,16 @@ def test_autentique_signer_shape_follows_the_delivery_mode(monkeypatch: pytest.M
         "_post",
         lambda self, body, content_type: sent.update(body=body) or {},
     )
+    # Direto no provider: o formato do payload é assunto dele, não do orquestrador (que desde a
+    # rodada 4 recusa referência vazia e mascararia o que este teste quer inspecionar).
     with override_settings(ESIGN_PROVIDER="autentique", ESIGN_API_TOKEN="tok", ESIGN_DELIVERY="email"):
-        esign.send_for_signature(_document(), "quem@x.test")
+        esign.AutentiqueProvider().send(_document(), "quem@x.test")
     by_email = cast(bytes, sent["body"])
     assert b"DELIVERY_METHOD_LINK" not in by_email
     assert b'"name"' not in by_email.split(b'"signers"')[1].split(b'"file"')[0]
 
     with override_settings(ESIGN_PROVIDER="autentique", ESIGN_API_TOKEN="tok", ESIGN_DELIVERY="link"):
-        esign.send_for_signature(_document(), "quem@x.test")
+        esign.AutentiqueProvider().send(_document(), "quem@x.test")
     by_link = cast(bytes, sent["body"])
     assert b'"delivery_method": "DELIVERY_METHOD_LINK"' in by_link
     assert b'"name": "quem"' in by_link
@@ -295,7 +308,7 @@ def test_autentique_send_respects_sandbox_off(monkeypatch: pytest.MonkeyPatch):
         lambda self, body, content_type: sent.update(body=body) or {},
     )
     with override_settings(ESIGN_PROVIDER="autentique", ESIGN_API_TOKEN="tok", ESIGN_SANDBOX=False):
-        esign.send_for_signature(_document(), "quem@x.test")
+        esign.AutentiqueProvider().send(_document(), "quem@x.test")
     assert b'"sandbox": false' in cast(bytes, sent["body"])
 
 
@@ -565,3 +578,32 @@ def test_webhook_400_on_invalid_body():
         HTTP_CONTENT_HMAC=f"sha256={sign(SECRET, body)}",
     )
     assert response.status_code == 400
+
+
+# --- sonda do Autentique (rodada 4) ------------------------------------------
+
+
+def test_ping_le_a_conta_do_token():
+    """A sonda pergunta ao Autentique de quem é o token, sem criar documento.
+
+    O gancho existia em `integrations._probe_esign` desde a FDD 024 (`getattr(provider, "ping")`),
+    mas nenhum adaptador o implementava — e o e-sign era a única integração configurada que
+    respondia "sem sonda disponível". A rodada 4 mostrou que a query `me` do Autentique serve:
+    valida o token, é só leitura e não cobra nada.
+    """
+    dados = {"data": {"me": {"id": "abc", "name": "Fulano", "email": "conta@x.test"}}}
+
+    ok, detalhe = esign.AutentiqueProvider._parse_ping(dados)
+
+    assert ok is True
+    assert "conta@x.test" in detalhe
+
+
+def test_ping_reprova_quando_o_token_nao_e_reconhecido():
+    """`_http_raw` devolve `None` em falha de rede/401 — e `data.me` vem nulo quando o token não
+    vale. Os dois têm de reprovar, senão a sonda mentiria justamente sobre o que existe para dizer.
+    """
+    for resposta in (None, {}, {"data": {"me": None}}, {"data": {}}):
+        ok, detalhe = esign.AutentiqueProvider._parse_ping(resposta)
+        assert ok is False, resposta
+        assert detalhe
