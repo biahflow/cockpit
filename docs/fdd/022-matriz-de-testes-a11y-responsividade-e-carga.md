@@ -101,6 +101,29 @@ avaliava saúde, risco, fase e próxima reunião dentro do laço: 43 queries com
 `health.assess_projects_health` carregam tudo em lote, e `build_overview_context` monta uma vez o que
 `build_client_overview` consumia por cliente. Custo constante nos três.
 
+
+## Fechado depois: foco preso e `Escape`
+
+O que esta FDD adiou por não ser alcançável pelo axe entrou depois, com teste próprio em
+`e2e/teclado.spec.ts`:
+
+- **O diálogo prende o `Tab` e fecha no `Escape`.** `aria-modal="true"` promete ao leitor de tela
+  que o resto da página está inerte; sem prender a tabulação, a promessa era falsa.
+- **O sino e o menu do usuário fecham no `Escape`** e **devolvem o foco a quem os abriu** — a
+  metade esquecida, porque sem ela quem fecha é despejado no início da página.
+- **A alternativa de teclado ao kanban ficou provada**: o `select` de etapa no detalhe da
+  oportunidade existe e é alcançável. Este é caracterização, não correção — o caminho já existia,
+  faltava travá-lo.
+
+Sabotagem: remover os hooks reprova quatro dos cinco testes; o quinto passa de propósito, porque
+não testa mudança nenhuma.
+
+**E a matriz cobrou o próprio preço de outra entrega.** Ao carregar a fonte Inter de verdade
+(ela estava declarada e nunca baixada), as métricas de texto mudaram e o detalhe do projeto passou
+a estourar **5 px** na horizontal no celular — uma fileira de quatro botões de IA com `flex` sem
+`flex-wrap`. O layout estava, sem que ninguém soubesse, ajustado contra a fonte de fallback. É
+exatamente o defeito que esta matriz existe para pegar, e ela pegou.
+
 ## Fora deste recorte
 
 **`eslint-plugin-jsx-a11y`.** Estava planejado e ficou de fora por um motivo concreto: a versão
