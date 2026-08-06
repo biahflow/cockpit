@@ -74,8 +74,11 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   `docs/runbooks/homologacao-de-integracoes.md`.
 
 ### 3. Documentos no Google Drive
-- Habilitar a Drive API e dar à identidade (a do Workload Identity, ou o usuário do OAuth)
-  acesso de escrita à pasta raiz — num **Shared Drive**, como Gerente de conteúdo.
+- **Ativar a Google Drive API e a Google Calendar API** no projeto do GCP (são duas ativações
+  separadas; faltando, o Google devolve `403 accessNotConfigured` com credencial válida) e dar à
+  identidade acesso de escrita à pasta raiz — num **Shared Drive**, como Gerente de conteúdo.
+- O passo a passo do projeto no GCP (APIs, tela de permissão, client OAuth e onde achar cada id)
+  está na seção 3 do `docs/runbooks/homologacao-de-integracoes.md`.
 - `.env`: `GOOGLE_DRIVE_ENABLED=true`, `GOOGLE_DRIVE_ROOT_FOLDER_ID=<id>` e o **modo de auth**
   (ADR 0016). Em container/pod, `GOOGLE_AUTH_MODE=adc` e Workload Identity — nenhum segredo no
   ambiente. Localmente, `adc` mais `gcloud auth application-default login`. Use

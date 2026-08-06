@@ -265,7 +265,7 @@ Mais o cenário semeado. **Apagamento duro, não arquivamento** — a regra de s
 `CLAUDE.md` protege dado de negócio, e cenário de homologação é a exceção explícita: arquivado, ele
 seguiria aparecendo em `/clients/overview/`, `/analytics/` e nas métricas de IA para sempre.
 
-## 3. Google (Drive + Calendário) — pendente
+## 3. Google (Drive + Calendário) — homologado em 06/08/2026
 
 > **A primeira tentativa desta rodada foi bloqueada, e mudou o desenho.** Não foi possível criar a
 > chave de conta de serviço: a organização aplica
@@ -290,6 +290,59 @@ seguiria aparecendo em `/clients/overview/`, `/analytics/` e nas métricas de IA
 > gcloud não tem permissão para pedir escopos sensíveis. É por isso que o modo `oauth` com client
 > **próprio** é o caminho, e não uma alternativa.
 
+### Preparar o projeto no Google Cloud
+
+Quatro passos, na ordem. Os três primeiros são no console; pular qualquer um derruba a rodada mais
+adiante, e nem sempre com uma mensagem que aponta para cá.
+
+**1. Ativar as duas APIs.** No projeto, *APIs e serviços → Biblioteca*, ative:
+
+- **Google Drive API** — `https://console.cloud.google.com/apis/api/drive.googleapis.com/overview?project=<PROJETO>`
+- **Google Calendar API** — `https://console.cloud.google.com/apis/api/calendar-json.googleapis.com/overview?project=<PROJETO>`
+
+São **duas** ativações separadas, e é fácil ativar uma e esquecer a outra. Sem elas o Google
+responde **`403 accessNotConfigured`** com a credencial perfeitamente válida — o erro parece
+permissão e não é. A propagação leva alguns minutos.
+
+**2. Tela de permissão OAuth.** *APIs e serviços → Tela de permissão OAuth*:
+
+- Tipo de usuário: **Interno**, se a conta for Workspace. Vale a pena pelos dois lados — evita a
+  verificação do app e **elimina a expiração de 7 dias** do refresh token que o modo "Testing"
+  impõe.
+- Declare os escopos que o portal usa, senão o consentimento é recusado:
+
+  ```
+  https://www.googleapis.com/auth/drive
+  https://www.googleapis.com/auth/calendar
+  ```
+
+**3. Criar o client OAuth.** *APIs e serviços → Credenciais → Criar credenciais → ID do cliente
+OAuth*:
+
+- Tipo de aplicativo: **App para computador**. É o tipo certo aqui por um motivo prático: o Google
+  aceita `http://localhost` **em qualquer porta** para esse tipo, então **não é preciso cadastrar
+  URI de redirecionamento nenhuma** — e é `http://localhost:8765` que o comando do passo 4 usa. Se
+  você escolher *Aplicativo da Web*, aí sim precisa cadastrar `http://localhost:8765` exatamente.
+- Saem dali o **`GOOGLE_OAUTH_CLIENT_ID`** (`<numero>-<hash>.apps.googleusercontent.com`) e o
+  **`GOOGLE_OAUTH_CLIENT_SECRET`** (`GOCSPX-…`).
+- Para *App para computador*, o Google trata o secret como **não confidencial por natureza** — ele
+  vive na máquina de quem instala. Ainda assim, se um dia esse client virar *Aplicativo da Web*,
+  rotacione o segredo antes, porque aí ele passa a ser secreto de verdade.
+
+**4. Dar acesso ao recurso.** A identidade que consentiu precisa enxergar o que vai usar:
+
+- **Drive**: acesso de escrita à pasta raiz. Num **Shared Drive** (id começa com `0A`), como
+  *Gerente de conteúdo* — é a opção preferível, porque o dono passa a ser a organização e não a
+  pessoa, que era a maior ressalva do modo `oauth` na ADR 0016.
+- **Calendário**: uma agenda **dedicada** à homologação. A rodada cria eventos de verdade.
+
+**Onde achar os dois ids** que faltam no `.env`:
+
+| Variável | Onde |
+| --- | --- |
+| `GOOGLE_DRIVE_ROOT_FOLDER_ID` | na URL da pasta: `…/folders/<ID>?…`. **Pode colar a URL inteira** — o código extrai o id (achado desta rodada; ver adiante). |
+| `GOOGLE_CALENDAR_ID` | Google Calendar → *Configurações* → a agenda → *Integrar agenda* → **ID da agenda**. Numa agenda dedicada tem a forma `c_…@group.calendar.google.com`. |
+
 **Obtendo o refresh token** — comando dedicado, rodado **no host** (precisa de navegador):
 
 ```bash
@@ -310,17 +363,77 @@ A mesma identidade serve às duas flags, mas os escopos são diferentes — por 
 separadas: conceder Drive e esquecer Calendar é o erro comum, e ele passaria batido.
 
 **Cria artefato na sua conta.** Prefixe tudo com `[homologação]`, use pasta e agenda dedicadas, e
-remova ao fim.
+remova ao fim. Esta foi a primeira rodada que deixou rastro fora da máquina.
 
-Três correções da FDD 024 esperam confirmação aqui, todas feitas por análise:
+### Habilitar as APIs no projeto
 
-- evento de dia inteiro com `end.date` exclusivo (antes a API recusava **toda** tentativa);
-- free/busy que falha fechado quando a agenda é inacessível;
-- upload no Drive devolvendo 502 em vez de 500 mudo.
+Passo que não é credencial e derruba tudo mesmo assim: no projeto do Google Cloud, **ative a Google
+Drive API e a Google Calendar API**. Sem isso o Google devolve `403 accessNotConfigured` — com a
+credencial perfeitamente válida. A sonda entrega o link do conserto junto com o erro.
 
-**Já se sabe que vai falhar:** `create_timed_event` convida participante, e uma conta de serviço não
-convida sem delegação em todo o domínio — o Google responde `forbiddenForServiceAccounts`. É
-configuração do Workspace, não código.
+### O que foi observado
+
+| Superfície | Gatilho | Resultado |
+| --- | --- | --- |
+| Sonda do Drive | `check_integrations` | **OK** — `pasta raiz 0AAu…acessível` |
+| Sonda do Calendário | `check_integrations` | **OK** — `calendário 'Biahflow - HML' acessível` |
+| Árvore PARA | `convert-to-project` | **201** — pasta do cliente e do projeto criadas no Shared Drive |
+| Upload | `POST /documents/` | **201** — `drive_file_id` e link preenchidos |
+| Download | `GET /documents/<id>/download/` | **200**, 920 bytes, **byte a byte idêntico** (SHA-256) |
+| Evento de dia inteiro | `add-to-calendar` | **200** com link — intervalo `2026-08-10` a `2026-08-11` |
+| Free/busy | `calendar_sync.freebusy` | **OK** — leu a agenda |
+| Slots | `booking.available_slots` | **79** nos 14 dias seguintes |
+| Reserva com convite | `booking.book` | evento criado **e o convite ao participante aceito** |
+| Sincronia inbound | evento `#proj-<id>` + `sync_calendar` | criadas 1, ignoradas 1 |
+| Idempotência | repetir a sincronia | **criadas 0** — não duplica |
+
+**As três correções da FDD 024 feitas por análise foram confirmadas.** A que mais importa é o
+`end.date` exclusivo: o `add-to-calendar` respondeu 200 com link, e antes da correção ele falhava
+em **100%** das tentativas desde que existe. O free/busy leu a agenda de verdade, e o upload/
+download atravessaram inteiros.
+
+### Provocar as falhas
+
+Um refresh token inválido por `-e`, sem tocar no `.env`:
+
+```bash
+docker compose exec -e GOOGLE_OAUTH_REFRESH_TOKEN=invalido api uv run python manage.py shell < provocar.py
+```
+
+| | Provocação | Resultado |
+| --- | --- | --- |
+| F1 | download de documento | **502** — "O Google Drive não respondeu agora." |
+| F2 | `add-to-calendar` | **502** — "O Google Calendar não respondeu agora." |
+| F3 | sincronia manual | **502** |
+| F4 | `booking.book` | **não levantou**: reserva criada, evento vazio, **dono avisado com a ressalva** de que a reunião não entrou na agenda |
+
+F4 é a correção mais importante da varredura vista agindo: antes, isso era 500 no endpoint público
+com uma reserva órfã bloqueando o horário.
+
+### Dois achados
+
+**1. O `forbiddenForServiceAccounts` não aconteceu — e essa é a notícia.** A FDD 024 previa que o
+convite ao participante seria recusado, e o runbook dizia "já se sabe que vai falhar". Não falhou:
+com a **credencial de usuário** da ADR 0016, o convite foi aceito na primeira tentativa. A troca de
+autenticação, que nasceu de uma política que bloqueava a chave, resolveu de carona o defeito
+funcional que se esperava contornar. A degradação do `booking.book` continua valendo — mas passou
+de caminho cotidiano a **rede de segurança**.
+
+**2. A tese da FDD 024 se provou três vezes nesta rodada, por três motivos diferentes.** A
+credencial pode estar *ausente* (o refresh token vazio, que o `configured()` nomeou); pode estar
+*presente com o valor errado* (a URL da pasta colada no lugar do id, que o `configured()` **não**
+pega, porque a variável está preenchida); e pode estar *presente e correta com a integração morta
+mesmo assim* (a API não habilitada no projeto, `403 accessNotConfigured`). Só a terceira é
+inalcançável por qualquer verificação de ambiente — e as três só apareceram porque alguém sondou.
+
+### Limpar
+
+Apagar os eventos da agenda de homologação e a **pasta do cliente** no Drive (ela leva junto a do
+projeto e os arquivos), mais o cenário do banco — apagamento duro, pelo motivo já registrado.
+
+**Confira, não presuma.** A conferência aqui achou divergência entre o número de eventos que a
+limpeza reportou e o que a rodada tinha criado; listar a agenda e a raiz do Drive depois mostrou
+**zero** dos dois, mas o passo de conferir é que deu essa certeza.
 
 ## 4. Assinatura eletrônica — pendente
 
