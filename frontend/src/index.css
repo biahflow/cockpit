@@ -1,4 +1,13 @@
 @import "tailwindcss";
+/* A Inter estava **declarada e nunca carregada**: `--font-sans` a nomeava, mas não havia
+   `@font-face`, `<link>` nem dependência que a trouxesse — o produto inteiro caía no
+   Avenir Next / system UI sem ninguém notar.
+
+   Auto-hospedada, e não `<link>` para o Google Fonts, por três motivos: some uma requisição a
+   terceiro no caminho crítico, funciona em rede fechada e offline, e o Google Fonts entrega o IP
+   de quem acessa a um terceiro — que é exatamente o tipo de coisa que uma política de retenção
+   teria de justificar depois. A variável traz todos os pesos num arquivo só. */
+@import "@fontsource-variable/inter";
 
 @theme {
   --color-ink: #102a2a;
@@ -10,7 +19,7 @@
      notificação. O mesmo ajuste conserta o contador, que é branco sobre `bg-signal` e
      também reprovava. Continua o mesmo clay laranja, um degrau mais fundo. */
   --color-signal: #bd4a30;
-  --font-sans: "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
