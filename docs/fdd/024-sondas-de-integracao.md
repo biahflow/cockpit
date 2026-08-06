@@ -261,9 +261,11 @@ falha alto, ou degrada dizendo o que perdeu.
 única superfície desta FDD que continua corrigida **por análise, não por observação**: o teste
 prova a regra, só a credencial real prova a integração.
 
-**O contexto do agente de Entrega.** O achado 4 da rodada 2: ele descreve risco em vez de listar
-o que está atrasado, então a pergunta mais óbvia da área não tem resposta. Ampliar significa mexer
-num agregador que a ADR 0010 recorta à mão, com teste de escopo próprio — recorte separado.
+**O contexto do agente de Entrega — resolvido.** O achado 4 da rodada 2 (ele descrevia risco em
+vez de listar o que está atrasado) foi corrigido depois: `build_delivery_context` passou a nomear
+os itens vencidos, com o projeto de cada um. O recorte segue saindo de `visible_to`, e o vazamento
+possível — que deixou de ser o nome do projeto e passou a ser o título do item — ganhou teste de
+regressão próprio.
 
 **Teto de tokens por chamada.** `AI_DAILY_LIMIT` conta chamadas, não custo, e nada limita o
 tamanho de uma resposta. A rodada 2 mediu a ordem de grandeza real (média de ~225 tokens de saída,

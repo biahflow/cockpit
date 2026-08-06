@@ -106,6 +106,26 @@ def test_delivery_agent_context_only_mentions_my_projects(delivery, mine, theirs
     assert theirs.name not in context
 
 
+def test_delivery_agent_context_does_not_leak_items_from_other_projects(delivery, mine, theirs) -> None:  # type: ignore[no-untyped-def]
+    """O contexto passou a listar **quais** itens estão atrasados, e não só o escore de risco.
+
+    Com isso o vazamento possível deixou de ser só o nome do projeto e passou a ser o título do
+    item — que é onde mora o conteúdo. O teste irmão acima já travava o nome; este trava o item.
+    """
+    from datetime import timedelta
+
+    from apps.core import agents
+
+    vencido = timezone.localdate() - timedelta(days=3)
+    Task.objects.create(project=mine, title="Consolidar entrevistas", owner=delivery, due_date=vencido)
+    Task.objects.create(project=theirs, title="Segredo do projeto alheio", owner=UserFactory(), due_date=vencido)
+
+    context = agents.build_delivery_context(delivery)
+
+    assert "Consolidar entrevistas" in context
+    assert "Segredo do projeto alheio" not in context
+
+
 def test_analytics_and_recommendations_stay_forbidden(api: APIClient) -> None:
     """Trava contra afrouxamento futuro: os dois varrem tudo e não foram parametrizados."""
     assert api.get(reverse("analytics")).status_code == 403
