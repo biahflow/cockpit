@@ -84,12 +84,32 @@ Testes em `apps/core/tests/test_integrations.py` e `tests/regression/test_integr
 Sabotagem deliberada, como nas entregas anteriores: repor a data final igual ao início e o
 `.get("busy", [])` reprova três testes de regressão.
 
+## Rodada 1 — e-mail, homologada em 06/08/2026
+
+Primeira integração exercitada contra infra real. Procedimento e evidência em
+`docs/runbooks/homologacao-de-integracoes.md`. O que a rodada produziu:
+
+- **A sonda SMTP funciona** (`SMTP mailpit:1025 respondeu`) — primeira vez que uma sonda deste
+  módulo roda contra algo de verdade.
+- **A codificação do assunto está correta no fio**: RFC 2047 base64/utf-8, travessão e cedilha
+  intactos. Era o principal risco, porque o backend de teste do Django guarda objetos em memória e
+  **nunca codifica nada** — nenhum dos assuntos acentuados jamais tinha passado por MIME.
+- **A correção da contagem do digest foi observada**: com o SMTP morto, `Digests enviados: 0` e um
+  aviso por destinatário. Único item desta FDD que saiu de "corrigido por análise" para
+  "corrigido e visto".
+- **Defeito novo, achado e corrigido na rodada**: o convite ficava **órfão** quando o SMTP recusava
+  — a linha era gravada e o `fail_silently=False` devolvia 500, deixando um convite válido que
+  ninguém recebeu e que cada retentativa duplicava. Agora grava e envia na mesma transação, e
+  devolve 502.
+- **Comportamento documentado**: convite e kickoff **ignoram a flag `email`** (são transacionais).
+  A FDD 010 dizia "desligada → nada muda (só in-app)", o que se lia como "nenhum e-mail sai".
+
 ## Fora deste recorte
 
-**A homologação em si.** Este recorte entrega o instrumento e limpa o que a análise já provou
-quebrado; apontar credencial real para IA, Google e assinatura é a rodada seguinte, com runbook
-próprio. Os defeitos acima foram corrigidos **por análise, não por observação** — continuam atrás
-de `# pragma: no cover`, e só a credencial real prova a integração.
+**As rodadas 2 a 4.** IA, Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
+três defeitos de calendário e os dois de blindagem (Drive, `qualify_lead`) continuam corrigidos
+**por análise, não por observação** — o teste prova a regra, só a credencial real prova a
+integração.
 
 **Rodar `check_integrations` pelo agendador.** O gancho é natural (o `scheduler` já faz isso com o
 `backup_status`), mas fica para depois de as sondas provarem que não dão falso positivo.

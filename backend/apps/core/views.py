@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -108,6 +109,20 @@ from .serializers import (
     TaskSyncSerializer,
     UserSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class EmailUndeliverable(APIException):
+    """O SMTP recusou uma mensagem sem a qual a operação não faz sentido.
+
+    502 porque o defeito é do fornecedor de e-mail, não do pedido — e porque o convite **é** o
+    e-mail: quem recebe não tem outro caminho para o token.
+    """
+
+    status_code = 502
+    default_detail = "Não foi possível enviar o e-mail. Verifique o SMTP e tente de novo."
+    default_code = "email_undeliverable"
 
 
 class ArchiveModelViewSet(viewsets.ModelViewSet):
@@ -1572,19 +1587,29 @@ class InvitationView(APIView):
             return Response({"detail": "Somente administradores convidam pessoas."}, status=403)
         serializer = InvitationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        invitation = serializer.save(
-            invited_by=request.user, expires_at=timezone.now() + timedelta(days=7)
-        )
-        accept_link = f"{settings.FRONTEND_BASE_URL}/aceitar-convite?token={invitation.token}"
-        send_mail(
-            "Convite para o Portal Biahflow",
-            f"Você foi convidado para o Portal Biahflow.\n\n"
-            f"Acesse este link para ativar seu acesso:\n{accept_link}\n\n"
-            f"Ou use este token na tela de ativação: {invitation.token}",
-            None,
-            [invitation.email],
-            fail_silently=False,
-        )
+        # Gravação e envio na mesma transação: o convite só vale se o e-mail sair, porque o convite
+        # **é** o e-mail — quem recebe não tem outro caminho para o token. Sem isto, um SMTP fora do
+        # ar gravava a linha e devolvia 500 (`fail_silently=False`), então sobrava um convite válido
+        # que ninguém recebeu, o admin achava que falhou e cada tentativa criava mais um. Observado
+        # na homologação da FDD 024, com o SMTP apontado para uma porta morta.
+        with transaction.atomic():
+            invitation = serializer.save(
+                invited_by=request.user, expires_at=timezone.now() + timedelta(days=7)
+            )
+            accept_link = f"{settings.FRONTEND_BASE_URL}/aceitar-convite?token={invitation.token}"
+            try:
+                send_mail(
+                    "Convite para o Portal Biahflow",
+                    f"Você foi convidado para o Portal Biahflow.\n\n"
+                    f"Acesse este link para ativar seu acesso:\n{accept_link}\n\n"
+                    f"Ou use este token na tela de ativação: {invitation.token}",
+                    None,
+                    [invitation.email],
+                    fail_silently=False,
+                )
+            except Exception as exc:  # noqa: BLE001 - qualquer falha de SMTP desfaz o convite
+                logger.exception("convite para %s não pôde ser enviado", invitation.email)
+                raise EmailUndeliverable() from exc
         return Response(InvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)
 
 

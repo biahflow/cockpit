@@ -11,8 +11,19 @@ por IA** resume, para cada usuário, o que está atrasado e a vencer.
 
 - **Flag `email`** ("Notificações por e-mail e digest"): default do ambiente
   (`EMAIL_NOTIFICATIONS_ENABLED`) e alternável em runtime na página Configurações. Como o
-  SMTP já vem configurado, não exige credencial extra para ligar. Desligada → nada muda
-  (só in-app), a plataforma opera normalmente.
+  SMTP já vem configurado, não exige credencial extra para ligar.
+
+  **Desligada, o que para é a notificação — não todo o e-mail.** Seguem saindo o **convite**
+  (`InvitationView`) e o **kickoff** (`kickoff._send_kickoff_email`), porque são transacionais: um
+  portal cujo convite não sai não onboarda ninguém. Ficam atrás da flag o espelho de notificação, o
+  digest, o lembrete de assinatura e a confirmação de agendamento. Esta linha dizia "nada muda (só
+  in-app)", o que se lia como "nenhum e-mail sai"; a homologação da FDD 024 mostrou o contrário.
+
+- **O convite grava e envia na mesma transação.** O convite **é** o e-mail — quem recebe não tem
+  outro caminho para o token —, então SMTP fora do ar desfaz o convite e devolve **502**. Antes, a
+  linha era gravada e o `fail_silently=False` devolvia 500: sobrava um convite válido que ninguém
+  recebeu, o admin achava que falhara, e cada tentativa criava mais um. É o único ponto de envio
+  que **não** é best-effort, e de propósito.
 - **Espelho por e-mail**: `notifications.notify(...)` cria a notificação in-app e, quando a
   flag está ligada, envia a mesma mensagem por e-mail a cada destinatário com endereço
   (best-effort, `fail_silently` — falha de e-mail não quebra o fluxo que notificou).

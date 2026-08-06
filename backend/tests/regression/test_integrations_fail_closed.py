@@ -203,3 +203,36 @@ def test_openai_fora_do_ar_nao_derruba_o_formulario_publico(monkeypatch: pytest.
 
     # Não levanta, e devolve o mesmo que devolveria com a IA desligada: triagem manual.
     assert qualification.qualify_lead(lead) is False
+
+
+# --- convite: o e-mail é o convite ---------------------------------------------------------------
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+                   EMAIL_HOST="127.0.0.1", EMAIL_PORT=1)
+def test_convite_nao_fica_orfao_quando_o_smtp_recusa() -> None:
+    """Observado na homologação da FDD 024, com o SMTP apontado para uma porta morta.
+
+    O convite **é** o e-mail: quem recebe não tem outro caminho para o token. Antes, a linha era
+    gravada e o `fail_silently=False` devolvia 500 — sobrava um convite válido que ninguém recebeu,
+    o admin achava que falhara, e cada tentativa criava mais um. Agora grava e envia na mesma
+    transação: ou os dois acontecem, ou nenhum.
+    """
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.core.models import Invitation, User
+    from apps.core.tests.factories import UserFactory
+
+    admin = UserFactory(role=User.Role.ADMIN)
+    client = APIClient()
+    client.force_authenticate(admin)
+    antes = Invitation.objects.count()
+
+    resposta = client.post(
+        reverse("invitation"), {"email": "ninguem@exemplo.test", "role": "delivery"}, format="json"
+    )
+
+    assert resposta.status_code == 502
+    assert Invitation.objects.count() == antes
+    assert not Invitation.objects.filter(email="ninguem@exemplo.test").exists()
