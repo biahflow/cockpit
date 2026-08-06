@@ -1,6 +1,7 @@
 import { ArrowRight, CalendarDays, CircleDollarSign, Download, FileText, GripVertical, Plus, Save, SlidersHorizontal, Sparkles, UploadCloud, X } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
+import { useEscape, useFocusTrap } from "../a11y";
 import { api, documentDownloadUrl } from "../api";
 import { useAuth } from "../auth";
 import { AgentPanel } from "../components/AgentPanel";
@@ -136,4 +137,12 @@ function tierBadgeClass(tier: ServiceTier) { return tierBadges[tier] ?? tierBadg
 function serviceLabel(service: Service) { return service.tier ? `${service.name} — ${Number(service.list_price) === 0 ? "gratuito" : money.format(Number(service.list_price))}` : service.name; }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="grid gap-2 text-sm font-medium text-slate-700">{label}{children}</label>; }
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) { return <div className="fixed inset-0 z-40 grid place-items-center bg-ink/45 p-4" role="dialog" aria-modal="true" aria-label={title}><div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold text-ink">{title}</h2><button className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Fechar" onClick={onClose}><X className="size-4" /></button></div>{children}</div></div>; }
+function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  // `aria-modal` promete ao leitor de tela que o resto da página está inerte. Sem prender o `Tab`
+  // e sem fechar no `Escape`, a promessa era falsa: dava para tabular para fora do diálogo sem
+  // fechá-lo, e quem abriu pelo teclado não tinha como sair. O axe não pega isso (FDD 022).
+  const caixa = useRef<HTMLDivElement>(null);
+  useEscape(true, onClose);
+  useFocusTrap(true, caixa);
+  return <div className="fixed inset-0 z-40 grid place-items-center bg-ink/45 p-4" role="dialog" aria-modal="true" aria-label={title} ref={caixa}><div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold text-ink">{title}</h2><button className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Fechar" onClick={onClose}><X className="size-4" /></button></div>{children}</div></div>;
+}
