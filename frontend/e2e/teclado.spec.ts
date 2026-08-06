@@ -45,7 +45,7 @@ test("o sino de notificações fecha com Escape", async ({ page }) => {
 test("o diálogo fecha com Escape", async ({ page }) => {
   await abrir(page, COMERCIAL);
   await page.getByRole("button", { name: /Nova oportunidade/i }).first().click();
-  const dialogo = page.getByRole("dialog");
+  const dialogo = page.getByRole("dialog", { name: "Nova oportunidade" });
   await expect(dialogo).toBeVisible();
 
   await page.keyboard.press("Escape");
@@ -56,7 +56,7 @@ test("o diálogo fecha com Escape", async ({ page }) => {
 test("o foco não escapa do diálogo pelo Tab", async ({ page }) => {
   await abrir(page, COMERCIAL);
   await page.getByRole("button", { name: /Nova oportunidade/i }).first().click();
-  const dialogo = page.getByRole("dialog");
+  const dialogo = page.getByRole("dialog", { name: "Nova oportunidade" });
   await expect(dialogo).toBeVisible();
 
   // Tabular mais vezes que o número de controles: sem a prisão, o foco sai para a página atrás e

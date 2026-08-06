@@ -1,4 +1,4 @@
-import { Download, FileText, Paperclip, PenLine, Trash2, UploadCloud } from "lucide-react";
+import { Download, FileText, Paperclip, PenLine, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { api, documentDownloadUrl } from "../api";
@@ -27,16 +27,18 @@ export function DocumentsPage() {
   const [isUploading, setUploading] = useState(false);
   const [archiving, setArchiving] = useState<DocumentEntry | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [restoring, setRestoring] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => Promise.all([
-    api<DocumentEntry[]>("/documents/"),
+    api<DocumentEntry[]>(`/documents/${showArchived ? "?archived=1" : ""}`),
     api<Client[]>("/clients/"),
     isDelivery ? Promise.resolve<Opportunity[]>([]) : api<Opportunity[]>("/opportunities/"),
     api<Project[]>("/projects/"),
   ]).then(([loadedDocuments, loadedClients, loadedOpportunities, loadedProjects]) => {
     setDocuments(loadedDocuments); setClients(loadedClients); setOpportunities(loadedOpportunities); setProjects(loadedProjects);
-  }).catch((cause: Error) => setError(cause.message)), [isDelivery]);
+  }).catch((cause: Error) => setError(cause.message)), [isDelivery, showArchived]);
   useEffect(() => { void load(); }, [load]);
 
   const targets: { id: number; label: string }[] = linkType === "client"
@@ -65,6 +67,12 @@ export function DocumentsPage() {
       setTarget(""); if (fileInput.current) fileInput.current.value = "";
       await load();
     } catch (cause) { setError((cause as Error).message); } finally { setUploading(false); }
+  }
+  async function restore(id: number) {
+    setError(""); setRestoring(id);
+    try { await api(`/documents/${id}/unarchive/`, { method: "POST" }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+    finally { setRestoring(null); }
   }
   async function archive() {
     if (!archiving) return;
@@ -108,11 +116,11 @@ export function DocumentsPage() {
       </form>
 
       <section className="overflow-hidden rounded-2xl border bg-white">
-        <div className="border-b px-5 py-5 sm:px-6"><h2 className="font-semibold text-ink">Documentos enviados</h2><p className="mt-1 text-sm text-slate-600">Baixe ou arquive quando necessário.</p></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-5 sm:px-6"><div><h2 className="font-semibold text-ink">{showArchived ? "Arquivados" : "Documentos enviados"}</h2><p className="mt-1 text-sm text-slate-600">{showArchived ? "Fora da listagem ativa. Restaurar devolve o arquivo." : "Baixe ou arquive quando necessário."}</p></div><div className="flex gap-1 rounded-xl bg-slate-50 p-1"><button className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${showArchived ? "text-slate-600 hover:text-ink" : "bg-white text-ocean shadow-sm"}`} onClick={() => setShowArchived(false)}>Ativos</button><button className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${showArchived ? "bg-white text-ocean shadow-sm" : "text-slate-600 hover:text-ink"}`} onClick={() => setShowArchived(true)}>Arquivados</button></div></div>
         {documents.length ? <div className="divide-y">{documents.map(document => { const pending = document.signature_requests.filter(request => request.status === "pending"); return <div className="px-5 py-4 sm:px-6" key={document.id}>
-          <div className="flex items-center gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><FileText className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{document.original_name}</p><p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-600"><Paperclip className="size-3" />{labelFor(document)}</p></div>{document.drive_link && <a className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:text-ocean" href={document.drive_link} target="_blank" rel="noreferrer" aria-label={`Abrir ${document.original_name} no Drive`}>Drive</a>}{esignEnabled && pending.length > 0 && <button className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:text-ocean" aria-label={`Lembrar assinantes de ${document.original_name}`} onClick={() => void remindSignatures(document.id)}>Lembrar</button>}{esignEnabled && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-mint hover:text-ocean" aria-label={`Enviar ${document.original_name} para assinatura`} onClick={() => void requestSignature(document.id)}><PenLine className="size-4" /></button>}<a className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-mint hover:text-ocean" href={documentDownloadUrl(document.id)} aria-label={`Baixar ${document.original_name}`}><Download className="size-4" /></a><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Arquivar ${document.original_name}`} onClick={() => setArchiving(document)}><Trash2 className="size-4" /></button></div>
+          <div className="flex items-center gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><FileText className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{document.original_name}</p><p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-600"><Paperclip className="size-3" />{labelFor(document)}</p></div>{showArchived ? <button className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-ocean hover:border-ocean disabled:opacity-60" disabled={restoring === document.id} onClick={() => void restore(document.id)}><RotateCcw className="size-4" />{restoring === document.id ? "Restaurando…" : "Restaurar"}</button> : <>{document.drive_link && <a className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:text-ocean" href={document.drive_link} target="_blank" rel="noreferrer" aria-label={`Abrir ${document.original_name} no Drive`}>Drive</a>}{esignEnabled && pending.length > 0 && <button className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:text-ocean" aria-label={`Lembrar assinantes de ${document.original_name}`} onClick={() => void remindSignatures(document.id)}>Lembrar</button>}{esignEnabled && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-mint hover:text-ocean" aria-label={`Enviar ${document.original_name} para assinatura`} onClick={() => void requestSignature(document.id)}><PenLine className="size-4" /></button>}<a className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-mint hover:text-ocean" href={documentDownloadUrl(document.id)} aria-label={`Baixar ${document.original_name}`}><Download className="size-4" /></a><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Arquivar ${document.original_name}`} onClick={() => setArchiving(document)}><Trash2 className="size-4" /></button></>}</div>
           {document.signature_requests.length > 0 && <ul className="mt-2 space-y-1 pl-14">{document.signature_requests.map(request => <li className="flex items-center gap-2 text-xs" key={request.id}><span className={`rounded-full px-2 py-0.5 font-semibold ${request.status === "signed" ? "bg-emerald-50 text-emerald-700" : request.status === "declined" ? "bg-red-50 text-signal" : "bg-amber-50 text-amber-700"}`}>{request.status === "signed" ? "Assinado" : request.status === "declined" ? "Recusado" : "Pendente"}</span><span className="min-w-0 flex-1 truncate text-slate-600">{request.signer_email}</span>{request.status === "pending" && request.sign_url && <a className="shrink-0 font-semibold text-ocean hover:text-ink" href={request.sign_url} target="_blank" rel="noreferrer" aria-label={`Abrir link de assinatura de ${request.signer_email}`}>Assinar</a>}{request.status === "pending" && <button className="shrink-0 font-semibold text-ocean hover:text-ink" onClick={() => void markSigned(document.id, request.id)}>Marcar assinado</button>}</li>)}</ul>}
-        </div>; })}</div> : <div className="grid min-h-56 place-items-center p-6 text-center"><div><span className="mx-auto grid size-11 place-items-center rounded-xl bg-mint text-ocean"><FileText className="size-5" /></span><p className="mt-3 text-sm font-semibold text-ink">Nenhum documento ainda</p><p className="mt-1 text-sm text-slate-600">Envie o primeiro arquivo ao lado.</p></div></div>}
+        </div>; })}</div> : <div className="grid min-h-56 place-items-center p-6 text-center"><div><span className="mx-auto grid size-11 place-items-center rounded-xl bg-mint text-ocean"><FileText className="size-5" /></span><p className="mt-3 text-sm font-semibold text-ink">{showArchived ? "Nada arquivado" : "Nenhum documento ainda"}</p><p className="mt-1 text-sm text-slate-600">{showArchived ? "Documentos arquivados aparecem aqui e podem voltar." : "Envie o primeiro arquivo ao lado."}</p></div></div>}
       </section>
     </div>
   </section>;
