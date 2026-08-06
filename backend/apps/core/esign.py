@@ -57,6 +57,16 @@ class Event:
     signer_email: str = ""
 
 
+class EsignProviderError(Exception):
+    """O fornecedor de assinatura não devolveu uma solicitação utilizável.
+
+    `_http_raw` engole a falha de rede e devolve `None` de propósito — o portal não pode cair
+    porque o fornecedor caiu. O problema era o degrau seguinte: `None` virava um `SignatureRef`
+    vazio, **indistinguível de sucesso**, e a solicitação era gravada assim mesmo. Este tipo existe
+    para separar as duas coisas.
+    """
+
+
 @dataclass(frozen=True)
 class SignatureRef:
     """O que o fornecedor devolve ao criar a solicitação."""
@@ -170,6 +180,37 @@ class AutentiqueProvider:
         )
         data = self._post(body, content_type)
         return self._parse_created(data, signer_email)
+
+    @staticmethod
+    def _parse_ping(data: dict | None) -> tuple[bool, str]:
+        """Lê a resposta do `me` (separada do I/O para ficar testável, como `_parse_created`)."""
+        me = ((data or {}).get("data") or {}).get("me") or {}
+        email = str(me.get("email", ""))
+        if not email:
+            return False, "o Autentique não reconheceu o token"
+        return True, f"conta {email} acessível"
+
+    def ping(self) -> tuple[bool, str]:  # pragma: no cover - I/O com o fornecedor
+        """Pergunta de quem é o token, sem criar documento nem cobrar nada.
+
+        O gancho existe em `integrations._probe_esign` desde a FDD 024, mas nenhum adaptador o
+        implementava — e o e-sign era a única integração configurada que dizia "sem sonda
+        disponível". A rodada 4 confirmou que a query `me` serve.
+        """
+        # `_http_raw` e não `_http`: este último é o helper do **Clicksign**, que leva o token na
+        # URL e por isso não manda header de autorização — usá-lo aqui rende um 401 com um token
+        # perfeitamente válido. Foi o que aconteceu na primeira versão desta sonda, e só apareceu
+        # porque ela foi rodada contra o fornecedor de verdade.
+        return self._parse_ping(
+            _http_raw(
+                settings.ESIGN_API_BASE or self.DEFAULT_BASE,
+                json.dumps({"query": "{ me { email } }"}).encode(),
+                {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {settings.ESIGN_API_TOKEN}",
+                },
+            )
+        )
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
         secret = settings.ESIGN_WEBHOOK_SECRET
@@ -327,9 +368,28 @@ def get_provider() -> Provider:
 # --- Saída (Biahflow → fornecedor) ------------------------------------------
 
 
+def has_provider() -> bool:
+    """Há fornecedor homologado, ou estamos no registro local do `NullProvider`?"""
+    return not isinstance(get_provider(), NullProvider)
+
+
 def send_for_signature(document: Document, signer_email: str) -> SignatureRef:
-    """Envia o documento para assinatura e devolve as referências do fornecedor."""
-    return get_provider().send(document, signer_email)
+    """Envia o documento para assinatura e devolve as referências do fornecedor.
+
+    Levanta `EsignProviderError` quando **havia um fornecedor** e ele não devolveu referência: sem
+    `provider_ref` a solicitação não existe do lado dele, e gravá-la aqui produziria uma assinatura
+    que ninguém assina, que o webhook nunca fecha (não há o que casar) e que o lembrete ainda
+    cobraria de uma pessoa de verdade — sem link, porque `sign_url` também vem vazio.
+
+    Sem fornecedor, referência vazia é **correta**: o `NullProvider` registra a intenção e o
+    `mark-signed` manual é o caminho previsto. A distinção é toda esta função.
+    """
+    ref = get_provider().send(document, signer_email)
+    if has_provider() and not ref.provider_ref:
+        raise EsignProviderError(
+            f"{settings.ESIGN_PROVIDER} não devolveu referência para {document.pk}"
+        )
+    return ref
 
 
 def _document_bytes(document: Document) -> bytes:

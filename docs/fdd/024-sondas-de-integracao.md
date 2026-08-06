@@ -217,9 +217,47 @@ público.
   terceira é inalcançável por qualquer verificação de ambiente. As três só apareceram porque alguém
   perguntou ao provedor.
 
+## Rodada 4 — assinatura eletrônica, homologada em 06/08/2026
+
+Última integração, e a única cuja ação principal alcança uma pessoa. Rodada com
+`ESIGN_DELIVERY=link`, que faz o Autentique **não** notificar ninguém e devolve o convite para o
+portal — ou seja, para o Mailpit. A API real foi exercitada de ponta a ponta sem sair da máquina.
+
+**O laço inteiro da ADR 0007 funciona**: pedido com `provider_ref`/`document_ref`/`sign_url` reais,
+convite, lembrete, webhook com HMAC fechando a assinatura **sozinho**, reentrega idempotente, e
+HMAC falso recusado com 401.
+
+**A sonda que faltava nasceu aqui.** O gancho existia desde este recorte — `_probe_esign` procura
+um `ping` no adaptador —, mas nenhum fornecedor o implementava, e o e-sign era a única integração
+configurada que respondia "sem sonda disponível". A query `me` do Autentique serve: valida o token,
+é só leitura, não cria documento. Das sete flags, sobram sem sonda apenas as que **não têm como**
+ter uma (`portal`, que é destino de webhook, e `tasksync`, sem credencial nesta instalação).
+
+**Dois achados:**
+
+- **A solicitação fantasma.** `_http_raw` engole a falha do fornecedor e devolve `None` — de
+  propósito. O degrau seguinte é que estava errado: `None` virava um `SignatureRef` vazio,
+  **indistinguível de sucesso**, e a view gravava a `SignatureRequest` e respondia **201**. Ficava
+  uma assinatura "pendente" que ninguém assinaria, que o webhook nunca poderia fechar (sem
+  `provider_ref` não há o que casar) e sobre a qual o lembrete ainda cobraria uma pessoa de
+  verdade, sem link. É a terceira encarnação do padrão das rodadas 1 e 3 e a **pior das três**: o
+  convite órfão devolvia 500, a reserva órfã avisava o dono, esta respondia 201 Created.
+- **A primeira versão da sonda deu 401 com um token válido**, porque usava o helper HTTP do
+  **Clicksign** — que leva o token na URL e não manda header de autorização. Só apareceu por rodar
+  contra o fornecedor real; contra um dublê, teria passado. É a tese desta FDD aplicada à própria
+  ferramenta que ela criou.
+
+## As quatro rodadas, em uma linha
+
+E-mail, IA, Google e assinatura foram homologadas — **e as quatro acharam defeito**. Três delas
+acharam a *mesma* classe: uma linha gravada afirmando um efeito externo que não aconteceu (convite,
+reserva, solicitação de assinatura). A regra que sobrou vale para a próxima integração que entrar:
+**se o registro local só faz sentido porque algo saiu daqui, ele não pode existir sem isso** — ou
+falha alto, ou degrada dizendo o que perdeu.
+
 ## Fora deste recorte
 
-**A rodada 4.** Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
+**O Clicksign**, que segue sem homologação — o adaptador existe, e agora também sem `ping`. Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
 três defeitos de calendário e a blindagem do upload no Drive continuam corrigidos **por análise,
 não por observação** — o teste prova a regra, só a credencial real prova a integração.
 

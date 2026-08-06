@@ -435,15 +435,72 @@ projeto e os arquivos), mais o cenário do banco — apagamento duro, pelo motiv
 limpeza reportou e o que a rodada tinha criado; listar a agenda e a raiz do Drive depois mostrou
 **zero** dos dois, mas o passo de conferir é que deu essa certeza.
 
-## 4. Assinatura eletrônica — pendente
+## 4. Assinatura eletrônica — homologada em 06/08/2026
 
-**Variáveis:** `ESIGN_ENABLED=true`, `ESIGN_PROVIDER` (`autentique` homologado na ADR 0007;
-`clicksign` **sem** homologação), `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, e
-**`ESIGN_SANDBOX=true`**.
+**Variáveis:** `ESIGN_ENABLED=true`, `ESIGN_PROVIDER` (`autentique`; o `clicksign` segue **sem**
+homologação), `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET` e **`ESIGN_SANDBOX=true`**.
 
-> **`request-signature` manda e-mail a um signatário de verdade** — é a única ação de todo este
-> runbook que sai da máquina e chega a uma pessoa. Use sandbox, um endereço **seu**, e nunca um
-> contato real de cliente.
+> **`request-signature` é a única ação de todo este runbook que sai da máquina e chega a uma
+> pessoa** — mas só quando `ESIGN_DELIVERY=email`, porque aí quem convida é o **fornecedor**. Os
+> e-mails do próprio portal caem no Mailpit e não escapam.
+>
+> **Rode com `ESIGN_DELIVERY=link`** (por `-e`, sem tocar no `.env`): o adaptador manda
+> `DELIVERY_METHOD_LINK`, o Autentique **não** notifica ninguém, e o convite passa a ser nosso —
+> ou seja, vai para o Mailpit. Exercita a API real de ponta a ponta sem alcançar pessoa alguma.
+> Foi assim que esta rodada correu, com signatário `@exemplo.test`.
 
-Exercitar: pedido de assinatura, lembrete de pendentes, e o webhook de status com HMAC fechando o
-artefato sozinho.
+### Sondar
+
+```bash
+docker compose exec api uv run python manage.py check_integrations --all
+# OK  Assinatura eletrônica   conta <e-mail da conta> acessível
+```
+
+A sonda **nasceu nesta rodada**. O gancho existia desde a FDD 024
+(`integrations._probe_esign` procura um `ping` no adaptador), mas nenhum fornecedor o
+implementava — e o e-sign era a única integração configurada que respondia "sem sonda disponível".
+A query `me` do Autentique serve: valida o token, é só leitura e não cria documento.
+
+### O que foi observado
+
+| Superfície | Gatilho | Resultado |
+| --- | --- | --- |
+| Sonda | `check_integrations` | **OK** — a conta do token |
+| Pedido de assinatura | `POST /documents/<id>/request-signature/` | **201** com `provider_ref`, `document_ref` e `sign_url` reais |
+| Convite ao signatário | entrega por link | e-mail no Mailpit |
+| Lembrete de pendentes | `remind-signature` | **1** lembrete |
+| Webhook com HMAC válido | `POST /esign/webhook/` | **200**, assinatura fecha **sozinha** (`signed`) |
+| Idempotência | reentregar o mesmo evento | **200**, status não muda |
+| Webhook com HMAC errado | assinatura falsa | **401** — recusado |
+| Fornecedor recusando | token inválido | **502**, e **nenhuma** solicitação gravada |
+
+Com isso o laço inteiro da ADR 0007 está exercitado contra o fornecedor real: pedido → convite →
+lembrete → webhook assinado → artefato de contrato fechado.
+
+### Dois achados
+
+**1. A solicitação fantasma.** `_http_raw` engole a falha do fornecedor e devolve `None` — de
+propósito, o portal não pode cair porque o Autentique caiu. O problema era o degrau seguinte:
+`None` virava um `SignatureRef` vazio, **indistinguível de sucesso**, e a view gravava a
+`SignatureRequest` e respondia **201**. Sobrava uma assinatura "pendente" que ninguém assinaria,
+que o webhook **nunca** poderia fechar (sem `provider_ref` não há o que casar), e sobre a qual o
+lembrete ainda cobraria uma pessoa de verdade — sem link, porque `sign_url` também vinha vazio.
+É a terceira encarnação do padrão das rodadas 1 e 3, e a pior: o convite órfão ao menos devolvia
+500, a reserva órfã avisava o dono, esta respondia **201 Created**. Agora é **502** e nada é
+gravado. Sem fornecedor configurado nada muda: o `NullProvider` registra a intenção, e o
+`mark-signed` manual segue sendo o caminho previsto.
+
+**2. A primeira versão da sonda deu 401 com um token válido.** Ela usava `_http`, que é o helper
+do **Clicksign** — ele leva o token na URL e por isso não manda header de autorização. Só apareceu
+porque a sonda foi rodada contra o fornecedor de verdade; contra um dublê, teria passado.
+
+### Limpar
+
+```bash
+docker compose exec api uv run python manage.py shell -c \
+  "from apps.core.models import AppSetting; AppSetting.objects.filter(key='esign').delete()"
+curl -s -X DELETE localhost:19025/api/v1/messages
+```
+
+O documento criado no sandbox **também sai**: a mutation `deleteDocument(id:)` do Autentique
+aceita o `document_ref` guardado na `SignatureRequest`. Sandbox não é motivo para deixar lixo.

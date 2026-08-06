@@ -732,3 +732,111 @@ def test_kickoff_sem_pasta_no_drive_deixa_rastro(
         kickoff.finalize(projeto)  # não levanta: o kickoff segue
 
     assert any("drive" in r.message.lower() or "pasta" in r.message.lower() for r in caplog.records)
+
+
+# --- assinatura: a solicitação é o pedido ao fornecedor (rodada 4) ------------------------------
+#
+# Terceira encarnação do padrão das rodadas 1 e 3 — e a pior das três, porque aqui o silêncio é
+# **por desenho**: `_http_raw` engole a falha do fornecedor e devolve `None`, e `_parse_created`
+# transforma `None` num `SignatureRef` vazio, indistinguível de sucesso. O convite órfão devolvia
+# 500 (o admin via que falhou); a reserva órfã avisava o dono. Esta devolvia **201 Created**.
+
+
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique",
+                   ESIGN_API_TOKEN="tok", ESIGN_WEBHOOK_SECRET="seg")
+def test_fornecedor_fora_do_ar_nao_deixa_solicitacao_orfa(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Com o fornecedor recusando, o portal gravava uma `SignatureRequest` sem referência nenhuma
+    e respondia **201**.
+
+    A linha ficava no detalhe do documento como "pendente", ninguém jamais assinaria, e o webhook
+    **nunca** poderia fechá-la — não há `provider_ref` para casar o evento. Pior: `remind_pending`
+    passaria a mandar "consta pendente a sua assinatura" a uma pessoa de verdade, sobre um
+    documento que nunca lhe foi enviado, e sem link, porque `sign_url` também está vazio.
+
+    A solicitação de assinatura **é** o pedido ao fornecedor, como o convite é o e-mail.
+    """
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.core import esign
+    from apps.core.models import Document, SignatureRequest, User
+    from apps.core.tests.factories import ClientFactory, UserFactory
+
+    # É o que `_http_raw` devolve quando a rede, o 401 ou o timeout acontecem.
+    monkeypatch.setattr(esign.AutentiqueProvider, "_post", lambda self, body, ct: None)
+    monkeypatch.setattr(esign, "_document_bytes", lambda doc: b"conteudo")
+
+    admin = UserFactory(role=User.Role.ADMIN)
+    documento = Document.objects.create(
+        client=ClientFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
+    )
+    client = APIClient()
+    client.force_authenticate(admin)
+    antes = SignatureRequest.objects.count()
+
+    resposta = client.post(
+        reverse("document-request-signature", args=[documento.id]),
+        {"signer_email": "signatario@exemplo.test"}, format="json",
+    )
+
+    assert resposta.status_code == 502
+    assert SignatureRequest.objects.count() == antes
+
+
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="", ESIGN_API_TOKEN="", ESIGN_WEBHOOK_SECRET="")
+def test_sem_provedor_a_solicitacao_local_continua_valendo() -> None:
+    """O contraponto que impede a correção de virar regressão.
+
+    Sem fornecedor configurado, o `NullProvider` "registra a intenção e não promete nada" — e o
+    `mark-signed` manual é o único caminho que funciona assim (roadmap). Uma referência vazia aqui
+    é **correta**, não falha, e a solicitação tem de ser criada.
+    """
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.core.models import Document, SignatureRequest, User
+    from apps.core.tests.factories import ClientFactory, UserFactory
+
+    admin = UserFactory(role=User.Role.ADMIN)
+    documento = Document.objects.create(
+        client=ClientFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
+    )
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    resposta = client.post(
+        reverse("document-request-signature", args=[documento.id]),
+        {"signer_email": "signatario@exemplo.test"}, format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert SignatureRequest.objects.filter(document=documento).count() == 1
+
+
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique",
+                   ESIGN_API_TOKEN="tok", ESIGN_WEBHOOK_SECRET="seg")
+def test_documento_vazio_nao_vira_solicitacao_fantasma(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O outro caminho que produzia referência vazia: documento sem conteúdo. O `send` loga um
+    aviso e devolve `SignatureRef()` — que era gravado como se tivesse dado certo."""
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.core import esign
+    from apps.core.models import Document, SignatureRequest, User
+    from apps.core.tests.factories import ClientFactory, UserFactory
+
+    monkeypatch.setattr(esign, "_document_bytes", lambda doc: b"")
+    admin = UserFactory(role=User.Role.ADMIN)
+    documento = Document.objects.create(
+        client=ClientFactory(owner=admin), original_name="vazio.pdf", uploaded_by=admin,
+    )
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    resposta = client.post(
+        reverse("document-request-signature", args=[documento.id]),
+        {"signer_email": "signatario@exemplo.test"}, format="json",
+    )
+
+    assert resposta.status_code == 502
+    assert not SignatureRequest.objects.filter(document=documento).exists()

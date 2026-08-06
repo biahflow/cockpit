@@ -56,15 +56,22 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
   Confirmou as três correções que estavam só na análise — inclusive o `end.date` exclusivo, que
   fazia o "Adicionar ao calendário" falhar em **100%** das tentativas — e o download voltando byte
   a byte. O `forbiddenForServiceAccounts` que a FDD 024 previa **não aconteceu**: a troca de auth
-  resolveu de carona o defeito que se esperava contornar. Falta a assinatura.
+  resolveu de carona o defeito que se esperava contornar.
+- **Homologação, rodada 4 — assinatura** (FDD 024, ADR 0007): fecha o ciclo. O laço inteiro
+  confirmado contra o Autentique — pedido, convite, lembrete, **webhook com HMAC fechando a
+  assinatura sozinho**, idempotência e HMAC falso recusado. Nasceu a **sonda do e-sign**, que era a
+  única integração configurada sem uma. E caiu a terceira "linha órfã" da série: uma
+  `SignatureRequest` gravada com **201** sem nada ter sido pedido ao fornecedor — pendente para
+  sempre, impossível de fechar pelo webhook, e ainda cobrada por lembrete a uma pessoa de verdade.
+  **As quatro rodadas acharam defeito**, e três acharam a mesma classe.
 
 > **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
 > de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa
 > instalação nova, e quase todo código que fala com provedor externo está atrás de
-> `# pragma: no cover`. Três integrações já têm homologação registrada — e-mail, IA e Google
-> (FDD 024) —, mais o Autentique (ADR 0007). O que está ligado por padrão funciona e é testado;
-> **falta a assinatura**. As três rodadas feitas acharam defeito nas três vezes, e a do Google
-> achou antes mesmo de a credencial funcionar.
+> `# pragma: no cover`. **As quatro rodadas de homologação foram feitas** — e-mail, IA, Google e
+> assinatura (FDD 024) — e as quatro acharam defeito. O que sobra apagado numa instalação nova é
+> configuração, não código não exercitado: as flags nascem `false` e cada integração pede a sua
+> credencial. O Clicksign segue sem homologação.
 
 ## Prontidão para produção — adiada deliberadamente
 
