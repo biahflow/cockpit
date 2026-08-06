@@ -17,7 +17,9 @@ from .models import (
     Opportunity,
     Pendencia,
     Project,
+    ProjectDeliverable,
     ProjectMember,
+    ProjectPhase,
     Task,
     User,
 )
@@ -75,6 +77,33 @@ def _emit_meeting(sender: type[Meeting], instance: Meeting, **kwargs: Any) -> No
 @receiver(post_save, sender=Pendencia)
 def _emit_pendencia(sender: type[Pendencia], instance: Pendencia, **kwargs: Any) -> None:
     portal.emit("updated", "pendencia", instance.project_id)
+
+
+# A jornada é justamente o que a barra "Você está aqui" do portal mostra, e era a única parte do
+# projeto que mudava em silêncio: avançar fase e marcar entregável não salvam o `Project`, então
+# nenhum dos emissores acima disparava e a fase nova só chegava ao cliente de carona no próximo
+# salvamento de outro objeto.
+#
+# O `created` não é zelo excessivo: `journey.materialize_journey` cria as fases e os entregáveis
+# num laço de `.objects.create()`, e sem o guarda **criar um projeto** dispararia dezenas de
+# webhooks — cada um provocando um snapshot inteiro do lado do portal — todos redundantes com o
+# `_emit_project` do mesmo commit. Criação já está coberta; o que faltava era a mudança de estado.
+@receiver(post_save, sender=ProjectPhase)
+def _emit_project_phase(
+    sender: type[ProjectPhase], instance: ProjectPhase, created: bool, **kwargs: Any
+) -> None:
+    if created:
+        return
+    portal.emit("updated", "project_phase", instance.project_id)
+
+
+@receiver(post_save, sender=ProjectDeliverable)
+def _emit_project_deliverable(
+    sender: type[ProjectDeliverable], instance: ProjectDeliverable, created: bool, **kwargs: Any
+) -> None:
+    if created:
+        return
+    portal.emit("updated", "project_deliverable", instance.project_phase.project_id)
 
 
 @receiver(post_save, sender=Lead)

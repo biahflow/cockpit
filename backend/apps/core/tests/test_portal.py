@@ -209,6 +209,54 @@ def test_saving_meeting_and_pendencia_emit_webhook(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.django_db
+def test_advancing_the_journey_emits_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A jornada é o que a barra "Você está aqui" do portal mostra — e mudava em silêncio.
+
+    Avançar fase não salva o `Project`, então nenhum dos outros emissores cobria este caminho: a
+    fase nova só chegava ao cliente de carona no próximo salvamento de outro objeto.
+    """
+    project = ProjectFactory()
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    journey.advance_phase(project)
+
+    assert ("updated", "project_phase", project.pk) in calls
+
+
+@pytest.mark.django_db
+def test_marking_a_deliverable_emits_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
+    project = ProjectFactory()
+    deliverable = ProjectDeliverable.objects.filter(project_phase__project=project).first()
+    assert deliverable is not None
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    deliverable.status = ProjectDeliverable.Status.DELIVERED
+    deliverable.save(update_fields=["status", "updated_at"])
+
+    # O entregável chega ao projeto pela fase; se o caminho quebrar, o webhook sai sem projeto.
+    assert ("updated", "project_deliverable", project.pk) in calls
+
+
+@pytest.mark.django_db
+def test_creating_a_project_does_not_flood_the_portal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Um projeto novo vale **um** aviso, não um por fase e entregável materializados.
+
+    `materialize_journey` cria as fases e os entregáveis num laço; emitir em cada `create` faria
+    o portal buscar o snapshot inteiro dezenas de vezes pelo mesmo commit. Este teste é o que
+    protege o guarda `created` de ser "simplificado" depois.
+    """
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    project = ProjectFactory()
+
+    assert ProjectPhase.objects.filter(project=project).count() > 1  # houve materialização
+    assert [event for _, event, _ in calls] == ["project"]
+
+
+@pytest.mark.django_db
 def test_snapshot_endpoint_requires_valid_token() -> None:
     project = ProjectFactory()
     client = APIClient()
