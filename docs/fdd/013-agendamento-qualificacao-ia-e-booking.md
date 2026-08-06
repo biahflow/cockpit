@@ -23,6 +23,10 @@ apenas o `booking_token` efêmero.
   tolerante (cercas de código/texto ao redor); grava em `Lead.ai_fit/ai_score/ai_summary/
   ai_recommended_action/qualified_at`; auditado em `AiInteraction(user=None, lead=…,
   feature="lead_qualification")`. `ai` desligado → sem qualificação e `qualified=False`.
+  **O mesmo vale quando a OpenAI falha**: a guarda que a FDD 024 pôs aqui foi finalmente
+  observada na rodada 2, com o endpoint apontado para uma porta morta — o POST público
+  responde 201, o lead fica gravado e cai na triagem manual, em vez do 500 que o visitante
+  via para um cadastro que na verdade funcionou.
 - **Corte**: `settings.BOOKING_MIN_FIT` (default `medium` → high+medium qualificam). Só quem passa
   recebe `booking_token`.
 - **Disponibilidade** atrás da flag `calendar`: `booking.available_slots` = grade de horário

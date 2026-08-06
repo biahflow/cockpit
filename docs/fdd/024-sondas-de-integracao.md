@@ -69,7 +69,7 @@ ser apontada:
 
 | Variável | Default | O que faz |
 | --- | --- | --- |
-| `AI_TIMEOUT_SECONDS` | `30` | teto da chamada à OpenAI; protege o formulário público |
+| `AI_TIMEOUT_SECONDS` | `30` | teto da chamada à OpenAI; protege o formulário público. É o teto **de verdade** desde a rodada 2: o cliente vai com `max_retries=0`, senão o SDK triplicaria o tempo por baixo |
 
 ## Critérios de aceite
 
@@ -104,12 +104,58 @@ Primeira integração exercitada contra infra real. Procedimento e evidência em
 - **Comportamento documentado**: convite e kickoff **ignoram a flag `email`** (são transacionais).
   A FDD 010 dizia "desligada → nada muda (só in-app)", o que se lia como "nenhum e-mail sai".
 
+## Rodada 2 — IA (OpenAI), homologada em 06/08/2026
+
+Segunda integração exercitada contra o provedor real, e a primeira que custa dinheiro: **7 115
+tokens em 15 chamadas** de `gpt-4o-mini`. Procedimento e evidência no runbook. As 12 superfícies de
+IA responderam 200 e os quatro artefatos nasceram em `draft` com conteúdo (FDD 016).
+
+**O que a sonda provou.** `models.retrieve` distingue, de graça, "a chave funciona" de "a chave
+funciona mas esta conta não usa este modelo": com `AI_MODEL` inexistente e credencial boa, a sonda
+**reprova** com a mensagem do provedor. É a tese desta FDD demonstrada em vez de argumentada.
+
+**O que saiu de "corrigido por análise" para "corrigido e visto".** Os dois itens de blindagem que
+faltavam: `qualify_lead` com o fornecedor fora do ar **não derruba** o POST público (lead gravado,
+triagem manual), e o digest **entrega a todos** em texto estruturado em vez de morrer no primeiro.
+
+**Antivazamento confere contra o modelo real.** A transcrição semeada omitia o orçamento de
+propósito; Discovery, Assessment e o chat não o inventaram, e perguntado direto o chat recusou.
+**E `_parse` aguenta**: o AI Score voltou como JSON válido de primeira, sem precisar de
+`response_format`.
+
+**Quatro defeitos novos, três corrigidos na rodada:**
+
+- **O assistente do projeto respondia "Não sei." a pergunta que o contexto respondia** — três
+  tokens de resposta, enquanto o `summary`, com o mesmo contexto, acertava. Duas causas: o contexto
+  **não dizia que dia é hoje** (então "está atrasado?" era indecidível) e o texto de sistema
+  proibia raciocinar ("use somente o contexto" virou "só repita o que está escrito"). Corrigidas e
+  reconferidas: a resposta certa aparece, e o antivazamento não afrouxou.
+- **`AI_TIMEOUT_SECONDS` não era o teto que prometia.** Com o teto em 1 s a chamada levou **5,5 s**
+  — o SDK tenta 3 vezes por padrão, então o teto real era `timeout × 3` mais backoff. Com o default
+  de 30 s, mais de um minuto e meio segurando um worker por causa de um formulário público. Agora
+  `max_retries=0`; a retentativa mudou de dono, porque depois desta rodada todo ponto de chamada ou
+  degrada ou devolve 502 dizendo que vale repetir.
+- **O digest cobrava a cota de IA de quem nem pediu**, auditando com `user=user` — e sem consultar
+  o limite, então era isento dele e cobrava dele ao mesmo tempo.
+- **O agente de Entrega não sabe o que está atrasado** — e responde isso honestamente, porque
+  `build_delivery_context` manda um resumo de resumos (`risco médio — Itens atrasados`) sem os
+  itens. **Não corrigido**: é um dos agregadores recortados à mão pela ADR 0010, e ampliá-lo pede
+  revisar o escopo com cuidado próprio.
+
 ## Fora deste recorte
 
-**As rodadas 2 a 4.** IA, Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
-três defeitos de calendário e os dois de blindagem (Drive, `qualify_lead`) continuam corrigidos
-**por análise, não por observação** — o teste prova a regra, só a credencial real prova a
-integração.
+**As rodadas 3 e 4.** Google e assinatura seguem pendentes, com o roteiro pronto no runbook. Os
+três defeitos de calendário e a blindagem do upload no Drive continuam corrigidos **por análise,
+não por observação** — o teste prova a regra, só a credencial real prova a integração.
+
+**O contexto do agente de Entrega.** O achado 4 da rodada 2: ele descreve risco em vez de listar
+o que está atrasado, então a pergunta mais óbvia da área não tem resposta. Ampliar significa mexer
+num agregador que a ADR 0010 recorta à mão, com teste de escopo próprio — recorte separado.
+
+**Teto de tokens por chamada.** `AI_DAILY_LIMIT` conta chamadas, não custo, e nada limita o
+tamanho de uma resposta. A rodada 2 mediu a ordem de grandeza real (média de ~225 tokens de saída,
+máximo 854 no contrato) e não achou motivo urgente; um teto global truncaria contrato no meio de
+uma cláusula, então, se entrar, é por feature.
 
 **Rodar `check_integrations` pelo agendador.** O gancho é natural (o `scheduler` já faz isso com o
 `backup_status`), mas fica para depois de as sondas provarem que não dão falso positivo.

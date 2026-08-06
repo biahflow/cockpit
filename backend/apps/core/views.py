@@ -125,6 +125,25 @@ class EmailUndeliverable(APIException):
     default_code = "email_undeliverable"
 
 
+class AiProviderUnavailable(APIException):
+    """A OpenAI recusou, expirou ou não respondeu.
+
+    Irmã da `EmailUndeliverable`, e 502 pelo mesmo motivo que o upload no Drive é 502 desde a FDD
+    024: o defeito é do fornecedor, e quem lê precisa saber que **vale repetir**. Antes era 500 —
+    erro nosso para um problema que não é nosso — nas nove actions que passam pelo `_ai_run` e no
+    AI Score, que tem guarda própria.
+
+    Classe própria em vez de uma genérica porque a mensagem é o produto: o texto que a pessoa lê na
+    tela ao pedir uma proposta não pode falar de SMTP.
+    """
+
+    status_code = 502
+    default_detail = (
+        "O serviço de IA não respondeu. Nada foi cobrado nem gravado — tente de novo em instantes."
+    )
+    default_code = "ai_provider_unavailable"
+
+
 class ArchiveModelViewSet(viewsets.ModelViewSet):
     permission_classes = [RolePermission]
 
@@ -236,7 +255,15 @@ def _ai_run(  # type: ignore[no-untyped-def]
         return Response({"detail": "Recurso de IA está desativado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     if not ai.within_daily_limit(request.user):
         return Response({"detail": "Limite diário de uso de IA atingido."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-    text, usage = ai.complete(system, user_prompt)
+    # Este helper serve **nove** actions, e a chamada mora atrás de `# pragma: no cover` — por isso
+    # a falta de guarda passou batida: 429 de rate limit, timeout de 30 s, chave revogada ou modelo
+    # sem acesso na conta viravam 500 do Django. Nada é gravado antes da resposta chegar, então a
+    # falha não consome a cota diária de quem tentou nem deixa artefato pela metade.
+    try:
+        text, usage = ai.complete(system, user_prompt)
+    except ai.AiProviderError as exc:
+        logger.exception("chamada de IA (%s) falhou", feature)
+        raise AiProviderUnavailable() from exc
     interaction = AiInteraction.objects.create(
         user=request.user, feature=feature, project=project, opportunity=opportunity,
         prompt_tokens=usage.get("prompt_tokens", 0), completion_tokens=usage.get("completion_tokens", 0),
@@ -540,7 +567,19 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         question = str(request.data.get("question", "")).strip()
         if not question:
             return Response({"detail": "Envie uma pergunta."}, status=400)
-        system = "Você é o assistente deste projeto. Responda em português usando somente o contexto fornecido; se a informação não estiver ali, diga que não sabe."
+        # "Use somente o contexto" não pode virar "só repita o que está escrito". Observado na
+        # rodada 2 (FDD 024): perguntado sobre o maior risco de um projeto com uma tarefa vencida
+        # há três dias, o assistente respondia **"Não sei."** em três tokens — enquanto o `summary`,
+        # com o mesmo contexto e outro texto de sistema, respondia bem. O antivazamento continua
+        # inteiro (nada de conhecimento externo); o que muda é permitir **raciocinar sobre** o
+        # material, que é o que distingue um assistente de uma consulta ao banco.
+        system = (
+            "Você é o assistente deste projeto. Responda em português. Use exclusivamente o "
+            "contexto fornecido como fonte de fatos — nunca conhecimento externo nem suposição "
+            "sobre o que não está ali —, mas você **pode e deve raciocinar** sobre esse material: "
+            "comparar prazos com a data de hoje, apontar o que está atrasado, inferir riscos e "
+            "priorizar. Só diga que não sabe quando o contexto realmente não permitir concluir."
+        )
         prompt = f"Contexto do projeto:\n{ai.build_project_context(project)}\n\nPergunta: {question}"
         return _ai_run(request, "project_chat", system, prompt, project=project)
 
@@ -881,7 +920,15 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
             return Response({"detail": "Recurso de IA está desativado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         if not ai.within_daily_limit(request.user):
             return Response({"detail": "Limite diário de uso de IA atingido."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-        return Response(ai_score.score_meeting(meeting, user=request.user))
+        # Guarda própria porque esta action não passa pelo `_ai_run` — ela persiste no projeto em
+        # vez de só devolver texto, então repete as guardas à mão e a correção de lá não a alcança.
+        # Dá para envolver a chamada inteira porque o tipo é estreito: um erro de banco no `save()`
+        # que vem depois continua sendo 500, e não vira "a IA está fora do ar".
+        try:
+            return Response(ai_score.score_meeting(meeting, user=request.user))
+        except ai.AiProviderError as exc:
+            logger.exception("AI Score da reunião %s falhou", meeting.pk)
+            raise AiProviderUnavailable() from exc
 
 
 class PendenciaViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):

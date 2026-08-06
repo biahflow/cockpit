@@ -37,6 +37,10 @@ o índice aparece no snapshot do projeto e na visão do cliente.
 
 ## Regressão crítica
 
-Reunião sem transcrição retorna 400; IA desligada retorna 503; limite diário retorna 429; a
+Reunião sem transcrição retorna 400; IA desligada retorna 503; limite diário retorna 429; e
+**fornecedor fora do ar retorna 502** (rodada 2 da FDD 024). Os três dizem coisas diferentes de
+propósito: 503 é "um admin desligou", 429 é "a sua cota acabou", 502 é "a OpenAI caiu". Como a
+chamada ao modelo é a primeira coisa que `score_meeting` faz, o 502 deixa o projeto **sem carimbo**
+(`ai_scored_at` intacto) — não existe AI Score pela metade. A
 interação é registrada com feature `ai_score` e vinculada ao projeto. O `ai_score` **não** cruza
 ao snapshot enquanto `ai_score_reviewed` for `False`.

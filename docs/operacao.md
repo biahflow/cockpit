@@ -62,6 +62,16 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 - `docker compose up -d --build api` (rebuild instala o `openai`).
 - **Testar:** no detalhe do projeto aparecem o **Assistente** e "Sugerir próximos passos";
   no detalhe da oportunidade, "Resumir" e "Gerar proposta". Limite: `AI_DAILY_LIMIT` (50/dia/usuário).
+- **Conferir antes de ligar:** `manage.py check_integrations --all` pergunta à OpenAI se a chave
+  funciona **e** se a conta alcança o modelo — sem gerar token. Chave boa com `AI_MODEL` errado
+  reprova aqui, e é o erro mais comum.
+- **O custo que não parte de ninguém:** o digest diário chama o modelo **uma vez por usuário
+  ativo com itens, todo dia**, e é o único gasto de IA não iniciado por uma pessoa — ele fica
+  de fora do `AI_DAILY_LIMIT`, que existe para limitar gente. Se a IA cair, o digest sai em
+  texto estruturado em vez de não sair.
+- **Teto por chamada:** `AI_TIMEOUT_SECONDS` (30 s) é o teto de verdade — o cliente vai sem
+  retentativa, senão o SDK triplicaria o tempo por baixo. Ver a rodada 2 em
+  `docs/runbooks/homologacao-de-integracoes.md`.
 
 ### 3. Documentos no Google Drive
 - Criar service account (Drive API) + **Shared Drive** com a conta como Gerente de conteúdo.
