@@ -59,6 +59,7 @@ test("arquiva um documento", async () => {
   await screen.findByText("contrato.pdf");
 
   await user.click(screen.getByLabelText("Arquivar contrato.pdf"));
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/documents/1/", expect.objectContaining({ method: "DELETE" })));
 });
 

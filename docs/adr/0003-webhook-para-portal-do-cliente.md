@@ -27,3 +27,14 @@ portal. As mudanças são **aditivas** e preservam o contrato `/api/v1/`.
 O portal recebe mudanças em quase tempo real sem duplicar digitação; o Biahflow continua
 como sistema de registro. É preciso configurar `PORTAL_WEBHOOK_URL` e `PORTAL_WEBHOOK_SECRET`
 e proteger o token de leitura. Ver `portal_cliente/docs/adr/0006`.
+
+
+## Emenda (ADR 0018, 06/08/2026)
+
+A flag `portal` deixou de ser controlada **apenas** por ambiente. Ela continua nascendo do par
+`PORTAL_WEBHOOK_URL` + `PORTAL_WEBHOOK_SECRET`, mas passou a ser alternável em runtime na tela
+Configurações, e `portal.emit()` consulta `flags.is_enabled("portal")` antes de agendar a entrega.
+
+O motivo é operacional: pausar a emissão durante um incidente do portal exigia deploy. A entrega
+segue best-effort e sem retentativa — desligar e religar **não** reenvia o que se perdeu no meio, e
+a recuperação continua sendo o backfill manual descrito acima.

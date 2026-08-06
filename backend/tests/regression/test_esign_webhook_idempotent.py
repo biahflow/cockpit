@@ -19,7 +19,8 @@ SECRET = "webhook-secret"
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_duplicate_delivery_keeps_signed_at_and_single_notification() -> None:
     user = UserFactory()
     document = Document.objects.create(

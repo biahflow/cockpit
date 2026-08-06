@@ -5,8 +5,10 @@ import { getConfig, setFlag, syncCalendar } from "../api";
 import type { IntegrationFlag } from "../types";
 
 function hint(flag: IntegrationFlag): string {
+  // Nomear a variável que falta é o que resolve o problema de quem lê: "faltam credenciais" mandava
+  // a pessoa procurar no código quais eram.
+  if (!flag.configured) return `Falta no ambiente: ${flag.missing.join(", ")}.`;
   if (!flag.toggleable) return "Controlada por variáveis de ambiente.";
-  if (!flag.configured) return "Faltam credenciais no ambiente para ligar.";
   return flag.enabled ? "Ativa." : "Desligada.";
 }
 

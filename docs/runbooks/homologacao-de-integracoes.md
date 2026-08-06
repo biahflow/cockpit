@@ -40,6 +40,9 @@ vence o `env_file`. Portanto tudo roda via `docker compose exec api`; da sua má
 
 ### Ligar
 
+Desde a ADR 0018 esta flag **já nasce ligada** — o passo abaixo só é necessário se alguém a desligou
+(pela tela ou com `EMAIL_NOTIFICATIONS_ENABLED=false`):
+
 ```bash
 docker compose exec api uv run python manage.py shell -c \
   "from apps.core.models import AppSetting; AppSetting.objects.update_or_create(key='email', defaults={'enabled': True})"

@@ -10,8 +10,11 @@ por IA** resume, para cada usuário, o que está atrasado e a vencer.
 ## Regras
 
 - **Flag `email`** ("Notificações por e-mail e digest"): default do ambiente
-  (`EMAIL_NOTIFICATIONS_ENABLED`) e alternável em runtime na página Configurações. Como o
-  SMTP já vem configurado, não exige credencial extra para ligar.
+  (`EMAIL_NOTIFICATIONS_ENABLED`, **`true` desde a ADR 0018**) e alternável em runtime na página
+  Configurações. É a única das sete flags sem `requires`: como o SMTP já tem default, não há
+  credencial a cobrar — e por isso ela foi a candidata natural a nascer ligada. Ponha `false` para
+  silenciar. Em produção isso torna o SMTP real um requisito de deploy, não um opcional: o default
+  `localhost:1025` é o Mailpit do compose e, fora do dev, é lugar nenhum.
 
   **Desligada, o que para é a notificação — não todo o e-mail.** Seguem saindo o **convite**
   (`InvitationView`) e o **kickoff** (`kickoff._send_kickoff_email`), porque são transacionais: um

@@ -22,7 +22,7 @@ def _post_agent(client: APIClient, key: str) -> object:
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_delivery_uses_entrega_agent_and_audits(fake_ai: None) -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     ProjectFactory()
@@ -36,7 +36,7 @@ def test_delivery_uses_entrega_agent_and_audits(fake_ai: None) -> None:
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_rbac_per_agent(fake_ai: None) -> None:
     sales = UserFactory(role=User.Role.SALES)
     client = APIClient()
@@ -60,7 +60,7 @@ def test_agent_503_when_ai_disabled() -> None:
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_agent_invalid_key_404(fake_ai: None) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     client = APIClient()
@@ -69,7 +69,7 @@ def test_agent_invalid_key_404(fake_ai: None) -> None:
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_feedback_sets_rating_and_metrics(fake_ai: None) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     client = APIClient()
@@ -85,7 +85,7 @@ def test_feedback_sets_rating_and_metrics(fake_ai: None) -> None:
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_feedback_only_by_owner(fake_ai: None) -> None:
     owner = UserFactory(role=User.Role.ADMIN)
     intruder = UserFactory(role=User.Role.ADMIN)

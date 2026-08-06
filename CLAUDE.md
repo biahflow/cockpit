@@ -65,7 +65,13 @@ Key cross-cutting patterns to preserve:
 - **Soft delete.** Most business models extend `TimestampedModel` and are archived via
   `archive()` (sets `archived_at`), never hard-deleted. `ArchiveModelViewSet`
   (`views.py`) filters `archived_at__isnull=True` in `get_queryset` and overrides
-  `perform_destroy` to archive. New business resources should follow this.
+  `perform_destroy` to archive. New business resources should follow this. It also exposes
+  `?archived=1` and a `POST /unarchive/` action — that action resolves the object from the **raw**
+  queryset, since `get_object()` would filter out exactly what is being restored. Archiving does
+  **not** cascade: if a parent's children are listed anywhere on their own, override
+  `perform_destroy` to refuse with `ArchiveConflict` (409) or archive them in the same transaction,
+  or you leave orphans pointing at a hidden row. UI copy says "Arquivar"; reserve "Excluir" for the
+  two resources that really hard-delete (pipeline stage, journey phase). See FDD 025.
 - **Authorization is two-layered.** `RolePermission` (`permissions.py`) enforces a
   coarse role policy keyed off each viewset's `resource` string attribute
   (e.g. `resource = "client"`), plus per-object `has_object_permission`, which

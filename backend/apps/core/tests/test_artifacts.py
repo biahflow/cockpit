@@ -169,7 +169,7 @@ def test_anonymous_cannot_reach_artifacts():
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_generating_a_proposal_persists_a_draft_artifact(monkeypatch):
     _mock_ai(monkeypatch, "Proposta em três frentes.")
     opportunity = OpportunityFactory()
@@ -194,7 +194,7 @@ def test_generating_a_proposal_persists_a_draft_artifact(monkeypatch):
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_generating_a_contract_persists_a_draft_artifact(monkeypatch):
     _mock_ai(monkeypatch)
     opportunity = OpportunityFactory()
@@ -208,7 +208,7 @@ def test_generating_a_contract_persists_a_draft_artifact(monkeypatch):
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 @pytest.mark.parametrize(("action", "kind"), [("discovery", "discovery"), ("assessment", "assessment")])
 def test_meeting_analysis_survives_the_page(monkeypatch, action, kind):
     _mock_ai(monkeypatch, "Diagnóstico da transcrição.")

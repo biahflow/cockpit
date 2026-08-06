@@ -30,14 +30,17 @@ test("lista e cria serviços", async () => {
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/services/", expect.objectContaining({ method: "POST" })));
 });
 
-test("edita, salva e remove um serviço avulso", async () => {
+test("edita, salva e arquiva um serviço avulso", async () => {
   const user = userEvent.setup();
   render(<ServicesPage />);
   await screen.findByDisplayValue("Consultoria");
   await user.click(screen.getByLabelText("Ativo"));
   await user.click(screen.getAllByRole("button", { name: "Salvar" })[2]);
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/services/1/", expect.objectContaining({ method: "PATCH" })));
-  await user.click(screen.getByLabelText("Excluir serviço Consultoria"));
+  await user.click(screen.getByLabelText("Arquivar serviço Consultoria"));
+  // O clique abre a confirmação; o DELETE só sai depois do segundo passo.
+  expect(mocks.api).not.toHaveBeenCalledWith("/services/1/", expect.objectContaining({ method: "DELETE" }));
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/services/1/", expect.objectContaining({ method: "DELETE" })));
 });
 

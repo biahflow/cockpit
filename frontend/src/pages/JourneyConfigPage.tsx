@@ -2,6 +2,7 @@ import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
+import { ConfirmDialog } from "../components/Modal";
 import type { JourneyPhaseTemplate } from "../types";
 
 export function JourneyConfigPage() {
@@ -9,6 +10,8 @@ export function JourneyConfigPage() {
   const [phaseDraft, setPhaseDraft] = useState({ name: "", description: "", position: "" });
   const [deliverableDraft, setDeliverableDraft] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
+  const [removingPhase, setRemovingPhase] = useState<JourneyPhaseTemplate | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
   const load = useCallback(() => api<JourneyPhaseTemplate[]>("/journey-phases/").then(setPhases).catch((cause: Error) => setError(cause.message)), []);
   useEffect(() => { void load(); }, [load]);
@@ -21,10 +24,12 @@ export function JourneyConfigPage() {
     try { await api(`/journey-phases/${phase.id}/`, { method: "PATCH", body: JSON.stringify({ name: phase.name, description: phase.description, position: Number(phase.position) }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
-  async function removePhase(id: number) {
-    setError("");
-    try { await api(`/journey-phases/${id}/`, { method: "DELETE" }); await load(); }
-    catch (cause) { setError((cause as Error).message); }
+  async function removePhase() {
+    if (!removingPhase) return;
+    setError(""); setRemoveBusy(true);
+    try { await api(`/journey-phases/${removingPhase.id}/`, { method: "DELETE" }); setRemovingPhase(null); await load(); }
+    catch (cause) { setRemovingPhase(null); setError((cause as Error).message); }
+    finally { setRemoveBusy(false); }
   }
   async function createPhase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
@@ -45,6 +50,12 @@ export function JourneyConfigPage() {
   }
 
   return <section className="space-y-7">
+    {removingPhase && <ConfirmDialog
+      title="Excluir fase da jornada"
+      message={<>A fase <strong className="text-ink">{removingPhase.name}</strong> e os entregáveis dela são apagados de vez — aqui não há arquivamento. Projetos que já materializaram esta fase não são afetados.</>}
+      confirmLabel="Excluir" busy={removeBusy}
+      onCancel={() => setRemovingPhase(null)} onConfirm={() => void removePhase()}
+    />}
     <a href="/configuracoes" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para configurações</a>
     <header><p className="text-sm font-semibold text-ocean">Metodologia</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Jornada de Transformação</h1><p className="mt-2 text-sm text-slate-600">Nomeie e ordene as fases e seus entregáveis. Cada projeto novo herda este modelo.</p></header>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
@@ -54,7 +65,7 @@ export function JourneyConfigPage() {
         <input className="field max-w-56 flex-1" value={phase.name} onChange={event => updateLocal(phase.id, { name: event.target.value })} aria-label={`Nome da fase ${phase.id}`} />
         <input className="field w-20" type="number" value={phase.position} onChange={event => updateLocal(phase.id, { position: Number(event.target.value) })} aria-label={`Ordem da fase ${phase.id}`} />
         <button className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void savePhase(phase)}><Save className="size-4" />Salvar</button>
-        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir fase ${phase.name}`} onClick={() => void removePhase(phase.id)}><Trash2 className="size-4" /></button>
+        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir fase ${phase.name}`} onClick={() => setRemovingPhase(phase)}><Trash2 className="size-4" /></button>
       </div>
       <div className="px-5 py-4 sm:px-6">
         <input className="field mb-4" value={phase.description} placeholder="Descrição da fase (opcional)" onChange={event => updateLocal(phase.id, { description: event.target.value })} aria-label={`Descrição da fase ${phase.name}`} />

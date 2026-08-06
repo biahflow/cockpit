@@ -6,6 +6,7 @@ import { ClientDetailPage } from "./ClientDetailPage";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock("../api", () => ({ api: mocks.api }));
+vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, is_admin: true, role: "admin" } }) }));
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
@@ -48,6 +49,7 @@ test("salva o cliente, cria e remove contato", async () => {
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/contacts/", expect.objectContaining({ method: "POST" })));
 
   await user.click(screen.getByLabelText("Remover João"));
+  await user.click(screen.getByRole("button", { name: "Remover" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/contacts/1/", expect.objectContaining({ method: "DELETE" })));
 });
 

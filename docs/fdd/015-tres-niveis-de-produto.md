@@ -17,7 +17,7 @@ um serviço avulso, que entra apenas no ROI por serviço.
 - `Service` ganha `tier` (`discovery_express` / `discovery_assessment` / `implantacao`, ou vazio),
   `list_price` (0 = gratuito) e `summary` (o que está incluso). A migração `0020` semeia os três
   níveis de forma **idempotente** (`get_or_create` por `tier`); nome, preço e resumo são editáveis
-  pelo admin em **Serviços** (`/servicos`).
+  pelo admin em **Serviços** (`/servicos`, item do menu lateral, só admin).
 - **No máximo um serviço ativo por nível**, garantido por `UniqueConstraint` condicional
   (`~Q(tier="") & Q(archived_at__isnull=True)`) — mesma invariante do `PipelineStage` ganho/perdido.
   Arquivar um nível libera o `tier` para um substituto; serviços sem `tier` coexistem à vontade.

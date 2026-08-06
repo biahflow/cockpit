@@ -11,13 +11,13 @@ beforeEach(() => {
   mocks.getConfig.mockResolvedValue({
     ai_enabled: false, calendar_enabled: true, esign_enabled: false,
     integrations: [
-      { key: "ai", label: "Assistente de IA", enabled: false, configured: true, toggleable: true },
-      { key: "esign", label: "Assinatura eletrônica", enabled: false, configured: false, toggleable: true },
-      { key: "calendar", label: "Calendário (Google)", enabled: true, configured: true, toggleable: true },
-      { key: "portal", label: "Portal do cliente", enabled: true, configured: true, toggleable: false },
+      { key: "ai", label: "Assistente de IA", enabled: false, configured: true, toggleable: true, missing: [] },
+      { key: "esign", label: "Assinatura eletrônica", enabled: false, configured: false, toggleable: true, missing: ["ESIGN_API_TOKEN"] },
+      { key: "calendar", label: "Calendário (Google)", enabled: true, configured: true, toggleable: true, missing: [] },
+      { key: "portal", label: "Portal do cliente", enabled: true, configured: true, toggleable: true, missing: [] },
     ],
   });
-  mocks.setFlag.mockResolvedValue({ key: "ai", label: "Assistente de IA", enabled: true, configured: true, toggleable: true });
+  mocks.setFlag.mockResolvedValue({ key: "ai", label: "Assistente de IA", enabled: true, configured: true, toggleable: true, missing: [] });
   mocks.syncCalendar.mockResolvedValue({ created: 2, skipped: 1 });
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -31,12 +31,20 @@ test("liga uma integração configurada", async () => {
   await waitFor(() => expect(mocks.setFlag).toHaveBeenCalledWith("ai", true));
 });
 
-test("bloqueia ligar sem credenciais e mostra flag read-only", async () => {
+test("bloqueia ligar sem credenciais e nomeia a variável que falta", async () => {
   render(<SettingsPage />);
   await screen.findByText("Assinatura eletrônica");
   const ligarButtons = screen.getAllByRole("button", { name: /Ligar/ });
   expect(ligarButtons[1]).toBeDisabled(); // esign não configurada
-  expect(screen.getByText("via .env")).toBeInTheDocument(); // portal não é alternável
+  // Dizer *qual* variável falta é o que permite consertar sem abrir o código (ADR 0018).
+  expect(screen.getByText("Falta no ambiente: ESIGN_API_TOKEN.")).toBeInTheDocument();
+});
+
+test("o portal virou alternável como as outras", async () => {
+  render(<SettingsPage />);
+  await screen.findByText("Portal do cliente");
+  expect(screen.queryByText("via .env")).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: /Desligar/ })).toHaveLength(2); // calendar + portal
 });
 
 test("sincroniza o calendário e mostra o resultado", async () => {

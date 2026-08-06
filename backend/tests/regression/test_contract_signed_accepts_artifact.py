@@ -58,7 +58,8 @@ def _contract(user):  # type: ignore[no-untyped-def]
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_signature_accepts_the_contract_artifact_once() -> None:
     artifact = _contract(UserFactory())
 
@@ -76,7 +77,8 @@ def test_signature_accepts_the_contract_artifact_once() -> None:
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_refusal_rejects_the_contract_artifact() -> None:
     artifact = _contract(UserFactory())
 

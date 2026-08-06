@@ -365,7 +365,8 @@ def test_each_provider_rejects_the_others_header():
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_autentique_webhook_signs_and_is_idempotent():
     document = _document()
     signature = SignatureRequest.objects.create(
@@ -386,14 +387,16 @@ def test_autentique_webhook_signs_and_is_idempotent():
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_autentique_webhook_401_on_bad_signature():
     code, _ = _post_autentique(_autentique_payload(), secret="outro")
     assert code == 401
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="autentique", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_autentique_webhook_rejects_a_clicksign_delivery():
     """Trocar de fornecedor é trocar o ESIGN_PROVIDER: a entrega do outro não passa."""
     code, _ = _post(_payload())
@@ -522,21 +525,31 @@ def test_webhook_503_when_disabled():
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_webhook_401_on_bad_signature():
     code, _ = _post(_payload(), secret="outro-segredo")
     assert code == 401
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET="")
-def test_webhook_401_without_configured_secret():
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET="")
+def test_webhook_recusa_sem_segredo_configurado():
+    """Sem `ESIGN_WEBHOOK_SECRET` a entrega não fecha assinatura nenhuma.
+
+    O código mudou de 401 para 503 com a ADR 0018: o segredo do webhook está no `requires` da flag,
+    então faltando ele a integração inteira resolve para desligada e o guard de disponibilidade
+    responde antes da verificação de HMAC. A garantia que importa é a mesma — entrega não
+    autenticada não marca documento como assinado.
+    """
     code, _ = _post(_payload(), secret="qualquer")
-    assert code == 401
+    assert code == 503
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_webhook_marks_signature_as_signed():
     document = _document()
     signature = SignatureRequest.objects.create(
@@ -552,7 +565,8 @@ def test_webhook_marks_signature_as_signed():
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_webhook_ignores_unknown_event_and_unlinked_signature():
     document = _document()
     SignatureRequest.objects.create(
@@ -568,7 +582,8 @@ def test_webhook_ignores_unknown_event_and_unlinked_signature():
 
 
 @pytest.mark.django_db
-@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_WEBHOOK_SECRET=SECRET)
+@override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
+                   ESIGN_WEBHOOK_SECRET=SECRET)
 def test_webhook_400_on_invalid_body():
     body = b"nao-e-json"
     response = APIClient().post(

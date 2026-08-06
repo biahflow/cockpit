@@ -31,6 +31,7 @@ def test_client_of_resolves_owner_from_any_link():
 
 @pytest.mark.django_db
 def test_is_enabled_reflects_setting(settings):
+    settings.GOOGLE_DRIVE_ROOT_FOLDER_ID = "pasta-raiz"  # sem credencial nada liga (ADR 0018)
     settings.GOOGLE_DRIVE_ENABLED = True
     assert drive.is_enabled() is True
     settings.GOOGLE_DRIVE_ENABLED = False

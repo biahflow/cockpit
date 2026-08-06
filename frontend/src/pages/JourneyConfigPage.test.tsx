@@ -56,5 +56,6 @@ test("remove uma fase e edita descrição/ordem", async () => {
   await user.clear(screen.getByLabelText("Descrição da fase Welcome"));
   await user.type(screen.getByLabelText("Descrição da fase Welcome"), "Onboarding do cliente");
   await user.click(screen.getByLabelText("Excluir fase Welcome"));
+  await user.click(screen.getByRole("button", { name: "Excluir" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/journey-phases/1/", expect.objectContaining({ method: "DELETE" })));
 });

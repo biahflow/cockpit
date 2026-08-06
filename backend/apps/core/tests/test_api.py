@@ -134,7 +134,8 @@ def test_document_requires_exactly_one_link_and_keeps_private_access(api_client:
 
 
 @pytest.mark.django_db
-@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media", GOOGLE_DRIVE_ENABLED=True)
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media", GOOGLE_DRIVE_ENABLED=True,
+                   GOOGLE_DRIVE_ROOT_FOLDER_ID="pasta-raiz")
 def test_document_upload_goes_to_drive_when_enabled(api_client: APIClient, admin_user: User, monkeypatch):
     from apps.core import drive
 
@@ -331,7 +332,7 @@ def test_notifications_are_per_user_and_can_be_marked_read(api_client: APIClient
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_project_assistant_returns_answer_and_logs_interaction(api_client: APIClient, admin_user: User, monkeypatch):
     from apps.core import ai
     from apps.core.models import AiInteraction
@@ -356,7 +357,7 @@ def test_ai_action_returns_503_when_disabled(api_client: APIClient, admin_user: 
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True, AI_DAILY_LIMIT=0)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x", AI_DAILY_LIMIT=0)
 def test_ai_action_returns_429_over_daily_limit(api_client: APIClient, admin_user: User):
     opportunity = OpportunityFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
@@ -365,7 +366,7 @@ def test_ai_action_returns_429_over_daily_limit(api_client: APIClient, admin_use
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_contract_action_returns_draft_and_logs_interaction(api_client: APIClient, admin_user: User, monkeypatch):
     from apps.core import ai
     from apps.core.models import AiInteraction
@@ -382,7 +383,7 @@ def test_contract_action_returns_draft_and_logs_interaction(api_client: APIClien
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 @pytest.mark.parametrize(("action", "feature"), [
     ("meeting-discovery", "meeting_discovery"),
     ("meeting-assessment", "meeting_assessment"),
@@ -403,7 +404,7 @@ def test_meeting_ai_returns_text_and_logs_interaction(api_client, admin_user, mo
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_meeting_ai_requires_transcript(api_client, admin_user):
     meeting = MeetingFactory(transcript="   ")
     api_client.force_authenticate(admin_user)
@@ -420,7 +421,9 @@ def test_meeting_ai_returns_503_when_disabled(api_client, admin_user):
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+# `ESIGN_ENABLED=False` explícito: desde a ADR 0018 a assinatura nasce ligada, e o valor deste teste
+# está em conferir que o endpoint reporta ligada e desligada — não em herdar o default.
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x", ESIGN_ENABLED=False)
 def test_config_exposes_feature_flags(api_client: APIClient, admin_user: User):
     api_client.force_authenticate(admin_user)
     response = api_client.get(reverse("config"))
@@ -439,7 +442,7 @@ def test_add_to_calendar_returns_503_when_disabled(api_client: APIClient, admin_
 
 
 @pytest.mark.django_db
-@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media", ESIGN_ENABLED=False)
 def test_request_signature_flag_gated(api_client: APIClient, admin_user: User):
     from apps.core.models import SignatureRequest
 
@@ -451,7 +454,7 @@ def test_request_signature_flag_gated(api_client: APIClient, admin_user: User):
     off = api_client.post(reverse("document-request-signature", args=[document["id"]]), {"signer_email": "a@b.com"}, format="json")
     assert off.status_code == 503
 
-    with override_settings(ESIGN_ENABLED=True):
+    with override_settings(ESIGN_ENABLED=True):  # sem provedor: registro local + mark-signed
         on = api_client.post(reverse("document-request-signature", args=[document["id"]]), {"signer_email": "a@b.com"}, format="json")
     assert on.status_code == 201
     assert SignatureRequest.objects.filter(document_id=document["id"]).count() == 1
@@ -466,7 +469,7 @@ def test_remind_signature_and_mark_signed_close_the_loop(api_client: APIClient, 
     api_client.force_authenticate(admin_user)
     file = SimpleUploadedFile("contrato.pdf", b"x", content_type="application/pdf")
     document = api_client.post(reverse("document-list"), {"client": client.id, "file": file}).data
-    with override_settings(ESIGN_ENABLED=True):
+    with override_settings(ESIGN_ENABLED=True):  # sem provedor: registro local + mark-signed
         api_client.post(reverse("document-request-signature", args=[document["id"]]), {"signer_email": "quem@assina.test"}, format="json")
 
         remind_off = api_client.post(reverse("document-remind-signature", args=[document["id"]]))
@@ -510,7 +513,7 @@ def test_risk_and_recommendations_endpoints(api_client: APIClient, admin_user: U
 
 
 @pytest.mark.django_db
-@override_settings(AI_ENABLED=True)
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_project_next_steps_agent_uses_ai_and_logs(api_client: APIClient, admin_user: User, monkeypatch):
     from apps.core import ai
     from apps.core.models import AiInteraction
