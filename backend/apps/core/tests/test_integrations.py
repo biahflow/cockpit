@@ -133,7 +133,7 @@ def test_comando_lista_o_motivo_de_cada_reprovacao(
     with override_settings(
         GOOGLE_DRIVE_ENABLED=True,
         GOOGLE_DRIVE_ROOT_FOLDER_ID="abc",
-        GOOGLE_SERVICE_ACCOUNT_INFO="{}",
+        GOOGLE_AUTH_MODE="adc",
     ):
         with pytest.raises(CommandError):
             call_command("check_integrations")

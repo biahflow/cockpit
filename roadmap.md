@@ -45,8 +45,13 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
 - **Varredura de falhar-fechado do Google** (FDD 024): feita antes de apontar credencial, achou o
   mesmo padrão da rodada 2 — o upload no Drive estava blindado e **seis vizinhos não**. O mais grave
   é público: uma recusa do Google deixava a **reserva órfã**, bloqueando o horário sem reunião na
-  agenda, sem aviso ao dono e sem confirmação ao lead. A homologação do Google em si depende da
-  conta de serviço.
+  agenda, sem aviso ao dono e sem confirmação ao lead.
+- **Auth do Google sem chave** (ADR 0016): a rodada 3 tentou apontar a credencial e esbarrou na
+  política da organização (`iam.managed.disableServiceAccountKeyCreation`) — as duas variáveis que
+  o código lia **eram** o artefato proibido. O desenho não era subótimo, era inconstruível, e é
+  provavelmente por isso que Drive e Calendário nunca foram homologados. Agora a credencial vem de
+  **ADC** (que cobre Workload Identity em container/pod, sem segredo no ambiente) ou de **OAuth de
+  usuário**, para o que exige agir como pessoa. Falta a homologação em si.
 
 > **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. As sete flags
 > de integração nascem `false`, então **cerca de metade dos itens acima fica apagada** numa

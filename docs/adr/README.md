@@ -17,4 +17,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0013 — Backup lógico em container próprio, com restauração exercitada no CI
 - 0014 — Gate de carga por custo de query no CI, k6 como procedimento operado
 - 0015 — Agendador de trabalho periódico na aplicação, com carimbo durável no banco
+- 0016 — Autenticação com o Google sem chave de conta de serviço (ADC/Workload Identity ou OAuth)
 

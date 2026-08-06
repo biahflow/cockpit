@@ -64,19 +64,13 @@ def client_of(document: Document) -> Client | None:
 
 
 def _service():  # pragma: no cover - I/O com a API do Google
-    import json
-
-    from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
-    if settings.GOOGLE_SERVICE_ACCOUNT_INFO:
-        info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_INFO)
-        credentials = service_account.Credentials.from_service_account_info(info, scopes=[DRIVE_SCOPE])
-    else:
-        credentials = service_account.Credentials.from_service_account_file(
-            settings.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=[DRIVE_SCOPE]
-        )
-    return build("drive", "v3", credentials=credentials, cache_discovery=False)
+    from . import google_auth
+
+    return build(
+        "drive", "v3", credentials=google_auth.credentials([DRIVE_SCOPE]), cache_discovery=False
+    )
 
 
 def _find_folder(service, name: str, parent: str) -> str | None:  # pragma: no cover - I/O

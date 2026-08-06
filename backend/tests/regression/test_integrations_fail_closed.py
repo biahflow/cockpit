@@ -93,32 +93,57 @@ def test_resposta_sem_o_calendario_pedido_nao_vira_agenda_livre() -> None:
 # --- `configured()` cobra o que o código dereferencia -------------------------------------------
 
 
-@override_settings(GOOGLE_DRIVE_ROOT_FOLDER_ID="pasta", GOOGLE_SERVICE_ACCOUNT_INFO="",
-                   GOOGLE_SERVICE_ACCOUNT_FILE="")
-def test_drive_nao_se_diz_pronto_sem_a_conta_de_servico() -> None:
-    """Antes, o id da pasta bastava para a tela Configurações liberar o toggle — e o primeiro
-    upload estourava em `_service()`, com o arquivo do usuário perdido junto."""
+@override_settings(GOOGLE_DRIVE_ROOT_FOLDER_ID="pasta", GOOGLE_AUTH_MODE="adc")
+def test_no_modo_adc_nao_ha_variavel_de_credencial_a_cobrar() -> None:
+    """E isso é correto, não descuido (ADR 0016).
+
+    Num pod com Workload Identity a credencial vem do **metadata server**: não existe variável de
+    ambiente para conferir. Cobrar uma recusaria justamente a instalação mais segura das duas.
+    Quem responde "isto funciona?" aqui é a sonda do `check_integrations`, que pergunta ao provedor
+    em vez de ao ambiente — a tese da FDD 024 aplicada ao próprio mecanismo de auth.
+    """
+    assert flags.configured("drive") is True
+    assert flags.missing("drive") == []
+
+
+@override_settings(GOOGLE_DRIVE_ROOT_FOLDER_ID="", GOOGLE_AUTH_MODE="adc")
+def test_o_recurso_em_si_continua_sendo_cobrado() -> None:
+    """O que não depende do modo de auth segue exigido: sem a pasta raiz não há onde gravar."""
     assert flags.configured("drive") is False
-    assert any("GOOGLE_SERVICE_ACCOUNT" in falta for falta in flags.missing("drive"))
+    assert "GOOGLE_DRIVE_ROOT_FOLDER_ID" in flags.missing("drive")
 
 
-@override_settings(GOOGLE_DRIVE_ROOT_FOLDER_ID="pasta", GOOGLE_SERVICE_ACCOUNT_INFO="{}",
-                   GOOGLE_SERVICE_ACCOUNT_FILE="")
-def test_credencial_do_google_aceita_json_inline_ou_arquivo() -> None:
-    """São duas formas da mesma credencial: exigir ambas recusaria instalação legítima."""
-    assert flags.configured("drive") is True
+@override_settings(GOOGLE_DRIVE_ROOT_FOLDER_ID="pasta", GOOGLE_AUTH_MODE="oauth",
+                   GOOGLE_OAUTH_CLIENT_ID="", GOOGLE_OAUTH_CLIENT_SECRET="",
+                   GOOGLE_OAUTH_REFRESH_TOKEN="")
+def test_no_modo_oauth_o_trio_e_obrigatorio() -> None:
+    """Aqui há o que cobrar, e a promessa do `docs/operacao.md` vale: o toggle não liga uma
+    integração cujas credenciais faltem."""
+    assert flags.configured("drive") is False
+    faltando = flags.missing("drive")
+    assert "GOOGLE_OAUTH_CLIENT_ID" in faltando
+    assert "GOOGLE_OAUTH_CLIENT_SECRET" in faltando
+    assert "GOOGLE_OAUTH_REFRESH_TOKEN" in faltando
 
 
-@override_settings(GOOGLE_DRIVE_ROOT_FOLDER_ID="pasta", GOOGLE_SERVICE_ACCOUNT_INFO="",
-                   GOOGLE_SERVICE_ACCOUNT_FILE="/caminho/sa.json")
-def test_credencial_do_google_por_arquivo_tambem_serve() -> None:
-    assert flags.configured("drive") is True
+@override_settings(GOOGLE_CALENDAR_ID="agenda", GOOGLE_AUTH_MODE="oauth",
+                   GOOGLE_OAUTH_CLIENT_ID="id", GOOGLE_OAUTH_CLIENT_SECRET="segredo",
+                   GOOGLE_OAUTH_REFRESH_TOKEN="refresh")
+def test_oauth_completo_libera_o_calendario() -> None:
+    assert flags.configured("calendar") is True
 
 
-@override_settings(GOOGLE_CALENDAR_ID="agenda", GOOGLE_SERVICE_ACCOUNT_INFO="",
-                   GOOGLE_SERVICE_ACCOUNT_FILE="")
-def test_calendario_nao_se_diz_pronto_sem_a_conta_de_servico() -> None:
-    assert flags.configured("calendar") is False
+@override_settings(GOOGLE_AUTH_MODE="chave-de-conta-de-servico")
+def test_modo_de_auth_invalido_e_recusado_com_nome() -> None:
+    """A chave de conta de serviço deixou de ser um caminho: a política da organização a proíbe
+    (`iam.managed.disableServiceAccountKeyCreation`), e manter um caminho que ninguém pode tomar é
+    a mesma mentira que a FDD 024 existe para consertar. Quem tem chave aponta
+    `GOOGLE_APPLICATION_CREDENTIALS` e o ADC a lê.
+    """
+    from apps.core import google_auth
+
+    with pytest.raises(google_auth.GoogleAuthError, match="GOOGLE_AUTH_MODE"):
+        google_auth.credentials(["https://www.googleapis.com/auth/drive"])
 
 
 @override_settings(ESIGN_PROVIDER="autentique", ESIGN_API_TOKEN="", ESIGN_WEBHOOK_SECRET="")
