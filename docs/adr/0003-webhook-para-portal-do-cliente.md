@@ -38,3 +38,18 @@ Configurações, e `portal.emit()` consulta `flags.is_enabled("portal")` antes d
 O motivo é operacional: pausar a emissão durante um incidente do portal exigia deploy. A entrega
 segue best-effort e sem retentativa — desligar e religar **não** reenvia o que se perdeu no meio, e
 a recuperação continua sendo o backfill manual descrito acima.
+
+
+## Emenda (FDD 025, 07/08/2026)
+
+O snapshot passou a carregar `archived_at` do projeto, e a rota de leitura
+(`GET /api/v1/portal/projects/{id}/snapshot/`) **serve projeto arquivado**, com 200.
+
+"O que entra no snapshot precisa de emissor" já valia para o arquivamento — `archive()` é um
+`save()` e emite. Faltava a outra ponta: a rota escondia o arquivado, então a busca disparada pelo
+próprio webhook levava 404, que o portal não distingue de "este id nunca existiu". O estado que já
+mudou continuava na tela do cliente, agora por omissão do lado que deveria contá-lo. O 404 desta rota
+volta a significar só "não existe", e quem declara o encerramento é o `archived_at` do snapshot.
+
+Mudança **aditiva** ao contrato `/api/v1/`: um campo novo, e um id que antes respondia 404 passando a
+responder 200.

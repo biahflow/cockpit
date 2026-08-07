@@ -76,6 +76,20 @@ respondia 204, em silêncio.
   `EventTarget` (isso seria `stopImmediatePropagation`) e ambos vivem no `document`. O `inert`
   resolve de carona os dois `aria-modal="true"` visíveis ao mesmo tempo, que eram inválidos.
 
+## Fronteira com o portal do cliente (ADR 0003)
+
+Arquivar um projeto **emite webhook** — `archive()` é um `save()` — e o portal vem buscar o estado
+novo em `GET /api/v1/portal/projects/{id}/snapshot/`. Essa rota filtrava `archived_at__isnull=True`,
+o mesmo filtro do `get_queryset` do `ArchiveModelViewSet`, onde ele está certo: quem lista não quer
+ver o arquivado. Aqui produzia o efeito oposto do pretendido — o portal levava **404**, que ele não
+tem como distinguir de "este id nunca existiu", e por isso congelava o projeto no último estado bom,
+exibindo como ativo, na tela do cliente, um projeto encerrado. Só voltava a concordar se alguém
+desarquivasse.
+
+**Arquivar não pode fazer o projeto sumir desta rota — só declarar que acabou.** O snapshot passou a
+carregar `project.archived_at` (`None` quando ativo, e o portal desfaz igual ao restaurar), a rota
+responde 200 para arquivado, e o 404 volta a significar uma coisa só.
+
 ## Fronteira com a retenção (ADR 0017)
 
 `retention.py` conta o prazo de expurgo a partir de `archived_at`, para as famílias `lead` e
@@ -88,11 +102,14 @@ O expurgo continua sendo a única operação que destrói de propósito, e conti
 ## Onde está
 
 - Backend: `ArchiveModelViewSet` (`?archived=1`, `unarchive`), `ArchiveConflict`,
-  `ClientViewSet.perform_destroy`, `OpportunityViewSet.perform_destroy` — todos em
-  `backend/apps/core/views.py`.
+  `ClientViewSet.perform_destroy`, `OpportunityViewSet.perform_destroy` e
+  `PortalProjectSnapshotView` — todos em `backend/apps/core/views.py`; o campo `archived_at` do
+  snapshot em `backend/apps/core/portal.py`.
 - Frontend: `components/Modal.tsx` (`Modal` extraído da `CommercialPage` + `ConfirmDialog`); botões
   em `ClientDetailPage`, `ProjectDetailPage` e no detalhe da `CommercialPage`; abas Arquivados em
   `ClientsPage` e `ProjectsPage`.
 - Testes: `backend/tests/regression/test_archive_nao_deixa_orfao.py`,
   `backend/tests/regression/test_arquivar_tem_saida.py`,
-  `backend/apps/core/tests/test_archive_restore.py`, `frontend/src/components/Modal.test.tsx`.
+  `backend/apps/core/tests/test_archive_restore.py`, `backend/apps/core/tests/test_portal.py`
+  (`test_snapshot_serve_projeto_arquivado_declarando_o_arquivamento`),
+  `frontend/src/components/Modal.test.tsx`.

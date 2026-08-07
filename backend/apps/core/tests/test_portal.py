@@ -297,6 +297,40 @@ def test_ai_score_crosses_to_snapshot_only_after_review() -> None:
 
 
 @pytest.mark.django_db
+def test_snapshot_serve_projeto_arquivado_declarando_o_arquivamento() -> None:
+    """Arquivar não pode fazer o projeto sumir desta rota — só declarar que acabou.
+
+    Arquivar emite webhook (o `archive()` é um `save()`), e o portal vem buscar o estado novo.
+    Enquanto esta rota filtrava `archived_at__isnull=True`, ele levava 404 — que não distingue
+    "acabou" de "nunca existiu" — e mantinha na tela do cliente, como ativo, um projeto encerrado.
+    """
+    project = ProjectFactory()
+    client = APIClient()
+    url = reverse("portal-project-snapshot", args=[project.pk])
+
+    with override_settings(PORTAL_READ_TOKEN="token-secreto"):
+        ativo = client.get(url, HTTP_AUTHORIZATION="Bearer token-secreto")
+        assert ativo.status_code == 200
+        assert ativo.json()["project"]["archived_at"] is None
+
+        project.archive()
+        arquivado = client.get(url, HTTP_AUTHORIZATION="Bearer token-secreto")
+        assert arquivado.status_code == 200
+        project.refresh_from_db()
+        assert arquivado.json()["project"]["archived_at"] == project.archived_at.isoformat()
+
+        # E o caminho de volta, que a interface oferece por item (`POST /unarchive/`).
+        project.archived_at = None
+        project.save(update_fields=["archived_at", "updated_at"])
+        restaurado = client.get(url, HTTP_AUTHORIZATION="Bearer token-secreto")
+        assert restaurado.json()["project"]["archived_at"] is None
+
+        # 404 continua existindo, e agora quer dizer uma coisa só.
+        ausente = reverse("portal-project-snapshot", args=[project.pk + 10_000])
+        assert client.get(ausente, HTTP_AUTHORIZATION="Bearer token-secreto").status_code == 404
+
+
+@pytest.mark.django_db
 def test_snapshot_endpoint_denies_when_token_unset() -> None:
     project = ProjectFactory()
     client = APIClient()

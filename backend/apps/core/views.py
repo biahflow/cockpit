@@ -1786,6 +1786,15 @@ class PortalProjectSnapshotView(APIView):
 
     Autenticado por service token (Bearer) fora do fluxo de sessão/RBAC interno, para uso
     servidor-a-servidor no backfill/reconciliação. Só expõe dados do projeto — nada comercial.
+
+    **Projeto arquivado também responde 200.** O filtro `archived_at__isnull=True` que existia
+    aqui vinha do `get_queryset` do `ArchiveModelViewSet`, onde ele está certo — quem lista não
+    quer ver o arquivado. Nesta rota ele produzia o efeito oposto do pretendido: arquivar um
+    projeto emite webhook (o `archive()` é um `save()`), o portal vinha buscar o estado novo e
+    levava 404, que ele não tem como distinguir de "este id nunca existiu". O portal então
+    mantinha o projeto encerrado na tela do cliente como se estivesse ativo, e só voltava a
+    concordar quando alguém desarquivasse. Aqui o 404 volta a significar só "não existe", e
+    quem diz que o projeto acabou é o `archived_at` do próprio snapshot.
     """
 
     authentication_classes: list = []
@@ -1798,5 +1807,5 @@ class PortalProjectSnapshotView(APIView):
         provided = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not expected or not hmac.compare_digest(provided, expected):
             return Response({"detail": "Token inválido."}, status=status.HTTP_401_UNAUTHORIZED)
-        project = get_object_or_404(Project.objects.filter(archived_at__isnull=True), pk=pk)
+        project = get_object_or_404(Project, pk=pk)
         return Response(portal.build_snapshot(project))
