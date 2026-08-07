@@ -1,0 +1,102 @@
+# Deploy de HML do Biahflow.
+#
+# Mesmo desenho do portal do cliente, e a mesma separação: **deploy de aplicação
+# não roda `terraform apply`**. O Terraform dos dois portais mora num lugar só
+# (`biahflow-portal-cliente/infra/terraform`), porque a rede, o registro, os
+# segredos e a identidade são compartilhados — dois estados sobre os mesmos
+# recursos é como se cria drift que ninguém consegue explicar.
+name: deploy-hml
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hml-biahflow
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  PROJETO: biahflow-hml
+  REGIAO: us-east1
+  REGISTRO: us-east1-docker.pkg.dev/biahflow-hml/hml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: biahflow-hml
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: hml-deploy@biahflow-hml.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Autoriza os dois registros
+        run: |
+          gcloud auth configure-docker "$REGIAO-docker.pkg.dev" --quiet
+          echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Constrói e publica
+        run: |
+          set -euo pipefail
+          publica() {
+            local nome="$1" contexto="$2"
+            docker build -t "$REGISTRO/$nome:$GITHUB_SHA" \
+                         -t "ghcr.io/${{ github.repository }}/$nome:$GITHUB_SHA" "$contexto"
+            docker push "$REGISTRO/$nome:$GITHUB_SHA"
+            docker push "ghcr.io/${{ github.repository }}/$nome:$GITHUB_SHA"
+          }
+          publica biahflow-api backend
+          publica biahflow-web frontend
+
+      # A imagem recusa subir com configuração insegura: o entrypoint roda
+      # `check --deploy --fail-level WARNING --tag security` antes do gunicorn
+      # (ADR 0011). Se um segredo faltar, o deploy morre aqui — e é onde deve.
+      - name: Migra o banco
+        run: |
+          gcloud run jobs update biahflow-migrate \
+            --image "$REGISTRO/biahflow-api:$GITHUB_SHA" \
+            --region "$REGIAO" --quiet
+          gcloud run jobs execute biahflow-migrate --region "$REGIAO" --wait
+
+      - name: Publica as revisões
+        run: |
+          for s in biahflow-api biahflow-web; do
+            gcloud run services update "$s" \
+              --image "$REGISTRO/$s:$GITHUB_SHA" \
+              --region "$REGIAO" --quiet
+          done
+
+      # A sonda pergunta ao **provedor**, não ao ambiente — é a tese da FDD 024
+      # aplicada ao deploy: "a variável está definida" não é a mesma pergunta que
+      # "a credencial funciona". Não falha o deploy, porque integração fora do ar
+      # não é motivo para reverter código que está bom; deixa o veredito no log.
+      - name: Sonda as integrações
+        continue-on-error: true
+        run: |
+          gcloud run jobs execute biahflow-check --region "$REGIAO" --wait || true
+
+      - name: Fumaça
+        run: |
+          set -euo pipefail
+          url=$(gcloud run services describe biahflow-web --region "$REGIAO" --format='value(status.url)')
+          for tentativa in 1 2 3 4 5; do
+            if curl -sf --max-time 10 "$url/" > /dev/null; then
+              echo "biahflow-web responde em $url"; exit 0
+            fi
+            echo "tentativa $tentativa falhou; esperando"; sleep 10
+          done
+          echo "::error::o Biahflow não respondeu depois do deploy"; exit 1
