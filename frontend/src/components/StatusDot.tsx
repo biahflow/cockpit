@@ -4,12 +4,12 @@ import type { HealthLevel } from "../types";
 const HEALTH_BADGE: Record<HealthLevel, string> = {
   "saudável": "bg-emerald-50 text-emerald-700",
   "atenção": "bg-amber-50 text-amber-700",
-  "crítico": "bg-red-50 text-signal",
+  "crítico": "bg-red-50 text-danger",
 };
 const HEALTH_DOT: Record<HealthLevel, string> = {
   "saudável": "bg-emerald-500",
   "atenção": "bg-amber-500",
-  "crítico": "bg-signal",
+  "crítico": "bg-danger",
 };
 
 export function healthBadgeClass(level: HealthLevel): string {

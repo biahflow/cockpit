@@ -128,9 +128,9 @@ export function BibliotecaPage() {
       confirmLabel="Excluir" busy={removeBusy}
       onCancel={() => setRemoving(null)} onConfirm={() => void remove()}
     />}
-    <a href="/configuracoes" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para configurações</a>
-    <header><p className="text-sm font-semibold text-ocean">Metodologia</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Biblioteca de Funcionários Digitais</h1><p className="mt-2 text-sm text-slate-600">O catálogo que a entrega instancia em vez de recriar. Cada bloco pode ser parametrizado por vertical — o mesmo SDR servindo setores diferentes.</p></header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    <a href="/configuracoes" className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-ink"><ArrowLeft className="size-4" />Voltar para configurações</a>
+    <header><p className="text-sm font-semibold text-accent">Metodologia</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Biblioteca de Funcionários Digitais</h1><p className="mt-2 text-sm text-slate-600">O catálogo que a entrega instancia em vez de recriar. Cada bloco pode ser parametrizado por vertical — o mesmo SDR servindo setores diferentes.</p></header>
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
 
     <section className="overflow-hidden rounded-2xl border bg-white">
       <div className="border-b px-5 py-4 sm:px-6"><h2 className="font-semibold text-ink">Verticais</h2><p className="mt-0.5 text-sm text-slate-600">Os setores dos clientes. É por eles que um blueprint se parametriza.</p></div>
@@ -138,15 +138,15 @@ export function BibliotecaPage() {
         <input className="field max-w-56 flex-1" value={vertical.name} onChange={event => updateVertical(vertical.id, { name: event.target.value })} aria-label={`Nome da vertical ${vertical.id}`} />
         <input className="field w-40" value={vertical.slug} onChange={event => updateVertical(vertical.id, { slug: event.target.value })} aria-label={`Identificador da vertical ${vertical.name}`} />
         <input className="field w-20" type="number" value={vertical.position} onChange={event => updateVertical(vertical.id, { position: Number(event.target.value) })} aria-label={`Ordem da vertical ${vertical.name}`} />
-        <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-ocean" checked={vertical.active} onChange={event => updateVertical(vertical.id, { active: event.target.checked })} />Disponível</label>
-        <button className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveVertical(vertical)}><Save className="size-4" />Salvar</button>
-        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir vertical ${vertical.name}`} onClick={() => setRemoving({ kind: "vertical", id: vertical.id, name: vertical.name })}><Trash2 className="size-4" /></button>
+        <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-accent" checked={vertical.active} onChange={event => updateVertical(vertical.id, { active: event.target.checked })} />Disponível</label>
+        <button className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveVertical(vertical)}><Save className="size-4" />Salvar</button>
+        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Excluir vertical ${vertical.name}`} onClick={() => setRemoving({ kind: "vertical", id: vertical.id, name: vertical.name })}><Trash2 className="size-4" /></button>
       </div>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Nenhuma vertical ainda. Sem elas, os blocos valem para qualquer setor.</p>}
       <form className="flex flex-wrap items-end gap-3 border-t bg-slate-50/60 px-5 py-4 sm:px-6" onSubmit={event => void createVertical(event)}>
         <label className="grid gap-2 text-sm font-medium text-slate-700">Nova vertical<input className="field w-56" value={verticalDraft.name} onChange={event => setVerticalDraft({ ...verticalDraft, name: event.target.value })} placeholder="Ex.: Igrejas" required /></label>
         <label className="grid gap-2 text-sm font-medium text-slate-700">Identificador<input className="field w-40" value={verticalDraft.slug} onChange={event => setVerticalDraft({ ...verticalDraft, slug: event.target.value })} placeholder="igrejas" required /></label>
         <label className="grid gap-2 text-sm font-medium text-slate-700">Ordem<input className="field w-20" type="number" value={verticalDraft.position} onChange={event => setVerticalDraft({ ...verticalDraft, position: event.target.value })} placeholder="0" /></label>
-        <button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar vertical</button>
+        <button className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar vertical</button>
       </form>
     </section>
 
@@ -156,11 +156,11 @@ export function BibliotecaPage() {
         <div className="flex flex-wrap items-center gap-3 border-b bg-slate-50/60 px-5 py-4 sm:px-6">
           <input className="field max-w-56 flex-1" value={blueprint.name} onChange={event => updateBlueprint(blueprint.id, { name: event.target.value })} aria-label={`Nome do blueprint ${blueprint.id}`} />
           <select className="field w-40" value={blueprint.area} onChange={event => updateBlueprint(blueprint.id, { area: event.target.value as BlueprintArea })} aria-label={`Área de ${blueprint.name}`}>{areas.map(area => <option key={area.value} value={area.value}>{area.label}</option>)}</select>
-          <button className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveBlueprint(blueprint)}><Save className="size-4" />Salvar</button>
-          <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir blueprint ${blueprint.name}`} onClick={() => setRemoving({ kind: "blueprint", id: blueprint.id, name: blueprint.name })}><Trash2 className="size-4" /></button>
+          <button className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void saveBlueprint(blueprint)}><Save className="size-4" />Salvar</button>
+          <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Excluir blueprint ${blueprint.name}`} onClick={() => setRemoving({ kind: "blueprint", id: blueprint.id, name: blueprint.name })}><Trash2 className="size-4" /></button>
         </div>
         <div className="px-5 py-4 sm:px-6">
-          <label className="mb-4 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-ocean" checked={blueprint.active} onChange={event => updateBlueprint(blueprint.id, { active: event.target.checked })} />Disponível para instanciar</label>
+          <label className="mb-4 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-accent" checked={blueprint.active} onChange={event => updateBlueprint(blueprint.id, { active: event.target.checked })} />Disponível para instanciar</label>
           {!blueprint.active && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">Bloco aposentado: não é oferecido em entrega nova. Os Funcionários Digitais já instanciados continuam iguais — eles são cópias.</p>}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium text-slate-700 sm:col-span-2">O que este bloco faz<textarea className="field min-h-20" value={blueprint.description} onChange={event => updateBlueprint(blueprint.id, { description: event.target.value })} aria-label={`Descrição de ${blueprint.name}`} placeholder="Vai para a descrição do Funcionário Digital e para a proposta gerada pela IA" /></label>
@@ -175,16 +175,16 @@ export function BibliotecaPage() {
           <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-600">Variantes por vertical</p>
           <p className="mb-2 text-xs text-slate-600">Campo em branco na variante herda o valor do bloco acima.</p>
           <div className="divide-y">{blueprint.variants.map(variant => <div className="flex flex-wrap items-center gap-3 py-2" key={variant.id}>
-            <span className="rounded-lg bg-mint px-2 py-0.5 text-xs font-semibold text-ocean">{variant.vertical_name}</span>
+            <span className="rounded-lg bg-accent-50 px-2 py-0.5 text-xs font-semibold text-accent">{variant.vertical_name}</span>
             <span className="flex-1 text-sm text-slate-600">{variant.description || <em className="text-slate-500">herda a descrição do bloco</em>}</span>
             {variant.kpi_label && <span className="text-xs text-slate-600">KPI: {variant.kpi_label}</span>}
-            <button className="grid size-8 place-items-center rounded-lg border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir variante ${variant.vertical_name} de ${blueprint.name}`} onClick={() => void removeVariant(variant.id)}><Trash2 className="size-3.5" /></button>
+            <button className="grid size-8 place-items-center rounded-lg border text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Excluir variante ${variant.vertical_name} de ${blueprint.name}`} onClick={() => void removeVariant(variant.id)}><Trash2 className="size-3.5" /></button>
           </div>)}</div>
           <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); void addVariant(blueprint.id); }}>
             <label className="grid gap-2 text-sm font-medium text-slate-700">Vertical<select className="field w-44" value={draftFor(blueprint.id).vertical} onChange={event => setDraft(blueprint.id, { vertical: event.target.value })} aria-label={`Vertical da nova variante de ${blueprint.name}`} required><option value="">Escolha…</option>{verticals.map(vertical => <option key={vertical.id} value={vertical.id}>{vertical.name}</option>)}</select></label>
             <label className="grid flex-1 gap-2 text-sm font-medium text-slate-700">Descrição para o setor<input className="field" value={draftFor(blueprint.id).description} onChange={event => setDraft(blueprint.id, { description: event.target.value })} aria-label={`Descrição da nova variante de ${blueprint.name}`} placeholder="Em branco, herda a do bloco" /></label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">KPI<input className="field w-40" value={draftFor(blueprint.id).kpi_label} onChange={event => setDraft(blueprint.id, { kpi_label: event.target.value })} aria-label={`KPI da nova variante de ${blueprint.name}`} /></label>
-            <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label={`Adicionar variante a ${blueprint.name}`} type="submit"><Plus className="size-4" /></button>
+            <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label={`Adicionar variante a ${blueprint.name}`} type="submit"><Plus className="size-4" /></button>
           </form>
         </div>
       </section>)}
@@ -194,7 +194,7 @@ export function BibliotecaPage() {
     <form className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-5 sm:p-6" onSubmit={event => void createBlueprint(event)}>
       <label className="grid gap-2 text-sm font-medium text-slate-700">Novo bloco<input className="field w-56" value={blueprintDraft.name} onChange={event => setBlueprintDraft({ ...blueprintDraft, name: event.target.value })} placeholder="Ex.: SDR" required /></label>
       <label className="grid gap-2 text-sm font-medium text-slate-700">Área<select className="field w-44" value={blueprintDraft.area} onChange={event => setBlueprintDraft({ ...blueprintDraft, area: event.target.value as BlueprintArea })}>{areas.map(area => <option key={area.value} value={area.value}>{area.label}</option>)}</select></label>
-      <button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar bloco</button>
+      <button className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar bloco</button>
     </form>
   </section>;
 }

@@ -9,22 +9,73 @@
    teria de justificar depois. A variável traz todos os pesos num arquivo só. */
 @import "@fontsource-variable/inter";
 
+/* Paleta e superfícies (ADR 0024).
+   ---------------------------------------------------------------------------
+   Branco, preto e laranja. O teal `ocean`/`mint` saiu; a paleta anterior está
+   inteira em `docs/design/paleta-anterior.md`, com as razões, e o marco de git é
+   `design/antes-do-redesenho`.
+
+   Os nomes dizem o **papel**, não a cor — `ink`, `accent`, `canvas`, `line` —, porque um
+   token chamado `ocean` valendo preto é o tipo de nome mentiroso que este repositório
+   costuma consertar depois com um commit próprio.
+
+   Contraste pré-calculado (o axe da FDD 022 é o árbitro, isto é só o que evita descobrir
+   tarde): `ink` sobre branco 18,9:1; `accent` sobre branco 4,96:1; branco sobre `accent`
+   4,96:1; `accent` sobre `canvas` 4,76:1. Todos passam AA para texto normal. */
 @theme {
-  --color-ink: #102a2a;
-  --color-ocean: #0d5f5a;
-  --color-mint: #eaf7f2;
-  --color-sand: #f7f8f5;
-  /* Escurecido de #d05d45 para passar em AA (FDD 022). O tom antigo dava 3,9:1 sobre branco,
-     e a marca aparece como **texto**: prazo vencido, mensagem de erro, contador de
-     notificação. O mesmo ajuste conserta o contador, que é branco sobre `bg-signal` e
-     também reprovava. Continua o mesmo clay laranja, um degrau mais fundo. */
-  --color-signal: #bd4a30;
+  /* Texto, títulos, sidebar e botão primário — a mesma cor nos quatro papéis, que é o que
+     dá a sobriedade da tela. Quente (não `#000`) para conversar com o laranja. */
+  --color-ink: #12110f;
+  /* Texto secundário. Sobre `canvas` dá 7,4:1: passa AA com folga, e é o que permite usá-lo
+     em rótulo pequeno sem cair no cinza ilegível de sempre. */
+  --color-muted: #57534e;
+  --color-line: #e7e5e4;
+  /* Quase-branco e quente. **Não** é branco puro de propósito: com `canvas` e `.panel` ambos
+     brancos, o card desaparece, e é justamente a hierarquia de superfície que faz o portal
+     do cliente parecer acabado. */
+  --color-canvas: #fafaf9;
+
+  /* O laranja é o **mesmo hex de antes**, e isso é decisão e não inércia: `#bd4a30` é
+     resultado de uma medição de contraste da FDD 022 (o tom anterior, `#d05d45`, dava 3,9:1
+     e reprovava como texto). Inventar um tom novo aqui seria refazer aquela medição do zero,
+     com chance de repetir o defeito. Ver `docs/design/paleta-anterior.md`. */
+  --color-accent: #bd4a30;
+  --color-accent-50: #fdf1ec;
+  --color-accent-700: #9c3c26;
+  /* **O acento sobre o escuro precisa ser outro tom, e o axe é quem descobriu.**
+     `accent` sobre branco dá 4,96:1 e passa; sobre `ink` dá **3,82:1** e reprova — a barra
+     lateral escura tornou isso um problema que a paleta antiga, de sidebar clara, não tinha.
+     Este é o clay que sobrevive ao preto: 7,2:1 sobre `ink`. É o mesmo papel do `clay-200` do
+     design system do OikOS, e existir como token separado é o que impede alguém de "consertar"
+     escrevendo `text-accent` num fundo escuro de novo. */
+  --color-accent-200: #dd8b62;
+
+  /* **O acento e o perigo tinham a mesma cor, e isso deixou de poder ser verdade.**
+     `signal` era o clay laranja e era usado como cor de **erro** — quase sempre dentro de um
+     `bg-red-50`: mensagem de falha, "Vencido", valor em atraso, o item Sair. Promover o
+     laranja a acento da marca colidiria os dois: a mensagem de erro ficaria idêntica ao
+     eyebrow de uma seção, e o cliente não teria como distinguir "isto é a marca" de "isto
+     deu errado".
+
+     Então o perigo virou vermelho de verdade, e o laranja ficou com a marca. `#b91c1c` dá
+     5,9:1 sobre branco e 5,6:1 sobre `red-50`, que é o container onde ele quase sempre
+     aparece — passa AA nos dois. A única exceção deliberada é o contador de notificação, que
+     era `bg-signal` por ser marca e não erro: ele fica em `accent`. */
+  --color-danger: #b91c1c;
+
   --font-sans: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+
+  /* Sombras em **camadas**, portadas do portal do cliente: um contorno de 1px que define a
+     borda e uma difusão ampla e suave que dá a profundidade. É a metade do acabamento que
+     não é cor — o app inteiro tinha doze `shadow-sm` e nenhuma definição de card. */
+  --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.04), 0 12px 28px -18px rgba(18, 17, 15, 0.22);
+  --shadow-raised: 0 1px 2px rgba(18, 17, 15, 0.05), 0 20px 46px -22px rgba(18, 17, 15, 0.28);
+  --shadow-pop: 0 18px 50px -14px rgba(18, 17, 15, 0.24);
 }
 
 @layer base {
-  * { @apply border-slate-200; }
-  body { @apply min-h-screen bg-sand font-sans text-slate-800 antialiased; }
+  * { @apply border-line; }
+  body { @apply min-h-screen bg-canvas font-sans text-slate-800 antialiased; }
   /* Foco visível (WCAG 2.4.7). Aqui havia `button, input, select { @apply focus:outline-none }`,
      que apagava o indicador de foco de **todo** controle: alguns campos recompunham com
      `focus:ring`, nenhum botão recompunha, e navegar de teclado pelo portal era navegar às
@@ -36,10 +87,84 @@
      2. Ela impedia a correção. `outline-none` do Tailwind v4 não só zera o contorno: grava
         `--tw-outline-style: none` no elemento. Como `outline-2` desenha com
         `outline-style: var(--tw-outline-style)`, qualquer regra de `:focus-visible` escrita
-        depois resolvia para `none` e não aparecia — silenciosamente. */
-  :focus-visible { @apply outline-2 outline-offset-2 outline-ocean; }
+        depois resolvia para `none` e não aparecia — silenciosamente.
+
+     O anel passou a ser **laranja** com o redesenho, e é o uso mais importante do acento: é
+     a única cor da tela cuja função é ser notada. */
+  :focus-visible { @apply outline-2 outline-offset-2 outline-accent; }
+  ::selection { @apply bg-accent-50 text-ink; }
+}
+
+/* As primitivas (ADR 0024).
+   ---------------------------------------------------------------------------
+   Portadas do `app/globals.css` do portal do cliente, e só as que este produto usa — as ~200
+   classes de lá descrevem telas que não existem aqui (jornada, chat, pendências do cliente), e
+   copiar classe sem consumidor traria para cá o defeito que aquele repositório passou nove ADRs
+   consertando.
+
+   As 22 páginas **ainda não as adotam**: elas trocaram de cor pelos tokens e mantêm o
+   utilitário inline. Isto é o destino para onde migrar, não uma migração já feita. */
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-line bg-white p-5;
+    box-shadow: var(--shadow-card);
+  }
+  .panel-heading { @apply mb-4 flex items-start justify-between gap-3; }
+  .panel-heading h2 { @apply m-0 text-base font-semibold tracking-[-0.02em] text-ink; }
+
+  /* O rótulo acima do título. É o principal lugar onde o laranja aparece como texto, e o
+     `tracking` largo é o que o mantém legível em caixa alta e corpo pequeno. */
+  .eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.18em] text-accent; }
+
+  .page-head { @apply mb-6 grid gap-1.5; }
+  .page-head h1 { @apply m-0 text-2xl font-semibold tracking-[-0.03em] text-ink; }
+  .page-head p { @apply m-0 max-w-2xl text-sm leading-6 text-muted; }
+
+  .metric-card {
+    @apply grid gap-2 rounded-2xl border border-line bg-white p-4;
+    box-shadow: var(--shadow-card);
+  }
+  .metric-card strong { @apply text-2xl font-semibold tracking-[-0.03em] text-ink; }
+  .metric-card span { @apply text-xs text-muted; }
+  .metric-icon { @apply grid size-9 place-items-center rounded-xl bg-accent-50 text-accent; }
+
+  /* Botões. O primário é **preto**, não laranja: o acento vale mais por ser raro, e uma tela
+     com seis botões laranja não tem acento nenhum. O laranja fica no hover e no foco. */
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5
+      text-sm font-semibold text-white transition hover:bg-accent-700
+      disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn--secondary {
+    @apply border border-line bg-white text-ink hover:border-accent hover:bg-accent-50 hover:text-accent-700;
+  }
+  .btn--ghost { @apply bg-transparent text-muted hover:bg-accent-50 hover:text-ink; }
+  .btn--danger { @apply bg-red-700 text-white hover:bg-red-800; }
+
+  /* Item de menu. Duas peles, porque a sidebar é escura e o menu mobile é claro — e não uma
+     só com `dark:`, que este produto não tem. */
+  .nav-item {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/70
+      transition hover:bg-white/10 hover:text-white;
+  }
+  .nav-item--active { @apply bg-white font-semibold text-ink hover:bg-white; }
+  .nav-item--light { @apply text-muted hover:bg-accent-50 hover:text-ink; }
+  .nav-item--light.nav-item--active { @apply bg-accent-50 font-semibold text-accent-700; }
+
+  /* Selos de estado. Os quatro tons são os do portal do cliente, recolorido o "informativo"
+     para o acento. */
+  .state { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold; }
+  .state--0 { @apply bg-accent-50 text-accent-700; }
+  .state--1 { @apply bg-emerald-50 text-emerald-700; }
+  .state--2 { @apply bg-amber-50 text-amber-700; }
+  .state--3 { @apply bg-red-50 text-red-700; }
+
+  .popover {
+    @apply rounded-2xl border border-line bg-white p-2;
+    box-shadow: var(--shadow-raised);
+  }
 }
 
 @utility field {
-  @apply w-full rounded-xl border bg-white px-3 py-3 text-sm text-slate-800 transition focus:border-ocean focus:ring-4 focus:ring-ocean/10;
+  @apply w-full rounded-xl border bg-white px-3 py-3 text-sm text-slate-800 transition focus:border-accent focus:ring-4 focus:ring-accent/10;
 }

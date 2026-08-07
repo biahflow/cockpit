@@ -120,8 +120,22 @@ unset; email goes through SMTP (Mailpit in dev).
 
 **Frontend structure:** thin SPA — `src/api.ts` is the single API client, `src/pages/*`
 are the screens (Login, Dashboard, Clients, Commercial, Projects), `src/components/Layout.tsx`
-is the shell, `src/types.ts` holds shared types. There is a Biahflow/OikOS design system;
-use the `biahflow-design` skill when building or restyling UI.
+is the shell, `src/types.ts` holds shared types.
+
+**O design system é deste repositório, e a skill `biahflow-design` não o descreve** (ADR 0024).
+A paleta é **branco, preto e laranja**: `ink` (texto, sidebar, botão primário), `canvas`
+(fundo quase-branco), `accent`/`accent-50`/`accent-700` (o clay laranja, usado com parcimônia),
+`accent-200` (**o único acento que sobrevive a fundo escuro** — `accent` cru sobre `ink` dá
+3,82:1 e reprova no axe), `danger` (vermelho de verdade, separado do acento desde a ADR 0024),
+`line` e `muted`. Tudo em `src/index.css`, junto de uma `@layer components` com `.panel`,
+`.eyebrow`, `.page-head`, `.metric-card`, `.btn`, `.nav-item`, `.state` e `.popover` — **prefira
+essas primitivas a repetir utilitário inline**; as 22 páginas ainda não migraram, e é para lá que
+elas vão. A skill `biahflow-design` descreve o **OikOS** (`pine`/`clay`/`paper`) e nunca casou com
+este produto; não a siga aqui. O anterior está em `docs/design/paleta-anterior.md` e na tag
+`design/antes-do-redesenho`.
+
+Toda mudança de cor passa por `e2e/a11y.spec.ts` — 21 telas × 3 larguras, contraste AA incluído.
+**Quando o axe e o tom discordam, cede o tom.**
 
 ## Conventions (from AGENTS.md / CONTRIBUTING.md)
 

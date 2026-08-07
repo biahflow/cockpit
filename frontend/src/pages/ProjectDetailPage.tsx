@@ -278,7 +278,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
     } catch (cause) { setError((cause as Error).message); }
   }
 
-  if (error && !project) return <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-signal">{error}</div>;
+  if (error && !project) return <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-danger">{error}</div>;
   if (!project) return <div className="animate-pulse space-y-6"><div className="h-10 w-64 rounded-xl bg-slate-200" /><div className="h-56 rounded-2xl bg-white" /></div>;
 
   return <section className="space-y-7">
@@ -310,8 +310,8 @@ export function ProjectDetailPage({ id }: { id: number }) {
           <label className="grid gap-2 text-sm font-medium text-slate-700">ROI/mês (R$)<input className="field" type="number" min="0" step="0.01" value={employeeEdit.roi_month} onChange={event => setEmployeeEdit({ ...employeeEdit, roi_month: event.target.value })} /></label>
         </div>
         <div className="flex flex-wrap justify-end gap-3">
-          <button type="button" className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-ink hover:border-ocean" onClick={() => setEditingEmployee(null)}>Cancelar</button>
-          <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" disabled={employeeBusy}><Save className="size-4" />{employeeBusy ? "Salvando…" : "Salvar"}</button>
+          <button type="button" className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-ink hover:border-accent" onClick={() => setEditingEmployee(null)}>Cancelar</button>
+          <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" disabled={employeeBusy}><Save className="size-4" />{employeeBusy ? "Salvando…" : "Salvar"}</button>
         </div>
       </form>
     </Modal>}
@@ -327,9 +327,9 @@ export function ProjectDetailPage({ id }: { id: number }) {
       confirmLabel="Arquivar" busy={archiveBusy}
       onCancel={() => setArchivingProject(false)} onConfirm={() => void archiveProject()}
     />}
-    <a href="/projetos" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para projetos</a>
-    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-ocean">Entrega</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{project.name}</h1><p className="mt-2 flex items-center gap-2 text-sm text-slate-600"><CalendarDays className="size-4" />{formatDate(project.start_date)} — {formatDate(project.due_date)}</p></div><div className="flex items-center gap-3 self-start"><span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${project.status === "active" ? "bg-emerald-50 text-emerald-700" : project.status === "completed" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{projectStatusLabel[project.status] || project.status}</span><button className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-ink hover:border-ocean" onClick={openEdit}><Pencil className="size-4 text-ocean" />Editar</button>{canManageTeam && <button className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:border-signal hover:text-signal" onClick={() => setArchivingProject(true)}><Trash2 className="size-4" />Arquivar</button>}</div></header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    <a href="/projetos" className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-ink"><ArrowLeft className="size-4" />Voltar para projetos</a>
+    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-accent">Entrega</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{project.name}</h1><p className="mt-2 flex items-center gap-2 text-sm text-slate-600"><CalendarDays className="size-4" />{formatDate(project.start_date)} — {formatDate(project.due_date)}</p></div><div className="flex items-center gap-3 self-start"><span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${project.status === "active" ? "bg-emerald-50 text-emerald-700" : project.status === "completed" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{projectStatusLabel[project.status] || project.status}</span><button className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-ink hover:border-accent" onClick={openEdit}><Pencil className="size-4 text-accent" />Editar</button>{canManageTeam && <button className="inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:border-danger hover:text-danger" onClick={() => setArchivingProject(true)}><Trash2 className="size-4" />Arquivar</button>}</div></header>
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
     {editing && <form className="grid gap-4 rounded-2xl border bg-white p-5 sm:p-6" onSubmit={event => void saveProject(event)}>
       <div className="flex items-center justify-between"><h2 className="font-semibold text-ink">Editar projeto</h2><button type="button" className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Cancelar edição" onClick={() => setEditing(false)}><X className="size-4" /></button></div>
       <label className="grid gap-2 text-sm font-medium text-slate-700">Nome<input className="field" value={editDraft.name} onChange={event => setEditDraft({ ...editDraft, name: event.target.value })} required /></label>
@@ -344,7 +344,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
         <label className="grid gap-2 text-sm font-medium text-slate-700">Receita realizada<input className="field" type="number" min="0" step="0.01" value={editDraft.actual_value} onChange={event => setEditDraft({ ...editDraft, actual_value: event.target.value })} placeholder="0,00" /></label>
         <label className="grid gap-2 text-sm font-medium text-slate-700">Custo<input className="field" type="number" min="0" step="0.01" value={editDraft.cost} onChange={event => setEditDraft({ ...editDraft, cost: event.target.value })} placeholder="0,00" /></label>
       </div>
-      <button className="inline-flex items-center gap-2 self-start rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar projeto</button>
+      <button className="inline-flex items-center gap-2 self-start rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar projeto</button>
     </form>}
 
     <JourneySection phases={phases} canManage={canManageJourney} onAdvance={() => void advancePhase()} onMark={id => void markDeliverable(id)} onSetTarget={(phaseId, date) => void setPhaseTarget(phaseId, date)} />
@@ -354,35 +354,35 @@ export function ProjectDetailPage({ id }: { id: number }) {
     {project?.ai_scored_at && <AiScorePanel project={project} canManage={canManageJourney} onTogglePublish={next => void toggleAiScorePublish(next)} />}
 
     <section className="rounded-2xl border bg-white p-5 sm:p-6">
-      <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><UsersRound className="size-4" /></span><div><h2 className="font-semibold text-ink">Equipe do projeto</h2><p className="text-sm text-slate-600">Quem participa é quem enxerga este projeto e tudo o que pende dele.</p></div></div>
+      <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><UsersRound className="size-4" /></span><div><h2 className="font-semibold text-ink">Equipe do projeto</h2><p className="text-sm text-slate-600">Quem participa é quem enxerga este projeto e tudo o que pende dele.</p></div></div>
       {members.length ? <ul className="mt-4 divide-y rounded-xl border">{members.map(member => <li className="flex items-center gap-3 px-4 py-3" key={member.id}>
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-mint text-xs font-bold text-ocean">{(member.user_name || member.user_username).slice(0, 2).toUpperCase()}</span>
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-50 text-xs font-bold text-accent">{(member.user_name || member.user_username).slice(0, 2).toUpperCase()}</span>
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{member.user_name || member.user_username}</p><p className="text-xs text-slate-600">{roleLabel[member.user_role] ?? member.user_role}</p></div>
-        {canManageTeam && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Remover ${member.user_name || member.user_username} da equipe`} onClick={() => void removeMember(member.id)}><X className="size-4" /></button>}
+        {canManageTeam && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Remover ${member.user_name || member.user_username} da equipe`} onClick={() => void removeMember(member.id)}><X className="size-4" /></button>}
       </li>)}</ul> : <p className="mt-4 rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">Ninguém na equipe ainda — o projeto está invisível para a Entrega.</p>}
       {canManageTeam && <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void addMember(event)}>
         <select className="field flex-1" value={memberDraft} onChange={event => setMemberDraft(event.target.value)} aria-label="Pessoa a adicionar" required>
           <option value="">Selecione uma pessoa</option>
           {people.filter(person => !members.some(member => member.user === person.id)).map(person => <option key={person.id} value={person.id}>{person.first_name || person.username} — {roleLabel[person.role] ?? person.role}</option>)}
         </select>
-        <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar à equipe" type="submit"><Plus className="size-4" /></button>
+        <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label="Adicionar à equipe" type="submit"><Plus className="size-4" /></button>
       </form>}
     </section>
 
     <section className="rounded-2xl border bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Bot className="size-4" /></span><div><h2 className="font-semibold text-ink">Funcionários Digitais</h2><p className="text-sm text-slate-600">Os agentes de IA entregues neste projeto.</p></div></div>
-        <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-ocean" checked={showArchivedEmployees} onChange={event => setShowArchivedEmployees(event.target.checked)} />Mostrar arquivados</label>
+        <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><Bot className="size-4" /></span><div><h2 className="font-semibold text-ink">Funcionários Digitais</h2><p className="text-sm text-slate-600">Os agentes de IA entregues neste projeto.</p></div></div>
+        <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-accent" checked={showArchivedEmployees} onChange={event => setShowArchivedEmployees(event.target.checked)} />Mostrar arquivados</label>
       </div>
       {employees.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{employees.map(employee => <article className="rounded-xl border bg-slate-50/50 p-4" key={employee.id}>
         <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{employee.name}</p><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${employee.status === "active" ? "bg-emerald-50 text-emerald-700" : employee.status === "paused" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{employeeStatusLabel[employee.status]}</span></div>
-        {employee.area && <p className="mt-0.5 text-xs text-ocean">{employee.area}</p>}
+        {employee.area && <p className="mt-0.5 text-xs text-accent">{employee.area}</p>}
         {employee.description && <p className="mt-1 text-xs text-slate-600">{employee.description}</p>}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{employee.kpi_label && <span><strong className="text-ink">{employee.kpi_label}:</strong> {employee.kpi_value}</span>}{Number(employee.hours_saved_month) > 0 && <span>{Number(employee.hours_saved_month)}h/mês</span>}{Number(employee.roi_month) > 0 && <span>ROI {money.format(Number(employee.roi_month))}/mês</span>}</div>
         {canManageJourney && <div className="mt-3 flex flex-wrap justify-end gap-2">{showArchivedEmployees
-          ? <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-ocean hover:border-ocean" onClick={() => void restoreEmployee(employee.id)}>Restaurar</button>
-          : <><button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-ocean" aria-label={`Editar ${employee.name}`} onClick={() => openEmployeeEdit(employee)}><Pencil className="size-3.5 text-ocean" />Editar</button>
-            <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-signal hover:text-signal" aria-label={`Arquivar ${employee.name}`} onClick={() => setArchivingEmployee(employee)}><Trash2 className="size-3.5" />Arquivar</button></>
+          ? <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-accent hover:border-accent" onClick={() => void restoreEmployee(employee.id)}>Restaurar</button>
+          : <><button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent" aria-label={`Editar ${employee.name}`} onClick={() => openEmployeeEdit(employee)}><Pencil className="size-3.5 text-accent" />Editar</button>
+            <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-danger hover:text-danger" aria-label={`Arquivar ${employee.name}`} onClick={() => setArchivingEmployee(employee)}><Trash2 className="size-3.5" />Arquivar</button></>
         }</div>}
       </article>)}</div> : <p className="mt-4 rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">{showArchivedEmployees ? "Nenhum funcionário digital arquivado." : "Nenhum funcionário digital ainda."}</p>}
       {canManageJourney && !showArchivedEmployees && <>
@@ -390,7 +390,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
             bloco nasce com nome, descrição, KPI e valores já preenchidos, em vez de um cartão
             vazio para alguém completar à mão depois (FDD 026). O formulário livre continua
             embaixo, para o que ainda não virou catálogo. */}
-        {catalog.length > 0 && <form className="mt-4 flex flex-wrap items-end gap-2 rounded-xl border border-dashed bg-mint/30 p-3" onSubmit={event => void createEmployeeFromBlueprint(event)}>
+        {catalog.length > 0 && <form className="mt-4 flex flex-wrap items-end gap-2 rounded-xl border border-dashed bg-accent-50/30 p-3" onSubmit={event => void createEmployeeFromBlueprint(event)}>
           <label className="grid flex-1 gap-2 text-sm font-medium text-slate-700">Adicionar da biblioteca<select className="field" value={blueprintDraft} onChange={event => setBlueprintDraft(event.target.value)} required>
             <option value="">Escolha um bloco do catálogo…</option>
             {catalog.map(blueprint => <option key={blueprint.id} value={blueprint.id}>{blueprint.name} — {blueprint.area_display}{blueprint.has_variant ? ` (ajustado a ${project.client_vertical_name})` : ""}</option>)}
@@ -399,25 +399,25 @@ export function ProjectDetailPage({ id }: { id: number }) {
               o único momento em que ele ainda é medição. Preenchido meses depois, na conclusão,
               seria memória — e é exatamente isso que destrói a credibilidade de uma prova (FDD 027). */}
           <label className="grid gap-2 text-sm font-medium text-slate-700">Base do KPI hoje<input className="field w-40" type="number" step="0.01" placeholder="Opcional" value={baselineDraft} onChange={event => setBaselineDraft(event.target.value)} /></label>
-          <button className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-ocean px-4 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Instanciar</button>
+          <button className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Instanciar</button>
         </form>}
         <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void createEmployee(event)}>
           <input className="field flex-1" placeholder="Nome (ex.: Agente Financeiro)" value={employeeDraft.name} onChange={event => setEmployeeDraft({ ...employeeDraft, name: event.target.value })} required />
           <input className="field w-40" placeholder="Área" value={employeeDraft.area} onChange={event => setEmployeeDraft({ ...employeeDraft, area: event.target.value })} />
-          <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar funcionário digital" type="submit"><Plus className="size-4" /></button>
+          <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label="Adicionar funcionário digital" type="submit"><Plus className="size-4" /></button>
         </form>
       </>}
     </section>
 
     {risk && risk.signals.length > 0 && <section className="rounded-2xl border bg-white p-5 sm:p-6">
-      <div className="flex items-center gap-3"><span className={`rounded-full px-3 py-1 text-sm font-semibold ${risk.level === "alto" ? "bg-red-50 text-signal" : risk.level === "médio" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>Risco {risk.level}</span><h2 className="font-semibold text-ink">Sinais de atraso</h2></div>
-      <ul className="mt-3 space-y-1.5 text-sm text-slate-600">{risk.signals.map((signal, index) => <li className="flex gap-2" key={index}><AlertTriangle className="mt-0.5 size-4 shrink-0 text-signal" /><span><strong className="text-ink">{signal.label}:</strong> {signal.detail}</span></li>)}</ul>
-      {risk.forecast && <p className={`mt-3 text-sm font-medium ${risk.forecast.delay_days > 0 ? "text-signal" : "text-slate-600"}`}>Previsão de término: {formatDate(risk.forecast.predicted_finish_date)}{risk.forecast.delay_days > 0 ? ` — atraso previsto de ${risk.forecast.delay_days} dia(s)` : " — dentro do prazo"} <span className="text-slate-600">({risk.forecast.basis})</span></p>}
+      <div className="flex items-center gap-3"><span className={`rounded-full px-3 py-1 text-sm font-semibold ${risk.level === "alto" ? "bg-red-50 text-danger" : risk.level === "médio" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>Risco {risk.level}</span><h2 className="font-semibold text-ink">Sinais de atraso</h2></div>
+      <ul className="mt-3 space-y-1.5 text-sm text-slate-600">{risk.signals.map((signal, index) => <li className="flex gap-2" key={index}><AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" /><span><strong className="text-ink">{signal.label}:</strong> {signal.detail}</span></li>)}</ul>
+      {risk.forecast && <p className={`mt-3 text-sm font-medium ${risk.forecast.delay_days > 0 ? "text-danger" : "text-slate-600"}`}>Previsão de término: {formatDate(risk.forecast.predicted_finish_date)}{risk.forecast.delay_days > 0 ? ` — atraso previsto de ${risk.forecast.delay_days} dia(s)` : " — dentro do prazo"} <span className="text-slate-600">({risk.forecast.basis})</span></p>}
     </section>}
 
     {aiEnabled && <section className="rounded-2xl border bg-white p-5 sm:p-6">
-      <div className="flex flex-wrap items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Sparkles className="size-4" /></span><div><h2 className="font-semibold text-ink">Assistente do projeto</h2><p className="text-sm text-slate-600">Pergunte sobre marcos, tarefas e prazos deste projeto.</p></div><button type="button" className="ml-auto rounded-xl border px-3 py-2 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void suggestNextSteps()} disabled={aiLoading}>Sugerir próximos passos</button><button type="button" className="rounded-xl border px-3 py-2 text-sm font-semibold text-ink hover:border-ocean disabled:opacity-60" onClick={() => void summarize()} disabled={aiLoading}>Resumir projeto</button></div>
-      <form className="mt-4 flex gap-2" onSubmit={event => void askAssistant(event)}><input className="field" value={aiQuestion} onChange={event => setAiQuestion(event.target.value)} placeholder="Ex.: quais tarefas estão atrasadas?" aria-label="Pergunta ao assistente" /><button className="shrink-0 rounded-xl bg-ocean px-4 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" type="submit" disabled={aiLoading}>{aiLoading ? "…" : "Perguntar"}</button></form>
+      <div className="flex flex-wrap items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><Sparkles className="size-4" /></span><div><h2 className="font-semibold text-ink">Assistente do projeto</h2><p className="text-sm text-slate-600">Pergunte sobre marcos, tarefas e prazos deste projeto.</p></div><button type="button" className="ml-auto rounded-xl border px-3 py-2 text-sm font-semibold text-ink hover:border-accent disabled:opacity-60" onClick={() => void suggestNextSteps()} disabled={aiLoading}>Sugerir próximos passos</button><button type="button" className="rounded-xl border px-3 py-2 text-sm font-semibold text-ink hover:border-accent disabled:opacity-60" onClick={() => void summarize()} disabled={aiLoading}>Resumir projeto</button></div>
+      <form className="mt-4 flex gap-2" onSubmit={event => void askAssistant(event)}><input className="field" value={aiQuestion} onChange={event => setAiQuestion(event.target.value)} placeholder="Ex.: quais tarefas estão atrasadas?" aria-label="Pergunta ao assistente" /><button className="shrink-0 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" type="submit" disabled={aiLoading}>{aiLoading ? "…" : "Perguntar"}</button></form>
       {aiAnswer && <p className="mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{aiAnswer}</p>}
     </section>}
 
@@ -425,7 +425,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
       <WorkColumn icon={<Flag className="size-4" />} title="Marcos" count={milestones.length}>
         <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={event => void createMilestone(event)}>
           <input className="field" placeholder="Novo marco" value={milestoneDraft.title} onChange={event => setMilestoneDraft({ ...milestoneDraft, title: event.target.value })} required />
-          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Prazo do marco" value={milestoneDraft.due_date} onChange={event => setMilestoneDraft({ ...milestoneDraft, due_date: event.target.value })} required /><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar marco" type="submit"><Plus className="size-4" /></button></div>
+          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Prazo do marco" value={milestoneDraft.due_date} onChange={event => setMilestoneDraft({ ...milestoneDraft, due_date: event.target.value })} required /><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label="Adicionar marco" type="submit"><Plus className="size-4" /></button></div>
         </form>
         <WorkList items={milestones} onToggle={(itemId, isDone) => void toggleWorkItem("milestones", itemId, isDone)} onCalendar={calendarEnabled ? itemId => void addToCalendar("milestones", itemId) : undefined} emptyLabel="Nenhum marco cadastrado." />
       </WorkColumn>
@@ -433,7 +433,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
       <WorkColumn icon={<ListTodo className="size-4" />} title="Tarefas" count={tasks.length}>
         <form className="grid gap-3" onSubmit={event => void createTask(event)}>
           <input className="field" placeholder="Nova tarefa" value={taskDraft.title} onChange={event => setTaskDraft({ ...taskDraft, title: event.target.value })} required />
-          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Prazo da tarefa" value={taskDraft.due_date} onChange={event => setTaskDraft({ ...taskDraft, due_date: event.target.value })} required /><select className="field min-w-0 flex-1" aria-label="Marco da tarefa" value={taskDraft.milestone} onChange={event => setTaskDraft({ ...taskDraft, milestone: event.target.value })}><option value="">Sem marco</option>{milestones.map(milestone => <option key={milestone.id} value={milestone.id}>{milestone.title}</option>)}</select><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar tarefa" type="submit"><Plus className="size-4" /></button></div>
+          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Prazo da tarefa" value={taskDraft.due_date} onChange={event => setTaskDraft({ ...taskDraft, due_date: event.target.value })} required /><select className="field min-w-0 flex-1" aria-label="Marco da tarefa" value={taskDraft.milestone} onChange={event => setTaskDraft({ ...taskDraft, milestone: event.target.value })}><option value="">Sem marco</option>{milestones.map(milestone => <option key={milestone.id} value={milestone.id}>{milestone.title}</option>)}</select><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label="Adicionar tarefa" type="submit"><Plus className="size-4" /></button></div>
         </form>
         <WorkList items={tasks} onToggle={(itemId, isDone) => void toggleWorkItem("tasks", itemId, isDone)} onCalendar={calendarEnabled ? itemId => void addToCalendar("tasks", itemId) : undefined} emptyLabel="Nenhuma tarefa cadastrada." />
       </WorkColumn>
@@ -443,21 +443,21 @@ export function ProjectDetailPage({ id }: { id: number }) {
       <WorkColumn icon={<Video className="size-4" />} title="Reuniões" count={meetings.length}>
         <form className="grid gap-3" onSubmit={event => void createMeeting(event)}>
           <input className="field" placeholder="Título da reunião" value={meetingDraft.title} onChange={event => setMeetingDraft({ ...meetingDraft, title: event.target.value })} required />
-          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Data da reunião" value={meetingDraft.date} onChange={event => setMeetingDraft({ ...meetingDraft, date: event.target.value })} required /><input className="field min-w-0 flex-1" type="url" aria-label="Link da reunião" placeholder="Link da reunião (opcional)" value={meetingDraft.meeting_url} onChange={event => setMeetingDraft({ ...meetingDraft, meeting_url: event.target.value })} /><input className="field min-w-0 flex-1" type="url" aria-label="Link da gravação" placeholder="Link da gravação (opcional)" value={meetingDraft.recording_url} onChange={event => setMeetingDraft({ ...meetingDraft, recording_url: event.target.value })} /><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar reunião" type="submit"><Plus className="size-4" /></button></div>
+          <div className="flex gap-2"><input className="field min-w-0 flex-1" type="date" aria-label="Data da reunião" value={meetingDraft.date} onChange={event => setMeetingDraft({ ...meetingDraft, date: event.target.value })} required /><input className="field min-w-0 flex-1" type="url" aria-label="Link da reunião" placeholder="Link da reunião (opcional)" value={meetingDraft.meeting_url} onChange={event => setMeetingDraft({ ...meetingDraft, meeting_url: event.target.value })} /><input className="field min-w-0 flex-1" type="url" aria-label="Link da gravação" placeholder="Link da gravação (opcional)" value={meetingDraft.recording_url} onChange={event => setMeetingDraft({ ...meetingDraft, recording_url: event.target.value })} /><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label="Adicionar reunião" type="submit"><Plus className="size-4" /></button></div>
           <textarea className="field min-h-20" placeholder="Transcrição da reunião (para Discovery/Assessment por IA)" value={meetingDraft.transcript} onChange={event => setMeetingDraft({ ...meetingDraft, transcript: event.target.value })} />
         </form>
         {meetings.length ? <div className="divide-y">{meetings.map(meeting => <div className="py-3" key={meeting.id}>
           <div className="flex items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><Video className="size-4" /></span>
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{meeting.title}</p><p className="mt-0.5 text-xs text-slate-600">{formatDate(meeting.date)}</p></div>
-            {meeting.meeting_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-ocean" href={meeting.meeting_url} target="_blank" rel="noreferrer" aria-label={`Abrir reunião de ${meeting.title}`}><Video className="size-4" /></a>}
-            {meeting.recording_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-ocean" href={meeting.recording_url} target="_blank" rel="noreferrer" aria-label={`Abrir gravação de ${meeting.title}`}><ExternalLink className="size-4" /></a>}
-            <button type="button" onClick={() => void toggleMeeting(meeting)} aria-label={meeting.status === "held" ? `Marcar ${meeting.title} como agendada` : `Marcar ${meeting.title} como realizada`} className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition hover:ring-2 hover:ring-ocean/30 ${meeting.status === "held" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{meeting.status === "held" ? "Realizada" : "Agendada"}</button>
+            {meeting.meeting_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-accent" href={meeting.meeting_url} target="_blank" rel="noreferrer" aria-label={`Abrir reunião de ${meeting.title}`}><Video className="size-4" /></a>}
+            {meeting.recording_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-accent" href={meeting.recording_url} target="_blank" rel="noreferrer" aria-label={`Abrir gravação de ${meeting.title}`}><ExternalLink className="size-4" /></a>}
+            <button type="button" onClick={() => void toggleMeeting(meeting)} aria-label={meeting.status === "held" ? `Marcar ${meeting.title} como agendada` : `Marcar ${meeting.title} como realizada`} className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition hover:ring-2 hover:ring-accent/30 ${meeting.status === "held" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{meeting.status === "held" ? "Realizada" : "Agendada"}</button>
           </div>
           {aiEnabled && meeting.transcript.trim() && <div className="mt-2 flex flex-wrap gap-2 pl-12">
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-ocean disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "discovery")}><Sparkles className="size-3.5 text-ocean" />Discovery</button>
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-ocean disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "assessment")}><Sparkles className="size-3.5 text-ocean" />Assessment</button>
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-ocean disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-ocean" />AI Score</button>
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "discovery")}><Sparkles className="size-3.5 text-accent" />Discovery</button>
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "assessment")}><Sparkles className="size-3.5 text-accent" />Assessment</button>
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-accent" />AI Score</button>
           </div>}
         </div>)}</div> : <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">Nenhuma reunião registrada.</p>}
         <ArtifactsPanel project={Number(id)} reloadToken={artifactsToken} />
@@ -466,12 +466,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
       <WorkColumn icon={<Inbox className="size-4" />} title="Pendências" count={pendencias.length}>
         <form className="grid gap-3" onSubmit={event => void createPendencia(event)}>
           <input className="field" placeholder="Nova pendência" value={pendenciaDraft.title} onChange={event => setPendenciaDraft({ ...pendenciaDraft, title: event.target.value })} required />
-          <div className="flex gap-2"><select className="field min-w-0 flex-1" aria-label="Responsável pela pendência" value={pendenciaDraft.party} onChange={event => setPendenciaDraft({ ...pendenciaDraft, party: event.target.value as Party })}><option value="provider">Fornecedor</option><option value="client">Cliente</option></select><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar pendência" type="submit"><Plus className="size-4" /></button></div>
+          <div className="flex gap-2"><select className="field min-w-0 flex-1" aria-label="Responsável pela pendência" value={pendenciaDraft.party} onChange={event => setPendenciaDraft({ ...pendenciaDraft, party: event.target.value as Party })}><option value="provider">Fornecedor</option><option value="client">Cliente</option></select><button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label="Adicionar pendência" type="submit"><Plus className="size-4" /></button></div>
         </form>
         {pendencias.length ? <div className="divide-y">{pendencias.map(pendencia => {
           const resolved = pendencia.status === "resolved";
           return <div className="flex items-center gap-3 py-3" key={pendencia.id}>
-            <button className={`shrink-0 ${resolved ? "text-emerald-600 hover:text-ink" : "text-slate-300 hover:text-ocean"}`} aria-label={resolved ? `Reabrir ${pendencia.title}` : `Resolver ${pendencia.title}`} onClick={() => void togglePendencia(pendencia.id, resolved)}>{resolved ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
+            <button className={`shrink-0 ${resolved ? "text-emerald-600 hover:text-ink" : "text-slate-300 hover:text-accent"}`} aria-label={resolved ? `Reabrir ${pendencia.title}` : `Resolver ${pendencia.title}`} onClick={() => void togglePendencia(pendencia.id, resolved)}>{resolved ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
             <div className="min-w-0 flex-1"><p className={`truncate text-sm font-medium ${resolved ? "text-slate-600 line-through" : "text-ink"}`}>{pendencia.title}</p><p className="mt-0.5 text-xs text-slate-600">{partyLabel[pendencia.party]}</p></div>
             <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${resolved ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{resolved ? "Resolvida" : "Aberta"}</span>
           </div>;
@@ -481,11 +481,11 @@ export function ProjectDetailPage({ id }: { id: number }) {
   </section>;
 }
 
-function ScoreBar({ label, value, tone }: { label: string; value: number | null; tone: "ocean" | "mint" }) {
+function ScoreBar({ label, value, tone }: { label: string; value: number | null; tone: "brand" | "positive" }) {
   const pct = value ?? 0;
   return <div>
     <div className="flex items-baseline justify-between text-sm"><span className="font-medium text-slate-600">{label}</span><span className="font-semibold text-ink">{value === null ? "—" : `${value}/100`}</span></div>
-    <div className="mt-1 h-2 rounded-full bg-slate-100"><div className={`h-2 rounded-full transition-all ${tone === "ocean" ? "bg-ocean" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} /></div>
+    <div className="mt-1 h-2 rounded-full bg-slate-100"><div className={`h-2 rounded-full transition-all ${tone === "brand" ? "bg-ink" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} /></div>
   </div>;
 }
 
@@ -493,17 +493,17 @@ function AiScorePanel({ project, canManage, onTogglePublish }: { project: Projec
   const published = project.ai_score_reviewed;
   return <section className="space-y-4 rounded-2xl border bg-white p-5 sm:p-6">
     <div className="flex flex-wrap items-center gap-3">
-      <span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Gauge className="size-4" /></span>
+      <span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><Gauge className="size-4" /></span>
       <div className="flex-1"><h2 className="font-semibold text-ink">AI Score</h2><p className="text-sm text-slate-600">Maturidade e oportunidade de IA a partir do Discovery/Assessment.</p></div>
       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${published ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{published ? "Publicado ao cliente" : "Rascunho — revisar"}</span>
     </div>
     <div className="grid gap-3 sm:grid-cols-2">
-      <ScoreBar label="Maturidade" value={project.ai_maturity} tone="ocean" />
-      <ScoreBar label="Oportunidade" value={project.ai_opportunity} tone="mint" />
+      <ScoreBar label="Maturidade" value={project.ai_maturity} tone="brand" />
+      <ScoreBar label="Oportunidade" value={project.ai_opportunity} tone="positive" />
     </div>
-    {project.ai_dimensions.length > 0 && <div className="grid gap-2 sm:grid-cols-2">{project.ai_dimensions.map((dimension, index) => <ScoreBar key={index} label={dimension.label} value={dimension.score} tone="ocean" />)}</div>}
+    {project.ai_dimensions.length > 0 && <div className="grid gap-2 sm:grid-cols-2">{project.ai_dimensions.map((dimension, index) => <ScoreBar key={index} label={dimension.label} value={dimension.score} tone="brand" />)}</div>}
     {project.ai_score_summary && <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{project.ai_score_summary}</p>}
-    {canManage && <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-ocean" checked={published} onChange={event => onTogglePublish(event.target.checked)} />Publicar ao cliente (revisado)</label>}
+    {canManage && <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-accent" checked={published} onChange={event => onTogglePublish(event.target.checked)} />Publicar ao cliente (revisado)</label>}
   </section>;
 }
 
@@ -516,21 +516,21 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget }: {
 
   return <section className="space-y-5 rounded-2xl border bg-white p-5 sm:p-6">
     <div className="flex flex-wrap items-center gap-3">
-      <span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><MapPin className="size-4" /></span>
+      <span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><MapPin className="size-4" /></span>
       <div className="flex-1"><h2 className="font-semibold text-ink">Jornada de Transformação</h2><p className="text-sm text-slate-600">{done} de {phases.length} fases concluídas</p></div>
-      <span className="text-sm font-semibold text-ocean">{pct}%</span>
+      <span className="text-sm font-semibold text-accent">{pct}%</span>
     </div>
 
-    <div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-ocean transition-all" style={{ width: `${pct}%` }} /></div>
+    <div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-ink transition-all" style={{ width: `${pct}%` }} /></div>
 
     <div className="flex flex-wrap gap-2">{phases.map(phase => {
       const isDone = phase.status === "done"; const isActive = phase.status === "active";
-      return <span key={phase.id} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "bg-emerald-50 text-emerald-700" : isActive ? "bg-ocean text-white" : "bg-slate-100 text-slate-600"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>;
+      return <span key={phase.id} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "bg-emerald-50 text-emerald-700" : isActive ? "bg-ink text-white" : "bg-slate-100 text-slate-600"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>;
     })}</div>
 
     {active ? <div className="rounded-2xl border bg-slate-50/60 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-ocean">Você está aqui</p><h3 className="mt-0.5 text-lg font-semibold text-ink">{active.phase_name}</h3>{active.phase_description && <p className="mt-1 text-sm text-slate-600">{active.phase_description}</p>}</div>
+        <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-accent">Você está aqui</p><h3 className="mt-0.5 text-lg font-semibold text-ink">{active.phase_name}</h3>{active.phase_description && <p className="mt-1 text-sm text-slate-600">{active.phase_description}</p>}</div>
         {next && <p className="shrink-0 text-right text-xs text-slate-600">Próxima<span className="mt-0.5 flex items-center gap-1 font-semibold text-slate-600"><ChevronRight className="size-3.5" />{next.phase_name}</span></p>}
       </div>
 
@@ -539,7 +539,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget }: {
         <div className="divide-y">{active.deliverables.map(item => {
           const delivered = item.status === "delivered";
           return <div className="flex items-center gap-3 py-2.5" key={item.id}>
-            <button className={`shrink-0 ${delivered ? "text-emerald-600" : canManage ? "text-slate-300 hover:text-ocean" : "text-slate-200"}`} aria-label={delivered ? `${item.name} entregue` : `Marcar ${item.name} como entregue`} disabled={delivered || !canManage} onClick={() => onMark(item.id)}>{delivered ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
+            <button className={`shrink-0 ${delivered ? "text-emerald-600" : canManage ? "text-slate-300 hover:text-accent" : "text-slate-200"}`} aria-label={delivered ? `${item.name} entregue` : `Marcar ${item.name} como entregue`} disabled={delivered || !canManage} onClick={() => onMark(item.id)}>{delivered ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
             <span className={`flex-1 text-sm font-medium ${delivered ? "text-slate-600 line-through" : "text-ink"}`}>{item.name}</span>
           </div>;
         })}</div>
@@ -547,7 +547,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget }: {
 
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
         {canManage ? <label className="grid gap-1 text-xs font-medium text-slate-600">Previsão desta fase<input className="field w-44" type="date" value={active.target_date ?? ""} onChange={event => onSetTarget(active.id, event.target.value)} /></label> : active.target_date ? <p className="text-sm text-slate-600">Previsão: {formatDate(active.target_date)}</p> : <span />}
-        {canManage && <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink" onClick={onAdvance}><CheckCircle2 className="size-4" />Concluir fase e avançar</button>}
+        {canManage && <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink" onClick={onAdvance}><CheckCircle2 className="size-4" />Concluir fase e avançar</button>}
       </div>
     </div> : <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700"><Trophy className="size-5 shrink-0" />Jornada de transformação concluída — todas as fases entregues.</div>}
   </section>;
@@ -556,7 +556,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget }: {
 function WorkColumn({ icon, title, count, children }: { icon: ReactNode; title: string; count: number; children: ReactNode }) {
   // `min-w-0`: item de grade nasce com `min-width: auto` e se recusa a encolher abaixo do
   // conteúdo — no celular a coluna estourava a trilha e a página inteira rolava na horizontal.
-  return <section className="min-w-0 space-y-4 rounded-2xl border bg-white p-5 sm:p-6"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean">{icon}</span><div><h2 className="font-semibold text-ink">{title}</h2><p className="text-sm text-slate-600">{count} {count === 1 ? "item" : "itens"}</p></div></div>{children}</section>;
+  return <section className="min-w-0 space-y-4 rounded-2xl border bg-white p-5 sm:p-6"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent">{icon}</span><div><h2 className="font-semibold text-ink">{title}</h2><p className="text-sm text-slate-600">{count} {count === 1 ? "item" : "itens"}</p></div></div>{children}</section>;
 }
 
 function WorkList({ items, onToggle, onCalendar, emptyLabel }: { items: (Milestone | Task)[]; onToggle: (id: number, isDone: boolean) => void; onCalendar?: (id: number) => void; emptyLabel: string }) {
@@ -564,9 +564,9 @@ function WorkList({ items, onToggle, onCalendar, emptyLabel }: { items: (Milesto
   return <div className="divide-y">{items.map(item => {
     const done = item.status === "done";
     return <div className="flex items-center gap-3 py-3" key={item.id}>
-      <button className={`shrink-0 ${done ? "text-emerald-600 hover:text-ink" : "text-slate-300 hover:text-ocean"}`} aria-label={done ? `Reabrir ${item.title}` : `Concluir ${item.title}`} onClick={() => onToggle(item.id, done)}>{done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
-      <div className="min-w-0 flex-1"><p className={`truncate text-sm font-medium ${done ? "text-slate-600 line-through" : "text-ink"}`}>{item.title}</p><p className={`mt-0.5 flex items-center gap-1.5 text-xs ${item.is_overdue ? "font-semibold text-signal" : "text-slate-600"}`}>{item.is_overdue && <AlertTriangle className="size-3.5" />}{formatDate(item.due_date)}</p></div>
-      {onCalendar && <button className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-ocean" aria-label={`Adicionar ${item.title} ao calendário`} onClick={() => onCalendar(item.id)}><CalendarPlus className="size-4" /></button>}
+      <button className={`shrink-0 ${done ? "text-emerald-600 hover:text-ink" : "text-slate-300 hover:text-accent"}`} aria-label={done ? `Reabrir ${item.title}` : `Concluir ${item.title}`} onClick={() => onToggle(item.id, done)}>{done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
+      <div className="min-w-0 flex-1"><p className={`truncate text-sm font-medium ${done ? "text-slate-600 line-through" : "text-ink"}`}>{item.title}</p><p className={`mt-0.5 flex items-center gap-1.5 text-xs ${item.is_overdue ? "font-semibold text-danger" : "text-slate-600"}`}>{item.is_overdue && <AlertTriangle className="size-3.5" />}{formatDate(item.due_date)}</p></div>
+      {onCalendar && <button className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-accent" aria-label={`Adicionar ${item.title} ao calendário`} onClick={() => onCalendar(item.id)}><CalendarPlus className="size-4" /></button>}
       <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${done ? "bg-emerald-50 text-emerald-700" : item.status === "in_progress" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{workStatusLabel[item.status]}</span>
     </div>;
   })}</div>;

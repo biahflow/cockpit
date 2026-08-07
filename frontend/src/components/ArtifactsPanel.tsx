@@ -18,7 +18,7 @@ const STATUS_BADGE: Record<ArtifactStatus, string> = {
   review: "bg-amber-50 text-amber-700",
   sent: "bg-sky-50 text-sky-700",
   accepted: "bg-emerald-50 text-emerald-700",
-  rejected: "bg-red-50 text-signal",
+  rejected: "bg-red-50 text-danger",
 };
 const STATUS_LABEL: Record<ArtifactStatus, string> = {
   draft: "Rascunho", review: "Em revisão", sent: "Enviado", accepted: "Aceito", rejected: "Recusado",
@@ -65,9 +65,9 @@ export function ArtifactsPanel({ opportunity, project, reloadToken, onChange }: 
   if (!artifacts.length && !error) return null;
 
   return <div className="mt-6 border-t pt-5">
-    <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Sparkles className="size-4 text-ocean" />Artefatos da jornada</h3>
+    <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Sparkles className="size-4 text-accent" />Artefatos da jornada</h3>
     <p className="mt-1 text-xs text-slate-600">Rascunhos gerados pela IA ficam registrados aqui até a revisão humana e a decisão do cliente.</p>
-    {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
     <div className="mt-3 grid gap-3">{artifacts.map(artifact => {
       const content = drafts[artifact.id] ?? artifact.content;
       const dirty = content !== artifact.content;
@@ -76,7 +76,7 @@ export function ArtifactsPanel({ opportunity, project, reloadToken, onChange }: 
       // coluna no celular, o que fazia a página inteira rolar na horizontal.
       return <article className="min-w-0 rounded-xl border bg-white p-4" key={artifact.id}>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-lg bg-mint px-2 py-0.5 text-[11px] font-semibold text-ocean">{artifact.kind_display}</span>
+          <span className="rounded-lg bg-accent-50 px-2 py-0.5 text-[11px] font-semibold text-accent">{artifact.kind_display}</span>
           <span className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[artifact.status]}`}>{artifact.status_display}</span>
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{artifact.title}</p>
           {artifact.document && <span className="inline-flex items-center gap-1 text-xs text-slate-600"><FileText className="size-3.5" />Documento salvo</span>}
@@ -92,19 +92,19 @@ export function ArtifactsPanel({ opportunity, project, reloadToken, onChange }: 
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-1.5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-1.5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60"
             disabled={!dirty}
             onClick={() => void patch(artifact, { content })}
           ><Save className="size-3.5" />Salvar texto</button>
           {!artifact.document && <button
             type="button"
-            className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean"
+            className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-accent"
             onClick={() => void saveAsDocument(artifact)}
           >Salvar como documento</button>}
           <div className="ml-auto flex flex-wrap gap-2">{NEXT[artifact.status].map(next => <button
             key={next}
             type="button"
-            className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-ocean"
+            className="rounded-xl border px-3 py-1.5 text-sm font-semibold text-ink hover:border-accent"
             onClick={() => void patch(artifact, { status: next })}
           >Marcar como {STATUS_LABEL[next].toLowerCase()}</button>)}</div>
         </div>

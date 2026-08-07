@@ -64,11 +64,11 @@ export function ClientDetailPage({ id }: { id: number }) {
     }
   }
 
-  if (error && !client) return <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-signal">{error}</div>;
+  if (error && !client) return <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-danger">{error}</div>;
   if (!client) return <div className="animate-pulse space-y-6"><div className="h-10 w-64 rounded-xl bg-slate-200" /><div className="h-56 rounded-2xl bg-white" /></div>;
 
   return <section className="space-y-7">
-    <a href="/clientes" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para clientes</a>
+    <a href="/clientes" className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-ink"><ArrowLeft className="size-4" />Voltar para clientes</a>
     {removingContact && <ConfirmDialog
       title="Remover contato"
       message={<>Remover <strong className="text-ink">{removingContact.name}</strong> da lista de contatos deste cliente?</>}
@@ -82,16 +82,16 @@ export function ClientDetailPage({ id }: { id: number }) {
       onCancel={() => setArchiving(false)} onConfirm={() => void archiveClient()}
     />}
     <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="text-sm font-semibold text-ocean">Relacionamento</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{client.name}</h1><p className="mt-2 text-sm text-slate-600">Dados cadastrais e contatos do cliente.</p></div>
-      {canArchive && <button type="button" className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:border-signal hover:text-signal sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar cliente</button>}
+      <div><p className="text-sm font-semibold text-accent">Relacionamento</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">{client.name}</h1><p className="mt-2 text-sm text-slate-600">Dados cadastrais e contatos do cliente.</p></div>
+      {canArchive && <button type="button" className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:border-danger hover:text-danger sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar cliente</button>}
     </header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
 
     {overview && (overview.health
       ? <section className="rounded-2xl border bg-white p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2"><h2 className="font-semibold text-ink">Saúde da relação</h2><HealthBadge level={overview.health.level} score={overview.health.score} /></div>
-            {overview.phase && <span className="text-xs font-semibold uppercase tracking-wide text-ocean">Você está aqui · {overview.phase.name}</span>}
+            {overview.phase && <span className="text-xs font-semibold uppercase tracking-wide text-accent">Você está aqui · {overview.phase.name}</span>}
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <Metric label="Risco de atraso" value={overview.risk_level ?? "—"} />
@@ -119,20 +119,20 @@ export function ClientDetailPage({ id }: { id: number }) {
             valores genéricos. */}
         <Field label="Vertical"><select className="field" value={form.vertical} onChange={event => { setForm({ ...form, vertical: event.target.value }); setSaved(false); }}><option value="">Sem vertical definida</option>{verticals.filter(vertical => vertical.active || String(vertical.id) === form.vertical).map(vertical => <option key={vertical.id} value={vertical.id}>{vertical.name}</option>)}</select></Field>
         <Field label="Situação"><select className="field" value={form.status} onChange={event => { setForm({ ...form, status: event.target.value as ClientStatus }); setSaved(false); }}><option value="prospect">Prospect — ainda não fechou</option><option value="active">Cliente ativo — já fechou</option></select></Field>
-        <button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar alterações</button>
+        <button className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar alterações</button>
         {saved && <p className="text-sm font-medium text-emerald-700">Dados atualizados.</p>}
       </form>
 
       <section className="space-y-4 rounded-2xl border bg-white p-5 sm:p-6">
-        <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><UserRound className="size-4" /></span><div><h2 className="font-semibold text-ink">Contatos</h2><p className="text-sm text-slate-600">{contacts.length} {contacts.length === 1 ? "contato" : "contatos"}</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><UserRound className="size-4" /></span><div><h2 className="font-semibold text-ink">Contatos</h2><p className="text-sm text-slate-600">{contacts.length} {contacts.length === 1 ? "contato" : "contatos"}</p></div></div>
         <form className="grid gap-3 sm:grid-cols-2" onSubmit={event => void createContact(event)}>
           <input className="field" placeholder="Nome" value={contactDraft.name} onChange={event => setContactDraft({ ...contactDraft, name: event.target.value })} required />
           <input className="field" type="email" placeholder="E-mail" value={contactDraft.email} onChange={event => setContactDraft({ ...contactDraft, email: event.target.value })} />
           <input className="field" placeholder="Telefone" value={contactDraft.phone} onChange={event => setContactDraft({ ...contactDraft, phone: event.target.value })} />
           <input className="field" placeholder="Cargo" value={contactDraft.job_title} onChange={event => setContactDraft({ ...contactDraft, job_title: event.target.value })} />
-          <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink sm:col-span-2" type="submit"><Plus className="size-4" />Adicionar contato</button>
+          <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink sm:col-span-2" type="submit"><Plus className="size-4" />Adicionar contato</button>
         </form>
-        {contacts.length ? <div className="divide-y">{contacts.map(contact => <div className="flex items-start gap-3 py-3" key={contact.id}><span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><UserRound className="size-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink">{contact.name}</p>{contact.job_title && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Briefcase className="size-3" />{contact.job_title}</p>}{contact.email && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Mail className="size-3" />{contact.email}</p>}{contact.phone && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Phone className="size-3" />{contact.phone}</p>}</div><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Remover ${contact.name}`} onClick={() => setRemovingContact(contact)}><Trash2 className="size-4" /></button></div>)}</div> : <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">Nenhum contato cadastrado.</p>}
+        {contacts.length ? <div className="divide-y">{contacts.map(contact => <div className="flex items-start gap-3 py-3" key={contact.id}><span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><UserRound className="size-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink">{contact.name}</p>{contact.job_title && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Briefcase className="size-3" />{contact.job_title}</p>}{contact.email && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Mail className="size-3" />{contact.email}</p>}{contact.phone && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Phone className="size-3" />{contact.phone}</p>}</div><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Remover ${contact.name}`} onClick={() => setRemovingContact(contact)}><Trash2 className="size-4" /></button></div>)}</div> : <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">Nenhum contato cadastrado.</p>}
       </section>
     </div>
   </section>;

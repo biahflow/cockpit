@@ -10,8 +10,8 @@ const statusLabel: Record<KnowledgeStatus, string> = {
 };
 
 const statusTone: Record<KnowledgeStatus, string> = {
-  sem_dono: "bg-red-50 text-signal",
-  vencido: "bg-red-50 text-signal",
+  sem_dono: "bg-red-50 text-danger",
+  vencido: "bg-red-50 text-danger",
   a_vencer: "bg-amber-50 text-amber-800",
   corrente: "bg-emerald-50 text-emerald-800",
 };
@@ -58,18 +58,18 @@ export function ConhecimentoPage() {
 
   return <section className="space-y-7">
     <header>
-      <p className="text-sm font-semibold text-ocean">Metodologia</p>
+      <p className="text-sm font-semibold text-accent">Metodologia</p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Conhecimento</h1>
       <p className="mt-2 text-sm text-slate-600">Quem responde por quê, e o que já venceu. É deste material que os agentes tiram resposta com fonte — e é por isso que peça velha servida como corrente é pior que peça nenhuma.</p>
     </header>
 
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
 
     <div className="grid gap-4 sm:grid-cols-4">
       {(["sem_dono", "vencido", "a_vencer", "corrente"] as KnowledgeStatus[]).map(estado =>
         <article key={estado} className="rounded-2xl border bg-white p-5">
           <p className="text-sm font-medium text-slate-600">{statusLabel[estado]}</p>
-          <p className={`mt-1 text-2xl font-semibold ${estado === "corrente" ? "text-ink" : estado === "a_vencer" ? "text-amber-800" : "text-signal"}`}>{summary?.[estado] ?? 0}</p>
+          <p className={`mt-1 text-2xl font-semibold ${estado === "corrente" ? "text-ink" : estado === "a_vencer" ? "text-amber-800" : "text-danger"}`}>{summary?.[estado] ?? 0}</p>
         </article>)}
     </div>
 
@@ -77,7 +77,7 @@ export function ConhecimentoPage() {
         primeira coisa que aparece — não um filtro que alguém precisa lembrar de aplicar. */}
     {semDono.length > 0 && <section className="rounded-2xl border border-red-200 bg-red-50/40 p-5 sm:p-6">
       <div className="flex items-center gap-3">
-        <span className="grid size-9 place-items-center rounded-xl bg-red-100 text-signal"><UserX className="size-4" /></span>
+        <span className="grid size-9 place-items-center rounded-xl bg-red-100 text-danger"><UserX className="size-4" /></span>
         <div>
           <h2 className="font-semibold text-ink">Áreas sem dono</h2>
           <p className="text-sm text-slate-600">Sem responsável, ninguém é avisado quando o material vence. Defina o dono em cada área.</p>
@@ -100,7 +100,7 @@ export function ConhecimentoPage() {
     {comArquivo.length ? <section className="overflow-hidden rounded-2xl border bg-white">
       <div className="divide-y">
         {comArquivo.map(piece => <article key={piece.id} className="flex flex-wrap items-center gap-3 px-5 py-4 sm:px-6">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-mint text-ocean"><BookOpen className="size-4" /></span>
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent"><BookOpen className="size-4" /></span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold text-ink">{piece.title}</h2>
@@ -114,7 +114,7 @@ export function ConhecimentoPage() {
             </p>
           </div>
           {podeVerificar(piece) && <button type="button" disabled={busy === piece.id} onClick={() => void verificar(piece)}
-            className="shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold text-ocean hover:border-ocean disabled:opacity-60">
+            className="shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold text-accent hover:border-accent disabled:opacity-60">
             {busy === piece.id ? "…" : "Marcar como verificado"}
           </button>}
         </article>)}

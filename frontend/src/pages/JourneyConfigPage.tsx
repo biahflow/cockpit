@@ -56,29 +56,29 @@ export function JourneyConfigPage() {
       confirmLabel="Excluir" busy={removeBusy}
       onCancel={() => setRemovingPhase(null)} onConfirm={() => void removePhase()}
     />}
-    <a href="/configuracoes" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para configurações</a>
-    <header><p className="text-sm font-semibold text-ocean">Metodologia</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Jornada de Transformação</h1><p className="mt-2 text-sm text-slate-600">Nomeie e ordene as fases e seus entregáveis. Cada projeto novo herda este modelo.</p></header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    <a href="/configuracoes" className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-ink"><ArrowLeft className="size-4" />Voltar para configurações</a>
+    <header><p className="text-sm font-semibold text-accent">Metodologia</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Jornada de Transformação</h1><p className="mt-2 text-sm text-slate-600">Nomeie e ordene as fases e seus entregáveis. Cada projeto novo herda este modelo.</p></header>
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
 
     <div className="space-y-4">{phases.map(phase => <section className="overflow-hidden rounded-2xl border bg-white" key={phase.id}>
       <div className="flex flex-wrap items-center gap-3 border-b bg-slate-50/60 px-5 py-4 sm:px-6">
         <input className="field max-w-56 flex-1" value={phase.name} onChange={event => updateLocal(phase.id, { name: event.target.value })} aria-label={`Nome da fase ${phase.id}`} />
         <input className="field w-20" type="number" value={phase.position} onChange={event => updateLocal(phase.id, { position: Number(event.target.value) })} aria-label={`Ordem da fase ${phase.id}`} />
-        <button className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void savePhase(phase)}><Save className="size-4" />Salvar</button>
-        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir fase ${phase.name}`} onClick={() => setRemovingPhase(phase)}><Trash2 className="size-4" /></button>
+        <button className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void savePhase(phase)}><Save className="size-4" />Salvar</button>
+        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Excluir fase ${phase.name}`} onClick={() => setRemovingPhase(phase)}><Trash2 className="size-4" /></button>
       </div>
       <div className="px-5 py-4 sm:px-6">
-        <label className="mb-4 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-ocean" checked={phase.active} onChange={event => updateLocal(phase.id, { active: event.target.checked })} />Herdada por projetos novos</label>
+        <label className="mb-4 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-accent" checked={phase.active} onChange={event => updateLocal(phase.id, { active: event.target.checked })} />Herdada por projetos novos</label>
         {!phase.active && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">Fase aposentada: não entra em projeto novo. Os projetos que já passaram por ela continuam com a delas.</p>}
         <input className="field mb-4" value={phase.description} placeholder="Descrição da fase (opcional)" onChange={event => updateLocal(phase.id, { description: event.target.value })} aria-label={`Descrição da fase ${phase.name}`} />
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Entregáveis</p>
         <div className="divide-y">{phase.deliverables.map(deliverable => <div className="flex items-center gap-3 py-2" key={deliverable.id}>
           <span className="flex-1 text-sm text-ink">{deliverable.name}</span>
-          <button className="grid size-8 place-items-center rounded-lg border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir entregável ${deliverable.name}`} onClick={() => void removeDeliverable(deliverable.id)}><Trash2 className="size-3.5" /></button>
+          <button className="grid size-8 place-items-center rounded-lg border text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Excluir entregável ${deliverable.name}`} onClick={() => void removeDeliverable(deliverable.id)}><Trash2 className="size-3.5" /></button>
         </div>)}</div>
         <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); void addDeliverable(phase.id); }}>
           <input className="field" value={deliverableDraft[phase.id] ?? ""} placeholder="Novo entregável" onChange={event => setDeliverableDraft(prev => ({ ...prev, [phase.id]: event.target.value }))} aria-label={`Novo entregável da fase ${phase.name}`} />
-          <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label={`Adicionar entregável à fase ${phase.name}`} type="submit"><Plus className="size-4" /></button>
+          <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ink text-white hover:bg-ink" aria-label={`Adicionar entregável à fase ${phase.name}`} type="submit"><Plus className="size-4" /></button>
         </form>
       </div>
     </section>)}</div>
@@ -86,7 +86,7 @@ export function JourneyConfigPage() {
     <form className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-5 sm:p-6" onSubmit={event => void createPhase(event)}>
       <label className="grid gap-2 text-sm font-medium text-slate-700">Nova fase<input className="field w-56" value={phaseDraft.name} onChange={event => setPhaseDraft({ ...phaseDraft, name: event.target.value })} placeholder="Ex.: Activation" required /></label>
       <label className="grid gap-2 text-sm font-medium text-slate-700">Ordem<input className="field w-20" type="number" value={phaseDraft.position} onChange={event => setPhaseDraft({ ...phaseDraft, position: event.target.value })} placeholder="0" /></label>
-      <button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar fase</button>
+      <button className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar fase</button>
     </form>
   </section>;
 }

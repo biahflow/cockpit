@@ -179,6 +179,25 @@ e acima.
 `--font-sans` cai no fallback. A correção de contraste encostou nisso ao escurecer `--color-signal`;
 reconciliar as duas paletas é outro recorte.
 
+*Esse recorte aconteceu em 07/08/2026 (ADR 0024), e reconciliou pelo lado oposto ao que esta linha
+supunha: o portal passou a ter design system **próprio** — branco, preto e laranja, com camada de
+componentes — e a skill fica governando o OikOS. A fonte Inter já tinha sido resolvida aqui.*
+
+**A matriz foi reexecutada contra a paleta nova, e foi ela que projetou o tom (ADR 0024).** A
+primeira passagem reprovou **24 das 66 varreduras**, todas `color-contrast`, e por uma causa só que
+a paleta anterior não podia ter: a barra lateral virou escura, e o laranja da marca — que dá 4,96:1
+sobre branco e passa — dá **3,82:1 sobre o preto** e reprova. Foi o axe que descobriu, não a
+revisão. Duas correções fecharam as 24:
+
+1. Nasceu `--color-accent-200` (`#dd8b62`, 7,2:1 sobre `ink`), o clay para **texto de acento sobre
+   escuro**. Existir como token separado é o que impede alguém de escrever `text-accent` num fundo
+   escuro de novo — o mesmo papel que o `clay-200` tem no design system do OikOS.
+2. Os selos `bg-accent/10 text-accent` viraram `bg-accent-50 text-accent-700` (6,1:1): laranja a
+   10% sobre um container já acinzentado não sustentava o texto.
+
+Depois disso, **66 varreduras verdes**. Vale registrar a ordem, porque ela é a política: quando o
+axe e o tom discordaram, **cedeu o tom**.
+
 ## Aceite
 
 `npm run e2e` roda 116 testes em quatro projetos: `e2e` (fluxo, desktop) e `mobile`/`tablet`/

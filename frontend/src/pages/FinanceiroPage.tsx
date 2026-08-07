@@ -19,7 +19,7 @@ const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDate
 
 function statusTone(invoice: Invoice): string {
   if (invoice.status === "paid") return "bg-emerald-50 text-emerald-800";
-  if (invoice.status === "overdue" || invoice.is_overdue) return "bg-red-50 text-signal";
+  if (invoice.status === "overdue" || invoice.is_overdue) return "bg-red-50 text-danger";
   if (invoice.status === "cancelled" || invoice.status === "renegotiated") return "bg-slate-100 text-slate-600";
   if (invoice.status === "issued") return "bg-amber-50 text-amber-800";
   return "bg-slate-100 text-slate-700";
@@ -103,7 +103,7 @@ export function FinanceiroPage() {
 
   const faixas = [
     { key: "open", label: "Em aberto", value: summary?.open, count: summary?.open_count, tone: "text-ink" },
-    { key: "overdue", label: "Vencido", value: summary?.overdue, count: summary?.overdue_count, tone: "text-signal" },
+    { key: "overdue", label: "Vencido", value: summary?.overdue, count: summary?.overdue_count, tone: "text-danger" },
     { key: "paid", label: "Recebido", value: summary?.paid, count: summary?.paid_count, tone: "text-emerald-800" },
   ];
 
@@ -122,13 +122,13 @@ export function FinanceiroPage() {
     />}
 
     <header>
-      <p className="text-sm font-semibold text-ocean">Financeiro</p>
+      <p className="text-sm font-semibold text-accent">Financeiro</p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Contas a receber</h1>
       <p className="mt-2 text-sm text-slate-600">Quem deve o quê, e desde quando. Antes desta tela a inadimplência era imensurável — não havia data de vencimento nem de pagamento em lugar nenhum do portal.</p>
     </header>
 
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
-    {notice && <p role="status" className="rounded-xl bg-mint/60 p-3 text-sm text-ocean">{notice}</p>}
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
+    {notice && <p role="status" className="rounded-xl bg-accent-50/60 p-3 text-sm text-accent">{notice}</p>}
 
     <div className="grid gap-4 sm:grid-cols-3">
       {faixas.map(faixa => <article key={faixa.key} className="rounded-2xl border bg-white p-5">
@@ -158,7 +158,7 @@ export function FinanceiroPage() {
         </label>
       </div>
       <div>
-        <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60">
+        <button type="submit" disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60">
           <Receipt className="size-4" />{busy ? "Salvando…" : "Criar rascunho"}
         </button>
       </div>
@@ -179,10 +179,10 @@ export function FinanceiroPage() {
         <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-slate-50/60 px-5 py-4 sm:px-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Receipt className="size-4" /></span>
+              <span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><Receipt className="size-4" /></span>
               <h2 className="font-semibold text-ink">{invoice.number || "Rascunho"}</h2>
               <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${statusTone(invoice)}`}>{invoice.status_display}</span>
-              {invoice.is_overdue && invoice.status !== "overdue" && <span className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2 py-0.5 text-xs font-semibold text-signal"><AlertTriangle className="size-3" />Venceu</span>}
+              {invoice.is_overdue && invoice.status !== "overdue" && <span className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2 py-0.5 text-xs font-semibold text-danger"><AlertTriangle className="size-3" />Venceu</span>}
             </div>
             <p className="mt-1 text-sm text-slate-600">{invoice.client_name}{invoice.description && ` — ${invoice.description}`}</p>
           </div>
@@ -195,7 +195,7 @@ export function FinanceiroPage() {
         <div className="flex flex-wrap items-center gap-2 px-5 py-4 sm:px-6">
           {invoice.paid_at && <p className="mr-auto text-sm text-emerald-800">Recebida em {new Date(invoice.paid_at).toLocaleDateString("pt-BR")}{invoice.method_display && ` · ${invoice.method_display}`}</p>}
           {invoice.cancel_reason && <p className="mr-auto text-sm text-slate-600">Cancelada: {invoice.cancel_reason}</p>}
-          {invoice.payment_url && <a href={invoice.payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-ocean hover:bg-sand">
+          {invoice.payment_url && <a href={invoice.payment_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-accent hover:bg-canvas">
             <ExternalLink className="size-4" />Link de pagamento
           </a>}
 
@@ -203,21 +203,21 @@ export function FinanceiroPage() {
             {/* Desabilitado **com o motivo à vista**, e não escondido: botão que some deixa quem
                 usa procurando o que falta. Mesma escolha da tela de Cases (FDD 027). */}
             <button type="button" disabled={busy || Boolean(motivo)} title={motivo} onClick={() => void acao(invoice, "issue")}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60">
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60">
               <Send className="size-4" />Emitir
             </button>
             {motivo && <span className="text-xs text-slate-600">{motivo}</span>}
-            <button type="button" onClick={() => setDiscarding(invoice)} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-sand">
+            <button type="button" onClick={() => setDiscarding(invoice)} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-canvas">
               <Trash2 className="size-4" />Descartar
             </button>
           </>}
 
           {isAdmin && (invoice.status === "issued" || invoice.status === "overdue") && <>
             <button type="button" disabled={busy} onClick={() => void acao(invoice, "mark-paid", { method: "pix" })}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60">
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60">
               <CheckCircle2 className="size-4" />Marcar como paga
             </button>
-            <button type="button" onClick={() => setCancelling(invoice)} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-sand">
+            <button type="button" onClick={() => setCancelling(invoice)} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-canvas">
               <Ban className="size-4" />Cancelar
             </button>
           </>}

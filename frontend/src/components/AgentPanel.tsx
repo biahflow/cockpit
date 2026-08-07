@@ -34,23 +34,23 @@ export function AgentPanel({ agentKey, title, roles, placeholder }: { agentKey: 
   }
 
   return <section className="rounded-2xl border bg-white p-5 sm:p-6">
-    <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Sparkles className="size-4" /></span><div><h2 className="font-semibold text-ink">{title}</h2><p className="text-sm text-slate-600">Sugestões para revisão humana — nada é executado automaticamente.</p></div></div>
+    <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><Sparkles className="size-4" /></span><div><h2 className="font-semibold text-ink">{title}</h2><p className="text-sm text-slate-600">Sugestões para revisão humana — nada é executado automaticamente.</p></div></div>
     <form className="mt-4 flex gap-2" onSubmit={event => void ask(event)}>
       <input className="field" value={question} onChange={event => setQuestion(event.target.value)} placeholder={placeholder || "Pergunte sobre esta área"} aria-label={`Pergunta ao ${title}`} />
-      <button className="shrink-0 rounded-xl bg-ocean px-4 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" type="submit" disabled={loading}>{loading ? "…" : "Perguntar"}</button>
+      <button className="shrink-0 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" type="submit" disabled={loading}>{loading ? "…" : "Perguntar"}</button>
     </form>
-    {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
     {answer && <div className="mt-4"><p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{answer}</p>
       {/* A citação é o que separa resposta ancorada de resposta plausível (FDD 029). Vencida vai
           marcada: citar sem avisar legitimaria material velho. */}
       {sources.length > 0 && <ul className="mt-2 grid gap-1">{sources.map(source => <li key={source.ref} className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-        <span className="rounded bg-mint px-1.5 py-0.5 font-semibold text-ocean">{source.ref}</span>
+        <span className="rounded bg-accent-50 px-1.5 py-0.5 font-semibold text-accent">{source.ref}</span>
         <span>{source.title} › {source.section}</span>
-        {source.stale && <span className="rounded bg-red-50 px-1.5 py-0.5 font-semibold text-signal">Vencido</span>}
+        {source.stale && <span className="rounded bg-red-50 px-1.5 py-0.5 font-semibold text-danger">Vencido</span>}
       </li>)}</ul>}
       <div className="mt-2 flex items-center gap-2 text-slate-600"><span className="text-xs">Esta resposta ajudou?</span>
-        <button className={`rounded-lg p-1.5 hover:text-ocean ${rated === 1 ? "text-ocean" : ""}`} aria-label="Resposta útil" onClick={() => void rate(1)}><ThumbsUp className="size-4" /></button>
-        <button className={`rounded-lg p-1.5 hover:text-signal ${rated === -1 ? "text-signal" : ""}`} aria-label="Resposta ruim" onClick={() => void rate(-1)}><ThumbsDown className="size-4" /></button>
+        <button className={`rounded-lg p-1.5 hover:text-accent ${rated === 1 ? "text-accent" : ""}`} aria-label="Resposta útil" onClick={() => void rate(1)}><ThumbsUp className="size-4" /></button>
+        <button className={`rounded-lg p-1.5 hover:text-danger ${rated === -1 ? "text-danger" : ""}`} aria-label="Resposta ruim" onClick={() => void rate(-1)}><ThumbsDown className="size-4" /></button>
       </div>
     </div>}
   </section>;

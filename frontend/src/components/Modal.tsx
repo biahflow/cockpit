@@ -114,8 +114,8 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
   return <Modal title={title} onClose={onCancel}>
     <div className="text-sm text-slate-600">{message}</div>
     <div className="mt-6 flex flex-wrap justify-end gap-3">
-      <button type="button" className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-ink hover:border-ocean" onClick={onCancel}>Cancelar</button>
-      <button type="button" className="rounded-xl bg-signal px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" disabled={busy} onClick={onConfirm}>{busy ? "Aguarde…" : confirmLabel}</button>
+      <button type="button" className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-ink hover:border-accent" onClick={onCancel}>Cancelar</button>
+      <button type="button" className="rounded-xl bg-danger px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" disabled={busy} onClick={onConfirm}>{busy ? "Aguarde…" : confirmLabel}</button>
     </div>
   </Modal>;
 }

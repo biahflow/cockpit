@@ -45,9 +45,9 @@ export function PipelinePage() {
       confirmLabel="Excluir" busy={removeBusy}
       onCancel={() => setRemoving(null)} onConfirm={() => void remove()}
     />}
-    <a href="/comercial" className="inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:text-ink"><ArrowLeft className="size-4" />Voltar para o Comercial</a>
-    <header><p className="text-sm font-semibold text-ocean">Comercial</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Etapas do pipeline</h1><p className="mt-2 text-sm text-slate-600">Ordene e nomeie as etapas. Só pode haver uma etapa "Ganho" e uma "Perdido".</p></header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-signal">{error}</p>}
+    <a href="/comercial" className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-ink"><ArrowLeft className="size-4" />Voltar para o Comercial</a>
+    <header><p className="text-sm font-semibold text-accent">Comercial</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Etapas do pipeline</h1><p className="mt-2 text-sm text-slate-600">Ordene e nomeie as etapas. Só pode haver uma etapa "Ganho" e uma "Perdido".</p></header>
+    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
 
     <section className="overflow-hidden rounded-2xl border bg-white">
       <div className="border-b px-5 py-4 sm:px-6"><h2 className="font-semibold text-ink">Etapas atuais</h2></div>
@@ -56,8 +56,8 @@ export function PipelinePage() {
         <input className="field max-w-56 flex-1" value={stage.name} onChange={event => updateLocal(stage.id, { name: event.target.value })} aria-label={`Nome da etapa ${stage.id}`} />
         <select className="field w-32" value={stage.kind} onChange={event => updateLocal(stage.id, { kind: event.target.value as PipelineStage["kind"] })} aria-label={`Tipo da etapa ${stage.id}`}>{Object.entries(kindLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         <input className="field w-20" type="number" value={stage.position} onChange={event => updateLocal(stage.id, { position: Number(event.target.value) })} aria-label={`Ordem da etapa ${stage.id}`} />
-        <button className="inline-flex items-center gap-1.5 rounded-xl bg-ocean px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void save(stage)}><Save className="size-4" />Salvar</button>
-        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir etapa ${stage.name}`} onClick={() => setRemoving(stage)}><Trash2 className="size-4" /></button>
+        <button className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void save(stage)}><Save className="size-4" />Salvar</button>
+        <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Excluir etapa ${stage.name}`} onClick={() => setRemoving(stage)}><Trash2 className="size-4" /></button>
       </div>)}</div>
     </section>
 
@@ -65,7 +65,7 @@ export function PipelinePage() {
       <label className="grid gap-2 text-sm font-medium text-slate-700">Nova etapa<input className="field w-56" value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} placeholder="Ex.: Proposta enviada" required /></label>
       <label className="grid gap-2 text-sm font-medium text-slate-700">Tipo<select className="field w-32" value={draft.kind} onChange={event => setDraft({ ...draft, kind: event.target.value })}>{Object.entries(kindLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label className="grid gap-2 text-sm font-medium text-slate-700">Ordem<input className="field w-20" type="number" value={draft.position} onChange={event => setDraft({ ...draft, position: event.target.value })} placeholder="0" /></label>
-      <button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar etapa</button>
+      <button className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Adicionar etapa</button>
     </form>
   </section>;
 }

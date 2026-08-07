@@ -50,7 +50,7 @@ function resolvePage(path: string): ReactNode {
 export function App() {
   const { isLoading, user } = useAuth();
   if (window.location.pathname === "/aceitar-convite") return <AcceptInvitePage />;
-  if (isLoading) return <div className="grid min-h-screen place-items-center bg-sand"><LoaderCircle className="size-7 animate-spin text-ocean" aria-label="Carregando sessão" /></div>;
+  if (isLoading) return <div className="grid min-h-screen place-items-center bg-canvas"><LoaderCircle className="size-7 animate-spin text-accent" aria-label="Carregando sessão" /></div>;
   if (!user) return <LoginPage />;
   return <Layout>{resolvePage(window.location.pathname)}</Layout>;
 }
