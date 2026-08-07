@@ -204,6 +204,11 @@ def build_snapshot(project: Project) -> dict[str, Any]:
                 project.status != Project.Status.COMPLETED
                 and project.due_date < timezone.localdate()
             ),
+            # O arquivamento é um fato desta base, e quem o declara é ela. Antes, arquivar um
+            # projeto o fazia sumir do snapshot inteiro, e o portal só via um 404 —
+            # indistinguível de "projeto inexistente", que é o que travava o read model dele no
+            # último estado bom. `None` quando ativo, e o portal desfaz igual ao restaurar.
+            "archived_at": project.archived_at.isoformat() if project.archived_at else None,
             "client": {"id": project.client_id, "name": project.client.name},
         },
         "completion": completion,
