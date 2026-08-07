@@ -7,7 +7,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from django.conf import settings
@@ -38,6 +38,7 @@ from . import (
     blueprints,
     booking,
     calendar_sync,
+    cases,
     drive,
     esign,
     flags,
@@ -62,6 +63,7 @@ from .models import (
     AppSetting,
     Artifact,
     BlueprintVariant,
+    Case,
     Client,
     Contact,
     DigitalEmployee,
@@ -94,6 +96,7 @@ from .serializers import (
     ArtifactSerializer,
     BlueprintVariantSerializer,
     BookingCreateSerializer,
+    CaseSerializer,
     ClientSerializer,
     ContactSerializer,
     DigitalEmployeeBlueprintSerializer,
@@ -680,7 +683,9 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         request=inline_serializer(
             "DigitalEmployeeFromBlueprint",
             {"blueprint": serializers.IntegerField(),
-             "vertical": serializers.IntegerField(required=False)},
+             "vertical": serializers.IntegerField(required=False),
+             "kpi_baseline": serializers.DecimalField(
+                 max_digits=12, decimal_places=2, required=False, allow_null=True)},
         ),
         responses=DigitalEmployeeSerializer,
     )
@@ -695,6 +700,9 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         toda ação de detalhe de `project` que não seja `create`/`destroy`, o objeto ainda passa por
         `_participates`, e Vendas — que tem `project` só-leitura — é barrada. É a regra do recurso:
         Vendas lê o roster e não mexe.
+
+        `kpi_baseline` é opcional e entra aqui porque este é o momento em que o "antes" ainda é
+        medição (FDD 027): perguntado na conclusão do projeto, ele seria digitado de memória.
         """
         project = self.get_object()
         blueprint = get_object_or_404(
@@ -711,7 +719,16 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
             if vertical_id
             else project.client.vertical
         )
-        employee = blueprints.instantiate(project, blueprint, vertical)
+        # Vazio e ausente são a mesma coisa — "não medido" —, e valem `None`, não zero.
+        baseline_raw = request.data.get("kpi_baseline")
+        try:
+            baseline = None if baseline_raw in (None, "") else Decimal(str(baseline_raw))
+        except InvalidOperation:
+            return Response(
+                {"kpi_baseline": "Informe um número ou deixe em branco."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        employee = blueprints.instantiate(project, blueprint, vertical, kpi_baseline=baseline)
         return Response(DigitalEmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
@@ -954,6 +971,42 @@ class DigitalEmployeeViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveM
     queryset = DigitalEmployee.objects.select_related("project").all()
     serializer_class = DigitalEmployeeSerializer
     filter_fields = ("project",)
+
+
+class CaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """Cases de projetos concluídos, com os números congelados (FDD 027).
+
+    Não há `create`: case nasce do congelamento (`cases.freeze_if_completed`, no signal de
+    conclusão do projeto) e não da mão de ninguém — um case digitado seria a prova social sem a
+    medição, que é o que a FDD recusa. O que a API oferece é revisar, consentir e publicar.
+
+    O escopo de projeto vem do mixin e sai certo de graça: Entrega vê case dos projetos de que
+    participa, Vendas e admin veem todos, porque `project_scope_q` só recorta para a Entrega.
+    """
+
+    resource = "case"
+    queryset = Case.objects.select_related("project__client", "vertical").all()
+    serializer_class = CaseSerializer
+    filter_fields = ("project", "vertical")
+    filter_exact_fields = ("status",)
+
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return Response(
+            {"detail": "Case é gerado na conclusão do projeto, não criado à mão."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    @extend_schema(responses=CaseSerializer, request=None)
+    @action(detail=True, methods=["post"], url_path="record-consent")
+    def record_consent(self, request: Request, pk: str | None = None) -> Response:
+        """Registra o consentimento do cliente para usar este case (admin).
+
+        Ação separada do `PATCH` porque consentimento não é um campo que se edita junto com o
+        título: é ato, e sem autor e carimbo "o cliente autorizou" é alegação de ninguém. Só admin
+        chega aqui — `RolePermission` dá a Vendas e à Entrega apenas leitura de `case`.
+        """
+        case = self.get_object()
+        return Response(CaseSerializer(cases.record_consent(case, request.user)).data)
 
 
 class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):

@@ -11,6 +11,8 @@ from apps.core.models import (
     BlueprintVariant,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
+    KpiDirection,
+    KpiUnit,
     Service,
     Vertical,
 )
@@ -90,6 +92,27 @@ def test_resolution_without_vertical_falls_back_to_the_blueprint():
     resolvido = blueprints.resolve(blueprint, None)
 
     assert resolvido["description"] == "Qualifica lead fora do horário comercial."
+
+
+@pytest.mark.django_db
+def test_unidade_e_direcao_do_kpi_nao_passam_pela_variante():
+    """O rótulo do KPI é do setor; a unidade e a direção são o que torna os cases comparáveis.
+
+    Deixar uma variante trocá-las faria duas instâncias do **mesmo bloco** deixarem de se comparar
+    sem nada dizer — que é o que a FDD 027 existe para impedir.
+    """
+    blueprint = _blueprint(kpi_unit=KpiUnit.COUNT, kpi_direction=KpiDirection.UP)
+    vertical = _vertical()
+    BlueprintVariant.objects.create(
+        blueprint=blueprint, vertical=vertical, kpi_label="Visitantes qualificados/mês"
+    )
+    blueprint.refresh_from_db()
+
+    resolvido = blueprints.resolve(blueprint, vertical)
+
+    assert resolvido["kpi_label"] == "Visitantes qualificados/mês"
+    assert resolvido["kpi_unit"] == KpiUnit.COUNT
+    assert resolvido["kpi_direction"] == KpiDirection.UP
 
 
 # --- instanciar copia ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -15,7 +15,12 @@ const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_pr
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
 const blankMeeting = { title: "", date: "", meeting_url: "", recording_url: "", transcript: "" };
 const employeeStatusLabel: Record<DigitalEmployeeStatus, string> = { building: "Em construção", active: "Ativo", paused: "Pausado" };
-const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", hours_saved_month: "", roi_month: "" };
+const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", kpi_unit: "" as KpiUnit, kpi_direction: "up" as KpiDirection, kpi_baseline: "", kpi_current: "", hours_saved_month: "", roi_month: "" };
+const kpiUnits: { value: KpiUnit; label: string }[] = [
+  { value: "", label: "Sem unidade" }, { value: "percent", label: "Percentual (%)" },
+  { value: "hours", label: "Horas" }, { value: "minutes", label: "Minutos" },
+  { value: "currency", label: "Moeda (R$)" }, { value: "count", label: "Contagem" },
+];
 
 function formatDate(value: string): string { return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR"); }
 
@@ -49,6 +54,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", area: "", status: "building" as DigitalEmployeeStatus });
   const [catalog, setCatalog] = useState<DigitalEmployeeBlueprint[]>([]);
   const [blueprintDraft, setBlueprintDraft] = useState("");
+  const [baselineDraft, setBaselineDraft] = useState("");
   const [showArchivedEmployees, setShowArchivedEmployees] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<DigitalEmployee | null>(null);
   const [employeeEdit, setEmployeeEdit] = useState(blankEmployeeEdit);
@@ -161,13 +167,17 @@ export function ProjectDetailPage({ id }: { id: number }) {
   async function createEmployeeFromBlueprint(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!blueprintDraft) return;
-    try { await api(`/projects/${id}/digital-employees/from-blueprint/`, { method: "POST", body: JSON.stringify({ blueprint: Number(blueprintDraft) }) }); setBlueprintDraft(""); await loadEmployees(); }
+    // Em branco vira `null`, não zero: sem base medida, o case declara a lacuna em vez de
+    // afirmar um "antes" que ninguém apurou (FDD 027).
+    try { await api(`/projects/${id}/digital-employees/from-blueprint/`, { method: "POST", body: JSON.stringify({ blueprint: Number(blueprintDraft), kpi_baseline: baselineDraft || null }) }); setBlueprintDraft(""); setBaselineDraft(""); await loadEmployees(); }
     catch (cause) { setError((cause as Error).message); }
   }
   function openEmployeeEdit(employee: DigitalEmployee) {
     setEmployeeEdit({
       name: employee.name, area: employee.area, status: employee.status, description: employee.description,
       kpi_label: employee.kpi_label, kpi_value: employee.kpi_value,
+      kpi_unit: employee.kpi_unit, kpi_direction: employee.kpi_direction,
+      kpi_baseline: employee.kpi_baseline ?? "", kpi_current: employee.kpi_current ?? "",
       hours_saved_month: employee.hours_saved_month, roi_month: employee.roi_month,
     });
     setEditingEmployee(employee);
@@ -183,6 +193,10 @@ export function ProjectDetailPage({ id }: { id: number }) {
         ...employeeEdit,
         hours_saved_month: employeeEdit.hours_saved_month || "0",
         roi_month: employeeEdit.roi_month || "0",
+        // Aqui o vazio é `null` e **não** "0": base e valor atual medem, e um zero inventado
+        // vira número no case (FDD 027).
+        kpi_baseline: employeeEdit.kpi_baseline || null,
+        kpi_current: employeeEdit.kpi_current || null,
       }) });
       setEditingEmployee(null); await loadEmployees();
     } catch (cause) { setError((cause as Error).message); }
@@ -280,7 +294,16 @@ export function ProjectDetailPage({ id }: { id: number }) {
         <label className="grid gap-2 text-sm font-medium text-slate-700">O que ele faz<textarea className="field min-h-20" placeholder="Descrição que o cliente lê no portal" value={employeeEdit.description} onChange={event => setEmployeeEdit({ ...employeeEdit, description: event.target.value })} /></label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-medium text-slate-700">Rótulo do KPI<input className="field" placeholder="Notas conciliadas/mês" value={employeeEdit.kpi_label} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_label: event.target.value })} /></label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">Valor do KPI<input className="field" placeholder="312" value={employeeEdit.kpi_value} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_value: event.target.value })} /></label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Valor do KPI (texto livre)<input className="field" placeholder="312" value={employeeEdit.kpi_value} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_value: event.target.value })} /></label>
+        </div>
+        {/* O par medido (FDD 027). É ele que vira o antes/depois do case quando o projeto for
+            concluído — o campo de texto acima descreve, este mede. Deixar a base em branco é
+            legítimo e diferente de zero: o case dirá que não houve base registrada. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Unidade do KPI<select className="field" value={employeeEdit.kpi_unit} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_unit: event.target.value as KpiUnit })}>{kpiUnits.map(unit => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select></label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Direção<select className="field" value={employeeEdit.kpi_direction} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_direction: event.target.value as KpiDirection })}><option value="up">Maior é melhor</option><option value="down">Menor é melhor</option></select></label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Antes (base)<input className="field" type="number" step="0.01" placeholder="Em branco = sem base medida" value={employeeEdit.kpi_baseline} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_baseline: event.target.value })} /></label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Depois (atual)<input className="field" type="number" step="0.01" value={employeeEdit.kpi_current} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_current: event.target.value })} /></label>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-medium text-slate-700">Horas poupadas/mês<input className="field" type="number" min="0" step="0.1" value={employeeEdit.hours_saved_month} onChange={event => setEmployeeEdit({ ...employeeEdit, hours_saved_month: event.target.value })} /></label>
@@ -372,6 +395,10 @@ export function ProjectDetailPage({ id }: { id: number }) {
             <option value="">Escolha um bloco do catálogo…</option>
             {catalog.map(blueprint => <option key={blueprint.id} value={blueprint.id}>{blueprint.name} — {blueprint.area_display}{blueprint.has_variant ? ` (ajustado a ${project.client_vertical_name})` : ""}</option>)}
           </select></label>
+          {/* O "antes" é pedido **aqui**, na instanciação, e não na hora de montar o case: este é
+              o único momento em que ele ainda é medição. Preenchido meses depois, na conclusão,
+              seria memória — e é exatamente isso que destrói a credibilidade de uma prova (FDD 027). */}
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Base do KPI hoje<input className="field w-40" type="number" step="0.01" placeholder="Opcional" value={baselineDraft} onChange={event => setBaselineDraft(event.target.value)} /></label>
           <button className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-ocean px-4 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Instanciar</button>
         </form>}
         <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void createEmployee(event)}>

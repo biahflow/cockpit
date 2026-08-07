@@ -7,7 +7,7 @@ from typing import Any
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from . import journey, notifications, portal, tasksync
+from . import cases, journey, notifications, portal, tasksync
 from .models import (
     Client,
     DigitalEmployee,
@@ -73,6 +73,18 @@ def _owner_is_always_a_member(
     ProjectMember.objects.get_or_create(
         project=instance, user_id=instance.owner_id, archived_at=None
     )
+
+
+@receiver(post_save, sender=Project)
+def _freeze_case_on_completion(sender: type[Project], instance: Project, **kwargs: Any) -> None:
+    """Congela o case quando o projeto é concluído (FDD 027).
+
+    Signal, e não uma ação na tela, porque o valor inteiro está em capturar **aquele instante**:
+    um botão "gerar case" clicado semanas depois congelaria um health que já mudou, que é o defeito
+    que a FDD existe para evitar. Sem guarda de `created`: um projeto importado já concluído também
+    merece case, e `freeze_if_completed` cuida de não duplicar.
+    """
+    cases.freeze_if_completed(instance)
 
 
 @receiver(post_save, sender=Milestone)

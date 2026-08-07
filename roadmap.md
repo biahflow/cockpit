@@ -265,11 +265,28 @@ um radar que ele respeita.
       do catálogo e tomava **403 no detalhe**, porque `has_permission` e
       `has_object_permission` discordavam e só a tela de Serviços — que usa a listagem —
       passava perto. Ver FDD 026.
-- [ ] **Repositório de cases com métrica — Fase 6.** Projeto concluído não vira nada. O
-      obstáculo não é a tela: não existe "antes" (`hours_saved_month` já é o delta), o
-      `kpi_value` é texto livre e não agrega, e o health **nunca é persistido** — um projeto
-      concluído recalculado meses depois devolve outro número. Exige tipar o KPI, capturar
-      baseline no início e **congelar** na conclusão. Ver FDD 027, que depende da FDD 026.
+- [x] **Repositório de cases com métrica — Fase 6.** Projeto concluído não virava nada: o que
+      a entrega provava ficava espalhado entre o ROI do projeto, os KPIs de cada Funcionário
+      Digital e a memória de quem entregou. O obstáculo nunca foi a tela, e os três pontos que
+      a FDD levantou se confirmaram no código: não existia "antes" (`hours_saved_month` já é o
+      delta declarado), `kpi_value` é texto livre e não agrega, e o health **nunca era
+      persistido** — `assess_project_health` é função pura sobre o **agora**, então um projeto
+      encerrado com 68 é recalculado meses depois como 100, porque as tarefas foram fechadas na
+      arrumação de fim de contrato. Um case cujo número muda sozinho depois de publicado é pior
+      que nenhum case. Agora o KPI é **tipado** (unidade e direção canônicas no blueprint, que
+      a variante **não** sobrescreve — trocar "horas" por "percentual" faria duas instâncias do
+      mesmo bloco deixarem de se comparar em silêncio), o **baseline é capturado na
+      instanciação** — o único instante em que ele ainda é medição, e não memória — e o `Case`
+      **congela** health, ROI e o antes/depois de cada Funcionário Digital quando o projeto é
+      concluído. O congelamento é estrutural, não convencional: os três campos são read-only no
+      serializer, então "os números não mudam" é verdade por não haver caminho, não por
+      ninguém usar o caminho. Publicar exige `client_consent` registrado **com autor e
+      carimbo**, e anonimizar não substitui — são duas autorizações diferentes (o resultado e a
+      marca). A proposta por IA passa a citar o case da mesma vertical com o número real, e
+      **nunca** o `roi_snapshot`, que é receita e custo internos. Ausência de base é dita, não
+      preenchida com zero. De carona, a regressão achou um vazamento que a análise não tinha
+      localizado: apagar `client_name` não bastava, porque o título congelado é "Cliente —
+      Projeto". Ver FDD 027 e ADR 0020.
 - [ ] **Contas a receber e cobrança relacional — Fase 7.** Não há domínio financeiro: nenhum
       dos modelos de `apps/core` registra fatura, vencimento ou pagamento, de modo que **a
       inadimplência é hoje imensurável**. O passo zero é medir, não modelar. E o maior risco

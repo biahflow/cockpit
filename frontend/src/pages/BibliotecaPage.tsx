@@ -3,7 +3,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
 import { ConfirmDialog } from "../components/Modal";
-import type { BlueprintArea, DigitalEmployeeBlueprint, Service, Vertical } from "../types";
+import type { BlueprintArea, DigitalEmployeeBlueprint, KpiDirection, KpiUnit, Service, Vertical } from "../types";
 
 const areas: { value: BlueprintArea; label: string }[] = [
   { value: "comercial", label: "Comercial" },
@@ -11,6 +11,13 @@ const areas: { value: BlueprintArea; label: string }[] = [
   { value: "rh", label: "RH" },
   { value: "juridico", label: "Jurídico" },
   { value: "atendimento", label: "Atendimento" },
+];
+// Unidade e direção não têm coluna na variante de propósito: a variante muda o **texto** do KPI
+// para o setor, e trocar a unidade faria dois blocos iguais deixarem de se comparar (FDD 027).
+const kpiUnits: { value: KpiUnit; label: string }[] = [
+  { value: "", label: "Sem unidade" }, { value: "percent", label: "Percentual (%)" },
+  { value: "hours", label: "Horas" }, { value: "minutes", label: "Minutos" },
+  { value: "currency", label: "Moeda (R$)" }, { value: "count", label: "Contagem" },
 ];
 const blankVariant = { vertical: "", description: "", kpi_label: "", default_hours_saved_month: "", default_roi_month: "" };
 type VariantDraft = typeof blankVariant;
@@ -63,7 +70,8 @@ export function BibliotecaPage() {
     try {
       await api(`/digital-employee-blueprints/${blueprint.id}/`, { method: "PATCH", body: JSON.stringify({
         name: blueprint.name, area: blueprint.area, description: blueprint.description,
-        kpi_label: blueprint.kpi_label, default_hours_saved_month: blueprint.default_hours_saved_month || "0",
+        kpi_label: blueprint.kpi_label, kpi_unit: blueprint.kpi_unit, kpi_direction: blueprint.kpi_direction,
+        default_hours_saved_month: blueprint.default_hours_saved_month || "0",
         default_roi_month: blueprint.default_roi_month || "0", service: blueprint.service, active: blueprint.active,
       }) });
       await load();
@@ -157,6 +165,8 @@ export function BibliotecaPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-2 text-sm font-medium text-slate-700 sm:col-span-2">O que este bloco faz<textarea className="field min-h-20" value={blueprint.description} onChange={event => updateBlueprint(blueprint.id, { description: event.target.value })} aria-label={`Descrição de ${blueprint.name}`} placeholder="Vai para a descrição do Funcionário Digital e para a proposta gerada pela IA" /></label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">KPI canônico<input className="field" value={blueprint.kpi_label} onChange={event => updateBlueprint(blueprint.id, { kpi_label: event.target.value })} aria-label={`KPI de ${blueprint.name}`} placeholder="Ex.: Leads qualificados/mês" /></label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">Unidade do KPI<select className="field" value={blueprint.kpi_unit} onChange={event => updateBlueprint(blueprint.id, { kpi_unit: event.target.value as KpiUnit })} aria-label={`Unidade do KPI de ${blueprint.name}`}>{kpiUnits.map(unit => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select></label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">Direção do KPI<select className="field" value={blueprint.kpi_direction} onChange={event => updateBlueprint(blueprint.id, { kpi_direction: event.target.value as KpiDirection })} aria-label={`Direção do KPI de ${blueprint.name}`}><option value="up">Maior é melhor</option><option value="down">Menor é melhor</option></select></label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">Nível de produto<select className="field" value={blueprint.service ?? ""} onChange={event => updateBlueprint(blueprint.id, { service: event.target.value ? Number(event.target.value) : null })} aria-label={`Nível de produto de ${blueprint.name}`}><option value="">Qualquer nível</option>{services.map(service => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">Horas poupadas/mês (padrão)<input className="field" type="number" min="0" step="0.1" value={blueprint.default_hours_saved_month} onChange={event => updateBlueprint(blueprint.id, { default_hours_saved_month: event.target.value })} aria-label={`Horas padrão de ${blueprint.name}`} /></label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">ROI/mês (padrão)<input className="field" type="number" min="0" step="0.01" value={blueprint.default_roi_month} onChange={event => updateBlueprint(blueprint.id, { default_roi_month: event.target.value })} aria-label={`ROI padrão de ${blueprint.name}`} /></label>

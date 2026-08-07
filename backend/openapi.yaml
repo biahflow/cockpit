@@ -520,6 +520,250 @@ paths:
               schema:
                 $ref: '#/components/schemas/BookingSlotsResponse'
           description: ''
+  /api/v1/cases/:
+    get:
+      operationId: v1_cases_list
+      description: |-
+        Cases de projetos concluídos, com os números congelados (FDD 027).
+
+        Não há `create`: case nasce do congelamento (`cases.freeze_if_completed`, no signal de
+        conclusão do projeto) e não da mão de ninguém — um case digitado seria a prova social sem a
+        medição, que é o que a FDD recusa. O que a API oferece é revisar, consentir e publicar.
+
+        O escopo de projeto vem do mixin e sai certo de graça: Entrega vê case dos projetos de que
+        participa, Vendas e admin veem todos, porque `project_scope_q` só recorta para a Entrega.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Case'
+          description: ''
+    post:
+      operationId: v1_cases_create
+      description: |-
+        Cases de projetos concluídos, com os números congelados (FDD 027).
+
+        Não há `create`: case nasce do congelamento (`cases.freeze_if_completed`, no signal de
+        conclusão do projeto) e não da mão de ninguém — um case digitado seria a prova social sem a
+        medição, que é o que a FDD recusa. O que a API oferece é revisar, consentir e publicar.
+
+        O escopo de projeto vem do mixin e sai certo de graça: Entrega vê case dos projetos de que
+        participa, Vendas e admin veem todos, porque `project_scope_q` só recorta para a Entrega.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Case'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Case'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Case'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Case'
+          description: ''
+  /api/v1/cases/{id}/:
+    get:
+      operationId: v1_cases_retrieve
+      description: |-
+        Cases de projetos concluídos, com os números congelados (FDD 027).
+
+        Não há `create`: case nasce do congelamento (`cases.freeze_if_completed`, no signal de
+        conclusão do projeto) e não da mão de ninguém — um case digitado seria a prova social sem a
+        medição, que é o que a FDD recusa. O que a API oferece é revisar, consentir e publicar.
+
+        O escopo de projeto vem do mixin e sai certo de graça: Entrega vê case dos projetos de que
+        participa, Vendas e admin veem todos, porque `project_scope_q` só recorta para a Entrega.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este case.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Case'
+          description: ''
+    put:
+      operationId: v1_cases_update
+      description: |-
+        Cases de projetos concluídos, com os números congelados (FDD 027).
+
+        Não há `create`: case nasce do congelamento (`cases.freeze_if_completed`, no signal de
+        conclusão do projeto) e não da mão de ninguém — um case digitado seria a prova social sem a
+        medição, que é o que a FDD recusa. O que a API oferece é revisar, consentir e publicar.
+
+        O escopo de projeto vem do mixin e sai certo de graça: Entrega vê case dos projetos de que
+        participa, Vendas e admin veem todos, porque `project_scope_q` só recorta para a Entrega.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este case.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Case'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Case'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Case'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Case'
+          description: ''
+    patch:
+      operationId: v1_cases_partial_update
+      description: |-
+        Cases de projetos concluídos, com os números congelados (FDD 027).
+
+        Não há `create`: case nasce do congelamento (`cases.freeze_if_completed`, no signal de
+        conclusão do projeto) e não da mão de ninguém — um case digitado seria a prova social sem a
+        medição, que é o que a FDD recusa. O que a API oferece é revisar, consentir e publicar.
+
+        O escopo de projeto vem do mixin e sai certo de graça: Entrega vê case dos projetos de que
+        participa, Vendas e admin veem todos, porque `project_scope_q` só recorta para a Entrega.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este case.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCase'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Case'
+          description: ''
+    delete:
+      operationId: v1_cases_destroy
+      description: |-
+        Cases de projetos concluídos, com os números congelados (FDD 027).
+
+        Não há `create`: case nasce do congelamento (`cases.freeze_if_completed`, no signal de
+        conclusão do projeto) e não da mão de ninguém — um case digitado seria a prova social sem a
+        medição, que é o que a FDD recusa. O que a API oferece é revisar, consentir e publicar.
+
+        O escopo de projeto vem do mixin e sai certo de graça: Entrega vê case dos projetos de que
+        participa, Vendas e admin veem todos, porque `project_scope_q` só recorta para a Entrega.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este case.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/cases/{id}/record-consent/:
+    post:
+      operationId: v1_cases_record_consent_create
+      description: |-
+        Registra o consentimento do cliente para usar este case (admin).
+
+        Ação separada do `PATCH` porque consentimento não é um campo que se edita junto com o
+        título: é ato, e sem autor e carimbo "o cliente autorizou" é alegação de ninguém. Só admin
+        chega aqui — `RolePermission` dá a Vendas e à Entrega apenas leitura de `case`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este case.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Case'
+          description: ''
+  /api/v1/cases/{id}/unarchive/:
+    post:
+      operationId: v1_cases_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este case.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/clients/:
     get:
       operationId: v1_clients_list
@@ -4160,6 +4404,9 @@ paths:
         toda ação de detalhe de `project` que não seja `create`/`destroy`, o objeto ainda passa por
         `_participates`, e Vendas — que tem `project` só-leitura — é barrada. É a regra do recurso:
         Vendas lê o roster e não mexe.
+
+        `kpi_baseline` é opcional e entra aqui porque este é o momento em que o "antes" ainda é
+        medição (FDD 027): perguntado na conclusão do projeto, ele seria digitado de memória.
       parameters:
       - in: path
         name: id
@@ -5302,6 +5549,114 @@ components:
       required:
       - created
       - skipped
+    Case:
+      type: object
+      description: |-
+        O case de um projeto concluído (FDD 027).
+
+        A lista de `read_only_fields` é a entrega, não burocracia: `metrics`, `health_snapshot` e
+        `roi_snapshot` são a fotografia, e mantê-los fora da escrita é o que faz "os números não mudam
+        depois de congelados" ser verdade por construção — não há caminho, em vez de haver um caminho
+        que ninguém usa. O trio do consentimento fica de fora pelo motivo oposto: ele *deve* mudar, mas
+        só pela ação `record-consent`, que grava quem autorizou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        project_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        summary:
+          type: string
+        vertical:
+          type: integer
+          readOnly: true
+          nullable: true
+        vertical_name:
+          type: string
+          readOnly: true
+          default: ''
+        client_name:
+          type: string
+          description: |-
+            Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
+
+            Deixá-la para o frontend faria a resposta da API carregar o nome mesmo assim, e "não
+            aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
+            nunca são projetados, anonimizado ou não: o case não precisa deles.
+          readOnly: true
+        metrics:
+          readOnly: true
+        health_snapshot:
+          readOnly: true
+        roi_snapshot:
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/CaseStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        client_consent:
+          type: boolean
+          readOnly: true
+        consent_recorded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        consent_recorded_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        anonymized:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client_consent
+      - client_name
+      - consent_recorded_at
+      - consent_recorded_by
+      - created_at
+      - health_snapshot
+      - id
+      - metrics
+      - project
+      - project_name
+      - published_at
+      - roi_snapshot
+      - status_display
+      - title
+      - updated_at
+      - vertical
+      - vertical_name
+    CaseStatusEnum:
+      enum:
+      - draft
+      - review
+      - published
+      type: string
+      description: |-
+        * `draft` - Rascunho
+        * `review` - Em revisão
+        * `published` - Publicado
     Client:
       type: object
       properties:
@@ -5491,6 +5846,22 @@ components:
         kpi_value:
           type: string
           maxLength: 80
+        kpi_unit:
+          oneOf:
+          - $ref: '#/components/schemas/KpiUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        kpi_direction:
+          $ref: '#/components/schemas/KpiDirectionEnum'
+        kpi_baseline:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        kpi_current:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
         hours_saved_month:
           type: string
           format: decimal
@@ -5539,6 +5910,12 @@ components:
         kpi_label:
           type: string
           maxLength: 80
+        kpi_unit:
+          oneOf:
+          - $ref: '#/components/schemas/KpiUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        kpi_direction:
+          $ref: '#/components/schemas/KpiDirectionEnum'
         default_hours_saved_month:
           type: string
           format: decimal
@@ -5584,6 +5961,11 @@ components:
           type: integer
         vertical:
           type: integer
+        kpi_baseline:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
       required:
       - blueprint
     DigitalEmployeeStatusEnum:
@@ -5709,6 +6091,28 @@ components:
       - deliverables
       - id
       - name
+    KpiDirectionEnum:
+      enum:
+      - up
+      - down
+      type: string
+      description: |-
+        * `up` - Maior é melhor
+        * `down` - Menor é melhor
+    KpiUnitEnum:
+      enum:
+      - percent
+      - hours
+      - minutes
+      - currency
+      - count
+      type: string
+      description: |-
+        * `percent` - Percentual
+        * `hours` - Horas
+        * `minutes` - Minutos
+        * `currency` - Moeda
+        * `count` - Contagem
     Lead:
       type: object
       properties:
@@ -6167,6 +6571,86 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
+    PatchedCase:
+      type: object
+      description: |-
+        O case de um projeto concluído (FDD 027).
+
+        A lista de `read_only_fields` é a entrega, não burocracia: `metrics`, `health_snapshot` e
+        `roi_snapshot` são a fotografia, e mantê-los fora da escrita é o que faz "os números não mudam
+        depois de congelados" ser verdade por construção — não há caminho, em vez de haver um caminho
+        que ninguém usa. O trio do consentimento fica de fora pelo motivo oposto: ele *deve* mudar, mas
+        só pela ação `record-consent`, que grava quem autorizou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        project_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        summary:
+          type: string
+        vertical:
+          type: integer
+          readOnly: true
+          nullable: true
+        vertical_name:
+          type: string
+          readOnly: true
+          default: ''
+        client_name:
+          type: string
+          description: |-
+            Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
+
+            Deixá-la para o frontend faria a resposta da API carregar o nome mesmo assim, e "não
+            aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
+            nunca são projetados, anonimizado ou não: o case não precisa deles.
+          readOnly: true
+        metrics:
+          readOnly: true
+        health_snapshot:
+          readOnly: true
+        roi_snapshot:
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/CaseStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        client_consent:
+          type: boolean
+          readOnly: true
+        consent_recorded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        consent_recorded_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        anonymized:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedClient:
       type: object
       properties:
@@ -6266,6 +6750,22 @@ components:
         kpi_value:
           type: string
           maxLength: 80
+        kpi_unit:
+          oneOf:
+          - $ref: '#/components/schemas/KpiUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        kpi_direction:
+          $ref: '#/components/schemas/KpiDirectionEnum'
+        kpi_baseline:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        kpi_current:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
         hours_saved_month:
           type: string
           format: decimal
@@ -6307,6 +6807,12 @@ components:
         kpi_label:
           type: string
           maxLength: 80
+        kpi_unit:
+          oneOf:
+          - $ref: '#/components/schemas/KpiUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        kpi_direction:
+          $ref: '#/components/schemas/KpiDirectionEnum'
         default_hours_saved_month:
           type: string
           format: decimal

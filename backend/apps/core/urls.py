@@ -12,6 +12,7 @@ from .views import (
     BookingCreateView,
     BookingSlotsView,
     CalendarSyncView,
+    CaseViewSet,
     ClientViewSet,
     ConfigView,
     ContactViewSet,
@@ -68,6 +69,7 @@ router.register("meetings", MeetingViewSet)
 router.register("pendencias", PendenciaViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
+router.register("cases", CaseViewSet)
 router.register("leads", LeadViewSet)
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("services", ServiceViewSet)

@@ -16,8 +16,10 @@ from . import blueprints, drive
 from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
+    CASE_TRANSITIONS,
     Artifact,
     BlueprintVariant,
+    Case,
     Client,
     Contact,
     DigitalEmployee,
@@ -449,6 +451,7 @@ class DigitalEmployeeBlueprintSerializer(serializers.ModelSerializer[DigitalEmpl
     class Meta:
         model = DigitalEmployeeBlueprint
         fields = ["id", "name", "area", "area_display", "description", "kpi_label",
+                  "kpi_unit", "kpi_direction",
                   "default_hours_saved_month", "default_roi_month", "service", "service_name",
                   "active", "variants", "resolved", "has_variant"]
         read_only_fields = ["id"]
@@ -467,6 +470,8 @@ class DigitalEmployeeBlueprintSerializer(serializers.ModelSerializer[DigitalEmpl
             "area": valores["area_display"],
             "description": valores["description"],
             "kpi_label": valores["kpi_label"],
+            "kpi_unit": valores["kpi_unit"],
+            "kpi_direction": valores["kpi_direction"],
             "hours_saved_month": str(valores["hours_saved_month"]),
             "roi_month": str(valores["roi_month"]),
         }
@@ -479,7 +484,8 @@ class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
     class Meta:
         model = DigitalEmployee
         fields = ["id", "project", "blueprint", "name", "area", "description", "status",
-                  "kpi_label", "kpi_value", "hours_saved_month", "roi_month",
+                  "kpi_label", "kpi_value", "kpi_unit", "kpi_direction",
+                  "kpi_baseline", "kpi_current", "hours_saved_month", "roi_month",
                   "created_at", "updated_at"]
         # `blueprint` é procedência, gravada pela rota `from-blueprint` (FDD 026). Gravável aqui,
         # abriria um segundo caminho que aponta para o template **sem copiar** — exatamente o que
@@ -520,6 +526,93 @@ class ArtifactSerializer(serializers.ModelSerializer[Artifact]):
                 f"{Artifact.Status(value).label}."
             )
         return value
+
+
+class CaseSerializer(serializers.ModelSerializer[Case]):
+    """O case de um projeto concluído (FDD 027).
+
+    A lista de `read_only_fields` é a entrega, não burocracia: `metrics`, `health_snapshot` e
+    `roi_snapshot` são a fotografia, e mantê-los fora da escrita é o que faz "os números não mudam
+    depois de congelados" ser verdade por construção — não há caminho, em vez de haver um caminho
+    que ninguém usa. O trio do consentimento fica de fora pelo motivo oposto: ele *deve* mudar, mas
+    só pela ação `record-consent`, que grava quem autorizou.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    vertical_name = serializers.CharField(source="vertical.name", read_only=True, default="")
+    client_name = serializers.SerializerMethodField()
+    project_name = serializers.CharField(source="project.name", read_only=True)
+
+    class Meta:
+        model = Case
+        fields = ["id", "project", "project_name", "title", "summary", "vertical",
+                  "vertical_name", "client_name", "metrics", "health_snapshot", "roi_snapshot",
+                  "status", "status_display", "published_at", "client_consent",
+                  "consent_recorded_at", "consent_recorded_by", "anonymized",
+                  "created_at", "updated_at"]
+        read_only_fields = ["id", "project", "project_name", "vertical", "vertical_name",
+                            "client_name", "metrics", "health_snapshot", "roi_snapshot",
+                            "status_display", "published_at", "client_consent",
+                            "consent_recorded_at", "consent_recorded_by",
+                            "created_at", "updated_at"]
+
+    def get_client_name(self, case: Case) -> str:
+        """Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
+
+        Deixá-la para o frontend faria a resposta da API carregar o nome mesmo assim, e "não
+        aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
+        nunca são projetados, anonimizado ou não: o case não precisa deles.
+        """
+        return "" if case.anonymized else case.project.client.name
+
+    def _anonimo(self, case: Case) -> str:
+        setor = case.vertical.name if case.vertical else None
+        return f"Uma empresa do setor {setor}" if setor else "Uma empresa cliente"
+
+    def to_representation(self, instance: Case) -> dict[str, Any]:
+        """Apagar o `client_name` não bastava: o nome também vive no **texto**.
+
+        O congelamento monta o título como "Cliente — Projeto", então um case anonimizado saía com
+        o nome no título enquanto o campo dedicado vinha vazio — a permissão que o cliente deu
+        virando a que ele não deu, por uma porta que ninguém olha. A substituição alcança também o
+        resumo escrito à mão, onde o mesmo nome costuma reaparecer.
+
+        Substituir, e não esconder o título inteiro: quem revisa precisa saber de que case se
+        trata, e "Uma empresa do setor Imobiliárias — Implantação de agentes" continua dizendo isso.
+        """
+        dados = super().to_representation(instance)
+        if not instance.anonymized:
+            return dados
+        nome = instance.project.client.name
+        rotulo = self._anonimo(instance)
+        for campo in ("title", "summary"):
+            if isinstance(dados.get(campo), str):
+                dados[campo] = dados[campo].replace(nome, rotulo)
+        return dados
+
+    def validate_status(self, value: str) -> str:
+        if self.instance is None:
+            return value
+        current = self.instance.status
+        if value != current and value not in CASE_TRANSITIONS[current]:
+            raise serializers.ValidationError(
+                f"Não é possível ir de {self.instance.get_status_display()} para "
+                f"{Case.Status(value).label}."
+            )
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        # A guarda de consentimento é repetida aqui e no `Case.clean()` porque as duas portas são
+        # de verdade: o `clean()` cobre admin do Django, shell e job; esta cobre a API e é a que
+        # devolve 400 com o campo certo. `anonymized` não abre exceção — anonimizar autoriza omitir
+        # a marca, não usar o resultado.
+        status = attrs.get("status", getattr(self.instance, "status", Case.Status.DRAFT))
+        consent = getattr(self.instance, "client_consent", False)
+        if status == Case.Status.PUBLISHED and not consent:
+            raise serializers.ValidationError(
+                {"status": "Registre o consentimento do cliente antes de publicar o case."}
+            )
+        return attrs
 
 
 class NotificationSerializer(serializers.ModelSerializer[Notification]):
