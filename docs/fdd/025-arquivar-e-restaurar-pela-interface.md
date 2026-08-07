@@ -64,11 +64,19 @@ respondia 204, em silêncio.
 - **A aba Arquivados fala com o viewset, não com o agregador.** Em Clientes ela chama
   `/clients/?archived=1` e não `/clients/overview/`: o overview é montado à mão e não passa pelo
   `get_queryset` do `ArchiveModelViewSet`, então nunca enxergaria o arquivado.
-- **Quem promete restauração precisa oferecê-la.** Os seis recursos arquiváveis pela interface têm
-  caminho de volta: aba em Clientes e Projetos, chip de filtro em Leads, alternador em Documentos e
-  Serviços, e uma lista que substitui o quadro em Comercial — o kanban não comporta uma coluna de
-  arquivadas. Na primeira entrega três diálogos diziam "pode ser restaurada depois" sem que houvesse
-  onde, que é a mesma classe de mentira que a FDD 024 existe para consertar.
+- **Quem promete restauração precisa oferecê-la.** Os **sete** recursos arquiváveis pela interface
+  têm caminho de volta: aba em Clientes e Projetos, chip de filtro em Leads, alternador em
+  Documentos, Serviços e no roster de Funcionários Digitais, e uma lista que substitui o quadro em
+  Comercial — o kanban não comporta uma coluna de arquivadas. Na primeira entrega três diálogos
+  diziam "pode ser restaurada depois" sem que houvesse onde, que é a mesma classe de mentira que a
+  FDD 024 existe para consertar.
+- **E o `DigitalEmployee` ficou de fora até 07/08/2026.** A regra "não havia botão" valia para ele
+  também, e passou despercebida porque ele mora **dentro** do detalhe do projeto, não numa listagem
+  própria — o levantamento olhou as telas de lista. O viewset é `ArchiveModelViewSet` desde sempre e
+  a tela não tinha arquivar, restaurar nem edição: dos oito campos do serializer, o formulário
+  alcançava dois. Como seis deles cruzam ao painel do cliente pelo snapshot (ADR 0003), o efeito ia
+  além do arquivamento — a narrativa de valor do "produto central" não tinha como ser escrita por
+  tela nenhuma. Ver FDD 026.
 - **Diálogos empilham.** O `Modal` mantém uma pilha por **ordem de abertura** (não por ordem no
   JSX): o topo recebe o `zIndex` maior e é o único que escuta o `Escape`; os de baixo ficam `inert`.
   Sem isso, a confirmação aberta de dentro do detalhe da oportunidade pintava atrás dele — mesmo
@@ -145,7 +153,8 @@ O expurgo continua sendo a única operação que destrói de propósito, e conti
   `backend/apps/core/exceptions.py` (`api_exception_handler`), ligada em `config/settings.py`.
 - Frontend: `components/Modal.tsx` (`Modal` extraído da `CommercialPage` + `ConfirmDialog`); botões
   em `ClientDetailPage`, `ProjectDetailPage` e no detalhe da `CommercialPage`; abas Arquivados em
-  `ClientsPage` e `ProjectsPage`; alternador "Herdada por projetos novos" em `JourneyConfigPage`.
+  `ClientsPage` e `ProjectsPage`; alternador "Herdada por projetos novos" em `JourneyConfigPage`;
+  Editar/Arquivar/Mostrar arquivados no roster de Funcionários Digitais (`ProjectDetailPage`).
 - Testes: `backend/tests/regression/test_archive_nao_deixa_orfao.py`,
   `backend/tests/regression/test_arquivar_tem_saida.py`,
   `backend/tests/regression/test_excluir_recusa_em_vez_de_quebrar.py`,

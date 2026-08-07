@@ -250,3 +250,120 @@ test("admin adiciona alguém à equipe", async () => {
     method: "POST", body: JSON.stringify({ project: 1, user: 9 }),
   })));
 });
+
+
+// --- Roster de Funcionários Digitais (FDD 026, FDD 025) ----------------------
+//
+// O backend sempre teve `PATCH`, `DELETE` e `POST /unarchive/` para este recurso, e a tela só
+// alcançava `name` e `area` na criação. Os outros seis campos — os que o snapshot leva ao painel
+// "Seu Time Digital" do cliente — não tinham como ser preenchidos por tela nenhuma.
+
+const employee = (overrides = {}) => ({
+  id: 4, project: 1, name: "Agente Financeiro", area: "Financeiro",
+  description: "", status: "building", kpi_label: "", kpi_value: "",
+  hours_saved_month: "0.0", roi_month: "0.00", ...overrides,
+});
+
+function comRoster(...employees: object[]) {
+  const anterior = mocks.api.getMockImplementation()!;
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path.startsWith("/digital-employees") && (options?.method ?? "GET") === "GET") {
+      return Promise.resolve(path.includes("archived=1") ? [] : employees);
+    }
+    return anterior(path, options);
+  });
+}
+
+test("preenche pela tela os campos que só a API alcançava", async () => {
+  const user = userEvent.setup();
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  comRoster(employee());
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Agente Financeiro");
+
+  await user.click(screen.getByLabelText("Editar Agente Financeiro"));
+  await user.type(screen.getByLabelText("O que ele faz"), "Concilia notas fiscais.");
+  await user.selectOptions(screen.getByLabelText("Status"), "active");
+  await user.type(screen.getByLabelText("Rótulo do KPI"), "Notas/mês");
+  await user.type(screen.getByLabelText("Valor do KPI"), "312");
+  await user.clear(screen.getByLabelText("Horas poupadas/mês"));
+  await user.type(screen.getByLabelText("Horas poupadas/mês"), "40");
+  await user.clear(screen.getByLabelText("ROI/mês (R$)"));
+  await user.type(screen.getByLabelText("ROI/mês (R$)"), "8000");
+  await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employees/4/", expect.objectContaining({
+    method: "PATCH",
+    body: JSON.stringify({
+      name: "Agente Financeiro", area: "Financeiro", status: "active",
+      description: "Concilia notas fiscais.", kpi_label: "Notas/mês", kpi_value: "312",
+      hours_saved_month: "40", roi_month: "8000",
+    }),
+  })));
+});
+
+test("decimal em branco vira zero em vez de 400", async () => {
+  // O serializer recusa `""` num `DecimalField`. Mandar o campo vazio devolveria erro de validação
+  // sobre algo que a pessoa deliberadamente não preencheu.
+  const user = userEvent.setup();
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  comRoster(employee({ hours_saved_month: "", roi_month: "" }));
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Agente Financeiro");
+
+  await user.click(screen.getByLabelText("Editar Agente Financeiro"));
+  await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employees/4/", expect.objectContaining({
+    body: expect.stringContaining('"hours_saved_month":"0","roi_month":"0"'),
+  })));
+});
+
+test("arquivar o funcionário digital pede confirmação", async () => {
+  const user = userEvent.setup();
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  comRoster(employee());
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Agente Financeiro");
+
+  await user.click(screen.getByLabelText("Arquivar Agente Financeiro"));
+  expect(screen.getByText("Arquivar funcionário digital")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employees/4/", expect.objectContaining({ method: "DELETE" })));
+});
+
+test("os arquivados têm onde ser restaurados", async () => {
+  // "Quem promete restauração precisa oferecê-la" (FDD 025): o diálogo acima diz que dá para
+  // restaurar, e antes desta entrega não havia onde.
+  const user = userEvent.setup();
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  const anterior = mocks.api.getMockImplementation()!;
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path.startsWith("/digital-employees") && (options?.method ?? "GET") === "GET") {
+      return Promise.resolve(path.includes("archived=1") ? [employee({ name: "Agente Aposentado" })] : []);
+    }
+    return anterior(path, options);
+  });
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Funcionários Digitais");
+
+  await user.click(screen.getByLabelText("Mostrar arquivados"));
+  await screen.findByText("Agente Aposentado");
+  await user.click(screen.getByRole("button", { name: "Restaurar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employees/4/unarchive/", expect.objectContaining({ method: "POST" })));
+});
+
+test("Vendas lê o roster e não mexe nele", async () => {
+  // A permissão é do backend (`RolePermission` dá só leitura a Vendas); a tela não pode oferecer
+  // um botão que responderia 403.
+  mocks.auth = { aiEnabled: true, user: { role: "sales" } };
+  comRoster(employee());
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Agente Financeiro");
+
+  expect(screen.queryByLabelText("Editar Agente Financeiro")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Arquivar Agente Financeiro")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Adicionar funcionário digital")).not.toBeInTheDocument();
+});
