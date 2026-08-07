@@ -390,6 +390,17 @@ AI_DAILY_LIMIT = int(os.getenv("AI_DAILY_LIMIT", "50"))
 # formulário de leads, então sem teto um dia ruim do fornecedor prende o worker e derruba o site
 # junto. 30 s é folgado para uma completion curta e curto para não segurar ninguém.
 AI_TIMEOUT_SECONDS = _env_int("AI_TIMEOUT_SECONDS", 30)
+# Base de conhecimento interna (FDD 029, ADR 0022). Mesma credencial e mesma flag (`ai`) do resto —
+# uma flag a mais seria outra tela para a mesma chave. A **dimensão não é setting**: ela é assada na
+# migração pelo `VectorField`, e um env var aqui seria promessa que o código não cumpre.
+AI_EMBEDDING_MODEL = os.getenv("AI_EMBEDDING_MODEL", "text-embedding-3-small")
+# Piso de similaridade para o material entrar no contexto. **Ele não decide correção** — a rodada 5
+# de homologação mediu que as faixas de "pergunta sobre método" (51–69%) e "pergunta sobre dados"
+# (47–56%) se sobrepõem, então nenhum limiar separa as duas. Quem declara de onde veio a resposta é
+# o modelo (ver `knowledge.GROUNDING_RULES`); este número só evita gastar token injetando material
+# claramente fora do assunto — o ruído medido ficou entre 22% e 49%.
+KB_MIN_SIMILARITY_PERCENT = _env_int("KB_MIN_SIMILARITY_PERCENT", 45)
+KB_TOP_K = _env_int("KB_TOP_K", 6)
 
 # Calendário (Google) e assinatura eletrônica — esqueletos atrás de flag (desligados).
 CALENDAR_ENABLED = os.getenv("CALENDAR_ENABLED", "false").lower() == "true"

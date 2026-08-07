@@ -313,6 +313,33 @@ def completion_kwargs(system: str, user: str, max_tokens: int | None = None) -> 
     return argumentos
 
 
+# Lotes de 100 na indexação: o corpus tem ~420 trechos, então são cinco chamadas em vez de 420.
+EMBED_BATCH = 100
+
+
+def embed(texts: list[str]) -> list[list[float]]:
+    """Vetores para uma lista de textos (FDD 029, ADR 0022).
+
+    Mesma divisão de `complete`: a rede mora em `_client()`, fora da cobertura, e o que sobra aqui
+    é a **tradução** de qualquer falha do SDK para `AiProviderError` — regra, e não I/O, então
+    testável com o cliente dublado.
+
+    É a **primeira chamada a `embeddings.create` do repositório**: até aqui `ai.py` só falava
+    `chat.completions.create`. A dimensão não é passada de propósito — `text-embedding-3-small`
+    devolve 1536 nativamente, que é o que a coluna espera, e o parâmetro `dimensions` só existiria
+    para encolher, comprando um jeito a mais de errar.
+    """
+    vetores: list[list[float]] = []
+    for inicio in range(0, len(texts), EMBED_BATCH):
+        lote = texts[inicio : inicio + EMBED_BATCH]
+        try:
+            resposta = _client().embeddings.create(model=settings.AI_EMBEDDING_MODEL, input=lote)
+        except Exception as exc:  # noqa: BLE001 - o SDK levanta uma família inteira; aqui vira uma só
+            raise AiProviderError(str(exc) or exc.__class__.__name__) from exc
+        vetores += [item.embedding for item in resposta.data]
+    return vetores
+
+
 def complete(system: str, user: str, max_tokens: int | None = None) -> tuple[str, dict]:
     """Chama o modelo e retorna (texto, uso de tokens).
 

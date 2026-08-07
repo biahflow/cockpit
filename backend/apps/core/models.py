@@ -604,6 +604,10 @@ class AiInteraction(models.Model):
     prompt_tokens = models.PositiveIntegerField(default=0)
     completion_tokens = models.PositiveIntegerField(default=0)
     rating = models.SmallIntegerField(null=True, blank=True)  # +1 (👍) / -1 (👎) / None
+    # As fontes que a resposta citou (FDD 029, ADR 0023). É o que torna "resposta sem citação é
+    # defeito" auditável **depois do fato**, e não só no instante em que a tela mostrou. Mesmo
+    # movimento que a ADR 0006 fez com `rating`.
+    sources = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

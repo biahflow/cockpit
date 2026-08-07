@@ -290,7 +290,7 @@ _TEXTO_CORRIDO = (
 
 def _ai_run(  # type: ignore[no-untyped-def]
     request, feature, system, user_prompt, project=None, opportunity=None,
-    artifact_kind=None, artifact_title="", source_meeting=None,
+    artifact_kind=None, artifact_title="", source_meeting=None, grounding=None,
 ):
     """Guarda (flag + limite), executa a IA e registra a auditoria.
 
@@ -305,16 +305,29 @@ def _ai_run(  # type: ignore[no-untyped-def]
     # a falta de guarda passou batida: 429 de rate limit, timeout de 30 s, chave revogada ou modelo
     # sem acesso na conta viravam 500 do Django. Nada é gravado antes da resposta chegar, então a
     # falha não consome a cota diária de quem tentou nem deixa artefato pela metade.
+    # O material da metodologia entra **aqui e só aqui** (FDD 029). `grounding` é preenchido
+    # exclusivamente pelo `AgentView`; os outros oito chamadores passam `None` e seguem idênticos.
+    # Ponto único de chamada é o que faz o anti-vazamento ser estrutural em vez de vigiado: não há
+    # segundo caminho por onde o corpus interno saia.
+    if grounding is not None:
+        system = f"{system}\n\n{knowledge.GROUNDING_RULES}"
+        user_prompt = f"{user_prompt}\n\n{grounding.block}"
     try:
         text, usage = ai.complete(f"{system}\n\n{_TEXTO_CORRIDO}", user_prompt)
     except ai.AiProviderError as exc:
         logger.exception("chamada de IA (%s) falhou", feature)
         raise AiProviderUnavailable() from exc
+    sources: list[dict] = []
+    if grounding is not None:
+        text, sources = knowledge.enforce_citations(text, grounding)
     interaction = AiInteraction.objects.create(
         user=request.user, feature=feature, project=project, opportunity=opportunity,
         prompt_tokens=usage.get("prompt_tokens", 0), completion_tokens=usage.get("completion_tokens", 0),
+        sources=sources,
     )
     payload: dict[str, object] = {"text": text, "interaction": interaction.id}
+    if grounding is not None:
+        payload["sources"] = sources
     if artifact_kind is not None:
         artifact = Artifact.objects.create(
             kind=artifact_kind, title=artifact_title, content=text,
@@ -1984,7 +1997,12 @@ class AgentView(APIView):
         if not question:
             return Response({"detail": "Informe uma pergunta."}, status=status.HTTP_400_BAD_REQUEST)
         prompt = f"{agent.build_context(request.user)}\n\nPergunta: {question}"
-        return _ai_run(request, f"agent_{key}", agent.system, prompt)
+        # Abaixo do piso de similaridade `ground` devolve `None`, nada é injetado, e o agente
+        # responde exatamente como respondia antes desta FDD — que é o que mantém "o que está
+        # atrasado?" sendo uma pergunta operacional em vez de virar uma lacuna.
+        return _ai_run(
+            request, f"agent_{key}", agent.system, prompt, grounding=knowledge.ground(question)
+        )
 
 
 class AiFeedbackView(APIView):

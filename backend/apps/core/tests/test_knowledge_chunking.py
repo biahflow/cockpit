@@ -118,7 +118,8 @@ def test_o_artefato_e_json_por_linha():
     assert linhas
     for linha in linhas[:5]:
         assert set(json.loads(linha)) == {
-            "source_path", "title", "kind", "position", "heading_path", "content", "content_hash",
+            "source_path", "title", "kind", "area_slug", "position", "heading_path",
+            "content", "content_hash",
         }
 
 
@@ -133,6 +134,18 @@ def test_o_manifesto_deixa_de_fora_o_que_envelheceria_mentindo():
     assert not any(c.startswith(("CHANGELOG", "roadmap", "CLAUDE", "AGENTS")) for c in caminhos)
     assert any(c.startswith("docs/adr/") for c in caminhos)
     assert "PRD.md" in caminhos
+
+
+def test_a_area_padrao_e_declarada_no_manifesto():
+    """Declarar a área é o mesmo ato que declarar o tipo — não é adivinhação.
+
+    Não muda o dia um (as áreas nascem sem dono, então tudo segue "em falta"); o ganho é que nomear
+    um dono para Operação cobre os sete runbooks de uma vez.
+    """
+    por_caminho = {linha["source_path"]: linha["area_slug"] for linha in knowledge.load_corpus()}
+    assert por_caminho["docs/runbooks/producao.md"] == "operacao"
+    assert por_caminho["docs/adr/0013-backup-logico-em-container-proprio.md"] == "produto"
+    assert por_caminho["docs/captacao-de-leads.md"] == "comercial"
 
 
 def test_readme_de_pasta_fica_de_fora():
