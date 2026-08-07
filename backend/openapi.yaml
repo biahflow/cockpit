@@ -5068,6 +5068,8 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        active:
+          type: boolean
         deliverables:
           type: array
           items:
@@ -5664,6 +5666,8 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+        active:
+          type: boolean
         deliverables:
           type: array
           items:

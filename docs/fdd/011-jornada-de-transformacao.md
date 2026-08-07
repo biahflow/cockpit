@@ -30,6 +30,13 @@ para carregar seu próprio estado sem que editar o template reescreva o históri
   (read-only na API); só `target_date` ("a prevista") é editável pela equipe.
 - **Template (config):** `journey-phases` e `phase-deliverables` são **admin-only**
   (resource `journey`), como a configuração de pipeline.
+- **Aposentar uma fase é desativar, não excluir** (`JourneyPhase.active`, FDD 025). Fase inativa
+  deixa de ser copiada por `materialize_journey` e os projetos que já passaram por ela mantêm a
+  delas — desativar é sobre o futuro. Existe porque `ProjectPhase.phase` é `PROTECT`: fase
+  materializada **não pode** ser excluída, e não deveria mesmo, já que apagá-la apagaria o
+  histórico de projetos reais. `DELETE` continua valendo para a fase que ninguém materializou (a
+  criada por engano) e, para as demais, recusa com **409** apontando a desativação. Antes disso a
+  recusa vinha do banco como 500 e a tela prometia que projetos materializados "não são afetados".
 - **Repropaga ao portal do cliente:** avançar de fase e marcar entregável emitem webhook
   (`project_phase`/`project_deliverable`, ADR 0003) — é a jornada que alimenta a barra "você
   está aqui" do cliente, e sem emissor ela só chegava lá de carona no próximo salvamento de
@@ -50,4 +57,6 @@ entregáveis, define a previsão e avança de fase; ao concluir a última, apare
 Materialização é idempotente (não duplica fases numa segunda chamada nem em novo save do
 projeto); avançar além da última fase é gracioso (sem fase ativa, nada quebra); vendas
 recebe **403** ao tentar `advance-phase` ou marcar entregável, mas **200** ao ler a
-jornada; template continua acessível só a admin.
+jornada; template continua acessível só a admin; fase desativada some do projeto **novo** e
+permanece no antigo, e excluir fase materializada é 409 — nunca 500
+(`backend/tests/regression/test_excluir_recusa_em_vez_de_quebrar.py`).

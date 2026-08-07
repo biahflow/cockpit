@@ -120,11 +120,15 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
-class ArchiveConflict(APIException):
-    """Arquivar recusado porque outra coisa ainda depende deste registro.
+class StateConflict(APIException):
+    """Recusado porque outra coisa ainda depende deste registro.
 
     409, não 400: o pedido está bem formado e a permissão existe — o que impede é o **estado** do
     sistema, e é ele que muda para o pedido passar. Um 400 mandaria quem lê procurar erro no corpo.
+
+    Nasceu como `ArchiveConflict`, do arquivamento, e o nome ficou estreito: a exclusão **real**
+    (etapa do pipeline, fase da jornada) recusa pela mesma razão e com a mesma forma — contagem do
+    que depende, mais o caminho de saída. Ver FDD 025.
     """
 
     status_code = status.HTTP_409_CONFLICT
@@ -447,7 +451,7 @@ class ClientViewSet(ArchiveModelViewSet):
                 partes.append(f"{projetos} projeto(s)")
             if oportunidades:
                 partes.append(f"{oportunidades} oportunidade(s)")
-            raise ArchiveConflict(
+            raise StateConflict(
                 f"Este cliente ainda tem {' e '.join(partes)} em aberto. "
                 "Arquive esses registros antes de arquivar o cliente."
             )
@@ -509,6 +513,27 @@ class PipelineStageViewSet(viewsets.ModelViewSet):
     serializer_class = PipelineStageSerializer
     permission_classes = [RolePermission]
 
+    def perform_destroy(self, instance: PipelineStage) -> None:
+        """Recusa excluir etapa que ainda tem oportunidade — com 409, e dizendo quantas.
+
+        Um dos dois `DELETE` de verdade do portal (FDD 025). `Opportunity.stage` é `PROTECT`, e
+        sem esta guarda o banco recusava por baixo: `ProtectedError` sem tradução vira **500**.
+        """
+        total = instance.opportunities.count()
+        if total:
+            # A contagem ignora `archived_at` de propósito: `PROTECT` também ignora. Contar só as
+            # ativas produziria "0 oportunidade(s)" numa recusa, ou mandaria mover o que a tela
+            # não mostra — recusa cuja instrução não é verdade é o defeito que a FDD 025 corrige.
+            arquivadas = instance.opportunities.filter(archived_at__isnull=False).count()
+            saida = "Mova essas oportunidades para outra etapa antes de excluí-la."
+            if arquivadas:
+                saida += (
+                    f" {arquivadas} está(ão) arquivada(s) e não aparece(m) no quadro: "
+                    "restaure, mova e arquive de novo."
+                )
+            raise StateConflict(f"Esta etapa ainda tem {total} oportunidade(s). {saida}")
+        instance.delete()
+
 
 class OpportunityViewSet(ArchiveModelViewSet):
     resource = "opportunity"
@@ -537,7 +562,7 @@ class OpportunityViewSet(ArchiveModelViewSet):
         """
         projeto = getattr(instance, "project", None)
         if projeto is not None and projeto.archived_at is None:
-            raise ArchiveConflict(
+            raise StateConflict(
                 f"Esta oportunidade já virou o projeto \"{projeto.name}\". "
                 "Arquive o projeto se quiser encerrar este trabalho."
             )
@@ -712,6 +737,27 @@ class JourneyPhaseViewSet(viewsets.ModelViewSet):
     queryset = JourneyPhase.objects.prefetch_related("deliverables").all()
     serializer_class = JourneyPhaseSerializer
     permission_classes = [RolePermission]
+
+    def perform_destroy(self, instance: JourneyPhase) -> None:
+        """Recusa excluir fase já materializada — e aponta a desativação como saída (FDD 011).
+
+        Aqui a recusa é a regra, não a exceção: `materialize_journey` copia o template inteiro
+        para **todo** projeto, então basta um projeto na base para nenhuma fase poder ser
+        excluída. Antes desta guarda, o `PROTECT` de `ProjectPhase.phase` respondia **500** e o
+        diálogo da tela ainda prometia que "projetos que já materializaram esta fase não são
+        afetados" — a exclusão nunca chegava a acontecer.
+
+        Excluir uma fase por que se passaram projetos reais seria apagar histórico. O que se quer
+        ao aposentar uma fase é que ela pare de valer daqui para frente, e isso é `active=False`.
+        """
+        total = instance.project_phases.count()
+        if total:
+            raise StateConflict(
+                f"Esta fase já foi materializada em {total} projeto(s) e não pode ser excluída "
+                "sem apagar o histórico deles. Desative a fase: ela deixa de ser herdada por "
+                "projetos novos e os atuais mantêm a delas."
+            )
+        instance.delete()
 
 
 class PhaseDeliverableViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):

@@ -115,7 +115,7 @@ class JourneyPhaseSerializer(serializers.ModelSerializer[JourneyPhase]):
 
     class Meta:
         model = JourneyPhase
-        fields = ["id", "name", "description", "position", "deliverables"]
+        fields = ["id", "name", "description", "position", "active", "deliverables"]
         read_only_fields = ["id"]
 
 

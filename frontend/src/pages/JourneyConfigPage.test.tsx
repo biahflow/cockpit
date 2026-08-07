@@ -11,7 +11,7 @@ beforeEach(() => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     if (path === "/journey-phases/" && (options?.method ?? "GET") === "GET") {
       return Promise.resolve([
-        { id: 1, name: "Welcome", description: "Recepção", position: 0, deliverables: [{ id: 5, phase: 1, name: "Acesso ao portal", position: 0 }] },
+        { id: 1, name: "Welcome", description: "Recepção", position: 0, active: true, deliverables: [{ id: 5, phase: 1, name: "Acesso ao portal", position: 0 }] },
       ]);
     }
     return Promise.resolve({});
@@ -47,6 +47,39 @@ test("remove um entregável", async () => {
   await screen.findByDisplayValue("Welcome");
   await user.click(screen.getByLabelText("Excluir entregável Acesso ao portal"));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/phase-deliverables/5/", expect.objectContaining({ method: "DELETE" })));
+});
+
+test("aposenta a fase sem excluí-la", async () => {
+  // A saída que a recusa da exclusão oferece (FDD 011/025): fase em uso não some, para de ser
+  // herdada. Sem isto, "Excluir" seria a única alternativa oferecida — e ela é recusada.
+  const user = userEvent.setup();
+  render(<JourneyConfigPage />);
+  await screen.findByDisplayValue("Welcome");
+
+  await user.click(screen.getByLabelText("Herdada por projetos novos"));
+  expect(screen.getByText(/não entra em projeto novo/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/journey-phases/1/", expect.objectContaining({ body: expect.stringContaining("\"active\":false") })));
+});
+
+test("mostra a recusa da exclusão em vez de engolir o erro", async () => {
+  // O 409 do backend traz a contagem e o caminho de saída; a tela precisa exibi-lo tal como veio.
+  const user = userEvent.setup();
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path === "/journey-phases/1/" && options?.method === "DELETE") {
+      return Promise.reject(new Error("Esta fase já foi materializada em 3 projeto(s)."));
+    }
+    if (path === "/journey-phases/") return Promise.resolve([{ id: 1, name: "Welcome", description: "", position: 0, active: true, deliverables: [] }]);
+    return Promise.resolve({});
+  });
+  render(<JourneyConfigPage />);
+  await screen.findByDisplayValue("Welcome");
+
+  await user.click(screen.getByLabelText("Excluir fase Welcome"));
+  await user.click(screen.getByRole("button", { name: "Excluir" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("materializada em 3 projeto(s)");
 });
 
 test("remove uma fase e edita descrição/ordem", async () => {

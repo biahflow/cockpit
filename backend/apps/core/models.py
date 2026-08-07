@@ -587,6 +587,12 @@ class JourneyPhase(models.Model):
     name = models.CharField(max_length=80)
     description = models.TextField(blank=True, default="")
     position = models.PositiveIntegerField(default=0)
+    # Aposentar uma fase da metodologia sem reescrever o histórico. `ProjectPhase.phase` é
+    # `PROTECT`, então uma fase materializada não pode mais ser excluída — e excluí-la também
+    # não seria o que se quer: os projetos em andamento passaram por ela. Inativa, ela deixa de
+    # ser herdada por projeto novo (`journey.materialize_journey`) e os antigos ficam com a
+    # delas. É a saída que a recusa da exclusão oferece (FDD 011, FDD 025).
+    active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["position", "id"]

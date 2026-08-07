@@ -171,6 +171,9 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Sem isto, `ProtectedError` sobe como 500 e a recusa de uma exclusão vira incidente no
+    # Sentry em vez de instrução na tela (FDD 025). Ver `apps/core/exceptions.py`.
+    "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
     # Teto de requisições (FDD 017, ADR 0009). `anon`/`user` são a rede de baixo, que vale
     # para toda a API; os escopos nomeados protegem as portas específicas. Tudo por env para
     # afrouxar em produção sem redeploy de código.

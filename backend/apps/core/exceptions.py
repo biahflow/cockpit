@@ -16,11 +16,21 @@ compartilha é o status e o motivo dele, não a redação.
 Não confundir com `calendar_sync.CalendarUnavailable`, que é outra coisa: o sinal de *falhar
 fechado* do free/busy — não conseguimos ler a agenda, então nada pode ser afirmado sobre ela — e
 vira **503**, porque ali o recurso é que está indisponível, não o fornecedor que recusou.
+
+No fim do módulo, a mesma regra virada para dentro: `api_exception_handler` traduz o
+`ProtectedError` do banco em **409** (FDD 025). Também ali um 500 diria "quebrou aqui" sobre uma
+recusa perfeitamente normal.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+from django.db.models import ProtectedError
+from rest_framework import status
 from rest_framework.exceptions import APIException
+from rest_framework.response import Response
+from rest_framework.views import exception_handler, set_rollback
 
 
 class UpstreamUnavailable(APIException):
@@ -89,3 +99,27 @@ class EsignUnavailable(UpstreamUnavailable):
         "tente de novo em instantes."
     )
     default_code = "esign_unavailable"
+
+
+def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
+    """Handler do DRF com `ProtectedError` traduzido para **409** (FDD 025).
+
+    Mesma regra do módulo, outro lado da rede: o DRF só conhece as próprias exceções, então tudo
+    o mais sobe como 500 — inclusive o `ProtectedError`, que não é falha nenhuma, e sim o banco
+    recusando apagar uma linha da qual outra depende. Sem tradução, um clique legítimo em
+    "Excluir" virava "Não foi possível concluir a operação." na tela **e** um evento no Sentry,
+    porque o SPA reporta todo status ≥ 500 (`api.ts`) — escondendo a única informação útil.
+
+    409 pela razão do `StateConflict`: o pedido está bem formado e a permissão existe, o que
+    impede é o estado. Isto aqui é **rede**, não a mensagem boa: quem sabe o que está em jogo é a
+    view, e `perform_destroy` recusa antes, com contagem e caminho de saída. A rede existe porque
+    são doze FKs `PROTECT` no `models.py` e nada obriga a próxima rota de exclusão a lembrar da
+    sua.
+    """
+    if isinstance(exc, ProtectedError):
+        set_rollback()  # como o handler do DRF faz; sem isto a transação da requisição vaza
+        return Response(
+            {"detail": "Outro registro ainda depende deste. Remova o vínculo antes de excluir."},
+            status=status.HTTP_409_CONFLICT,
+        )
+    return exception_handler(exc, context)

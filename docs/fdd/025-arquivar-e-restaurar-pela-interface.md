@@ -48,7 +48,8 @@ respondia 204, em silêncio.
   preenchido de propósito: anulá-lo faria a tela voltar a oferecer "Criar projeto", que responderia
   409 — trocaria um link morto por um botão morto.
 - **409, não 400.** O pedido está bem formado e a permissão existe; o que impede é o **estado**, e é
-  ele que muda para o pedido passar. `ArchiveConflict` em `views.py`.
+  ele que muda para o pedido passar. `StateConflict` em `views.py` (nasceu `ArchiveConflict`; ver
+  a seção sobre os dois "Excluir" de verdade).
 - **O contato acompanha em vez de bloquear.** Ninguém lista contato fora do cliente, então ele não
   produz órfão visível — mas deixá-lo ativo restauraria depois um cliente com contatos vivos pela
   metade. Arquiva junto, na mesma transação.
@@ -76,6 +77,41 @@ respondia 204, em silêncio.
   `EventTarget` (isso seria `stopImmediatePropagation`) e ambos vivem no `document`. O `inert`
   resolve de carona os dois `aria-modal="true"` visíveis ao mesmo tempo, que eram inválidos.
 
+## A outra metade: os dois "Excluir" de verdade
+
+A regra "Arquivar ≠ Excluir" separou os seis recursos que arquivam dos **dois** que apagam de
+verdade — etapa do pipeline e fase da jornada. Os seis ganharam guarda, 409 e caminho de volta. Os
+dois ganharam botão e confirmação e **nenhum caminho de recusa**, o que é exatamente o que esta FDD
+existe para não deixar acontecer.
+
+Os dois batem em FK `PROTECT` (`Opportunity.stage`, `ProjectPhase.phase`) e o `ProtectedError` não
+era tratado em lugar nenhum. Saía **500** — que o SPA mostra como "Não foi possível concluir a
+operação." e ainda **reporta ao Sentry**, porque `api.ts` reporta todo status ≥ 500. Uso legítimo da
+interface virava incidente, e a única informação útil (o que ainda depende do registro) não chegava
+a quem tinha clicado.
+
+O caso da fase era pior que intermitente. `journey.materialize_journey` copia o template inteiro
+para **todo** projeto, então bastava um projeto na base para o botão "Excluir" da tela Jornada estar
+morto para **qualquer** fase — enquanto o diálogo prometia o contrário: *"Projetos que já
+materializaram esta fase não são afetados"*.
+
+- **Recusa por estado é 409 também na exclusão real.** `ArchiveConflict` virou **`StateConflict`**:
+  o nome estava estreito, a razão é a mesma (o pedido está bem formado, o que impede é o estado) e a
+  forma também — contagem do que depende, mais o que fazer antes.
+- **A contagem inclui o arquivado, e diz que inclui.** `PROTECT` não sabe o que é `archived_at`.
+  Contar só o ativo produziria "0 oportunidade(s)" numa recusa, ou mandaria mover o que a tela
+  esconde — a mesma classe de mentira que a guarda da oportunidade tinha. Quando há oportunidade
+  arquivada segurando a etapa, a mensagem manda restaurar, mover e arquivar de novo; o caminho de
+  volta existe desde esta FDD.
+- **A recusa da fase tem saída: desativar** (`JourneyPhase.active`, FDD 011). Excluir uma fase por
+  onde passaram projetos reais seria apagar o histórico deles; o que se quer ao aposentar uma fase é
+  que ela pare de valer daqui para frente. Excluir continua valendo para a fase que **ninguém**
+  materializou, que é o caso da fase criada por engano.
+- **E uma rede por baixo:** `apps.core.exceptions.api_exception_handler`, registrado em
+  `REST_FRAMEWORK["EXCEPTION_HANDLER"]`, traduz qualquer `ProtectedError` em 409. Não substitui a
+  mensagem específica — dá o status certo. Existe porque são **doze** FKs `PROTECT` no `models.py` e
+  nada obriga a próxima rota de exclusão a lembrar de contar os seus dependentes.
+
 ## Fronteira com o portal do cliente (ADR 0003)
 
 Arquivar um projeto **emite webhook** — `archive()` é um `save()` — e o portal vem buscar o estado
@@ -101,15 +137,18 @@ O expurgo continua sendo a única operação que destrói de propósito, e conti
 
 ## Onde está
 
-- Backend: `ArchiveModelViewSet` (`?archived=1`, `unarchive`), `ArchiveConflict`,
-  `ClientViewSet.perform_destroy`, `OpportunityViewSet.perform_destroy` e
+- Backend: `ArchiveModelViewSet` (`?archived=1`, `unarchive`), `StateConflict`,
+  `ClientViewSet.perform_destroy`, `OpportunityViewSet.perform_destroy`,
+  `PipelineStageViewSet.perform_destroy`, `JourneyPhaseViewSet.perform_destroy` e
   `PortalProjectSnapshotView` — todos em `backend/apps/core/views.py`; o campo `archived_at` do
-  snapshot em `backend/apps/core/portal.py`.
+  snapshot em `backend/apps/core/portal.py`; a rede do `ProtectedError` em
+  `backend/apps/core/exceptions.py` (`api_exception_handler`), ligada em `config/settings.py`.
 - Frontend: `components/Modal.tsx` (`Modal` extraído da `CommercialPage` + `ConfirmDialog`); botões
   em `ClientDetailPage`, `ProjectDetailPage` e no detalhe da `CommercialPage`; abas Arquivados em
-  `ClientsPage` e `ProjectsPage`.
+  `ClientsPage` e `ProjectsPage`; alternador "Herdada por projetos novos" em `JourneyConfigPage`.
 - Testes: `backend/tests/regression/test_archive_nao_deixa_orfao.py`,
   `backend/tests/regression/test_arquivar_tem_saida.py`,
+  `backend/tests/regression/test_excluir_recusa_em_vez_de_quebrar.py`,
   `backend/apps/core/tests/test_archive_restore.py`, `backend/apps/core/tests/test_portal.py`
   (`test_snapshot_serve_projeto_arquivado_declarando_o_arquivamento`),
-  `frontend/src/components/Modal.test.tsx`.
+  `frontend/src/components/Modal.test.tsx`, `frontend/src/pages/JourneyConfigPage.test.tsx`.

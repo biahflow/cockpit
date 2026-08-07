@@ -26,7 +26,13 @@ def materialize_journey(project: Project) -> None:
 
     if ProjectPhase.objects.filter(project=project).exists():
         return
-    phases = list(JourneyPhase.objects.prefetch_related("deliverables").order_by("position", "id"))
+    # `active=True`: fase aposentada não entra em projeto novo. Os projetos que já a
+    # materializaram continuam com a delas — desativar é sobre o futuro (FDD 011).
+    phases = list(
+        JourneyPhase.objects.filter(active=True)
+        .prefetch_related("deliverables")
+        .order_by("position", "id")
+    )
     now = timezone.now()
     for index, phase in enumerate(phases):
         project_phase = ProjectPhase.objects.create(
