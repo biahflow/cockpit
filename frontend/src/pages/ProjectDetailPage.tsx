@@ -4,7 +4,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 import { api, listUsers } from "../api";
 import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
-import { ConfirmDialog } from "../components/Modal";
+import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import type { DigitalEmployee, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
@@ -14,6 +14,8 @@ const projectStatusLabel: Record<string, string> = { planning: "Planejamento", a
 const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_progress: "Em andamento", done: "Concluído" };
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
 const blankMeeting = { title: "", date: "", meeting_url: "", recording_url: "", transcript: "" };
+const employeeStatusLabel: Record<DigitalEmployeeStatus, string> = { building: "Em construção", active: "Ativo", paused: "Pausado" };
+const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", hours_saved_month: "", roi_month: "" };
 
 function formatDate(value: string): string { return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR"); }
 
@@ -45,6 +47,11 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [people, setPeople] = useState<SessionUser[]>([]);
   const [memberDraft, setMemberDraft] = useState("");
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", area: "", status: "building" as DigitalEmployeeStatus });
+  const [showArchivedEmployees, setShowArchivedEmployees] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<DigitalEmployee | null>(null);
+  const [employeeEdit, setEmployeeEdit] = useState(blankEmployeeEdit);
+  const [archivingEmployee, setArchivingEmployee] = useState<DigitalEmployee | null>(null);
+  const [employeeBusy, setEmployeeBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState({ name: "", description: "", status: "", start_date: "", due_date: "", service: "", actual_value: "", cost: "" });
 
@@ -58,12 +65,19 @@ export function ProjectDetailPage({ id }: { id: number }) {
     api<Pendencia[]>(`/pendencias/?project=${id}`),
     api<ProjectPhase[]>(`/project-phases/?project=${id}`),
     api<HealthAssessment>(`/projects/${id}/health/`),
-    api<DigitalEmployee[]>(`/digital-employees/?project=${id}`),
     api<ProjectMember[]>(`/project-members/?project=${id}`),
-  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedPhases, loadedHealth, loadedEmployees, loadedMembers]) => {
-    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setPhases(loadedPhases); setHealth(loadedHealth); setEmployees(loadedEmployees); setMembers(loadedMembers);
+  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedPhases, loadedHealth, loadedMembers]) => {
+    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setPhases(loadedPhases); setHealth(loadedHealth); setMembers(loadedMembers);
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
+
+  // O roster tem carga própria porque o alternador de arquivados muda só a lista dele: pendurá-lo
+  // no `load` faria cada clique refazer as dez chamadas da página inteira.
+  const loadEmployees = useCallback(
+    () => api<DigitalEmployee[]>(`/digital-employees/?project=${id}${showArchivedEmployees ? "&archived=1" : ""}`).then(setEmployees).catch((cause: Error) => setError(cause.message)),
+    [id, showArchivedEmployees],
+  );
+  useEffect(() => { void loadEmployees(); }, [loadEmployees]);
 
   async function advancePhase() {
     try { const updated = await api<ProjectPhase[]>(`/projects/${id}/advance-phase/`, { method: "POST" }); setPhases(updated); }
@@ -129,7 +143,42 @@ export function ProjectDetailPage({ id }: { id: number }) {
   }
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    try { await api("/digital-employees/", { method: "POST", body: JSON.stringify({ project: id, ...employeeDraft }) }); setEmployeeDraft({ name: "", area: "", status: "building" }); await load(); }
+    try { await api("/digital-employees/", { method: "POST", body: JSON.stringify({ project: id, ...employeeDraft }) }); setEmployeeDraft({ name: "", area: "", status: "building" }); await loadEmployees(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  function openEmployeeEdit(employee: DigitalEmployee) {
+    setEmployeeEdit({
+      name: employee.name, area: employee.area, status: employee.status, description: employee.description,
+      kpi_label: employee.kpi_label, kpi_value: employee.kpi_value,
+      hours_saved_month: employee.hours_saved_month, roi_month: employee.roi_month,
+    });
+    setEditingEmployee(employee);
+  }
+  async function saveEmployee(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingEmployee) return;
+    setEmployeeBusy(true);
+    try {
+      // Os seis campos que nenhuma tela alcançava — e que o snapshot leva à tela do cliente.
+      // Vazio vira "0" nos decimais porque o serializer os recusa em branco.
+      await api(`/digital-employees/${editingEmployee.id}/`, { method: "PATCH", body: JSON.stringify({
+        ...employeeEdit,
+        hours_saved_month: employeeEdit.hours_saved_month || "0",
+        roi_month: employeeEdit.roi_month || "0",
+      }) });
+      setEditingEmployee(null); await loadEmployees();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setEmployeeBusy(false); }
+  }
+  async function archiveEmployee() {
+    if (!archivingEmployee) return;
+    setEmployeeBusy(true);
+    try { await api(`/digital-employees/${archivingEmployee.id}/`, { method: "DELETE" }); setArchivingEmployee(null); await loadEmployees(); }
+    catch (cause) { setArchivingEmployee(null); setError((cause as Error).message); }
+    finally { setEmployeeBusy(false); }
+  }
+  async function restoreEmployee(employeeId: number) {
+    try { await api(`/digital-employees/${employeeId}/unarchive/`, { method: "POST" }); await loadEmployees(); }
     catch (cause) { setError((cause as Error).message); }
   }
   // Só admin monta equipe (RFC 0003), e `/users/` também é admin-only — por isso a lista de
@@ -201,6 +250,36 @@ export function ProjectDetailPage({ id }: { id: number }) {
   if (!project) return <div className="animate-pulse space-y-6"><div className="h-10 w-64 rounded-xl bg-slate-200" /><div className="h-56 rounded-2xl bg-white" /></div>;
 
   return <section className="space-y-7">
+    {editingEmployee && <Modal title={`Editar ${editingEmployee.name}`} onClose={() => setEditingEmployee(null)}>
+      {/* Os oito campos, e não os dois do formulário rápido: seis deles cruzam ao painel "Seu Time
+          Digital" do cliente pelo snapshot (ADR 0003) e nenhuma tela os alcançava. */}
+      <form className="grid gap-4" onSubmit={event => void saveEmployee(event)}>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">Nome<input className="field" value={employeeEdit.name} onChange={event => setEmployeeEdit({ ...employeeEdit, name: event.target.value })} required /></label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Área<input className="field" placeholder="Financeiro, Atendimento…" value={employeeEdit.area} onChange={event => setEmployeeEdit({ ...employeeEdit, area: event.target.value })} /></label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Status<select className="field" value={employeeEdit.status} onChange={event => setEmployeeEdit({ ...employeeEdit, status: event.target.value as DigitalEmployeeStatus })}>{Object.entries(employeeStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        </div>
+        <label className="grid gap-2 text-sm font-medium text-slate-700">O que ele faz<textarea className="field min-h-20" placeholder="Descrição que o cliente lê no portal" value={employeeEdit.description} onChange={event => setEmployeeEdit({ ...employeeEdit, description: event.target.value })} /></label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Rótulo do KPI<input className="field" placeholder="Notas conciliadas/mês" value={employeeEdit.kpi_label} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_label: event.target.value })} /></label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Valor do KPI<input className="field" placeholder="312" value={employeeEdit.kpi_value} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_value: event.target.value })} /></label>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm font-medium text-slate-700">Horas poupadas/mês<input className="field" type="number" min="0" step="0.1" value={employeeEdit.hours_saved_month} onChange={event => setEmployeeEdit({ ...employeeEdit, hours_saved_month: event.target.value })} /></label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">ROI/mês (R$)<input className="field" type="number" min="0" step="0.01" value={employeeEdit.roi_month} onChange={event => setEmployeeEdit({ ...employeeEdit, roi_month: event.target.value })} /></label>
+        </div>
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-ink hover:border-ocean" onClick={() => setEditingEmployee(null)}>Cancelar</button>
+          <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" disabled={employeeBusy}><Save className="size-4" />{employeeBusy ? "Salvando…" : "Salvar"}</button>
+        </div>
+      </form>
+    </Modal>}
+    {archivingEmployee && <ConfirmDialog
+      title="Arquivar funcionário digital"
+      message={<>O agente <strong className="text-ink">{archivingEmployee.name}</strong> sai do roster do projeto e do painel que o cliente vê. Nada é apagado — dá para restaurar em "Mostrar arquivados".</>}
+      confirmLabel="Arquivar" busy={employeeBusy}
+      onCancel={() => setArchivingEmployee(null)} onConfirm={() => void archiveEmployee()}
+    />}
     {archivingProject && <ConfirmDialog
       title="Arquivar projeto"
       message={<>O projeto <strong className="text-ink">{project.name}</strong> sai das listagens ativas, junto com o que pende dele. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
@@ -250,14 +329,22 @@ export function ProjectDetailPage({ id }: { id: number }) {
     </section>
 
     <section className="rounded-2xl border bg-white p-5 sm:p-6">
-      <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Bot className="size-4" /></span><div><h2 className="font-semibold text-ink">Funcionários Digitais</h2><p className="text-sm text-slate-600">Os agentes de IA entregues neste projeto.</p></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-mint text-ocean"><Bot className="size-4" /></span><div><h2 className="font-semibold text-ink">Funcionários Digitais</h2><p className="text-sm text-slate-600">Os agentes de IA entregues neste projeto.</p></div></div>
+        <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-ocean" checked={showArchivedEmployees} onChange={event => setShowArchivedEmployees(event.target.checked)} />Mostrar arquivados</label>
+      </div>
       {employees.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{employees.map(employee => <article className="rounded-xl border bg-slate-50/50 p-4" key={employee.id}>
-        <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{employee.name}</p><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${employee.status === "active" ? "bg-emerald-50 text-emerald-700" : employee.status === "paused" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{employee.status === "active" ? "Ativo" : employee.status === "paused" ? "Pausado" : "Em construção"}</span></div>
+        <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{employee.name}</p><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${employee.status === "active" ? "bg-emerald-50 text-emerald-700" : employee.status === "paused" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"}`}>{employeeStatusLabel[employee.status]}</span></div>
         {employee.area && <p className="mt-0.5 text-xs text-ocean">{employee.area}</p>}
         {employee.description && <p className="mt-1 text-xs text-slate-600">{employee.description}</p>}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{employee.kpi_label && <span><strong className="text-ink">{employee.kpi_label}:</strong> {employee.kpi_value}</span>}{Number(employee.hours_saved_month) > 0 && <span>{Number(employee.hours_saved_month)}h/mês</span>}{Number(employee.roi_month) > 0 && <span>ROI {money.format(Number(employee.roi_month))}/mês</span>}</div>
-      </article>)}</div> : <p className="mt-4 rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">Nenhum funcionário digital ainda.</p>}
-      {canManageJourney && <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void createEmployee(event)}>
+        {canManageJourney && <div className="mt-3 flex flex-wrap justify-end gap-2">{showArchivedEmployees
+          ? <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-ocean hover:border-ocean" onClick={() => void restoreEmployee(employee.id)}>Restaurar</button>
+          : <><button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-ocean" aria-label={`Editar ${employee.name}`} onClick={() => openEmployeeEdit(employee)}><Pencil className="size-3.5 text-ocean" />Editar</button>
+            <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-signal hover:text-signal" aria-label={`Arquivar ${employee.name}`} onClick={() => setArchivingEmployee(employee)}><Trash2 className="size-3.5" />Arquivar</button></>
+        }</div>}
+      </article>)}</div> : <p className="mt-4 rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">{showArchivedEmployees ? "Nenhum funcionário digital arquivado." : "Nenhum funcionário digital ainda."}</p>}
+      {canManageJourney && !showArchivedEmployees && <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void createEmployee(event)}>
         <input className="field flex-1" placeholder="Nome (ex.: Agente Financeiro)" value={employeeDraft.name} onChange={event => setEmployeeDraft({ ...employeeDraft, name: event.target.value })} required />
         <input className="field w-40" placeholder="Área" value={employeeDraft.area} onChange={event => setEmployeeDraft({ ...employeeDraft, area: event.target.value })} />
         <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar funcionário digital" type="submit"><Plus className="size-4" /></button>

@@ -50,8 +50,20 @@ aplicação do mesmo padrão.
   nada técnico vaza junto. Do outro lado, o portal já tem modelo próprio e o exibe na Visão
   geral e em Resultados (FDD 006 do `biahflow-portal-cliente`).
 - **Interface.** `ProjectDetailPage.tsx` mostra o roster com selo de status, área, descrição
-  e a linha de métricas (`kpi_label: kpi_value`, horas/mês, ROI/mês). A criação pela tela
-  cobre apenas nome, área e status.
+  e a linha de métricas (`kpi_label: kpi_value`, horas/mês, ROI/mês). Cada cartão tem **Editar**
+  — um `Modal` com os oito campos — e **Arquivar** com `ConfirmDialog`, mais um alternador
+  **Mostrar arquivados** com Restaurar; tudo gated por admin/Entrega, que é a permissão do
+  backend (Vendas lê e não mexe). O formulário rápido embaixo do roster continua criando com
+  nome e área, e o resto se preenche no Editar.
+
+  Até 07/08/2026 a tela alcançava **dois** dos oito campos: o formulário de criação mandava só
+  nome e área (o `status` era `"building"` fixo, sem input), os cartões eram de leitura e não
+  havia arquivar nem restaurar, embora o viewset seja um `ArchiveModelViewSet` completo desde
+  sempre. Como o snapshot leva `description`, `status`, `kpi_label`, `kpi_value`,
+  `hours_saved_month` e `roi_month` ao painel do cliente, o Funcionário Digital chegava lá como
+  "Em construção", sem KPI, 0h e R$ 0 de ROI — e ficava assim, porque preencher exigia a API
+  crua ou o Django admin. Era a mesma falha que a FDD 025 nomeia ("não havia botão"), no único
+  recurso arquivável que ela não fechou.
 
 ## Regras — o catálogo proposto
 
