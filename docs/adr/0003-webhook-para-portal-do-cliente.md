@@ -82,3 +82,41 @@ Como está, um projeto inteiro sai daqui como **um** aviso, e há teste que repr
 
 O custo declarado: a entrega segue best-effort e sem retentativa, e um `deleted` perdido é
 **definitivo** — ao contrário de um `updated`, que o próximo salvamento daquele projeto corrige.
+
+
+## Emenda (07/08/2026) — a data de aceitação do artefato, e a linha "nenhum dado comercial"
+
+Terceira lacuna na mesma regra, e desta vez ela estava um degrau antes: o fato **não entrava no
+snapshot**, então não havia sequer o que emitir.
+
+O portal do cliente instrumentou um funil de onboarding (RFC 001 de lá) e listou entre os degraus
+"artefato aceito (`sent → accepted`)". Ele nasceu com o degrau **declarado ausente do enum**, e a
+razão escrita no código de lá aponta para cá: *"o snapshot do Biahflow não carrega nada de
+artefato […] ele entra quando o outro lado o afirmar"*. Aqui o dado existe inteiro desde a FDD 016
+— `Artifact.status`, `Artifact.decided_at` carimbado no `save()`, e o e-sign fechando o contrato
+sozinho quando o signatário assina —, e o docstring do próprio modelo diz para que ele serve:
+*"permite medir onde a jornada trava entre uma etapa e a seguinte"*. O que faltava era atravessar.
+
+**O que atravessa é um instante e nada mais.** `artifact_accepted_at` é a data da **primeira**
+aceitação daquele cliente. Não vai `kind` (diria em que etapa do funil comercial ele está), não vai
+`title`, não vai `content` (o texto que a IA daqui redige é dado interno da casa), não vai valor e
+não vai contagem.
+
+Isso mantém a frase da Decisão acima — *"nenhum dado comercial (Opportunity, PipelineStage,
+valores) é enviado ao portal"* — verdadeira, e vale dizer por quê em vez de deixar por conta da
+leitura: nenhuma das três coisas nomeadas cruza. O que cruza é a data em que **o próprio cliente
+aprovou** alguma coisa, que é um fato dele sobre ele. Do lado de lá ela também não chega a tela
+nenhuma do cliente: alimenta uma tabela que o papel de requisição do portal não consegue ler.
+
+**O cálculo é por cliente, não por projeto**, porque o funil de lá é escopado por organização e um
+cliente pode ter vários projetos. Os dois vínculos possíveis do artefato (`project` e
+`opportunity`) chegam ao mesmo `Client`, e é pelo lado da oportunidade que o contrato quase sempre
+vive — a aceitação dele é o que *cria* o projeto depois.
+
+**O emissor tem um limite declarado.** `post_save` de `Artifact` emite só em `ACCEPTED`: rascunho,
+revisão e envio mudam a linha várias vezes sem mover degrau, e `REJECTED` também não move, porque
+o funil mede o que o cliente **recebeu**. O projeto é resolvido — o do artefato quando há, senão o
+projeto vivo mais antigo do mesmo cliente, um só e nunca fan-out. E quando não há projeto nenhum
+**nada é emitido**, o que é limite e não esquecimento: sem projeto o portal ainda não conhece
+aquela organização, e como `build_snapshot` calcula o campo sobre o cliente, o fato chega inteiro
+no primeiro snapshot depois que o projeto nascer.
