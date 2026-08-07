@@ -3,6 +3,12 @@
 O Biahflow é a fonte da verdade do status do projeto. Aqui ficam os utilitários que
 notificam o portal externo (webhook assinado) e que montam o snapshot read-only que o
 portal consome para backfill/reconciliação. Nenhum dado comercial é exposto.
+
+A única coisa que a linha acima precisa qualificar é `artifact_accepted_at` (emenda de
+07/08/2026 na ADR 0003): o que sai é o **instante** da primeira aceitação do cliente, para o
+funil de onboarding do portal — nunca `kind`, `title`, `content`, valor ou contagem. Nenhuma
+das três coisas que a ADR nomeia (Opportunity, PipelineStage, valores) cruza; o que cruza é
+a data em que o próprio cliente aprovou alguma coisa.
 """
 
 from __future__ import annotations
@@ -18,10 +24,12 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Min, Q
 from django.utils import timezone
 
 from . import flags, health
 from .models import (
+    Artifact,
     DigitalEmployee,
     Document,
     Meeting,
@@ -50,6 +58,37 @@ def _doc_type(name: str) -> str:
     """Tipo do documento derivado da extensão (para o portal exibir PDF/Planilha/…)."""
     _, _, ext = name.rpartition(".")
     return ext.upper() if ext and ext != name else "Arquivo"
+
+
+def _artifact_accepted_at(project: Project) -> str | None:
+    """Quando este cliente aprovou um artefato pela **primeira** vez, ou ``None``.
+
+    O degrau que faltava no funil de onboarding do portal (RFC 001 de lá). O `Artifact`
+    guarda a jornada comercial e o docstring dele já dizia para que serve — *"permite medir
+    onde a jornada trava entre uma etapa e a seguinte"* —, mas nada disso atravessava: nem
+    o snapshot levava artefato, nem `signals.py` tinha receiver. Do outro lado o degrau
+    estava declarado ausente no enum, com a razão escrita: *"ele entra quando o outro lado o
+    afirmar"*.
+
+    **Sai a data e nada mais** — nem `kind`, nem `title`, nem `content`, nem contagem, nem
+    valor. O `content` é o texto comercial que a IA daqui redige e é dado interno da casa;
+    o `kind` diria em que etapa do funil comercial o cliente está. O que o portal precisa é
+    de um instante, e a linha do módulo acima ("nenhum dado comercial é exposto") continua
+    valendo com a precisão de sempre: a data em que **o próprio cliente aprovou** alguma
+    coisa é um fato dele sobre ele, e é o único que atravessa.
+
+    Escopado pelo **cliente** e não pelo projeto, porque o funil de lá é por organização e
+    um cliente pode ter vários projetos: os dois lados do vínculo do artefato (`project` e
+    `opportunity`) chegam ao mesmo `Client`, e a aceitação do contrato quase sempre está no
+    lado da oportunidade, antes de existir projeto algum.
+    """
+    first = Artifact.objects.filter(
+        Q(project__client=project.client_id) | Q(opportunity__client=project.client_id),
+        status=Artifact.Status.ACCEPTED,
+        archived_at__isnull=True,
+        decided_at__isnull=False,
+    ).aggregate(first=Min("decided_at"))["first"]
+    return first.isoformat() if first else None
 
 
 def _journey(project: Project) -> list[dict[str, Any]]:
@@ -211,6 +250,9 @@ def build_snapshot(project: Project) -> dict[str, Any]:
             "archived_at": project.archived_at.isoformat() if project.archived_at else None,
             "client": {"id": project.client_id, "name": project.client.name},
         },
+        # A primeira aprovação deste cliente, e só o instante dela — o degrau que faltava no
+        # funil de onboarding do portal. Ver `_artifact_accepted_at`.
+        "artifact_accepted_at": _artifact_accepted_at(project),
         "completion": completion,
         "health": {"label": health_label, "level": health_level},
         "digital_employees": digital_employees,

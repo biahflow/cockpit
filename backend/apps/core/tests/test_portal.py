@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from apps.core import blueprints, journey, portal
 from apps.core.models import (
     AppSetting,
+    Artifact,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
@@ -22,7 +23,7 @@ from apps.core.models import (
     Vertical,
 )
 
-from .factories import ClientFactory, ProjectFactory
+from .factories import ArtifactFactory, ClientFactory, OpportunityFactory, ProjectFactory
 
 
 def _milestone(project: Project, status: str = Milestone.Status.TODO, days: int = 5) -> Milestone:
@@ -307,6 +308,135 @@ def test_saving_digital_employee_emits_webhook(monkeypatch: pytest.MonkeyPatch) 
     calls.clear()
     employee.archive()
     assert ("updated", "digital_employee", project.pk) in calls
+
+
+@pytest.mark.django_db
+def test_snapshot_carries_the_date_of_the_first_accepted_artifact() -> None:
+    """O degrau que o funil do portal declarava ausente por falta de produtor daqui.
+
+    Sai a **primeira** aceitação e só o instante dela: o portal precisa de uma data para medir
+    o time-to-first-value, e `kind`/`title`/`content` seriam dado comercial atravessando a
+    fronteira que a ADR 0003 fecha.
+    """
+    project = ProjectFactory()
+    primeiro = timezone.now() - timedelta(days=20)
+    depois = timezone.now() - timedelta(days=3)
+    ArtifactFactory(
+        kind=Artifact.Kind.CONTRACT,
+        opportunity=OpportunityFactory(client=project.client),
+        status=Artifact.Status.ACCEPTED,
+        decided_at=primeiro,
+    )
+    ArtifactFactory(
+        project=project,
+        opportunity=None,
+        status=Artifact.Status.ACCEPTED,
+        decided_at=depois,
+    )
+
+    snapshot = portal.build_snapshot(project)
+
+    assert snapshot["artifact_accepted_at"] == primeiro.isoformat()
+    # E nada além do instante: nem o texto que a IA redigiu, nem em que etapa comercial ele está.
+    assert "artifacts" not in snapshot
+    assert "Rascunho gerado" not in json.dumps(snapshot)
+
+
+@pytest.mark.django_db
+def test_an_artifact_still_awaiting_a_decision_is_not_a_rung() -> None:
+    """`sent` é o que **nós** fizemos; o degrau é o que o cliente recebeu e aprovou.
+
+    Recusado também não conta, e pela mesma razão — o funil mede valor recebido, não atividade.
+    """
+    project = ProjectFactory()
+    ArtifactFactory(
+        opportunity=OpportunityFactory(client=project.client),
+        status=Artifact.Status.SENT,
+    )
+    ArtifactFactory(project=project, opportunity=None, status=Artifact.Status.REJECTED)
+
+    assert portal.build_snapshot(project)["artifact_accepted_at"] is None
+
+
+@pytest.mark.django_db
+def test_an_archived_artifact_stops_counting_like_every_other_child() -> None:
+    project = ProjectFactory()
+    artifact = ArtifactFactory(
+        project=project, opportunity=None, status=Artifact.Status.ACCEPTED
+    )
+    assert portal.build_snapshot(project)["artifact_accepted_at"] is not None
+
+    artifact.archive()
+
+    assert portal.build_snapshot(project)["artifact_accepted_at"] is None
+
+
+@pytest.mark.django_db
+def test_accepting_an_artifact_emits_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aceitar avisa; rascunho, revisão e envio não.
+
+    O caminho de verdade é o e-sign fechando o contrato sozinho quando o signatário assina, e
+    ele é um `save()` — o mesmo motivo pelo qual `archive()` emite.
+    """
+    project = ProjectFactory()
+    artifact = ArtifactFactory(project=project, opportunity=None, status=Artifact.Status.DRAFT)
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    artifact.status = Artifact.Status.SENT
+    artifact.save(update_fields=["status", "updated_at"])
+    assert calls == []
+
+    artifact.status = Artifact.Status.ACCEPTED
+    artifact.save(update_fields=["status", "decided_at", "updated_at"])
+    assert ("updated", "artifact", project.pk) in calls
+
+
+@pytest.mark.django_db
+def test_an_artifact_on_an_opportunity_names_the_clients_oldest_live_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`emit` não faz nada sem `project_id`, e o contrato quase sempre vive na oportunidade.
+
+    Um projeto só, nunca fan-out — o argumento é o mesmo do `post_delete` de `Project`.
+    """
+    client = ClientFactory()
+    mais_velho = ProjectFactory(client=client)
+    arquivado = ProjectFactory(client=client)
+    arquivado.archive()
+    ProjectFactory(client=client)  # vivo, porém mais novo
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    ArtifactFactory(
+        kind=Artifact.Kind.CONTRACT,
+        opportunity=OpportunityFactory(client=client),
+        status=Artifact.Status.ACCEPTED,
+    )
+
+    assert [pk for _, event, pk in calls if event == "artifact"] == [mais_velho.pk]
+
+
+@pytest.mark.django_db
+def test_accepting_before_any_project_exists_is_a_declared_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sem projeto não há o que nomear, e isso **não** pode estourar.
+
+    É o caso típico do contrato: aceitá-lo é o que cria o projeto depois. O fato não se perde —
+    `build_snapshot` calcula o campo sobre o cliente, então ele chega inteiro no primeiro
+    snapshot depois que o projeto nascer.
+    """
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    ArtifactFactory(
+        kind=Artifact.Kind.CONTRACT,
+        opportunity=OpportunityFactory(client=ClientFactory()),
+        status=Artifact.Status.ACCEPTED,
+    )
+
+    assert [pk for _, event, pk in calls if event == "artifact"] == [None]
 
 
 @pytest.mark.django_db

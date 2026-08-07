@@ -10,6 +10,7 @@ from django.dispatch import receiver
 
 from . import cases, journey, notifications, portal, tasksync
 from .models import (
+    Artifact,
     Client,
     DigitalEmployee,
     Document,
@@ -153,6 +154,42 @@ def _emit_project_deliverable(
     if created:
         return
     portal.emit("updated", "project_deliverable", instance.project_phase.project_id)
+
+
+# A aceitação de artefato é o degrau que o funil de onboarding do portal declarava ausente por
+# falta de produtor daqui (RFC 001 de lá; o enum tinha a razão escrita: "ele entra quando o outro
+# lado o afirmar"). É a forma da FDD 023: o que entra no snapshot precisa de emissor.
+#
+# Só `ACCEPTED` emite. Rascunho, revisão e envio mudam a linha várias vezes e não movem degrau
+# nenhum — e `REJECTED` também não, porque o funil mede o que o cliente **recebeu**, não o que ele
+# recusou. É a mesma economia do `if created: return` dos dois receivers acima, por outro eixo.
+#
+# **O projeto tem de ser resolvido, e às vezes não existe.** `portal.emit` não faz nada sem
+# `project_id`, e o artefato pode estar preso a uma `Opportunity` — que é justamente onde o
+# contrato vive no caso típico, porque a aceitação dele é o que *cria* o projeto depois. Então:
+# o projeto do artefato quando há; senão o projeto vivo mais antigo do mesmo cliente; senão nada,
+# e isso é limite declarado e não esquecimento — sem projeto o portal ainda não conhece aquela
+# organização, e o fato chega inteiro no primeiro snapshot depois que o projeto nascer, porque
+# `build_snapshot` o calcula sobre o cliente e não sobre o evento.
+#
+# Um projeto só, nunca fan-out, pelo argumento que o `post_delete` de `Project` já escreve acima.
+@receiver(post_save, sender=Artifact)
+def _emit_artifact(sender: type[Artifact], instance: Artifact, **kwargs: Any) -> None:
+    if instance.status != Artifact.Status.ACCEPTED:
+        return
+    project_id = instance.project_id
+    if project_id is None and instance.opportunity_id is not None:
+        # Pela oportunidade e não pelo `instance.opportunity.client_id`: aquele caminho custa uma
+        # busca a mais só para descobrir o cliente que este `filter` já alcança pela travessia.
+        project_id = (
+            Project.objects.filter(
+                client__opportunities=instance.opportunity_id, archived_at__isnull=True
+            )
+            .order_by("created_at", "id")
+            .values_list("id", flat=True)
+            .first()
+        )
+    portal.emit("updated", "artifact", project_id)
 
 
 @receiver(post_save, sender=Lead)

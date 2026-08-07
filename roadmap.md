@@ -244,6 +244,14 @@ cobre ~70% da visão; abaixo o que falta construir aqui. Prioridade em ordem.
       `AiInteraction` e à `Meeting` de origem. Contrato assinado no fornecedor fecha o artefato
       sozinho pelo webhook, e Indicadores ganha `funnel.by_stage` — clientes distintos por etapa,
       que é a queda entre elas. Ver FDD 016, ADR 0008 e testes em `apps/core/tests/test_artifacts.py`.
+      *Complementado em 07/08/2026 (FDD 031): o `decided_at` desta fase nunca saiu daqui. O portal
+      do cliente instrumentou um funil de onboarding, listou "artefato aceito" entre os degraus e o
+      declarou **ausente do enum** porque o snapshot não carregava artefato nenhum — a razão escrita
+      no código de lá apontava para cá, "ele entra quando o outro lado o afirmar". Agora
+      `artifact_accepted_at` atravessa, e **só o instante**: `kind`, `title` e `content` seguem sem
+      cruzar a fronteira que a ADR 0003 fecha. O que ele destrava não é um item de lista — é a
+      régua, porque sem a data da aceitação o portal contava o time-to-first-value a partir do
+      convite, e não do ganho.*
 
 Levantadas em 07/08/2026, as fases seguintes. **São backlog, não plano de release** — e a
 ordem importa mais que a lista: o gargalo não é construir sinal, é a capacidade do time de
