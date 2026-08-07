@@ -176,7 +176,7 @@ const FIXTURES: Record<string, unknown> = {
       : [],
   })),
   "/api/v1/journey-phases/": serie(5, index => ({
-    id: index, name: `Fase ${index} — implantação assistida`, description: "",
+    id: index, name: `Fase ${index} — implantação assistida`, description: "", active: true,
     position: index, deliverables: serie(3, d => ({ id: d, phase: index, name: `Entregável ${d}`, position: d })),
   })),
   "/api/v1/analytics/": {

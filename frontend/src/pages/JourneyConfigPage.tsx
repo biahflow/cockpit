@@ -21,7 +21,7 @@ export function JourneyConfigPage() {
   }
   async function savePhase(phase: JourneyPhaseTemplate) {
     setError("");
-    try { await api(`/journey-phases/${phase.id}/`, { method: "PATCH", body: JSON.stringify({ name: phase.name, description: phase.description, position: Number(phase.position) }) }); await load(); }
+    try { await api(`/journey-phases/${phase.id}/`, { method: "PATCH", body: JSON.stringify({ name: phase.name, description: phase.description, position: Number(phase.position), active: phase.active }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function removePhase() {
@@ -52,7 +52,7 @@ export function JourneyConfigPage() {
   return <section className="space-y-7">
     {removingPhase && <ConfirmDialog
       title="Excluir fase da jornada"
-      message={<>A fase <strong className="text-ink">{removingPhase.name}</strong> e os entregáveis dela são apagados de vez — aqui não há arquivamento. Projetos que já materializaram esta fase não são afetados.</>}
+      message={<>A fase <strong className="text-ink">{removingPhase.name}</strong> e os entregáveis dela são apagados de vez — aqui não há arquivamento. Só é possível excluir fase que nenhum projeto materializou; para aposentar uma fase em uso, desmarque <strong className="text-ink">Herdada por projetos novos</strong> e salve.</>}
       confirmLabel="Excluir" busy={removeBusy}
       onCancel={() => setRemovingPhase(null)} onConfirm={() => void removePhase()}
     />}
@@ -68,6 +68,8 @@ export function JourneyConfigPage() {
         <button className="grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-signal" aria-label={`Excluir fase ${phase.name}`} onClick={() => setRemovingPhase(phase)}><Trash2 className="size-4" /></button>
       </div>
       <div className="px-5 py-4 sm:px-6">
+        <label className="mb-4 flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-ocean" checked={phase.active} onChange={event => updateLocal(phase.id, { active: event.target.checked })} />Herdada por projetos novos</label>
+        {!phase.active && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">Fase aposentada: não entra em projeto novo. Os projetos que já passaram por ela continuam com a delas.</p>}
         <input className="field mb-4" value={phase.description} placeholder="Descrição da fase (opcional)" onChange={event => updateLocal(phase.id, { description: event.target.value })} aria-label={`Descrição da fase ${phase.name}`} />
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Entregáveis</p>
         <div className="divide-y">{phase.deliverables.map(deliverable => <div className="flex items-center gap-3 py-2" key={deliverable.id}>
