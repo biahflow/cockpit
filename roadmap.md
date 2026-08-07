@@ -172,7 +172,12 @@ Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e 
       homologação**. `mark-signed` fica como fallback manual — e é o único caminho que funciona
       sem `ESIGN_PROVIDER` configurado.
 - [x] Portal do cliente: **alimentação** pelo Biahflow (webhook + snapshot, ADR 0003/0005).
-      [ ] Consumo no repo `portal_cliente` (isolado por organização) — trilho separado.
+      [x] Consumo no repo `biahflow-portal-cliente` (isolado por organização) — trilho
+      separado, e **fechado**: aquele repositório está com as Fases 1 a 6 concluídas
+      (identidade OIDC com isolamento por linha, jornada e roster de Funcionários Digitais
+      no dashboard, ROI apurado na leitura, assistente ancorado em documento com citação,
+      busca, e o bloco de segurança e produção). Esta linha ficou meses afirmando o
+      contrário e induziu ao erro quem a leu — corrigida em 07/08/2026.
 
 ## Versão 4 — Inteligência operacional (concluída)
 
@@ -239,6 +244,39 @@ cobre ~70% da visão; abaixo o que falta construir aqui. Prioridade em ordem.
       `AiInteraction` e à `Meeting` de origem. Contrato assinado no fornecedor fecha o artefato
       sozinho pelo webhook, e Indicadores ganha `funnel.by_stage` — clientes distintos por etapa,
       que é a queda entre elas. Ver FDD 016, ADR 0008 e testes em `apps/core/tests/test_artifacts.py`.
+
+Levantadas em 07/08/2026, as fases seguintes. **São backlog, não plano de release** — e a
+ordem importa mais que a lista: o gargalo não é construir sinal, é a capacidade do time de
+responder a ele. Três radares tocando para um time que não dá conta de agir em um é pior que
+um radar que ele respeita.
+
+- [ ] **Biblioteca de Funcionários Digitais — Fase 5.** O `DigitalEmployee` é "o produto
+      central" pelo próprio docstring e é a **única entidade central sem FDD** — entregue na
+      Fase 3 sem FDD, ADR ou CHANGELOG. Hoje é linha plana por projeto, com `area` em texto
+      livre e KPI em duas strings soltas, e a tela só deixa preencher nome, área e status.
+      Falta o catálogo parametrizado por área e **vertical** (eixo que não existe em nenhum
+      modelo) que a entrega **instancia** em vez de recriar — terceira aplicação do molde
+      "template global + cópia por instância" que a FDD 011 já provou duas vezes. Ver FDD 026.
+- [ ] **Repositório de cases com métrica — Fase 6.** Projeto concluído não vira nada. O
+      obstáculo não é a tela: não existe "antes" (`hours_saved_month` já é o delta), o
+      `kpi_value` é texto livre e não agrega, e o health **nunca é persistido** — um projeto
+      concluído recalculado meses depois devolve outro número. Exige tipar o KPI, capturar
+      baseline no início e **congelar** na conclusão. Ver FDD 027, que depende da FDD 026.
+- [ ] **Contas a receber e cobrança relacional — Fase 7.** Não há domínio financeiro: nenhum
+      dos modelos de `apps/core` registra fatura, vencimento ou pagamento, de modo que **a
+      inadimplência é hoje imensurável**. O passo zero é medir, não modelar. E o maior risco
+      é a colisão de verdade sobre receita — `Project.actual_value` alimenta o ROI que **já
+      vai à tela do cliente**. Ver RFC 0004 e FDD 028.
+- [ ] **Base de conhecimento interna e frescor — Fase 8.** O KB voltado ao cliente **já
+      existe** no repositório do portal; o interno não: aqui não há recuperação de conteúdo, e
+      `build_project_context` passa documentos só como nomes. Frescor com dono por área e
+      carimbo de validade cabe no `ScheduledJobRun` que já existe. Ver FDD 029 — e a ressalva
+      de que boa parte da resposta não é wiki, é **método codificado no produto**.
+- [ ] **Indicação no pico de valor e enriquecimento de lead — Fase 9.** A captação já tem
+      qualificação por IA e agendamento com free/busy do Google (FDD 013); o que falta é
+      pedir indicação **no momento do valor realizado** e enriquecer o lead para a
+      qualificação decidir melhor. **Não há troca de ferramenta de agendamento a fazer.** Ver
+      FDD 030.
 
 ## Princípios de entrega
 
