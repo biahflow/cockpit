@@ -29,6 +29,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/servicos", name: "Serviços", role: "admin" },
   { path: "/biblioteca", name: "Biblioteca de Funcionários Digitais", role: "admin" },
   { path: "/cases", name: "Cases", role: "admin" },
+  { path: "/financeiro", name: "Financeiro", role: "admin" },
   { path: "/equipe", name: "Equipe", role: "admin" },
   { path: "/configuracoes", name: "Configurações", role: "admin" },
   // Entrega sem projeto: o estado vazio é uma tela de verdade e tem seu próprio texto.
@@ -227,6 +228,29 @@ const FIXTURES: Record<string, unknown> = {
     consent_recorded_by: index === 1 ? 1 : null, anonymized: false,
     created_at: `${HOJE}T10:00:00Z`, updated_at: `${HOJE}T10:00:00Z`,
   })),
+  // Uma fatura de cada estado que a tela desenha, incluindo a vencida — o pior caso de
+  // comprimento é a linha vermelha com selo, valor e data juntos.
+  "/api/v1/invoices/": serie(5, index => ({
+    id: index, client: 1, client_name: NOME_LONGO,
+    project: index, project_name: `Implantação de agentes — frente ${index}`,
+    service: 1, service_name: "Implantação",
+    number: index === 1 ? "" : `2026-000${index}`,
+    amount: "48750.90", description: "Implantação — parcela de go-live do faturamento",
+    due_date: HOJE, method: index === 4 ? "pix" : "", method_display: index === 4 ? "Pix" : "",
+    status: ["draft", "issued", "overdue", "paid", "cancelled"][index - 1],
+    status_display: ["Rascunho", "Emitida", "Vencida", "Paga", "Cancelada"][index - 1],
+    is_overdue: index === 3,
+    issued_at: index === 1 ? null : `${HOJE}T10:00:00Z`, issued_by: index === 1 ? null : 1,
+    paid_at: index === 4 ? `${HOJE}T11:00:00Z` : null, settled_by: index === 4 ? 1 : null,
+    cancelled_at: index === 5 ? `${HOJE}T12:00:00Z` : null, cancelled_by: index === 5 ? 1 : null,
+    cancel_reason: index === 5 ? "Escopo renegociado com o cliente antes do go-live" : "",
+    provider: "", external_reference: "", payment_url: index === 2 ? "https://pay.example.test/i/2" : "",
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  })),
+  "/api/v1/invoices/summary/": {
+    open: "97501.80", overdue: "48750.90", paid: "48750.90",
+    open_count: 2, overdue_count: 1, paid_count: 1,
+  },
   "/api/v1/journey-phases/": serie(5, index => ({
     id: index, name: `Fase ${index} — implantação assistida`, description: "", active: true,
     position: index, deliverables: serie(3, d => ({ id: d, phase: index, name: `Entregável ${d}`, position: d })),

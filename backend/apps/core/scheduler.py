@@ -135,6 +135,12 @@ def jobs() -> list[Job]:
             description="Eventos do calendário viram tarefas (FDD 012)",
         ),
         Job(
+            name="invoices_overdue",
+            command="mark_overdue_invoices",
+            schedule=Daily(_parse_at(settings.SCHEDULER_INVOICES_AT, time(6, 0))),
+            description="Fatura emitida com vencimento passado vira vencida (FDD 028)",
+        ),
+        Job(
             name="backup_status",
             command="backup_status",
             schedule=Daily(_parse_at(settings.SCHEDULER_BACKUP_CHECK_AT, time(9, 0))),

@@ -76,6 +76,11 @@ class Client(TimestampedModel):
     )
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="owned_clients")
     drive_folder_id = models.CharField(max_length=128, blank=True, default="")
+    # O cliente no gateway de pagamento (FDD 028), preenchido na primeira emissão e reusado depois.
+    # Nome neutro pelo mesmo motivo que as settings são `PAYMENTS_*` e não `STRIPE_*`. Um cliente
+    # novo por fatura quebraria a deduplicação e os relatórios do próprio fornecedor. Precedente da
+    # casa: `drive_folder_id` acima já é id de fornecedor morando num modelo do domínio.
+    payment_customer_ref = models.CharField(max_length=128, blank=True, default="")
     # Quem cadastra afirma o status (a SPA oferece a escolha); o default é o mais conservador,
     # porque um POST que omite o campo não deve alegar uma venda que não houve. O cliente vindo de
     # conversão de lead também nasce "prospect", e vira "active" pelo signal quando a oportunidade
@@ -1018,6 +1023,152 @@ class Case(TimestampedModel):
         if self.status == self.Status.PUBLISHED and self.published_at is None:
             self.published_at = timezone.now()
         super().save(*args, **kwargs)
+
+
+# Transições válidas da fatura (FDD 028), no molde de `ARTIFACT_TRANSITIONS` e `CASE_TRANSITIONS`.
+#
+# Duas arestas que a FDD não escreveu e sem as quais o recorte não fecha:
+#
+# `overdue → paid` é a mais importante do domínio inteiro. `overdue` é derivado por trabalho
+# agendado, e lido ao pé da letra o mapa da FDD — que só descreve as saídas de `issued` — faria a
+# fatura atrasada nunca poder ser paga: o webhook recusaria justamente a baixa que ele existe para
+# dar. Quem venceu recebe as mesmas saídas de quem foi emitido, menos vencer de novo.
+#
+# `renegotiated` é **terminal** neste recorte. Renegociar produz *outra* fatura com os novos termos,
+# e a original encerra dizendo o que houve; ligar as duas é camada 3 da RFC 0004 e está fora. Vale
+# manter o estado separado de `cancelled` em vez de fundir os dois: a camada 0 existe para medir
+# inadimplência, e "não recebi como combinado, mas negociei" é resultado materialmente diferente de
+# "não vou receber" — fundir apagaria o sinal mais interessante já no primeiro dia.
+INVOICE_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"issued"},
+    "issued": {"paid", "overdue", "renegotiated", "cancelled"},
+    "overdue": {"paid", "renegotiated", "cancelled"},
+    "renegotiated": set(),
+    "paid": set(),
+    "cancelled": set(),
+}
+
+
+class Invoice(TimestampedModel):
+    """A fatura — o primeiro registro financeiro do portal (FDD 028, camada 0 da RFC 0004).
+
+    O portal levava a oportunidade da venda até a operação e parava no ponto em que o dinheiro
+    deveria entrar: `Service.list_price` e `Opportunity.estimated_value` são **preço**,
+    `Project.actual_value` é um número digitado, e nenhum deles responde "cobrei o cliente X, R$ Y,
+    vence dia Z, está pago?". Sem data de vencimento e sem data de pagamento em lugar nenhum, a
+    inadimplência era **imensurável** — e é por isso que este modelo vem antes de qualquer régua de
+    cobrança.
+
+    **`actual_value` continua sendo a receita.** Esta FDD adota `Project.actual_value` como *valor
+    contratado* e a soma das faturas pagas como *recebido*, sem trocar a fonte de nada: `_roi`, os
+    agregados de `/analytics/`, o `build_client_overview`, o sinal de ROI negativo do `health.py` e
+    o bloco de ROI que o `portal.build_snapshot` **já entrega à tela do cliente** seguem lendo o que
+    sempre leram. Trocar a fonte do ROI é mudança de contrato e exige ADR próprio — deixado
+    nomeado, não resolvido de carona.
+
+    **Estende `TimestampedModel` pelos carimbos, e nunca arquiva.** É a exceção declarada à regra da
+    casa (FDD 025, ADR 0021): registro financeiro não se edita nem se arquiva depois de emitido —
+    cancela-se, e o registro sobrevive ao próprio cancelamento. `archived_at` vem herdado como peso
+    morto e a `CheckConstraint` abaixo o mantém nulo para sempre. Arquivar seria pior que apagar:
+    esconde da lista sem desfazer o fato, e um recebível que some do total em aberto em silêncio é
+    exatamente o defeito que este modelo existe para não ter.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        ISSUED = "issued", "Emitida"
+        PAID = "paid", "Paga"
+        OVERDUE = "overdue", "Vencida"
+        RENEGOTIATED = "renegotiated", "Renegociada"
+        CANCELLED = "cancelled", "Cancelada"
+
+    class Method(models.TextChoices):
+        PIX = "pix", "Pix"
+        BOLETO = "boleto", "Boleto"
+        CARD = "card", "Cartão"
+        TRANSFER = "transfer", "Transferência"
+        OTHER = "other", "Outro"
+
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="invoices")
+    # `SET_NULL` e não `PROTECT`: a fatura sobrevive ao arquivamento do projeto que a originou —
+    # o dinheiro continuou devido. É a mesma escolha de `Artifact.project`.
+    project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices"
+    )
+    service = models.ForeignKey(
+        "Service", on_delete=models.SET_NULL, null=True, blank=True, related_name="invoices"
+    )
+    # Vazio no rascunho — é o que faz dele um rascunho. Atribuído na emissão, formato `AAAA-NNNN`.
+    number = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    # Sem `default=0`, ao contrário de `Project.actual_value`: aquilo é um saldo que se acumula,
+    # isto é uma **afirmação**. Um POST que esquece o valor deve tomar 400, não criar um recebível
+    # de R$ 0,00 que ninguém emite, ninguém paga e o job de vencimento visita todo dia.
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.CharField(max_length=255, blank=True, default="")
+    due_date = models.DateField()
+    # Choices fechadas, e não texto livre: isto precisa agregar depois. É a lição que a FDD 026
+    # registrou sobre `DigitalEmployee.area`, aplicada antes de doer.
+    method = models.CharField(max_length=16, choices=Method.choices, blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+
+    issued_at = models.DateTimeField(null=True, blank=True)
+    issued_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # A data **do provedor**, não `now()`: quem paga sexta e é conciliado segunda pagou sexta.
+    paid_at = models.DateTimeField(null=True, blank=True)
+    settled_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    cancel_reason = models.TextField(blank=True, default="")
+
+    # Referências do gateway, no molde de `SignatureRequest` (ADR 0007). `provider` guarda de
+    # **quem** é o `external_reference`: sem ele, trocar de fornecedor deixa um id órfão sem
+    # namespace, e "o fornecedor é peça trocável" vira frase que o banco não sustenta.
+    provider = models.CharField(max_length=32, blank=True, default="")
+    external_reference = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    payment_url = models.URLField(blank=True, default="")
+
+    class Meta:
+        # Nunca ordenar por coluna anulável: `-issued_at` põe os NULL em pontas diferentes no
+        # SQLite (testes) e no Postgres (produção), e a ordem padrão da API passaria a divergir
+        # entre o CI e o ar. Ascendente por vencimento é, além disso, a leitura de recebíveis:
+        # o mais atrasado primeiro.
+        ordering = ["due_date", "id"]
+        indexes = [models.Index(fields=["status", "due_date"])]
+        constraints = [
+            # Parcial, e não `unique=True` no campo: com `default=""`, um unique simples deixaria
+            # **um único rascunho** existir no sistema inteiro.
+            models.UniqueConstraint(
+                fields=["number"], condition=~Q(number=""), name="unique_invoice_number"
+            ),
+            models.CheckConstraint(
+                condition=Q(amount__gte=0), name="invoice_amount_is_not_negative"
+            ),
+            # A invariante escrita onde não depende de ninguém lembrar dela. Uma viewset futura que
+            # herde `ArchiveModelViewSet` por reflexo falha alto no primeiro DELETE, em vez de
+            # esconder um recebível da lista em silêncio.
+            models.CheckConstraint(
+                condition=Q(archived_at__isnull=True), name="invoice_is_never_archived"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.number or 'rascunho'} — {self.client.name}"
+
+    @property
+    def is_overdue(self) -> bool:
+        """Vencida de fato, mesmo antes de o job diário passar.
+
+        O estado `overdue` é derivado por trabalho agendado (06:00), então entre a virada do dia e o
+        job existe uma janela em que a fatura está `issued` e atrasada. Sem esta propriedade a tela
+        mostraria "em aberto" para quem já venceu — e quem olha recebível não perdoa essa hora.
+        """
+        return self.status == self.Status.ISSUED and self.due_date < timezone.localdate()
 
 
 class ScheduledJobRun(models.Model):

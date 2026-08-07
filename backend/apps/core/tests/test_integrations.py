@@ -11,7 +11,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import override_settings
 
-from apps.core import integrations
+from apps.core import integrations, payments
 
 pytestmark = pytest.mark.django_db
 
@@ -139,3 +139,24 @@ def test_comando_lista_o_motivo_de_cada_reprovacao(
             call_command("check_integrations")
 
     assert "escopo faltando" in capsys.readouterr().out
+
+
+def test_sonda_de_pagamento_sem_provedor_diz_que_nao_ha_o_que_sondar() -> None:
+    """`NullProvider` não tem `ping`: a sonda responde "não sondável", não reprovação (FDD 024)."""
+    with override_settings(PAYMENTS_PROVIDER=""):
+        ok, detalhe = integrations._probe_payments()
+    assert ok is True
+    assert "nenhum provedor" in detalhe
+
+
+def test_sonda_de_pagamento_usa_o_ping_do_adaptador(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reusa o cliente real do adaptador — credencial malformada falha como falharia em produção."""
+    with override_settings(PAYMENTS_PROVIDER="stripe", PAYMENTS_API_TOKEN="sk_test_x"):
+        monkeypatch.setattr(
+            payments.StripeProvider, "ping", lambda self: (True, "chave válida, modo teste")
+        )
+        assert integrations._probe_payments() == (True, "chave válida, modo teste")
+
+
+def test_pagamento_entra_no_registro_de_sondas() -> None:
+    assert "payments" in integrations.PROBES

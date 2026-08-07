@@ -39,6 +39,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Calendário (add ao Google Calendar + eventos → tarefas) | `CALENDAR_ENABLED`, `GOOGLE_CALENDAR_ID` | mesma auth do Drive, **outro escopo** | Pronto (desligado) |
 | Agendamento (qualificação IA + booking pelo site) | `AI_ENABLED`+`CALENDAR_ENABLED`, `GOOGLE_BOOKING_CALENDAR_ID`, `BOOKING_MIN_FIT` | OpenAI + Google (free/busy) | Pronto (desligado) |
 | Assinatura eletrônica | `ESIGN_ENABLED` (default `true`), `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `ESIGN_PROVIDER` roda em registro local (`mark-signed` manual); com fornecedor nomeado, exige token e segredo do webhook |
+| Gateway de pagamento (contas a receber) | `PAYMENTS_ENABLED` (default `true`), `PAYMENTS_PROVIDER`, `PAYMENTS_API_TOKEN`, `PAYMENTS_WEBHOOK_SECRET` | conta Stripe — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `PAYMENTS_PROVIDER` roda em registro local (`mark-paid` manual); com fornecedor nomeado, exige token e segredo do webhook. **Stripe sem homologação** |
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) — liga sozinho quando as duas variáveis estiverem preenchidas; alternável em Configurações |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
 | Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
@@ -130,6 +131,22 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   idempotente, então as reentregas (3 tentativas: 60s, 120s e 300s) não duplicam nada. Só
   `signature.accepted` e `signature.rejected` movem a assinatura; os demais eventos são ignorados
   com 200.
+- **Pagamentos (Stripe)**: já vem `PAYMENTS_ENABLED=true` (ADR 0018). Sem `PAYMENTS_PROVIDER`, a
+  integração roda no **registro local**: a fatura vive só no portal e "Marcar como paga" é o único
+  caminho de baixa — modo previsto, não degradado, e a tela Financeiro funciona inteira assim. Para
+  valer com fornecedor, `PAYMENTS_PROVIDER=stripe` + `PAYMENTS_API_TOKEN` (chave secreta do painel,
+  `sk_test_…` ou `sk_live_…`) + `PAYMENTS_WEBHOOK_SECRET` (`whsec_…`, gerado ao cadastrar o
+  endpoint). No painel do Stripe, cadastre o webhook em
+  `https://<host>/api/v1/payments/webhook/` e assine **quatro** eventos: `invoice.paid`,
+  `invoice.payment_succeeded`, `invoice.voided` e `invoice.marked_uncollectible`. A entrega é
+  validada por HMAC-SHA256 sobre `<carimbo>.<corpo cru>` (header `Stripe-Signature`, formato
+  `t=…,v1=…`) com tolerância de `PAYMENTS_WEBHOOK_TOLERANCE_SECONDS` (300) — o que faz uma entrega
+  capturada parar de valer. É idempotente: reentrega do mesmo evento não duplica baixa, e um `paid`
+  numa fatura já cancelada é recusado em vez de reabri-la. `invoice.payment_failed` é ignorado com
+  200 de propósito — tentativa recusada não muda estado nenhum aqui. **O Stripe ainda não foi
+  homologado contra conta real**; ver `docs/runbooks/homologacao-de-integracoes.md`. E a fatura
+  vencida é marcada por trabalho agendado (`SCHEDULER_INVOICES_AT`, default `06:00` — antes do
+  digest, para quem lê o dia achar o vencimento já apurado). Ver FDD 028 e ADR 0021.
   - `ESIGN_SANDBOX=true` (padrão) cria documentos de teste: não consomem crédito e o fornecedor
     os apaga em poucos dias. Ponha `false` para valer de verdade.
   - `ESIGN_DELIVERY=email` (padrão) deixa o Autentique mandar o convite oficial; o portal não
@@ -218,6 +235,7 @@ protegem as portas específicas. Todos vêm do `.env` — mexa só se um limite 
 | `booking` | `BOOKING_RATE` | `60/hour` | horários livres e reserva |
 | `task_sync` | `TASK_SYNC_RATE` | `60/hour` | webhook de Linear/GitHub |
 | `esign_webhook` | `ESIGN_WEBHOOK_RATE` | `120/hour` | webhook do fornecedor de assinatura |
+| `payments_webhook` | `PAYMENTS_WEBHOOK_RATE` | `600/hour` | webhook do gateway de pagamento — cinco vezes o teto do e-sign de propósito: o Stripe trata 429 como falha e faz backoff por dias, e cada pagamento chega em **dois** eventos |
 
 Dois avisos para produção, agora com trava:
 

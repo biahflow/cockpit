@@ -101,6 +101,22 @@ class EsignUnavailable(UpstreamUnavailable):
     default_code = "esign_unavailable"
 
 
+class PaymentsUnavailable(UpstreamUnavailable):
+    """O gateway de pagamento não aceitou a cobrança (FDD 028).
+
+    Vale aqui o mesmo motivo a mais que na assinatura, com dinheiro em cima: a emissão **é** o
+    pedido ao fornecedor. Uma fatura marcada como emitida sem link pagável é cobrança que ninguém
+    consegue pagar, que o webhook nunca poderá fechar, e que ainda assim entra no total em aberto
+    que alguém vai olhar para decidir alguma coisa.
+    """
+
+    default_detail = (
+        "O gateway de pagamento não aceitou a cobrança. Nada foi emitido — "
+        "tente de novo em instantes."
+    )
+    default_code = "payments_unavailable"
+
+
 def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
     """Handler do DRF com `ProtectedError` traduzido para **409** (FDD 025).
 

@@ -1,4 +1,4 @@
-import { BarChart3, Bell, BookMarked, ChevronDown, FileText, FolderKanban, Inbox, LayoutDashboard, LogOut, Menu, Package, Route, Settings, Trophy, Users, UsersRound, WalletCards } from "lucide-react";
+import { BarChart3, Bell, BookMarked, ChevronDown, FileText, FolderKanban, Inbox, LayoutDashboard, LogOut, Menu, Package, Receipt, Route, Settings, Trophy, Users, UsersRound, WalletCards } from "lucide-react";
 import { type ComponentType, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useEscape } from "../a11y";
@@ -19,6 +19,9 @@ const links: NavLink[] = [
   // Material comercial: quem revisa e publica é admin, quem usa na proposta é Vendas. A Entrega
   // lê pela API o case dos projetos de que participa, mas não tem o que fazer nesta tela.
   ["/cases", "Cases", Trophy, ["admin", "sales"]],
+  // Vendas lê o recebível do próprio cliente; emitir, baixar e cancelar são de admin, e o
+  // backend recusa (FDD 028). A Entrega não alcança nem a leitura — nem o link, nem a rota.
+  ["/financeiro", "Financeiro", Receipt, ["admin", "sales"]],
   ["/servicos", "Serviços", Package, ["admin"]],
   ["/jornada", "Jornada", Route, ["admin"]],
   ["/biblioteca", "Biblioteca", BookMarked, ["admin"]],

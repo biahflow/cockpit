@@ -43,8 +43,10 @@ from . import (
     esign,
     flags,
     health,
+    invoices,
     journey,
     kickoff,
+    payments,
     portal,
     qualification,
     recommendations,
@@ -57,6 +59,7 @@ from .exceptions import (
     DriveUnavailable,
     EmailUndeliverable,
     EsignUnavailable,
+    PaymentsUnavailable,
 )
 from .models import (
     AiInteraction,
@@ -70,6 +73,7 @@ from .models import (
     DigitalEmployeeBlueprint,
     Document,
     Invitation,
+    Invoice,
     JourneyPhase,
     Lead,
     Meeting,
@@ -103,6 +107,7 @@ from .serializers import (
     DigitalEmployeeSerializer,
     DocumentSerializer,
     InvitationSerializer,
+    InvoiceSerializer,
     JourneyPhaseSerializer,
     LeadIntakeSerializer,
     LeadSerializer,
@@ -621,6 +626,11 @@ class OpportunityViewSet(ArchiveModelViewSet):
                     opportunity=opportunity, owner=request.user, service=service
                 )
                 kickoff.seed_work_items(project)
+                # Dentro da transação, e não no `finalize` abaixo, porque é escrita no banco e não
+                # efeito externo — o mesmo lugar de `seed_work_items`, pelo mesmo motivo. As
+                # faturas nascem em **rascunho**: débito automático não existe neste recorte, e
+                # emitir é ato deliberado de gente (FDD 028).
+                invoices.seed_invoices(project)
         except IntegrityError:
             return Response({"detail": "A oportunidade já foi convertida."}, status=409)
         kickoff.finalize(project)
@@ -1007,6 +1017,136 @@ class CaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet
         """
         case = self.get_object()
         return Response(CaseSerializer(cases.record_consent(case, request.user)).data)
+
+
+class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    """Contas a receber (FDD 028, camada 0 da RFC 0004).
+
+    **Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, e as duas ausências são a entrega.**
+
+    Não arquiva porque registro financeiro emitido não se apaga nem se esconde: cancela-se, e a
+    linha sobrevive ao próprio cancelamento (ADR 0021). Arquivar seria pior que apagar — some da
+    lista sem desfazer o fato, e um recebível que sai do total em aberto em silêncio é o defeito
+    que este recurso existe para não ter.
+
+    Não é escopado por projeto porque dado financeiro não pertence ao recorte de projeto: a Entrega
+    não alcança fatura nenhuma, nem de leitura, nem em projeto de que participa — o que quem passar
+    por aqui vai querer "consertar" achando que é esquecimento. Não é.
+    """
+
+    resource = "invoice"
+    queryset = Invoice.objects.select_related("client", "project", "service").all()
+    serializer_class = InvoiceSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("client", "project")
+    filter_exact_fields = ("status",)
+
+    def perform_destroy(self, instance: Invoice) -> None:
+        """Rascunho se descarta; emitida, não — 409 apontando o cancelamento (FDD 025, FDD 028)."""
+        if instance.status != Invoice.Status.DRAFT:
+            raise StateConflict(
+                f"A fatura {instance.number or instance.pk} já foi emitida e não se apaga. "
+                f"Cancele-a, se for o caso."
+            )
+        instance.delete()
+
+    @extend_schema(responses=InvoiceSerializer, request=None)
+    @action(detail=True, methods=["post"])
+    def issue(self, request: Request, pk: str | None = None) -> Response:
+        """Emite: pede a cobrança ao gateway e **só então** numera e carimba (admin).
+
+        A ordem é a lição que a FDD 024 aprendeu quatro vezes. A chamada de rede acontece **fora**
+        da transação — segurar um `select_for_update` durante um round-trip ao Stripe esgota o pool
+        de conexões —, e a fatura só muda de estado depois de o fornecedor confirmar. Fornecedor
+        fora do ar deixa a fatura em rascunho, sem número e sem carimbo, e devolve 502.
+        """
+        invoice = self.get_object()
+        if invoice.status != Invoice.Status.DRAFT:
+            raise StateConflict(
+                f"A fatura {invoice.number or invoice.pk} já foi emitida."
+            )
+        if invoice.amount <= 0:
+            return Response(
+                {"amount": "Uma fatura de valor zero não se emite."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            ref = payments.issue_charge(invoice)
+        except payments.PaymentProviderError as exc:
+            logger.exception("emissão recusada para a fatura %s", invoice.pk)
+            raise PaymentsUnavailable() from exc
+        return Response(InvoiceSerializer(invoices.finish_issue(invoice, ref, request.user)).data)
+
+    @extend_schema(responses=InvoiceSerializer, request=None)
+    @action(detail=True, methods=["post"], url_path="mark-paid")
+    def mark_paid(self, request: Request, pk: str | None = None) -> Response:
+        """Baixa manual (admin) — e, sem gateway configurado, o **único** caminho de baixa.
+
+        É a gêmea do `mark-signed` do documento, e a FDD 028 pede que isso seja dito em voz alta
+        em vez de descoberto: quem não tem `PAYMENTS_PROVIDER` opera a camada 0 inteira por aqui.
+        """
+        invoice = self.get_object()
+        try:
+            baixada = invoices.settle(
+                invoice,
+                method=str(request.data.get("method", "")),
+                by=request.user,
+            )
+        except invoices.InvoiceTransitionError as exc:
+            return Response({"status": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(InvoiceSerializer(baixada).data)
+
+    @extend_schema(responses=InvoiceSerializer, request=None)
+    @action(detail=True, methods=["post"])
+    def cancel(self, request: Request, pk: str | None = None) -> Response:
+        """Cancela com motivo obrigatório (admin) — a saída que substitui apagar e arquivar.
+
+        O motivo é exigido porque cancelamento de recebível sem justificativa é o começo do
+        recebível que estraga invisível: a RFC 0004 já registra que "recuar precisa ser declarado".
+        """
+        invoice = self.get_object()
+        reason = str(request.data.get("reason", "")).strip()
+        if not reason:
+            return Response(
+                {"reason": "Diga por que esta fatura está sendo cancelada."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            cancelada = invoices.cancel(invoice, request.user, reason)
+        except invoices.InvoiceTransitionError as exc:
+            return Response({"status": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(InvoiceSerializer(cancelada).data)
+
+    @extend_schema(
+        responses=inline_serializer(
+            name="InvoiceSummary",
+            fields={
+                "open": serializers.DecimalField(max_digits=12, decimal_places=2),
+                "overdue": serializers.DecimalField(max_digits=12, decimal_places=2),
+                "paid": serializers.DecimalField(max_digits=12, decimal_places=2),
+                "open_count": serializers.IntegerField(),
+                "overdue_count": serializers.IntegerField(),
+                "paid_count": serializers.IntegerField(),
+            },
+        )
+    )
+    @action(detail=False, methods=["get"])
+    def summary(self, request: Request) -> Response:
+        """Os três totais da tela, numa consulta agregada só.
+
+        Agregado no banco e não em laço de Python porque este endpoint entra na mesma disciplina
+        do gate de custo de query da ADR 0014: o custo não pode crescer com a base.
+        """
+        faixas = {
+            "open": Q(status=Invoice.Status.ISSUED),
+            "overdue": Q(status=Invoice.Status.OVERDUE),
+            "paid": Q(status=Invoice.Status.PAID),
+        }
+        dados = self.get_queryset().aggregate(
+            **{nome: Sum("amount", filter=q, default=Decimal("0")) for nome, q in faixas.items()},
+            **{f"{nome}_count": Count("id", filter=q) for nome, q in faixas.items()},
+        )
+        return Response(dados)
 
 
 class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
@@ -1421,6 +1561,49 @@ class EsignWebhookView(APIView):
         if signature is None:
             return Response({"detail": "Evento ignorado."})
         return Response(SignatureRequestSerializer(signature).data)
+
+
+class PaymentsWebhookView(APIView):
+    """Entrada do gateway de pagamento (FDD 028). Autentica pela assinatura do corpo cru.
+
+    Gêmea da `EsignWebhookView`, com duas diferenças que não são estilo:
+
+    - **Loga a recusa.** Com `PAYMENTS_ENABLED=true` e nenhum provedor, o `NullProvider.verify`
+      responde `False` para sempre e o endpoint 401 até o Stripe desistir. É o comportamento certo
+      e é indiagnosticável sem esta linha.
+    - **Teto de requisição cinco vezes maior** (`payments_webhook`), porque um 429 aqui vira
+      backoff de dias do lado do fornecedor — e conciliação atrasada é o que faz cobrança
+      importunar quem já pagou.
+    """
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "payments_webhook"
+
+    @extend_schema(request=None, responses={200: InvoiceSerializer})
+    def post(self, request: Request) -> Response:
+        if not payments.is_enabled():
+            return Response(
+                {"detail": "Gateway de pagamento desativado."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        body = request.body  # o HMAC é sobre os bytes originais, então nada de request.data
+        provider = payments.get_provider()
+        if not provider.verify(body, request.headers):
+            logger.warning("webhook de pagamento com assinatura inválida")
+            return Response({"detail": "Assinatura inválida."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            payload = json.loads(body or b"{}")
+        except ValueError:
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(payload, dict):
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        event = provider.parse_event(payload)
+        invoice = payments.apply_event(event) if event else None
+        if invoice is None:
+            return Response({"detail": "Evento ignorado."})
+        return Response(InvoiceSerializer(invoice).data)
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):

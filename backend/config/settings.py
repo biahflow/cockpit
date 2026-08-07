@@ -191,6 +191,11 @@ REST_FRAMEWORK = {
         "task_sync": os.getenv("TASK_SYNC_RATE", "60/hour"),
         "booking": os.getenv("BOOKING_RATE", "60/hour"),
         "esign_webhook": os.getenv("ESIGN_WEBHOOK_RATE", "120/hour"),
+        # Cinco vezes o teto do e-sign, de propósito: o Stripe trata 429 como falha e faz backoff
+        # por até três dias, e cada pagamento chega em **dois** eventos (`invoice.paid` e
+        # `invoice.payment_succeeded`). Um 429 aqui não é inofensivo como no e-sign — ele atrasa a
+        # conciliação por dias, e é exatamente o atraso que faz a régua cobrar quem já pagou.
+        "payments_webhook": os.getenv("PAYMENTS_WEBHOOK_RATE", "600/hour"),
     },
     # Atrás de proxy, sem isso todo mundo compartilha o IP do container e o limite por IP
     # vira um limite global. Ver docs/operacao.md.
@@ -327,6 +332,9 @@ SCHEDULER_CALENDAR_EVERY_MINUTES = _env_int("SCHEDULER_CALENDAR_EVERY_MINUTES", 
 # Depois do backup das 03:15 e depois do digest: o alerta de backup velho é para o horário
 # comercial de quem vai agir sobre ele, não para a madrugada.
 SCHEDULER_BACKUP_CHECK_AT = os.getenv("SCHEDULER_BACKUP_CHECK_AT", "09:00")
+# **Antes** do digest das 07:30, e a ordem é o ponto: quem lê o dia — tela, resumo, qualquer aviso
+# futuro — precisa encontrar o vencimento já apurado, não a apurar.
+SCHEDULER_INVOICES_AT = os.getenv("SCHEDULER_INVOICES_AT", "06:00")
 CSRF_TRUSTED_ORIGINS = _env_list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:19173,http://127.0.0.1:19173",
@@ -403,6 +411,22 @@ ESIGN_SANDBOX = os.getenv("ESIGN_SANDBOX", "true").lower() == "true"
 # Quem avisa o signatário: "email" (o fornecedor manda o convite, padrão) ou "link" (o
 # fornecedor devolve o link de assinatura e o portal se encarrega de entregar).
 ESIGN_DELIVERY = os.getenv("ESIGN_DELIVERY", "email").lower()
+
+# Gateway de pagamento (FDD 028): cobrança emitida no fornecedor + webhook de baixa assinado.
+# Ligado por padrão (ADR 0018) e sem provedor nomeado por padrão — o que significa `NullProvider`:
+# a fatura vive só no portal e a baixa manual (`mark-paid`) é o único caminho, que é o modo previsto
+# pela FDD 028 e não um modo degradado. Nomear `PAYMENTS_PROVIDER` torna token e segredo
+# obrigatórios (`flags._payments_missing`), e sem eles `is_enabled()` continua `False`.
+# Nome neutro, e não `STRIPE_*`, pela mesma razão que a assinatura é `ESIGN_*` e não `AUTENTIQUE_*`.
+PAYMENTS_ENABLED = os.getenv("PAYMENTS_ENABLED", "true").lower() == "true"
+PAYMENTS_PROVIDER = os.getenv("PAYMENTS_PROVIDER", "")
+PAYMENTS_API_TOKEN = os.getenv("PAYMENTS_API_TOKEN", "")
+# Vazio = o adaptador usa a própria URL padrão (`Provider.DEFAULT_BASE`).
+PAYMENTS_API_BASE = os.getenv("PAYMENTS_API_BASE", "")
+PAYMENTS_WEBHOOK_SECRET = os.getenv("PAYMENTS_WEBHOOK_SECRET", "")
+# Janela de aceitação do carimbo do webhook. É o que faz uma entrega **capturada** parar de valer:
+# sem ela, um corpo assinado hoje é reproduzível para sempre.
+PAYMENTS_WEBHOOK_TOLERANCE_SECONDS = _env_int("PAYMENTS_WEBHOOK_TOLERANCE_SECONDS", 300)
 
 # Sincronia de tarefas com ferramentas externas (Linear/GitHub) atrás de flag (ADR 0004).
 # Token compartilhado para o webhook de entrada; credenciais/estados por fornecedor.

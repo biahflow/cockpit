@@ -107,3 +107,28 @@ def test_config_get_lists_integrations() -> None:
     data = client.get(reverse("config")).json()
     keys = {item["key"] for item in data["integrations"]}
     assert {"ai", "drive", "calendar", "esign", "tasksync", "portal"} <= keys
+
+
+@pytest.mark.django_db
+@override_settings(PAYMENTS_ENABLED=True, PAYMENTS_PROVIDER="")
+def test_pagamentos_sem_provedor_nao_cobra_credencial() -> None:
+    """Sem gateway a camada 0 funciona inteira: emitir, vencer e baixar à mão (FDD 028).
+
+    É a mesma forma do e-sign sem `ESIGN_PROVIDER`, e pela mesma razão — uma lista fixa em
+    `requires` mataria um modo que é previsto, não degradado.
+    """
+    assert flags.missing("payments") == []
+    assert flags.is_enabled("payments") is True
+
+
+@pytest.mark.django_db
+@override_settings(
+    PAYMENTS_ENABLED=True,
+    PAYMENTS_PROVIDER="stripe",
+    PAYMENTS_API_TOKEN="",
+    PAYMENTS_WEBHOOK_SECRET="",
+)
+def test_pagamentos_com_provedor_exige_token_e_segredo() -> None:
+    """Sem o segredo do webhook a baixa leva 401 e a fatura nunca fecha — a falha mais cara aqui."""
+    assert flags.missing("payments") == ["PAYMENTS_API_TOKEN", "PAYMENTS_WEBHOOK_SECRET"]
+    assert flags.is_enabled("payments") is False

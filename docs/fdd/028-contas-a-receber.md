@@ -1,7 +1,10 @@
 # FDD 028 — Contas a receber
 
-> **Status: proposta.** Nada aqui está implementado. É o recorte construível das camadas 0 e
-> 1 da **RFC 0004**; a régua de cobrança e a IA de tom ficam para uma FDD posterior.
+> **Status: entregue** (07/08/2026). É o recorte construível das camadas 0 e 1 da **RFC 0004**; a
+> régua de cobrança e a IA de tom ficam para uma FDD posterior. O gateway é o **Stripe**, e ele
+> **não foi homologado** contra conta real — o roteiro está em
+> `docs/runbooks/homologacao-de-integracoes.md`, seção 5. Ver "O que a construção decidiu", no fim,
+> para os oito pontos em que o construído diverge do escrito aqui.
 
 ## Jornada
 
@@ -84,3 +87,64 @@ com dono e prazo. Dependem da régua existir.
 faturamento real para emitir sobre.
 
 **Trocar a fonte do ROI de `actual_value` para faturas pagas.** Nomeado acima, **pede ADR**.
+
+**A nota de crédito.** Citada nas Regras como alternativa ao cancelamento, ficou de fora por
+recomendação — ver "O que a construção decidiu". Cancelar com motivo obrigatório, mais uma nova
+fatura pelo valor corrigido, cobre o caso real deste recorte.
+
+## O que a construção decidiu
+
+Oito pontos em que construir mudou o desenho. Ficam registrados aqui, e não no commit, porque é
+esta página que a próxima pessoa lê.
+
+**O mapa de transições estava incompleto, e a lacuna era fatal.** A seção "Regras" escreve
+`rascunho → emitida`, e de `emitida` para as quatro seguintes — e **não diz o que sai de
+`vencida`**. Lido ao pé da letra, uma fatura que venceu nunca poderia ser paga: o estado derivado
+pelo trabalho agendado viraria uma armadilha que impede exatamente o desfecho que se quer, e o
+webhook recusaria a baixa mais comum do domínio. `vencida` recebe as mesmas saídas de `emitida`
+menos vencer de novo. E `renegociada` ficou **terminal**: renegociar produz *outra* fatura com os
+novos termos, e ligar as duas é camada 3. Vale manter o estado separado de `cancelada` — a camada 0
+existe para medir inadimplência, e "não recebi como combinado, mas negociei" é resultado
+materialmente diferente de "não vou receber".
+
+**Faltava `paid_at` na lista de campos.** A RFC 0004 abre dizendo que "não existe data de
+vencimento nem data de pagamento em lugar nenhum", e o Aceite desta FDD exige que o webhook feche a
+fatura "**com a data do provedor**" — mas o campo não estava listado. É metade da medição que o
+passo zero existe para fazer.
+
+**`status` continua gravável, com dois degraus de guarda.** O primeiro é o mapa, e é ele que dá o
+400 de `paga → emitida` que a "Regressão crítica" pede. O segundo recusa as transições que
+*existem* mas não se alcançam por digitação — emitir, baixar e cancelar são atos com autor, carimbo
+e, na emissão, uma chamada ao gateway; um `PATCH status=paid` não carrega nada disso. A mensagem
+aponta a rota certa em vez de dizer só "inválido".
+
+**"Fatura emitida não se edita" é erro alto, não descarte silencioso.** A ADR 0020 escolheu ignorar
+em silêncio os campos congelados do case, e ali estava certo: ninguém *queria* escrever
+`health_snapshot`. Aqui, quem digita um novo `amount` numa fatura emitida **quis** — e um 200 que
+joga fora uma edição de dinheiro é o pior modo de falha disponível. Em rascunho, tudo continua
+editável, porque em rascunho esses campos são o próprio trabalho.
+
+**A gratuidade é do valor, não do nível.** A regra "Discovery Express não gera fatura" foi escrita
+como cronograma vazio, e isso sozinho não bastava: a migração `0020` semeia os níveis **pagos** com
+`list_price=0`, então uma implantação vendida a zero produziria três rascunhos de R$ 0,00. A guarda
+que de fato salva é a do valor contratado. Junto: a divisão percentual precisou jogar o resíduo de
+centavos na última parcela, senão 30/40/30 de R$ 10.000,01 não fecha com o contratado — e uma
+diferença de um centavo é impossível de localizar seis meses depois.
+
+**A numeração deriva do ano e tem buracos.** Formato `AAAA-NNNN`, atribuído na emissão (rascunho não
+tem número — é o que faz dele rascunho), com `UniqueConstraint` **parcial** (`condition=~Q(number="")`)
+porque um `unique=True` simples deixaria **um único rascunho** existir no sistema inteiro. Fatura
+cancelada mantém o número, então a sequência tem lacunas. Isso é correto: numeração sem lacuna é
+exigência *fiscal* da NFS-e, que esta FDD exclui. Alguém vai reportar como defeito.
+
+**A nota de crédito ficou de fora**, e é recomendação, não esquecimento. As "Regras" a citam como
+*alternativa* ao cancelamento ("cancela-se, **ou** emite-se uma nota de crédito"), e o cancelamento
+já satisfaz a invariante inteira. Sem emissão fiscal — explicitamente fora do recorte — uma nota de
+crédito seria um registro de valor negativo que não credita nada em lugar nenhum, e forçaria
+`amount` a aceitar negativos, o que faria todo `Sum` futuro **compensar em silêncio**: o "total em
+aberto" subtrairia notas de crédito dos recebíveis e ninguém notaria por um trimestre. O que
+substitui: cancelar **com motivo obrigatório**, mais uma nova fatura pelo valor corrigido.
+
+**A decisão de não arquivar virou a ADR 0021.** Ela contraria uma regra transversal da casa
+(FDD 025) e por isso pede registro próprio, com as quatro camadas que a sustentam — da recusa com
+409 até a `CheckConstraint` que mantém `archived_at` nulo para sempre.

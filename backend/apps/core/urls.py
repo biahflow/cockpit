@@ -23,6 +23,7 @@ from .views import (
     EsignWebhookView,
     HealthView,
     InvitationView,
+    InvoiceViewSet,
     JourneyPhaseViewSet,
     LeadIntakeView,
     LeadViewSet,
@@ -33,6 +34,7 @@ from .views import (
     MilestoneViewSet,
     NotificationViewSet,
     OpportunityViewSet,
+    PaymentsWebhookView,
     PendenciaViewSet,
     PhaseDeliverableViewSet,
     PipelineStageViewSet,
@@ -70,6 +72,7 @@ router.register("pendencias", PendenciaViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)
+router.register("invoices", InvoiceViewSet)
 router.register("leads", LeadViewSet)
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("services", ServiceViewSet)
@@ -84,6 +87,7 @@ urlpatterns = [
     path("booking/book/", BookingCreateView.as_view(), name="booking-book"),
     path("tasks/sync/", TaskSyncIntakeView.as_view(), name="task-sync"),
     path("esign/webhook/", EsignWebhookView.as_view(), name="esign-webhook"),
+    path("payments/webhook/", PaymentsWebhookView.as_view(), name="payments-webhook"),
     path("", include(router.urls)),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("analytics/", AnalyticsView.as_view(), name="analytics"),

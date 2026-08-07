@@ -16,7 +16,8 @@ vi.mock("../api", () => ({
 }));
 vi.mock("../auth", () => ({ useAuth: mocks.useAuth }));
 
-const ADMIN_ONLY = ["Leads", "Indicadores", "Jornada", "Equipe", "Configurações"];
+// Na prática: "invisível para a Entrega". Leads, Indicadores e Financeiro são admin+Vendas.
+const ADMIN_ONLY = ["Leads", "Indicadores", "Financeiro", "Jornada", "Equipe", "Configurações"];
 
 function renderComo(user: { role: string; is_admin: boolean }) {
   mocks.useAuth.mockReturnValue({ logout: vi.fn(), user: { id: 1, username: "u", first_name: "Bia", last_name: "", email: "b@x.test", ...user } });
@@ -53,6 +54,7 @@ test("Vendas vê o que é seu e não o resto", () => {
   renderComo({ role: "sales", is_admin: false });
   expect(temLink("Leads")).toBe(true);
   expect(temLink("Indicadores")).toBe(true);
+  expect(temLink("Financeiro")).toBe(true);
   expect(temLink("Configurações")).toBe(false);
   expect(temLink("Equipe")).toBe(false);
 });

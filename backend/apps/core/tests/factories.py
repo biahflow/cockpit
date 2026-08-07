@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.core.models import (
     Artifact,
     Client,
+    Invoice,
     Meeting,
     Opportunity,
     PipelineStage,
@@ -118,3 +119,20 @@ class ArtifactFactory(factory.django.DjangoModelFactory):
     content = "Rascunho gerado para revisão humana."
     opportunity = factory.SubFactory(OpportunityFactory)
     created_by = factory.SubFactory(UserFactory)
+
+
+class InvoiceFactory(factory.django.DjangoModelFactory):
+    """Fatura em rascunho por padrão — o único estado que se cria à mão.
+
+    Emitir, baixar e cancelar passam por `invoices.issue`/`settle`/`cancel`, e os testes devem usar
+    essas funções (ou as ações da API) em vez de gravar `status` direto: é justamente o caminho que
+    carrega número, carimbo e autor.
+    """
+
+    class Meta:
+        model = Invoice
+
+    client = factory.SubFactory(ClientFactory)
+    amount = Decimal("1000.00")
+    description = "Parcela única"
+    due_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=15))

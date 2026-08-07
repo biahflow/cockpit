@@ -52,6 +52,26 @@ def _esign_missing() -> list[str]:
     ]
 
 
+def _payments_missing() -> list[str]:
+    """O que falta no gateway de pagamento — mesma forma do e-sign, mesma razão (FDD 028).
+
+    Sem `PAYMENTS_PROVIDER` a integração roda no `NullProvider`, e isso **não** é um modo degradado:
+    a camada 0 inteira funciona sem gateway — emitir, acompanhar, vencer e baixar à mão. Cobrar
+    credencial aqui desligaria a tela Financeiro numa instalação que nunca quis gateway nenhum.
+
+    Nomeado o fornecedor, os dois viram obrigatórios: sem token a emissão estoura, e sem o segredo
+    do webhook a baixa leva 401 e a fatura nunca fecha sozinha — que é a falha silenciosa desta
+    integração, e a mais cara, porque a fatura fica cobrando quem já pagou.
+    """
+    if not settings.PAYMENTS_PROVIDER:
+        return []
+    return [
+        key
+        for key in ("PAYMENTS_API_TOKEN", "PAYMENTS_WEBHOOK_SECRET")
+        if not getattr(settings, key, "")
+    ]
+
+
 def _google_auth_missing() -> list[str]:
     """O que falta na autenticação com o Google (ADR 0016).
 
@@ -92,6 +112,11 @@ FLAGS: dict[str, Flag] = {
         "Assinatura eletrônica",
         lambda: bool(settings.ESIGN_ENABLED),
         extra_missing=lambda: _esign_missing(),
+    ),
+    "payments": Flag(
+        "Gateway de pagamento",
+        lambda: bool(settings.PAYMENTS_ENABLED),
+        extra_missing=lambda: _payments_missing(),
     ),
     # SMTP tem default (`localhost:1025`, o Mailpit do compose), então não há variável cuja ausência
     # denuncie falta de configuração — em produção esse default é "lugar nenhum". Quem cobra aqui é
