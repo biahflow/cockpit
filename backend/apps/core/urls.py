@@ -25,6 +25,8 @@ from .views import (
     InvitationView,
     InvoiceViewSet,
     JourneyPhaseViewSet,
+    KnowledgeAreaViewSet,
+    KnowledgePieceViewSet,
     LeadIntakeView,
     LeadViewSet,
     LoginView,
@@ -73,6 +75,8 @@ router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)
 router.register("invoices", InvoiceViewSet)
+router.register("knowledge-areas", KnowledgeAreaViewSet)
+router.register("knowledge-pieces", KnowledgePieceViewSet)
 router.register("leads", LeadViewSet)
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("services", ServiceViewSet)

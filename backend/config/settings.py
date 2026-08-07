@@ -335,6 +335,9 @@ SCHEDULER_BACKUP_CHECK_AT = os.getenv("SCHEDULER_BACKUP_CHECK_AT", "09:00")
 # **Antes** do digest das 07:30, e a ordem é o ponto: quem lê o dia — tela, resumo, qualquer aviso
 # futuro — precisa encontrar o vencimento já apurado, não a apurar.
 SCHEDULER_INVOICES_AT = os.getenv("SCHEDULER_INVOICES_AT", "06:00")
+# Depois do digest, para não competir por atenção com ele, e antes do alerta de backup. Em horário
+# comercial de propósito: quem age sobre conhecimento vencido é gente, não um plantão.
+SCHEDULER_KNOWLEDGE_AT = os.getenv("SCHEDULER_KNOWLEDGE_AT", "08:00")
 CSRF_TRUSTED_ORIGINS = _env_list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:19173,http://127.0.0.1:19173",

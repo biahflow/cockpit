@@ -42,6 +42,11 @@ jobs:
       - run: uv run pytest
       - run: uv run python manage.py spectacular --file openapi.yaml --validate
       - run: git diff --exit-code -- openapi.yaml
+      # O corpus de conhecimento é derivado de docs/ e PRD.md e vive commitado, exatamente como o
+      # OpenAPI acima: editou metodologia, regera e commita. A fricção é de propósito — "mudei o
+      # método" vira ato visível e revisado, em vez de o índice divergir do repositório em silêncio.
+      - run: uv run python manage.py build_knowledge_corpus
+      - run: git diff --exit-code -- apps/core/knowledge_corpus.jsonl
       # Gate de produção (FDD 019), o que a FDD 017 tinha deixado pendente. Simula o ambiente que o
       # cofre de segredos vai entregar e cobra que `check --deploy` saia limpo.
       #

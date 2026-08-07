@@ -8,6 +8,9 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from pgvector.django import VectorField
+
+from . import knowledge
 
 
 class TimestampedModel(models.Model):
@@ -1169,6 +1172,128 @@ class Invoice(TimestampedModel):
         mostraria "em aberto" para quem já venceu — e quem olha recebível não perdoa essa hora.
         """
         return self.status == self.Status.ISSUED and self.due_date < timezone.localdate()
+
+
+class KnowledgeArea(models.Model):
+    """A área de conhecimento — e, sobretudo, **onde o dono mora** (FDD 029).
+
+    Taxonomia e não enum, pelo mesmo argumento do `Vertical` (FDD 026): vocabulário que o admin
+    edita. Mas aqui há uma razão a mais e ela é decisiva — a exigência central da FDD é "dono **por
+    área**, não por documento", e num `TextChoices` o dono não teria onde morar senão numa tabela
+    lateral chaveada pelo valor do enum, que é esta taxonomia com passos a mais.
+
+    `owner` é **nulável de propósito**: "peça sem dono é peça em falta" só é uma regra visível se o
+    estado sem dono existir. `SET_NULL` em vez de `PROTECT` porque quem saiu da empresa é arquivado,
+    e devolver a área ao estado "em falta" é a verdade — travar o arquivamento seria fingir que o
+    dono continua lá.
+    """
+
+    name = models.CharField(max_length=80)
+    slug = models.SlugField(max_length=80, unique=True)
+    position = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    owner = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="knowledge_areas"
+    )
+    review_interval_days = models.PositiveIntegerField(default=180)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class KnowledgePiece(TimestampedModel):
+    """Uma peça de conhecimento: **ao mesmo tempo a linha de governança e a unidade citável**.
+
+    Que os dois papéis morem no mesmo registro não é conveniência. A FDD 029 exige que "conteúdo
+    vencido apareça como vencido, e não seja servido como corrente" — e isso só é implementável se
+    o caminho de recuperação conseguir ler a frescura daquilo que está prestes a citar. Em tabelas
+    sem relação, aquela cláusula fica insatisfazível.
+
+    `source_path` vazio é a **lacuna tácita**: o que só uma pessoa sabe fazer e ainda não está
+    escrito. É o que o Aceite pede quando diz que "os pontos onde ela trava viram itens do
+    inventário" — e por isso a unicidade abaixo é **parcial**.
+    """
+
+    class Kind(models.TextChoices):
+        # Quase imutável: ADR não se atualiza, se **substitui** por outra que a referencia.
+        DECISION = "decision", "Decisão"
+        # Apodrece rápido porque a realidade muda; é o que pede o laço mais apertado.
+        PROCEDURE = "procedure", "Procedimento"
+        # Apodrece em silêncio, que é o mais perigoso dos três.
+        REFERENCE = "reference", "Referência"
+
+    area = models.ForeignKey(
+        KnowledgeArea, on_delete=models.SET_NULL, null=True, blank=True, related_name="pieces"
+    )
+    title = models.CharField(max_length=200)
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.REFERENCE)
+    source_path = models.CharField(max_length=255, blank=True, default="")
+    summary = models.TextField(blank=True, default="")
+    last_verified_at = models.DateField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Nulo **herda da área**; zero significa **não vence**. Colapsar os dois daria ou ADR cobrando
+    # revisão para sempre — são quase imutáveis, e revisar a ADR 0001 a cada semestre é ruído, que
+    # é o que faz o laço inteiro ser ignorado — ou lacuna que nunca aflora.
+    review_interval_days = models.PositiveIntegerField(null=True, blank=True)
+    # Teto de frequência do aviso. Sem ele o job vira lembrete diário que a pessoa aprende a
+    # ignorar em uma semana, e aí o laço todo é teatro.
+    last_notified_at = models.DateField(null=True, blank=True)
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+
+    class Meta:
+        ordering = ["area__position", "kind", "title", "id"]
+        constraints = [
+            # **Parcial**, e não `unique=True`: com `default=""`, um unique simples deixaria existir
+            # uma **única** lacuna tácita no sistema inteiro. É a segunda vez que o repositório
+            # precisa desta forma — a FDD 028 pagou por ela em `Invoice.number`.
+            models.UniqueConstraint(
+                fields=["source_path"],
+                condition=~Q(source_path=""),
+                name="unique_knowledge_source_path",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class KnowledgeChunk(models.Model):
+    """Um trecho recuperável, ancorado numa seção (FDD 029, ADR 0022).
+
+    Registro **derivado**: fora do soft delete, fora do `RolePermission`, **sem serializer, sem
+    viewset, sem rota e fora do `admin.py`**. A única saída do texto daqui é o `AgentView`, e isso
+    é o anti-vazamento sendo estrutural em vez de vigiado.
+
+    **Não tem FK para `Project`, `Client` nem `Document`, e é a invariante em forma de esquema:**
+    este corpus é a metodologia da casa, e conteúdo de cliente não entra por caminho nenhum. O
+    `ai.build_project_context` continua passando documento como *nome*, como sempre passou.
+    """
+
+    piece = models.ForeignKey(KnowledgePiece, on_delete=models.CASCADE, related_name="chunks")
+    position = models.PositiveIntegerField(default=0)
+    heading_path = models.CharField(max_length=300)  # "ADR 0013 — … › Decisão"
+    content = models.TextField()
+    content_hash = models.CharField(max_length=64)
+    embedding = VectorField(dimensions=knowledge.EMBEDDING_DIMENSIONS, null=True, blank=True)
+    # Carimbo por linha: trocar de modelo passa a ser **detectável** em vez de produzir um índice
+    # metade num espaço vetorial e metade noutro — defeito que não dá erro, só piora a busca.
+    embedding_model = models.CharField(max_length=64, blank=True, default="")
+
+    class Meta:
+        ordering = ["piece_id", "position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["piece", "position"], name="unique_knowledge_chunk_position"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.heading_path
 
 
 class ScheduledJobRun(models.Model):

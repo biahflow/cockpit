@@ -2400,6 +2400,407 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/knowledge-areas/:
+    get:
+      operationId: v1_knowledge_areas_list
+      description: 'As áreas de conhecimento e seus donos (FDD 029). Catálogo: todos
+        leem, admin escreve.'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeArea'
+          description: ''
+    post:
+      operationId: v1_knowledge_areas_create
+      description: 'As áreas de conhecimento e seus donos (FDD 029). Catálogo: todos
+        leem, admin escreve.'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeArea'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KnowledgeArea'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KnowledgeArea'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeArea'
+          description: ''
+  /api/v1/knowledge-areas/{id}/:
+    get:
+      operationId: v1_knowledge_areas_retrieve
+      description: 'As áreas de conhecimento e seus donos (FDD 029). Catálogo: todos
+        leem, admin escreve.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge area.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeArea'
+          description: ''
+    put:
+      operationId: v1_knowledge_areas_update
+      description: 'As áreas de conhecimento e seus donos (FDD 029). Catálogo: todos
+        leem, admin escreve.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge area.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeArea'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KnowledgeArea'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KnowledgeArea'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeArea'
+          description: ''
+    patch:
+      operationId: v1_knowledge_areas_partial_update
+      description: 'As áreas de conhecimento e seus donos (FDD 029). Catálogo: todos
+        leem, admin escreve.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge area.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedKnowledgeArea'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedKnowledgeArea'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedKnowledgeArea'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeArea'
+          description: ''
+    delete:
+      operationId: v1_knowledge_areas_destroy
+      description: 'As áreas de conhecimento e seus donos (FDD 029). Catálogo: todos
+        leem, admin escreve.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge area.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/knowledge-pieces/:
+    get:
+      operationId: v1_knowledge_pieces_list
+      description: |-
+        O inventário de conhecimento (FDD 029).
+
+        Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+        avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+        com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgePiece'
+          description: ''
+    post:
+      operationId: v1_knowledge_pieces_create
+      description: |-
+        O inventário de conhecimento (FDD 029).
+
+        Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+        avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+        com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgePiece'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KnowledgePiece'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KnowledgePiece'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgePiece'
+          description: ''
+  /api/v1/knowledge-pieces/{id}/:
+    get:
+      operationId: v1_knowledge_pieces_retrieve
+      description: |-
+        O inventário de conhecimento (FDD 029).
+
+        Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+        avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+        com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge piece.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgePiece'
+          description: ''
+    put:
+      operationId: v1_knowledge_pieces_update
+      description: |-
+        O inventário de conhecimento (FDD 029).
+
+        Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+        avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+        com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge piece.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgePiece'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KnowledgePiece'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KnowledgePiece'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgePiece'
+          description: ''
+    patch:
+      operationId: v1_knowledge_pieces_partial_update
+      description: |-
+        O inventário de conhecimento (FDD 029).
+
+        Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+        avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+        com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge piece.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedKnowledgePiece'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedKnowledgePiece'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedKnowledgePiece'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgePiece'
+          description: ''
+    delete:
+      operationId: v1_knowledge_pieces_destroy
+      description: |-
+        O inventário de conhecimento (FDD 029).
+
+        Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+        avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+        com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge piece.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/knowledge-pieces/{id}/unarchive/:
+    post:
+      operationId: v1_knowledge_pieces_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge piece.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/knowledge-pieces/{id}/verify/:
+    post:
+      operationId: v1_knowledge_pieces_verify_create
+      description: |-
+        Registra que alguém conferiu esta peça hoje — com autor e carimbo.
+
+        Ação e não campo, no molde do `record-consent` (FDD 027): "está conferido" sem dizer quem
+        conferiu é alegação de ninguém, e é exatamente o que apodrece num inventário de frescor.
+
+        Admin sempre; além dele, **o dono da área** — que é de quem se espera o ato, e travá-lo
+        atrás de admin faria o aviso chegar a quem não pode agir sobre ele.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este knowledge piece.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgePiece'
+          description: ''
+  /api/v1/knowledge-pieces/summary/:
+    get:
+      operationId: v1_knowledge_pieces_summary_retrieve
+      description: |-
+        O inventário de conhecimento (FDD 029).
+
+        Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+        avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+        com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSummary'
+          description: ''
   /api/v1/leads/:
     get:
       operationId: v1_leads_list
@@ -6617,6 +7018,158 @@ components:
       - deliverables
       - id
       - name
+    KnowledgeArea:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        slug:
+          type: string
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        active:
+          type: boolean
+        owner:
+          type: integer
+          nullable: true
+        owner_name:
+          type: string
+          readOnly: true
+          default: ''
+        review_interval_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        piece_count:
+          type: integer
+          readOnly: true
+          default: 0
+      required:
+      - id
+      - name
+      - owner_name
+      - piece_count
+      - slug
+    KnowledgePiece:
+      type: object
+      description: |-
+        A peça do inventário (FDD 029).
+
+        `last_verified_at` e `verified_by` são **read-only**: verificar é ato com autor e carimbo, pela
+        ação `verify` — no molde do `record-consent` da FDD 027. Um `PATCH` que ligue a data diria "foi
+        conferido" sem dizer por quem, que é a alegação de ninguém.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        area:
+          type: integer
+          nullable: true
+        area_name:
+          type: string
+          readOnly: true
+          default: ''
+        owner_name:
+          type: string
+          readOnly: true
+          default: ''
+        title:
+          type: string
+          maxLength: 200
+        kind:
+          $ref: '#/components/schemas/KnowledgePieceKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        source_path:
+          type: string
+          maxLength: 255
+        summary:
+          type: string
+        last_verified_at:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        verified_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        review_interval_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        status:
+          type: string
+          readOnly: true
+        next_review_at:
+          type: string
+          nullable: true
+          readOnly: true
+        is_gap:
+          type: boolean
+          description: Peça sem arquivo é **lacuna tácita** — o que só alguém sabe
+            e ainda não está escrito.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - area_name
+      - created_at
+      - id
+      - is_gap
+      - kind_display
+      - last_verified_at
+      - next_review_at
+      - owner_name
+      - status
+      - title
+      - updated_at
+      - verified_by
+    KnowledgePieceKindEnum:
+      enum:
+      - decision
+      - procedure
+      - reference
+      type: string
+      description: |-
+        * `decision` - Decisão
+        * `procedure` - Procedimento
+        * `reference` - Referência
+    KnowledgeSummary:
+      type: object
+      properties:
+        sem_dono:
+          type: integer
+        vencido:
+          type: integer
+        a_vencer:
+          type: integer
+        corrente:
+          type: integer
+      required:
+      - a_vencer
+      - corrente
+      - sem_dono
+      - vencido
     KpiDirectionEnum:
       enum:
       - up
@@ -7559,6 +8112,113 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PhaseDeliverable'
+          readOnly: true
+    PatchedKnowledgeArea:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        slug:
+          type: string
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        active:
+          type: boolean
+        owner:
+          type: integer
+          nullable: true
+        owner_name:
+          type: string
+          readOnly: true
+          default: ''
+        review_interval_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        piece_count:
+          type: integer
+          readOnly: true
+          default: 0
+    PatchedKnowledgePiece:
+      type: object
+      description: |-
+        A peça do inventário (FDD 029).
+
+        `last_verified_at` e `verified_by` são **read-only**: verificar é ato com autor e carimbo, pela
+        ação `verify` — no molde do `record-consent` da FDD 027. Um `PATCH` que ligue a data diria "foi
+        conferido" sem dizer por quem, que é a alegação de ninguém.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        area:
+          type: integer
+          nullable: true
+        area_name:
+          type: string
+          readOnly: true
+          default: ''
+        owner_name:
+          type: string
+          readOnly: true
+          default: ''
+        title:
+          type: string
+          maxLength: 200
+        kind:
+          $ref: '#/components/schemas/KnowledgePieceKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        source_path:
+          type: string
+          maxLength: 255
+        summary:
+          type: string
+        last_verified_at:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        verified_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        review_interval_days:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        status:
+          type: string
+          readOnly: true
+        next_review_at:
+          type: string
+          nullable: true
+          readOnly: true
+        is_gap:
+          type: boolean
+          description: Peça sem arquivo é **lacuna tácita** — o que só alguém sabe
+            e ainda não está escrito.
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
           readOnly: true
     PatchedLead:
       type: object
