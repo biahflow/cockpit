@@ -70,7 +70,13 @@ export type Notification = { id: number; kind: string; message: string; url: str
 export type ProjectMember = { id: number; project: number; user: number; user_name: string; user_username: string; user_role: Role; added_by: number | null; created_at: string };
 
 export type DigitalEmployeeStatus = "building" | "active" | "paused";
-export type DigitalEmployee = { id: number; project: number; blueprint: number | null; name: string; area: string; description: string; status: DigitalEmployeeStatus; kpi_label: string; kpi_value: string; hours_saved_month: string; roi_month: string };
+// O KPI tipado (FDD 027). `kpi_value` continua no tipo porque continua na API — é a frase livre
+// da era anterior, obsoleta e não removida —, mas quem mede usa o par baseline/atual: `null` é
+// "não medido", que é diferente de zero e é o que faz o case declarar a lacuna em vez de inventar
+// um "antes".
+export type KpiUnit = "" | "percent" | "hours" | "minutes" | "currency" | "count";
+export type KpiDirection = "up" | "down";
+export type DigitalEmployee = { id: number; project: number; blueprint: number | null; name: string; area: string; description: string; status: DigitalEmployeeStatus; kpi_label: string; kpi_value: string; kpi_unit: KpiUnit; kpi_direction: KpiDirection; kpi_baseline: string | null; kpi_current: string | null; hours_saved_month: string; roi_month: string };
 // A biblioteca de Funcionários Digitais (FDD 026): catálogo global + parametrização por vertical.
 // Mesmo par que `JourneyPhaseTemplate`/`ProjectPhase`, um nível acima: o que a entrega instancia
 // é uma **cópia**, e por isso `DigitalEmployee` não referencia nada aqui além da procedência.
@@ -79,8 +85,8 @@ export type BlueprintArea = "comercial" | "financeiro" | "rh" | "juridico" | "at
 export type BlueprintVariant = { id: number; blueprint: number; vertical: number; vertical_name: string; description: string; kpi_label: string; default_hours_saved_month: string | null; default_roi_month: string | null };
 // `resolved` só vem preenchido quando a lista é pedida com `?vertical=` — são os valores já com a
 // variante aplicada, que é exatamente o que a instanciação vai copiar.
-export type ResolvedBlueprint = { name: string; area: string; description: string; kpi_label: string; hours_saved_month: string; roi_month: string };
-export type DigitalEmployeeBlueprint = { id: number; name: string; area: BlueprintArea; area_display: string; description: string; kpi_label: string; default_hours_saved_month: string; default_roi_month: string; service: number | null; service_name: string; active: boolean; variants: BlueprintVariant[]; resolved: ResolvedBlueprint | null; has_variant: boolean };
+export type ResolvedBlueprint = { name: string; area: string; description: string; kpi_label: string; kpi_unit: KpiUnit; kpi_direction: KpiDirection; hours_saved_month: string; roi_month: string };
+export type DigitalEmployeeBlueprint = { id: number; name: string; area: BlueprintArea; area_display: string; description: string; kpi_label: string; kpi_unit: KpiUnit; kpi_direction: KpiDirection; default_hours_saved_month: string; default_roi_month: string; service: number | null; service_name: string; active: boolean; variants: BlueprintVariant[]; resolved: ResolvedBlueprint | null; has_variant: boolean };
 export type JourneyPhaseStatus = "locked" | "active" | "done";
 export type ProjectDeliverableStatus = "pending" | "delivered";
 export type ProjectDeliverable = { id: number; project_phase: number; name: string; status: ProjectDeliverableStatus; document: number | null; position: number; delivered_at: string | null };
@@ -90,3 +96,11 @@ export type JourneyPhaseTemplate = { id: number; name: string; description: stri
 export type LeadStatus = "new" | "contacted" | "qualified" | "discarded";
 export type LeadFit = "high" | "medium" | "low" | "";
 export type Lead = { id: number; name: string; email: string; company: string; phone: string; message: string; source: string; status: LeadStatus; ai_fit: LeadFit; ai_score: number | null; ai_summary: string; ai_recommended_action: string; qualified_at: string | null; client: number | null; opportunity: number | null; created_at: string };
+
+// O case de um projeto concluído (FDD 027). Os três campos de snapshot são **fotografia**: vêm
+// congelados do backend e não há como reescrevê-los pela API — a tela só os exibe.
+export type CaseStatus = "draft" | "review" | "published";
+export type CaseMetric = { employee_id: number; blueprint_id: number | null; name: string; area: string; kpi_label: string; kpi_unit: KpiUnit; kpi_direction: KpiDirection; baseline: string | null; current: string | null; has_baseline: boolean; kpi_value: string; hours_saved_month: string };
+export type CaseHealthSnapshot = { score: number; level: string; signals: { label: string; detail: string; weight: number }[] };
+export type CaseRoiSnapshot = { revenue: string; cost: string; roi: number | null };
+export type Case = { id: number; project: number; project_name: string; title: string; summary: string; vertical: number | null; vertical_name: string; client_name: string; metrics: CaseMetric[]; health_snapshot: CaseHealthSnapshot; roi_snapshot: CaseRoiSnapshot; status: CaseStatus; status_display: string; published_at: string | null; client_consent: boolean; consent_recorded_at: string | null; consent_recorded_by: number | null; anonymized: boolean; created_at: string; updated_at: string };

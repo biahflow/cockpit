@@ -5,6 +5,7 @@ import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { AcceptInvitePage } from "./pages/AcceptInvitePage";
 import { BibliotecaPage } from "./pages/BibliotecaPage";
+import { CasesPage } from "./pages/CasesPage";
 import { ClientDetailPage } from "./pages/ClientDetailPage";
 import { ClientsPage } from "./pages/ClientsPage";
 import { CommercialPage } from "./pages/CommercialPage";
@@ -26,6 +27,7 @@ function resolvePage(path: string): ReactNode {
   if (path === "/pipeline") return <PipelinePage />;
   if (path === "/jornada") return <JourneyConfigPage />;
   if (path === "/biblioteca") return <BibliotecaPage />;
+  if (path === "/cases") return <CasesPage />;
   if (path === "/leads") return <LeadsPage />;
   if (path === "/indicadores") return <IndicadoresPage />;
   if (path === "/servicos") return <ServicesPage />;

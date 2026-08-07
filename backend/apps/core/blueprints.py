@@ -36,6 +36,10 @@ class Resolved(TypedDict):
     area_display: str
     description: str
     kpi_label: str
+    # Unidade e direção saem sempre do blueprint: a variante não participa delas (FDD 027). Estão
+    # aqui, e não fora do `Resolved`, para que quem instancia tenha o bloco inteiro num lugar só.
+    kpi_unit: str
+    kpi_direction: str
     hours_saved_month: Decimal
     roi_month: Decimal
 
@@ -61,6 +65,11 @@ def resolve(blueprint: DigitalEmployeeBlueprint, vertical: Vertical | None = Non
     muda para aquele setor, não repete o que não muda. Sem vertical — cliente que ainda não tem
     uma —, ou sem variante para ela, o que sai é o próprio blueprint. É o que sustenta a regra de
     que cliente sem vertical continua funcionando.
+
+    A exceção é o par (`kpi_unit`, `kpi_direction`): ele não passa pela variante nem quando ela
+    existe. O `kpi_label` é o **texto** do KPI e muda com o setor; a unidade e a direção são o que
+    torna o número comparável entre setores, e uma variante que as trocasse quebraria a comparação
+    sem dizer nada (FDD 027).
     """
     variant = variant_for(blueprint, vertical)
     return Resolved(
@@ -69,6 +78,8 @@ def resolve(blueprint: DigitalEmployeeBlueprint, vertical: Vertical | None = Non
         area_display=blueprint.get_area_display(),
         description=(variant.description if variant and variant.description else blueprint.description),
         kpi_label=(variant.kpi_label if variant and variant.kpi_label else blueprint.kpi_label),
+        kpi_unit=blueprint.kpi_unit,
+        kpi_direction=blueprint.kpi_direction,
         hours_saved_month=(
             variant.default_hours_saved_month
             if variant and variant.default_hours_saved_month is not None
@@ -83,7 +94,10 @@ def resolve(blueprint: DigitalEmployeeBlueprint, vertical: Vertical | None = Non
 
 
 def instantiate(
-    project: Project, blueprint: DigitalEmployeeBlueprint, vertical: Vertical | None = None
+    project: Project,
+    blueprint: DigitalEmployeeBlueprint,
+    vertical: Vertical | None = None,
+    kpi_baseline: Decimal | None = None,
 ) -> DigitalEmployee:
     """Cria o `DigitalEmployee` do projeto **copiando** os valores resolvidos do catálogo.
 
@@ -92,6 +106,11 @@ def instantiate(
     gravar `"rh"` ali faria o cliente ler "rh".
 
     O `blueprint` fica gravado como procedência. Ele não é lido depois: o que vale é a cópia.
+
+    O `kpi_baseline` entra aqui, e não numa tela de case lá na frente, porque é este o instante em
+    que ele ainda é **medição**: perguntado na conclusão do projeto, o "antes" seria digitado de
+    memória meses depois do fato (FDD 027). Continua opcional — `None` é "não medido", e o case
+    declara a lacuna em vez de inventar um zero.
     """
     from .models import DigitalEmployee
 
@@ -103,6 +122,9 @@ def instantiate(
         area=valores["area_display"],
         description=valores["description"],
         kpi_label=valores["kpi_label"],
+        kpi_unit=valores["kpi_unit"],
+        kpi_direction=valores["kpi_direction"],
+        kpi_baseline=kpi_baseline,
         hours_saved_month=valores["hours_saved_month"],
         roi_month=valores["roi_month"],
         status=DigitalEmployee.Status.BUILDING,

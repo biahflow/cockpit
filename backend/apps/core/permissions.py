@@ -4,6 +4,7 @@ from rest_framework.permissions import BasePermission
 
 from .models import (
     Artifact,
+    Case,
     DigitalEmployee,
     Document,
     Meeting,
@@ -40,6 +41,9 @@ PROJECT_OF = {
     ProjectMember: lambda obj: obj.project,
     Document: lambda obj: obj.project,
     Artifact: lambda obj: obj.project,
+    # O case é prova social, mas nasce de um projeto e herda a fronteira dele: a Entrega lê o case
+    # dos projetos de que participa e não a vitrine inteira da casa (ADR 0010, FDD 027).
+    Case: lambda obj: obj.project,
 }
 
 
@@ -60,14 +64,17 @@ class RolePermission(BasePermission):
         if resource in CATALOG:
             return request.method in SAFE_METHODS
         if request.user.role == User.Role.SALES:
+            # `case` só-leitura para Vendas: quem mais usa o case é o comercial, e ainda assim
+            # revisar, consentir e publicar são atos de admin — é ele que carrega a
+            # responsabilidade pelo que a casa afirma sobre um cliente (FDD 027).
             if resource in {"project", "project_phase", "project_deliverable",
-                            "digital_employee", "project_member", "risk", "health"}:
+                            "digital_employee", "project_member", "risk", "health", "case"}:
                 return request.method in SAFE_METHODS
             return resource in {"client", "contact", "opportunity", "document", "lead",
                                 "analytics", "artifact"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
-                            "risk", "health"}:
+                            "risk", "health", "case"}:
                 return request.method in SAFE_METHODS
             # Projeto não nasce nem morre pela mão da Entrega: vem da conversão comercial ou
             # do admin. Editar o que é seu, sim — e o objeto abaixo decide qual é o seu.

@@ -1,7 +1,8 @@
 # FDD 027 — Repositório de cases com métrica
 
-> **Status: proposta.** Nada aqui está implementado. **Depende da FDD 026**: o "setor" do
-> case é a `Vertical` proposta lá, e o KPI canônico vem do blueprint.
+> **Status: entregue** (07/08/2026). Construída sobre a FDD 026: o "setor" do case é a
+> `Vertical` de lá, e o KPI canônico vem do blueprint. Fora deste recorte e ainda pendente: a
+> superfície no portal do cliente, que **exige RFC** — ver "Superfície no portal do cliente".
 
 ## Jornada
 
@@ -54,9 +55,14 @@ o resultado no fim.
   não publica — nem anonimizado. `anonymized` permite publicar como "uma imobiliária de médio
   porte" quando há autorização de uso do resultado mas não da marca; são duas permissões
   diferentes e o modelo não pode confundi-las.
-- **Superfície interna.** Tela `/cases` com filtro por vertical, área e blueprint; e
+- **Superfície interna.** Tela `/cases` com filtro por vertical (no servidor, `?vertical=`),
+  área e blueprint (na tela, sobre `metrics`, que já vem carregado — consultar dentro do JSON
+  pediria rota especial para poupar um `filter` sobre dado que a tela tem na mão); e
   `ai.build_opportunity_context` passa a injetar cases da mesma vertical, ao lado do nível de
-  produto e dos blueprints. A proposta gerada deixa de prometer e passa a provar.
+  produto e dos blueprints. A proposta gerada deixa de prometer e passa a provar. Cliente **sem
+  vertical não recebe case nenhum**: sem setor não há "mesmo setor", e citar case de qualquer
+  origem seria prova fraca vendida como forte — ao contrário do catálogo, que resolve para o
+  bloco genérico, aqui o silêncio é a resposta certa.
 - **Superfície no portal do cliente.** Fica declarada aqui, com as restrições que a tornam
   possível — e **exige RFC antes de construir**, porque atravessa a fronteira de um serviço
   externo. O snapshot da ADR 0003 é **por projeto** e `portal.py` afirma que nenhum dado
@@ -68,6 +74,28 @@ o resultado no fim.
 - **Acesso.** Recurso próprio no `RolePermission`, que nega por padrão: leitura para papéis
   internos, escrita e publicação só admin. Registrar consentimento é ato de admin, porque é
   ele que carrega a responsabilidade.
+
+## O que a construção decidiu
+
+Duas decisões nasceram na hora de construir e não estavam nesta FDD:
+
+- **Unidade e direção são canônicas no blueprint, e a `BlueprintVariant` não as sobrescreve.** A
+  variante continua sobrescrevendo `kpi_label`, que é o **texto** do KPI naquele setor. Mas deixá-la
+  trocar "horas" por "percentual" faria duas instâncias do *mesmo bloco* deixarem de se comparar sem
+  nada dizer — exatamente o que esta FDD existe para impedir quando diz que o par canônico "é o que
+  torna centenas de cases comparáveis entre si em vez de uma coleção de frases".
+- **O case nasce por signal, idempotente por existência.** Um botão "gerar case" clicado semanas
+  depois congelaria um health que já mudou, reintroduzindo o defeito inteiro por outra porta. A
+  guarda é `Case.objects.filter(project=...).exists()`, que responde de uma vez a três casos:
+  projeto reaberto e reconcluído não produz um segundo case, salvar outro campo de um projeto já
+  concluído não produz nada, e um projeto importado já concluído produz o seu.
+
+E a construção achou um vazamento que a seção de regressão previa em espírito mas não em local:
+apagar o `client_name` **não bastava**, porque o congelamento monta o título como "Cliente —
+Projeto". Um case anonimizado saía com o nome no título enquanto o campo dedicado vinha vazio. O
+`CaseSerializer.to_representation` passa a substituir o nome do cliente pelo rótulo do setor no
+título **e no resumo** — substituir, e não esconder, porque quem revisa precisa saber de que case se
+trata. A razão de a decisão ser "persistir e não recalcular" virou a **ADR 0020**.
 
 ## Aceite
 

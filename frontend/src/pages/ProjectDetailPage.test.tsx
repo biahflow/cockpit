@@ -261,6 +261,7 @@ test("admin adiciona alguém à equipe", async () => {
 const employee = (overrides = {}) => ({
   id: 4, project: 1, name: "Agente Financeiro", area: "Financeiro",
   description: "", status: "building", kpi_label: "", kpi_value: "",
+  kpi_unit: "", kpi_direction: "up", kpi_baseline: null, kpi_current: null,
   hours_saved_month: "0.0", roi_month: "0.00", ...overrides,
 });
 
@@ -285,7 +286,10 @@ test("preenche pela tela os campos que só a API alcançava", async () => {
   await user.type(screen.getByLabelText("O que ele faz"), "Concilia notas fiscais.");
   await user.selectOptions(screen.getByLabelText("Status"), "active");
   await user.type(screen.getByLabelText("Rótulo do KPI"), "Notas/mês");
-  await user.type(screen.getByLabelText("Valor do KPI"), "312");
+  await user.type(screen.getByLabelText("Valor do KPI (texto livre)"), "312");
+  await user.selectOptions(screen.getByLabelText("Unidade do KPI"), "count");
+  await user.type(screen.getByLabelText("Antes (base)"), "120");
+  await user.type(screen.getByLabelText("Depois (atual)"), "312");
   await user.clear(screen.getByLabelText("Horas poupadas/mês"));
   await user.type(screen.getByLabelText("Horas poupadas/mês"), "40");
   await user.clear(screen.getByLabelText("ROI/mês (R$)"));
@@ -297,6 +301,7 @@ test("preenche pela tela os campos que só a API alcançava", async () => {
     body: JSON.stringify({
       name: "Agente Financeiro", area: "Financeiro", status: "active",
       description: "Concilia notas fiscais.", kpi_label: "Notas/mês", kpi_value: "312",
+      kpi_unit: "count", kpi_direction: "up", kpi_baseline: "120", kpi_current: "312",
       hours_saved_month: "40", roi_month: "8000",
     }),
   })));
@@ -404,7 +409,7 @@ test("instancia um Funcionário Digital a partir do catálogo", async () => {
   await user.click(screen.getByRole("button", { name: "Instanciar" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/digital-employees/from-blueprint/", expect.objectContaining({
-    method: "POST", body: JSON.stringify({ blueprint: 3 }),
+    method: "POST", body: JSON.stringify({ blueprint: 3, kpi_baseline: null }),
   })));
 });
 

@@ -28,6 +28,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/jornada", name: "Jornada", role: "admin" },
   { path: "/servicos", name: "Serviços", role: "admin" },
   { path: "/biblioteca", name: "Biblioteca de Funcionários Digitais", role: "admin" },
+  { path: "/cases", name: "Cases", role: "admin" },
   { path: "/equipe", name: "Equipe", role: "admin" },
   { path: "/configuracoes", name: "Configurações", role: "admin" },
   // Entrega sem projeto: o estado vazio é uma tela de verdade e tem seu próprio texto.
@@ -193,7 +194,8 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/digital-employee-blueprints/": serie(4, index => ({
     id: index, name: `SDR de ${NOME_LONGO}`, area: "comercial", area_display: "Comercial",
     description: "Qualifica lead fora do horário comercial e agenda a reunião de discovery.",
-    kpi_label: "Leads qualificados por mês", default_hours_saved_month: "40.0",
+    kpi_label: "Leads qualificados por mês", kpi_unit: "count", kpi_direction: "up",
+    default_hours_saved_month: "40.0",
     default_roi_month: "8000.00", service: null, service_name: "", active: true,
     variants: serie(2, v => ({
       id: v, blueprint: index, vertical: v, vertical_name: `Setor ${v} — indústria metalúrgica de base`,
@@ -201,6 +203,29 @@ const FIXTURES: Record<string, unknown> = {
       default_hours_saved_month: null, default_roi_month: null,
     })),
     resolved: null, has_variant: false,
+  })),
+  "/api/v1/cases/": serie(4, index => ({
+    id: index, project: index, project_name: `Implantação de agentes — frente ${index}`,
+    title: `${NOME_LONGO} — implantação de agentes no faturamento`,
+    summary: "Triplicou a qualificação de leads e cortou o tempo de resposta pela metade.",
+    vertical: 1, vertical_name: "Setor 1 — indústria metalúrgica de base",
+    client_name: NOME_LONGO,
+    metrics: serie(3, m => ({
+      employee_id: m, blueprint_id: m, name: `SDR de ${NOME_LONGO}`, area: "Comercial",
+      kpi_label: "Leads qualificados por mês", kpi_unit: "count", kpi_direction: "up",
+      // A terceira linha vai sem base de propósito: o estado "sem base registrada" é conteúdo
+      // de verdade na tela e precisa ser medido pela matriz junto com o resto.
+      baseline: m === 3 ? null : "12.00", current: "48.00", has_baseline: m !== 3,
+      kpi_value: "", hours_saved_month: "40.0",
+    })),
+    health_snapshot: { score: 82, level: "saudável", signals: [{ label: "Decisões pendentes", detail: "2 em aberto", weight: 10 }] },
+    roi_snapshot: { revenue: "180000.00", cost: "90000.00", roi: 1 },
+    status: index === 1 ? "published" : "draft",
+    status_display: index === 1 ? "Publicado" : "Rascunho",
+    published_at: index === 1 ? `${HOJE}T12:00:00Z` : null,
+    client_consent: index === 1, consent_recorded_at: index === 1 ? `${HOJE}T11:00:00Z` : null,
+    consent_recorded_by: index === 1 ? 1 : null, anonymized: false,
+    created_at: `${HOJE}T10:00:00Z`, updated_at: `${HOJE}T10:00:00Z`,
   })),
   "/api/v1/journey-phases/": serie(5, index => ({
     id: index, name: `Fase ${index} — implantação assistida`, description: "", active: true,

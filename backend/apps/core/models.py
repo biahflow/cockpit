@@ -703,6 +703,28 @@ class ProjectDeliverable(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class KpiUnit(models.TextChoices):
+    """A unidade em que um KPI é medido (FDD 027).
+
+    Existe porque `DigitalEmployee.kpi_value` é `CharField` e cabe `"80%"` tanto quanto
+    `"de 3h para 20min"`: dá para ler, não dá para ordenar nem agregar. Em branco é estado
+    legítimo — "não tipado" —, que é onde ficam as linhas anteriores a esta FDD.
+    """
+
+    PERCENT = "percent", "Percentual"
+    HOURS = "hours", "Horas"
+    MINUTES = "minutes", "Minutos"
+    CURRENCY = "currency", "Moeda"
+    COUNT = "count", "Contagem"
+
+
+class KpiDirection(models.TextChoices):
+    """Para que lado o KPI melhora. Sem isto, "de 40 para 12" não diz se foi bom (FDD 027)."""
+
+    UP = "up", "Maior é melhor"
+    DOWN = "down", "Menor é melhor"
+
+
 class DigitalEmployeeBlueprint(models.Model):
     """O catálogo de Funcionários Digitais — o bloco produtizado (FDD 026).
 
@@ -726,6 +748,15 @@ class DigitalEmployeeBlueprint(models.Model):
     area = models.CharField(max_length=24, choices=Area.choices, default=Area.COMMERCIAL)
     description = models.TextField(blank=True, default="")
     kpi_label = models.CharField(max_length=80, blank=True, default="")  # o KPI canônico do bloco
+    # Unidade e direção ficam **só aqui**, e a `BlueprintVariant` não as sobrescreve — ao contrário
+    # do `kpi_label`, que ela sobrescreve porque é o texto do setor. Deixar uma variante trocar
+    # "horas" por "percentual" tornaria duas instâncias do *mesmo bloco* incomparáveis em silêncio,
+    # que é exatamente o que a FDD 027 existe para impedir: é o par (unidade, direção) que torna
+    # centenas de cases comparáveis entre si em vez de uma coleção de frases.
+    kpi_unit = models.CharField(max_length=16, choices=KpiUnit.choices, blank=True, default="")
+    kpi_direction = models.CharField(
+        max_length=8, choices=KpiDirection.choices, default=KpiDirection.UP
+    )
     default_hours_saved_month = models.DecimalField(max_digits=10, decimal_places=1, default=0)
     default_roi_month = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     # Opcional, para sugerir blueprints pelo nível de produto vendido (FDD 015).
@@ -799,7 +830,21 @@ class DigitalEmployee(TimestampedModel):
     description = models.TextField(blank=True, default="")  # o que o funcionário digital faz
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.BUILDING)
     kpi_label = models.CharField(max_length=80, blank=True, default="")
+    # **Obsoleto** desde a FDD 027, e mantido de propósito: removê-lo quebraria `/api/v1/` e o
+    # painel "Seu Time Digital" que `portal.build_snapshot` já entrega ao cliente. Quem for medir
+    # usa o par tipado abaixo; este continua servindo à frase livre ("de 3h para 20min").
     kpi_value = models.CharField(max_length=80, blank=True, default="")
+    # Copiados do blueprint na instanciação (`blueprints.instantiate`), como todo o resto: o que
+    # vale é a cópia, não uma referência viva ao catálogo.
+    kpi_unit = models.CharField(max_length=16, choices=KpiUnit.choices, blank=True, default="")
+    kpi_direction = models.CharField(
+        max_length=8, choices=KpiDirection.choices, default=KpiDirection.UP
+    )
+    # Nulo é **"não medido"**, e zero é "medido e era zero" — a distinção é a razão de o campo ser
+    # nulável em vez de `default=0`. Sem ela, um case de projeto sem baseline inventaria um "antes"
+    # igual a zero, que é precisamente o que destrói a credibilidade de prova social (FDD 027).
+    kpi_baseline = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    kpi_current = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     hours_saved_month = models.DecimalField(max_digits=10, decimal_places=1, default=0)
     roi_month = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
@@ -888,6 +933,90 @@ class Artifact(TimestampedModel):
             self.sent_at = timezone.now()
         if self.status in {self.Status.ACCEPTED, self.Status.REJECTED} and self.decided_at is None:
             self.decided_at = timezone.now()
+        super().save(*args, **kwargs)
+
+
+# Transições válidas do case. Rascunho e revisão vão e voltam enquanto o humano trabalha; publicado
+# é terminal, porque despublicar não desfaz nada — o número já saiu em proposta. Mesma forma de
+# `ARTIFACT_TRANSITIONS`, e a governança espelha a do AI Score: gerado como rascunho, publicado por
+# decisão humana.
+CASE_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"review", "published"},
+    "review": {"draft", "published"},
+    "published": set(),
+}
+
+
+class Case(TimestampedModel):
+    """O case de um projeto concluído — uma **fotografia**, não uma consulta (FDD 027, ADR 0020).
+
+    Projeto entregue não virava nada: `Project.status` chegava a `completed` e o que aquela entrega
+    provava ficava espalhado entre o ROI do projeto, os KPIs de cada `DigitalEmployee` e a memória
+    de quem entregou.
+
+    O que faz este modelo existir — em vez de uma tela que agrega o estado atual — é que os números
+    **precisam parar no tempo**. `assess_project_health` é função pura sobre o estado de agora: um
+    projeto concluído, recalculado meses depois, devolve outro número, porque tarefas fecharam e
+    pendências sumiram. Um case cujo número muda sozinho depois de publicado é pior que nenhum case.
+    Por isso `health_snapshot`, `roi_snapshot` e `metrics` são gravados no congelamento e nunca
+    recalculados (o serializer os expõe como read-only: não há caminho de escrita, não é convenção).
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        REVIEW = "review", "Em revisão"
+        PUBLISHED = "published", "Publicado"
+
+    # `PROTECT`, e não o `CASCADE` do resto do grafo de projeto: o case existe justamente para
+    # sobreviver ao que acontece com o projeto depois. Deixar um `delete()` levar a prova junto
+    # derrotaria o ponto — é a mesma escolha de `Project.client` e `Project.opportunity`.
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="cases")
+    title = models.CharField(max_length=255)
+    summary = models.TextField(blank=True, default="")
+    # Cópia da vertical do cliente no instante do congelamento. É por ela que a proposta encontra
+    # o case do mesmo setor (FDD 026, FDD 027).
+    vertical = models.ForeignKey(
+        Vertical, on_delete=models.SET_NULL, null=True, blank=True, related_name="cases"
+    )
+    # Uma entrada por Funcionário Digital, com rótulo, unidade, antes, depois e direção. JSON aqui
+    # não repete a discussão da ADR 0019: lá a estrutura era **catálogo vivo**, com invariante de
+    # unicidade que só uma constraint garante; isto é registro morto, escrito uma vez e nunca
+    # consultado por chave.
+    metrics = models.JSONField(default=list, blank=True)
+    health_snapshot = models.JSONField(default=dict, blank=True)
+    # **Interno.** Receita e custo do projeto nunca vão para texto destinado ao cliente — ver a
+    # guarda em `ai._case_lines`, que injeta métrica operacional e health e nunca isto.
+    roi_snapshot = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    published_at = models.DateTimeField(null=True, blank=True)
+    # O trio do consentimento. São três campos e não um booleano porque autorizar o uso do próprio
+    # resultado é ato com autor e data — sem a cadeia, "o cliente deixou" é alegação de ninguém.
+    # Gravados só pela ação `record-consent` (admin); read-only no serializer.
+    client_consent = models.BooleanField(default=False)
+    consent_recorded_at = models.DateTimeField(null=True, blank=True)
+    consent_recorded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Publicar como "uma imobiliária de médio porte". É **outra** permissão, não uma versão fraca
+    # do consentimento: autorizar o uso do resultado e autorizar o uso da marca são duas conversas,
+    # e por isso anonimizar não dispensa `client_consent`.
+    anonymized = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def clean(self) -> None:
+        if self.status == self.Status.PUBLISHED and not self.client_consent:
+            raise ValidationError(
+                {"status": "Sem consentimento registrado do cliente, o case não pode ser publicado."}
+            )
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        if self.status == self.Status.PUBLISHED and self.published_at is None:
+            self.published_at = timezone.now()
         super().save(*args, **kwargs)
 
 

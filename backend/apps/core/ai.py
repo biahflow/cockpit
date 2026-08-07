@@ -30,6 +30,11 @@ MEETING_TRANSCRIPT_LIMIT = 12000
 # chamada que ninguém pediu. Seis cabem numa proposta sem virar lista de compras.
 OPPORTUNITY_BLUEPRINT_LIMIT = 6
 
+# Quantos cases publicados a proposta cita (FDD 027). Menor que o teto de blueprints de propósito:
+# blueprint é escopo — precisa listar o que a venda inclui —, case é prova, e três provas boas
+# convencem mais que seis rasas.
+OPPORTUNITY_CASE_LIMIT = 3
+
 
 class AiProviderError(Exception):
     """A OpenAI não respondeu: rede, timeout, chave revogada, cota ou modelo inacessível.
@@ -125,6 +130,7 @@ def build_opportunity_context(opportunity: Opportunity) -> str:
         if service.summary:
             lines.append(f"Escopo do nível: {service.summary}")
     lines.extend(_blueprint_lines(opportunity))
+    lines.extend(_case_lines(opportunity))
     return "\n".join(lines)
 
 
@@ -164,6 +170,80 @@ def _blueprint_lines(opportunity: Opportunity) -> list[str]:
         lines.append(detalhe)
     if vertical:
         lines.append(f"Vertical do cliente: {vertical.name} (os blocos acima já vêm ajustados a ela)")
+    return lines
+
+
+_UNIDADE_KPI = {
+    "percent": "%", "hours": "h", "minutes": "min", "currency": "R$", "count": "",
+}
+
+
+def _numero_kpi(valor: str | None, unidade: str) -> str:
+    """`"48"` + `"hours"` vira `"48h"`. Sem unidade, o número sai sozinho."""
+    if valor is None:
+        return "—"
+    sufixo = _UNIDADE_KPI.get(unidade, "")
+    return f"R$ {valor}" if unidade == "currency" else f"{valor}{sufixo}"
+
+
+def _case_lines(opportunity: Opportunity) -> list[str]:
+    """Os cases publicados da mesma vertical — a prova, ao lado da promessa (FDD 027).
+
+    Três guardas fazem esta função, e nenhuma é decorativa:
+
+    1. **Só publicado com consentimento.** A condição de publicação já é essa, e repeti-la na
+       consulta é barato: se um dia algo publicar por outro caminho, o prompt não sai citando
+       cliente que não autorizou.
+    2. **Nunca o `roi_snapshot`.** Receita e custo de outro cliente são números internos da casa, e
+       este texto vai para uma proposta que o cliente lê. O que sai é métrica operacional do
+       Funcionário Digital e o health — o que o cliente comprou, não o que a casa ganhou.
+    3. **Anonimizado não vira nome.** Case sem autorização de marca entra como "uma empresa do
+       setor X", que é exatamente para o que `anonymized` existe.
+
+    Sem case publicado da vertical, nada é emitido: quem ainda não tem repositório segue com o
+    contexto de antes.
+    """
+    from .models import Case
+
+    vertical = opportunity.client.vertical
+    if vertical is None:
+        # Sem vertical não há "mesmo setor", e citar case de qualquer setor seria prova fraca
+        # vendida como forte. Ao contrário do catálogo, que resolve para o genérico, aqui o
+        # silêncio é a resposta certa.
+        return []
+    publicados = list(
+        Case.objects.filter(
+            status=Case.Status.PUBLISHED,
+            client_consent=True,
+            archived_at__isnull=True,
+            vertical=vertical,
+        ).select_related("project__client")[:OPPORTUNITY_CASE_LIMIT]
+    )
+    if not publicados:
+        return []
+    lines = [f"Cases já entregues no mesmo setor ({vertical.name}), com número real:"]
+    for case in publicados:
+        # No case anonimizado nem o título entra: ele é montado como "Cliente — Projeto" no
+        # congelamento, e deixá-lo passar devolveria pela porta dos fundos o nome que
+        # `anonymized` existe para omitir.
+        lines.append(f"- Uma empresa do setor {vertical.name}" if case.anonymized else f"- {case.title}")
+        if case.summary:
+            lines.append(f"  {case.summary}")
+        for metrica in case.metrics:
+            rotulo = metrica.get("kpi_label") or metrica.get("name") or "KPI"
+            unidade = metrica.get("kpi_unit", "")
+            depois = _numero_kpi(metrica.get("current"), unidade)
+            if metrica.get("has_baseline"):
+                antes = _numero_kpi(metrica.get("baseline"), unidade)
+                sentido = "menor é melhor" if metrica.get("kpi_direction") == "down" else "maior é melhor"
+                lines.append(f"  · {rotulo}: de {antes} para {depois} ({sentido})")
+            else:
+                # A lacuna é dita, não preenchida: sem base registrada, "de 0 para 48" seria uma
+                # afirmação que ninguém mediu.
+                lines.append(f"  · {rotulo}: {depois} ao final (sem base registrada no início)")
+        saude = case.health_snapshot.get("score")
+        if saude is not None:
+            lines.append(f"  · Saúde da entrega ao encerrar: {saude}/100")
     return lines
 
 
