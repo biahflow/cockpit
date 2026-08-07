@@ -45,6 +45,34 @@ recomeça se ele for arquivado de novo.
 É intencional: um lead ou documento que voltou ao uso não deve ser apagado por um prazo que corria
 enquanto ele estava fora. Quem restaura assume o dado de volta.
 
+## "A linha fica para a próxima tentativa" precisou de duas correções para ser verdade (07/08/2026)
+
+A decisão acima diz: *"Se o arquivo não sair, a linha **fica**, para o próximo expurgo tentar de
+novo."* O código cumpria a primeira metade e falhava nas duas que a sustentam.
+
+**Não havia isolamento.** O laço de `retention.executar()` chamava `_apagar_arquivo` sem `try`, sob
+um comentário que prometia que "um erro num documento não pode impedir o expurgo dos outros". A
+primeira falha do Drive abortava o laço inteiro — todos os documentos seguintes ficavam sem expurgo
+— e estourava para fora do `executar()`, fazendo o `purge_archived` despejar um traceback em vez do
+relatório em português que ele promete. Agora o `except` é por documento e estreito
+(`DriveProviderError`, não `Exception`): erro de banco continua sendo erro, e não vira "o Google
+recusou".
+
+**E "tentar de novo" só é saída se alguma tentativa puder passar.** Dois casos rotineiros deixavam a
+linha presa para sempre, falhando idêntico a cada execução: o arquivo **apagado à mão** na interface
+do Google (o Drive responde 404) e a integração **desligada** — que desde a ADR 0018 é um toggle de
+runtime, enquanto `_apagar_arquivo` continua chamando o provedor por qualquer `drive_file_id`
+herdado. O primeiro caso passou a concluir o expurgo: `delete_document` trata 404 como sucesso,
+porque apagar o que já não existe *é* o estado desejado e um `DELETE` idempotente é o comportamento
+correto. Um dado pessoal impossível de esquecer é o oposto do que esta ADR garante. Qualquer outra
+falha continua levantando — credencial ausente **não** é "já foi apagado", e confundir as duas
+apagaria o índice deixando o conteúdo.
+
+**O que ficou é relatado.** `Plano` ganhou `falhas`, e o comando termina com `CommandError` (código
+1, mensagem no stderr — o padrão do `backup_status` e do `check_integrations`) **depois** de imprimir
+o relatório das famílias. Sair 0 dizendo "expurgo concluído" sobre dado pessoal que continua na base
+seria a mentira que fecha o ciclo.
+
 ## Consequências
 
 - **O mecanismo existe e não faz nada até ser configurado.** É a postura certa para uma operação

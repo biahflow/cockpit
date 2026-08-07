@@ -21,6 +21,7 @@ que aquilo saiu de uso.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -29,17 +30,27 @@ from django.conf import settings
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from . import drive
+
+logger = logging.getLogger(__name__)
+
 # Famílias expurgáveis. A chave é o nome usado na configuração e na saída do comando.
 FAMILIAS = ("lead", "document")
 
 
 @dataclass(frozen=True)
 class Plano:
-    """O que seria apagado numa família. `dias == 0` significa retenção desligada."""
+    """O que seria apagado numa família. `dias == 0` significa retenção desligada.
+
+    `falhas` só existe para `document`: são as linhas cujo arquivo não saiu do provedor e que, por
+    isso, ficaram para a próxima tentativa. Precisa ser contado e devolvido, e não apenas registrado
+    no log — um expurgo que não expurgou e sai em silêncio é a mentira que fecha o ciclo.
+    """
 
     familia: str
     dias: int
     quantidade: int
+    falhas: int = 0
 
     @property
     def ativa(self) -> bool:
@@ -81,8 +92,6 @@ def _apagar_arquivo(document) -> None:  # type: ignore[no-untyped-def]
     Ao contrário, some o índice e o conteúdo permanece sem ninguém sabendo que existe, que é
     exatamente o que a LGPD não quer.
     """
-    from . import drive
-
     if document.drive_file_id:
         drive.delete_document(document)
     elif document.file:
@@ -102,13 +111,33 @@ def executar() -> list[Plano]:
         alvo = _queryset(familia, dias)
         if familia == "document":
             # Um a um, e não em massa: cada arquivo precisa sair antes da sua linha, e um erro num
-            # documento não pode impedir o expurgo dos outros.
-            saiu = 0
+            # documento não pode impedir o expurgo dos outros. O `try` é o que torna essa segunda
+            # metade verdade — sem ele a primeira falha abortava o laço e levava junto todos os
+            # documentos seguintes, que é o oposto exato do que esta linha promete.
+            #
+            # `except DriveProviderError` e não `except Exception`: erro de banco no `delete()`
+            # logo abaixo continua sendo erro. Engoli-lo aqui viraria "o Google recusou" para uma
+            # falha nossa — o tipo de mentira que o próprio `DriveProviderError` foi criado estreito
+            # para evitar.
+            saiu, falhas = 0, 0
             for documento in list(alvo):
-                _apagar_arquivo(documento)
+                try:
+                    _apagar_arquivo(documento)
+                except drive.DriveProviderError:
+                    # A linha **fica**, de propósito (ADR 0017): some o índice e fica o conteúdo é o
+                    # pior resultado possível de um expurgo. Quem opera fica sabendo pelo comando.
+                    logger.warning(
+                        "expurgo: o arquivo de %s não saiu do provedor; a linha fica",
+                        documento.original_name,
+                        exc_info=True,
+                    )
+                    falhas += 1
+                    continue
                 Document.objects.filter(pk=documento.pk).delete()
                 saiu += 1
-            resultados.append(Plano(familia=familia, dias=dias, quantidade=saiu))
+            resultados.append(
+                Plano(familia=familia, dias=dias, quantidade=saiu, falhas=falhas)
+            )
         else:
             quantidade = alvo.count()
             alvo.delete()

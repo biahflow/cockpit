@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.core import retention
 
@@ -54,6 +54,16 @@ class Command(BaseCommand):
             return
 
         total = sum(plano.quantidade for plano in ativas)
+        # As linhas cujo arquivo não saiu do provedor ficaram, de propósito (ADR 0017) — mas quem
+        # mandou apagar precisa saber que não apagou. Sair 0 aqui seria dizer "expurgo concluído"
+        # sobre dado pessoal que continua na base, e é a mentira que o comando inteiro evita.
+        ficaram = sum(plano.falhas for plano in ativas)
+        if aplicar and ficaram:
+            self.stdout.write(self.style.SUCCESS(f"Expurgo parcial: {total} registro(s)."))
+            raise CommandError(
+                f"{ficaram} documento(s) não saíram do provedor e as linhas ficaram para a "
+                "próxima execução. Confira a credencial do Drive e o log do comando."
+            )
         if aplicar:
             self.stdout.write(self.style.SUCCESS(f"Expurgo concluído: {total} registro(s)."))
         elif total:

@@ -70,3 +70,54 @@ def test_url_sem_folders_fica_como_veio() -> None:
     assert drive.parse_root_folder_id("https://drive.google.com/qualquer") == (
         "https://drive.google.com/qualquer"
     )
+
+
+class _RespostaFalsa:
+    """O mínimo do `HttpError` do SDK que a classificação lê: `exc.resp.status`."""
+
+    def __init__(self, status: int) -> None:
+        self.status = status
+
+
+class _ErroDoSdk(Exception):
+    def __init__(self, status: int) -> None:
+        super().__init__(f"HTTP {status}")
+        self.resp = _RespostaFalsa(status)
+
+
+def _service_que_recusa(status: int):  # type: ignore[no-untyped-def]
+    class _Files:
+        def delete(self, **kwargs):  # type: ignore[no-untyped-def]
+            return self
+
+        def execute(self):  # type: ignore[no-untyped-def]
+            raise _ErroDoSdk(status)
+
+    class _Service:
+        def files(self):  # type: ignore[no-untyped-def]
+            return _Files()
+
+    return lambda: _Service()
+
+
+def test_apagar_o_que_ja_sumiu_do_drive_e_sucesso(monkeypatch: pytest.MonkeyPatch) -> None:
+    """404 não é falha: apagar o que já não existe **é** o estado desejado do expurgo (ADR 0017).
+
+    Sem isto, um arquivo removido à mão na interface do Google prendia a linha para sempre — toda
+    execução do expurgo falhava igual, e o dado pessoal ficava impossível de esquecer.
+    """
+    monkeypatch.setattr(drive, "_service", _service_que_recusa(404))
+
+    drive.delete_document(Document(drive_file_id="ja-nao-existe"))  # não levanta
+
+
+def test_qualquer_outra_recusa_do_drive_continua_levantando(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A trava que não pode afrouxar: credencial ausente **não** é "já foi apagado".
+
+    Tratar as duas como a mesma coisa apagaria o índice deixando o conteúdo no Drive — o pior
+    resultado possível de um expurgo, e o que o módulo inteiro existe para evitar.
+    """
+    monkeypatch.setattr(drive, "_service", _service_que_recusa(403))
+
+    with pytest.raises(drive.DriveProviderError):
+        drive.delete_document(Document(drive_file_id="sem-permissao"))
