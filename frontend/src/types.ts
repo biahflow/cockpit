@@ -1,7 +1,7 @@
 export type PipelineStage = { id: number; name: string; kind: "open" | "won" | "lost"; position: number; opportunity_count?: number; estimated_total?: string | null };
 export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier; project: number | null; project_archived: boolean };
 export type AiScoreDimension = { label: string; score: number };
-export type Project = { id: number; name: string; description: string; client: number; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean };
+export type Project = { id: number; name: string; description: string; client: number; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };
 export type ServiceTier = "discovery_express" | "discovery_assessment" | "implantacao" | "";
 export type Service = { id: number; name: string; active: boolean; tier: ServiceTier; tier_display: string; list_price: string; summary: string };
 export type TierFunnelRow = { tier: ServiceTier; label: string; total: number; open: number; won: number; lost: number; estimated_total: number; win_rate: number | null };
@@ -22,7 +22,7 @@ export type Analytics = {
   roi: { revenue: number; cost: number; roi: number | null; by_client: RoiRow[]; by_service: RoiRow[] };
 };
 export type ClientStatus = "prospect" | "active";
-export type Client = { id: number; name: string; legal_name: string; tax_id: string; owner: number; status: ClientStatus };
+export type Client = { id: number; name: string; legal_name: string; tax_id: string; owner: number; status: ClientStatus; vertical: number | null; vertical_name: string };
 export type Contact = { id: number; client: number; name: string; email: string; phone: string; job_title: string };
 export type WorkItemStatus = "todo" | "in_progress" | "done";
 export type Party = "provider" | "client";
@@ -70,7 +70,17 @@ export type Notification = { id: number; kind: string; message: string; url: str
 export type ProjectMember = { id: number; project: number; user: number; user_name: string; user_username: string; user_role: Role; added_by: number | null; created_at: string };
 
 export type DigitalEmployeeStatus = "building" | "active" | "paused";
-export type DigitalEmployee = { id: number; project: number; name: string; area: string; description: string; status: DigitalEmployeeStatus; kpi_label: string; kpi_value: string; hours_saved_month: string; roi_month: string };
+export type DigitalEmployee = { id: number; project: number; blueprint: number | null; name: string; area: string; description: string; status: DigitalEmployeeStatus; kpi_label: string; kpi_value: string; hours_saved_month: string; roi_month: string };
+// A biblioteca de Funcionários Digitais (FDD 026): catálogo global + parametrização por vertical.
+// Mesmo par que `JourneyPhaseTemplate`/`ProjectPhase`, um nível acima: o que a entrega instancia
+// é uma **cópia**, e por isso `DigitalEmployee` não referencia nada aqui além da procedência.
+export type Vertical = { id: number; name: string; slug: string; position: number; active: boolean };
+export type BlueprintArea = "comercial" | "financeiro" | "rh" | "juridico" | "atendimento";
+export type BlueprintVariant = { id: number; blueprint: number; vertical: number; vertical_name: string; description: string; kpi_label: string; default_hours_saved_month: string | null; default_roi_month: string | null };
+// `resolved` só vem preenchido quando a lista é pedida com `?vertical=` — são os valores já com a
+// variante aplicada, que é exatamente o que a instanciação vai copiar.
+export type ResolvedBlueprint = { name: string; area: string; description: string; kpi_label: string; hours_saved_month: string; roi_month: string };
+export type DigitalEmployeeBlueprint = { id: number; name: string; area: BlueprintArea; area_display: string; description: string; kpi_label: string; default_hours_saved_month: string; default_roi_month: string; service: number | null; service_name: string; active: boolean; variants: BlueprintVariant[]; resolved: ResolvedBlueprint | null; has_variant: boolean };
 export type JourneyPhaseStatus = "locked" | "active" | "done";
 export type ProjectDeliverableStatus = "pending" | "delivered";
 export type ProjectDeliverable = { id: number; project_phase: number; name: string; status: ProjectDeliverableStatus; document: number | null; position: number; delivered_at: string | null };

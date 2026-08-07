@@ -35,6 +35,7 @@ from . import (
     agents,
     ai,
     ai_score,
+    blueprints,
     booking,
     calendar_sync,
     drive,
@@ -60,9 +61,11 @@ from .models import (
     AiInteraction,
     AppSetting,
     Artifact,
+    BlueprintVariant,
     Client,
     Contact,
     DigitalEmployee,
+    DigitalEmployeeBlueprint,
     Document,
     Invitation,
     JourneyPhase,
@@ -82,15 +85,18 @@ from .models import (
     SignatureRequest,
     Task,
     User,
+    Vertical,
     project_scope_q,
 )
 from .permissions import RolePermission
 from .serializers import (
     AcceptInvitationSerializer,
     ArtifactSerializer,
+    BlueprintVariantSerializer,
     BookingCreateSerializer,
     ClientSerializer,
     ContactSerializer,
+    DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
     DocumentSerializer,
     InvitationSerializer,
@@ -115,6 +121,7 @@ from .serializers import (
     TaskSerializer,
     TaskSyncSerializer,
     UserSerializer,
+    VerticalSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -629,7 +636,9 @@ class OpportunityViewSet(ArchiveModelViewSet):
             "Redija um RASCUNHO de proposta comercial em português a partir dos dados (contexto, "
             "escopo sugerido, entregáveis, investimento estimado). Quando houver um nível de "
             "produto informado, respeite o escopo e o preço de tabela desse nível — se for "
-            "gratuito, deixe isso explícito e não sugira cobrança. Deixe claro que é um rascunho "
+            "gratuito, deixe isso explícito e não sugira cobrança. Quando houver Funcionários "
+            "Digitais do catálogo listados, cite-os pelo nome e pelo que fazem, com o KPI e o "
+            "ganho estimado — é o que torna a proposta concreta. Deixe claro que é um rascunho "
             "para revisão humana e use apenas o material fornecido."
         )
         return _ai_run(
@@ -666,6 +675,44 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         # `_owner_is_always_a_member` já coloca quem criou na equipe. Entrega não chega aqui —
         # `RolePermission` só lhe dá leitura e edição de projeto.
         serializer.save(owner=self.request.user)
+
+    @extend_schema(
+        request=inline_serializer(
+            "DigitalEmployeeFromBlueprint",
+            {"blueprint": serializers.IntegerField(),
+             "vertical": serializers.IntegerField(required=False)},
+        ),
+        responses=DigitalEmployeeSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="digital-employees/from-blueprint")
+    def digital_employee_from_blueprint(self, request: Request, pk: str | None = None) -> Response:
+        """Instancia um Funcionário Digital a partir do catálogo, copiando os valores (FDD 026).
+
+        Ação explícita, sem signal: a jornada é materializada no `post_save` do projeto porque é
+        igual para todo projeto; o roster não é — cada entrega escolhe seus blocos.
+
+        Mora em `ProjectViewSet` e a permissão sai certa de graça: `RolePermission` libera à Entrega
+        toda ação de detalhe de `project` que não seja `create`/`destroy`, o objeto ainda passa por
+        `_participates`, e Vendas — que tem `project` só-leitura — é barrada. É a regra do recurso:
+        Vendas lê o roster e não mexe.
+        """
+        project = self.get_object()
+        blueprint = get_object_or_404(
+            DigitalEmployeeBlueprint, pk=request.data.get("blueprint") or 0
+        )
+        if not blueprint.active:
+            return Response(
+                {"detail": "Este blueprint está desativado e não pode ser instanciado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        vertical_id = request.data.get("vertical")
+        vertical = (
+            Vertical.objects.filter(pk=vertical_id).first()
+            if vertical_id
+            else project.client.vertical
+        )
+        employee = blueprints.instantiate(project, blueprint, vertical)
+        return Response(DigitalEmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def assistant(self, request: Request, pk: str | None = None) -> Response:
@@ -1347,6 +1394,97 @@ class ServiceViewSet(ArchiveModelViewSet):
     resource = "service"
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
+
+
+class VerticalViewSet(viewsets.ModelViewSet):
+    """Setores dos clientes (config admin). Espelha `PipelineStage`: config, não dado de negócio."""
+
+    resource = "vertical"
+    queryset = Vertical.objects.all()
+    serializer_class = VerticalSerializer
+    permission_classes = [RolePermission]
+
+    def perform_destroy(self, instance: Vertical) -> None:
+        """Recusa excluir vertical em uso — e aponta a desativação como saída (FDD 026, FDD 025).
+
+        `Client.vertical` é `SET_NULL`: sem esta guarda, apagar uma vertical **zeraria em silêncio**
+        o setor de todos os clientes que a tinham, sem nada na tela dizendo que aconteceu. As
+        variantes já estariam protegidas pelo `PROTECT` do banco, mas de lá vem um 409 genérico,
+        sem contagem e sem caminho de saída.
+        """
+        clientes = instance.clients.count()
+        variantes = instance.variants.count()
+        if clientes or variantes:
+            partes = []
+            if clientes:
+                partes.append(f"{clientes} cliente(s)")
+            if variantes:
+                partes.append(f"{variantes} variante(s) de blueprint")
+            raise StateConflict(
+                f"Esta vertical ainda é usada por {' e '.join(partes)} e não pode ser excluída. "
+                "Desative a vertical: ela deixa de ser oferecida e o que já a usa continua intacto."
+            )
+        instance.delete()
+
+
+class DigitalEmployeeBlueprintViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    """O catálogo de Funcionários Digitais (leitura para todos, escrita só admin — FDD 026)."""
+
+    resource = "blueprint"
+    queryset = DigitalEmployeeBlueprint.objects.select_related("service").prefetch_related(
+        "variants__vertical"
+    )
+    serializer_class = DigitalEmployeeBlueprintSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("service",)
+    filter_exact_fields = ("area",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        # `?active=1` é o que a instanciação pede: bloco aposentado não entra em entrega nova.
+        # A tela de configuração não passa o parâmetro, porque precisa ver o que desativou.
+        if self.request.query_params.get("active") == "1":
+            queryset = queryset.filter(active=True)
+        return queryset
+
+    def get_serializer_context(self) -> dict[str, Any]:
+        """`?vertical=<id>` **resolve**, não filtra.
+
+        Filtrar para fora esconderia o bloco genérico — o que serve a qualquer setor — de quem tem
+        vertical, e deixaria sem catálogo nenhum quem não tem. Aqui o parâmetro só diz sobre qual
+        setor calcular `resolved`; a lista continua sendo o catálogo inteiro (FDD 026).
+        """
+        context = super().get_serializer_context()
+        vertical_id = self.request.query_params.get("vertical")
+        if vertical_id and vertical_id.isdigit():
+            context["vertical"] = Vertical.objects.filter(pk=vertical_id).first()
+        return context
+
+    def perform_destroy(self, instance: DigitalEmployeeBlueprint) -> None:
+        """Recusa excluir blueprint já instanciado (FDD 026, FDD 025).
+
+        `DigitalEmployee.blueprint` é `SET_NULL`, então o banco deixaria passar — e o que se
+        perderia seria a procedência dos Funcionários Digitais entregues. Aposentar um bloco é
+        `active=False`: ele para de valer daqui para frente e o que foi entregue segue igual.
+        """
+        total = instance.instances.count()
+        if total:
+            raise StateConflict(
+                f"Este blueprint já foi instanciado em {total} Funcionário(s) Digital(is) e não "
+                "pode ser excluído sem apagar a procedência deles. Desative o blueprint: ele "
+                "deixa de ser oferecido e as instâncias atuais continuam intactas."
+            )
+        instance.delete()
+
+
+class BlueprintVariantViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    """Parametrização por vertical de cada bloco do catálogo (admin)."""
+
+    resource = "blueprint"
+    queryset = BlueprintVariant.objects.select_related("blueprint", "vertical").all()
+    serializer_class = BlueprintVariantSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("blueprint", "vertical")
 
 
 def _roi(revenue: Decimal, cost: Decimal) -> float | None:

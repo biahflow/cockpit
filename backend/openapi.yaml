@@ -330,6 +330,153 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/v1/blueprint-variants/:
+    get:
+      operationId: v1_blueprint_variants_list
+      description: Parametrização por vertical de cada bloco do catálogo (admin).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BlueprintVariant'
+          description: ''
+    post:
+      operationId: v1_blueprint_variants_create
+      description: Parametrização por vertical de cada bloco do catálogo (admin).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlueprintVariant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlueprintVariant'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlueprintVariant'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlueprintVariant'
+          description: ''
+  /api/v1/blueprint-variants/{id}/:
+    get:
+      operationId: v1_blueprint_variants_retrieve
+      description: Parametrização por vertical de cada bloco do catálogo (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este blueprint variant.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlueprintVariant'
+          description: ''
+    put:
+      operationId: v1_blueprint_variants_update
+      description: Parametrização por vertical de cada bloco do catálogo (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este blueprint variant.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlueprintVariant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BlueprintVariant'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BlueprintVariant'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlueprintVariant'
+          description: ''
+    patch:
+      operationId: v1_blueprint_variants_partial_update
+      description: Parametrização por vertical de cada bloco do catálogo (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este blueprint variant.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBlueprintVariant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBlueprintVariant'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBlueprintVariant'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlueprintVariant'
+          description: ''
+    delete:
+      operationId: v1_blueprint_variants_destroy
+      description: Parametrização por vertical de cada bloco do catálogo (admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este blueprint variant.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/booking/book/:
     post:
       operationId: v1_booking_book_create
@@ -799,6 +946,159 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardResponse'
           description: ''
+  /api/v1/digital-employee-blueprints/:
+    get:
+      operationId: v1_digital_employee_blueprints_list
+      description: O catálogo de Funcionários Digitais (leitura para todos, escrita
+        só admin — FDD 026).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          description: ''
+    post:
+      operationId: v1_digital_employee_blueprints_create
+      description: O catálogo de Funcionários Digitais (leitura para todos, escrita
+        só admin — FDD 026).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          description: ''
+  /api/v1/digital-employee-blueprints/{id}/:
+    get:
+      operationId: v1_digital_employee_blueprints_retrieve
+      description: O catálogo de Funcionários Digitais (leitura para todos, escrita
+        só admin — FDD 026).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee blueprint.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          description: ''
+    put:
+      operationId: v1_digital_employee_blueprints_update
+      description: O catálogo de Funcionários Digitais (leitura para todos, escrita
+        só admin — FDD 026).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee blueprint.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          description: ''
+    patch:
+      operationId: v1_digital_employee_blueprints_partial_update
+      description: O catálogo de Funcionários Digitais (leitura para todos, escrita
+        só admin — FDD 026).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee blueprint.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDigitalEmployeeBlueprint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDigitalEmployeeBlueprint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDigitalEmployeeBlueprint'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployeeBlueprint'
+          description: ''
+    delete:
+      operationId: v1_digital_employee_blueprints_destroy
+      description: O catálogo de Funcionários Digitais (leitura para todos, escrita
+        só admin — FDD 026).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este digital employee blueprint.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/digital-employees/:
     get:
       operationId: v1_digital_employees_list
@@ -3847,6 +4147,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/Project'
           description: ''
+  /api/v1/projects/{id}/digital-employees/from-blueprint/:
+    post:
+      operationId: v1_projects_digital_employees_from_blueprint_create
+      description: |-
+        Instancia um Funcionário Digital a partir do catálogo, copiando os valores (FDD 026).
+
+        Ação explícita, sem signal: a jornada é materializada no `post_save` do projeto porque é
+        igual para todo projeto; o roster não é — cada entrega escolhe seus blocos.
+
+        Mora em `ProjectViewSet` e a permissão sai certa de graça: `RolePermission` libera à Entrega
+        toda ação de detalhe de `project` que não seja `create`/`destroy`, o objeto ainda passa por
+        `_participates`, e Vendas — que tem `project` só-leitura — é barrada. É a regra do recurso:
+        Vendas lê o roster e não mexe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeFromBlueprint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeFromBlueprint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DigitalEmployeeFromBlueprint'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalEmployee'
+          description: ''
   /api/v1/projects/{id}/health/:
     get:
       operationId: v1_projects_health_retrieve
@@ -4507,6 +4850,159 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/v1/verticals/:
+    get:
+      operationId: v1_verticals_list
+      description: 'Setores dos clientes (config admin). Espelha `PipelineStage`:
+        config, não dado de negócio.'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vertical'
+          description: ''
+    post:
+      operationId: v1_verticals_create
+      description: 'Setores dos clientes (config admin). Espelha `PipelineStage`:
+        config, não dado de negócio.'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Vertical'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Vertical'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Vertical'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vertical'
+          description: ''
+  /api/v1/verticals/{id}/:
+    get:
+      operationId: v1_verticals_retrieve
+      description: 'Setores dos clientes (config admin). Espelha `PipelineStage`:
+        config, não dado de negócio.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este vertical.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vertical'
+          description: ''
+    put:
+      operationId: v1_verticals_update
+      description: 'Setores dos clientes (config admin). Espelha `PipelineStage`:
+        config, não dado de negócio.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este vertical.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Vertical'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Vertical'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Vertical'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vertical'
+          description: ''
+    patch:
+      operationId: v1_verticals_partial_update
+      description: 'Setores dos clientes (config admin). Espelha `PipelineStage`:
+        config, não dado de negócio.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este vertical.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVertical'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVertical'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVertical'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vertical'
+          description: ''
+    delete:
+      operationId: v1_verticals_destroy
+      description: 'Setores dos clientes (config admin). Espelha `PipelineStage`:
+        config, não dado de negócio.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este vertical.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
 components:
   schemas:
     AcceptInvitation:
@@ -4614,6 +5110,20 @@ components:
       - pipeline
       - roi
       - win_rate
+    AreaEnum:
+      enum:
+      - comercial
+      - financeiro
+      - rh
+      - juridico
+      - atendimento
+      type: string
+      description: |-
+        * `comercial` - Comercial
+        * `financeiro` - Financeiro
+        * `rh` - RH
+        * `juridico` - Jurídico
+        * `atendimento` - Atendimento
     Artifact:
       type: object
       properties:
@@ -4715,6 +5225,41 @@ components:
     BlankEnum:
       enum:
       - ''
+    BlueprintVariant:
+      type: object
+      description: Parametrização de um blueprint por vertical. Campo em branco herda
+        o do blueprint.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        blueprint:
+          type: integer
+        vertical:
+          type: integer
+        vertical_name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        kpi_label:
+          type: string
+          maxLength: 80
+        default_hours_saved_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,1})?$
+          nullable: true
+        default_roi_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+      required:
+      - blueprint
+      - id
+      - vertical
+      - vertical_name
     BookingCreate:
       type: object
       properties:
@@ -4777,6 +5322,13 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ClientStatusEnum'
+        vertical:
+          type: integer
+          nullable: true
+        vertical_name:
+          type: string
+          readOnly: true
+          default: ''
         created_at:
           type: string
           format: date-time
@@ -4791,6 +5343,7 @@ components:
       - name
       - owner
       - updated_at
+      - vertical_name
     ClientOverviewList:
       type: object
       properties:
@@ -4918,6 +5471,10 @@ components:
           readOnly: true
         project:
           type: integer
+        blueprint:
+          type: integer
+          readOnly: true
+          nullable: true
         name:
           type: string
           maxLength: 120
@@ -4951,11 +5508,84 @@ components:
           format: date-time
           readOnly: true
       required:
+      - blueprint
       - created_at
       - id
       - name
       - project
       - updated_at
+    DigitalEmployeeBlueprint:
+      type: object
+      description: |-
+        Bloco do catálogo, com as variantes aninhadas (forma do `JourneyPhaseSerializer`).
+
+        `resolved` só aparece quando o viewset recebe `?vertical=`: são os valores já com a variante
+        aplicada, que é o que a instanciação vai copiar. Sem o parâmetro o campo é omitido — quem
+        lista o catálogo para editá-lo não quer ver os valores de um setor em particular.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        area:
+          $ref: '#/components/schemas/AreaEnum'
+        area_display:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        kpi_label:
+          type: string
+          maxLength: 80
+        default_hours_saved_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,1})?$
+        default_roi_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+          default: ''
+        active:
+          type: boolean
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlueprintVariant'
+          readOnly: true
+        resolved:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+        has_variant:
+          type: boolean
+          readOnly: true
+      required:
+      - area_display
+      - has_variant
+      - id
+      - name
+      - resolved
+      - service_name
+      - variants
+    DigitalEmployeeFromBlueprint:
+      type: object
+      properties:
+        blueprint:
+          type: integer
+        vertical:
+          type: integer
+      required:
+      - blueprint
     DigitalEmployeeStatusEnum:
       enum:
       - building
@@ -5507,6 +6137,36 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedBlueprintVariant:
+      type: object
+      description: Parametrização de um blueprint por vertical. Campo em branco herda
+        o do blueprint.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        blueprint:
+          type: integer
+        vertical:
+          type: integer
+        vertical_name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        kpi_label:
+          type: string
+          maxLength: 80
+        default_hours_saved_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,1})?$
+          nullable: true
+        default_roi_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
     PatchedClient:
       type: object
       properties:
@@ -5527,6 +6187,13 @@ components:
           readOnly: true
         status:
           $ref: '#/components/schemas/ClientStatusEnum'
+        vertical:
+          type: integer
+          nullable: true
+        vertical_name:
+          type: string
+          readOnly: true
+          default: ''
         created_at:
           type: string
           format: date-time
@@ -5579,6 +6246,10 @@ components:
           readOnly: true
         project:
           type: integer
+        blueprint:
+          type: integer
+          readOnly: true
+          nullable: true
         name:
           type: string
           maxLength: 120
@@ -5610,6 +6281,61 @@ components:
         updated_at:
           type: string
           format: date-time
+          readOnly: true
+    PatchedDigitalEmployeeBlueprint:
+      type: object
+      description: |-
+        Bloco do catálogo, com as variantes aninhadas (forma do `JourneyPhaseSerializer`).
+
+        `resolved` só aparece quando o viewset recebe `?vertical=`: são os valores já com a variante
+        aplicada, que é o que a instanciação vai copiar. Sem o parâmetro o campo é omitido — quem
+        lista o catálogo para editá-lo não quer ver os valores de um setor em particular.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        area:
+          $ref: '#/components/schemas/AreaEnum'
+        area_display:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        kpi_label:
+          type: string
+          maxLength: 80
+        default_hours_saved_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,9}(?:\.\d{0,1})?$
+        default_roi_month:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+          default: ''
+        active:
+          type: boolean
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlueprintVariant'
+          readOnly: true
+        resolved:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
+        has_variant:
+          type: boolean
           readOnly: true
     PatchedDocument:
       type: object
@@ -6009,6 +6735,13 @@ components:
           nullable: true
         ai_score_reviewed:
           type: boolean
+        client_vertical:
+          type: integer
+          readOnly: true
+        client_vertical_name:
+          type: string
+          readOnly: true
+          default: ''
     PatchedProjectDeliverable:
       type: object
       description: Entregável de um projeto — só `status`/`document` são editáveis
@@ -6199,6 +6932,27 @@ components:
         milestone:
           type: integer
           nullable: true
+    PatchedVertical:
+      type: object
+      description: Setor do cliente (config admin, vocabulário editável — FDD 026).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        slug:
+          type: string
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        active:
+          type: boolean
     Pendencia:
       type: object
       properties:
@@ -6371,9 +7125,18 @@ components:
           nullable: true
         ai_score_reviewed:
           type: boolean
+        client_vertical:
+          type: integer
+          readOnly: true
+        client_vertical_name:
+          type: string
+          readOnly: true
+          default: ''
       required:
       - ai_scored_at
       - client
+      - client_vertical
+      - client_vertical_name
       - created_at
       - due_date
       - id
@@ -6801,6 +7564,31 @@ components:
       - id
       - is_admin
       - username
+    Vertical:
+      type: object
+      description: Setor do cliente (config admin, vocabulário editável — FDD 026).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 80
+        slug:
+          type: string
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        active:
+          type: boolean
+      required:
+      - id
+      - name
+      - slug
     WorkItemStatusEnum:
       enum:
       - todo

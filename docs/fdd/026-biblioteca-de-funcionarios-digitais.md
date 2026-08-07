@@ -1,8 +1,9 @@
 # FDD 026 — Biblioteca de Funcionários Digitais
 
-> **Status: proposta.** Nada aqui está implementado. A primeira metade documenta o que já
-> existe e nunca teve FDD; a segunda descreve o catálogo reutilizável, para uma release
-> futura. Ver `roadmap.md`, bloco "Lacunas vs. visão da metodologia".
+> **Status: entregue.** Em duas metades. A primeira documentou o que já existia sem FDD e deu
+> tela aos oito campos do roster; a segunda — o catálogo reutilizável — está agora construída.
+> A decisão de modelar a variante como tabela própria virou a **ADR 0019**, como esta FDD
+> previa que precisaria virar.
 
 ## Jornada
 
@@ -65,56 +66,84 @@ aplicação do mesmo padrão.
   crua ou o Django admin. Era a mesma falha que a FDD 025 nomeia ("não havia botão"), no único
   recurso arquivável que ela não fechou.
 
-## Regras — o catálogo proposto
+## Regras — o catálogo
 
 - **`Vertical` é taxonomia, não enum.** Modelo próprio (`name`, `slug`, `position`,
   `active`), editável pelo admin, na forma de `PipelineStage` e `JourneyPhase` — o domínio
-  hoje **não tem nenhum eixo de setor**, e cravar um enum no código repetiria o erro de
-  `area`. `Client` ganha `vertical` (`SET_NULL`, opcional): campo aditivo, sem quebra do
-  contrato `/api/v1/`.
+  não tinha **nenhum eixo de setor**, e cravar um enum no código repetiria o erro de
+  `area`. `Client` ganhou `vertical` (`SET_NULL`, opcional): campo aditivo, sem quebra do
+  contrato `/api/v1/`. `ProjectSerializer` expõe `client_vertical`/`client_vertical_name`
+  (read-only), para o detalhe do projeto pedir o catálogo resolvido sem carregar o cliente
+  inteiro por causa de um id.
 - **`DigitalEmployeeBlueprint` é catálogo global**, sem FK para projeto: `name`, `area` em
   **choices fechadas** (comercial, financeiro, RH, jurídico, atendimento), `description`,
   `kpi_label` **canônico**, `default_hours_saved_month`, `default_roi_month`, `active`, e FK
   opcional para `Service` para sugerir blueprints pelo nível de produto (FDD 015). A `area`
-  fechada é o ponto: hoje ela é `CharField` livre e por isso não filtra, não agrega e não
-  aparece em nenhuma consulta.
-- **`BlueprintVariant` é a parametrização por vertical:** FK `blueprint`, FK `vertical`,
-  sobrescritas de descrição, KPI e defaults, com `UniqueConstraint(blueprint, vertical)` —
-  a mesma forma de invariante que o `PipelineStage` ganho/perdido e o `Service` por `tier`
-  já usam. Um blueprint, N parametrizações: é esta tabela que produtiza o bloco.
-- **Instanciar copia, não referencia.** `DigitalEmployee` ganha `blueprint` (`SET_NULL`) e
-  **copia** nome, descrição, KPI e defaults no momento da criação. O precedente é
-  `ProjectDeliverable`, que copia o `name` do template pela mesma razão: editar o catálogo
-  amanhã não pode reescrever o que foi entregue ontem.
+  fechada é o ponto — livre, ela não filtra, não agrega e não aparece em consulta nenhuma.
+  **Só no blueprint**: em `DigitalEmployee` ela continua `CharField` livre, porque fechá-la
+  ali quebraria o contrato `/api/v1/` (um PATCH com a área digitada à mão passaria a receber
+  400) e o que o snapshot já entrega ao cliente. A instanciação copia o **rótulo**
+  (`get_area_display`), não o slug: gravar `"rh"` faria o cliente ler "rh".
+- **`BlueprintVariant` é a parametrização por vertical:** FK `blueprint` (`CASCADE`), FK
+  `vertical` (`PROTECT`), sobrescritas de descrição, KPI e defaults, com
+  `UniqueConstraint(blueprint, vertical)` — a mesma forma de invariante que o
+  `PipelineStage` ganho/perdido e o `Service` por `tier` já usam. Um blueprint, N
+  parametrizações: é esta tabela que produtiza o bloco. **Em branco herda** (string vazia ou
+  decimal nulo): a variante diz o que muda para aquele setor, não repete o que não muda —
+  daí os decimais dela serem `null=True`, e não `default=0`, que seria sobrescrever com zero.
+  A escolha de tabela própria em vez de JSON no blueprint está na **ADR 0019**.
+- **`?vertical=` resolve, não filtra.** `GET /digital-employee-blueprints/?vertical=<id>`
+  devolve o catálogo **inteiro** com um bloco `resolved` (os valores já com a variante
+  aplicada) e `has_variant` por linha. Filtrar esconderia o bloco genérico de quem tem
+  vertical e deixaria sem catálogo nenhum quem não tem — e é regra desta FDD que cliente sem
+  vertical continue funcionando. `?active=1` é o recorte que a instanciação pede; a tela de
+  configuração não o passa, porque precisa ver o que desativou.
+- **Instanciar copia, não referencia.** `DigitalEmployee` ganhou `blueprint` (`SET_NULL`) e
+  `blueprints.instantiate` **copia** nome, descrição, KPI e defaults no momento da criação. O
+  precedente é `ProjectDeliverable`, que copia o `name` do template pela mesma razão: editar
+  o catálogo amanhã não pode reescrever o que foi entregue ontem. O campo é **read-only** no
+  serializer: gravável, abriria um segundo caminho que aponta para o template sem copiar —
+  exatamente o que a cópia existe para impedir.
 - **Sem signal, e isso é deliberado.** A jornada é materializada em `post_save` de `Project`
   porque é igual para todo projeto; o roster de Funcionários Digitais **não é**. A
   instanciação é ação explícita — `POST /projects/{id}/digital-employees/from-blueprint/` —
-  com a vertical do cliente como padrão do formulário.
+  com a vertical do cliente como padrão. A rota mora em `ProjectViewSet` e daí sai a
+  permissão certa de graça: Entrega alcança as ações de detalhe de `project` que não sejam
+  `create`/`destroy`, o objeto ainda passa por `_participates`, e Vendas é barrada.
 - **Acesso: catálogo é global, não de projeto.** Blueprint, variante e vertical seguem o
-  padrão do recurso `service` — leitura para todos, escrita só admin. **Não** entram em
-  `PROJECT_OF`, que só descreve objeto pendurado em projeto. Lembrar que `RolePermission`
-  **nega por padrão**: cada `resource` novo nasce fechado e precisa de política explícita.
-- **Proposta por IA.** `ai.build_opportunity_context` passa a injetar os blueprints
-  aplicáveis ao `tier` e à vertical do cliente, ao lado do bloco de nível de produto que já
-  existe. Sem vertical ou sem blueprint, o comportamento anterior é preservado, e o
-  anti-vazamento segue intacto: só dados desta oportunidade e do catálogo.
-- **Interface.** Tela nova de biblioteca clonando a estrutura de `JourneyConfigPage`
+  padrão do recurso `service` — leitura para todos, escrita só admin — agrupados no conjunto
+  `CATALOG` de `permissions.py`. **Não** entram em `PROJECT_OF`, que só descreve objeto
+  pendurado em projeto. Lembrar que `RolePermission` **nega por padrão**: cada `resource`
+  novo nasce fechado e precisa de política explícita.
+- **Proposta por IA.** `ai.build_opportunity_context` injeta os blueprints aplicáveis — ativos
+  e ou amarrados ao nível vendido ou genéricos —, resolvidos pela vertical do cliente, ao lado
+  do bloco de nível de produto que já existe, com teto de `OPPORTUNITY_BLUEPRINT_LIMIT`
+  blocos, porque catálogo cresce sem limite e prompt que cresce junto é custo por chamada que
+  ninguém pediu. Sem vertical ou sem blueprint, o comportamento anterior é preservado, e o
+  antivazamento segue intacto: só dados desta oportunidade e do catálogo, que é da casa.
+- **Interface.** `BibliotecaPage` (`/biblioteca`) clona a estrutura de `JourneyConfigPage`
   (cartões editáveis em linha, sub-lista, formulário de criação e `ConfirmDialog`),
   registrada em `App.tsx` e no menu de `Layout.tsx` com `["admin"]`, ao lado de `/servicos` e
-  `/jornada` — os dois itens de metodologia já agrupados ali. `api.ts` não muda: recurso CRUD
-  é chamado com `api<T>("/rota/")` direto na página.
-- **Aposentar é desativar.** Blueprint e vertical com instância viva não se excluem: seguem
-  a decisão da FDD 025 e da FDD 011 — `active = False` como saída, e `DELETE` recusado com
-  409 quando houver dependente.
+  `/jornada` — os dois itens de metodologia já agrupados ali. `api.ts` não mudou: recurso CRUD
+  é chamado com `api<T>("/rota/")` direto na página. No detalhe do projeto, "Adicionar da
+  biblioteca" aparece **acima** do formulário livre, e só quando há catálogo — um `<select>`
+  sem opção prometeria um caminho que não existe. A vertical do cliente é editável em
+  Clientes.
+- **Aposentar é desativar.** Blueprint e vertical em uso não se excluem: seguem a decisão da
+  FDD 025 e da FDD 011 — `active = False` como saída, e `DELETE` recusado com 409 quando
+  houver dependente. Na vertical a guarda é a recusa, não só a boa mensagem sobre ela:
+  `Client.vertical` é `SET_NULL`, então o banco aceitaria de bom grado e zeraria o setor de
+  todos os clientes que a tinham, com 204 na tela e nada dizendo o que se perdeu.
 
 ## Aceite
 
 Em **Biblioteca**, o admin cadastra a vertical "Igrejas" e o blueprint "SDR" na área
 Comercial, com o KPI canônico e os valores padrão de horas e ROI; em seguida cria a variante
 de "Igrejas" ajustando a descrição. Em **Clientes**, um cliente recebe a vertical. Ao abrir
-um projeto desse cliente, "Adicionar Funcionário Digital" oferece os blueprints do catálogo
-já filtrados pela vertical do cliente; escolhido um, o Funcionário Digital nasce com nome,
-descrição, KPI e valores padrão preenchidos — não mais um cartão vazio a completar à mão.
+um projeto desse cliente, "Adicionar da biblioteca" oferece os blueprints do catálogo já
+resolvidos pela vertical do cliente, marcando os que têm variante para ela; escolhido um, o
+Funcionário Digital nasce com nome, descrição, KPI e valores padrão preenchidos — não mais um
+cartão vazio a completar à mão.
 Editar o blueprint depois **não** altera os Funcionários Digitais já instanciados. Com IA
 ligada, a proposta gerada para uma oportunidade daquele cliente cita o Funcionário Digital
 concreto, e não apenas o nível de produto.
@@ -124,11 +153,16 @@ concreto, e não apenas o nível de produto.
 Duas variantes do mesmo blueprint na mesma vertical são rejeitadas (400 na API,
 `IntegrityError` no banco). Instanciar copia os campos: alterar o blueprint em seguida não
 muda o `DigitalEmployee` já criado. Blueprint com instância viva não é excluído — a rota
-recusa com 409 e aponta a desativação. O catálogo é legível por qualquer papel autenticado e
-gravável só por admin; um usuário de Entrega que tente criar blueprint recebe 403, e segue
-podendo instanciar dentro dos projetos de que participa. Cliente sem vertical continua
-funcionando: a instanciação oferece o catálogo inteiro e a proposta não inventa um bloco de
-vertical no contexto da IA.
+recusa com 409 e aponta a desativação; vertical com cliente ou variante, idem, e o cliente
+mantém o setor. O catálogo é legível por qualquer papel autenticado, **na lista e no
+detalhe**, e gravável só por admin; um usuário de Entrega que tente criar blueprint recebe
+403, e segue podendo instanciar dentro dos projetos de que participa — em projeto alheio,
+não. Cliente sem vertical continua funcionando: a instanciação oferece o catálogo inteiro com
+os valores genéricos e a proposta não inventa um bloco de vertical no contexto da IA. O
+snapshot do portal do cliente não carrega blueprint, variante nem vertical — só a cópia.
+Testes em `apps/core/tests/test_blueprints.py`, `test_ai.py` e `test_portal.py`; a recusa da
+vertical também em `backend/tests/regression/test_excluir_recusa_em_vez_de_quebrar.py`, porque
+é o primeiro caso do arquivo em que o banco **não** recusaria sozinho.
 
 ## Fora deste recorte
 
@@ -140,7 +174,14 @@ perguntar "o que mudou no SDR desde março".
 **Catálogo exposto ao cliente.** Atravessa a fronteira do portal e revisita a ADR 0003, cujo
 snapshot é por projeto — pede RFC, não uma emenda aqui.
 
-**`BlueprintVariant` como modelo separado vs. JSON no blueprint.** Esta FDD assume o modelo
-separado porque a `UniqueConstraint` por vertical é o que impede duplicata silenciosa, e um
-JSON não a oferece. É decisão duradoura e **pede ADR** na hora de construir, não antes: sem
-uso real, escolher agora seria adivinhar.
+**Semente do catálogo.** Verticais e blueprints não são semeados por migração, ao contrário
+dos três `tier` da `0020`. Os níveis de produto **são** a metodologia; o catálogo é conteúdo
+da casa, e semeá-lo seria inventar produto. A tela nasce com estado vazio e diz o que fazer.
+
+**Agregar Funcionário Digital por área.** `DigitalEmployee.area` segue texto livre, então
+somar entregas por área continua impossível. É problema da FDD 027, que precisa tipar o KPI de
+qualquer forma — fechar a `area` aqui teria custado uma quebra de contrato para entregar meia
+resposta.
+
+**`BlueprintVariant` como modelo separado vs. JSON no blueprint.** Decidido na construção, como
+esta FDD previa: **ADR 0019**, pelo modelo separado.

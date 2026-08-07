@@ -10,7 +10,8 @@ vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, is_admin: true, rol
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active" });
+    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active", vertical: null, vertical_name: "" });
+    if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
     if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 1, client: 1, name: "João", email: "j@x.com", phone: "", job_title: "CEO" }]);
     return Promise.resolve([]);
@@ -66,4 +67,27 @@ test("corrige a situação do cliente e leva o status no PATCH", async () => {
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({
     method: "PATCH", body: expect.stringContaining("\"status\":\"prospect\""),
   })));
+});
+
+
+test("atribui uma vertical ao cliente", async () => {
+  // É ela que escolhe a variante do blueprint quando a entrega instancia um bloco (FDD 026).
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.selectOptions(screen.getByLabelText("Vertical"), "7");
+  await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({
+    method: "PATCH", body: expect.stringContaining("\"vertical\":7"),
+  })));
+});
+
+test("cliente sem vertical continua funcionando", async () => {
+  // Regra da FDD 026: nada exige vertical. Sem ela o catálogo inteiro segue disponível, genérico.
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  expect(screen.getByLabelText("Vertical")).toHaveValue("");
 });

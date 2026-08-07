@@ -8,6 +8,7 @@ from .views import (
     AiMetricsView,
     AnalyticsView,
     ArtifactViewSet,
+    BlueprintVariantViewSet,
     BookingCreateView,
     BookingSlotsView,
     CalendarSyncView,
@@ -15,6 +16,7 @@ from .views import (
     ConfigView,
     ContactViewSet,
     DashboardView,
+    DigitalEmployeeBlueprintViewSet,
     DigitalEmployeeViewSet,
     DocumentViewSet,
     EsignWebhookView,
@@ -44,6 +46,7 @@ from .views import (
     TaskSyncIntakeView,
     TaskViewSet,
     UserViewSet,
+    VerticalViewSet,
     csrf,
 )
 
@@ -68,6 +71,9 @@ router.register("artifacts", ArtifactViewSet)
 router.register("leads", LeadViewSet)
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("services", ServiceViewSet)
+router.register("verticals", VerticalViewSet)
+router.register("digital-employee-blueprints", DigitalEmployeeBlueprintViewSet)
+router.register("blueprint-variants", BlueprintVariantViewSet)
 router.register("users", UserViewSet)
 
 urlpatterns = [

@@ -40,6 +40,27 @@ class User(AbstractUser):
         return self.role == self.Role.ADMIN or self.is_superuser
 
 
+class Vertical(models.Model):
+    """O setor do cliente — o eixo que o domínio não tinha (FDD 026).
+
+    Taxonomia, não enum: é `PipelineStage`/`JourneyPhase` de novo — vocabulário que o admin edita,
+    porque cravar "imobiliária, saúde, telecom" no código repetiria o erro de `DigitalEmployee.area`,
+    que nasceu texto livre e por isso não filtra nem agrega. `active` aposenta sem reescrever
+    histórico: uma vertical inativa some das escolhas novas e continua nos clientes que já a têm.
+    """
+
+    name = models.CharField(max_length=80)
+    slug = models.SlugField(max_length=80, unique=True)
+    position = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Client(TimestampedModel):
     class Status(models.TextChoices):
         PROSPECT = "prospect", "Prospect"
@@ -48,6 +69,11 @@ class Client(TimestampedModel):
     name = models.CharField(max_length=255)
     legal_name = models.CharField(max_length=255, blank=True)
     tax_id = models.CharField(max_length=32, blank=True)
+    # Aditivo e opcional, na forma de `Opportunity.service`: é o que a instanciação de Funcionário
+    # Digital usa como padrão e o que escolhe a variante do blueprint (FDD 026).
+    vertical = models.ForeignKey(
+        Vertical, on_delete=models.SET_NULL, null=True, blank=True, related_name="clients"
+    )
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="owned_clients")
     drive_folder_id = models.CharField(max_length=128, blank=True, default="")
     # Quem cadastra afirma o status (a SPA oferece a escolha); o default é o mais conservador,
@@ -677,6 +703,77 @@ class ProjectDeliverable(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class DigitalEmployeeBlueprint(models.Model):
+    """O catálogo de Funcionários Digitais — o bloco produtizado (FDD 026).
+
+    Global, sem FK para projeto: é o "SDR" que serve imobiliária, saúde e telecom com a mesma
+    espinha. A entrega **instancia** (ver `blueprints.instantiate`), não recria.
+
+    A `area` aqui é fechada, e é o ponto: em `DigitalEmployee` ela é `CharField` livre e por isso
+    não filtra, não agrega e não aparece em consulta nenhuma. Fechá-la lá seria quebrar o contrato
+    `/api/v1/` e o que o snapshot já entrega ao cliente; fechá-la aqui não custa nada, porque o
+    catálogo nasce agora.
+    """
+
+    class Area(models.TextChoices):
+        COMMERCIAL = "comercial", "Comercial"
+        FINANCE = "financeiro", "Financeiro"
+        HR = "rh", "RH"
+        LEGAL = "juridico", "Jurídico"
+        SUPPORT = "atendimento", "Atendimento"
+
+    name = models.CharField(max_length=120)
+    area = models.CharField(max_length=24, choices=Area.choices, default=Area.COMMERCIAL)
+    description = models.TextField(blank=True, default="")
+    kpi_label = models.CharField(max_length=80, blank=True, default="")  # o KPI canônico do bloco
+    default_hours_saved_month = models.DecimalField(max_digits=10, decimal_places=1, default=0)
+    default_roi_month = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Opcional, para sugerir blueprints pelo nível de produto vendido (FDD 015).
+    service = models.ForeignKey(
+        Service, on_delete=models.SET_NULL, null=True, blank=True, related_name="blueprints"
+    )
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["area", "name", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class BlueprintVariant(models.Model):
+    """A parametrização de um blueprint por vertical — é isto que produtiza o bloco (FDD 026).
+
+    Um blueprint, N parametrizações. Campo em branco (ou decimal nulo) **herda** o do blueprint:
+    a variante existe para dizer o que muda, não para repetir o que não muda.
+    """
+
+    blueprint = models.ForeignKey(
+        DigitalEmployeeBlueprint, on_delete=models.CASCADE, related_name="variants"
+    )
+    vertical = models.ForeignKey(Vertical, on_delete=models.PROTECT, related_name="variants")
+    description = models.TextField(blank=True, default="")
+    kpi_label = models.CharField(max_length=80, blank=True, default="")
+    default_hours_saved_month = models.DecimalField(
+        max_digits=10, decimal_places=1, null=True, blank=True
+    )
+    default_roi_month = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ["vertical__position", "id"]
+        constraints = [
+            # Duas parametrizações do mesmo bloco para o mesmo setor não é configuração, é
+            # ambiguidade: `resolve()` não saberia qual aplicar. Mesma forma de invariante que
+            # `one_won_pipeline_stage` e `one_active_service_per_tier`.
+            models.UniqueConstraint(
+                fields=["blueprint", "vertical"], name="unique_blueprint_variant"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.blueprint.name} — {self.vertical.name}"
+
+
 class DigitalEmployee(TimestampedModel):
     """Funcionário Digital — o agente de IA entregue ao cliente (o produto central).
 
@@ -690,6 +787,13 @@ class DigitalEmployee(TimestampedModel):
         PAUSED = "paused", "Pausado"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="digital_employees")
+    # Procedência, não referência viva: os valores foram **copiados** do catálogo na instanciação
+    # (FDD 026). `SET_NULL` porque saber de onde veio não pode impedir o catálogo de mudar — e a
+    # cópia é justamente o que garante que mudá-lo não reescreve o que foi entregue.
+    blueprint = models.ForeignKey(
+        DigitalEmployeeBlueprint, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="instances",
+    )
     name = models.CharField(max_length=120)
     area = models.CharField(max_length=80, blank=True, default="")  # Financeiro, Atendimento…
     description = models.TextField(blank=True, default="")  # o que o funcionário digital faz

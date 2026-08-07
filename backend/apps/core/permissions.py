@@ -21,6 +21,11 @@ from .models import (
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
+# Catálogos globais: leitura para todo autenticado, escrita só de admin. Não são de projeto e por
+# isso não entram em `PROJECT_OF` — o objeto não pendura em lugar nenhum, é config da casa.
+# `blueprint` cobre o bloco e a variante dele, como `journey` cobre a fase e o entregável.
+CATALOG = {"service", "vertical", "blueprint"}
+
 # Recursos que vivem dentro de um projeto: a permissão de objeto deles é uma pergunta só —
 # a pessoa participa do projeto? O caminho até o projeto varia por modelo.
 PROJECT_OF = {
@@ -52,7 +57,7 @@ class RolePermission(BasePermission):
         if request.user.is_admin_role:
             return True
         resource = getattr(view, "resource", "")
-        if resource == "service":  # catálogo: leitura para todos, escrita só admin
+        if resource in CATALOG:
             return request.method in SAFE_METHODS
         if request.user.role == User.Role.SALES:
             if resource in {"project", "project_phase", "project_deliverable",
@@ -83,6 +88,12 @@ class RolePermission(BasePermission):
                 return request.method in SAFE_METHODS
             return True
         if request.user.role == User.Role.DELIVERY:
+            # Catálogo global não é objeto de projeto e cairia no `return False` do fim — a Entrega
+            # lia a lista e tomava 403 no detalhe. Já valia para `/services/{id}/` e só não
+            # aparecia porque a tela de Serviços usa a listagem; com a Biblioteca (FDD 026) o
+            # detalhe passa a ser caminho de verdade, porque é dela que sai a instanciação.
+            if getattr(view, "resource", "") in CATALOG:
+                return request.method in SAFE_METHODS
             if getattr(view, "resource", "") in {"client", "contact"}:
                 return request.method in SAFE_METHODS
             if isinstance(obj, Opportunity):

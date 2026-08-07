@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 import pytest
@@ -6,10 +7,11 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core import journey, portal
+from apps.core import blueprints, journey, portal
 from apps.core.models import (
     AppSetting,
     DigitalEmployee,
+    DigitalEmployeeBlueprint,
     Document,
     Meeting,
     Milestone,
@@ -17,9 +19,10 @@ from apps.core.models import (
     Project,
     ProjectDeliverable,
     ProjectPhase,
+    Vertical,
 )
 
-from .factories import ProjectFactory
+from .factories import ClientFactory, ProjectFactory
 
 
 def _milestone(project: Project, status: str = Milestone.Status.TODO, days: int = 5) -> Milestone:
@@ -124,6 +127,27 @@ def test_build_snapshot_projects_journey_and_roi() -> None:
     refreshed = portal.build_snapshot(project)
     assert refreshed["digital_employees"][0]["name"] == "Agente Financeiro"
     assert refreshed["digital_employees"][0]["roi_month"] == 14000.0
+
+
+@pytest.mark.django_db
+def test_snapshot_does_not_carry_the_internal_catalog() -> None:
+    """O catálogo não cruza a fronteira do cliente — está em "Fora deste recorte" da FDD 026.
+
+    O que o cliente vê é o Funcionário Digital dele, que a instanciação já **copiou**. Mandar junto
+    o blueprint, a variante ou a vertical seria expor a biblioteca interna — e revisitar a ADR 0003,
+    cujo snapshot é por projeto. Isso pede RFC, não uma emenda no `build_snapshot`.
+    """
+    vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
+    project = ProjectFactory(client=ClientFactory(vertical=vertical))
+    blueprint = DigitalEmployeeBlueprint.objects.create(name="SDR", description="Interno.")
+    blueprints.instantiate(project, blueprint, vertical)
+
+    snapshot = portal.build_snapshot(project)
+
+    assert snapshot["digital_employees"][0]["name"] == "SDR"  # a cópia, sim
+    serializado = json.dumps(snapshot, default=str)
+    for chave in ("blueprint", "variant", "vertical", "Igrejas"):
+        assert chave not in serializado
 
 
 @pytest.mark.django_db  # `emit` passou a consultar a flag, que lê o override em `AppSetting`
