@@ -507,3 +507,88 @@ curl -s -X DELETE localhost:19025/api/v1/messages
 
 O documento criado no sandbox **também sai**: a mutation `deleteDocument(id:)` do Autentique
 aceita o `document_ref` guardado na `SignatureRequest`. Sandbox não é motivo para deixar lixo.
+
+---
+
+## 5. Pagamentos (Stripe) — **pendente**
+
+**Esta seção é roteiro, não relato.** As quatro rodadas acima aconteceram; esta ainda não. O
+adaptador do Stripe foi escrito seguindo o molde já provado do e-sign, mas nenhuma linha dele falou
+com o fornecedor de verdade. As quatro rodadas anteriores acharam defeito — **cada uma** —, e três
+acharam a mesma classe: linha gravada como se o fornecedor tivesse aceitado, sem ele ter aceitado.
+Não há razão para supor que esta seja diferente.
+
+**Variáveis:** `PAYMENTS_ENABLED=true`, `PAYMENTS_PROVIDER=stripe`, `PAYMENTS_API_TOKEN`
+(**`sk_test_…`**, nunca a chave de produção) e `PAYMENTS_WEBHOOK_SECRET` (`whsec_…`).
+
+> **Nada aqui alcança pessoa nenhuma** se o cliente de teste for criado com e-mail `@exemplo.test`
+> e o Stripe estiver em modo de teste — ele não envia e-mail de fatura em `sk_test_`. Confirme o
+> modo pela sonda antes de qualquer coisa: ela diz `modo teste` ou `modo produção`, e essa é
+> metade da razão de ela existir.
+
+### Sondar antes de emitir
+
+```bash
+docker compose exec api uv run python manage.py check_integrations --all
+# OK  Gateway de pagamento   chave válida, modo teste
+```
+
+`GET /v1/balance`: leitura pura, sem custo, sem efeito colateral — a regra da FDD 024. Se disser
+`modo produção`, **pare**: a chave está errada e a próxima chamada cria cobrança de verdade.
+
+### Ligar
+
+```bash
+docker compose exec api uv run python manage.py shell -c \
+  "from apps.core import flags; print(flags.status('payments'))"
+# {'key': 'payments', 'enabled': True, 'configured': True, 'missing': [], ...}
+```
+
+Sem `PAYMENTS_PROVIDER`, `missing` vem **vazio** e a integração fica ligada: é o `NullProvider`, e
+é modo previsto. Com `stripe` nomeado e sem token, `missing` deve listar
+`PAYMENTS_API_TOKEN`/`PAYMENTS_WEBHOOK_SECRET` — confira isso antes de preencher, porque é a única
+forma de saber que a exigência dinâmica está funcionando.
+
+### O que exercitar — pela API, não pelo olho
+
+| Superfície | Gatilho | O que confirmar |
+| --- | --- | --- |
+| Emissão | `POST /api/v1/invoices/{id}/issue/` | volta 200 com `number`, `external_reference` (`in_…`) e `payment_url`; a fatura aparece no painel do Stripe como **finalizada** |
+| Cliente reusado | emitir **duas** faturas do mesmo cliente | o segundo `issue` **não** cria outro `Customer`; `Client.payment_customer_ref` é o mesmo |
+| Centavos | fatura de `R$ 18,99` | o Stripe mostra **1899**, não 1898 |
+| Fatura já vencida | `due_date` no passado | o `days_until_due` vai como `0` e o Stripe aceita (negativo daria 400) |
+| Baixa por webhook | pagar pela `hosted_invoice_url` com o cartão de teste `4242 4242 4242 4242` | a fatura vira `paga` sozinha, **com a data do provedor** |
+| Idempotência | reenviar o evento pelo painel ("Resend") | `paid_at` **não** muda |
+| Dois eventos | `invoice.paid` + `invoice.payment_succeeded` | uma baixa só |
+| Cancelamento no fornecedor | "Void invoice" no painel | a fatura vira `cancelada` aqui, com o motivo |
+| Duplo clique | `issue` duas vezes seguidas | 409 na segunda; e no Stripe **uma** fatura, pelo `Idempotency-Key` |
+
+### Provocar as falhas
+
+```bash
+# 1. Fornecedor mudo: token válido, base inalcançável. A emissão tem de dar 502 e a fatura
+#    continuar em RASCUNHO, sem número e sem carimbo. Se ela ficar "emitida" sem link, é a
+#    quarta encarnação do defeito das rodadas 1, 3 e 4.
+docker compose exec -e PAYMENTS_API_BASE=https://127.0.0.1:9 api \
+  uv run python manage.py shell -c "..."
+
+# 2. HMAC falso: mesmo corpo, outro segredo → 401 e nada muda.
+# 3. Carimbo velho: assinatura correta com `t` de uma hora atrás → 401 (a tolerância é 300s).
+# 4. Rotação de segredo: header com dois `v1`, um velho e um novo → **passa**.
+```
+
+Os itens 2, 3 e 4 já têm regressão automatizada
+(`tests/regression/test_webhook_de_pagamento_e_idempotente.py`); rodá-los contra o painel confirma
+que o formato real do header bate com o que o teste supõe — que é exatamente o tipo de coisa em que
+o dublê mente.
+
+### Limpar
+
+```bash
+docker compose exec api uv run python manage.py shell -c \
+  "from apps.core.models import AppSetting; AppSetting.objects.filter(key='payments').delete()"
+```
+
+No painel do Stripe em modo de teste, apague o `Customer` criado — os `invoiceitems` e as faturas
+saem junto. Modo de teste não é motivo para deixar lixo, e um `Customer` órfão com
+`metadata[client_id]` apontando para um id que não existe mais confunde a próxima rodada.

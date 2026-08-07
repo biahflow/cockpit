@@ -11,6 +11,7 @@ import { ClientsPage } from "./pages/ClientsPage";
 import { CommercialPage } from "./pages/CommercialPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { FinanceiroPage } from "./pages/FinanceiroPage";
 import { IndicadoresPage } from "./pages/IndicadoresPage";
 import { JourneyConfigPage } from "./pages/JourneyConfigPage";
 import { LeadsPage } from "./pages/LeadsPage";
@@ -30,6 +31,7 @@ function resolvePage(path: string): ReactNode {
   if (path === "/cases") return <CasesPage />;
   if (path === "/leads") return <LeadsPage />;
   if (path === "/indicadores") return <IndicadoresPage />;
+  if (path === "/financeiro") return <FinanceiroPage />;
   if (path === "/servicos") return <ServicesPage />;
   if (path === "/documentos") return <DocumentsPage />;
   if (path === "/equipe") return <TeamPage />;

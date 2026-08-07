@@ -403,3 +403,13 @@ def _registrando(destino: list[str]):  # type: ignore[no-untyped-def]
         destino.append(nome)
 
     return call_command_falso
+
+
+def test_a_tabela_marca_vencidas_antes_do_digest() -> None:
+    """A ordem é o ponto: quem lê o dia precisa achar o vencimento apurado, não a apurar (FDD 028)."""
+    with override_settings(SCHEDULER_INVOICES_AT="06:00", SCHEDULER_DIGEST_AT="07:30"):
+        tabela = {job.name: job for job in scheduler.jobs()}
+
+    assert tabela["invoices_overdue"].command == "mark_overdue_invoices"
+    assert tabela["invoices_overdue"].schedule == scheduler.Daily(time(6, 0))
+    assert tabela["invoices_overdue"].schedule.at < tabela["digest"].schedule.at

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models.signals import post_delete, post_save
+from django.db.models import ProtectedError
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
 from . import cases, journey, notifications, portal, tasksync
@@ -12,6 +13,7 @@ from .models import (
     Client,
     DigitalEmployee,
     Document,
+    Invoice,
     Lead,
     Meeting,
     Milestone,
@@ -194,4 +196,27 @@ def _promote_client_on_won(sender: type[Opportunity], instance: Opportunity, **k
     if instance.is_won:
         Client.objects.filter(pk=instance.client_id, status=Client.Status.PROSPECT).update(
             status=Client.Status.ACTIVE
+        )
+
+
+@receiver(pre_delete, sender=Invoice)
+def _refuse_deleting_issued_invoice(sender: type[Invoice], instance: Invoice, **kwargs: Any) -> None:
+    """A parede, atrás da boa mensagem (FDD 028, ADR 0021).
+
+    `InvoiceViewSet.perform_destroy` já recusa com 409 e aponta o cancelamento — é ele que
+    **explica**. Isto aqui existe para os caminhos que não passam pela viewset: shell, migração de
+    dados, um `queryset.delete()` em cascata que alguém escreveu sem pensar na fatura. A mesma
+    divisão de trabalho que a casa mantém entre `perform_destroy` e a rede de `ProtectedError` do
+    `api_exception_handler`: a view diz o que fazer, a camada de baixo garante que não aconteça.
+    """
+    if instance.status != Invoice.Status.DRAFT:
+        # `ProtectedError` e não uma exceção nova: o `api_exception_handler` já a traduz para 409
+        # (FDD 025), então até um caminho que escape da viewset responde com o status certo em vez
+        # de 500. Reusar a rede existente é o ponto — uma exceção própria precisaria de mais um
+        # ramo no handler para dizer a mesma coisa.
+        raise ProtectedError(
+            f"A fatura {instance.number or instance.pk} está "
+            f"{instance.get_status_display().lower()} e não pode ser apagada. "
+            "Registro financeiro cancela-se; não se apaga.",
+            {instance},
         )

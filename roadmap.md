@@ -287,11 +287,35 @@ um radar que ele respeita.
       preenchida com zero. De carona, a regressão achou um vazamento que a análise não tinha
       localizado: apagar `client_name` não bastava, porque o título congelado é "Cliente —
       Projeto". Ver FDD 027 e ADR 0020.
-- [ ] **Contas a receber e cobrança relacional — Fase 7.** Não há domínio financeiro: nenhum
-      dos modelos de `apps/core` registra fatura, vencimento ou pagamento, de modo que **a
-      inadimplência é hoje imensurável**. O passo zero é medir, não modelar. E o maior risco
-      é a colisão de verdade sobre receita — `Project.actual_value` alimenta o ROI que **já
-      vai à tela do cliente**. Ver RFC 0004 e FDD 028.
+- [~] **Contas a receber e cobrança relacional — Fase 7.** Duas das seis camadas da RFC 0004:
+      a **fatura** e a **reconciliação**. Não havia domínio financeiro — nenhum modelo de
+      `apps/core` registrava vencimento ou pagamento —, então a inadimplência era literalmente
+      **imensurável**. Agora existe `Invoice`, com estado próprio, tela **Financeiro** e os três
+      totais que respondem quem deve o quê e desde quando; a conversão de oportunidade **semeia
+      o cronograma de cobrança em rascunho** pelo nível de produto, alinhado aos mesmos
+      deslocamentos dos marcos do kickoff, e o vencimento é apurado por trabalho agendado às
+      06:00 — antes do digest, para quem lê o dia achar o estado pronto. **Emitir é ato**, nunca
+      débito automático. A colisão de verdade sobre receita — o maior risco que a RFC declarava —
+      foi resolvida por decisão explícita e **protegida por regressão**: `actual_value` é o valor
+      contratado, faturas pagas são o recebido, e um teste diferencial exige que os seis leitores
+      de ROI (incluindo o bloco que já vai à tela do cliente) devolvam **exatamente** o mesmo
+      antes e depois de as faturas existirem. Nasce a **ADR 0021**, porque a fatura é o primeiro
+      registro da casa que nem arquiva nem apaga: contraria a regra transversal da FDD 025, e a
+      invariante ficou em quatro camadas — 409 que aponta o cancelamento, `pre_delete` para o
+      que escapa da viewset, e uma `CheckConstraint` que mantém `archived_at` nulo para sempre,
+      porque `ArchiveModelViewSet` é o reflexo de toda viewset nova e arquivar um recebível é
+      **pior que apagá-lo** (some do total em aberto sem ninguém ter decidido nada). Do lado do
+      gateway, o Stripe entra atrás de flag no molde já provado do e-sign, com webhook assinado,
+      tolerância de carimbo e a sonda que diz se a chave é de teste ou de produção — e com uma
+      divergência deliberada em relação ao molde: `apply_event` **consulta o mapa de transições**,
+      porque só a igualdade de status deixaria um pagamento ressuscitar fatura cancelada. A
+      escolha da API de Invoices em vez de Checkout Session foi decidida por um fato: a sessão
+      **expira em 24 h**, e um link para uma fatura de quinze dias morre antes de o cliente abrir.
+      **O Stripe não foi homologado** — o roteiro existe (runbook, seção 5), a rodada não. As
+      quatro rodadas anteriores acharam defeito cada uma. Ficam de fora, e nomeadas: a régua de
+      cobrança e a IA de tom (camadas 3 e 4 — cobrar antes de reconciliar produz um agente que
+      importuna quem já pagou), a nota de crédito, a NFS-e e **trocar a fonte do ROI**, que segue
+      pedindo ADR próprio. Ver RFC 0004, FDD 028 e ADR 0021.
 - [ ] **Base de conhecimento interna e frescor — Fase 8.** O KB voltado ao cliente **já
       existe** no repositório do portal; o interno não: aqui não há recuperação de conteúdo, e
       `build_project_context` passa documentos só como nomes. Frescor com dono por área e

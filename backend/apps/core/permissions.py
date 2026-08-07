@@ -67,8 +67,12 @@ class RolePermission(BasePermission):
             # `case` só-leitura para Vendas: quem mais usa o case é o comercial, e ainda assim
             # revisar, consentir e publicar são atos de admin — é ele que carrega a
             # responsabilidade pelo que a casa afirma sobre um cliente (FDD 027).
+            # `invoice` só-leitura para Vendas (FDD 028): quem acompanha o recebível do próprio
+            # cliente é o comercial, mas emitir, baixar e cancelar são atos de admin — é dinheiro,
+            # e a responsabilidade por afirmar que ele entrou não se delega.
             if resource in {"project", "project_phase", "project_deliverable",
-                            "digital_employee", "project_member", "risk", "health", "case"}:
+                            "digital_employee", "project_member", "risk", "health", "case",
+                            "invoice"}:
                 return request.method in SAFE_METHODS
             return resource in {"client", "contact", "opportunity", "document", "lead",
                                 "analytics", "artifact"}
@@ -82,6 +86,11 @@ class RolePermission(BasePermission):
             # próximos passos, avançar fase) também são POST e precisam continuar passando.
             if resource == "project":
                 return getattr(view, "action", None) not in {"create", "destroy"}
+            # `invoice` **não aparece em nenhum dos dois conjuntos**, e é assim que a FDD 028 pede:
+            # a Entrega não alcança rota de fatura nenhuma, nem de leitura, nem em projeto de que
+            # participa. Quem produz o 403 é o `return False` abaixo — o mesmo mecanismo que fecha
+            # `lead` e `analytics`, e a melhor propriedade deste modelo de permissão: recurso novo
+            # nasce fechado sem uma linha de código.
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
                                 "pendencia", "project_phase", "project_deliverable",
                                 "digital_employee", "artifact"}

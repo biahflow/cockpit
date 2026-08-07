@@ -1935,6 +1935,324 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/v1/invoices/:
+    get:
+      operationId: v1_invoices_list
+      description: |-
+        Contas a receber (FDD 028, camada 0 da RFC 0004).
+
+        **Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, e as duas ausências são a entrega.**
+
+        Não arquiva porque registro financeiro emitido não se apaga nem se esconde: cancela-se, e a
+        linha sobrevive ao próprio cancelamento (ADR 0021). Arquivar seria pior que apagar — some da
+        lista sem desfazer o fato, e um recebível que sai do total em aberto em silêncio é o defeito
+        que este recurso existe para não ter.
+
+        Não é escopado por projeto porque dado financeiro não pertence ao recorte de projeto: a Entrega
+        não alcança fatura nenhuma, nem de leitura, nem em projeto de que participa — o que quem passar
+        por aqui vai querer "consertar" achando que é esquecimento. Não é.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+          description: ''
+    post:
+      operationId: v1_invoices_create
+      description: |-
+        Contas a receber (FDD 028, camada 0 da RFC 0004).
+
+        **Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, e as duas ausências são a entrega.**
+
+        Não arquiva porque registro financeiro emitido não se apaga nem se esconde: cancela-se, e a
+        linha sobrevive ao próprio cancelamento (ADR 0021). Arquivar seria pior que apagar — some da
+        lista sem desfazer o fato, e um recebível que sai do total em aberto em silêncio é o defeito
+        que este recurso existe para não ter.
+
+        Não é escopado por projeto porque dado financeiro não pertence ao recorte de projeto: a Entrega
+        não alcança fatura nenhuma, nem de leitura, nem em projeto de que participa — o que quem passar
+        por aqui vai querer "consertar" achando que é esquecimento. Não é.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+  /api/v1/invoices/{id}/:
+    get:
+      operationId: v1_invoices_retrieve
+      description: |-
+        Contas a receber (FDD 028, camada 0 da RFC 0004).
+
+        **Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, e as duas ausências são a entrega.**
+
+        Não arquiva porque registro financeiro emitido não se apaga nem se esconde: cancela-se, e a
+        linha sobrevive ao próprio cancelamento (ADR 0021). Arquivar seria pior que apagar — some da
+        lista sem desfazer o fato, e um recebível que sai do total em aberto em silêncio é o defeito
+        que este recurso existe para não ter.
+
+        Não é escopado por projeto porque dado financeiro não pertence ao recorte de projeto: a Entrega
+        não alcança fatura nenhuma, nem de leitura, nem em projeto de que participa — o que quem passar
+        por aqui vai querer "consertar" achando que é esquecimento. Não é.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+    put:
+      operationId: v1_invoices_update
+      description: |-
+        Contas a receber (FDD 028, camada 0 da RFC 0004).
+
+        **Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, e as duas ausências são a entrega.**
+
+        Não arquiva porque registro financeiro emitido não se apaga nem se esconde: cancela-se, e a
+        linha sobrevive ao próprio cancelamento (ADR 0021). Arquivar seria pior que apagar — some da
+        lista sem desfazer o fato, e um recebível que sai do total em aberto em silêncio é o defeito
+        que este recurso existe para não ter.
+
+        Não é escopado por projeto porque dado financeiro não pertence ao recorte de projeto: a Entrega
+        não alcança fatura nenhuma, nem de leitura, nem em projeto de que participa — o que quem passar
+        por aqui vai querer "consertar" achando que é esquecimento. Não é.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+    patch:
+      operationId: v1_invoices_partial_update
+      description: |-
+        Contas a receber (FDD 028, camada 0 da RFC 0004).
+
+        **Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, e as duas ausências são a entrega.**
+
+        Não arquiva porque registro financeiro emitido não se apaga nem se esconde: cancela-se, e a
+        linha sobrevive ao próprio cancelamento (ADR 0021). Arquivar seria pior que apagar — some da
+        lista sem desfazer o fato, e um recebível que sai do total em aberto em silêncio é o defeito
+        que este recurso existe para não ter.
+
+        Não é escopado por projeto porque dado financeiro não pertence ao recorte de projeto: a Entrega
+        não alcança fatura nenhuma, nem de leitura, nem em projeto de que participa — o que quem passar
+        por aqui vai querer "consertar" achando que é esquecimento. Não é.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedInvoice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedInvoice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedInvoice'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+    delete:
+      operationId: v1_invoices_destroy
+      description: |-
+        Contas a receber (FDD 028, camada 0 da RFC 0004).
+
+        **Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, e as duas ausências são a entrega.**
+
+        Não arquiva porque registro financeiro emitido não se apaga nem se esconde: cancela-se, e a
+        linha sobrevive ao próprio cancelamento (ADR 0021). Arquivar seria pior que apagar — some da
+        lista sem desfazer o fato, e um recebível que sai do total em aberto em silêncio é o defeito
+        que este recurso existe para não ter.
+
+        Não é escopado por projeto porque dado financeiro não pertence ao recorte de projeto: a Entrega
+        não alcança fatura nenhuma, nem de leitura, nem em projeto de que participa — o que quem passar
+        por aqui vai querer "consertar" achando que é esquecimento. Não é.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/invoices/{id}/cancel/:
+    post:
+      operationId: v1_invoices_cancel_create
+      description: |-
+        Cancela com motivo obrigatório (admin) — a saída que substitui apagar e arquivar.
+
+        O motivo é exigido porque cancelamento de recebível sem justificativa é o começo do
+        recebível que estraga invisível: a RFC 0004 já registra que "recuar precisa ser declarado".
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+  /api/v1/invoices/{id}/issue/:
+    post:
+      operationId: v1_invoices_issue_create
+      description: |-
+        Emite: pede a cobrança ao gateway e **só então** numera e carimba (admin).
+
+        A ordem é a lição que a FDD 024 aprendeu quatro vezes. A chamada de rede acontece **fora**
+        da transação — segurar um `select_for_update` durante um round-trip ao Stripe esgota o pool
+        de conexões —, e a fatura só muda de estado depois de o fornecedor confirmar. Fornecedor
+        fora do ar deixa a fatura em rascunho, sem número e sem carimbo, e devolve 502.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+  /api/v1/invoices/{id}/mark-paid/:
+    post:
+      operationId: v1_invoices_mark_paid_create
+      description: |-
+        Baixa manual (admin) — e, sem gateway configurado, o **único** caminho de baixa.
+
+        É a gêmea do `mark-signed` do documento, e a FDD 028 pede que isso seja dito em voz alta
+        em vez de descoberto: quem não tem `PAYMENTS_PROVIDER` opera a camada 0 inteira por aqui.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+          description: ''
+  /api/v1/invoices/summary/:
+    get:
+      operationId: v1_invoices_summary_retrieve
+      description: |-
+        Os três totais da tela, numa consulta agregada só.
+
+        Agregado no banco e não em laço de Python porque este endpoint entra na mesma disciplina
+        do gate de custo de query da ADR 0014: o custo não pode crescer com a base.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceSummary'
+          description: ''
   /api/v1/journey-phases/:
     get:
       operationId: v1_journey_phases_list
@@ -3172,6 +3490,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/payments/webhook/:
+    post:
+      operationId: v1_payments_webhook_create
+      description: |-
+        Entrada do gateway de pagamento (FDD 028). Autentica pela assinatura do corpo cru.
+
+        Gêmea da `EsignWebhookView`, com duas diferenças que não são estilo:
+
+        - **Loga a recusa.** Com `PAYMENTS_ENABLED=true` e nenhum provedor, o `NullProvider.verify`
+          responde `False` para sempre e o endpoint 401 até o Stripe desistir. É o comportamento certo
+          e é indiagnosticável sem esta linha.
+        - **Teto de requisição cinco vezes maior** (`payments_webhook`), porque um 429 aqui vira
+          backoff de dias do lado do fornecedor — e conciliação atrasada é o que faz cobrança
+          importunar quem já pagou.
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
           description: ''
   /api/v1/pendencias/:
     get:
@@ -6062,6 +6405,189 @@ components:
       - expires_at
       - id
       - role
+    Invoice:
+      type: object
+      description: |-
+        A fatura (FDD 028).
+
+        Duas travas que valem ser lidas juntas, porque a diferença entre elas é deliberada.
+
+        **A do estado** é o mapa `INVOICE_TRANSITIONS` mais um segundo degrau que aponta a ação certa.
+        O primeiro devolve o 400 de `paga → emitida`; o segundo existe porque emitir, baixar e cancelar
+        são **atos com autor e carimbo** — um `PATCH status=paid` não carrega nem a data do provedor nem
+        quem baixou, e aceitar isso produziria uma baixa sem procedência.
+
+        **A dos campos** é um erro alto, e não o descarte silencioso que o `CaseSerializer` escolheu
+        para a fotografia do case. Lá ninguém *queria* escrever `health_snapshot`; aqui, quem digita um
+        novo `amount` numa fatura emitida **quis** — e um 200 que joga fora uma edição de dinheiro é o
+        pior modo de falha disponível.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        client_name:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          nullable: true
+        project_name:
+          type: string
+          readOnly: true
+          default: ''
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+          default: ''
+        number:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        description:
+          type: string
+          maxLength: 255
+        due_date:
+          type: string
+          format: date
+        method:
+          oneOf:
+          - $ref: '#/components/schemas/MethodEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        method_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/InvoiceStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        is_overdue:
+          type: boolean
+          readOnly: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        issued_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        settled_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        provider:
+          type: string
+          readOnly: true
+        external_reference:
+          type: string
+          readOnly: true
+        payment_url:
+          type: string
+          format: uri
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - cancel_reason
+      - cancelled_at
+      - cancelled_by
+      - client
+      - client_name
+      - created_at
+      - due_date
+      - external_reference
+      - id
+      - is_overdue
+      - issued_at
+      - issued_by
+      - method_display
+      - number
+      - paid_at
+      - payment_url
+      - project_name
+      - provider
+      - service_name
+      - settled_by
+      - status_display
+      - updated_at
+    InvoiceStatusEnum:
+      enum:
+      - draft
+      - issued
+      - paid
+      - overdue
+      - renegotiated
+      - cancelled
+      type: string
+      description: |-
+        * `draft` - Rascunho
+        * `issued` - Emitida
+        * `paid` - Paga
+        * `overdue` - Vencida
+        * `renegotiated` - Renegociada
+        * `cancelled` - Cancelada
+    InvoiceSummary:
+      type: object
+      properties:
+        open:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        overdue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        paid:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        open_count:
+          type: integer
+        overdue_count:
+          type: integer
+        paid_count:
+          type: integer
+      required:
+      - open
+      - open_count
+      - overdue
+      - overdue_count
+      - paid
+      - paid_count
     JourneyPhase:
       type: object
       description: Fase do template da Jornada de Transformação (config admin, vocabulário
@@ -6316,6 +6842,20 @@ components:
       description: |-
         * `scheduled` - Agendada
         * `held` - Realizada
+    MethodEnum:
+      enum:
+      - pix
+      - boleto
+      - card
+      - transfer
+      - other
+      type: string
+      description: |-
+        * `pix` - Pix
+        * `boleto` - Boleto
+        * `card` - Cartão
+        * `transfer` - Transferência
+        * `other` - Outro
     Milestone:
       type: object
       properties:
@@ -6879,6 +7419,121 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureRequest'
+          readOnly: true
+    PatchedInvoice:
+      type: object
+      description: |-
+        A fatura (FDD 028).
+
+        Duas travas que valem ser lidas juntas, porque a diferença entre elas é deliberada.
+
+        **A do estado** é o mapa `INVOICE_TRANSITIONS` mais um segundo degrau que aponta a ação certa.
+        O primeiro devolve o 400 de `paga → emitida`; o segundo existe porque emitir, baixar e cancelar
+        são **atos com autor e carimbo** — um `PATCH status=paid` não carrega nem a data do provedor nem
+        quem baixou, e aceitar isso produziria uma baixa sem procedência.
+
+        **A dos campos** é um erro alto, e não o descarte silencioso que o `CaseSerializer` escolheu
+        para a fotografia do case. Lá ninguém *queria* escrever `health_snapshot`; aqui, quem digita um
+        novo `amount` numa fatura emitida **quis** — e um 200 que joga fora uma edição de dinheiro é o
+        pior modo de falha disponível.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        client_name:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          nullable: true
+        project_name:
+          type: string
+          readOnly: true
+          default: ''
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+          default: ''
+        number:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        description:
+          type: string
+          maxLength: 255
+        due_date:
+          type: string
+          format: date
+        method:
+          oneOf:
+          - $ref: '#/components/schemas/MethodEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        method_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/InvoiceStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        is_overdue:
+          type: boolean
+          readOnly: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        issued_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        settled_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        cancel_reason:
+          type: string
+          readOnly: true
+        provider:
+          type: string
+          readOnly: true
+        external_reference:
+          type: string
+          readOnly: true
+        payment_url:
+          type: string
+          format: uri
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
           readOnly: true
     PatchedJourneyPhase:
       type: object

@@ -94,6 +94,17 @@ def _probe_esign() -> tuple[bool, str]:
     return ping()
 
 
+def _probe_payments() -> tuple[bool, str]:
+    """Consulta o saldo no gateway: leitura pura, sem custo e sem criar cobrança nenhuma."""
+    from . import payments
+
+    provider = payments.get_provider()
+    ping = getattr(provider, "ping", None)
+    if ping is None:
+        return True, f"{settings.PAYMENTS_PROVIDER or 'nenhum provedor'}: {NAO_SONDAVEL}"
+    return ping()
+
+
 def _probe_email() -> tuple[bool, str]:
     """Abre e fecha a conexão SMTP. Não envia nada — sonda que manda e-mail vira spam diário."""
     from django.core.mail import get_connection
@@ -122,6 +133,7 @@ PROBES = {
     "drive": _probe_drive,
     "calendar": _probe_calendar,
     "esign": _probe_esign,
+    "payments": _probe_payments,
     "email": _probe_email,
     "tasksync": _probe_tasksync,
     "portal": _probe_portal,

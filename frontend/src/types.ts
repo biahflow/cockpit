@@ -104,3 +104,12 @@ export type CaseMetric = { employee_id: number; blueprint_id: number | null; nam
 export type CaseHealthSnapshot = { score: number; level: string; signals: { label: string; detail: string; weight: number }[] };
 export type CaseRoiSnapshot = { revenue: string; cost: string; roi: number | null };
 export type Case = { id: number; project: number; project_name: string; title: string; summary: string; vertical: number | null; vertical_name: string; client_name: string; metrics: CaseMetric[]; health_snapshot: CaseHealthSnapshot; roi_snapshot: CaseRoiSnapshot; status: CaseStatus; status_display: string; published_at: string | null; client_consent: boolean; consent_recorded_at: string | null; consent_recorded_by: number | null; anonymized: boolean; created_at: string; updated_at: string };
+
+// Contas a receber (FDD 028). Valores em `string` porque é assim que o DRF serializa `DecimalField`
+// — converter para `number` aqui perderia centavos em valores grandes, que é o oposto do objetivo.
+// `is_overdue` é derivado no backend e não é `status === "overdue"`: o estado só vira `overdue` no
+// job das 06:00, e entre a virada do dia e ele a tela precisa dizer a verdade.
+export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "renegotiated" | "cancelled";
+export type InvoiceMethod = "pix" | "boleto" | "card" | "transfer" | "other" | "";
+export type Invoice = { id: number; client: number; client_name: string; project: number | null; project_name: string; service: number | null; service_name: string; number: string; amount: string; description: string; due_date: string; method: InvoiceMethod; method_display: string; status: InvoiceStatus; status_display: string; is_overdue: boolean; issued_at: string | null; issued_by: number | null; paid_at: string | null; settled_by: number | null; cancelled_at: string | null; cancelled_by: number | null; cancel_reason: string; provider: string; external_reference: string; payment_url: string; created_at: string; updated_at: string };
+export type InvoiceSummary = { open: string; overdue: string; paid: string; open_count: number; overdue_count: number; paid_count: number };

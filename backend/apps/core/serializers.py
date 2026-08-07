@@ -17,6 +17,7 @@ from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
     CASE_TRANSITIONS,
+    INVOICE_TRANSITIONS,
     Artifact,
     BlueprintVariant,
     Case,
@@ -26,6 +27,7 @@ from .models import (
     DigitalEmployeeBlueprint,
     Document,
     Invitation,
+    Invoice,
     JourneyPhase,
     Lead,
     Meeting,
@@ -612,6 +614,89 @@ class CaseSerializer(serializers.ModelSerializer[Case]):
             raise serializers.ValidationError(
                 {"status": "Registre o consentimento do cliente antes de publicar o case."}
             )
+        return attrs
+
+
+# Os estados que **existem** no mapa de transições mas não se alcançam por digitação: cada um tem
+# carimbo, autor ou chamada ao gateway por trás, e um PATCH não produz nenhum dos três.
+_INVOICE_ACTION_FOR: dict[str, str] = {
+    "issued": "issue",
+    "paid": "mark-paid",
+    "cancelled": "cancel",
+}
+
+# O que a fatura emitida não admite mais. **Não** são `read_only_fields`: em rascunho eles são o
+# próprio trabalho de quem monta a cobrança.
+_FROZEN_ONCE_ISSUED = (
+    "client", "project", "service", "amount", "due_date", "description",
+)
+
+
+class InvoiceSerializer(serializers.ModelSerializer[Invoice]):
+    """A fatura (FDD 028).
+
+    Duas travas que valem ser lidas juntas, porque a diferença entre elas é deliberada.
+
+    **A do estado** é o mapa `INVOICE_TRANSITIONS` mais um segundo degrau que aponta a ação certa.
+    O primeiro devolve o 400 de `paga → emitida`; o segundo existe porque emitir, baixar e cancelar
+    são **atos com autor e carimbo** — um `PATCH status=paid` não carrega nem a data do provedor nem
+    quem baixou, e aceitar isso produziria uma baixa sem procedência.
+
+    **A dos campos** é um erro alto, e não o descarte silencioso que o `CaseSerializer` escolheu
+    para a fotografia do case. Lá ninguém *queria* escrever `health_snapshot`; aqui, quem digita um
+    novo `amount` numa fatura emitida **quis** — e um 200 que joga fora uma edição de dinheiro é o
+    pior modo de falha disponível.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    method_display = serializers.CharField(source="get_method_display", read_only=True)
+    client_name = serializers.CharField(source="client.name", read_only=True)
+    project_name = serializers.CharField(source="project.name", read_only=True, default="")
+    service_name = serializers.CharField(source="service.name", read_only=True, default="")
+    is_overdue = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Invoice
+        fields = [
+            "id", "client", "client_name", "project", "project_name", "service", "service_name",
+            "number", "amount", "description", "due_date", "method", "method_display",
+            "status", "status_display", "is_overdue", "issued_at", "issued_by", "paid_at",
+            "settled_by", "cancelled_at", "cancelled_by", "cancel_reason",
+            "provider", "external_reference", "payment_url", "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "client_name", "project_name", "service_name", "number", "method_display",
+            "status_display", "is_overdue", "issued_at", "issued_by", "paid_at", "settled_by",
+            "cancelled_at", "cancelled_by", "cancel_reason",
+            "provider", "external_reference", "payment_url", "created_at", "updated_at",
+        ]
+
+    def validate_status(self, value: str) -> str:
+        if self.instance is None:
+            return value
+        current = self.instance.status
+        if value == current:
+            return value
+        if value not in INVOICE_TRANSITIONS[current]:
+            raise serializers.ValidationError(
+                f"Não é possível ir de {self.instance.get_status_display()} para "
+                f"{Invoice.Status(value).label}."
+            )
+        acao = _INVOICE_ACTION_FOR.get(value)
+        if acao:
+            raise serializers.ValidationError(
+                f"{Invoice.Status(value).label} não é campo, é ação: "
+                f"use POST /invoices/{{id}}/{acao}/."
+            )
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        if self.instance is not None and self.instance.status != Invoice.Status.DRAFT:
+            travados = sorted(set(attrs) & set(_FROZEN_ONCE_ISSUED))
+            if travados:
+                raise serializers.ValidationError(
+                    {c: "Fatura emitida não se edita. Cancele e emita outra." for c in travados}
+                )
         return attrs
 
 

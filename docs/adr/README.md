@@ -22,3 +22,4 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0018 — Integração ligada por padrão quando configurada (e nenhuma liga sem credencial)
 - 0019 — Variante de blueprint como tabela, não como JSON (a constraint é o que decide)
 - 0020 — Case como fotografia: números persistidos no congelamento, não recalculados
+- 0021 — Registro financeiro não arquiva: a exceção declarada ao soft delete da casa
