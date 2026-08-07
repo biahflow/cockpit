@@ -27,7 +27,11 @@ export class ErrorBoundary extends Component<Props, State> {
     const { erro, requestId } = this.state;
     if (!erro) return this.props.children;
 
-    return <main className="grid min-h-screen place-items-center bg-sand px-5 py-10">
+    // `data-erro-de-render` é a âncora de que o e2e depende para reprovar uma tela que estourou
+    // (`e2e/fixtures.ts`). Precisa ser atributo e não o texto do `h1`: o `h1` é copy, e foi
+    // justamente por confiar nele que a matriz passou a medir este cartão achando que media a
+    // tela. Renomeá-lo desliga a trava — por isso há teste travando o nome.
+    return <main data-erro-de-render className="grid min-h-screen place-items-center bg-sand px-5 py-10">
       <div className="w-full max-w-lg rounded-3xl border bg-white p-7 shadow-xl shadow-ocean/5 sm:p-9">
         <span className="grid size-11 place-items-center rounded-2xl bg-red-50 text-signal"><TriangleAlert className="size-5" /></span>
         <p className="mt-6 text-sm font-semibold text-ocean">Algo saiu do lugar</p>

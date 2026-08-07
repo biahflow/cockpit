@@ -6,7 +6,7 @@
  * e o que se toca tem tamanho de dedo.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 import { abrir, ROUTES } from "./matrix";
 

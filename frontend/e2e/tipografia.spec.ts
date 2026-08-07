@@ -10,7 +10,7 @@
  * distinção que falhou. É a mesma lição da FDD 022 sobre o axe não enxergar foco visível.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 import { abrir, ROUTES } from "./matrix";
 

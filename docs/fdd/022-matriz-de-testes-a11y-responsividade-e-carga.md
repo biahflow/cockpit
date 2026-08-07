@@ -28,6 +28,17 @@ celular e com a base grande — e como eu descubro isso antes do cliente?**
   papel, e as duas specs iteram sobre ela. Tela nova entra por **uma linha**, não por um arquivo de
   teste novo — é o que impede a matriz de envelhecer, porque o custo de cobrir a próxima página é
   uma linha.
+- **A tela precisa provar que renderizou.** `e2e/fixtures.ts` exporta o `test` que todas as specs
+  usam, com uma guarda `auto: true` — não é pedida, vale para todas — que reprova em dois sinais:
+  **exceção não tratada** na página (`pageerror`) e **`ErrorBoundary` renderizado**, detectado pelo
+  atributo `data-erro-de-render`. Existe porque o `<h1>` não prova nada: o `ErrorBoundary` também
+  tem um, então a matriz aceitava o cartão de erro como se fosse a tela e o media — pequeno,
+  centrado, sem rolagem e sem violação. Mesmo desenho do drill da FDD 021, que confere que a
+  destruição foi real "senão o drill passaria por não ter destruído nada". A guarda vale também
+  para os três e2e de fluxo, que montam mocks à mão e envelhecem igual. **`console.error` fica de
+  fora, de propósito**: pegaria warning de React que ninguém vê, mas o volume pré-existente é
+  desconhecido e transformaria qualquer entrega em faxina de warning; os dois sinais escolhidos não
+  têm falso positivo.
 - **As fixtures têm volume e nomes longos.** Lista vazia nunca estoura na horizontal. Uma matriz de
   responsividade alimentada com "Cliente 1" e tabelas vazias passaria inteira sem provar nada, e o
   estado vazio de `ProjectsPage`/`ClientsPage` é justamente o caminho mais fácil de acertar. As
@@ -95,6 +106,21 @@ página pela metade e o resultado dependia da máquina do dia — foi assim que 
 quase passou. O helper agora espera `networkidle`, que com a API toda mockada significa "o React já
 renderizou tudo o que ia buscar".
 
+**E o segundo defeito do mesmo helper, pela mesma raiz — só que este passou.** A correção acima
+resolveu *quando* medir e deixou de pé a premissa errada: que um `<h1>` prova que a tela carregou.
+O `ErrorBoundary` também tem um `<h1>`, então uma tela que estoura no render é aceita como se fosse
+a tela, e o que a matriz mede é o cartão de erro — pequeno, centrado, sem rolagem horizontal e sem
+violação de axe. Passa com louvor sem ter olhado para nada.
+
+Foi o que aconteceu com **Configurações**. O campo `missing` nasceu na ADR 0018 e a `SettingsPage`
+passou a fazer `flag.missing.join()`; a fixture `/api/v1/config/` ficou para trás, e desde então as
+**seis** varreduras daquela tela (3 larguras × axe e rolagem) mediam o `ErrorBoundary` — com o
+Aceite desta FDD afirmando que as 17 telas eram varridas. A guarda de `e2e/fixtures.ts` fecha a
+premissa, e a prova dela é sabotagem: tirar `missing` da fixture reprova a tela nas três larguras, e
+um `throw` assíncrono numa página qualquer (que o `ErrorBoundary` **não** pega) cai no `pageerror`.
+Renderizada de verdade, a tela passou em axe e rolagem sem correção nenhuma — o defeito era da
+fixture, não do produto.
+
 **N+1 nos três agregadores.** `/clients/overview/` consultava os projetos visíveis **por cliente** e
 avaliava saúde, risco, fase e próxima reunião dentro do laço: 43 queries com 3 clientes, 169 com 12.
 `/risk/` e `/health/` avaliavam **por projeto**, 2 e 4 queries cada. Agora `risk.assess_projects` e
@@ -158,7 +184,9 @@ reconciliar as duas paletas é outro recorte.
 `npm run e2e` roda 116 testes em quatro projetos: `e2e` (fluxo, desktop) e `mobile`/`tablet`/
 `desktop` (matriz). Cada uma das 17 telas é varrida pelo axe nas tags WCAG 2.0/2.1 A e AA nas três
 larguras, e conferida contra rolagem horizontal; mais navegação alcançável, alvo de toque ≥24 px e
-foco de teclado visível. `uv run pytest` inclui o orçamento de query dos cinco agregadores.
+foco de teclado visível. **E cada teste, de matriz ou de fluxo, reprova se a tela não renderizou** —
+sem essa trava o número acima é uma contagem de testes, não de telas cobertas, e por um tempo foi
+exatamente isso. `uv run pytest` inclui o orçamento de query dos cinco agregadores.
 
 O CI **não ganha nenhum job**: o orçamento roda no `pytest` do job `backend`, a matriz no
 `npm run e2e` do job `frontend`. O k6 fica fora, com procedimento em
@@ -180,6 +208,12 @@ Cada gate foi verificado por sabotagem deliberada — um gate que nunca reprovou
    explícito `o foco de teclado fica visível nos botões`, que tabula com o teclado de verdade
    (foco programático nem sempre casa com `:focus-visible` no Chromium) e lê o `outline` computado.
    Com a sabotagem ele reprova nas três larguras; restaurado, as 54 passam.
+
+4. **A tela renderizou.** Duas sabotagens, uma por braço da guarda: tirar `missing` de uma flag da
+   fixture `/api/v1/config/` reprova "Configurações" nas três larguras com a mensagem que nomeia o
+   `ErrorBoundary` — antes da guarda, esse era o estado **verde** do repositório; e um `throw`
+   dentro de um `setTimeout` numa página qualquer, que o `ErrorBoundary` não pega, cai no
+   `pageerror`. Restauradas as duas, os 123 testes passam.
 
 Uma sabotagem **não** reprovou, e o motivo está registrado em "Fora deste recorte": alargar a tabela
 de `ProjectsPage` para `min-w-[1400px]` passa, porque o `overflow-x-auto` a contém — e, mesmo

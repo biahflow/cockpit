@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 const user = { id: 1, username: "bia", first_name: "Bia", last_name: "", email: "bia@example.test", role: "admin", is_admin: true };
 
