@@ -260,6 +260,57 @@ def test_creating_a_project_does_not_flood_the_portal(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.django_db
+def test_saving_digital_employee_emits_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O roster é o produto central, e era o único item do snapshot sem emissor (ADR 0003).
+
+    Cadastrar, mexer no KPI e arquivar um funcionário digital não avisavam o portal, então o painel
+    "Seu Time Digital" do cliente só se corrigia de carona no próximo salvamento de outra coisa.
+    Arquivar entra aqui porque `archive()` é um `save()` — e arquivado ele sai do snapshot, o que
+    faz do arquivamento a mudança **mais** silenciosa das três.
+    """
+    project = ProjectFactory()
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    employee = DigitalEmployee.objects.create(project=project, name="Ana Financeiro")
+    assert ("updated", "digital_employee", project.pk) in calls
+
+    calls.clear()
+    employee.kpi_value = "312 notas/mês"
+    employee.save(update_fields=["kpi_value", "updated_at"])
+    assert ("updated", "digital_employee", project.pk) in calls
+
+    calls.clear()
+    employee.archive()
+    assert ("updated", "digital_employee", project.pk) in calls
+
+
+@pytest.mark.django_db
+def test_deleting_a_project_emits_once_even_with_children(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exclusão definitiva é o único caminho que o arquivamento não cobre — e não avisava ninguém.
+
+    Sem este sinal o portal ficava com um projeto morto marcado como **ativo** para sempre: nenhum
+    webhook saía, e o próximo evento daquele projeto nunca viria, porque não há mais projeto.
+
+    A segunda asserção é o que protege o desenho: a cascata apaga marcos, fases, entregáveis e
+    funcionários digitais, e nenhum deles tem `post_delete` de propósito. Um por filho agendaria
+    dezenas de buscas de snapshot — todas 404 — antes do aviso que interessa.
+    """
+    project = ProjectFactory()
+    _milestone(project)
+    DigitalEmployee.objects.create(project=project, name="Ana Financeiro")
+    project_id = project.pk
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    project.delete()
+
+    assert calls == [("deleted", "project", project_id)]
+
+
+@pytest.mark.django_db
 def test_snapshot_endpoint_requires_valid_token() -> None:
     project = ProjectFactory()
     client = APIClient()

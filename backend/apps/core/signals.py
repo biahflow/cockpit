@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from . import journey, notifications, portal, tasksync
 from .models import (
     Client,
+    DigitalEmployee,
     Document,
     Lead,
     Meeting,
@@ -28,6 +29,26 @@ from .models import (
 @receiver(post_save, sender=Project)
 def _emit_project(sender: type[Project], instance: Project, **kwargs: Any) -> None:
     portal.emit("updated", "project", instance.pk)
+
+
+# O único `post_delete` do repositório, e é deliberado que seja único.
+#
+# Exclusão de **filho** não é alcançável pelo produto: os nove viewsets que o portal enxerga são
+# `ArchiveModelViewSet`, cujo `perform_destroy` chama `archive()` — um `save()`, que emite —, o
+# Django admin não registra entidade de projeto nenhuma, e `retention.executar()` só alcança linha
+# já arquivada, que a essa altura já saiu do snapshot e já foi propagada. Sobra o projeto, apagado
+# por shell ou migração de dados, e aí o portal ficava com um projeto morto marcado como **ativo**
+# para sempre: o webhook não saía, e mesmo que saísse a rota de snapshot responde 404, que ele não
+# distingue de "id de outra base" (a FDD 025 corrigiu isso para o arquivamento, não para a
+# exclusão).
+#
+# Registrar `post_delete` nos filhos além deste teria um custo medido e nenhum ganho: numa cascata
+# o coletor do Django apaga filho primeiro e `on_commit` roda na ordem de registro, então cada
+# filho agendaria um webhook **antes** do webhook do projeto — todos provocando um `fetch_snapshot`
+# que já responde 404. Um projeto inteiro sai daqui como **um** aviso.
+@receiver(post_delete, sender=Project)
+def _emit_project_deleted(sender: type[Project], instance: Project, **kwargs: Any) -> None:
+    portal.emit("deleted", "project", instance.pk)
 
 
 @receiver(post_save, sender=Project)
@@ -77,6 +98,20 @@ def _emit_meeting(sender: type[Meeting], instance: Meeting, **kwargs: Any) -> No
 @receiver(post_save, sender=Pendencia)
 def _emit_pendencia(sender: type[Pendencia], instance: Pendencia, **kwargs: Any) -> None:
     portal.emit("updated", "pendencia", instance.project_id)
+
+
+# "O que entra no snapshot precisa de emissor" (ADR 0003) valia para o funcionário digital desde
+# que ele entrou nele, e ele era o único que não tinha nenhum — nem para criação, nem para KPI, nem
+# para arquivamento. O roster é o produto central e chegava à tela do cliente **de carona** no
+# próximo salvamento de outra coisa, quando chegava.
+#
+# Sem guarda de `created`, ao contrário da jornada: o funcionário digital é cadastrado um a um pela
+# tela, não materializado em laço, então não há enxurrada a conter.
+@receiver(post_save, sender=DigitalEmployee)
+def _emit_digital_employee(
+    sender: type[DigitalEmployee], instance: DigitalEmployee, **kwargs: Any
+) -> None:
+    portal.emit("updated", "digital_employee", instance.project_id)
 
 
 # A jornada é justamente o que a barra "Você está aqui" do portal mostra, e era a única parte do

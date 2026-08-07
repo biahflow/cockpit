@@ -7,7 +7,7 @@
  * estava quebrado.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 import { abrir, ROUTES } from "./matrix";
 

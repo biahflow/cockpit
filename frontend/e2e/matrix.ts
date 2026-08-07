@@ -101,12 +101,22 @@ const saude = serie(8, index => ({
 /** Rotas exatas → resposta. O que não casar cai no default por método (lista vazia). */
 const FIXTURES: Record<string, unknown> = {
   "/api/v1/auth/csrf/": { csrfToken: "test" },
+  // As sete flags que `flags.FLAGS` serve, e **com `missing`** — o campo nasceu na ADR 0018, a
+  // `SettingsPage` passou a fazer `flag.missing.join()` e esta fixture ficou para trás, estourando
+  // a tela em toda varredura. Passou despercebido porque o `ErrorBoundary` também tem `<h1>` e a
+  // matriz media o cartão de erro; a trava de `fixtures.ts` existe por causa disto. Duas
+  // integrações ficam sem credencial de propósito: é o caminho que estourava, e é o que exercita o
+  // texto "Falta no ambiente: X" — o mais longo da tela, que é o que a largura precisa aguentar.
   "/api/v1/config/": {
-    ai_enabled: true, calendar_enabled: true, esign_enabled: true,
+    ai_enabled: true, calendar_enabled: false, esign_enabled: true,
     integrations: [
-      { key: "ai", label: "Assistente de IA", enabled: true, configured: true, toggleable: true },
-      { key: "calendar", label: "Google Calendar", enabled: false, configured: false, toggleable: false },
-      { key: "esign", label: "Assinatura eletrônica", enabled: true, configured: true, toggleable: true },
+      { key: "ai", label: "Assistente de IA", enabled: true, configured: true, toggleable: true, missing: [] },
+      { key: "drive", label: "Documentos no Google Drive", enabled: false, configured: false, toggleable: true, missing: ["GOOGLE_DRIVE_ROOT_FOLDER_ID"] },
+      { key: "calendar", label: "Calendário (Google)", enabled: false, configured: false, toggleable: true, missing: ["GOOGLE_CALENDAR_ID", "GOOGLE_OAUTH_REFRESH_TOKEN"] },
+      { key: "esign", label: "Assinatura eletrônica", enabled: true, configured: true, toggleable: true, missing: [] },
+      { key: "email", label: "Notificações por e-mail e digest", enabled: true, configured: true, toggleable: true, missing: [] },
+      { key: "tasksync", label: "Sincronia de tarefas (Linear/GitHub)", enabled: false, configured: true, toggleable: true, missing: [] },
+      { key: "portal", label: "Portal do cliente", enabled: true, configured: true, toggleable: true, missing: [] },
     ],
   },
   "/api/v1/dashboard/": {

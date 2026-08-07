@@ -53,3 +53,32 @@ volta a significar só "não existe", e quem declara o encerramento é o `archiv
 
 Mudança **aditiva** ao contrato `/api/v1/`: um campo novo, e um id que antes respondia 404 passando a
 responder 200.
+
+
+## Emenda (07/08/2026) — o emissor que faltava, e o único `post_delete`
+
+Duas lacunas na regra desta ADR, "o que entra no snapshot precisa de emissor".
+
+**`DigitalEmployee` entrou no snapshot sem emissor nenhum.** Ele não está na lista da Decisão acima
+porque chegou depois dela, e ninguém voltou aqui: criar, mexer no KPI e **arquivar** um funcionário
+digital não avisavam o portal. Arquivar era o pior dos três — `archive()` tira a linha do snapshot,
+de modo que o roster do cliente ficava com alguém que este lado já considerava fora. Agora tem
+`post_save`, sem guarda de `created`: o cadastro é um a um pela tela, não é materializado em laço
+como a jornada, então não há enxurrada a conter.
+
+**A exclusão definitiva não avisava, e agora avisa — só do projeto.** `emit("deleted", "project", …)`
+num `post_delete` de `Project` é o único `post_delete` do repositório, e a escolha tem medição
+atrás. Exclusão de filho não é alcançável pelo produto: os nove viewsets que o portal enxerga são
+`ArchiveModelViewSet` (o `DELETE` da API **arquiva**), o Django admin não registra entidade de
+projeto nenhuma, e `retention.executar()` só alcança linha já arquivada — que a essa altura já saiu
+do snapshot e já foi propagada pelo webhook do arquivamento. Sobra o projeto, apagado por shell ou
+migração de dados, e sem aviso o portal ficava com ele marcado como **ativo para sempre**: nenhum
+evento sairia, e não haveria evento seguinte daquele projeto, porque não há mais projeto.
+
+Registrar `post_delete` nos filhos custaria mais do que resolve: numa cascata o coletor do Django
+apaga filho primeiro e `on_commit` roda na ordem de registro, então cada filho agendaria um webhook
+**antes** do webhook do projeto — cada um provocando uma busca de snapshot que já responde 404.
+Como está, um projeto inteiro sai daqui como **um** aviso, e há teste que reprova se isso mudar.
+
+O custo declarado: a entrega segue best-effort e sem retentativa, e um `deleted` perdido é
+**definitivo** — ao contrário de um `updated`, que o próximo salvamento daquele projeto corrige.
