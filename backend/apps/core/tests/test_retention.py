@@ -9,10 +9,11 @@ from datetime import timedelta
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import override_settings
 from django.utils import timezone
 
-from apps.core import retention
+from apps.core import drive, retention
 from apps.core.models import Document, Lead
 
 from .factories import ClientFactory, UserFactory
@@ -129,6 +130,109 @@ def test_o_arquivo_sai_junto_com_a_linha() -> None:
 
     assert not Document.objects.filter(pk=doc.pk).exists()
     assert not os.path.exists(caminho)
+
+
+def _documento_no_drive(nome: str, *, arquivado_ha: int) -> Document:
+    """Documento da era Drive: sem arquivo local, com `drive_file_id` — é o `if` do `_apagar_arquivo`."""
+    admin = UserFactory()
+    doc = Document.objects.create(
+        client=ClientFactory(owner=admin), original_name=nome, uploaded_by=admin,
+        drive_file_id=f"drive-{nome}",
+    )
+    Document.objects.filter(pk=doc.pk).update(
+        archived_at=timezone.now() - timedelta(days=arquivado_ha)
+    )
+    return doc
+
+
+@override_settings(RETENTION_DAYS={"lead": 0, "document": 30})
+def test_um_documento_que_nao_sai_nao_leva_os_outros(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O comentário do laço prometia isolamento por documento e não havia `try` nenhum.
+
+    A primeira falha do Drive abortava o laço inteiro: os documentos seguintes ficavam sem expurgo,
+    e `executar()` estourava para fora — o comando, que promete dizer em português o que fez,
+    despejava um traceback sem relatar o que já tinha saído.
+    """
+    primeiro = _documento_no_drive("primeiro.pdf", arquivado_ha=60)
+    travado = _documento_no_drive("travado.pdf", arquivado_ha=60)
+    ultimo = _documento_no_drive("ultimo.pdf", arquivado_ha=60)
+
+    def recusa_um(document: Document) -> None:
+        if document.pk == travado.pk:
+            raise drive.DriveProviderError("cota excedida")
+
+    monkeypatch.setattr(drive, "delete_document", recusa_um)
+
+    planos = retention.executar()
+
+    assert not Document.objects.filter(pk=primeiro.pk).exists()
+    assert not Document.objects.filter(pk=ultimo.pk).exists()
+    # A garantia da ADR 0017: o arquivo não saiu, então a linha fica — para a próxima tentativa.
+    assert Document.objects.filter(pk=travado.pk).exists()
+
+    plano = next(p for p in planos if p.familia == "document")
+    assert (plano.quantidade, plano.falhas) == (2, 1)
+
+
+@override_settings(RETENTION_DAYS={"lead": 0, "document": 30})
+def test_arquivo_que_ja_sumiu_do_provedor_conclui_o_expurgo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """"Tenta de novo" só é saída se alguma tentativa puder passar.
+
+    Quando alguém apaga o arquivo pela interface do Google, o Drive responde 404 e o estado
+    desejado do expurgo **já foi alcançado** — mas a falha traduzida segurava a linha para sempre,
+    a cada execução, sem nenhum caminho de conclusão. Um dado pessoal impossível de esquecer é o
+    oposto do que a ADR 0017 existe para garantir.
+    """
+    doc = _documento_no_drive("sumiu.pdf", arquivado_ha=60)
+    monkeypatch.setattr(drive, "delete_document", lambda document: None)
+
+    planos = retention.executar()
+
+    assert not Document.objects.filter(pk=doc.pk).exists()
+    assert next(p for p in planos if p.familia == "document").falhas == 0
+
+
+@override_settings(RETENTION_DAYS={"lead": 0, "document": 30})
+def test_falha_de_verdade_continua_preservando_a_linha(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A trava que não pode afrouxar ao corrigir as duas acima.
+
+    Credencial ausente **não** é "já foi apagado". Tratar as duas como a mesma coisa apagaria o
+    índice deixando o conteúdo no Drive — o pior resultado possível de um expurgo, e exatamente o
+    que o módulo inteiro foi escrito para evitar.
+    """
+    doc = _documento_no_drive("fica.pdf", arquivado_ha=60)
+
+    def recusa(document: Document) -> None:
+        raise drive.DriveProviderError("credencial inválida")
+
+    monkeypatch.setattr(drive, "delete_document", recusa)
+
+    planos = retention.executar()
+
+    assert Document.objects.filter(pk=doc.pk).exists()
+    assert next(p for p in planos if p.familia == "document").falhas == 1
+
+
+@override_settings(RETENTION_DAYS={"lead": 0, "document": 30})
+def test_comando_relata_o_que_ficou_e_sai_com_codigo_1(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Sair 0 depois de não apagar o que se mandou apagar é a mentira que fecha o ciclo."""
+    _documento_no_drive("fica.pdf", arquivado_ha=60)
+
+    def recusa(document: Document) -> None:
+        raise drive.DriveProviderError("cota excedida")
+
+    monkeypatch.setattr(drive, "delete_document", recusa)
+
+    with pytest.raises(CommandError, match="1 documento"):
+        call_command("purge_archived", "--apply")
+
+    # O relatório das famílias sai **antes** do erro: trocar o traceback por outro silêncio não
+    # resolveria nada para quem opera.
+    assert "document" in capsys.readouterr().out
 
 
 @override_settings(RETENTION_DAYS={"lead": 30, "document": 0})

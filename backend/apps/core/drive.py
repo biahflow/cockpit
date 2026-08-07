@@ -210,8 +210,21 @@ def delete_document(document: Document) -> None:  # pragma: no cover - I/O
     Traduz a falha para `DriveProviderError` como as demais, e **não** engole: quem chama precisa
     saber que o conteúdo continua lá, senão apagaria a linha e deixaria o arquivo órfão — que é o
     pior resultado possível de um expurgo.
+
+    **Com uma exceção, e ela é a regra e não o atalho: 404 é sucesso.** Apagar o que já não existe
+    *é* o estado desejado, e um `DELETE` idempotente é o comportamento correto. Sem isto, um arquivo
+    que alguém removeu pela interface do Google prendia a linha para sempre — toda execução do
+    expurgo falhava igual, e o dado pessoal ficava impossível de esquecer, que é o oposto do que a
+    ADR 0017 garante. Nenhuma outra falha entra aqui: credencial ausente **não** é "já foi apagado",
+    e confundir as duas apagaria o índice deixando o conteúdo.
+
+    O `pragma` cobre a chamada de rede, não a classificação: os dois ramos do `except` têm teste em
+    `tests/test_drive.py`, com um `_service` falso que levanta 404 e 403. A regra de negócio saiu de
+    dentro da função fina e por isso precisou de rede própria.
     """
     try:
         _service().files().delete(fileId=document.drive_file_id, supportsAllDrives=True).execute()
     except Exception as exc:  # noqa: BLE001 - a família do SDK vira um tipo só
+        if getattr(getattr(exc, "resp", None), "status", None) == 404:
+            return
         raise DriveProviderError(str(exc) or exc.__class__.__name__) from exc

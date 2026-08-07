@@ -105,7 +105,9 @@ jurídico — e que precisam ser pensados junto com a janela de retenção das c
 que a cópia desfaz não é expurgo.
 
 **Alertas.** Como na FDD 020, a regra mora no fornecedor; o que o código entrega é o sinal (código
-de saída 1). O mínimo a configurar está em `docs/runbooks/monitoramento.md`.
+de saída 1). O mínimo a configurar está em `docs/runbooks/monitoramento.md`. O `purge_archived`
+passou a emitir o mesmo sinal quando algum documento **não** saiu do provedor e a linha ficou para a
+próxima execução (ADR 0017): o expurgo parcial é justamente o caso que ninguém descobre sozinho.
 
 ## Aceite
 
