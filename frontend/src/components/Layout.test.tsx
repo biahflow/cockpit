@@ -35,6 +35,8 @@ test("Entrega não vê os itens de administração", () => {
   renderComo({ role: "delivery", is_admin: false });
   for (const item of ADMIN_ONLY) expect(temLink(item), item).toBe(false);
   expect(temLink("Projetos")).toBe(true);
+  // Conhecimento é para todo mundo: o dono de uma área pode ser da Entrega (FDD 029).
+  expect(temLink("Conhecimento")).toBe(true);
 });
 
 test("superusuário de papel Entrega vê o menu inteiro", () => {

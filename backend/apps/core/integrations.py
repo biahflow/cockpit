@@ -50,12 +50,19 @@ class ProbeResult:
 
 
 def _probe_ai() -> tuple[bool, str]:
-    """Recupera o modelo configurado: valida a chave **e** o acesso ao modelo, sem gerar token."""
+    """Recupera os modelos configurados: valida a chave **e** o acesso, sem gerar token.
+
+    Confere os **dois**, porque desde a FDD 029 há dois: o de chat e o de embedding. Uma conta com
+    acesso ao `gpt-4o-mini` e sem acesso a embeddings responde tudo normalmente até alguém rodar a
+    ingestão — que é exatamente a falha silenciosa que a FDD 024 criou as sondas para pegar.
+    """
     from . import ai
 
-    modelo = settings.AI_MODEL
-    ai._client().models.retrieve(modelo)
-    return True, f"modelo {modelo} acessível"
+    chat, embedding = settings.AI_MODEL, settings.AI_EMBEDDING_MODEL
+    cliente = ai._client()
+    cliente.models.retrieve(chat)
+    cliente.models.retrieve(embedding)
+    return True, f"modelos {chat} e {embedding} acessíveis"
 
 
 def _probe_drive() -> tuple[bool, str]:

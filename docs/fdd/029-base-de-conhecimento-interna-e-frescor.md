@@ -1,7 +1,10 @@
 # FDD 029 — Base de conhecimento interna e disciplina de frescor
 
-> **Status: proposta.** Nada aqui está implementado. O KB **voltado ao cliente já existe**,
-> maduro, no repositório `biahflow-portal-cliente` — esta FDD não o reespecifica.
+> **Status: entregue** (07/08/2026). O KB **voltado ao cliente já existia**, maduro, no repositório
+> `biahflow-portal-cliente` — esta FDD não o reespecifica. A bifurcação de arquitetura que ela
+> deixou pendente foi decidida e virou a **ADR 0022**; a regra de citar-ou-lacuna virou a
+> **ADR 0023**. Ver "O que a construção decidiu", no fim: a rodada 5 de homologação achou **dois
+> defeitos**, e um deles matou o desenho original do roteamento.
 
 ## Jornada
 
@@ -112,3 +115,60 @@ de conhecimento maior do que o conhecimento vale, e processo maior que o problem
 modo de falha. Uma consultoria enxuta precisa de ADR para o que não quer redecidir, runbook
 testado para o que para o serviço, e método no produto para o resto. O KB pequeno em que o
 time confia ganha, toda vez, do KB completo e abandonado.
+
+## O que a construção decidiu
+
+Seis pontos em que construir mudou o desenho, e dois deles só apareceram contra o modelo real.
+
+**O limiar de similaridade não pode decidir se a citação é obrigatória — foi a maior mudança.** O
+desenho previa um piso: acima dele, material injetado e citação exigida; abaixo, o agente responde
+como sempre. A rodada 5 mediu as três classes de pergunta contra o corpus real e as faixas **se
+sobrepõem** — metodologia 51–69%, operacional 47–56%, ruído 22–49%. Não é imprecisão de medida: o
+corpus *descreve o domínio*, então perguntar "o que está atrasado?" de fato se parece com o texto de
+uma FDD sobre atraso. Com o piso planejado de 30%, uma resposta operacional correta seria
+substituída por "não encontrei isso no material". Agora **o modelo declara o regime** (`FONTE: [K1]`
+ou `FONTE: dados da área`), e o limiar só evita gastar token com material fora do assunto.
+
+**A citação que o modelo dá vem na linha de declaração — e a primeira versão a descartava.** O
+prompt manda terminar com `FONTE: [K1]`, e o `gpt-4o-mini` cita **só** ali. O código removia essa
+linha antes de procurar marcador, então nada resolvia e a lacuna **substituía uma resposta certa**,
+com os comandos exatos do runbook. Nenhum dublê acharia: ele citaria onde o teste mandasse.
+
+**O corpus é um artefato gerado e commitado**, não leitura de `docs/` em tempo de execução. O
+runtime não tem `docs/` — o `Dockerfile` usa contexto `./backend` —, e mudar o contexto para a raiz
+tornaria **inerte** o `backend/.dockerignore`, cujo propósito é manter documento real de cliente
+fora da imagem que vai ao registry. O preço é a fricção de regerar, e ela é a mesma do
+`openapi.yaml`.
+
+**O fatiador precisou de duas guardas que a medição pediu.** Bloco de código com comentário `#`
+virava seção fantasma titulada com uma linha de shell; e as seções "Regras" das FDDs são listas
+**sem linha em branco entre os itens**, então a fronteira de parágrafo sozinha deixava blocos de
+quase mil palavras. A fronteira passou a incluir o item de lista — quebrar *entre* regras preserva
+cada uma inteira, e quebrar *dentro* seria pior que não quebrar: meia lista de regras lê como a
+lista completa.
+
+**`review_interval_days` tem três significados, e colapsá-los quebra o laço.** Nulo **herda da
+área**; zero significa **não vence**, que é o valor certo para ADR (ela se substitui, não se
+atualiza — cobrar revisão semestral da ADR 0001 é ruído, e ruído é o que faz o laço inteiro ser
+ignorado); e um número é o prazo. Junto: `source_path` precisou de constraint **parcial**, senão
+existiria uma única lacuna tácita no sistema inteiro — a segunda vez que o repositório precisa dessa
+forma, depois de `Invoice.number`.
+
+**O job não sai com erro.** Dívida editorial não é incidente, e transformar runbook vencido em
+evento de Sentry ensina quem opera a silenciar o Sentry. É a diferença deliberada em relação ao
+`backup_status`, que sai com código 1 porque ali o que falta é a cópia de segurança.
+
+## Fora deste recorte — o que ficou nomeado
+
+**Ingerir o conteúdo dos `Document` de projeto.** O corpus aqui é a **metodologia**, versionada e já
+revisada. Trazer arquivo de cliente mexeria no anti-vazamento que hoje passa só nomes e exigiria
+varredura e parser por formato — outra natureza de problema.
+
+**Registro de digest de prompt e avaliação adversarial**, que o repositório vizinho tem. Vale, e é
+FDD própria: `FONTE:` virou protocolo entre código e modelo, e mudá-lo sem mudar o parser quebraria
+a citação em silêncio — que é precisamente o que um registro de digest pega.
+
+**Índice ANN**, nomeado com o limiar (~50 mil trechos) na ADR 0022 em vez de omitido.
+
+**Plataforma de wiki**, **KB por cliente** e **onboarding como auditoria** — os três já estavam
+fora, e seguem.

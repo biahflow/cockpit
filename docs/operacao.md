@@ -40,6 +40,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Agendamento (qualificação IA + booking pelo site) | `AI_ENABLED`+`CALENDAR_ENABLED`, `GOOGLE_BOOKING_CALENDAR_ID`, `BOOKING_MIN_FIT` | OpenAI + Google (free/busy) | Pronto (desligado) |
 | Assinatura eletrônica | `ESIGN_ENABLED` (default `true`), `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `ESIGN_PROVIDER` roda em registro local (`mark-signed` manual); com fornecedor nomeado, exige token e segredo do webhook |
 | Gateway de pagamento (contas a receber) | `PAYMENTS_ENABLED` (default `true`), `PAYMENTS_PROVIDER`, `PAYMENTS_API_TOKEN`, `PAYMENTS_WEBHOOK_SECRET` | conta Stripe — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `PAYMENTS_PROVIDER` roda em registro local (`mark-paid` manual); com fornecedor nomeado, exige token e segredo do webhook. **Stripe sem homologação** |
+| Base de conhecimento interna | `AI_ENABLED`, `OPENAI_API_KEY`, `AI_EMBEDDING_MODEL`, `KB_MIN_SIMILARITY_PERCENT`, `KB_TOP_K`, `SCHEDULER_KNOWLEDGE_AT` | mesma chave do assistente | Segue a flag `ai`. O **inventário de frescor funciona sem IA**; só a recuperação com citação exige a chave. Popular: `manage.py ingest_knowledge` |
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) — liga sozinho quando as duas variáveis estiverem preenchidas; alternável em Configurações |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
 | Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
@@ -235,6 +236,7 @@ protegem as portas específicas. Todos vêm do `.env` — mexa só se um limite 
 | `booking` | `BOOKING_RATE` | `60/hour` | horários livres e reserva |
 | `task_sync` | `TASK_SYNC_RATE` | `60/hour` | webhook de Linear/GitHub |
 | `esign_webhook` | `ESIGN_WEBHOOK_RATE` | `120/hour` | webhook do fornecedor de assinatura |
+| `knowledge_freshness` (job) | `SCHEDULER_KNOWLEDGE_AT` | `08:00` | avisa o dono da área sobre o que venceu; **não** sai com erro, porque dívida editorial não é incidente |
 | `payments_webhook` | `PAYMENTS_WEBHOOK_RATE` | `600/hour` | webhook do gateway de pagamento — cinco vezes o teto do e-sign de propósito: o Stripe trata 429 como falha e faz backoff por dias, e cada pagamento chega em **dois** eventos |
 
 Dois avisos para produção, agora com trava:

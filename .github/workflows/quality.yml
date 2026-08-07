@@ -42,6 +42,11 @@ jobs:
       - run: uv run pytest
       - run: uv run python manage.py spectacular --file openapi.yaml --validate
       - run: git diff --exit-code -- openapi.yaml
+      # O corpus de conhecimento é derivado de docs/ e PRD.md e vive commitado, exatamente como o
+      # OpenAPI acima: editou metodologia, regera e commita. A fricção é de propósito — "mudei o
+      # método" vira ato visível e revisado, em vez de o índice divergir do repositório em silêncio.
+      - run: uv run python manage.py build_knowledge_corpus
+      - run: git diff --exit-code -- apps/core/knowledge_corpus.jsonl
       # Gate de produção (FDD 019), o que a FDD 017 tinha deixado pendente. Simula o ambiente que o
       # cofre de segredos vai entregar e cobra que `check --deploy` saia limpo.
       #
@@ -70,6 +75,36 @@ jobs:
           uv run python manage.py collectstatic --noinput
           DJANGO_SECRET_KEY="$(openssl rand -base64 48)" \
             uv run python manage.py check --deploy --fail-level WARNING --tag security
+
+  # A busca vetorial tem dois caminhos (FDD 029, ADR 0022): `CosineDistance` no Postgres e cosseno
+  # em Python no SQLite, porque a suíte roda em SQLite e a produção em Postgres. Este job existe
+  # para o caminho **de produção** ser exercitado de verdade — sem ele, o único que os testes
+  # cobrem seria justamente o que nunca roda no ar. O teste de paridade compara os dois.
+  backend-pgvector:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: biahflow
+          POSTGRES_USER: biahflow
+          POSTGRES_PASSWORD: ci
+        options: >-
+          --health-cmd "pg_isready -U biahflow" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+        ports: ["5432:5432"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      # `--no-cov` de propósito: aqui roda um punhado de testes, e o gate de 90% é do job `backend`,
+      # que mede a suíte inteira. Cobrar cobertura nos dois faria este reprovar sempre.
+      - run: uv run pytest -m pgvector --no-cov
+        env:
+          DATABASE_URL: postgresql://biahflow:ci@localhost:5432/biahflow
 
   frontend:
     runs-on: ubuntu-latest

@@ -1,9 +1,16 @@
 # Sidecar de backup (FDD 021, ADR 0013).
 #
-# A base é a **mesma imagem do servidor** (postgres:16-alpine), e isso não é economia de linha:
-# `pg_dump` recusa rodar contra um servidor de major maior que a dele, e a imagem da API é Debian
-# bookworm, cujo `postgresql-client` é o 15. Trocar a major do `db` no compose obriga a trocar aqui
-# junto — de propósito, porque o contrário é descobrir isso no dia do desastre.
+# A base **deixou de ser a mesma imagem do servidor**, e a diferença importa (FDD 029, emenda à
+# ADR 0013): desde que o `db` virou `pgvector/pgvector:pg16`, aqui ficou `postgres:16-alpine`.
+#
+# O que a ADR 0013 protege é **paridade de major**, não identidade de imagem — `pg_dump` recusa
+# rodar contra um servidor de major maior que a dele, e 16 contra 16 segue válido. O sidecar não
+# precisa de pgvector: a extensão é do servidor, e o `pg_dump` emite `CREATE EXTENSION vector;`
+# mais os valores como texto. Rebaseá-lo em Debian obrigaria a reescrever o `entrypoint.sh`, que é
+# busybox (`/etc/crontabs/root`, `crond`), por benefício nenhum.
+#
+# Como "mesma imagem" deixou de ser o mecanismo, a paridade passou a ser **conferida por máquina**
+# no `.github/scripts/backup-drill.sh` — que é mais forte do que depender de alguém reparar.
 #
 # Vem também do lado prático: o backup fica independente da imagem da aplicação. Se o build da API
 # quebrar, ainda se restaura.

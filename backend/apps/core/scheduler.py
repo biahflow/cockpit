@@ -141,6 +141,12 @@ def jobs() -> list[Job]:
             description="Fatura emitida com vencimento passado vira vencida (FDD 028)",
         ),
         Job(
+            name="knowledge_freshness",
+            command="check_knowledge_freshness",
+            schedule=Daily(_parse_at(settings.SCHEDULER_KNOWLEDGE_AT, time(8, 0))),
+            description="Conhecimento vencido ou sem dono avisa quem responde por ele (FDD 029)",
+        ),
+        Job(
             name="backup_status",
             command="backup_status",
             schedule=Daily(_parse_at(settings.SCHEDULER_BACKUP_CHECK_AT, time(9, 0))),

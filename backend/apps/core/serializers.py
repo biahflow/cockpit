@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import UploadedFile
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, drive
+from . import blueprints, drive, knowledge
 from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
@@ -29,6 +29,8 @@ from .models import (
     Invitation,
     Invoice,
     JourneyPhase,
+    KnowledgeArea,
+    KnowledgePiece,
     Lead,
     Meeting,
     Milestone,
@@ -698,6 +700,54 @@ class InvoiceSerializer(serializers.ModelSerializer[Invoice]):
                     {c: "Fatura emitida não se edita. Cancele e emita outra." for c in travados}
                 )
         return attrs
+
+
+class KnowledgeAreaSerializer(serializers.ModelSerializer[KnowledgeArea]):
+    owner_name = serializers.CharField(source="owner.get_full_name", read_only=True, default="")
+    piece_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = KnowledgeArea
+        fields = ["id", "name", "slug", "position", "active", "owner", "owner_name",
+                  "review_interval_days", "piece_count"]
+        read_only_fields = ["id", "owner_name", "piece_count"]
+
+
+class KnowledgePieceSerializer(serializers.ModelSerializer[KnowledgePiece]):
+    """A peça do inventário (FDD 029).
+
+    `last_verified_at` e `verified_by` são **read-only**: verificar é ato com autor e carimbo, pela
+    ação `verify` — no molde do `record-consent` da FDD 027. Um `PATCH` que ligue a data diria "foi
+    conferido" sem dizer por quem, que é a alegação de ninguém.
+    """
+
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    area_name = serializers.CharField(source="area.name", read_only=True, default="")
+    owner_name = serializers.CharField(source="area.owner.get_full_name", read_only=True, default="")
+    status = serializers.SerializerMethodField()
+    next_review_at = serializers.SerializerMethodField()
+    is_gap = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KnowledgePiece
+        fields = ["id", "area", "area_name", "owner_name", "title", "kind", "kind_display",
+                  "source_path", "summary", "last_verified_at", "verified_by",
+                  "review_interval_days", "status", "next_review_at", "is_gap",
+                  "created_at", "updated_at"]
+        read_only_fields = ["id", "area_name", "owner_name", "kind_display", "last_verified_at",
+                            "verified_by", "status", "next_review_at", "is_gap",
+                            "created_at", "updated_at"]
+
+    def get_status(self, piece: KnowledgePiece) -> str:
+        return knowledge.freshness(piece)
+
+    def get_next_review_at(self, piece: KnowledgePiece) -> str | None:
+        vence = knowledge.due_date(piece)
+        return vence.isoformat() if vence else None
+
+    def get_is_gap(self, piece: KnowledgePiece) -> bool:
+        """Peça sem arquivo é **lacuna tácita** — o que só alguém sabe e ainda não está escrito."""
+        return not piece.source_path
 
 
 class NotificationSerializer(serializers.ModelSerializer[Notification]):

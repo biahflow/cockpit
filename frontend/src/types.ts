@@ -63,7 +63,7 @@ export type ClientOverview = {
   ai_score: AiScore | null;
 };
 export type AiScore = { maturity: number | null; opportunity: number | null; dimensions: AiScoreDimension[]; summary: string; scored_at: string };
-export type AgentReply = { text: string; interaction: number };
+export type AgentReply = { text: string; interaction: number; sources?: AgentSource[] };
 export type Recommendation = { kind: string; label: string; detail: string; url: string };
 export type Notification = { id: number; kind: string; message: string; url: string; read: boolean; created_at: string };
 /** Participação numa equipe de projeto — é o que dá acesso a quem é da Entrega (RFC 0003). */
@@ -113,3 +113,16 @@ export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "renegotia
 export type InvoiceMethod = "pix" | "boleto" | "card" | "transfer" | "other" | "";
 export type Invoice = { id: number; client: number; client_name: string; project: number | null; project_name: string; service: number | null; service_name: string; number: string; amount: string; description: string; due_date: string; method: InvoiceMethod; method_display: string; status: InvoiceStatus; status_display: string; is_overdue: boolean; issued_at: string | null; issued_by: number | null; paid_at: string | null; settled_by: number | null; cancelled_at: string | null; cancelled_by: number | null; cancel_reason: string; provider: string; external_reference: string; payment_url: string; created_at: string; updated_at: string };
 export type InvoiceSummary = { open: string; overdue: string; paid: string; open_count: number; overdue_count: number; paid_count: number };
+
+// Base de conhecimento interna (FDD 029). `status` é derivado no backend — depende do dono da área
+// e do relógio —, então a tela **não** o recalcula: reproduzi-lo aqui seria a segunda expressão da
+// regra, e ela divergiria na primeira mudança de prazo.
+export type KnowledgeStatus = "sem_dono" | "vencido" | "a_vencer" | "corrente";
+export type KnowledgeKind = "decision" | "procedure" | "reference";
+export type KnowledgeArea = { id: number; name: string; slug: string; position: number; active: boolean; owner: number | null; owner_name: string; review_interval_days: number };
+export type KnowledgePiece = { id: number; area: number | null; area_name: string; owner_name: string; title: string; kind: KnowledgeKind; kind_display: string; source_path: string; summary: string; last_verified_at: string | null; verified_by: number | null; review_interval_days: number | null; status: KnowledgeStatus; next_review_at: string | null; is_gap: boolean; created_at: string; updated_at: string };
+export type KnowledgeSummary = Record<KnowledgeStatus, number>;
+
+// A citação que o agente devolve (ADR 0023). `stale` marca fonte vencida — a citação sem esse aviso
+// legitimaria material velho, que é o modo de falha que a FDD 029 chama de pior que não ter KB.
+export type AgentSource = { ref: string; piece: number; title: string; section: string; path: string; stale: boolean };

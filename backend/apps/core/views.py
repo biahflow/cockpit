@@ -46,6 +46,7 @@ from . import (
     invoices,
     journey,
     kickoff,
+    knowledge,
     payments,
     portal,
     qualification,
@@ -75,6 +76,8 @@ from .models import (
     Invitation,
     Invoice,
     JourneyPhase,
+    KnowledgeArea,
+    KnowledgePiece,
     Lead,
     Meeting,
     Milestone,
@@ -109,6 +112,8 @@ from .serializers import (
     InvitationSerializer,
     InvoiceSerializer,
     JourneyPhaseSerializer,
+    KnowledgeAreaSerializer,
+    KnowledgePieceSerializer,
     LeadIntakeSerializer,
     LeadSerializer,
     LinkExternalSerializer,
@@ -285,7 +290,7 @@ _TEXTO_CORRIDO = (
 
 def _ai_run(  # type: ignore[no-untyped-def]
     request, feature, system, user_prompt, project=None, opportunity=None,
-    artifact_kind=None, artifact_title="", source_meeting=None,
+    artifact_kind=None, artifact_title="", source_meeting=None, grounding=None,
 ):
     """Guarda (flag + limite), executa a IA e registra a auditoria.
 
@@ -300,16 +305,29 @@ def _ai_run(  # type: ignore[no-untyped-def]
     # a falta de guarda passou batida: 429 de rate limit, timeout de 30 s, chave revogada ou modelo
     # sem acesso na conta viravam 500 do Django. Nada é gravado antes da resposta chegar, então a
     # falha não consome a cota diária de quem tentou nem deixa artefato pela metade.
+    # O material da metodologia entra **aqui e só aqui** (FDD 029). `grounding` é preenchido
+    # exclusivamente pelo `AgentView`; os outros oito chamadores passam `None` e seguem idênticos.
+    # Ponto único de chamada é o que faz o anti-vazamento ser estrutural em vez de vigiado: não há
+    # segundo caminho por onde o corpus interno saia.
+    if grounding is not None:
+        system = f"{system}\n\n{knowledge.GROUNDING_RULES}"
+        user_prompt = f"{user_prompt}\n\n{grounding.block}"
     try:
         text, usage = ai.complete(f"{system}\n\n{_TEXTO_CORRIDO}", user_prompt)
     except ai.AiProviderError as exc:
         logger.exception("chamada de IA (%s) falhou", feature)
         raise AiProviderUnavailable() from exc
+    sources: list[dict] = []
+    if grounding is not None:
+        text, sources = knowledge.enforce_citations(text, grounding)
     interaction = AiInteraction.objects.create(
         user=request.user, feature=feature, project=project, opportunity=opportunity,
         prompt_tokens=usage.get("prompt_tokens", 0), completion_tokens=usage.get("completion_tokens", 0),
+        sources=sources,
     )
     payload: dict[str, object] = {"text": text, "interaction": interaction.id}
+    if grounding is not None:
+        payload["sources"] = sources
     if artifact_kind is not None:
         artifact = Artifact.objects.create(
             kind=artifact_kind, title=artifact_title, content=text,
@@ -1149,6 +1167,82 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return Response(dados)
 
 
+class KnowledgeAreaViewSet(viewsets.ModelViewSet):
+    """As áreas de conhecimento e seus donos (FDD 029). Catálogo: todos leem, admin escreve."""
+
+    resource = "knowledge_area"
+    queryset = KnowledgeArea.objects.select_related("owner").all()
+    serializer_class = KnowledgeAreaSerializer
+    permission_classes = [RolePermission]
+
+
+class KnowledgePieceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O inventário de conhecimento (FDD 029).
+
+    Leitura para todo autenticado **de propósito**: o dono de uma área pode ser de qualquer papel, e
+    avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado. Escrever é do admin,
+    com uma exceção — `verify`, que é justamente o ato que se espera do dono.
+    """
+
+    resource = "knowledge"
+    queryset = KnowledgePiece.objects.select_related("area", "area__owner", "verified_by").all()
+    serializer_class = KnowledgePieceSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("area",)
+    filter_exact_fields = ("kind",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        estado = self.request.query_params.get("status")
+        if not estado:
+            return queryset
+        # O estado é derivado (depende do dono da área e do relógio), então filtra-se em Python
+        # sobre o inventário — que é a mesma função que a tela e o job usam. Reproduzi-lo em SQL
+        # seria a segunda expressão da regra, e ela divergiria na primeira mudança de prazo.
+        ids = [piece.pk for piece in knowledge.inventory().get(estado, [])]
+        return queryset.filter(pk__in=ids)
+
+    @extend_schema(responses=KnowledgePieceSerializer, request=None)
+    @action(detail=True, methods=["post"])
+    def verify(self, request: Request, pk: str | None = None) -> Response:
+        """Registra que alguém conferiu esta peça hoje — com autor e carimbo.
+
+        Ação e não campo, no molde do `record-consent` (FDD 027): "está conferido" sem dizer quem
+        conferiu é alegação de ninguém, e é exatamente o que apodrece num inventário de frescor.
+
+        Admin sempre; além dele, **o dono da área** — que é de quem se espera o ato, e travá-lo
+        atrás de admin faria o aviso chegar a quem não pode agir sobre ele.
+        """
+        piece = self.get_object()
+        dono = piece.area.owner_id if piece.area else None
+        if not request.user.is_admin_role and dono != request.user.pk:
+            nome = piece.area.owner.get_full_name() if dono else "ninguém ainda"
+            return Response(
+                {"detail": f"Só o admin ou quem responde pela área ({nome}) pode verificar."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        piece.last_verified_at = timezone.localdate()
+        piece.verified_by = request.user
+        piece.save(update_fields=["last_verified_at", "verified_by", "updated_at"])
+        return Response(KnowledgePieceSerializer(piece).data)
+
+    @extend_schema(
+        responses=inline_serializer(
+            name="KnowledgeSummary",
+            fields={
+                "sem_dono": serializers.IntegerField(),
+                "vencido": serializers.IntegerField(),
+                "a_vencer": serializers.IntegerField(),
+                "corrente": serializers.IntegerField(),
+            },
+        )
+    )
+    @action(detail=False, methods=["get"])
+    def summary(self, request: Request) -> Response:
+        grupos = knowledge.inventory()
+        return Response({estado: len(pecas) for estado, pecas in grupos.items()})
+
+
 class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """Artefatos da jornada (Discovery, Assessment, Proposta, Contrato) — FDD 016."""
 
@@ -1903,7 +1997,12 @@ class AgentView(APIView):
         if not question:
             return Response({"detail": "Informe uma pergunta."}, status=status.HTTP_400_BAD_REQUEST)
         prompt = f"{agent.build_context(request.user)}\n\nPergunta: {question}"
-        return _ai_run(request, f"agent_{key}", agent.system, prompt)
+        # Abaixo do piso de similaridade `ground` devolve `None`, nada é injetado, e o agente
+        # responde exatamente como respondia antes desta FDD — que é o que mantém "o que está
+        # atrasado?" sendo uma pergunta operacional em vez de virar uma lacuna.
+        return _ai_run(
+            request, f"agent_{key}", agent.system, prompt, grounding=knowledge.ground(question)
+        )
 
 
 class AiFeedbackView(APIView):

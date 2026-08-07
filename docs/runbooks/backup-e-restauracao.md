@@ -173,3 +173,18 @@ funcionam.
 | upload falha com "permission denied" depois de restaurar | mídia restaurada com outro dono; o script ajusta pelo dono do diretório montado — confira `DJANGO_MEDIA_ROOT` |
 | as cópias sumiram | alguém rodou `down -v`: ele leva o volume `backup_data` junto. É o que o offsite existe para sobreviver |
 | o bucket não recebe nada | credencial ou endpoint errados: `logs backup` traz o erro do rclone; teste com `exec backup rclone ls :s3:SEU-BUCKET` |
+
+
+## A extensão `vector` precisa existir no alvo (FDD 029)
+
+Desde que o corpus de conhecimento passou a guardar embeddings, o dump carrega
+`CREATE EXTENSION vector;` e colunas do tipo `vector`. **Restaurar num Postgres que não tem a
+extensão falha** — e falha no início, no `CREATE EXTENSION`, não no meio.
+
+Não é problema no caminho normal: o `db` do compose é `pgvector/pgvector:pg16`, e o drill restaura
+nessa mesma imagem a cada PR (inclusive conferindo que um vetor de 1536 posições volta byte a byte).
+A ressalva vale para quem restaurar **à mão** num servidor avulso: instale a extensão antes, ou use
+a mesma imagem.
+
+O sidecar de backup continua em `postgres:16-alpine` e isso está correto — ele precisa de `pg_dump`
+da mesma **major**, não de pgvector. Ver a emenda na ADR 0013.

@@ -25,7 +25,7 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 # Catálogos globais: leitura para todo autenticado, escrita só de admin. Não são de projeto e por
 # isso não entram em `PROJECT_OF` — o objeto não pendura em lugar nenhum, é config da casa.
 # `blueprint` cobre o bloco e a variante dele, como `journey` cobre a fase e o entregável.
-CATALOG = {"service", "vertical", "blueprint"}
+CATALOG = {"service", "vertical", "blueprint", "knowledge_area"}
 
 # Recursos que vivem dentro de um projeto: a permissão de objeto deles é uma pergunta só —
 # a pessoa participa do projeto? O caminho até o projeto varia por modelo.
@@ -74,12 +74,20 @@ class RolePermission(BasePermission):
                             "digital_employee", "project_member", "risk", "health", "case",
                             "invoice"}:
                 return request.method in SAFE_METHODS
+            if resource == "knowledge":
+                return request.method in SAFE_METHODS or getattr(view, "action", None) == "verify"
             return resource in {"client", "contact", "opportunity", "document", "lead",
                                 "analytics", "artifact"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
                             "risk", "health", "case"}:
                 return request.method in SAFE_METHODS
+            # Conhecimento: **todo mundo lê**, e o dono da área verifica. O dono pode ser de
+            # qualquer papel, e avisá-lo sobre uma peça que ele não consegue abrir — ou não pode
+            # marcar como conferida — seria um laço quebrado (FDD 029). Quem barra o não-dono é a
+            # própria ação, que confere a área.
+            if resource == "knowledge":
+                return request.method in SAFE_METHODS or getattr(view, "action", None) == "verify"
             # Projeto não nasce nem morre pela mão da Entrega: vem da conversão comercial ou
             # do admin. Editar o que é seu, sim — e o objeto abaixo decide qual é o seu.
             # O corte é por *ação*, não por método: as ações de detalhe (assistente, resumo,
@@ -112,6 +120,12 @@ class RolePermission(BasePermission):
                 return request.method in SAFE_METHODS
             if getattr(view, "resource", "") in {"client", "contact"}:
                 return request.method in SAFE_METHODS
+            # Conhecimento não é objeto de projeto e cairia no `return False` do fim — a Entrega
+            # leria a lista e tomaria 403 no detalhe e no `verify`. É exatamente o defeito que a
+            # FDD 026 achou no catálogo, agora previsto em vez de descoberto: o dono de uma área
+            # pode ser da Entrega, e é dele que se espera o ato de verificar.
+            if getattr(view, "resource", "") == "knowledge":
+                return request.method in SAFE_METHODS or getattr(view, "action", None) == "verify"
             if isinstance(obj, Opportunity):
                 return obj.is_won and request.method in SAFE_METHODS
             if isinstance(obj, ProjectMember):

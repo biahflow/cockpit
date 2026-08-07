@@ -12,6 +12,7 @@ dependencies = [
   "google-auth>=2.56.2",
   "gunicorn>=23,<24",
   "openai>=2.52.1",
+  "pgvector>=0.3",
   "psycopg[binary]>=3.2,<3.3",
   "redis>=5.2,<7",
   # Rastreamento de erro (ADR 0012). Sempre instalado, inerte sem SENTRY_DSN.
@@ -35,6 +36,9 @@ dev = [
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py"]
 addopts = "--strict-markers --cov=apps.core --cov-config=.coveragerc --cov-report=term-missing --cov-fail-under=90"
+# `--strict-markers` obriga a declarar. `pgvector` marca o que só roda contra um Postgres com a
+# extensão: na suíte padrão (SQLite) eles pulam, e o job `backend-pgvector` do CI roda só eles.
+markers = ["pgvector: exige Postgres com a extensão vector; pula no SQLite da suíte padrão"]
 
 [tool.ruff]
 line-length = 100
