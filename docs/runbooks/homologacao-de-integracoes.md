@@ -592,3 +592,81 @@ docker compose exec api uv run python manage.py shell -c \
 No painel do Stripe em modo de teste, apague o `Customer` criado — os `invoiceitems` e as faturas
 saem junto. Modo de teste não é motivo para deixar lixo, e um `Customer` órfão com
 `metadata[client_id]` apontando para um id que não existe mais confunde a próxima rodada.
+
+---
+
+## 6. Base de conhecimento interna — homologada em 07/08/2026
+
+**Variáveis:** `AI_ENABLED=true`, `OPENAI_API_KEY` e `AI_EMBEDDING_MODEL`
+(default `text-embedding-3-small`). Mesma credencial do assistente — não há flag própria.
+
+**Custo da rodada:** ~US$ 0,003. O corpus inteiro são 421 trechos; indexá-lo é uma vez, e cada
+pergunta custa fração de centavo.
+
+### Sondar antes de gastar
+
+```bash
+docker compose exec api uv run python manage.py check_integrations --all
+# OK  Assistente de IA   modelos gpt-4o-mini e text-embedding-3-small acessíveis
+```
+
+A sonda passou a conferir **os dois** modelos nesta rodada. Uma conta com acesso ao chat e sem
+acesso a embeddings responde tudo normalmente até alguém rodar a ingestão — e aí a falha aparece
+como erro de fornecedor, longe da causa.
+
+### Indexar
+
+```bash
+docker compose exec api uv run python manage.py ingest_knowledge
+# peças: 66 (66 novas) · trechos: 421 · embeddadas: 421 · arquivadas: 0
+```
+
+Reingestão é idempotente: só reembeda o que mudou de hash, de modelo, ou está sem vetor.
+
+### O que foi medido — e é o achado principal
+
+Similaridade do melhor trecho, por classe de pergunta:
+
+| Classe | Valores medidos | Faixa |
+| --- | --- | --- |
+| Metodologia ("como restaurar o backup?") | 51 56 58 61 62 69 | **50,6 – 68,9%** |
+| Operacional ("o que está atrasado?") | 47 47 51 52 53 56 | **47,0 – 56,4%** |
+| Fora do corpus ("política de férias", "CNPJ", "copa do mundo") | 22 25 37 49 | 22,5 – 48,5% |
+
+**As duas primeiras faixas se sobrepõem**, e isso derrubou o desenho: não existe limiar que separe
+"perguntar sobre o método" de "perguntar sobre os dados". Não é ruído de medida — o corpus
+*descreve o domínio*, então uma pergunta sobre projeto atrasado se parece com o texto de uma FDD
+sobre projeto atrasado.
+
+### Dois achados
+
+**1. O limiar não pode decidir se a citação é obrigatória.** Estava planejado um piso de 30%: acima
+dele, material injetado e citação exigida. Com os números acima, "o que está atrasado?" (52,5%)
+passaria do piso, cairia na regra estrita, e uma **resposta operacional correta seria substituída
+por "não encontrei isso no material"**. Agora quem declara o regime é o modelo (`FONTE: [K1]` ou
+`FONTE: dados da área`), e o limiar — recalibrado para 45% — só evita gastar token com material
+fora do assunto. Virou a **ADR 0023**.
+
+**2. A citação vinha só na linha de declaração, e o código a descartava.** O prompt manda terminar
+com `FONTE: [K1]`, e o `gpt-4o-mini` faz exatamente isso — cita **só** ali. A primeira versão
+removia essa linha *antes* de procurar marcador, então nada resolvia e a lacuna **substituía uma
+resposta correta**, com os comandos exatos deste runbook. Nenhum dublê acharia: ele citaria onde o
+teste mandasse. É o achado mais concreto a favor de rodar contra o fornecedor de verdade.
+
+### O que foi observado, depois das correções
+
+| Pergunta | Ancorou? | Resultado |
+| --- | --- | --- |
+| "qual o procedimento de restauração do backup?" | sim (61%) | resposta correta, citando `[K1] Runbook — backup e restauração` |
+| "qual é a política de férias da empresa?" | **não** (abaixo do piso) | o modelo declina honestamente; nada é inventado |
+| "o que está atrasado nos projetos?" | sim (53%) | o modelo declara `FONTE: dados da área` e a resposta operacional **passa intacta** |
+
+### Limpar
+
+```bash
+docker compose exec api uv run python manage.py shell -c \
+  "from apps.core.models import KnowledgeChunk; KnowledgeChunk.objects.update(embedding=None)"
+```
+
+Zerar os vetores basta: as peças e a curadoria (dono, carimbo de verificação) **devem** sobreviver,
+e a próxima ingestão reembeda o que faltar.

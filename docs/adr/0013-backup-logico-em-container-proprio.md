@@ -98,3 +98,25 @@ com versionamento e lixeira próprios; o que o portal guarda é o `drive_file_id
 
 **`down -v` continua sendo o comando mais perigoso do repositório** — agora ele leva também as
 cópias, porque elas moram em volume nomeado do mesmo compose. O offsite é o que sobrevive a isso.
+
+
+## Emenda (FDD 029, 07/08/2026) — a invariante é a major, não a imagem
+
+O `db` passou a ser `pgvector/pgvector:pg16` (ADR 0022) e o sidecar **ficou** em
+`postgres:16-alpine`. À primeira vista isso desfaz o acoplamento que esta ADR criou de propósito;
+não desfaz, mas troca o mecanismo, e vale registrar por quê.
+
+O que esta ADR protege é **paridade de major**: `pg_dump` de major menor recusa rodar. "Mesma
+imagem" era como isso ficava visível no compose, não a regra em si. O sidecar não precisa de
+pgvector — a extensão é do servidor, e o `pg_dump` emite `CREATE EXTENSION vector;` mais os valores
+como texto — e rebaseá-lo em Debian obrigaria a reescrever o `entrypoint.sh`, que é busybox
+(`/etc/crontabs/root`, `crond`), por benefício nenhum.
+
+Como o mecanismo antigo deixou de valer, o novo é **mais forte que o olho**: o `backup-drill.sh`
+extrai a major dos dois arquivos e reprova se divergirem. E o drill passou a semear um
+`KnowledgeChunk` com 1536 floats e conferir que ele volta da restauração — porque um dump que perde
+o embedding restauraria um índice mudo, em que as buscas param de achar sem erro nenhum.
+
+**Ressalva que não estava aqui:** restaurar num servidor **sem** a extensão `vector` falha no
+`CREATE EXTENSION`. O drill restaura na mesma imagem e por isso passa; quem restaurar à mão num
+Postgres puro precisa instalar a extensão antes. Ver `docs/runbooks/backup-e-restauracao.md`.

@@ -23,3 +23,5 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0019 — Variante de blueprint como tabela, não como JSON (a constraint é o que decide)
 - 0020 — Case como fotografia: números persistidos no congelamento, não recalculados
 - 0021 — Registro financeiro não arquiva: a exceção declarada ao soft delete da casa
+- 0022 — Recuperação do corpus interno neste repositório, com pgvector
+- 0023 — Resposta ancorada: citar ou declarar a lacuna (e o modelo declara o regime)

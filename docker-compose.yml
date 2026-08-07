@@ -1,6 +1,11 @@
 services:
   db:
-    image: postgres:16-alpine
+    # pgvector, e não `postgres:16-alpine` (FDD 029, ADR 0022). Mesma major, mesmo entrypoint e
+    # mesmas variáveis POSTGRES_* — o que muda é que a extensão `vector` existe no servidor.
+    # **Não há tag alpine oficial do pgvector**: esta imagem é Debian, e trocar musl por glibc muda
+    # a collation de texto. Para um cluster que **já tem dado**, isso pede `REINDEX DATABASE` —
+    # ver o procedimento em docs/runbooks/producao.md antes de trocar a imagem em produção.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-biahflow}
       POSTGRES_USER: ${POSTGRES_USER:-biahflow}

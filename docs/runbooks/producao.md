@@ -219,3 +219,43 @@ mandar para fora do host: **`backup-e-restauracao.md`**.
 Nenhuma. O bloco fechou: monitoramento (FDD 020, ADR 0012 — ver `monitoramento.md`), backup
 (FDD 021, ADR 0013 — ver `backup-e-restauracao.md`) e a matriz de testes de acessibilidade,
 responsividade e carga (FDD 022, ADR 0014 — ver `testes-de-carga.md`).
+
+
+## Upgrade da imagem do Postgres para pgvector (FDD 029, ADR 0022)
+
+O `db` passou de `postgres:16-alpine` para `pgvector/pgvector:pg16`. Numa instalação **nova** não
+há nada a fazer. Num cluster que **já tem dado**, há — e é o passo mais perigoso desta mudança.
+
+**Por quê.** Alpine é musl, a imagem do pgvector é Debian/glibc, e **a collation de texto vem da
+libc**. Montar o mesmo `postgres_data` sob a outra libc pode deixar índices btree sobre colunas de
+texto sutilmente mal-ordenados. É silencioso: só aparece quando um `ORDER BY`, um `LIKE` ou uma
+checagem de unicidade responde errado. O teste de mesa do backup **não pega isso**, porque sempre
+parte de um cluster vazio.
+
+**O procedimento, e ele não é opcional:**
+
+```bash
+# 1. Pare quem escreve
+docker compose -f docker-compose.prod.yml stop web api scheduler
+
+# 2. Backup antes de tocar em qualquer coisa
+docker compose -f docker-compose.prod.yml exec backup backup.sh
+
+# 3. Troque a imagem (já está no compose) e suba só o banco
+docker compose -f docker-compose.prod.yml up -d db
+
+# 4. Reconstrua os índices — é este passo que fecha o risco de collation
+docker compose -f docker-compose.prod.yml exec db \
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'REINDEX DATABASE CONCURRENTLY "'"$POSTGRES_DB"'";'
+
+# 5. Migre e suba o resto
+docker compose -f docker-compose.prod.yml run --rm api-migrate
+docker compose -f docker-compose.prod.yml up -d
+
+# 6. Popule o corpus de conhecimento
+docker compose -f docker-compose.prod.yml exec api uv run python manage.py ingest_knowledge
+```
+
+**Caminho alternativo, e mais seguro se houver janela:** restaurar o dump num cluster **novo**
+(`restore.sh --latest --yes` sobre um volume vazio). A restauração reconstrói todo índice por
+construção, então o problema de collation não chega a existir.

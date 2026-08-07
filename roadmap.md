@@ -316,11 +316,33 @@ um radar que ele respeita.
       cobrança e a IA de tom (camadas 3 e 4 — cobrar antes de reconciliar produz um agente que
       importuna quem já pagou), a nota de crédito, a NFS-e e **trocar a fonte do ROI**, que segue
       pedindo ADR próprio. Ver RFC 0004, FDD 028 e ADR 0021.
-- [ ] **Base de conhecimento interna e frescor — Fase 8.** O KB voltado ao cliente **já
-      existe** no repositório do portal; o interno não: aqui não há recuperação de conteúdo, e
-      `build_project_context` passa documentos só como nomes. Frescor com dono por área e
-      carimbo de validade cabe no `ScheduledJobRun` que já existe. Ver FDD 029 — e a ressalva
-      de que boa parte da resposta não é wiki, é **método codificado no produto**.
+- [x] **Base de conhecimento interna e frescor — Fase 8.** O corpus da metodologia — 68
+      arquivos, 450 trechos — deixa de viver só no repositório e passa a ancorar a resposta dos
+      agentes, **com citação exata** ("Runbook — backup e restauração › Restaurar") e lacuna
+      honesta quando não há base. O fatiamento corta por cabeçalho e **nunca cruza seção**, que é
+      o que faz a citação ser conferível em dez segundos em vez de estimada. Junto vem a metade
+      que funciona **sem IA nenhuma**: o inventário com **dono por área** (`KnowledgeArea`, no
+      molde do `Vertical`), `verify` com autor e carimbo, e o job diário que avisa quem responde —
+      e que **não sai com erro**, porque dívida editorial não é incidente e transformar runbook
+      vencido em evento de Sentry ensina quem opera a silenciar o Sentry. O corpus é **artefato
+      gerado e commitado**, conferido no CI como o `openapi.yaml`: mudar o contexto de build para
+      alcançar `docs/` tornaria inerte o `.dockerignore` que mantém documento real de cliente fora
+      da imagem. **A rodada 5 de homologação rodou contra a OpenAI real e achou dois defeitos.** O
+      primeiro matou o desenho: a medição mostrou que as faixas de similaridade de "pergunta sobre
+      o método" (51–69%) e "pergunta sobre os dados" (47–56%) **se sobrepõem**, então limiar nenhum
+      as separa — e com o piso planejado, "o que está atrasado?" viraria "não encontrei isso no
+      material". Quem declara de onde veio a resposta passou a ser o **modelo**, não o cosseno
+      (ADR 0023). O segundo foi meu e era o mais caro: o `gpt-4o-mini` cita **só** na linha
+      `FONTE: [K1]`, e o código a descartava antes de resolver o marcador — a lacuna substituía uma
+      resposta certa, com os comandos exatos do runbook. Nenhum dublê acharia. A imposição é
+      código: marcador inventado conta zero, e alegar metodologia sem sustentar vira lacuna que
+      **substitui** em vez de anotar. O material entra num **ponto único** (`_ai_run`), e é isso
+      que faz o anti-vazamento ser estrutural — o corpus não alcança proposta, contrato nem o
+      portal do cliente. Nasce a tela **Conhecimento** (sem restrição de papel: o dono de uma área
+      pode ser de qualquer um), o banco vira `pgvector/pgvector:pg16` e um segundo job de CI roda a
+      busca contra Postgres de verdade, com teste de paridade contra o ranker em Python. Ver
+      FDD 029, ADR 0022 e ADR 0023. **Fora**: ingerir conteúdo de `Document` de projeto, registro
+      de digest de prompt e índice ANN (nomeado com o limiar de ~50 mil trechos, não omitido).
 - [ ] **Indicação no pico de valor e enriquecimento de lead — Fase 9.** A captação já tem
       qualificação por IA e agendamento com free/busy do Google (FDD 013); o que falta é
       pedir indicação **no momento do valor realizado** e enriquecer o lead para a
