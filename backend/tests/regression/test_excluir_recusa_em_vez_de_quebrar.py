@@ -22,8 +22,9 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.core.exceptions import api_exception_handler
-from apps.core.models import JourneyPhase, PipelineStage, ProjectPhase, User
+from apps.core.models import JourneyPhase, PipelineStage, ProjectPhase, User, Vertical
 from apps.core.tests.factories import (
+    ClientFactory,
     OpportunityFactory,
     PipelineStageFactory,
     ProjectFactory,
@@ -151,6 +152,27 @@ def test_etapa_sem_oportunidade_e_excluida(admin_client: APIClient) -> None:
 
     assert admin_client.delete(reverse("pipelinestage-detail", args=[etapa.pk])).status_code == 204
     assert not PipelineStage.objects.filter(pk=etapa.pk).exists()
+
+
+@pytest.mark.django_db
+def test_vertical_em_uso_nao_apaga_calada_o_setor_dos_clientes(admin_client: APIClient) -> None:
+    """A rede global **não** cobre este caso, e é por isso que ele está aqui (FDD 026).
+
+    Todo dependente deste arquivo até agora era `PROTECT`: o banco recusava e o único defeito era o
+    status. `Client.vertical` é `SET_NULL` — o banco aceita de bom grado e zera o setor de **todos**
+    os clientes que a tinham, com 204 na tela e nada dizendo o que se perdeu. Aqui a guarda
+    explícita do viewset não é a mensagem boa sobre uma recusa que existiria de qualquer jeito: ela
+    é a recusa.
+    """
+    vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
+    cliente = ClientFactory(vertical=vertical)
+
+    resposta = admin_client.delete(reverse("vertical-detail", args=[vertical.pk]))
+
+    assert resposta.status_code == 409
+    assert "Desative" in resposta.data["detail"]
+    cliente.refresh_from_db()
+    assert cliente.vertical_id == vertical.pk
 
 
 def test_a_rede_global_traduz_qualquer_protecterror() -> None:

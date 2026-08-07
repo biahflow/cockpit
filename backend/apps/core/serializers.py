@@ -12,14 +12,16 @@ from django.core.files.uploadedfile import UploadedFile
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import drive
+from . import blueprints, drive
 from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
     Artifact,
+    BlueprintVariant,
     Client,
     Contact,
     DigitalEmployee,
+    DigitalEmployeeBlueprint,
     Document,
     Invitation,
     JourneyPhase,
@@ -39,6 +41,7 @@ from .models import (
     SignatureRequest,
     Task,
     User,
+    Vertical,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,9 +65,12 @@ class UserSerializer(serializers.ModelSerializer[User]):
 
 
 class ClientSerializer(serializers.ModelSerializer[Client]):
+    vertical_name = serializers.CharField(source="vertical.name", read_only=True, default="")
+
     class Meta:
         model = Client
-        fields = ["id", "name", "legal_name", "tax_id", "owner", "status", "created_at", "updated_at"]
+        fields = ["id", "name", "legal_name", "tax_id", "owner", "status", "vertical",
+                  "vertical_name", "created_at", "updated_at"]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
 
     def validate_status(self, value: str) -> str:
@@ -202,6 +208,12 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
 
 class ProjectSerializer(serializers.ModelSerializer[Project]):
     is_overdue = serializers.SerializerMethodField()
+    # A vertical do cliente, aqui, para o detalhe do projeto pedir o catálogo já resolvido sem
+    # ter de carregar o cliente inteiro só por causa de um id (FDD 026).
+    client_vertical = serializers.IntegerField(source="client.vertical_id", read_only=True)
+    client_vertical_name = serializers.CharField(
+        source="client.vertical.name", read_only=True, default=""
+    )
 
     class Meta:
         model = Project
@@ -209,7 +221,7 @@ class ProjectSerializer(serializers.ModelSerializer[Project]):
             "id", "client", "opportunity", "name", "description", "owner", "start_date", "due_date",
             "status", "service", "actual_value", "cost", "is_overdue", "created_at", "updated_at",
             "ai_maturity", "ai_opportunity", "ai_dimensions", "ai_score_summary", "ai_scored_at",
-            "ai_score_reviewed",
+            "ai_score_reviewed", "client_vertical", "client_vertical_name",
         ]
         # ai_maturity/opportunity/dimensions/summary são editáveis: parte da revisão humana do
         # rascunho antes de publicar. ai_scored_at é carimbo da geração (só a IA escreve).
@@ -397,12 +409,82 @@ class ServiceSerializer(serializers.ModelSerializer[Service]):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class VerticalSerializer(serializers.ModelSerializer[Vertical]):
+    """Setor do cliente (config admin, vocabulário editável — FDD 026)."""
+
+    class Meta:
+        model = Vertical
+        fields = ["id", "name", "slug", "position", "active"]
+        read_only_fields = ["id"]
+
+
+class BlueprintVariantSerializer(serializers.ModelSerializer[BlueprintVariant]):
+    """Parametrização de um blueprint por vertical. Campo em branco herda o do blueprint."""
+
+    vertical_name = serializers.CharField(source="vertical.name", read_only=True)
+
+    class Meta:
+        model = BlueprintVariant
+        fields = ["id", "blueprint", "vertical", "vertical_name", "description", "kpi_label",
+                  "default_hours_saved_month", "default_roi_month"]
+        # A unicidade (blueprint, vertical) vem da UniqueConstraint do modelo; o DRF a deriva
+        # sozinho, como faz com o `tier` do `Service`.
+        read_only_fields = ["id"]
+
+
+class DigitalEmployeeBlueprintSerializer(serializers.ModelSerializer[DigitalEmployeeBlueprint]):
+    """Bloco do catálogo, com as variantes aninhadas (forma do `JourneyPhaseSerializer`).
+
+    `resolved` só aparece quando o viewset recebe `?vertical=`: são os valores já com a variante
+    aplicada, que é o que a instanciação vai copiar. Sem o parâmetro o campo é omitido — quem
+    lista o catálogo para editá-lo não quer ver os valores de um setor em particular.
+    """
+
+    variants = BlueprintVariantSerializer(many=True, read_only=True)
+    area_display = serializers.CharField(source="get_area_display", read_only=True)
+    service_name = serializers.CharField(source="service.name", read_only=True, default="")
+    resolved = serializers.SerializerMethodField()
+    has_variant = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DigitalEmployeeBlueprint
+        fields = ["id", "name", "area", "area_display", "description", "kpi_label",
+                  "default_hours_saved_month", "default_roi_month", "service", "service_name",
+                  "active", "variants", "resolved", "has_variant"]
+        read_only_fields = ["id"]
+
+    def _vertical(self) -> Vertical | None:
+        return self.context.get("vertical")
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_resolved(self, blueprint: DigitalEmployeeBlueprint) -> dict[str, object] | None:
+        vertical = self._vertical()
+        if vertical is None:
+            return None
+        valores = blueprints.resolve(blueprint, vertical)
+        return {
+            "name": valores["name"],
+            "area": valores["area_display"],
+            "description": valores["description"],
+            "kpi_label": valores["kpi_label"],
+            "hours_saved_month": str(valores["hours_saved_month"]),
+            "roi_month": str(valores["roi_month"]),
+        }
+
+    def get_has_variant(self, blueprint: DigitalEmployeeBlueprint) -> bool:
+        return blueprints.variant_for(blueprint, self._vertical()) is not None
+
+
 class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
     class Meta:
         model = DigitalEmployee
-        fields = ["id", "project", "name", "area", "description", "status", "kpi_label",
-                  "kpi_value", "hours_saved_month", "roi_month", "created_at", "updated_at"]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        fields = ["id", "project", "blueprint", "name", "area", "description", "status",
+                  "kpi_label", "kpi_value", "hours_saved_month", "roi_month",
+                  "created_at", "updated_at"]
+        # `blueprint` é procedência, gravada pela rota `from-blueprint` (FDD 026). Gravável aqui,
+        # abriria um segundo caminho que aponta para o template **sem copiar** — exatamente o que
+        # a cópia por instância existe para impedir.
+        read_only_fields = ["id", "blueprint", "created_at", "updated_at"]
 
 
 class ArtifactSerializer(serializers.ModelSerializer[Artifact]):

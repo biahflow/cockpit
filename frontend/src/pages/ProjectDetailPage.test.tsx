@@ -27,7 +27,7 @@ function stub() {
     if (path.startsWith("/artifacts")) return Promise.resolve([artifact()]);
     if (path.includes("/risk/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 0, level: "baixo", signals: [] });
     if (path.includes("/health/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 90, level: "saudável", signals: [] });
-    if (path.startsWith("/projects/")) return Promise.resolve({ id: 1, name: "Projeto X", description: "", client: 1, owner: 1, start_date: "2026-08-01", due_date: "2026-09-01", status: "active", service: null, actual_value: "0", cost: "0", is_overdue: false, ai_maturity: null, ai_opportunity: null, ai_dimensions: [], ai_score_summary: "", ai_scored_at: null, ai_score_reviewed: false });
+    if (path.startsWith("/projects/")) return Promise.resolve({ id: 1, name: "Projeto X", description: "", client: 1, owner: 1, start_date: "2026-08-01", due_date: "2026-09-01", status: "active", service: null, actual_value: "0", cost: "0", is_overdue: false, ai_maturity: null, ai_opportunity: null, ai_dimensions: [], ai_score_summary: "", ai_scored_at: null, ai_score_reviewed: false, client_vertical: 7, client_vertical_name: "Igrejas" });
     if (path.startsWith("/milestones")) return Promise.resolve([{ id: 1, project: 1, title: "Marco 1", description: "", owner: 1, due_date: "2026-08-15", completed_at: null, status: "todo", party: "provider", is_overdue: true }]);
     if (path.startsWith("/tasks")) return Promise.resolve([{ id: 1, project: 1, title: "Tarefa 1", description: "", owner: 1, due_date: "2026-08-10", completed_at: null, status: "todo", party: "provider", is_overdue: false, milestone: null }]);
     if (path.startsWith("/meetings")) return Promise.resolve([{ id: 1, project: 1, title: "Kickoff", date: "2026-08-05", recording_url: "https://rec/1", transcript: "Cliente descreveu suas dores.", status: "held" }]);
@@ -366,4 +366,65 @@ test("Vendas lê o roster e não mexe nele", async () => {
   expect(screen.queryByLabelText("Editar Agente Financeiro")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Arquivar Agente Financeiro")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Adicionar funcionário digital")).not.toBeInTheDocument();
+});
+
+
+// --- Instanciar da biblioteca (FDD 026) -------------------------------------
+//
+// O caminho que a metodologia quer: o bloco nasce preenchido, em vez de um cartão vazio para
+// alguém completar à mão — que era o estado anterior, e a razão de tudo chegar ao cliente zerado.
+
+const blueprint = (overrides = {}) => ({
+  id: 3, name: "SDR", area: "comercial", area_display: "Comercial",
+  description: "Qualifica lead fora do horário.", kpi_label: "Leads qualificados/mês",
+  default_hours_saved_month: "40.0", default_roi_month: "8000.00", service: null,
+  service_name: "", active: true, variants: [], resolved: null, has_variant: true, ...overrides,
+});
+
+function comCatalogo(...catalog: object[]) {
+  const anterior = mocks.api.getMockImplementation()!;
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path.startsWith("/digital-employee-blueprints")) return Promise.resolve(catalog);
+    if (path.includes("/from-blueprint/")) return Promise.resolve({ id: 9 });
+    if (path.startsWith("/digital-employees") && (options?.method ?? "GET") === "GET") return Promise.resolve([]);
+    return anterior(path, options);
+  });
+}
+
+test("instancia um Funcionário Digital a partir do catálogo", async () => {
+  const user = userEvent.setup();
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  comCatalogo(blueprint());
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Funcionários Digitais");
+
+  // O catálogo é pedido já resolvido pela vertical do cliente — é o que a instanciação vai copiar.
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employee-blueprints/?active=1&vertical=7"));
+  await user.selectOptions(await screen.findByLabelText("Adicionar da biblioteca"), "3");
+  await user.click(screen.getByRole("button", { name: "Instanciar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/digital-employees/from-blueprint/", expect.objectContaining({
+    method: "POST", body: JSON.stringify({ blueprint: 3 }),
+  })));
+});
+
+test("sem catálogo, a tela não mostra um seletor vazio", async () => {
+  // Instalação nova não tem biblioteca. Oferecer um `<select>` sem opção seria prometer um caminho
+  // que não existe — o formulário livre continua ali e dá conta.
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  comCatalogo();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Funcionários Digitais");
+
+  expect(screen.queryByLabelText("Adicionar da biblioteca")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Adicionar funcionário digital")).toBeInTheDocument();
+});
+
+test("Vendas não vê o caminho da biblioteca", async () => {
+  mocks.auth = { aiEnabled: true, user: { role: "sales" } };
+  comCatalogo(blueprint());
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Funcionários Digitais");
+
+  expect(screen.queryByLabelText("Adicionar da biblioteca")).not.toBeInTheDocument();
 });

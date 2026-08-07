@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from . import flags
@@ -23,6 +24,11 @@ if TYPE_CHECKING:
 
 # Limite de caracteres da transcrição enviada ao modelo (controle de tokens/custo).
 MEETING_TRANSCRIPT_LIMIT = 12000
+
+# Quantos blocos do catálogo a proposta carrega (FDD 026). Existe pela mesma razão do limite
+# acima: o catálogo é aberto e cresce sem teto, e um prompt que cresce com ele é custo por
+# chamada que ninguém pediu. Seis cabem numa proposta sem virar lista de compras.
+OPPORTUNITY_BLUEPRINT_LIMIT = 6
 
 
 class AiProviderError(Exception):
@@ -118,7 +124,47 @@ def build_opportunity_context(opportunity: Opportunity) -> str:
         lines.append(f"Preço de tabela: {'gratuito' if service.is_free else service.list_price}")
         if service.summary:
             lines.append(f"Escopo do nível: {service.summary}")
+    lines.extend(_blueprint_lines(opportunity))
     return "\n".join(lines)
+
+
+def _blueprint_lines(opportunity: Opportunity) -> list[str]:
+    """Os blocos do catálogo aplicáveis a esta oportunidade (FDD 026).
+
+    É o que faz a proposta citar o Funcionário Digital concreto — "um SDR que qualifica lead fora
+    do horário" — e não só o nível de produto. Aplicável significa: ativo, e ou amarrado ao nível
+    vendido ou genérico (sem `service`), porque um bloco de Implantação não cabe num Discovery.
+    Os valores saem **resolvidos** pela vertical do cliente, que é a razão de a variante existir.
+
+    Sem catálogo, nada é emitido — quem não construiu biblioteca segue com o contexto de antes.
+    O antivazamento fica intacto: isto lê esta oportunidade e o catálogo global, que é da casa e
+    não de cliente nenhum.
+    """
+    from . import blueprints
+    from .models import DigitalEmployeeBlueprint
+
+    aplicaveis = list(
+        DigitalEmployeeBlueprint.objects.filter(active=True)
+        .filter(Q(service=opportunity.service_id) | Q(service__isnull=True))
+        .prefetch_related("variants")[:OPPORTUNITY_BLUEPRINT_LIMIT]
+    )
+    if not aplicaveis:
+        return []
+    vertical = opportunity.client.vertical
+    lines = ["Funcionários Digitais do catálogo aplicáveis a esta venda:"]
+    for blueprint in aplicaveis:
+        valores = blueprints.resolve(blueprint, vertical)
+        detalhe = f"- {valores['name']} ({valores['area_display']})"
+        if valores["description"]:
+            detalhe += f": {valores['description']}"
+        if valores["kpi_label"]:
+            detalhe += f" | KPI: {valores['kpi_label']}"
+        if valores["hours_saved_month"]:
+            detalhe += f" | ~{valores['hours_saved_month']}h poupadas/mês"
+        lines.append(detalhe)
+    if vertical:
+        lines.append(f"Vertical do cliente: {vertical.name} (os blocos acima já vêm ajustados a ela)")
+    return lines
 
 
 def build_lead_context(lead: Lead, answers: dict | None = None) -> str:

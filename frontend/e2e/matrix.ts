@@ -27,6 +27,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/pipeline", name: "Pipeline", role: "admin" },
   { path: "/jornada", name: "Jornada", role: "admin" },
   { path: "/servicos", name: "Serviços", role: "admin" },
+  { path: "/biblioteca", name: "Biblioteca de Funcionários Digitais", role: "admin" },
   { path: "/equipe", name: "Equipe", role: "admin" },
   { path: "/configuracoes", name: "Configurações", role: "admin" },
   // Entrega sem projeto: o estado vazio é uma tela de verdade e tem seu próprio texto.
@@ -184,6 +185,22 @@ const FIXTURES: Record<string, unknown> = {
     signature_requests: index === 1
       ? [{ id: 1, signer_email: "juridico@empresa.test", status: "pending", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: null, created_at: `${HOJE}T09:00:00Z` }]
       : [],
+  })),
+  "/api/v1/verticals/": serie(5, index => ({
+    id: index, name: `Setor ${index} — indústria metalúrgica de base`, slug: `setor-${index}`,
+    position: index, active: true,
+  })),
+  "/api/v1/digital-employee-blueprints/": serie(4, index => ({
+    id: index, name: `SDR de ${NOME_LONGO}`, area: "comercial", area_display: "Comercial",
+    description: "Qualifica lead fora do horário comercial e agenda a reunião de discovery.",
+    kpi_label: "Leads qualificados por mês", default_hours_saved_month: "40.0",
+    default_roi_month: "8000.00", service: null, service_name: "", active: true,
+    variants: serie(2, v => ({
+      id: v, blueprint: index, vertical: v, vertical_name: `Setor ${v} — indústria metalúrgica de base`,
+      description: "Ajustado ao vocabulário do setor.", kpi_label: "",
+      default_hours_saved_month: null, default_roi_month: null,
+    })),
+    resolved: null, has_variant: false,
   })),
   "/api/v1/journey-phases/": serie(5, index => ({
     id: index, name: `Fase ${index} — implantação assistida`, description: "", active: true,

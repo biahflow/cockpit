@@ -20,3 +20,4 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0016 — Autenticação com o Google sem chave de conta de serviço (ADC/Workload Identity ou OAuth)
 - 0017 — Retenção de dado pessoal arquivado: mecanismo inerte, prazos a decidir
 - 0018 — Integração ligada por padrão quando configurada (e nenhuma liga sem credencial)
+- 0019 — Variante de blueprint como tabela, não como JSON (a constraint é o que decide)

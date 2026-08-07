@@ -250,13 +250,21 @@ ordem importa mais que a lista: o gargalo não é construir sinal, é a capacida
 responder a ele. Três radares tocando para um time que não dá conta de agir em um é pior que
 um radar que ele respeita.
 
-- [ ] **Biblioteca de Funcionários Digitais — Fase 5.** O `DigitalEmployee` é "o produto
-      central" pelo próprio docstring e é a **única entidade central sem FDD** — entregue na
-      Fase 3 sem FDD, ADR ou CHANGELOG. Hoje é linha plana por projeto, com `area` em texto
-      livre e KPI em duas strings soltas, e a tela só deixa preencher nome, área e status.
-      Falta o catálogo parametrizado por área e **vertical** (eixo que não existe em nenhum
-      modelo) que a entrega **instancia** em vez de recriar — terceira aplicação do molde
-      "template global + cópia por instância" que a FDD 011 já provou duas vezes. Ver FDD 026.
+- [x] **Biblioteca de Funcionários Digitais — Fase 5.** O `DigitalEmployee` era linha plana
+      por projeto: cada entrega recriava o bloco do zero, sem nada ligando o "SDR" de um
+      cliente ao do seguinte. Nasce a camada de blueprint — `Vertical` (o eixo de setor que
+      **nenhum modelo do domínio tinha**), `DigitalEmployeeBlueprint` e `BlueprintVariant` —,
+      mais `POST /projects/{id}/digital-employees/from-blueprint/`, a tela **Biblioteca** e a
+      vertical no cliente. Terceira aplicação do molde "template global + cópia por instância"
+      da FDD 011, e a cópia é o ponto: editar o catálogo amanhã não reescreve o que foi
+      entregue ontem. `?vertical=` **resolve, não filtra**, para que cliente sem vertical
+      continue funcionando. A proposta por IA passa a citar o bloco concreto, não só o nível de
+      produto. A escolha de tabela em vez de JSON virou a **ADR 0019** — o que decide não é o
+      número de peças, é a `UniqueConstraint`, porque num JSON a chave duplicada apaga a
+      anterior em silêncio. De carona, um defeito latente desde a FDD 015: Entrega lia a lista
+      do catálogo e tomava **403 no detalhe**, porque `has_permission` e
+      `has_object_permission` discordavam e só a tela de Serviços — que usa a listagem —
+      passava perto. Ver FDD 026.
 - [ ] **Repositório de cases com métrica — Fase 6.** Projeto concluído não vira nada. O
       obstáculo não é a tela: não existe "antes" (`hours_saved_month` já é o delta), o
       `kpi_value` é texto livre e não agrega, e o health **nunca é persistido** — um projeto

@@ -5,7 +5,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
-import type { Client, ClientOverview, ClientStatus, Contact } from "../types";
+import type { Client, ClientOverview, ClientStatus, Contact, Vertical } from "../types";
 
 const blankContact = { name: "", email: "", phone: "", job_title: "" };
 
@@ -13,7 +13,8 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [client, setClient] = useState<Client>();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [overview, setOverview] = useState<ClientOverview>();
-  const [form, setForm] = useState<{ name: string; legal_name: string; tax_id: string; status: ClientStatus }>({ name: "", legal_name: "", tax_id: "", status: "prospect" });
+  const [verticals, setVerticals] = useState<Vertical[]>([]);
+  const [form, setForm] = useState<{ name: string; legal_name: string; tax_id: string; status: ClientStatus; vertical: string }>({ name: "", legal_name: "", tax_id: "", status: "prospect", vertical: "" });
   const [contactDraft, setContactDraft] = useState(blankContact);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -27,15 +28,16 @@ export function ClientDetailPage({ id }: { id: number }) {
     api<Client>(`/clients/${id}/`),
     api<Contact[]>(`/contacts/?client=${id}`),
     api<ClientOverview>(`/clients/${id}/overview/`),
-  ]).then(([loadedClient, loadedContacts, loadedOverview]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setOverview(loadedOverview);
-    setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status });
+    api<Vertical[]>("/verticals/"),
+  ]).then(([loadedClient, loadedContacts, loadedOverview, loadedVerticals]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setOverview(loadedOverview); setVerticals(loadedVerticals);
+    setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
 
   async function saveClient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaved(false);
-    try { await api(`/clients/${id}/`, { method: "PATCH", body: JSON.stringify(form) }); setSaved(true); await load(); }
+    try { await api(`/clients/${id}/`, { method: "PATCH", body: JSON.stringify({ ...form, vertical: form.vertical ? Number(form.vertical) : null }) }); setSaved(true); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function createContact(event: FormEvent<HTMLFormElement>) {
@@ -112,6 +114,10 @@ export function ClientDetailPage({ id }: { id: number }) {
         <Field label="CNPJ / CPF"><input className="field" value={form.tax_id} onChange={event => { setForm({ ...form, tax_id: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>
         {/* Corrige o que foi digitado errado no cadastro. Voltar para prospect é recusado pela API
             quando o cliente já tem oportunidade ganha — o que o sistema observou não se desdiz. */}
+        {/* A vertical escolhe a variante do blueprint quando a entrega instancia um Funcionário
+            Digital (FDD 026). Sem ela nada quebra: o catálogo inteiro segue disponível, com os
+            valores genéricos. */}
+        <Field label="Vertical"><select className="field" value={form.vertical} onChange={event => { setForm({ ...form, vertical: event.target.value }); setSaved(false); }}><option value="">Sem vertical definida</option>{verticals.filter(vertical => vertical.active || String(vertical.id) === form.vertical).map(vertical => <option key={vertical.id} value={vertical.id}>{vertical.name}</option>)}</select></Field>
         <Field label="Situação"><select className="field" value={form.status} onChange={event => { setForm({ ...form, status: event.target.value as ClientStatus }); setSaved(false); }}><option value="prospect">Prospect — ainda não fechou</option><option value="active">Cliente ativo — já fechou</option></select></Field>
         <button className="inline-flex items-center gap-2 rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar alterações</button>
         {saved && <p className="text-sm font-medium text-emerald-700">Dados atualizados.</p>}

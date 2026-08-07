@@ -4,9 +4,16 @@ import pytest
 from django.test import override_settings
 
 from apps.core import ai
-from apps.core.models import AiInteraction, Service
+from apps.core.models import (
+    AiInteraction,
+    BlueprintVariant,
+    DigitalEmployeeBlueprint,
+    Service,
+    Vertical,
+)
 
 from .factories import (
+    ClientFactory,
     MeetingFactory,
     OpportunityFactory,
     ProjectFactory,
@@ -39,6 +46,7 @@ def test_build_opportunity_context_has_client_and_value():
     assert opportunity.client.name in context
     assert opportunity.title in context
     assert "Nível de produto" not in context  # oportunidade sem nível não inventa um
+    assert "catálogo" not in context  # nem um bloco de catálogo, sem catálogo nenhum
 
 
 @pytest.mark.django_db
@@ -68,6 +76,71 @@ def test_build_opportunity_context_names_a_service_without_tier():
 
     assert "Nível de produto: Avulso" in context
     assert "()" not in context
+
+
+@pytest.mark.django_db
+def test_build_opportunity_context_cites_the_catalog_resolved_by_vertical():
+    """A proposta deixa de citar só o nível e passa a citar o bloco concreto (FDD 026)."""
+    vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
+    blueprint = DigitalEmployeeBlueprint.objects.create(
+        name="SDR", area=DigitalEmployeeBlueprint.Area.COMMERCIAL,
+        description="Qualifica lead fora do horário.", kpi_label="Leads qualificados/mês",
+        default_hours_saved_month=Decimal("40.0"),
+    )
+    BlueprintVariant.objects.create(
+        blueprint=blueprint, vertical=vertical, description="Qualifica visitante de culto."
+    )
+
+    context = ai.build_opportunity_context(
+        OpportunityFactory(client=ClientFactory(vertical=vertical))
+    )
+
+    assert "SDR (Comercial)" in context
+    assert "Qualifica visitante de culto." in context  # resolvido pela vertical do cliente
+    assert "Leads qualificados/mês" in context  # herdado do blueprint
+    assert "Vertical do cliente: Igrejas" in context
+
+
+@pytest.mark.django_db
+def test_build_opportunity_context_only_offers_blocks_that_fit_the_tier():
+    """Bloco de Implantação não cabe num Discovery — e o genérico serve aos dois."""
+    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
+    implantacao = Service.objects.get(tier=Service.Tier.IMPLEMENTATION)
+    DigitalEmployeeBlueprint.objects.create(name="Bloco do Express", service=express)
+    DigitalEmployeeBlueprint.objects.create(name="Bloco da Implantação", service=implantacao)
+    DigitalEmployeeBlueprint.objects.create(name="Bloco genérico")
+
+    context = ai.build_opportunity_context(OpportunityFactory(service=express))
+
+    assert "Bloco do Express" in context
+    assert "Bloco genérico" in context
+    assert "Bloco da Implantação" not in context
+
+
+@pytest.mark.django_db
+def test_build_opportunity_context_ignores_retired_blocks_and_other_clients():
+    """Antivazamento: o contexto lê esta oportunidade e o catálogo da casa, e nada mais."""
+    outro = ClientFactory(name="Cliente de outra conta")
+    OpportunityFactory(client=outro, title="Oportunidade alheia")
+    DigitalEmployeeBlueprint.objects.create(name="Aposentado", active=False)
+    DigitalEmployeeBlueprint.objects.create(name="Em catálogo")
+
+    context = ai.build_opportunity_context(OpportunityFactory())
+
+    assert "Em catálogo" in context
+    assert "Aposentado" not in context
+    assert "Cliente de outra conta" not in context
+    assert "Oportunidade alheia" not in context
+
+
+@pytest.mark.django_db
+def test_build_opportunity_context_caps_how_much_catalog_it_carries():
+    for index in range(ai.OPPORTUNITY_BLUEPRINT_LIMIT + 3):
+        DigitalEmployeeBlueprint.objects.create(name=f"Bloco {index:02d}")
+
+    context = ai.build_opportunity_context(OpportunityFactory())
+
+    assert context.count("\n- ") == ai.OPPORTUNITY_BLUEPRINT_LIMIT
 
 
 @pytest.mark.django_db

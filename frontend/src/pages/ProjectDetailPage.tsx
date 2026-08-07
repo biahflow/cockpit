@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
-import type { DigitalEmployee, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, HealthAssessment, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -47,6 +47,8 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [people, setPeople] = useState<SessionUser[]>([]);
   const [memberDraft, setMemberDraft] = useState("");
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", area: "", status: "building" as DigitalEmployeeStatus });
+  const [catalog, setCatalog] = useState<DigitalEmployeeBlueprint[]>([]);
+  const [blueprintDraft, setBlueprintDraft] = useState("");
   const [showArchivedEmployees, setShowArchivedEmployees] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<DigitalEmployee | null>(null);
   const [employeeEdit, setEmployeeEdit] = useState(blankEmployeeEdit);
@@ -78,6 +80,16 @@ export function ProjectDetailPage({ id }: { id: number }) {
     [id, showArchivedEmployees],
   );
   useEffect(() => { void loadEmployees(); }, [loadEmployees]);
+
+  // O catálogo vem **resolvido** pela vertical do cliente: o que a lista mostra é o que a
+  // instanciação vai copiar (FDD 026). Sem vertical, vêm os valores genéricos — e vem tudo, porque
+  // filtrar por vertical esconderia justamente o bloco que serve a qualquer setor.
+  const vertical = project?.client_vertical;
+  useEffect(() => {
+    if (!canManageJourney) return;
+    const query = vertical ? `&vertical=${vertical}` : "";
+    void api<DigitalEmployeeBlueprint[]>(`/digital-employee-blueprints/?active=1${query}`).then(setCatalog).catch(() => setCatalog([]));
+  }, [vertical, canManageJourney]);
 
   async function advancePhase() {
     try { const updated = await api<ProjectPhase[]>(`/projects/${id}/advance-phase/`, { method: "POST" }); setPhases(updated); }
@@ -144,6 +156,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try { await api("/digital-employees/", { method: "POST", body: JSON.stringify({ project: id, ...employeeDraft }) }); setEmployeeDraft({ name: "", area: "", status: "building" }); await loadEmployees(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function createEmployeeFromBlueprint(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!blueprintDraft) return;
+    try { await api(`/projects/${id}/digital-employees/from-blueprint/`, { method: "POST", body: JSON.stringify({ blueprint: Number(blueprintDraft) }) }); setBlueprintDraft(""); await loadEmployees(); }
     catch (cause) { setError((cause as Error).message); }
   }
   function openEmployeeEdit(employee: DigitalEmployee) {
@@ -344,11 +362,24 @@ export function ProjectDetailPage({ id }: { id: number }) {
             <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-signal hover:text-signal" aria-label={`Arquivar ${employee.name}`} onClick={() => setArchivingEmployee(employee)}><Trash2 className="size-3.5" />Arquivar</button></>
         }</div>}
       </article>)}</div> : <p className="mt-4 rounded-xl border border-dashed bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-600">{showArchivedEmployees ? "Nenhum funcionário digital arquivado." : "Nenhum funcionário digital ainda."}</p>}
-      {canManageJourney && !showArchivedEmployees && <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void createEmployee(event)}>
-        <input className="field flex-1" placeholder="Nome (ex.: Agente Financeiro)" value={employeeDraft.name} onChange={event => setEmployeeDraft({ ...employeeDraft, name: event.target.value })} required />
-        <input className="field w-40" placeholder="Área" value={employeeDraft.area} onChange={event => setEmployeeDraft({ ...employeeDraft, area: event.target.value })} />
-        <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar funcionário digital" type="submit"><Plus className="size-4" /></button>
-      </form>}
+      {canManageJourney && !showArchivedEmployees && <>
+        {/* Instanciar da biblioteca vem primeiro porque é o caminho que a metodologia quer: o
+            bloco nasce com nome, descrição, KPI e valores já preenchidos, em vez de um cartão
+            vazio para alguém completar à mão depois (FDD 026). O formulário livre continua
+            embaixo, para o que ainda não virou catálogo. */}
+        {catalog.length > 0 && <form className="mt-4 flex flex-wrap items-end gap-2 rounded-xl border border-dashed bg-mint/30 p-3" onSubmit={event => void createEmployeeFromBlueprint(event)}>
+          <label className="grid flex-1 gap-2 text-sm font-medium text-slate-700">Adicionar da biblioteca<select className="field" value={blueprintDraft} onChange={event => setBlueprintDraft(event.target.value)} required>
+            <option value="">Escolha um bloco do catálogo…</option>
+            {catalog.map(blueprint => <option key={blueprint.id} value={blueprint.id}>{blueprint.name} — {blueprint.area_display}{blueprint.has_variant ? ` (ajustado a ${project.client_vertical_name})` : ""}</option>)}
+          </select></label>
+          <button className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-ocean px-4 text-sm font-semibold text-white hover:bg-ink" type="submit"><Plus className="size-4" />Instanciar</button>
+        </form>}
+        <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void createEmployee(event)}>
+          <input className="field flex-1" placeholder="Nome (ex.: Agente Financeiro)" value={employeeDraft.name} onChange={event => setEmployeeDraft({ ...employeeDraft, name: event.target.value })} required />
+          <input className="field w-40" placeholder="Área" value={employeeDraft.area} onChange={event => setEmployeeDraft({ ...employeeDraft, area: event.target.value })} />
+          <button className="grid size-11 shrink-0 place-items-center rounded-xl bg-ocean text-white hover:bg-ink" aria-label="Adicionar funcionário digital" type="submit"><Plus className="size-4" /></button>
+        </form>
+      </>}
     </section>
 
     {risk && risk.signals.length > 0 && <section className="rounded-2xl border bg-white p-5 sm:p-6">
