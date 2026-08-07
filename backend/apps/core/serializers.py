@@ -761,13 +761,16 @@ class LeadSerializer(serializers.ModelSerializer[Lead]):
     class Meta:
         model = Lead
         fields = [
-            "id", "name", "email", "company", "phone", "message", "source", "status",
+            "id", "name", "email", "company", "phone", "cnpj", "message", "source", "status",
             "ai_fit", "ai_score", "ai_summary", "ai_recommended_action", "qualified_at",
-            "client", "opportunity", "created_at", "updated_at",
+            "enrichment", "client", "opportunity", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "source", "ai_fit", "ai_score", "ai_summary", "ai_recommended_action",
-            "qualified_at", "client", "opportunity", "created_at", "updated_at",
+            # `enrichment` é retrato do fornecedor, não campo de trabalho: editável pela tela, ele
+            # deixaria de responder "o que a Receita diz" e passaria a responder "o que alguém
+            # digitou", que é a diferença entre dado enriquecido e dado inventado.
+            "qualified_at", "enrichment", "client", "opportunity", "created_at", "updated_at",
         ]
 
 
@@ -776,6 +779,10 @@ class LeadIntakeSerializer(serializers.Serializer):
     email = serializers.EmailField()
     company = serializers.CharField(max_length=255, required=False, allow_blank=True)
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    # Opcional, e tem de continuar opcional: é a chave do enriquecimento (FDD 030), mas exigi-lo
+    # colocaria um campo a mais entre o visitante e o formulário enviado — trocar volume de lead
+    # por qualidade de cadastro é o negócio errado para quem depende de demanda de topo.
+    cnpj = serializers.CharField(max_length=18, required=False, allow_blank=True)
     message = serializers.CharField(required=False, allow_blank=True)
     # Respostas de perguntas de triagem do formulário (rótulo → resposta), usadas na qualificação.
     answers = serializers.DictField(child=serializers.CharField(allow_blank=True), required=False)

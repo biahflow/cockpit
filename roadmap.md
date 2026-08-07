@@ -351,11 +351,44 @@ um radar que ele respeita.
       busca contra Postgres de verdade, com teste de paridade contra o ranker em Python. Ver
       FDD 029, ADR 0022 e ADR 0023. **Fora**: ingerir conteúdo de `Document` de projeto, registro
       de digest de prompt e índice ANN (nomeado com o limiar de ~50 mil trechos, não omitido).
-- [ ] **Indicação no pico de valor e enriquecimento de lead — Fase 9.** A captação já tem
+- [~] **Indicação no pico de valor e enriquecimento de lead — Fase 9.** A captação já tem
       qualificação por IA e agendamento com free/busy do Google (FDD 013); o que falta é
       pedir indicação **no momento do valor realizado** e enriquecer o lead para a
-      qualificação decidir melhor. **Não há troca de ferramenta de agendamento a fazer.** Ver
-      FDD 030.
+      qualificação decidir melhor. **Não há troca de ferramenta de agendamento a fazer.**
+      Entregue a metade que **mede**: `funnel.by_source` responde quantos negócios
+      **fechados** vieram de cada origem, e não quantos leads entraram — a pergunta que
+      localiza o canal que enche o formulário e não produz cliente. Não custou coluna: a
+      travessia `projeto → oportunidade → lead → source` já existia em chaves desde a
+      FDD 013, e o que faltava era o **leitor** — "a origem sobrevive à conversão" era
+      verdade que ninguém lia. As duas armadilhas estão em regressão, e as duas eram
+      silenciosas: o lead convertido é **arquivado** por `LeadViewSet.convert`, então o
+      filtro `active` que é o reflexo do resto de `AnalyticsView` apagaria da conta
+      exatamente quem fechou, deixando uma origem com mais ganhos que leads; e
+      `Opportunity.leads` é reverso de FK, então agrupar pelo `join` multiplicaria o projeto
+      por lead e **dobraria a receita** — a origem sai de `Subquery`, e o dinheiro não pode
+      dobrar numa tela cujo propósito é decidir onde investir. Oportunidade sem lead ganha
+      origem própria (`direto`) para os totais reconciliarem com `funnel.opportunities.won`:
+      tabela que não bate com a de cima ensina a não confiar nas duas. Entregue também o
+      **enriquecimento** — cadastro público de CNPJ (BrasilAPI) atrás da flag `enrichment`,
+      no molde de `esign`/`payments`. O provedor não foi escolhido por preço: o instrumento de
+      nicho da casa é a `Vertical` (FDD 026), e o CNAE é a única fonte que a preenche com dado
+      **oficial** em vez de inferência de vendor — o cliente nasce com setor na conversão,
+      quando o admin já cadastrou aquela vertical, e cala quando não. O cadastro entra no
+      **mesmo** contexto do `ai_fit` e nunca num prompt paralelo, porque um segundo score
+      seria dois números discordando sem que ninguém saiba qual olhar. Duas escolhas que
+      contrariam o reflexo e estão registradas: a flag nasce **sem `requires`** (cadastro
+      público não tem chave — não há variável cuja ausência denuncie falta de configuração, o
+      precedente do modo `adc` da ADR 0016) e nasce **desligada** por razão que não é custo,
+      já que a BrasilAPI é gratuita — é que isto manda o CNPJ do formulário público a um
+      terceiro. O CNPJ segue **opcional** no intake: exigi-lo trocaria volume de lead por
+      qualidade de cadastro. A regressão crítica está fechada — fornecedor fora do ar não
+      derruba o formulário nem impede a qualificação, o mesmo desfecho que `qualify_lead` já
+      dava para a OpenAI, repetido aqui porque caminho novo não herda guarda antiga. De
+      carona, uma defasagem de documento: PRD e `operacao.md` diziam **sete** integrações
+      desde antes desta fatia — o `payments` da FDD 028 entrou sem atualizá-los, e agora são
+      nove. **Aberto:** o pedido de indicação, que depende do teto de frequência e dos
+      gatilhos do portal do cliente (FDD 022 de lá, ela própria bloqueada até o laço do funil
+      fechar). Ver FDD 030.
 
 ## Princípios de entrega
 

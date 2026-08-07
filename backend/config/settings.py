@@ -442,6 +442,25 @@ PAYMENTS_WEBHOOK_SECRET = os.getenv("PAYMENTS_WEBHOOK_SECRET", "")
 # sem ela, um corpo assinado hoje é reproduzível para sempre.
 PAYMENTS_WEBHOOK_TOLERANCE_SECONDS = _env_int("PAYMENTS_WEBHOOK_TOLERANCE_SECONDS", 300)
 
+# Enriquecimento de lead (FDD 030): dado cadastral público de CNPJ alimentando a qualificação que
+# já existe. Nome neutro pela razão de `PAYMENTS_*` e `ESIGN_*` — o provedor é trocável.
+#
+# **Desligado por padrão, e não por conservadorismo automático.** O provedor default (BrasilAPI) é
+# gratuito e não pede credencial, então a razão que desliga IA e Drive — custo por chamada — não se
+# aplica; a que se aplica é outra: isto manda o CNPJ digitado no formulário público para um terceiro,
+# e essa é uma decisão de fluxo de dado que a instalação toma, não um default que ela descobre
+# depois. `configured()` passa sem exigir nada, no precedente do modo `adc` do Google (ADR 0016):
+# não há variável cuja ausência denuncie falta de configuração, e cobrar uma recusaria a instalação
+# que está certa. Quem responde "isto funciona?" é a sonda.
+ENRICHMENT_ENABLED = os.getenv("ENRICHMENT_ENABLED", "false").lower() == "true"
+ENRICHMENT_PROVIDER = os.getenv("ENRICHMENT_PROVIDER", "brasilapi")
+# Vazio = o adaptador usa a própria URL padrão (`BrasilApiProvider.DEFAULT_BASE`).
+ENRICHMENT_API_BASE = os.getenv("ENRICHMENT_API_BASE", "")
+# Teto apertado de propósito: isto roda **dentro do POST público** do formulário, antes da
+# qualificação. O mesmo argumento do timeout da OpenAI em `ai._client`, e aqui o prejuízo de
+# esperar é maior, porque o enriquecimento é melhoria e a qualificação é o produto.
+ENRICHMENT_TIMEOUT_SECONDS = _env_int("ENRICHMENT_TIMEOUT_SECONDS", 5)
+
 # Sincronia de tarefas com ferramentas externas (Linear/GitHub) atrás de flag (ADR 0004).
 # Token compartilhado para o webhook de entrada; credenciais/estados por fornecedor.
 TASKSYNC_ENABLED = os.getenv("TASKSYNC_ENABLED", "false").lower() == "true"

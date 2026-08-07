@@ -138,6 +138,14 @@ FLAGS: dict[str, Flag] = {
         lambda: bool(settings.PORTAL_WEBHOOK_URL and settings.PORTAL_WEBHOOK_SECRET),
         ("PORTAL_WEBHOOK_URL", "PORTAL_WEBHOOK_SECRET"),
     ),
+    # Enriquecimento de lead (FDD 030). **Sem `requires`, e isso é correto**: o provedor default é
+    # cadastro público e não pede credencial, então não existe variável cuja ausência denuncie
+    # falta de configuração — cobrar uma recusaria a instalação que está certa. É o precedente do
+    # modo `adc` do Google (ADR 0016), e quem responde "isto funciona?" é a sonda.
+    "enrichment": Flag(
+        "Enriquecimento de lead (CNPJ público)",
+        lambda: bool(settings.ENRICHMENT_ENABLED),
+    ),
 }
 
 

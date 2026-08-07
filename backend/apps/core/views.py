@@ -15,7 +15,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.core import signing
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from django.middleware.csrf import get_token
@@ -40,6 +40,7 @@ from . import (
     calendar_sync,
     cases,
     drive,
+    enrichment,
     esign,
     flags,
     health,
@@ -1429,11 +1430,18 @@ class LeadViewSet(ArchiveModelViewSet):
         entry_service = Service.objects.filter(
             tier=Service.Tier.DISCOVERY_EXPRESS, active=True, archived_at__isnull=True
         ).first()
+        # A vertical que o CNAE sugere, quando o enriquecimento a trouxe e o admin já cadastrou
+        # aquela vertical (FDD 030, FDD 026). Derivada aqui e não gravada no lead: o CNAE é a
+        # fonte, e um segundo campo com a mesma verdade diverge no dia em que alguém corrigir só
+        # um. Sem CNAE, sem mapa ou sem a vertical cadastrada, o cliente nasce sem setor — que é o
+        # estado que a FDD 026 já trata, e não uma lacuna nova.
+        vertical = enrichment.infer_vertical(lead.enrichment.get("cnae_code", ""))
         with transaction.atomic():
             client = Client.objects.create(
                 name=lead.company or lead.name,
                 owner=request.user,
                 status=Client.Status.PROSPECT,  # vira "ativo" quando a oportunidade é ganha
+                vertical=vertical,
             )
             opportunity = Opportunity.objects.create(
                 client=client,
@@ -1503,9 +1511,14 @@ class LeadIntakeView(APIView):
             email=data["email"],
             company=data.get("company", ""),
             phone=data.get("phone", ""),
+            cnpj=data.get("cnpj", ""),
             message=data.get("message", ""),
             source="site",
         )
+        # Antes da qualificação, e é a ordem que faz o enriquecimento valer alguma coisa: ele
+        # existe para o `ai_fit` sair melhor informado, e depois seria um cadastro bonito que a
+        # decisão já não usou. Não levanta — a falha do fornecedor deixa o lead como estava.
+        enrichment.enrich_lead(lead)
         qualified = qualification.qualify_lead(lead, data.get("answers"))
         booking_available = calendar_sync.is_enabled()
         token = None
@@ -1821,6 +1834,30 @@ def _roi(revenue: Decimal, cost: Decimal) -> float | None:
     return float((revenue - cost) / cost) if cost else None
 
 
+# A origem de quem chegou sem lead: oportunidade cadastrada à mão, que é um canal como
+# qualquer outro e some da conta se não tiver nome. Sem esta linha os totais por origem não
+# fecham com `funnel.opportunities.won`, e uma tabela que não reconcilia com a de cima é pior
+# que tabela nenhuma — ela ensina a não confiar nas duas.
+SEM_LEAD = "direto"
+
+
+def _lead_source(opportunity_path: str) -> Subquery:
+    """O `source` do lead que originou aquele negócio, um por linha.
+
+    Subconsulta e não `join`: `Opportunity.leads` é reverso de FK e aceita mais de uma linha,
+    então agrupar pelo join multiplicaria o projeto por lead e a **receita seria somada duas
+    vezes**. Aqui a origem é escalar por construção, e o dinheiro não pode dobrar.
+
+    O critério de desempate é o lead mais antigo: quem trouxe o negócio é quem chegou
+    primeiro, não quem foi cadastrado por último.
+    """
+    return Subquery(
+        Lead.objects.filter(opportunity=OuterRef(opportunity_path))
+        .order_by("created_at")
+        .values("source")[:1]
+    )
+
+
 class AnalyticsView(APIView):
     resource = "analytics"
     permission_classes = [RolePermission]
@@ -1920,6 +1957,49 @@ class AnalyticsView(APIView):
                 "reached": reached,
             })
 
+        # Origem do negócio, medida até o **fechado** e não até o formulário (FDD 030). O
+        # desperdício de demanda mora em canal que gera lead e não gera cliente, e essa
+        # pergunta era irrespondível — não por falta de dado, mas por falta de leitor: a
+        # travessia `projeto → oportunidade → lead → source` já existe em chaves desde a
+        # FDD 013, porque `Lead.opportunity` é FK e `Project.opportunity` é OneToOne.
+        #
+        # A contagem de entrada é sobre `Lead.objects` **inteiro**, sem o `active` que é o
+        # reflexo do resto deste método: `LeadViewSet.convert` chama `lead.archive()`, então
+        # filtrar arquivados apagaria da conta exatamente os leads que **fecharam** — a
+        # coluna "entraram" ficaria menor que a coluna "ganhas" ao lado dela.
+        entered = {
+            row["source"]: row["n"]
+            for row in Lead.objects.values("source").annotate(n=Count("id"))
+        }
+        won_by_source = {
+            row["origin"]: row["n"]
+            for row in opps.filter(stage__kind=PipelineStage.Kind.WON)
+            .annotate(origin=Coalesce(_lead_source("pk"), Value(SEM_LEAD)))
+            .values("origin")
+            .annotate(n=Count("id"))
+        }
+        closed_by_source = {
+            row["origin"]: (row["n"], row["rev"] or Decimal("0"))
+            for row in projects.annotate(
+                origin=Coalesce(_lead_source("opportunity_id"), Value(SEM_LEAD))
+            )
+            .values("origin")
+            .annotate(n=Count("id"), rev=Sum("actual_value"))
+        }
+        by_source = sorted(
+            (
+                {
+                    "source": origin,
+                    "leads": entered.get(origin, 0),
+                    "won": won_by_source.get(origin, 0),
+                    "projects": closed_by_source.get(origin, (0, Decimal("0")))[0],
+                    "revenue": closed_by_source.get(origin, (0, Decimal("0")))[1],
+                }
+                for origin in set(entered) | set(won_by_source) | set(closed_by_source)
+            ),
+            key=lambda row: (-row["won"], -row["leads"], row["source"]),
+        )
+
         return Response({
             "funnel": {
                 "leads": {"total": leads.count(), "by_status": leads_by_status},
@@ -1927,6 +2007,7 @@ class AnalyticsView(APIView):
                 "projects": {"total": projects.count(), "by_status": projects_by_status},
                 "by_tier": by_tier,
                 "by_stage": by_stage,
+                "by_source": by_source,
             },
             "win_rate": win_rate,
             "avg_ticket": avg_ticket,

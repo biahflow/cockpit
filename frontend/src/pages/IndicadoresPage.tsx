@@ -1,4 +1,4 @@
-import { AlertTriangle, HeartPulse, Layers, Lightbulb, Percent, PiggyBank, SlidersHorizontal, Sparkles, Target, Timer, TrendingUp } from "lucide-react";
+import { AlertTriangle, HeartPulse, Layers, Lightbulb, Percent, PiggyBank, Share2, SlidersHorizontal, Sparkles, Target, Timer, TrendingUp } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { api } from "../api";
@@ -11,6 +11,12 @@ const riskCls: Record<string, string> = { alto: "bg-red-50 text-signal", "médio
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const pct = (value: number | null) => value == null ? "—" : `${Math.round(value * 100)}%`;
+
+// `Lead.source` é texto livre — o intake pode gravar o que quiser. O mapa nomeia o que a casa
+// já produz e o resto passa como veio, porque origem desconhecida com o nome cru ainda é
+// informação; trocada por "Outros" viraria um balde onde canais distintos se escondem juntos.
+const sourceLabels: Record<string, string> = { site: "Site", direto: "Cadastro direto", indicacao: "Indicação" };
+const sourceLabel = (source: string) => sourceLabels[source] || source;
 
 export function IndicadoresPage() {
   const { user } = useAuth();
@@ -78,6 +84,14 @@ export function IndicadoresPage() {
         <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium text-ink">{row.label}</span><span className="font-semibold text-ocean">{row.reached} cliente(s)</span></div>
         <p className="mt-1 text-xs text-slate-600">{row.total} artefato(s) · {row.sent} enviado(s) · {row.accepted} aceito(s) · {row.rejected} recusado(s) · aceitação {pct(row.acceptance_rate)}</p>
       </div>)}</div>
+    </section>
+
+    <section className="overflow-hidden rounded-2xl border bg-white">
+      <div className="flex items-center gap-2 border-b px-5 py-4 sm:px-6"><Share2 className="size-4 text-ocean" /><h2 className="font-semibold text-ink">Origem do negócio</h2><span className="text-xs text-slate-600">medida até o fechado</span></div>
+      {data.funnel.by_source.length ? <div className="divide-y">{data.funnel.by_source.map(row => <div className="px-5 py-3 sm:px-6" key={row.source}>
+        <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium text-ink">{sourceLabel(row.source)}</span><span className="font-semibold text-ocean">{row.won} ganha(s)</span></div>
+        <p className="mt-1 text-xs text-slate-600">{row.leads} lead(s) · {row.projects} projeto(s) · {money.format(Number(row.revenue))} de receita{row.leads > 0 && <> · fecha {pct(row.won / row.leads)}</>}</p>
+      </div>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Nenhum negócio registrado ainda.</p>}
     </section>
 
     <RoiTable title="ROI por cliente" rows={data.roi.by_client} />

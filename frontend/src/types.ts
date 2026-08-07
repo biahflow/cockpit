@@ -6,6 +6,7 @@ export type ServiceTier = "discovery_express" | "discovery_assessment" | "implan
 export type Service = { id: number; name: string; active: boolean; tier: ServiceTier; tier_display: string; list_price: string; summary: string };
 export type TierFunnelRow = { tier: ServiceTier; label: string; total: number; open: number; won: number; lost: number; estimated_total: number; win_rate: number | null };
 export type StageFunnelRow = { kind: ArtifactKind; label: string; total: number; sent: number; accepted: number; rejected: number; acceptance_rate: number | null; reached: number };
+export type SourceFunnelRow = { source: string; leads: number; won: number; projects: number; revenue: number };
 export type RoiRow = { label: string; revenue: number; cost: number; roi: number | null };
 export type Analytics = {
   funnel: {
@@ -14,6 +15,7 @@ export type Analytics = {
     projects: { total: number; by_status: Record<string, number> };
     by_tier: TierFunnelRow[];
     by_stage: StageFunnelRow[];
+    by_source: SourceFunnelRow[];
   };
   win_rate: number | null;
   avg_ticket: number;
@@ -95,7 +97,10 @@ export type PhaseDeliverableTemplate = { id: number; phase: number; name: string
 export type JourneyPhaseTemplate = { id: number; name: string; description: string; position: number; active: boolean; deliverables: PhaseDeliverableTemplate[] };
 export type LeadStatus = "new" | "contacted" | "qualified" | "discarded";
 export type LeadFit = "high" | "medium" | "low" | "";
-export type Lead = { id: number; name: string; email: string; company: string; phone: string; message: string; source: string; status: LeadStatus; ai_fit: LeadFit; ai_score: number | null; ai_summary: string; ai_recommended_action: string; qualified_at: string | null; client: number | null; opportunity: number | null; created_at: string };
+// O cadastro público que o enriquecimento trouxe (FDD 030). Todo campo é opcional porque o objeto
+// inteiro é opcional: sem CNPJ, com a flag desligada ou com o fornecedor fora do ar, ele é `{}`.
+export type LeadEnrichment = { cnpj?: string; legal_name?: string; trade_name?: string; cnae_code?: string; cnae_label?: string; size?: string; share_capital?: string; status?: string; city?: string; state?: string; opened_on?: string };
+export type Lead = { id: number; name: string; email: string; company: string; phone: string; cnpj: string; message: string; source: string; status: LeadStatus; ai_fit: LeadFit; ai_score: number | null; ai_summary: string; ai_recommended_action: string; qualified_at: string | null; enrichment: LeadEnrichment; client: number | null; opportunity: number | null; created_at: string };
 
 // O case de um projeto concluído (FDD 027). Os três campos de snapshot são **fotografia**: vêm
 // congelados do backend e não há como reescrevê-los pela API — a tela só os exibe.

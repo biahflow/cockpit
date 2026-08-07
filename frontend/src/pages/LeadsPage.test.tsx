@@ -24,6 +24,23 @@ test("lista leads recebidos", async () => {
   expect(screen.getByText("quero ajuda")).toBeInTheDocument();
 });
 
+test("mostra o setor que o enriquecimento trouxe, e cala sem ele", async () => {
+  // O lead do fixture não tem `enrichment`, e é o caso que mais importa: o campo é opcional no
+  // contrato e a tela não pode quebrar com ele ausente — sem CNPJ, com a flag desligada ou com o
+  // fornecedor fora do ar, é exatamente esse o corpo que chega (FDD 030).
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/leads/") return Promise.resolve([
+      lead,
+      { ...lead, id: 3, name: "Beltrana", cnpj: "11222333000181", enrichment: { cnae_label: "Desenvolvimento de software", size: "DEMAIS", cnpj: "11222333000181" } },
+    ]);
+    return Promise.resolve({});
+  });
+  render(<LeadsPage />);
+  expect(await screen.findByText("Beltrana")).toBeInTheDocument();
+  expect(screen.getByText(/Desenvolvimento de software · DEMAIS/)).toBeInTheDocument();
+  expect(screen.getByText("Fulano")).toBeInTheDocument();
+});
+
 test("converte um lead em oportunidade", async () => {
   const user = userEvent.setup();
   render(<LeadsPage />);

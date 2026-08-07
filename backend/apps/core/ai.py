@@ -259,6 +259,14 @@ def build_lead_context(lead: Lead, answers: dict | None = None) -> str:
         lines.append(f"Telefone: {lead.phone}")
     if lead.message:
         lines.append(f"Mensagem: {lead.message}")
+    # O cadastro público do CNPJ, quando o enriquecimento o trouxe (FDD 030). Entra no **mesmo**
+    # contexto e não num prompt paralelo: o objetivo declarado é melhorar o `ai_fit`, e um segundo
+    # score seria dois números discordando sem que ninguém saiba qual olhar. Vazio é o normal —
+    # sem CNPJ, com a flag desligada ou com o fornecedor fora do ar, isto não acrescenta linha
+    # nenhuma e a qualificação vê exatamente o que via antes.
+    from . import enrichment as enrichment_module
+
+    lines.extend(enrichment_module.summary_lines(lead.enrichment))
     for question, answer in (answers or {}).items():
         if answer:
             lines.append(f"{question}: {answer}")

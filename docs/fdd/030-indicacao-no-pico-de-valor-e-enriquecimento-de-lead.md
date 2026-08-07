@@ -1,7 +1,39 @@
 # FDD 030 — Indicação no pico de valor e enriquecimento de lead
 
-> **Status: proposta.** Nada aqui está implementado. FDD curta de propósito: a captação já
-> está muito mais construída do que parece, e o que falta é estreito.
+> **Status: parcial.** FDD curta de propósito: a captação já está muito mais construída do
+> que parece, e o que falta é estreito. **Entregues: a medição por origem até o negócio
+> fechado** (`funnel.by_source` em `/api/v1/analytics/`, seção "Origem do negócio" em
+> Indicadores) **e o enriquecimento de lead** (`enrichment.py`, flag `enrichment`, provedor
+> BrasilAPI). **Aberto:** o pedido de indicação no pico de valor — e ele depende do teto de
+> frequência e dos gatilhos do portal do cliente (FDD 022 de lá, ela própria bloqueada por
+> ordem até o laço de ação do funil fechar).
+>
+> **Sobre o enriquecimento.** O provedor é **cadastro público de CNPJ** (BrasilAPI), e a
+> escolha carrega o argumento da própria FDD: o instrumento de nicho é a `Vertical`, e o CNAE
+> é a única fonte que a preenche com dado oficial em vez de inferência de vendor. Ele entra no
+> **mesmo** contexto de `qualify_lead`, nunca num prompt paralelo — o objetivo é melhorar o
+> `ai_fit`, e um segundo score seria dois números discordando sem que ninguém saiba qual olhar.
+> A flag nasce **sem `requires`**, o que é correto e não descuido: cadastro público não tem
+> chave, então não existe variável cuja ausência denuncie falta de configuração (precedente do
+> modo `adc` da ADR 0016). Ela também nasce **desligada**, e não pela razão de sempre — a
+> BrasilAPI é gratuita, então não há custo por chamada a evitar; a razão é que isto manda o
+> CNPJ digitado no formulário público para um terceiro, e isso é decisão de fluxo de dado que
+> a instalação toma de propósito. O CNPJ é **opcional** no intake: exigi-lo trocaria volume de
+> lead por qualidade de cadastro, que é o negócio errado para quem depende de demanda de topo.
+>
+> A medição saiu primeiro por uma razão de ordem, não de conveniência: ela é a única metade
+> que **não** depende do portal do cliente, e é a que diz se a indicação vale o esforço. Pedir
+> indicação sem saber quanto indicação fecha seria construir o canal e continuar sem a
+> resposta que esta FDD abre dizendo que quer.
+>
+> E ela não custou coluna nenhuma. A travessia `projeto → oportunidade → lead → source` já
+> existia em chaves desde a FDD 013 — `Lead.opportunity` é FK, `Project.opportunity` é
+> OneToOne —, de modo que "a origem sobrevive à conversão" era **verdade sem leitor**, e não
+> uma lacuna de modelo. O que se construiu foi a leitura, com duas armadilhas medidas e
+> fixadas em regressão (`tests/regression/test_origem_do_lead_sobrevive_a_conversao.py`): o
+> lead convertido está **arquivado**, então contar a entrada com o filtro `active` habitual
+> apagaria justamente quem fechou; e `Opportunity.leads` é reverso de FK, então agrupar por
+> `join` somaria a **receita duas vezes** — a origem sai de `Subquery`.
 
 ## Jornada
 

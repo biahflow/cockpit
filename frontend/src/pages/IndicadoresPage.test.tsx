@@ -21,6 +21,11 @@ vi.mock("../api", () => ({
           { kind: "assessment", label: "Assessment", total: 3, sent: 1, accepted: 2, rejected: 0, acceptance_rate: 1, reached: 2 },
           { kind: "contract", label: "Contrato", total: 0, sent: 0, accepted: 0, rejected: 0, acceptance_rate: null, reached: 0 },
         ],
+        by_source: [
+          { source: "indicacao", leads: 4, won: 3, projects: 3, revenue: 90000 },
+          { source: "site", leads: 10, won: 1, projects: 1, revenue: 5000 },
+          { source: "evento-sebrae", leads: 2, won: 0, projects: 0, revenue: 0 },
+        ],
       },
       win_rate: 0.5, avg_ticket: 1000, avg_cycle_days: 12,
       pipeline: [{ id: 1, name: "Prospecção", kind: "open", position: 0, opportunity_count: 2, estimated_total: 5000 }],
@@ -48,6 +53,18 @@ test("mostra a conversão por nível de produto", async () => {
   expect(screen.getByText("Discovery Express")).toBeInTheDocument();
   expect(screen.getByText("Ganho 100%")).toBeInTheDocument();
   expect(screen.getByText("Ganho —")).toBeInTheDocument();
+});
+
+test("mostra a origem do negócio medida até o fechado", async () => {
+  render(<IndicadoresPage />);
+  expect(await screen.findByText("Origem do negócio")).toBeInTheDocument();
+  // A pergunta da FDD 030 é "que canal fecha", não "que canal enche o formulário": o site traz
+  // 10 leads e ganha 1, a indicação traz 4 e ganha 3 — e é por isso que a linha mostra as duas.
+  expect(screen.getByText("Indicação")).toBeInTheDocument();
+  expect(screen.getByText(/4 lead\(s\).*fecha 75%/)).toBeInTheDocument();
+  expect(screen.getByText(/10 lead\(s\).*fecha 10%/)).toBeInTheDocument();
+  // Origem sem nome no mapa passa crua, em vez de virar um balde chamado "Outros".
+  expect(screen.getByText("evento-sebrae")).toBeInTheDocument();
 });
 
 test("mostra a conversão por etapa da jornada", async () => {

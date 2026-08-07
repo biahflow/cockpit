@@ -135,6 +135,17 @@ def _probe_portal() -> tuple[bool, str]:
     return True, NAO_SONDAVEL
 
 
+def _probe_enrichment() -> tuple[bool, str]:
+    """Consulta um CNPJ público de sonda: leitura pura, sem custo e sem criar nada."""
+    from . import enrichment
+
+    provider = enrichment.get_provider()
+    ping = getattr(provider, "ping", None)
+    if ping is None:
+        return True, f"{settings.ENRICHMENT_PROVIDER or 'nenhum provedor'}: {NAO_SONDAVEL}"
+    return ping()
+
+
 PROBES = {
     "ai": _probe_ai,
     "drive": _probe_drive,
@@ -144,6 +155,7 @@ PROBES = {
     "email": _probe_email,
     "tasksync": _probe_tasksync,
     "portal": _probe_portal,
+    "enrichment": _probe_enrichment,
 }
 
 

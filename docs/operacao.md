@@ -42,14 +42,16 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Gateway de pagamento (contas a receber) | `PAYMENTS_ENABLED` (default `true`), `PAYMENTS_PROVIDER`, `PAYMENTS_API_TOKEN`, `PAYMENTS_WEBHOOK_SECRET` | conta Stripe — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `PAYMENTS_PROVIDER` roda em registro local (`mark-paid` manual); com fornecedor nomeado, exige token e segredo do webhook. **Stripe sem homologação** |
 | Base de conhecimento interna | `AI_ENABLED`, `OPENAI_API_KEY`, `AI_EMBEDDING_MODEL`, `KB_MIN_SIMILARITY_PERCENT`, `KB_TOP_K`, `SCHEDULER_KNOWLEDGE_AT` | mesma chave do assistente | Segue a flag `ai`. O **inventário de frescor funciona sem IA**; só a recuperação com citação exige a chave. Popular: `manage.py ingest_knowledge` |
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) — liga sozinho quando as duas variáveis estiverem preenchidas; alternável em Configurações |
+| Enriquecimento de lead (CNPJ) | `ENRICHMENT_ENABLED` (default `false`), `ENRICHMENT_PROVIDER` (default `brasilapi`), `ENRICHMENT_API_BASE`, `ENRICHMENT_TIMEOUT_SECONDS` | **nenhuma** — cadastro público | Pronto (desligado). Desligado não por custo (BrasilAPI é gratuita) e sim porque manda o CNPJ do formulário público a um terceiro. Alimenta o `ai_fit` e preenche a vertical na conversão; falha do fornecedor **nunca** bloqueia o lead |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
 | Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
 | Rastreamento de erro (Sentry) | `SENTRY_DSN` (API) e `VITE_SENTRY_DSN` (SPA, build arg) | conta Sentry | Pronto (desligado) |
 | Backup do banco e dos documentos | — (sidecar do compose de produção) | — | **Sempre ligado** em produção ✅ — agendado por `BACKUP_CRON` |
 | Envio do backup para fora do host | `BACKUP_S3_*` | bucket compatível com S3 | Pronto (desligado) — **recomendado**: cópia no mesmo host morre com o host |
 
-> **As sete integrações** (IA, Drive, Calendário, Assinatura, E-mail, Sincronia de tarefas e
-> Portal do cliente) podem ser ligadas/desligadas em runtime por um admin na tela **Configurações**
+> **As nove integrações** (IA, Drive, Calendário, Assinatura, Pagamento, E-mail, Sincronia de
+> tarefas, Portal do cliente e Enriquecimento de lead) podem ser ligadas/desligadas em runtime por
+> um admin na tela **Configurações**
 > (`/configuracoes`), sem redeploy. O `.env` continua sendo o default e a casa dos segredos.
 >
 > Desde a ADR 0018, **credencial faltando vence qualquer intenção**: não liga pelo toggle, nem pelo

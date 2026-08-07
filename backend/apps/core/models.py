@@ -455,6 +455,16 @@ class Lead(TimestampedModel):
     phone = models.CharField(max_length=32, blank=True)
     message = models.TextField(blank=True)
     source = models.CharField(max_length=64, default="site")
+    # CNPJ como o visitante digitou — com ou sem pontuação, e é `enrichment.normalize_cnpj` que
+    # decide se aquilo vira consulta. Guardar o cru e normalizar na leitura, e não o contrário,
+    # porque um formulário público que recusa lead por causa de formatação troca um cliente
+    # possível por um cadastro bonito (FDD 030).
+    cnpj = models.CharField(max_length=18, blank=True, default="")
+    # O cadastro público devolvido pelo enriquecimento (FDD 030). JSON e não colunas: é retrato de
+    # um fornecedor, não fato do domínio — e o dia em que o provedor mudar, uma coluna a menos é
+    # uma migração a menos. Vazio é o estado normal: sem CNPJ, com a flag desligada ou com o
+    # fornecedor fora do ar, o lead segue para a qualificação como sempre seguiu.
+    enrichment = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
     # Qualificação por IA (rascunho para revisão humana — FDD 013). Vazio até a IA rodar.
     ai_fit = models.CharField(max_length=8, choices=Fit.choices, blank=True, default="")

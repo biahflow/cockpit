@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, Inbox, Mail, MessageSquare, Phone, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { ArrowRight, Building2, Inbox, Landmark, Mail, MessageSquare, Phone, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
@@ -76,7 +76,7 @@ export function LeadsPage() {
 
     {visible.length ? <div className="grid gap-4">{visible.map(lead => <article className="rounded-2xl border bg-white p-5 sm:p-6" key={lead.id}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><h2 className="text-base font-semibold text-ink">{lead.name}</h2><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{lead.company && <span className="flex items-center gap-1.5"><Building2 className="size-3.5" />{lead.company}</span>}<span className="flex items-center gap-1.5"><Mail className="size-3.5" />{lead.email}</span>{lead.phone && <span className="flex items-center gap-1.5"><Phone className="size-3.5" />{lead.phone}</span>}</div></div>
+        <div className="min-w-0"><h2 className="text-base font-semibold text-ink">{lead.name}</h2><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{lead.company && <span className="flex items-center gap-1.5"><Building2 className="size-3.5" />{lead.company}</span>}<span className="flex items-center gap-1.5"><Mail className="size-3.5" />{lead.email}</span>{lead.phone && <span className="flex items-center gap-1.5"><Phone className="size-3.5" />{lead.phone}</span>}{lead.enrichment?.cnae_label && <span className="flex items-center gap-1.5" title={`Cadastro público · CNPJ ${lead.enrichment.cnpj || lead.cnpj}`}><Landmark className="size-3.5" />{lead.enrichment.cnae_label}{lead.enrichment.size ? ` · ${lead.enrichment.size}` : ""}</span>}</div></div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {lead.ai_fit && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fitCls[lead.ai_fit]}`}>{fitLabel[lead.ai_fit]}{lead.ai_score !== null ? ` · ${lead.ai_score}` : ""}</span>}
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusCls[lead.status]}`}>{statusLabel[lead.status]}</span>

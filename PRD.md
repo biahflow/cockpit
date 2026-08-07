@@ -38,9 +38,10 @@ cliente, sempre com revisão humana pelo caminho. Indicadores de
 ROI, health score, previsão de atrasos com explicação dos sinais e recomendações revisáveis.
 
 **Plataforma.** Convites por e-mail, permissões por função, notificações in-app e por e-mail com
-digest diário, sete integrações atrás de flag alternável em runtime (IA, Drive, Calendário,
-Assinatura, E-mail, Sincronia de tarefas e Portal do cliente) — nenhuma delas liga sem as credenciais
-que exige — arquivamento reversível com confirmação, e API versionada `/api/v1/`.
+digest diário, nove integrações atrás de flag alternável em runtime (IA, Drive, Calendário,
+Assinatura, Pagamento, E-mail, Sincronia de tarefas, Portal do cliente e Enriquecimento de lead) —
+nenhuma delas liga sem as credenciais que exige — arquivamento reversível com confirmação, e API
+versionada `/api/v1/`.
 
 ## Fora de escopo
 

@@ -11,8 +11,11 @@ por IA** resume, para cada usuário, o que está atrasado e a vencer.
 
 - **Flag `email`** ("Notificações por e-mail e digest"): default do ambiente
   (`EMAIL_NOTIFICATIONS_ENABLED`, **`true` desde a ADR 0018**) e alternável em runtime na página
-  Configurações. É a única das sete flags sem `requires`: como o SMTP já tem default, não há
-  credencial a cobrar — e por isso ela foi a candidata natural a nascer ligada. Ponha `false` para
+  Configurações. Foi a primeira flag sem `requires`: como o SMTP já tem default, não há
+  credencial a cobrar — e por isso ela foi a candidata natural a nascer ligada. **Deixou de ser a
+  única na FDD 030**, e por uma razão diferente da dela: o `enrichment` consulta cadastro público,
+  então não há chave que exista para ser cobrada. Nos dois casos quem responde "isto funciona?" é
+  a sonda, não o `configured()`. Ponha `false` para
   silenciar. Em produção isso torna o SMTP real um requisito de deploy, não um opcional: o default
   `localhost:1025` é o Mailpit do compose e, fora do dev, é lugar nenhum.
 

@@ -293,6 +293,14 @@ const FIXTURES: Record<string, unknown> = {
         { kind: "proposal", label: "Proposta", total: 7, sent: 7, accepted: 5, rejected: 2, acceptance_rate: 0.71, reached: 7 },
         { kind: "contract", label: "Contrato", total: 5, sent: 5, accepted: 5, rejected: 0, acceptance_rate: 1, reached: 5 },
       ],
+      // Os seis ganhos de `opportunities.won` distribuídos por origem: a matriz mede contraste e
+      // rolagem, mas um mock que não reconcilia com o funil de cima seria a própria tela que a
+      // FDD 030 recusa — e alguém a leria como exemplo do formato certo.
+      by_source: [
+        { source: "indicacao", leads: 6, won: 3, projects: 3, revenue: 540000 },
+        { source: "site", leads: 28, won: 2, projects: 2, revenue: 180000 },
+        { source: "direto", leads: 0, won: 1, projects: 1, revenue: 95000 },
+      ],
     },
     win_rate: 0.67, avg_ticket: 150000, avg_cycle_days: 38, pipeline: etapas,
     roi: {
