@@ -1,6 +1,22 @@
 # nginx do SPA em produção (FDD 019). É a borda **da aplicação**, não o terminador de TLS: quem
 # termina o TLS é o proxy do provedor, na frente deste. Este arquivo entra em `conf.d/`, que o
 # nginx inclui dentro do bloco `http` — é por isso que o `map` abaixo é válido aqui.
+#
+# **É um `.template`, e não um `.conf`.** A imagem `nginx:alpine` roda
+# `/docker-entrypoint.d/20-envsubst-on-templates.sh` no boot, que expande `${VAR}` de
+# `/etc/nginx/templates/*.template` para `/etc/nginx/conf.d/`. Só as duas variáveis com chaves
+# abaixo são expandidas: as do nginx (`$scheme`, `$host`, `$request_id`…) não têm chaves e não
+# são nomes de variável de ambiente, então passam intactas.
+#
+# Duas coisas eram fixas aqui e **não funcionam no Cloud Run**, que é onde HML roda (ADR 0046 do
+# portal do cliente, onde mora o Terraform dos dois):
+#
+#   - `listen 80`. O Cloud Run entrega a porta na variável PORT e recusa a revisão de um que
+#     não atende nela. O Terraform declarava `porta = 8080` para este serviço, e o container
+#     escutava na 80: a sonda de inicialização falharia, sempre.
+#   - `http://api:8000` com `resolver 127.0.0.11`. Aquele endereço é o DNS interno **do Docker**,
+#     que existe na rede do compose e em lugar nenhum fora dela. E o nome `api` é do compose. O
+#     Terraform já injetava `API_UPSTREAM` para este contêiner — e este arquivo nunca a leu.
 
 # Preserva o que o proxy de fora disse sobre o esquema e só cai no `$scheme` quando não há ninguém
 # na frente. Fixar `https` aqui criaria laço infinito de redirect quando este nginx for o único
@@ -24,7 +40,7 @@ log_format biahflow '$remote_addr "$request" $status $body_bytes_sent '
                     '${request_time}s "$http_user_agent" req=$request_id_de_origem';
 
 server {
-    listen 80;
+    listen ${PORT};
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
@@ -51,10 +67,13 @@ server {
     # SPA com 200** — um balanceador leria "saudável" com a API fora do ar. É o mesmo defeito que
     # o bloco `/media/` documenta adiante, com consequência pior.
     location ~ ^/(healthz|readyz)$ {
-        resolver 127.0.0.11 valid=10s ipv6=off;
-        set $upstream_probe http://api:8000;
+        resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+        set $upstream_probe ${API_UPSTREAM};
         proxy_pass $upstream_probe;
-        proxy_set_header Host $host;
+        # `$proxy_host` e não `$host`: o upstream tem nome próprio (o do serviço no Cloud Run, ou
+        # `api` no compose), e mandar o nome público faria o Django recusar por `ALLOWED_HOSTS`.
+        proxy_set_header Host $proxy_host;
+        proxy_ssl_server_name on;
         proxy_set_header X-Request-ID $request_id_de_origem;
         # Sonda que espera 30 s não é sonda: o balanceador precisa da resposta ruim rápido.
         proxy_connect_timeout 3s;
@@ -69,11 +88,14 @@ server {
         # upstream"). Como o compose reinicia containers de forma independente, um restart do `web`
         # enquanto a `api` está fora deixaria o nginx morto até alguém subir na mão. Com variável a
         # resolução é adiada para a requisição, e o pior caso passa a ser um 502 temporário.
-        # `127.0.0.11` é o DNS interno do Docker na rede criada pelo compose.
-        resolver 127.0.0.11 valid=10s ipv6=off;
-        set $upstream_api http://api:8000;
+        # `DNS_RESOLVER` é `127.0.0.11` no compose (o DNS interno do Docker) e o resolvedor de
+        # metadados no Cloud Run, onde aquele endereço não existe.
+        resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+        set $upstream_api ${API_UPSTREAM};
         proxy_pass $upstream_api;
-        proxy_set_header Host $host;
+        proxy_set_header Host $proxy_host;
+        # Necessário quando o upstream é https (Cloud Run): sem SNI o handshake é recusado.
+        proxy_ssl_server_name on;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $esquema_de_origem;

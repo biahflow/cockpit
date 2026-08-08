@@ -207,7 +207,8 @@ mandar para fora do host: **`backup-e-restauracao.md`**.
 | admin sem CSS | `collectstatic` não rodou (a imagem faz no build; um `STATIC_ROOT` remontado por volume apaga isso) |
 | documento desapareceu no deploy | `DJANGO_MEDIA_ROOT` fora do volume `media_data` |
 | upload falha com "permission denied" | `DJANGO_MEDIA_ROOT` apontando para um caminho que não existe na imagem: um volume nomeado herda o dono do diretório que cobre, e fora de `/var/lib/biahflow/media` (ou `/app/media`) o ponto de montagem nasce do root, enquanto o processo roda como uid 10001 |
-| `web` não sobe: "host not found in upstream" | não deve acontecer — o `proxy_pass` usa variável para adiar a resolução. Se acontecer, o `resolver` do `nginx.conf` não é o DNS da sua rede |
+| `web` não sobe: "host not found in upstream" | não deve acontecer — o `proxy_pass` usa variável para adiar a resolução. Se acontecer, `DNS_RESOLVER` não é o DNS da sua rede (default `127.0.0.11`, o do Docker). O arquivo é `frontend/nginx.conf.template`, expandido no boot para `conf.d/` |
+| `web` responde na 8080 e não na 80 | é o esperado desde a ADR 0046 do portal do cliente: a porta interna passou a ser 8080, que é a que o Cloud Run declara. O mapeamento publicado (`WEB_PORT`) não mudou |
 | "o projeto sumiu" para a Entrega | não é produção: é equipe do projeto vazia (FDD 018) |
 | `backup_status` reprova | o sidecar parou: `logs backup`. Detalhe em `backup-e-restauracao.md` |
 | digest não sai / calendário não sincroniza | `logs scheduler`. Job diário nasce armado: na primeira subida ele só estreia na próxima âncora (FDD 023) |

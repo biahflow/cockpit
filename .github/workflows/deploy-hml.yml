@@ -80,6 +80,20 @@ jobs:
               --region "$REGIAO" --quiet
           done
 
+      # O agendador (FDD 023: digest diário, sincronia de calendário, alerta de
+      # backup velho) é um **worker pool**: Cloud Run sem HTTP. A imagem é a da
+      # `biahflow-api`, porque ele roda `manage.py` do mesmo código.
+      #
+      # Ele existia no `docker-compose.prod.yml` e não tinha casa em HML, o que
+      # significa que as três rotinas não rodariam — incluindo a que avisa que o
+      # backup envelheceu. Um alerta de backup que não roda é pior que nenhum: faz
+      # o silêncio parecer boa notícia.
+      - name: Atualiza o agendador
+        run: |
+          gcloud beta run worker-pools update biahflow-scheduler \
+            --image "$REGISTRO/biahflow-api:$GITHUB_SHA" \
+            --region "$REGIAO" --quiet
+
       # A sonda pergunta ao **provedor**, não ao ambiente — é a tese da FDD 024
       # aplicada ao deploy: "a variável está definida" não é a mesma pergunta que
       # "a credencial funciona". Não falha o deploy, porque integração fora do ar

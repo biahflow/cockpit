@@ -174,7 +174,9 @@ services:
         VITE_SENTRY_RELEASE: ${SENTRY_RELEASE:-}
     ports:
       # Só HTTP: o terminador de TLS fica na frente. Não exponha esta porta à internet direto.
-      - "${WEB_PORT:-8080}:80"
+      # A porta interna é 8080 desde que o nginx virou template: ela é a que o Cloud Run declara,
+      # e manter duas seria manter a divergência que fazia a sonda de lá reprovar (ADR 0046).
+      - "${WEB_PORT:-8080}:8080"
     depends_on:
       api:
         condition: service_healthy

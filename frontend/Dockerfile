@@ -34,6 +34,19 @@ ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN \
 RUN npm run build
 
 FROM nginx:alpine AS prod
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# `templates/` e não `conf.d/`: a imagem oficial expande `${VAR}` daqui para lá no boot
+# (`/docker-entrypoint.d/20-envsubst-on-templates.sh`). É o que permite ao mesmo arquivo servir o
+# compose e o Cloud Run, que têm porta, nome de upstream e resolvedor de DNS diferentes.
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+
+# Os defaults reproduzem o compose, para que `docker compose up` continue funcionando sem
+# ninguém declarar nada. O Cloud Run sobrescreve `PORT` sozinho, e o Terraform injeta
+# `API_UPSTREAM` e `DNS_RESOLVER`.
+ENV PORT=8080 \
+    API_UPSTREAM=http://api:8000 \
+    DNS_RESOLVER=127.0.0.11
+
+# 8080 e não 80: é a porta que o Terraform de HML declara para este serviço, e era a divergência
+# que faria a sonda de inicialização do Cloud Run reprovar toda revisão (ADR 0046).
+EXPOSE 8080
