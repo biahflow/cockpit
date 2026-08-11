@@ -18,6 +18,10 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"]
+  "include": ["src"],
+  // A guarda de primitivas lê `src/**` do disco com `node:fs` — é ferramenta e não código de
+  // tela, então fica no `tsconfig.node.json`. Alargar os tipos daqui levaria os globais do Node
+  // para dentro do bundle do navegador.
+  "exclude": ["src/test/primitivas.test.ts"]
 }
 

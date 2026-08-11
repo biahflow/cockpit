@@ -1,10 +1,12 @@
 import type { HealthLevel } from "../types";
 
 // Semáforo de saúde 🟢🟡🔴 reutilizável (eleva o mapa antes duplicado em IndicadoresPage).
+// Variantes de `.state`, não as cores delas (ADR 0026): um `bg-emerald-50` escrito aqui é uma
+// segunda definição de "saudável", e ela diverge da primeira sem nada ficar vermelho.
 const HEALTH_BADGE: Record<HealthLevel, string> = {
-  "saudável": "bg-emerald-50 text-emerald-700",
-  "atenção": "bg-amber-50 text-amber-700",
-  "crítico": "bg-red-50 text-danger",
+  "saudável": "state--1",
+  "atenção": "state--2",
+  "crítico": "state--3",
 };
 const HEALTH_DOT: Record<HealthLevel, string> = {
   "saudável": "bg-emerald-500",

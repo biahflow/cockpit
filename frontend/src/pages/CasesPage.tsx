@@ -19,9 +19,9 @@ function numero(valor: string | null, unidade: KpiUnit): string {
 }
 
 function healthTone(level: string): string {
-  if (level === "saudável") return "bg-emerald-50 text-emerald-800";
-  if (level === "atenção") return "bg-amber-50 text-amber-800";
-  return "bg-red-50 text-danger";
+  if (level === "saudável") return "state--1";
+  if (level === "atenção") return "state--2";
+  return "state--3";
 }
 
 export function CasesPage() {
@@ -97,34 +97,34 @@ export function CasesPage() {
       onCancel={() => setConsenting(null)} onConfirm={() => void recordConsent()}
     />}
 
-    <header>
-      <p className="text-sm font-semibold text-accent">Metodologia</p>
-      <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Cases</h1>
-      <p className="mt-2 text-sm text-slate-600">O que cada entrega provou, com número congelado na data da conclusão. É daqui que a proposta gerada pela IA tira prova em vez de promessa.</p>
+    <header className="page-head">
+      <p className="eyebrow">Metodologia</p>
+      <h1>Cases</h1>
+      <p>O que cada entrega provou, com número congelado na data da conclusão. É daqui que a proposta gerada pela IA tira prova em vez de promessa.</p>
     </header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
+    {error && <p role="alert" className="alert--error">{error}</p>}
 
-    <div className="flex flex-wrap items-end gap-3 rounded-2xl border bg-white p-4 sm:p-5">
-      <label className="grid gap-2 text-sm font-medium text-slate-700">Vertical<select className="field w-48" value={verticalFilter} onChange={event => setVerticalFilter(event.target.value)}><option value="">Todas</option>{verticals.map(vertical => <option key={vertical.id} value={vertical.id}>{vertical.name}</option>)}</select></label>
-      <label className="grid gap-2 text-sm font-medium text-slate-700">Área<select className="field w-44" value={areaFilter} onChange={event => setAreaFilter(event.target.value)}><option value="">Todas</option>{areas.map(area => <option key={area} value={area}>{area}</option>)}</select></label>
-      <label className="grid gap-2 text-sm font-medium text-slate-700">Estado<select className="field w-44" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">Todos</option>{Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    <div className="toolbar">
+      <label className="form-label">Vertical<select className="field w-48" value={verticalFilter} onChange={event => setVerticalFilter(event.target.value)}><option value="">Todas</option>{verticals.map(vertical => <option key={vertical.id} value={vertical.id}>{vertical.name}</option>)}</select></label>
+      <label className="form-label">Área<select className="field w-44" value={areaFilter} onChange={event => setAreaFilter(event.target.value)}><option value="">Todas</option>{areas.map(area => <option key={area} value={area}>{area}</option>)}</select></label>
+      <label className="form-label">Estado<select className="field w-44" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">Todos</option>{Object.entries(statusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     </div>
 
-    {visible.length ? <div className="grid gap-5">{visible.map(item => <article className="overflow-hidden rounded-2xl border bg-white" key={item.id}>
+    {visible.length ? <div className="grid gap-5">{visible.map(item => <article className="panel panel--flush" key={item.id}>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-slate-50/60 px-5 py-4 sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><Trophy className="size-4" /></span>
+            <span className="metric-icon"><Trophy className="size-4" /></span>
             <h2 className="font-semibold text-ink">{item.title}</h2>
-            <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">{item.status_display}</span>
-            {item.anonymized && <span className="rounded-lg bg-accent-50 px-2 py-0.5 text-xs font-semibold text-accent">Anonimizado</span>}
+            <span className="state state--off">{item.status_display}</span>
+            {item.anonymized && <span className="state state--0">Anonimizado</span>}
           </div>
           <p className="mt-1 text-sm text-slate-600">{item.vertical_name || "Sem vertical"} · concluído em {new Date(item.created_at).toLocaleDateString("pt-BR")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${healthTone(item.health_snapshot.level)}`}>Saúde {item.health_snapshot.score}/100</span>
+          <span className={`state ${healthTone(item.health_snapshot.level)}`}>Saúde {item.health_snapshot.score}/100</span>
           {/* O ROI é interno: aparece para quem opera o portal e nunca no texto que vai ao cliente. */}
-          {item.roi_snapshot.roi !== null && <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">ROI {(item.roi_snapshot.roi * 100).toFixed(0)}%</span>}
+          {item.roi_snapshot.roi !== null && <span className="state state--off">ROI {(item.roi_snapshot.roi * 100).toFixed(0)}%</span>}
         </div>
       </div>
 
@@ -143,31 +143,31 @@ export function CasesPage() {
             <td className="py-2 pr-3 text-slate-700">{metric.has_baseline ? numero(metric.baseline, metric.kpi_unit) : <em className="text-slate-600">sem base registrada</em>}</td>
             <td className="py-2 font-semibold text-ink"><span className="inline-flex items-center gap-1.5"><ArrowRight className="size-3.5 text-accent" aria-hidden />{numero(metric.current, metric.kpi_unit)}</span></td>
           </tr>)}</tbody>
-        </table> : <p className="rounded-xl border border-dashed bg-slate-50/60 px-4 py-5 text-center text-sm text-slate-600">Este projeto foi concluído sem Funcionário Digital no roster, então o case não tem antes e depois — só saúde e ROI.</p>}
+        </table> : <p className="empty-state">Este projeto foi concluído sem Funcionário Digital no roster, então o case não tem antes e depois — só saúde e ROI.</p>}
 
         {isAdmin ? <form className="mt-5 grid gap-3 border-t pt-4" onSubmit={event => void saveCase(event, item)}>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">Título<input className="field" value={draftFor(item).title} onChange={event => setDraft(item, { title: event.target.value })} aria-label={`Título do case ${item.id}`} /></label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">Resumo<textarea className="field min-h-20" value={draftFor(item).summary} onChange={event => setDraft(item, { summary: event.target.value })} aria-label={`Resumo do case ${item.id}`} placeholder="O que esta entrega provou, em uma ou duas frases. Vai para a proposta." /></label>
+          <label className="form-label">Título<input className="field" value={draftFor(item).title} onChange={event => setDraft(item, { title: event.target.value })} aria-label={`Título do case ${item.id}`} /></label>
+          <label className="form-label">Resumo<textarea className="field min-h-20" value={draftFor(item).summary} onChange={event => setDraft(item, { summary: event.target.value })} aria-label={`Resumo do case ${item.id}`} placeholder="O que esta entrega provou, em uma ou duas frases. Vai para a proposta." /></label>
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-accent" checked={item.anonymized} onChange={event => void setAnonymized(item, event.target.checked)} aria-label={`Anonimizar o case ${item.id}`} />Anonimizar (publicar sem citar a marca)</label>
-            <button className="inline-flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink" type="submit"><Save className="size-4" />Salvar texto</button>
+            <button className="btn" type="submit"><Save className="size-4" />Salvar texto</button>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50/60 p-3">
             {item.client_consent
-              ? <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent"><BadgeCheck className="size-4" />Consentimento registrado</span>
-              : <button type="button" className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-ink hover:border-accent" onClick={() => setConsenting(item)}><ShieldCheck className="size-4" />Registrar consentimento</button>}
+              ? <span className="back-link"><BadgeCheck className="size-4" />Consentimento registrado</span>
+              : <button type="button" className="btn btn--secondary" onClick={() => setConsenting(item)}><ShieldCheck className="size-4" />Registrar consentimento</button>}
             {item.status !== "published" && <>
-              {item.status === "draft" && <button type="button" className="rounded-xl border px-3 py-2 text-sm font-semibold text-ink hover:border-accent" onClick={() => void moveTo(item, "review")}>Enviar para revisão</button>}
-              {item.status === "review" && <button type="button" className="rounded-xl border px-3 py-2 text-sm font-semibold text-ink hover:border-accent" onClick={() => void moveTo(item, "draft")}>Voltar para rascunho</button>}
+              {item.status === "draft" && <button type="button" className="btn btn--secondary" onClick={() => void moveTo(item, "review")}>Enviar para revisão</button>}
+              {item.status === "review" && <button type="button" className="btn btn--secondary" onClick={() => void moveTo(item, "draft")}>Voltar para rascunho</button>}
               {/* Desabilitado **com o motivo à vista**: um botão que some deixa quem revisa
                   procurando o que falta, e o que falta é uma conversa com o cliente. */}
-              <button type="button" className="rounded-xl bg-ink px-3 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-50" disabled={!item.client_consent} onClick={() => void moveTo(item, "published")}>Publicar</button>
+              <button type="button" className="btn" disabled={!item.client_consent} onClick={() => void moveTo(item, "published")}>Publicar</button>
               {!item.client_consent && <span className="text-xs text-slate-600">Publicar exige o consentimento do cliente — anonimizar não substitui.</span>}
             </>}
           </div>
         </form> : item.summary && <p className="mt-4 border-t pt-4 text-sm text-slate-600">{item.summary}</p>}
       </div>
-    </article>)}</div> : <p className="rounded-2xl border border-dashed bg-white/40 px-6 py-8 text-center text-sm text-slate-600">Nenhum case ainda. Eles nascem sozinhos quando um projeto é marcado como concluído — com a saúde e o ROI congelados naquele instante.</p>}
+    </article>)}</div> : <p className="empty-state">Nenhum case ainda. Eles nascem sozinhos quando um projeto é marcado como concluído — com a saúde e o ROI congelados naquele instante.</p>}
   </section>;
 }

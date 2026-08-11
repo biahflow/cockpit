@@ -122,20 +122,59 @@ unset; email goes through SMTP (Mailpit in dev).
 are the screens (Login, Dashboard, Clients, Commercial, Projects), `src/components/Layout.tsx`
 is the shell, `src/types.ts` holds shared types.
 
-**O design system é deste repositório, e a skill `biahflow-design` não o descreve** (ADR 0024).
-A paleta é **branco, preto e laranja**: `ink` (texto, sidebar, botão primário), `canvas`
-(fundo quase-branco), `accent`/`accent-50`/`accent-700` (o clay laranja, usado com parcimônia),
-`accent-200` (**o único acento que sobrevive a fundo escuro** — `accent` cru sobre `ink` dá
-3,82:1 e reprova no axe), `danger` (vermelho de verdade, separado do acento desde a ADR 0024),
-`line` e `muted`. Tudo em `src/index.css`, junto de uma `@layer components` com `.panel`,
-`.eyebrow`, `.page-head`, `.metric-card`, `.btn`, `.nav-item`, `.state` e `.popover` — **prefira
-essas primitivas a repetir utilitário inline**; as 22 páginas ainda não migraram, e é para lá que
-elas vão. A skill `biahflow-design` descreve o **OikOS** (`pine`/`clay`/`paper`) e nunca casou com
-este produto; não a siga aqui. O anterior está em `docs/design/paleta-anterior.md` e na tag
-`design/antes-do-redesenho`.
+**O design system é compartilhado com o portal do cliente, e a skill que o descreve é
+`portal-design`** (ADR 0024, revista pela ADR 0025). A regra que carrega tudo: **a forma é a mesma
+nos dois portais; o que identifica é só o matiz** — roxo `#6e56cf` é o portal do cliente, clay
+`#bd4a30` é este. Nunca use um no outro.
+
+A paleta é **branco, preto e laranja**: `ink` (texto, títulos, botão primário), `canvas` (fundo
+quase-branco), a escala `brand-50…900` (o clay, usado com parcimônia) e `danger` (vermelho de
+verdade, separado do acento desde a ADR 0024), mais `line` e `muted`. Dois tokens da escala
+existem por medição e não por completude: `brand-200` é **o único acento que sobrevive a fundo
+escuro** (`brand-500` cru sobre `ink` dá 3,82:1 e reprova), e **não há `brand-300`** porque o
+único consumidor dele lá é um componente que este produto não tem. `accent` e `accent-50`
+continuam valendo como **apelidos** em `@theme inline`, para os 13 arquivos que ainda os usam
+inline — em código novo escreva `brand-*`. Eram quatro: `accent-200` e `accent-700` saíram por
+nunca terem tido um consumidor, que é a mesma dívida de uma classe sem chamador.
+
+O shell é o do portal do cliente: **barra lateral clara**, fixa, com o menu rolando por dentro
+(`.sidebar`, `.brand-row`, `.brand-mark`, `.nav-label`, `.nav-scroll`), e topbar com `.breadcrumb`
+derivado do mesmo array `links` que desenha o menu. `.nav-item` tem **uma pele só** desde a ADR
+0025 — a barra clara fez a `.nav-item--light` da gaveta mobile deixar de ter o que modificar. A
+única superfície escura do produto é o painel do login (`.auth-brand`), e o gradiente dele vai de
+`brand-900` ao `ink` **porque a direção do portal do cliente reprova aqui** (o eyebrow em
+`brand-200` dá 2,28:1 sobre `brand-600`).
+
+Tudo em `src/index.css`, junto de uma `@layer components` com `.panel`/`.panel--flush`/`.row`,
+`.eyebrow`, `.page-head`, `.metric-card`, `.btn` (+ `--secondary`, `--secondary-danger`,
+`--danger`, `--icon`, `--icon-danger`), `.form-label`, `.form-grid`, `.toolbar`, `.state` (`--0..3`
+e `--off`, o **neutro**: "Desligada" e "Arquivado" não são aviso), `.filter-chip`, `.empty-state`,
+`.alert--error`/`--ok`, `.back-link`, `.nav-item`, `.popover*` e `.avatar`.
+
+**Toda classe daqui tem consumidor, e isso é uma invariante, não uma observação.** `.btn--ghost` e
+`.card-grid` saíram por não terem nenhum; `.btn--danger` ficou porque tinha um que ninguém tinha
+notado (o `ConfirmDialog`). Os dois botões de perigo dizem coisas diferentes e não se substituem:
+`--danger` é vermelho sólido e só aparece na confirmação, quando a ação já foi pedida;
+`--secondary-danger` é neutro em repouso e vermelho no hover, e é o `Arquivar` que divide a faixa
+com o `Editar`.
+
+**Use a primitiva; não reescreva o literal.** Isso é cobrado por `src/test/primitivas.test.ts`
+(ADR 0026), guarda que varre `pages/` e `components/` e reprova o literal que já tem primitiva —
+ela existe porque um card escrito à mão renderiza *quase* igual a um `.panel` e a divergência não
+deixa nada vermelho, que foi como o produto chegou a 1.331 utilitários inline e adoção zero. A
+allowlist dela nasceu **vazia** e a meta é que continue; exceção legítima entra com o motivo
+escrito. Mapa de estado devolve **variante** (`"state--1"`), nunca a cor (`"bg-emerald-50 …"`) —
+uma segunda definição de "concluído" diverge da primeira em silêncio.
+
+A skill `biahflow-design` descreve o **OikOS** (`pine`/`clay`/`paper`) e
+nunca casou com este produto; não a siga aqui. O anterior está em `docs/design/paleta-anterior.md`
+e na tag `design/antes-do-redesenho`; o que foi portado de lá, em
+`docs/design/referencia-portal-do-cliente.md`.
 
 Toda mudança de cor passa por `e2e/a11y.spec.ts` — 21 telas × 3 larguras, contraste AA incluído.
-**Quando o axe e o tom discordam, cede o tom.**
+**Quando o axe e o tom discordam, cede o tom.** Vale inclusive contra a fonte: copiar a forma
+copia junto os defeitos de contraste dela, e foi assim que o `slate-400` do `.nav-label` do portal
+do cliente reprovou 19 telas de uma vez ao chegar aqui.
 
 ## Conventions (from AGENTS.md / CONTRIBUTING.md)
 

@@ -7,16 +7,18 @@ import type { Lead, LeadFit, LeadStatus } from "../types";
 
 const statusLabel: Record<LeadStatus, string> = { new: "Novo", contacted: "Contatado", qualified: "Qualificado", discarded: "Descartado" };
 const fitLabel: Record<Exclude<LeadFit, "">, string> = { high: "Fit alto", medium: "Fit médio", low: "Fit baixo" };
+// Variantes de `.state`, não as cores delas: um `bg-emerald-50` escrito aqui é uma segunda
+// definição de "concluído", e ela diverge da primeira sem nada ficar vermelho.
 const fitCls: Record<Exclude<LeadFit, "">, string> = {
-  high: "bg-emerald-50 text-emerald-700",
-  medium: "bg-amber-50 text-amber-700",
-  low: "bg-slate-100 text-slate-600",
+  high: "state--1",
+  medium: "state--2",
+  low: "state--off",
 };
 const statusCls: Record<LeadStatus, string> = {
-  new: "bg-accent-50 text-accent-700",
-  contacted: "bg-amber-50 text-amber-700",
-  qualified: "bg-emerald-50 text-emerald-700",
-  discarded: "bg-slate-100 text-slate-600",
+  new: "state--0",
+  contacted: "state--2",
+  qualified: "state--1",
+  discarded: "state--off",
 };
 // "archived" não é status de lead: é o recorte do que saiu da lista. Entra aqui porque o diálogo
 // de arquivar promete restauração, e a promessa precisava de um lugar onde ser cumprida (FDD 025).
@@ -69,28 +71,28 @@ export function LeadsPage() {
       confirmLabel="Arquivar" busy={archiveBusy}
       onCancel={() => setArchiving(null)} onConfirm={() => void archive()}
     />}
-    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-accent">Comercial</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Leads</h1><p className="mt-2 text-sm text-slate-600">Contatos recebidos pelo site. Triê e converta em oportunidades.</p></div><span className="self-start rounded-xl bg-accent-50 px-3 py-2 text-sm font-semibold text-accent sm:self-auto">{newCount} novos</span></header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
+    <header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">Comercial</p><h1>Leads</h1><p>Contatos recebidos pelo site. Triê e converta em oportunidades.</p></div><span className="self-start rounded-xl bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 sm:self-auto">{newCount} novos</span></header>
+    {error && <p role="alert" className="alert--error">{error}</p>}
 
-    <div className="flex flex-wrap gap-2">{filters.map(value => <button key={value} className={`rounded-xl px-3 py-1.5 text-sm font-semibold transition ${filter === value ? "bg-ink text-white" : "border bg-white text-slate-600 hover:text-ink"}`} onClick={() => setFilter(value)}>{value === "all" ? "Todos" : value === "archived" ? "Arquivados" : statusLabel[value]}</button>)}</div>
+    <div className="filter-bar">{filters.map(value => <button key={value} className={`filter-chip${filter === value ? " filter-chip--on" : ""}`} onClick={() => setFilter(value)}>{value === "all" ? "Todos" : value === "archived" ? "Arquivados" : statusLabel[value]}</button>)}</div>
 
-    {visible.length ? <div className="grid gap-4">{visible.map(lead => <article className="rounded-2xl border bg-white p-5 sm:p-6" key={lead.id}>
+    {visible.length ? <div className="grid gap-4">{visible.map(lead => <article className="panel sm:p-6" key={lead.id}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><h2 className="text-base font-semibold text-ink">{lead.name}</h2><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{lead.company && <span className="flex items-center gap-1.5"><Building2 className="size-3.5" />{lead.company}</span>}<span className="flex items-center gap-1.5"><Mail className="size-3.5" />{lead.email}</span>{lead.phone && <span className="flex items-center gap-1.5"><Phone className="size-3.5" />{lead.phone}</span>}{lead.enrichment?.cnae_label && <span className="flex items-center gap-1.5" title={`Cadastro público · CNPJ ${lead.enrichment.cnpj || lead.cnpj}`}><Landmark className="size-3.5" />{lead.enrichment.cnae_label}{lead.enrichment.size ? ` · ${lead.enrichment.size}` : ""}</span>}</div></div>
+        <div className="min-w-0"><h2 className="text-base font-semibold text-ink">{lead.name}</h2><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">{lead.company && <span className="flex items-center gap-1.5"><Building2 className="size-3.5" />{lead.company}</span>}<span className="flex items-center gap-1.5"><Mail className="size-3.5" />{lead.email}</span>{lead.phone && <span className="flex items-center gap-1.5"><Phone className="size-3.5" />{lead.phone}</span>}{lead.enrichment?.cnae_label && <span className="flex items-center gap-1.5" title={`Cadastro público · CNPJ ${lead.enrichment.cnpj || lead.cnpj}`}><Landmark className="size-3.5" />{lead.enrichment.cnae_label}{lead.enrichment.size ? ` · ${lead.enrichment.size}` : ""}</span>}</div></div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {lead.ai_fit && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fitCls[lead.ai_fit]}`}>{fitLabel[lead.ai_fit]}{lead.ai_score !== null ? ` · ${lead.ai_score}` : ""}</span>}
-          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusCls[lead.status]}`}>{statusLabel[lead.status]}</span>
+          {lead.ai_fit && <span className={`state ${fitCls[lead.ai_fit]}`}>{fitLabel[lead.ai_fit]}{lead.ai_score !== null ? ` · ${lead.ai_score}` : ""}</span>}
+          <span className={`state ${statusCls[lead.status]}`}>{statusLabel[lead.status]}</span>
         </div>
       </div>
-      {lead.ai_summary && <p className="mt-3 flex gap-2 rounded-xl bg-accent-50/50 p-3 text-sm text-accent"><Sparkles className="mt-0.5 size-4 shrink-0" />{lead.ai_summary}{lead.ai_recommended_action && <span className="text-slate-600"> — {lead.ai_recommended_action}</span>}</p>}
-      {lead.message && <p className="mt-3 flex gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600"><MessageSquare className="mt-0.5 size-4 shrink-0 text-slate-600" />{lead.message}</p>}
+      {lead.ai_summary && <p className="mt-3 flex gap-2 rounded-xl bg-brand-50/60 p-3 text-sm text-brand-700"><Sparkles className="mt-0.5 size-4 shrink-0" />{lead.ai_summary}{lead.ai_recommended_action && <span className="text-muted"> — {lead.ai_recommended_action}</span>}</p>}
+      {lead.message && <p className="mt-3 flex gap-2 rounded-xl bg-slate-50 p-3 text-sm text-muted"><MessageSquare className="mt-0.5 size-4 shrink-0 text-muted" />{lead.message}</p>}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {filter === "archived" ? <button className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold text-accent hover:border-accent disabled:opacity-60" disabled={restoring === lead.id} onClick={() => void restore(lead.id)}><RotateCcw className="size-4" />{restoring === lead.id ? "Restaurando…" : "Restaurar"}</button> : <>
+        {filter === "archived" ? <button className="btn btn--secondary" disabled={restoring === lead.id} onClick={() => void restore(lead.id)}><RotateCcw className="size-4" />{restoring === lead.id ? "Restaurando…" : "Restaurar"}</button> : <>
         <select className="field w-40" value={lead.status} onChange={event => void changeStatus(lead.id, event.target.value as LeadStatus)} aria-label={`Status do lead ${lead.name}`}>{(Object.keys(statusLabel) as LeadStatus[]).map(value => <option key={value} value={value}>{statusLabel[value]}</option>)}</select>
-        {lead.opportunity ? <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">Convertido</span> : <button className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink" onClick={() => void convert(lead.id)}>Converter em oportunidade <ArrowRight className="size-4" /></button>}
-        <button className="ml-auto grid size-9 place-items-center rounded-xl border text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar lead ${lead.name}`} onClick={() => setArchiving(lead)}><Trash2 className="size-4" /></button>
+        {lead.opportunity ? <span className="state state--1">Convertido</span> : <button className="btn" onClick={() => void convert(lead.id)}>Converter em oportunidade <ArrowRight className="size-4" /></button>}
+        <button className="btn btn--icon-danger ml-auto" aria-label={`Arquivar lead ${lead.name}`} onClick={() => setArchiving(lead)}><Trash2 className="size-4" /></button>
         </>}
       </div>
-    </article>)}</div> : <div className="grid min-h-56 place-items-center rounded-2xl border bg-white p-6 text-center"><div><span className="mx-auto grid size-11 place-items-center rounded-xl bg-accent-50 text-accent"><Inbox className="size-5" /></span><p className="mt-3 text-sm font-semibold text-ink">Nenhum lead {filter === "all" ? "recebido" : filter === "archived" ? "arquivado" : "neste status"}</p><p className="mt-1 text-sm text-slate-600">Leads enviados pelo formulário do site aparecem aqui.</p></div></div>}
+    </article>)}</div> : <div className="panel grid min-h-56 place-items-center p-6 text-center"><div><span className="metric-icon mx-auto size-11"><Inbox className="size-5" /></span><p className="mt-3 text-sm font-semibold text-ink">Nenhum lead {filter === "all" ? "recebido" : filter === "archived" ? "arquivado" : "neste status"}</p><p className="mt-1 text-sm text-muted">Leads enviados pelo formulário do site aparecem aqui.</p></div></div>}
   </section>;
 }
