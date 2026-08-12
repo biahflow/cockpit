@@ -42,7 +42,14 @@ jobs:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: hml-deploy@biahflow-hml.iam.gserviceaccount.com
 
+      # `beta` é declarado aqui e não instalado no passo que o usa: o worker pool do
+      # agendador só existe em `gcloud beta`, e o runner não traz esse componente. Sem
+      # esta linha o comando **pergunta** se pode instalá-lo — antes de olhar as flags,
+      # de modo que o `--quiet` que ele já tem não é lido —, e num shell não interativo
+      # isso é `exit 1` com uma mensagem que manda usar a flag que já está lá.
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: beta
 
       - name: Autoriza os dois registros
         run: |
@@ -98,9 +105,19 @@ jobs:
       # aplicada ao deploy: "a variável está definida" não é a mesma pergunta que
       # "a credencial funciona". Não falha o deploy, porque integração fora do ar
       # não é motivo para reverter código que está bom; deixa o veredito no log.
+      #
+      # O `update` antes do `execute` **faltava**, e a ausência dele não deixava
+      # nada vermelho: este passo é `continue-on-error`, então executar um job que
+      # ainda estava na `imagem_bootstrap` falhava com `Application exec likely
+      # failed` e seguia em frente. O veredito que o comentário acima promete nunca
+      # foi escrito em lugar nenhum — a sonda estava desligada desde sempre, e
+      # dizendo no log da esteira que tinha rodado.
       - name: Sonda as integrações
         continue-on-error: true
         run: |
+          gcloud run jobs update biahflow-check \
+            --image "$REGISTRO/biahflow-api:$GITHUB_SHA" \
+            --region "$REGIAO" --quiet
           gcloud run jobs execute biahflow-check --region "$REGIAO" --wait || true
 
       - name: Fumaça
