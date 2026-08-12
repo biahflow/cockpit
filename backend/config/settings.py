@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qsl, urlparse
 
 from django.core.exceptions import ImproperlyConfigured
@@ -127,8 +128,34 @@ STATIC_URL = "static/"
 # `collectstatic` roda no build da imagem de produção; em desenvolvimento o `runserver` serve
 # o estático do admin sozinho e este diretório nem existe (está no `.gitignore`).
 STATIC_ROOT = Path(os.getenv("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles")))
+# Onde o `Document.file` vive. Vazio = sistema de arquivos, que é o compose e a suíte;
+# preenchido = o bucket, que é o Cloud Run. A escolha é por **ausência de variável**, como
+# `DATABASE_URL` e `REDIS_URL`, e não por uma flag: para onde o arquivo vai não é algo que
+# se liga e desliga na tela — os objetos já gravados ficariam órfãos.
+#
+# Sem isto, no Cloud Run o arquivo ficava na instância que o recebeu: invisível para as
+# outras (`max = 4`) e perdido na revisão seguinte. É o arquivo que segue para o Drive, para
+# o fornecedor de assinatura e para o portal do cliente.
+GCS_MEDIA_BUCKET = os.getenv("GCS_MEDIA_BUCKET", "")
+if GCS_MEDIA_BUCKET:
+    _default_storage: dict[str, Any] = {
+        "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+        "OPTIONS": {
+            "bucket_name": GCS_MEDIA_BUCKET,
+            # O bucket tem acesso uniforme; mandar ACL por objeto faz o GCS recusar a
+            # escrita inteira, e o erro fala de permissão e não de configuração.
+            "default_acl": None,
+            # O download é servido pela rota autenticada (`DocumentViewSet.download`), que
+            # passa por `check_object_permissions`. URL assinada seria um segundo caminho
+            # para o arquivo, sem RBAC — é a premissa da ADR 0002 / FDD 017.
+            "querystring_auth": False,
+        },
+    }
+else:
+    _default_storage = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": _default_storage,
     # Comprimido, mas **não** `Manifest`: a variante com manifesto levanta em runtime se um
     # `{% static %}` não estiver no `staticfiles.json`, que só existe depois do `collectstatic`.
     # Com `DEBUG=False` na suíte, qualquer template renderizado (API navegável, Swagger) estouraria.

@@ -33,6 +33,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | **Níveis de produto** (Discovery Express / Discovery + Assessment / Implantação) | — | — | **Ligado** ✅ — semeados na migração; ajuste nome, preço e escopo no menu **Serviços** (`/servicos`, admin) |
 | **Captação de leads** | `LEAD_INTAKE_TOKEN`, `CORS_ALLOWED_ORIGINS` | token (você define) | **Ligado** ✅ |
 | Documentos no Google Drive | `GOOGLE_DRIVE_ENABLED` + auth ADC/OAuth (ADR 0016) | Pasta ou Shared Drive acessível à identidade | Desligado |
+| Documentos no Cloud Storage | `GCS_MEDIA_BUCKET` | bucket com acesso uniforme, alcançável pelo ADC | Segue a variável, e **não é alternável na tela** — para onde o arquivo vai não é um interruptor: desligar deixaria órfão o que já está no bucket. Vazia = sistema de arquivos, que só é durável onde há volume. **Num ambiente sem volume, vazia significa arquivo perdido na revisão seguinte** |
 | IA (assistente/resumos/proposta/próximos passos) | `AI_ENABLED`, `OPENAI_API_KEY` | conta OpenAI | Desligado |
 | Notificações in-app (sino) | — | — | **Sempre ligado** |
 | Notificações por e-mail e digest diário | `EMAIL_NOTIFICATIONS_ENABLED` (default `true`), `EMAIL_HOST`/`EMAIL_PORT`, `SCHEDULER_DIGEST_AT` | SMTP acessível (Mailpit no dev) | **Ligado** ✅ — ponha `false` para silenciar |
