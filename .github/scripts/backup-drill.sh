@@ -46,8 +46,17 @@ falhar() { echo "DRILL REPROVADO: $*" >&2; exit 1; }
 # no compose. Desde que o `db` virou `pgvector/pgvector:pg16` e o sidecar ficou no alpine, "mesma
 # imagem" deixou de valer — mas a invariante é a major, e `pg_dump` de major menor **recusa rodar**.
 # Confere-se aqui porque uma nota de rodapé não impede ninguém de subir só um dos dois.
-major_db="$(grep -oE 'image: .*postgres[^ ]*:(pg)?[0-9]+' docker-compose.prod.yml | grep -oE '[0-9]+$')"
-major_sidecar="$(grep -oE '^FROM .*:(pg)?[0-9]+' ops/backup/Dockerfile | grep -oE '[0-9]+$')"
+#
+# O padrão precisa alcançar `pgvector/pgvector:pg16`, que **não tem "postgres" no nome** — foi
+# exatamente por isso que esta leitura passou a devolver vazio no dia da FDD 029.
+#
+# E o `|| true` não é ruído: sem ele, `set -e` derruba a substituição de comando **antes** do
+# `falhar` logo abaixo, e o drill inteiro morre em três segundos sem imprimir uma linha. Foi o que
+# aconteceu entre 08/08 e hoje — o CI ficou vermelho sem dizer por quê e a restauração deixou de ser
+# exercitada. Uma guarda que morre muda é pior que guarda nenhuma: quem lê o log conclui "infra
+# instável" e segue. Quem decide daqui para frente é a checagem escrita, que tem a mensagem.
+major_db="$(grep -oE 'image: .*(postgres|pgvector)[^ ]*:(pg)?[0-9]+' docker-compose.prod.yml | grep -oE '[0-9]+$' || true)"
+major_sidecar="$(grep -oE '^FROM .*:(pg)?[0-9]+' ops/backup/Dockerfile | grep -oE '[0-9]+$' || true)"
 [ -n "$major_db" ] && [ -n "$major_sidecar" ] \
     || falhar "não consegui ler a major do Postgres (db='$major_db', sidecar='$major_sidecar')"
 [ "$major_db" = "$major_sidecar" ] \
