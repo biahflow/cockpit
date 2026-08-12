@@ -28,8 +28,10 @@ Hoje há dois destinos, escolhidos pela flag `GOOGLE_DRIVE_ENABLED`:
 
 > O `docker-compose.yml` ainda sobe um **MinIO** e passa `MINIO_ENDPOINT` para a API, mas o
 > `settings.py` não lê essa variável e não há cliente S3 nas dependências: o serviço está
-> provisionado e **não conectado**. Migrar os blobs para S3/MinIO — ou remover o serviço do compose —
-> continua pendente e merece um ADR quando for decidido.
+> provisionado e **não conectado**. A decisão foi tomada na ADR 0028 e não foi essa: com
+> `GCS_MEDIA_BUCKET` preenchida o `STORAGES["default"]` passa a ser o Cloud Storage pelo SDK do
+> GCS, não pela API S3. **Remover o MinIO do compose continua pendente** — agora é limpeza de um
+> serviço sem consumidor, não uma decisão em aberto.
 
 ## Topologia em produção
 

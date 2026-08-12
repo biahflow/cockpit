@@ -121,15 +121,16 @@ def test_o_arquivo_sai_junto_com_a_linha() -> None:
         client=ClientFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
     )
     doc.file.save("contrato.pdf", ContentFile(b"conteudo"), save=True)
-    caminho = doc.file.path
+    # `storage.exists(nome)` e não `os.path.exists(file.path)`: `.path` só existe em storage
+    # de sistema de arquivos e levanta `NotImplementedError` no bucket (FDD 017). A pergunta
+    # que este teste faz — "o objeto sumiu?" — é a mesma nos dois, e só esta forma a exprime.
+    armazenamento, nome = doc.file.storage, doc.file.name
     Document.objects.filter(pk=doc.pk).update(archived_at=timezone.now() - timedelta(days=60))
 
     retention.executar()
 
-    import os
-
     assert not Document.objects.filter(pk=doc.pk).exists()
-    assert not os.path.exists(caminho)
+    assert not armazenamento.exists(nome)
 
 
 def _documento_no_drive(nome: str, *, arquivado_ha: int) -> Document:

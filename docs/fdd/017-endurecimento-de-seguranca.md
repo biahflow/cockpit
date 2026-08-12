@@ -31,6 +31,15 @@ Três achados eram vazamento real, dois eram defeito, e a maior parte da superf�
   configuração real de desenvolvimento e homologação. Com caminhos previsíveis em
   `documents/%Y/%m/`, qualquer anônimo baixava contrato e proposta por `/media/...`, contornando o
   gate da ADR 0002. A rota deixou de existir em qualquer ambiente; o SPA nunca a usou.
+- **E continua sendo a única, agora que o arquivo pode morar num bucket** (12/08/2026).
+  `GCS_MEDIA_BUCKET` preenchida troca o `STORAGES["default"]` para o Cloud Storage — o
+  `FileField` não muda, e upload, download e expurgo já eram agnósticos de storage. As duas
+  opções do backend existem para **preservar esta regra**, e não por afinação: `default_acl=None`
+  porque o bucket tem acesso uniforme, e `querystring_auth=False` porque URL assinada em
+  `file.url` seria um segundo caminho para o arquivo, sem `check_object_permissions`. O bucket
+  nasce com `public_access_prevention = "enforced"`, que é o `/media/` desta era: a ameaça
+  equivalente a "o Django serve o diretório" passa a ser "o bucket está público".
+  `test_media_is_not_publicly_served.py` continua valendo e continua sendo sobre a rota.
 - **Upload com allowlist.** Além do limite de 10 MB que já existia, o tipo do arquivo é conferido
   contra `ALLOWED_DOCUMENT_EXTENSIONS`, e `original_name` é sanitizado antes de gravar. O download
   não era o risco (o Django já faz `basename` e escapa o header) — os consumidores do valor cru

@@ -138,6 +138,18 @@ FLAGS: dict[str, Flag] = {
         lambda: bool(settings.PORTAL_WEBHOOK_URL and settings.PORTAL_WEBHOOK_SECRET),
         ("PORTAL_WEBHOOK_URL", "PORTAL_WEBHOOK_SECRET"),
     ),
+    # **`toggleable=False`, e não é zelo.** Para onde o arquivo vai não é algo que se liga e
+    # desliga na tela: desligar deixaria órfão todo objeto já gravado no bucket, e ligar não
+    # traria de volta o que está no disco. Quem decide é a variável de ambiente, e a tela diz
+    # isso com todas as letras ("Controlada por variáveis de ambiente"). Desligada, o
+    # documento continua no sistema de arquivos — que é o compose, e é onde ele é durável
+    # porque há volume; no Cloud Run, sem bucket, ele morre na revisão seguinte.
+    "storage": Flag(
+        "Documentos no Cloud Storage",
+        lambda: bool(settings.GCS_MEDIA_BUCKET),
+        ("GCS_MEDIA_BUCKET",),
+        toggleable=False,
+    ),
     # Enriquecimento de lead (FDD 030). **Sem `requires`, e isso é correto**: o provedor default é
     # cadastro público e não pede credencial, então não existe variável cuja ausência denuncie
     # falta de configuração — cobrar uma recusaria a instalação que está certa. É o precedente do

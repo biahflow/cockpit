@@ -127,6 +127,24 @@ def test_media_root_sai_da_arvore_de_codigo_por_ambiente() -> None:
     assert str(_reload(PROD_ENV).MEDIA_ROOT) == "/var/lib/biahflow/media"
 
 
+def test_sem_bucket_o_documento_fica_no_sistema_de_arquivos() -> None:
+    """O compose é este caminho, e é o que faz o teste de mesa do backup seguir válido."""
+    cfg = _reload(PROD_ENV)
+    assert cfg.STORAGES["default"]["BACKEND"] == "django.core.files.storage.FileSystemStorage"
+
+
+def test_com_bucket_o_documento_vai_para_o_cloud_storage() -> None:
+    cfg = _reload({**PROD_ENV, "GCS_MEDIA_BUCKET": "biahflow-hml-midia"})
+    default = cfg.STORAGES["default"]
+    assert default["BACKEND"] == "storages.backends.gcloud.GoogleCloudStorage"
+    assert default["OPTIONS"]["bucket_name"] == "biahflow-hml-midia"
+    # As duas opções não são preferência. `default_acl` não nulo faz o GCS recusar a escrita
+    # num bucket de acesso uniforme; e `querystring_auth` ligado devolveria URL assinada em
+    # `file.url`, que é um caminho para o arquivo sem passar por `check_object_permissions`.
+    assert default["OPTIONS"]["default_acl"] is None
+    assert default["OPTIONS"]["querystring_auth"] is False
+
+
 def test_smtp_de_producao() -> None:
     cfg = _reload(PROD_ENV)
 

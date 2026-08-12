@@ -146,6 +146,24 @@ def _probe_enrichment() -> tuple[bool, str]:
     return ping()
 
 
+def _probe_storage() -> tuple[bool, str]:
+    """Escreve, lê e apaga um objeto de sonda. Ao contrário do e-mail, aqui o ciclo completo é
+    barato e é o único que prova o que importa: `objectAdmin` sem `create` ou sem `delete` deixa
+    o upload passar e o expurgo de retenção falhar — e o expurgo falha calado."""
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import storages
+
+    armazenamento = storages["default"]
+    nome = armazenamento.save(".sonda/check_integrations", ContentFile(b"sonda"))
+    try:
+        with armazenamento.open(nome) as arquivo:
+            if arquivo.read() != b"sonda":
+                return False, f"{settings.GCS_MEDIA_BUCKET}: leitura devolveu outro conteúdo"
+    finally:
+        armazenamento.delete(nome)
+    return True, f"bucket {settings.GCS_MEDIA_BUCKET} aceitou escrita, leitura e remoção"
+
+
 PROBES = {
     "ai": _probe_ai,
     "drive": _probe_drive,
@@ -156,6 +174,7 @@ PROBES = {
     "tasksync": _probe_tasksync,
     "portal": _probe_portal,
     "enrichment": _probe_enrichment,
+    "storage": _probe_storage,
 }
 
 
