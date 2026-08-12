@@ -5,6 +5,7 @@ from rest_framework.permissions import BasePermission
 from .models import (
     Artifact,
     Case,
+    Decisao,
     DigitalEmployee,
     Document,
     Meeting,
@@ -35,6 +36,7 @@ PROJECT_OF = {
     Task: lambda obj: obj.project,
     Meeting: lambda obj: obj.project,
     Pendencia: lambda obj: obj.project,
+    Decisao: lambda obj: obj.project,
     DigitalEmployee: lambda obj: obj.project,
     ProjectPhase: lambda obj: obj.project,
     ProjectDeliverable: lambda obj: obj.project_phase.project,
@@ -100,7 +102,7 @@ class RolePermission(BasePermission):
             # `lead` e `analytics`, e a melhor propriedade deste modelo de permissão: recurso novo
             # nasce fechado sem uma linha de código.
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
-                                "pendencia", "project_phase", "project_deliverable",
+                                "pendencia", "decisao", "project_phase", "project_deliverable",
                                 "digital_employee", "artifact"}
         return False
 

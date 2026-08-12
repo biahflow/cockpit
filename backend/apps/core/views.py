@@ -71,6 +71,7 @@ from .models import (
     Case,
     Client,
     Contact,
+    Decisao,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
@@ -107,6 +108,7 @@ from .serializers import (
     CaseSerializer,
     ClientSerializer,
     ContactSerializer,
+    DecisaoSerializer,
     DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
     DocumentSerializer,
@@ -289,14 +291,84 @@ _TEXTO_CORRIDO = (
 )
 
 
+class _ExtracaoSemResultado(Exception):
+    """O modelo respondeu, e o que veio não é uma lista de decisões.
+
+    Exceção e não `return`: o coletor roda **dentro** do `_ai_run`, que já montou o payload e vai
+    devolver `Response`. Sinalizar por retorno obrigaria aquele helper a saber o que fazer com um
+    coletor que desistiu — e ele serve dez actions que não têm essa preocupação.
+    """
+
+
+#: Os dois formatos de saída que o `_ai_run` sabe pedir. Constantes e não literais soltos porque o
+#: valor errado aqui não quebra nada — só volta a mandar o modelo evitar crase numa resposta que
+#: precisa ser JSON, e o sintoma disso é um parse que falha longe da causa.
+_FORMATO_TEXTO = "texto_corrido"
+_FORMATO_JSON = "json"
+
+
+def decisoes_do_texto(text: str) -> list[dict]:
+    """Extrai a lista de decisões do que o modelo devolveu. Função pura, e é por isso que existe.
+
+    **O modelo não obedece à instrução de formato o tempo todo**, e a falha típica não é JSON
+    inválido: é JSON válido embrulhado em prosa ("Aqui estão as decisões:") ou em cerca de markdown.
+    Recortar do primeiro ``[`` ao último ``]`` cobre os três casos com uma regra só.
+
+    **Item malformado é descartado, não derruba a extração.** Um título vazio no quinto de sete não
+    é razão para perder os outros seis — quem revisa vê seis rascunhos e a transcrição continua ali
+    para uma segunda passada. O que **derruba** é não haver lista nenhuma: aí não houve extração, e
+    dizer isso é diferente de gravar zero decisões em silêncio (a chamada devolve ``[]`` e quem a
+    invoca responde 502).
+
+    Fora da região ``# pragma: no cover`` de propósito: é a única parte disto que dá para exercitar
+    sem chamar o provedor, e é onde os defeitos moram.
+    """
+    inicio, fim = text.find("["), text.rfind("]")
+    if inicio == -1 or fim <= inicio:
+        return []
+    try:
+        bruto = json.loads(text[inicio : fim + 1])
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(bruto, list):
+        return []
+
+    decisoes: list[dict] = []
+    for item in bruto:
+        if not isinstance(item, dict):
+            continue
+        titulo = str(item.get("title") or "").strip()
+        if not titulo:
+            continue
+        decisoes.append({
+            "title": titulo[:255],
+            "rationale": str(item.get("rationale") or "").strip(),
+            "decided_by": str(item.get("decided_by") or "").strip()[:160],
+        })
+    return decisoes
+
+
 def _ai_run(  # type: ignore[no-untyped-def]
     request, feature, system, user_prompt, project=None, opportunity=None,
     artifact_kind=None, artifact_title="", source_meeting=None, grounding=None,
+    formato=_FORMATO_TEXTO, coletor=None,
 ):
     """Guarda (flag + limite), executa a IA e registra a auditoria.
 
     Com `artifact_kind`, o texto também vira um `Artifact` em rascunho (FDD 016) — antes ele só
     existia na resposta HTTP. A chave `artifact` é aditiva: `text` e `interaction` seguem iguais.
+
+    `formato` e `coletor` entraram na FDD 032, e os dois vieram do mesmo problema: extrair
+    **N decisões** de uma transcrição não cabe no que este helper fazia.
+
+    - `formato=_FORMATO_JSON` **não** concatena o `_TEXTO_CORRIDO`. Aquele texto manda o modelo não
+      usar crase nem marcação, e pedir JSON logo depois é dizer duas coisas contrárias na mesma
+      instrução. Ele continua sendo o padrão, porque o destino de quase todo texto gerado aqui é um
+      `<textarea>`.
+    - `coletor` é chamado com `(text, interaction)` e devolve o que entra no `payload`. É o mesmo
+      lugar do bloco do artefato, e de propósito: um segundo caminho até `ai.complete` faria "o que
+      a IA pode gravar" deixar de caber num arquivo, que é a razão de este helper ser um só (ver o
+      comentário do `grounding` abaixo).
     """
     if not ai.is_enabled():
         return Response({"detail": "Recurso de IA está desativado."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -313,8 +385,9 @@ def _ai_run(  # type: ignore[no-untyped-def]
     if grounding is not None:
         system = f"{system}\n\n{knowledge.GROUNDING_RULES}"
         user_prompt = f"{user_prompt}\n\n{grounding.block}"
+    moldura = f"{system}\n\n{_TEXTO_CORRIDO}" if formato == _FORMATO_TEXTO else system
     try:
-        text, usage = ai.complete(f"{system}\n\n{_TEXTO_CORRIDO}", user_prompt)
+        text, usage = ai.complete(moldura, user_prompt)
     except ai.AiProviderError as exc:
         logger.exception("chamada de IA (%s) falhou", feature)
         raise AiProviderUnavailable() from exc
@@ -336,6 +409,8 @@ def _ai_run(  # type: ignore[no-untyped-def]
             ai_interaction=interaction, created_by=request.user,
         )
         payload["artifact"] = ArtifactSerializer(artifact).data
+    if coletor is not None:
+        payload.update(coletor(text, interaction))
     return Response(payload)
 
 
@@ -1378,6 +1453,64 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
             artifact_title=f"Assessment — {meeting.title}", source_meeting=meeting,
         )
 
+    @action(detail=True, methods=["post"], url_path="extrair-decisoes")
+    def extrair_decisoes(self, request: Request, pk: str | None = None) -> Response:
+        """Propõe decisões do projeto a partir da transcrição, **em rascunho** (FDD 032).
+
+        Mora aqui e não no `DecisaoViewSet` porque o insumo é a transcrição, e é isto que o
+        `discovery` logo acima já estabeleceu: a IA de reunião pertence à reunião.
+
+        Duas diferenças em relação às duas actions acima, e as duas são o ponto da fatia. A primeira
+        é o **formato**: aqui o modelo devolve JSON, então o `_TEXTO_CORRIDO` (que manda não usar
+        crase nem marcação) fica de fora. A segunda é o **destino**: em vez de um `Artifact` com o
+        texto inteiro, saem N linhas de `Decisao` em `rascunho` — e rascunho **não entra no
+        snapshot**, que é o que faz um palpite de modelo não alcançar o cliente antes de alguém
+        publicar.
+        """
+        meeting = self.get_object()
+        if not meeting.transcript.strip():
+            return Response({"detail": "A reunião não tem transcrição."}, status=400)
+        system = (
+            "Você extrai decisões de projeto a partir da transcrição de uma reunião. Devolva "
+            "APENAS um array JSON, sem texto antes ou depois, em que cada item tem as chaves "
+            '"title" (a decisão em uma frase), "rationale" (o porquê, com as alternativas '
+            'descartadas quando aparecerem) e "decided_by" (quem decidiu, como foi dito na '
+            "reunião). Use APENAS o material fornecido: se a transcrição não registra uma decisão, "
+            "devolva um array vazio em vez de inferir. É um rascunho para revisão humana."
+        )
+
+        def grava(text: str, interaction) -> dict:  # type: ignore[no-untyped-def]
+            propostas = decisoes_do_texto(text)
+            if not propostas:
+                # Sem lista, não houve extração — e isso não é o mesmo que "a reunião não decidiu
+                # nada", que o modelo expressa devolvendo `[]` e que chega aqui como lista vazia
+                # também. Distinguir os dois exigiria um segundo canal de saída; entre inventar
+                # essa distinção e recusar, recusar é o que não mente.
+                raise _ExtracaoSemResultado()
+            criadas = Decisao.objects.bulk_create([
+                Decisao(
+                    project=meeting.project, source_meeting=meeting,
+                    status=Decisao.Status.DRAFT, **proposta,
+                )
+                for proposta in propostas
+            ])
+            return {"decisoes": DecisaoSerializer(criadas, many=True).data}
+
+        try:
+            # `atomic` em volta da chamada inteira: se o coletor levantar depois de gravar parte
+            # das linhas, um `bulk_create` parcial deixaria rascunhos órfãos de uma extração que a
+            # pessoa viu falhar. Aqui ou entram todas, ou nenhuma.
+            with transaction.atomic():
+                return _ai_run(
+                    request, "meeting_decisoes", system, ai.build_meeting_context(meeting),
+                    project=meeting.project, formato=_FORMATO_JSON, coletor=grava,
+                )
+        except _ExtracaoSemResultado:
+            return Response(
+                {"detail": "A IA não devolveu decisões em formato utilizável. Tente de novo."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
     @action(detail=True, methods=["post"], url_path="ai-score")
     def ai_score(self, request: Request, pk: str | None = None) -> Response:
         """Gera o AI Score de maturidade/oportunidade a partir da transcrição (FDD 014).
@@ -1411,6 +1544,16 @@ class PendenciaViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVi
 
     def create_kwargs(self) -> dict:
         return {"owner": self.request.user}
+
+
+class DecisaoViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    resource = "decisao"
+    queryset = Decisao.objects.select_related("project", "source_meeting").all()
+    serializer_class = DecisaoSerializer
+    # `status` entra no filtro porque a tela precisa separar rascunho de publicada: o rascunho é
+    # interno e a publicada é a que o cliente vê. Sem ele, revisar a extração da IA obrigaria a
+    # trazer as duas listas juntas e separá-las no navegador.
+    filter_fields = ("project", "status")
 
 
 class LeadViewSet(ArchiveModelViewSet):

@@ -24,6 +24,7 @@ function stub() {
     if (path.includes("/assistant/")) return Promise.resolve({ text: "Resposta da IA" });
     if (path.includes("/summary/") || path.includes("/next-steps/")) return Promise.resolve({ text: "Resumo da IA" });
     if (path.includes("/discovery/") || path.includes("/assessment/")) return Promise.resolve({ text: "Análise da reunião", interaction: 9, artifact: artifact() });
+    if (path.includes("/extrair-decisoes/")) return Promise.resolve({ text: "[]", interaction: 9, decisoes: [] });
     if (path.startsWith("/artifacts")) return Promise.resolve([artifact()]);
     if (path.includes("/risk/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 0, level: "baixo", signals: [] });
     if (path.includes("/health/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 90, level: "saudável", signals: [] });
@@ -32,6 +33,7 @@ function stub() {
     if (path.startsWith("/tasks")) return Promise.resolve([{ id: 1, project: 1, title: "Tarefa 1", description: "", owner: 1, due_date: "2026-08-10", completed_at: null, status: "todo", party: "provider", is_overdue: false, milestone: null }]);
     if (path.startsWith("/meetings")) return Promise.resolve([{ id: 1, project: 1, title: "Kickoff", date: "2026-08-05", recording_url: "https://rec/1", transcript: "Cliente descreveu suas dores.", status: "held" }]);
     if (path.startsWith("/pendencias")) return Promise.resolve([{ id: 1, project: 1, title: "Aprovar escopo", description: "", status: "open", party: "client", owner: null, resolved_at: null }]);
+    if (path.startsWith("/decisoes")) return Promise.resolve([{ id: 1, project: 1, title: "Adotar fila gerenciada", rationale: "Custa menos que o Memorystore.", decided_on: "2026-08-06", decided_by: "Marina", status: "draft", source_meeting: 1, published_at: null }]);
     if (path.startsWith("/project-members")) return Promise.resolve([{ id: 7, project: 1, user: 3, user_name: "Ana Lima", user_username: "ana", user_role: "delivery", added_by: 1, created_at: "2026-08-05T10:00:00Z" }]);
     return Promise.resolve([]);
   });
@@ -432,4 +434,36 @@ test("Vendas não vê o caminho da biblioteca", async () => {
   await screen.findByText("Funcionários Digitais");
 
   expect(screen.queryByLabelText("Adicionar da biblioteca")).not.toBeInTheDocument();
+});
+
+test("a decisão em rascunho aparece marcada como tal, e publicar é um clique", async () => {
+  // O selo é a única coisa na tela que diz **se o cliente vê**: rascunho não entra no snapshot
+  // (FDD 032), e é isso que faz a extração por IA não alcançar o portal antes de alguém olhar.
+  stub();
+  render(<ProjectDetailPage id={1} />);
+
+  expect(await screen.findByText("Adotar fila gerenciada")).toBeTruthy();
+  expect(screen.getByText("Custa menos que o Memorystore.")).toBeTruthy();
+
+  const selo = screen.getByRole("button", { name: "Publicar Adotar fila gerenciada" });
+  expect(selo.textContent).toBe("Rascunho");
+  fireEvent.click(selo);
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
+    "/decisoes/1/",
+    expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "published" }) }),
+  ));
+});
+
+test("extrair decisões da transcrição chama a reunião, não a decisão", async () => {
+  // O insumo é a transcrição, e é por isso que a action mora no `MeetingViewSet` — o mesmo lugar
+  // do Discovery. Um botão que chamasse `/decisoes/` não teria de onde extrair.
+  stub();
+  render(<ProjectDetailPage id={1} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Decisões" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
+    "/meetings/1/extrair-decisoes/", expect.objectContaining({ method: "POST" }),
+  ));
 });

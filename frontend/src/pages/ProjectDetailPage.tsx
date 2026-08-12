@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Sparkles, Trash2, Trophy, Video, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, Sparkles, Trash2, Trophy, Video, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, listUsers } from "../api";
@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -38,12 +38,14 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [pendencias, setPendencias] = useState<Pendencia[]>([]);
+  const [decisoes, setDecisoes] = useState<Decisao[]>([]);
   const [phases, setPhases] = useState<ProjectPhase[]>([]);
   const [error, setError] = useState("");
   const [milestoneDraft, setMilestoneDraft] = useState({ title: "", due_date: "" });
   const [taskDraft, setTaskDraft] = useState({ title: "", due_date: "", milestone: "" });
   const [meetingDraft, setMeetingDraft] = useState(blankMeeting);
   const [pendenciaDraft, setPendenciaDraft] = useState<{ title: string; party: Party }>({ title: "", party: "provider" });
+  const [decisaoDraft, setDecisaoDraft] = useState({ title: "", rationale: "", decided_by: "" });
   const [services, setServices] = useState<Service[]>([]);
   const [risk, setRisk] = useState<RiskAssessment>();
   const [health, setHealth] = useState<HealthAssessment>();
@@ -71,11 +73,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
     api<RiskAssessment>(`/projects/${id}/risk/`),
     api<Meeting[]>(`/meetings/?project=${id}`),
     api<Pendencia[]>(`/pendencias/?project=${id}`),
+    api<Decisao[]>(`/decisoes/?project=${id}`),
     api<ProjectPhase[]>(`/project-phases/?project=${id}`),
     api<HealthAssessment>(`/projects/${id}/health/`),
     api<ProjectMember[]>(`/project-members/?project=${id}`),
-  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedPhases, loadedHealth, loadedMembers]) => {
-    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setPhases(loadedPhases); setHealth(loadedHealth); setMembers(loadedMembers);
+  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedDecisoes, loadedPhases, loadedHealth, loadedMembers]) => {
+    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setDecisoes(loadedDecisoes); setPhases(loadedPhases); setHealth(loadedHealth); setMembers(loadedMembers);
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -158,6 +161,22 @@ export function ProjectDetailPage({ id }: { id: number }) {
     event.preventDefault();
     try { await api("/pendencias/", { method: "POST", body: JSON.stringify({ project: id, ...pendenciaDraft }) }); setPendenciaDraft({ title: "", party: "provider" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
+  }
+  async function createDecisao(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try { await api("/decisoes/", { method: "POST", body: JSON.stringify({ project: id, ...decisaoDraft }) }); setDecisaoDraft({ title: "", rationale: "", decided_by: "" }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  // Publicar é o que faz a decisão atravessar para o cliente: só `published` entra no snapshot
+  // (FDD 032). Despublicar volta a escondê-la, e **não** apaga a data em que ela passou a valer.
+  async function toggleDecisao(decisaoId: number, isPublished: boolean) {
+    try { await api(`/decisoes/${decisaoId}/`, { method: "PATCH", body: JSON.stringify({ status: isPublished ? "draft" : "published" }) }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function extrairDecisoes(meeting: Meeting) {
+    setAiLoading(true);
+    try { await api(`/meetings/${meeting.id}/extrair-decisoes/`, { method: "POST" }); await load(); }
+    catch (cause) { setError((cause as Error).message); } finally { setAiLoading(false); }
   }
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -457,7 +476,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
           {aiEnabled && meeting.transcript.trim() && <div className="mt-2 flex flex-wrap gap-2 pl-12">
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "discovery")}><Sparkles className="size-3.5 text-accent" />Discovery</button>
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "assessment")}><Sparkles className="size-3.5 text-accent" />Assessment</button>
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-accent" />AI Score</button>
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-accent" />AI Score</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void extrairDecisoes(meeting)}><Sparkles className="size-3.5 text-accent" />Decisões</button>
           </div>}
         </div>)}</div> : <p className="empty-state">Nenhuma reunião registrada.</p>}
         <ArtifactsPanel project={Number(id)} reloadToken={artifactsToken} />
@@ -476,6 +495,35 @@ export function ProjectDetailPage({ id }: { id: number }) {
             <span className={`state shrink-0 ${resolved ? "state--1" : "state--2"}`}>{resolved ? "Resolvida" : "Aberta"}</span>
           </div>;
         })}</div> : <p className="empty-state">Nenhuma pendência.</p>}
+      </WorkColumn>
+    </div>
+
+    {/* Decisões (FDD 032). Grade própria e não uma terceira coluna na de cima: o `WorkColumn` tem
+        comentário próprio sobre estourar a trilha no celular, e três colunas reabririam aquilo.
+
+        O selo diz o que o cliente vê. Rascunho é interno — é o que a extração por IA grava, e é o
+        que faz um palpite de modelo não alcançar a tela do cliente antes de alguém olhar. */}
+    <div className="grid gap-5">
+      <WorkColumn icon={<Scale className="size-4" />} title="Decisões" count={decisoes.length}>
+        <form className="grid gap-3" onSubmit={event => void createDecisao(event)}>
+          <input className="field" placeholder="O que foi decidido" value={decisaoDraft.title} onChange={event => setDecisaoDraft({ ...decisaoDraft, title: event.target.value })} required />
+          <div className="flex gap-2"><input className="field min-w-0 flex-1" placeholder="Quem decidiu (opcional)" value={decisaoDraft.decided_by} onChange={event => setDecisaoDraft({ ...decisaoDraft, decided_by: event.target.value })} /><button className="btn btn--icon" aria-label="Adicionar decisão" type="submit"><Plus className="size-4" /></button></div>
+          <textarea className="field min-h-20" placeholder="Por quê — o que pesou, e o que foi descartado" value={decisaoDraft.rationale} onChange={event => setDecisaoDraft({ ...decisaoDraft, rationale: event.target.value })} />
+        </form>
+        {decisoes.length ? <div className="divide-y">{decisoes.map(decisao => {
+          const published = decisao.status === "published";
+          return <div className="py-3" key={decisao.id}>
+            <div className="flex items-start gap-3">
+              <span className="metric-icon shrink-0"><Scale className="size-4" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-ink">{decisao.title}</p>
+                {decisao.rationale && <p className="mt-0.5 text-xs text-slate-600">{decisao.rationale}</p>}
+                <p className="mt-0.5 text-xs text-slate-600">{[decisao.decided_by, decisao.decided_on && formatDate(decisao.decided_on)].filter(Boolean).join(" · ") || "Sem autoria registrada"}</p>
+              </div>
+              <button type="button" onClick={() => void toggleDecisao(decisao.id, published)} aria-label={published ? `Despublicar ${decisao.title}` : `Publicar ${decisao.title}`} className={`state shrink-0 transition hover:ring-2 hover:ring-accent/30 ${published ? "state--1" : "state--off"}`}>{published ? "Publicada" : "Rascunho"}</button>
+            </div>
+          </div>;
+        })}</div> : <p className="empty-state">Nenhuma decisão registrada.</p>}
       </WorkColumn>
     </div>
   </section>;

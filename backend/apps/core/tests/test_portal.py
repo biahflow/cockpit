@@ -2,6 +2,7 @@ import json
 from datetime import timedelta
 
 import pytest
+from django.db.models.signals import post_save
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -11,6 +12,7 @@ from apps.core import blueprints, journey, portal
 from apps.core.models import (
     AppSetting,
     Artifact,
+    Decisao,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
@@ -559,3 +561,162 @@ def test_emit_respeita_desligamento_pela_tela(monkeypatch: pytest.MonkeyPatch) -
         portal.emit("updated", "project", 7)
 
     assert scheduled == []
+
+
+# --- A guarda que o funcionário digital custou -------------------------------
+#
+# A regra é da ADR 0003 e está escrita há meses: *"o que entra no snapshot precisa de emissor, sob
+# pena de o portal exibir um estado que já mudou"*. O que **verificava** a regra eram seis asserções
+# escritas à mão (as de cima) contra dezesseis chaves — e foi assim que `digital_employees` ficou no
+# snapshot sem emissor nenhum até 07/08/2026. Não foi o CI que achou: foi alguém lendo o código a
+# partir do outro repositório.
+#
+# É a forma exata das ADRs 0033 e 0035 do portal do cliente — guardas que eram, elas próprias,
+# listas digitadas —, deste lado da fronteira. Os dois lados são derivados: as chaves saem do
+# snapshot de verdade, e os emissores saem do **registro do Django**, não de um grep no arquivo.
+# Grep casaria um comentário; `_live_receivers` casa o que vai rodar.
+
+#: Chave do snapshot → o modelo cujo `save()` a muda. É o único mapa escrito à mão desta guarda, e
+#: ele é sobre *domínio*, não sobre implementação: dizer que `documents` vem de `Document` é a
+#: informação que nenhuma introspecção tem como descobrir.
+_MODELO_DA_CHAVE = {
+    "documents": Document,
+    "meetings": Meeting,
+    "pendencias": Pendencia,
+    "decisions": Decisao,
+    "milestones": Milestone,
+    "digital_employees": DigitalEmployee,
+}
+
+#: Chaves sem emissor próprio, e o motivo de cada uma. Allowlist com razão escrita, na forma do
+#: `NOT_AN_ALERT` do outro repositório: entrada sem motivo é a lista digitada voltando pela porta
+#: dos fundos.
+_DERIVADA_DE = {
+    "project": "o próprio projeto, coberto por `_emit_project`",
+    "completion": "derivada dos marcos; muda quando um `Milestone` salva",
+    "health": "derivada dos marcos e do projeto",
+    "roi": "derivado dos marcos e do valor do projeto",
+    "resultados": "derivado dos marcos",
+    "journey": "derivada de `ProjectPhase`/`ProjectDeliverable`, que têm emissor próprio",
+    "next_meeting": "derivada de `Meeting`, que tem emissor próprio",
+    "ai_score": "colunas do próprio `Project`, cobertas por `_emit_project`",
+    "artifact_accepted_at": "derivada de `Artifact`, que tem emissor desde a FDD 031",
+}
+
+
+def _tem_emissor(model: type) -> bool:
+    """Existe um receiver de `post_save` para este modelo que avisa o portal?
+
+    Derivado do registro do Django (`_live_receivers`) e não do texto de `signals.py`: um grep
+    encontraria a palavra num comentário, e um receiver desconectado continuaria "passando".
+
+    O `_live_receivers` do Django 5 devolve **dois** grupos, síncronos e assíncronos — medido, não
+    suposto. Somamos os dois: um emissor assíncrono continua sendo um emissor.
+    """
+    sincronos, assincronos = post_save._live_receivers(model)
+    return any(
+        getattr(receiver, "__name__", "").startswith("_emit_")
+        for receiver in (*sincronos, *assincronos)
+    )
+
+
+@pytest.mark.django_db
+def test_every_snapshot_key_has_an_emitter() -> None:
+    """Toda chave do snapshot tem quem avise o portal que ela mudou.
+
+    Que ela não nasce verde por acidente está no histórico do próprio repositório: rodada contra o
+    estado de 06/08/2026, ela reprovaria com `digital_employees` — o defeito exato que a emenda de
+    07/08 corrigiu à mão, sem deixar guarda atrás.
+    """
+    snapshot = portal.build_snapshot(ProjectFactory())
+
+    desconhecidas = set(snapshot) - set(_MODELO_DA_CHAVE) - set(_DERIVADA_DE)
+    assert not desconhecidas, (
+        f"chave(s) nova(s) no snapshot: {sorted(desconhecidas)}. Diga de qual modelo ela vem em "
+        "`_MODELO_DA_CHAVE`, ou de qual emissor ela é derivada em `_DERIVADA_DE`. Uma chave que "
+        "ninguém avisa faz o portal exibir um estado que já mudou (ADR 0003)."
+    )
+
+    orfas = [chave for chave, model in _MODELO_DA_CHAVE.items() if not _tem_emissor(model)]
+    assert not orfas, (
+        f"chave(s) de snapshot sem emissor: {sorted(orfas)}. Registre um `post_save` em signals.py."
+    )
+
+
+@pytest.mark.django_db
+def test_the_guard_lists_do_not_keep_a_key_that_stopped_existing() -> None:
+    """As duas listas envelhecem junto, senão viram a lista digitada que esta guarda mata."""
+    snapshot = portal.build_snapshot(ProjectFactory())
+    obsoletas = (set(_MODELO_DA_CHAVE) | set(_DERIVADA_DE)) - set(snapshot)
+    assert not obsoletas, f"a guarda guarda chave que não existe mais no snapshot: {sorted(obsoletas)}"
+
+
+# --- Decisões no snapshot (FDD 032) -------------------------------------------
+
+
+@pytest.mark.django_db
+def test_snapshot_carries_published_decisions_only() -> None:
+    """O rascunho é interno, e é esse filtro que faz a extração por IA ser aceitável.
+
+    Sem ele, um palpite de modelo chegaria à tela do cliente antes de qualquer pessoa olhar — que é
+    a razão de o estado existir neste modelo.
+    """
+    project = ProjectFactory()
+    meeting = Meeting.objects.create(
+        project=project, title="Comitê", date=timezone.localdate(), transcript="ata"
+    )
+    Decisao.objects.create(project=project, title="Rascunho da IA", source_meeting=meeting)
+    Decisao.objects.create(
+        project=project,
+        title="Adotar fila gerenciada",
+        rationale="Memorystore custa mais que o volume previsto.",
+        decided_by="Marina (cliente)",
+        decided_on=timezone.localdate(),
+        status=Decisao.Status.PUBLISHED,
+        source_meeting=meeting,
+    )
+
+    decisions = portal.build_snapshot(project)["decisions"]
+    assert [d["title"] for d in decisions] == ["Adotar fila gerenciada"]
+    assert decisions[0]["rationale"] == "Memorystore custa mais que o volume previsto."
+    assert decisions[0]["decided_by"] == "Marina (cliente)"
+    # A pk da reunião, que é como o portal recasa a proveniência com o que ele espelhou.
+    assert decisions[0]["meeting_id"] == meeting.pk
+
+
+@pytest.mark.django_db
+def test_an_archived_decision_stops_counting_like_every_other_child() -> None:
+    project = ProjectFactory()
+    decisao = Decisao.objects.create(
+        project=project, title="Adotar fila gerenciada", status=Decisao.Status.PUBLISHED
+    )
+    assert portal.build_snapshot(project)["decisions"] != []
+    decisao.archive()
+    assert portal.build_snapshot(project)["decisions"] == []
+
+
+@pytest.mark.django_db
+def test_saving_publishing_and_archiving_a_decision_all_emit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Os três caminhos, e o terceiro é o que mais importa.
+
+    Arquivar tira a decisão do snapshot sem criar linha nenhuma: é a mudança mais silenciosa das
+    três, e é exatamente a que o funcionário digital não avisava. `archive()` é um `save()`, então
+    o receiver sem guarda de `created` cobre os três de uma vez.
+    """
+    calls: list[tuple] = []
+    project = ProjectFactory()
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    decisao = Decisao.objects.create(project=project, title="Adotar fila gerenciada")
+    assert ("updated", "decisao", project.pk) in calls
+
+    calls.clear()
+    decisao.status = Decisao.Status.PUBLISHED
+    decisao.save()
+    assert ("updated", "decisao", project.pk) in calls
+
+    calls.clear()
+    decisao.archive()
+    assert ("updated", "decisao", project.pk) in calls

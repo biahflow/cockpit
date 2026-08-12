@@ -32,6 +32,7 @@ export type Milestone = { id: number; project: number; title: string; descriptio
 export type Task = Milestone & { milestone: number | null };
 export type Meeting = { id: number; project: number; title: string; date: string; meeting_url: string; recording_url: string; transcript: string; status: "scheduled" | "held" };
 export type Pendencia = { id: number; project: number; title: string; description: string; status: "open" | "resolved"; party: Party; owner: number | null; resolved_at: string | null };
+export type Decisao = { id: number; project: number; title: string; rationale: string; decided_on: string | null; decided_by: string; status: "draft" | "published"; source_meeting: number | null; published_at: string | null };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 export type DocumentEntry = { id: number; client: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";

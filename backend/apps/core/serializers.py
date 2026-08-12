@@ -23,6 +23,7 @@ from .models import (
     Case,
     Client,
     Contact,
+    Decisao,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
@@ -279,6 +280,17 @@ class PendenciaSerializer(serializers.ModelSerializer[Pendencia]):
         fields = ["id", "project", "title", "description", "status", "party", "owner",
                   "resolved_at", "created_at", "updated_at"]
         read_only_fields = ["id", "owner", "resolved_at", "created_at", "updated_at"]
+
+
+class DecisaoSerializer(serializers.ModelSerializer[Decisao]):
+    # `published_at` é read-only pela razão do `resolved_at` acima: quem carimba é o `save()` do
+    # modelo, não quem manda o PATCH. Aceitar a data do cliente seria deixar reescrever quando uma
+    # decisão passou a valer.
+    class Meta:
+        model = Decisao
+        fields = ["id", "project", "title", "rationale", "decided_on", "decided_by", "status",
+                  "source_meeting", "published_at", "created_at", "updated_at"]
+        read_only_fields = ["id", "published_at", "created_at", "updated_at"]
 
 
 class TaskSerializer(WorkItemSerializer):
