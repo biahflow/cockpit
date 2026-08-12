@@ -81,11 +81,23 @@ objetos em memória e **nunca codifica nada**, então isso jamais tinha sido exe
 ### Três achados
 
 **1. Convite e kickoff ignoram a flag `email`.** Com a flag **desligada**, converter uma
-oportunidade e convidar alguém ainda produz e-mail; só o espelho de notificação, o digest, o
-lembrete de assinatura e a confirmação de agendamento respeitam a flag. É intencional — os dois são
-transacionais, e um portal cujo convite não sai não onboarda ninguém —, mas a FDD 010 descrevia a
-flag desligada como "nada muda (só in-app)", o que se lia como "nenhum e-mail sai". A FDD foi
-corrigida.
+oportunidade e convidar alguém ainda produz e-mail. É intencional — os dois são transacionais, e um
+portal cujo convite não sai não onboarda ninguém —, mas a FDD 010 descrevia a flag desligada como
+"nada muda (só in-app)", o que se lia como "nenhum e-mail sai". A FDD foi corrigida.
+
+> **Retificação (12/08/2026).** Este achado dizia que "o espelho de notificação, o digest, o
+> lembrete de assinatura e a confirmação de agendamento respeitam a flag", e **são dois, não
+> quatro**: só `notifications._email` e `digest.send_daily_digest` consultam
+> `flags.is_enabled("email")`. `esign._mail_signer` e `booking._send_confirmation` **não** — foi
+> medido no código, ao ligar o SMTP em HML. A rodada de 06/08 não podia ter visto isso: com o
+> Mailpit de pé, tudo sai dos dois jeitos.
+>
+> A correção é do texto e não do código, e a razão está no rótulo da flag: ela é
+> **"Notificações por e-mail e digest"**, não um interruptor geral de e-mail. O lembrete de
+> assinatura está atrás da flag `esign`, que é a dele; e a confirmação de agendamento é
+> transacional a um terceiro que acabou de marcar reunião — silenciá-la por uma flag de
+> notificação interna deixaria o lead sem resposta. **Quatro dos seis pontos de envio ignoram a
+> flag**, e quem quiser mudez total desliga os provedores, não esta chave.
 
 **2. O convite ficava órfão quando o SMTP recusava.** Com o SMTP apontado para uma porta morta, o
 `POST /invitations/` gravava a linha e devolvia **500** (`fail_silently=False`): sobrava um convite

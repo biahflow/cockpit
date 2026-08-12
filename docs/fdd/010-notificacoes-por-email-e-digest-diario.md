@@ -19,11 +19,20 @@ por IA** resume, para cada usuário, o que está atrasado e a vencer.
   silenciar. Em produção isso torna o SMTP real um requisito de deploy, não um opcional: o default
   `localhost:1025` é o Mailpit do compose e, fora do dev, é lugar nenhum.
 
-  **Desligada, o que para é a notificação — não todo o e-mail.** Seguem saindo o **convite**
-  (`InvitationView`) e o **kickoff** (`kickoff._send_kickoff_email`), porque são transacionais: um
-  portal cujo convite não sai não onboarda ninguém. Ficam atrás da flag o espelho de notificação, o
-  digest, o lembrete de assinatura e a confirmação de agendamento. Esta linha dizia "nada muda (só
-  in-app)", o que se lia como "nenhum e-mail sai"; a homologação da FDD 024 mostrou o contrário.
+  **Desligada, o que para é a notificação — não todo o e-mail.** Ficam atrás da flag exatamente
+  **dois** pontos de envio: o espelho de notificação (`notifications._email`) e o digest
+  (`digest.send_daily_digest`). Os outros quatro seguem saindo: o **convite** (`InvitationView`) e o
+  **kickoff** (`kickoff._send_kickoff_email`), porque são transacionais e um portal cujo convite não
+  sai não onboarda ninguém; o **lembrete de assinatura** (`esign._mail_signer`), que está atrás da
+  flag `esign`, que é a dele; e a **confirmação de agendamento** (`booking._send_confirmation`), que
+  é transacional a um terceiro que acabou de marcar reunião — silenciá-la por uma flag de
+  notificação interna deixaria o lead sem resposta.
+
+  Esta linha já dizia "nada muda (só in-app)", o que se lia como "nenhum e-mail sai"; a homologação
+  da FDD 024 corrigiu isso e **errou para o outro lado**, listando quatro pontos atrás da flag. São
+  dois, e a diferença só apareceu ao ligar o SMTP em HML (12/08/2026): com o Mailpit de pé, tudo sai
+  dos dois jeitos e a divergência não deixa nada vermelho. **A flag é "Notificações por e-mail e
+  digest", e não um interruptor geral de e-mail** — quem quiser mudez total desliga os provedores.
 
 - **O convite grava e envia na mesma transação.** O convite **é** o e-mail — quem recebe não tem
   outro caminho para o token —, então SMTP fora do ar desfaz o convite e devolve **502**. Antes, a
