@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Meeting, Pendencia, User
+from apps.core.models import Decisao, Meeting, Pendencia, User
 
 from .factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
@@ -79,3 +79,76 @@ def test_pendencia_owner_is_set_to_request_user() -> None:
     )
     assert resp.status_code == 201
     assert Pendencia.objects.get(pk=resp.json()["id"]).owner_id == delivery.pk
+
+
+# --- Decisões (FDD 032) -------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_sales_cannot_manage_decisoes() -> None:
+    """Recurso novo nasce fechado, e `decisao` só abre porque entrou nas duas listas.
+
+    O caso existe porque o mecanismo é silencioso nos dois sentidos: esquecer `permissions.py` dá
+    403 em tudo, e acrescentar ao set sem acrescentar ao `PROJECT_OF` daria acesso a projeto alheio.
+    """
+    sales = UserFactory(role=User.Role.SALES)
+    project = ProjectFactory()
+    client = APIClient()
+    client.force_authenticate(sales)
+    resp = client.post(
+        reverse("decisao-list"),
+        {"project": project.pk, "title": "Adotar fila gerenciada"},
+        format="json",
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_delivery_only_sees_decisoes_of_their_own_projects() -> None:
+    delivery = UserFactory(role=User.Role.DELIVERY)
+    project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
+    Decisao.objects.create(project=ProjectFactory(), title="De outro projeto")
+    Decisao.objects.create(project=project, title="Adotar fila gerenciada")
+
+    client = APIClient()
+    client.force_authenticate(delivery)
+    listed = client.get(reverse("decisao-list"), {"project": project.pk}).json()
+    rows = listed if isinstance(listed, list) else listed["results"]
+    assert [row["title"] for row in rows] == ["Adotar fila gerenciada"]
+
+
+@pytest.mark.django_db
+def test_publishing_a_decisao_stamps_and_republishing_never_moves_the_stamp() -> None:
+    """O carimbo não se apaga — a divergência deliberada em relação à `Pendencia`.
+
+    O `save()` dela **limpa** `resolved_at` ao reabrir. Copiar isso aqui faria despublicar uma
+    decisão apagar a data em que ela passou a valer, que é fato histórico e não estado corrente.
+    """
+    delivery = UserFactory(role=User.Role.DELIVERY)
+    project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
+    decisao = Decisao.objects.create(project=project, title="Adotar fila gerenciada")
+    assert decisao.published_at is None
+
+    client = APIClient()
+    client.force_authenticate(delivery)
+    resp = client.patch(
+        reverse("decisao-detail", args=[decisao.pk]), {"status": "published"}, format="json"
+    )
+    assert resp.status_code == 200
+    decisao.refresh_from_db()
+    primeiro = decisao.published_at
+    assert primeiro is not None
+
+    # Volta para rascunho: o carimbo **fica**.
+    client.patch(reverse("decisao-detail", args=[decisao.pk]), {"status": "draft"}, format="json")
+    decisao.refresh_from_db()
+    assert decisao.published_at == primeiro
+
+    # E republicar não move o carimbo para a data de hoje.
+    client.patch(
+        reverse("decisao-detail", args=[decisao.pk]), {"status": "published"}, format="json"
+    )
+    decisao.refresh_from_db()
+    assert decisao.published_at == primeiro

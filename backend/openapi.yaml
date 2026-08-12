@@ -1190,6 +1190,169 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardResponse'
           description: ''
+  /api/v1/decisoes/:
+    get:
+      operationId: v1_decisoes_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Decisao'
+          description: ''
+    post:
+      operationId: v1_decisoes_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Decisao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Decisao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Decisao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decisao'
+          description: ''
+  /api/v1/decisoes/{id}/:
+    get:
+      operationId: v1_decisoes_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este decisao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decisao'
+          description: ''
+    put:
+      operationId: v1_decisoes_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este decisao.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Decisao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Decisao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Decisao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decisao'
+          description: ''
+    patch:
+      operationId: v1_decisoes_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este decisao.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDecisao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDecisao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDecisao'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decisao'
+          description: ''
+    delete:
+      operationId: v1_decisoes_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este decisao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/decisoes/{id}/unarchive/:
+    post:
+      operationId: v1_decisoes_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este decisao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/digital-employee-blueprints/:
     get:
       operationId: v1_digital_employee_blueprints_list
@@ -3243,6 +3406,51 @@ paths:
   /api/v1/meetings/{id}/discovery/:
     post:
       operationId: v1_meetings_discovery_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
+  /api/v1/meetings/{id}/extrair-decisoes/:
+    post:
+      operationId: v1_meetings_extrair_decisoes_create
+      description: |-
+        Propõe decisões do projeto a partir da transcrição, **em rascunho** (FDD 032).
+
+        Mora aqui e não no `DecisaoViewSet` porque o insumo é a transcrição, e é isto que o
+        `discovery` logo acima já estabeleceu: a IA de reunião pertence à reunião.
+
+        Duas diferenças em relação às duas actions acima, e as duas são o ponto da fatia. A primeira
+        é o **formato**: aqui o modelo devolve JSON, então o `_TEXTO_CORRIDO` (que manda não usar
+        crase nem marcação) fica de fora. A segunda é o **destino**: em vez de um `Artifact` com o
+        texto inteiro, saem N linhas de `Decisao` em `rascunho` — e rascunho **não entra no
+        snapshot**, que é o que faz um palpite de modelo não alcançar o cliente antes de alguém
+        publicar.
       parameters:
       - in: path
         name: id
@@ -6562,6 +6770,59 @@ components:
       - overdue_count
       - pipeline
       - upcoming_tasks
+    Decisao:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        rationale:
+          type: string
+        decided_on:
+          type: string
+          format: date
+          nullable: true
+        decided_by:
+          type: string
+          maxLength: 160
+        status:
+          $ref: '#/components/schemas/DecisaoStatusEnum'
+        source_meeting:
+          type: integer
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - project
+      - published_at
+      - title
+      - updated_at
+    DecisaoStatusEnum:
+      enum:
+      - draft
+      - published
+      type: string
+      description: |-
+        * `draft` - Rascunho
+        * `published` - Publicada
     DigitalEmployee:
       type: object
       properties:
@@ -7816,6 +8077,44 @@ components:
         job_title:
           type: string
           maxLength: 128
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedDecisao:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        rationale:
+          type: string
+        decided_on:
+          type: string
+          format: date
+          nullable: true
+        decided_by:
+          type: string
+          maxLength: 160
+        status:
+          $ref: '#/components/schemas/DecisaoStatusEnum'
+        source_meeting:
+          type: integer
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time

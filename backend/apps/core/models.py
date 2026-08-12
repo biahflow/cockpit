@@ -423,6 +423,54 @@ class Pendencia(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class Decisao(TimestampedModel):
+    """Decisão do projeto: o que foi decidido, por quê, e a partir de qual reunião.
+
+    **Por que ela não é uma `Pendencia`.** O docstring de lá diz "Pendência/decisão do projeto", e
+    a FDD 005 repete — a casa colapsou as duas desde sempre. Elas divergem em três eixos: o estado
+    de uma pendência é `aberta/resolvida` e o de uma decisão é `rascunho/publicada`; uma pendência
+    diz *de quem é a bola* (`party`) e uma decisão diz *quem decidiu*, que muitas vezes é alguém do
+    cliente e não um `User` daqui; e o valor de uma decisão está no **porquê**, que a pendência nem
+    guarda de forma que atravesse (o `description` dela não entra no snapshot).
+
+    **O estado existe para a IA caber.** A extração a partir da transcrição (FDD 032) grava
+    `rascunho`, e só `publicada` entra no snapshot — nenhum palpite de modelo alcança o cliente
+    antes de uma pessoa publicar. É a forma do `Artifact` (`draft → review → sent → accepted`),
+    reduzida ao que esta entidade precisa.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        PUBLISHED = "published", "Publicada"
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="decisoes")
+    title = models.CharField(max_length=255)
+    rationale = models.TextField(blank=True)
+    decided_on = models.DateField(null=True, blank=True)
+    # Texto livre, e não FK para `User`: quem decide costuma ser alguém do cliente, que não tem
+    # conta aqui. É o mesmo motivo de `Document.author` ser derivado e não relacional no snapshot.
+    decided_by = models.CharField(max_length=160, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    # A proveniência. `SET_NULL` porque apagar a reunião não desfaz a decisão que saiu dela — o
+    # que se perde é só de onde ela veio, e perder isso é melhor que perder a decisão.
+    source_meeting = models.ForeignKey(
+        Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="decisoes"
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-decided_on", "-created_at"]
+
+    def save(self, *args, **kwargs) -> None:
+        # **O carimbo não se apaga**, e é aqui que esta classe diverge de propósito da `Pendencia`
+        # logo acima: aquele `save()` limpa `resolved_at` ao reabrir. Para uma decisão isso seria
+        # destrutivo — a data em que se publicou é fato histórico, e despublicar não a desfaz. O
+        # precedente correto é o `Case` (ADR 0020): fotografia, persistida e não recalculada.
+        if self.status == self.Status.PUBLISHED and self.published_at is None:
+            self.published_at = timezone.now()
+        super().save(*args, **kwargs)
+
+
 class Invitation(models.Model):
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=16, choices=User.Role.choices)

@@ -17,6 +17,7 @@ from .views import (
     ConfigView,
     ContactViewSet,
     DashboardView,
+    DecisaoViewSet,
     DigitalEmployeeBlueprintViewSet,
     DigitalEmployeeViewSet,
     DocumentViewSet,
@@ -71,6 +72,7 @@ router.register("milestones", MilestoneViewSet)
 router.register("tasks", TaskViewSet)
 router.register("meetings", MeetingViewSet)
 router.register("pendencias", PendenciaViewSet)
+router.register("decisoes", DecisaoViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)

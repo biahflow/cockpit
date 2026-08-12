@@ -12,6 +12,7 @@ from . import cases, journey, notifications, portal, tasksync
 from .models import (
     Artifact,
     Client,
+    Decisao,
     DigitalEmployee,
     Document,
     Invoice,
@@ -113,6 +114,16 @@ def _emit_meeting(sender: type[Meeting], instance: Meeting, **kwargs: Any) -> No
 @receiver(post_save, sender=Pendencia)
 def _emit_pendencia(sender: type[Pendencia], instance: Pendencia, **kwargs: Any) -> None:
     portal.emit("updated", "pendencia", instance.project_id)
+
+
+# Sem guarda de `created`, como os quatro acima — e aqui isso importa duas vezes. Publicar uma
+# decisão é um `save()` que muda `status`, e arquivar é um `save()` que preenche `archived_at`: as
+# duas mudam o que o snapshot mostra sem criar linha nenhuma. Um receiver que ignorasse update
+# deixaria o cliente vendo uma decisão que já saiu do snapshot — o defeito exato do funcionário
+# digital (emenda de 07/08/2026 na ADR 0003), que é a mudança mais silenciosa das três.
+@receiver(post_save, sender=Decisao)
+def _emit_decisao(sender: type[Decisao], instance: Decisao, **kwargs: Any) -> None:
+    portal.emit("updated", "decisao", instance.project_id)
 
 
 # "O que entra no snapshot precisa de emissor" (ADR 0003) valia para o funcionário digital desde

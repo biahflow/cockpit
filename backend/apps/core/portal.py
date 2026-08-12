@@ -9,6 +9,13 @@ A única coisa que a linha acima precisa qualificar é `artifact_accepted_at` (e
 funil de onboarding do portal — nunca `kind`, `title`, `content`, valor ou contagem. Nenhuma
 das três coisas que a ADR nomeia (Opportunity, PipelineStage, valores) cruza; o que cruza é
 a data em que o próprio cliente aprovou alguma coisa.
+
+A segunda qualificação é o `rationale` das decisões (emenda de 12/08/2026 na ADR 0003, FDD 032).
+Ele é **texto** e atravessa, o que contrasta de propósito com a `Pendencia`: dela sai título e
+estado, e o `description` fica de fora. A assimetria tem motivo — uma pendência é um item de
+acompanhamento, e uma decisão sem o porquê é um título. O porquê é justamente o que o cliente não
+consegue reconstituir sozinho, e é o que ele volta para consultar meses depois. O limite continua
+onde estava: sai o racional da decisão **publicada**, nunca o rascunho e nunca anotação interna.
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ from django.utils import timezone
 from . import flags, health
 from .models import (
     Artifact,
+    Decisao,
     DigitalEmployee,
     Document,
     Meeting,
@@ -197,6 +205,29 @@ def build_snapshot(project: Project) -> dict[str, Any]:
         }
         for pendencia in Pendencia.objects.filter(project=project, archived_at__isnull=True)
     ]
+    # Decisões (FDD 032). **Só as publicadas**, e o filtro é a peça que faz a extração por IA ser
+    # aceitável: o rascunho que o modelo propôs é interno até uma pessoa publicar. Arquivado para
+    # de contar, como todo filho no snapshot.
+    #
+    # `rationale` atravessa, e isso é decisão registrada e não descuido: a `Pendencia` acima leva
+    # título e estado, e o `description` dela fica de fora de propósito. Uma decisão sem o porquê é
+    # um título — e o porquê é justamente o que o cliente não tem como reconstituir sozinho. Ver a
+    # emenda de agosto/2026 na ADR 0003.
+    decisions = [
+        {
+            "id": decisao.pk,
+            "title": decisao.title,
+            "rationale": decisao.rationale,
+            "decided_on": decisao.decided_on.isoformat() if decisao.decided_on else None,
+            "decided_by": decisao.decided_by,
+            # A pk da reunião, não a nossa chave interna: é por ela que o portal recasa a
+            # proveniência com a reunião que ele acabou de espelhar.
+            "meeting_id": decisao.source_meeting_id,
+        }
+        for decisao in Decisao.objects.filter(
+            project=project, archived_at__isnull=True, status=Decisao.Status.PUBLISHED
+        )
+    ]
     done = sum(1 for milestone in milestones if milestone["status"] == Milestone.Status.DONE)
     completion = round(done / len(milestones) * 100) if milestones else 0
     overdue = sum(1 for milestone in milestones if milestone["is_overdue"])
@@ -262,6 +293,7 @@ def build_snapshot(project: Project) -> dict[str, Any]:
         "documents": documents,
         "meetings": meetings,
         "pendencias": pendencias,
+        "decisions": decisions,
         "next_meeting": (
             {"id": next_meeting.pk, "title": next_meeting.title, "date": next_meeting.date.isoformat()}
             if next_meeting

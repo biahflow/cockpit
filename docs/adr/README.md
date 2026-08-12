@@ -28,3 +28,4 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0024 — Branco, preto e laranja, e a camada que faltava
 - 0025 — A sidebar clara, e o matiz como única identificação (revisa a 0024)
 - 0026 — As telas passam a chamar o design system (e a guarda que impede a volta)
+- 0027 — A regra do snapshot que só existia em prosa (a guarda derivada de emissores)

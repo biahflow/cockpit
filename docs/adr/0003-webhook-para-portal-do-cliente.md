@@ -120,3 +120,28 @@ projeto vivo mais antigo do mesmo cliente, um só e nunca fan-out. E quando não
 **nada é emitido**, o que é limite e não esquecimento: sem projeto o portal ainda não conhece
 aquela organização, e como `build_snapshot` calcula o campo sobre o cliente, o fato chega inteiro
 no primeiro snapshot depois que o projeto nascer.
+
+## Emenda (FDD 032, 12/08/2026) — o racional da decisão, e por que ele atravessa
+
+`decisions[]` entra no snapshot, e com ele entra **texto**: o `rationale` de cada decisão. É a
+segunda qualificação que a frase "nenhum dado comercial é exposto" precisa, e ela merece ser escrita
+porque contraria um corte que este arquivo já fazia de propósito.
+
+**A `Pendencia` leva título e estado. O `description` dela fica de fora.** A assimetria é
+deliberada: uma pendência é um item de acompanhamento, e o que o cliente precisa saber dela é se
+está aberta e de quem é a bola. Uma decisão é outra coisa — **uma decisão sem o porquê é um
+título**. O que ela responde é *por que escolhemos isto e não aquilo*, e é a única pergunta desta
+lista que o cliente não consegue reconstituir sozinho meses depois: hoje a resposta mora numa
+transcrição que ele não tem, ou na memória de quem estava na sala.
+
+**O limite continua onde estava, e ele é o estado.** Sai o racional da decisão **publicada** — nunca
+o rascunho, que é onde a extração por IA grava, e nunca anotação interna. `status=published` é o
+filtro do `build_snapshot`, e é ele que faz a IA caber nesta integração sem que um palpite de modelo
+alcance a tela do cliente antes de uma pessoa publicar.
+
+**A proveniência atravessa como pk, não como texto.** `meeting_id` é a chave da reunião daqui, e o
+portal a recasa com a reunião que ele acabou de espelhar. A transcrição em si continua sem
+atravessar — o snapshot informa `has_transcript` e nada mais, como desde a FDD 005.
+
+E a regra que abre esta ADR ganhou finalmente um portão derivado, em vez de seis asserções escritas
+à mão: ver a ADR 0027.
