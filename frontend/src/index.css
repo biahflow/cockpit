@@ -9,22 +9,30 @@
    teria de justificar depois. A variável traz todos os pesos num arquivo só. */
 @import "@fontsource-variable/inter";
 
-/* Paleta e superfícies (ADR 0024).
+/* Paleta e superfícies (ADR 0024, revista pela ADR 0025).
    ---------------------------------------------------------------------------
    Branco, preto e laranja. O teal `ocean`/`mint` saiu; a paleta anterior está
    inteira em `docs/design/paleta-anterior.md`, com as razões, e o marco de git é
    `design/antes-do-redesenho`.
 
-   Os nomes dizem o **papel**, não a cor — `ink`, `accent`, `canvas`, `line` —, porque um
+   Os nomes dizem o **papel**, não a cor — `ink`, `brand-*`, `canvas`, `line` —, porque um
    token chamado `ocean` valendo preto é o tipo de nome mentiroso que este repositório
    costuma consertar depois com um commit próprio.
 
+   **A ADR 0025 mudou uma coisa e não a paleta**: a forma passou a ser a mesma do portal do
+   cliente — sidebar clara, topbar com breadcrumb, as mesmas primitivas — e o que distingue os
+   dois produtos é só o matiz. Roxo lá, clay aqui. Por isso os quatro `accent*` viraram a escala
+   `brand-50…900` completa: os degraus espelham um a um os de lá, o que torna o port do shell
+   uma tradução de cor em vez de um redesenho.
+
    Contraste pré-calculado (o axe da FDD 022 é o árbitro, isto é só o que evita descobrir
-   tarde): `ink` sobre branco 18,9:1; `accent` sobre branco 4,96:1; branco sobre `accent`
-   4,96:1; `accent` sobre `canvas` 4,76:1. Todos passam AA para texto normal. */
+   tarde): `ink` sobre branco 18,9:1; `brand-500` sobre branco 4,96:1; branco sobre `brand-500`
+   4,96:1; `brand-500` sobre `canvas` 4,76:1; `brand-700` sobre `brand-50` 6,1:1. Todos passam
+   AA para texto normal. */
 @theme {
-  /* Texto, títulos, sidebar e botão primário — a mesma cor nos quatro papéis, que é o que
-     dá a sobriedade da tela. Quente (não `#000`) para conversar com o laranja. */
+  /* Texto, títulos e botão primário — a mesma cor nos três papéis, que é o que dá a sobriedade
+     da tela. Quente (não `#000`) para conversar com o laranja. Era também a cor da sidebar até
+     a ADR 0025; hoje a única superfície escura do produto é o painel do login. */
   --color-ink: #12110f;
   /* Texto secundário. Sobre `canvas` dá 7,4:1: passa AA com folga, e é o que permite usá-lo
      em rótulo pequeno sem cair no cinza ilegível de sempre. */
@@ -35,20 +43,41 @@
      do cliente parecer acabado. */
   --color-canvas: #fafaf9;
 
-  /* O laranja é o **mesmo hex de antes**, e isso é decisão e não inércia: `#bd4a30` é
+  /* A escala de marca (ADR 0025). Antes eram quatro tokens `accent*` avulsos, que bastavam
+     enquanto o laranja era só um detalhe sobre superfície branca. O shell claro precisa da
+     escala inteira — o item de menu ativo quer um fundo tinto e um texto escuro do mesmo
+     matiz, e "um pouco mais claro que o acento" não é um valor que se escreva inline.
+
+     Os degraus espelham, um a um, os do portal do cliente (`brand-50…900`), e isso é o que
+     torna o port do shell uma tradução de cor em vez de um redesenho: lá `brand-500` é roxo,
+     aqui é clay, e a marcação é a mesma.
+
+     O laranja é o **mesmo hex de antes**, e isso é decisão e não inércia: `#bd4a30` é
      resultado de uma medição de contraste da FDD 022 (o tom anterior, `#d05d45`, dava 3,9:1
      e reprovava como texto). Inventar um tom novo aqui seria refazer aquela medição do zero,
      com chance de repetir o defeito. Ver `docs/design/paleta-anterior.md`. */
-  --color-accent: #bd4a30;
-  --color-accent-50: #fdf1ec;
-  --color-accent-700: #9c3c26;
+  --color-brand-50: #fdf1ec;
+  --color-brand-100: #fadfd4;
   /* **O acento sobre o escuro precisa ser outro tom, e o axe é quem descobriu.**
-     `accent` sobre branco dá 4,96:1 e passa; sobre `ink` dá **3,82:1** e reprova — a barra
-     lateral escura tornou isso um problema que a paleta antiga, de sidebar clara, não tinha.
-     Este é o clay que sobrevive ao preto: 7,2:1 sobre `ink`. É o mesmo papel do `clay-200` do
-     design system do OikOS, e existir como token separado é o que impede alguém de "consertar"
-     escrevendo `text-accent` num fundo escuro de novo. */
-  --color-accent-200: #dd8b62;
+     `brand-500` sobre branco dá 4,96:1 e passa; sobre `ink` dá **3,82:1** e reprova. Este é o
+     clay que sobrevive ao preto: 7,2:1 sobre `ink`. Com a sidebar clara da ADR 0025 ele perdeu
+     o consumidor da barra lateral e manteve o do painel de login, que virou a única superfície
+     escura do produto — existir como token separado continua sendo o que impede alguém de
+     "consertar" escrevendo `text-accent` num fundo escuro de novo. */
+  --color-brand-200: #dd8b62;
+  /* Não há `brand-300` aqui, e a ausência é deliberada: lá ele é a borda do `.filter-chip` em
+     hover, componente que este produto não tem. Token sem consumidor é a mesma dívida que
+     classe sem consumidor — e o Tailwind v4 nem o emitiria, então ele só existiria no arquivo,
+     dando a impressão de uma escala mais completa do que a que está em uso. */
+  --color-brand-500: #bd4a30;
+  --color-brand-600: #a8412a;
+  /* 6,1:1 sobre `brand-50`, que é o par do item de menu ativo. */
+  --color-brand-700: #9c3c26;
+  /* O clay profundo, e ele existe por causa de uma medição: o painel de login do portal do
+     cliente vai de `brand-900` a `brand-600`, e traduzido para o clay isso **reprova** — o
+     eyebrow em `brand-200` dá 2,28:1 sobre `brand-600`. O gradiente daqui vai deste tom ao
+     `ink`, e aí as duas pontas passam (4,6:1 e 7,2:1). Ver ADR 0025. */
+  --color-brand-900: #5c2317;
 
   /* **O acento e o perigo tinham a mesma cor, e isso deixou de poder ser verdade.**
      `signal` era o clay laranja e era usado como cor de **erro** — quase sempre dentro de um
@@ -60,7 +89,7 @@
      Então o perigo virou vermelho de verdade, e o laranja ficou com a marca. `#b91c1c` dá
      5,9:1 sobre branco e 5,6:1 sobre `red-50`, que é o container onde ele quase sempre
      aparece — passa AA nos dois. A única exceção deliberada é o contador de notificação, que
-     era `bg-signal` por ser marca e não erro: ele fica em `accent`. */
+     era `bg-signal` por ser marca e não erro: ele fica em `brand-500`. */
   --color-danger: #b91c1c;
 
   --font-sans: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
@@ -71,6 +100,28 @@
   --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.04), 0 12px 28px -18px rgba(18, 17, 15, 0.22);
   --shadow-raised: 0 1px 2px rgba(18, 17, 15, 0.05), 0 20px 46px -22px rgba(18, 17, 15, 0.28);
   --shadow-pop: 0 18px 50px -14px rgba(18, 17, 15, 0.24);
+}
+
+/* Compatibilidade de migração, e não desenho (ADR 0025).
+   ---------------------------------------------------------------------------
+   Os nomes antigos continuam valendo porque 13 arquivos os usam inline — `text-accent`,
+   `bg-accent-50` e `hover:border-accent` aparecem 97 vezes, e trocá-los no mesmo commit que muda
+   o shell juntaria duas fatias que falham por motivos diferentes.
+
+   `@theme inline` e não `@theme`: sem o `inline` o utilitário sairia como
+   `var(--color-accent)`, que por sua vez aponta para `var(--color-brand-500)` — funciona, mas põe
+   um salto a mais em toda regra e faz o modificador de opacidade (`accent/10`) compor sobre uma
+   variável indireta. Com `inline` o Tailwind resolve na hora de gerar e o CSS de saída é o mesmo
+   que `brand-*` produziria.
+
+   **Eram quatro; são dois.** `accent-200` e `accent-700` foram declarados por simetria com a
+   escala e nunca tiveram um consumidor sequer — apelido sem chamador é a mesma dívida que classe
+   sem consumidor, e some pela mesma razão. Os dois que restam têm 97.
+
+   Em código novo escreva `brand-*`. Estes dois morrem quando a última página migrar. */
+@theme inline {
+  --color-accent: var(--color-brand-500);
+  --color-accent-50: var(--color-brand-50);
 }
 
 @layer base {
@@ -91,8 +142,8 @@
 
      O anel passou a ser **laranja** com o redesenho, e é o uso mais importante do acento: é
      a única cor da tela cuja função é ser notada. */
-  :focus-visible { @apply outline-2 outline-offset-2 outline-accent; }
-  ::selection { @apply bg-accent-50 text-ink; }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-brand-500; }
+  ::selection { @apply bg-brand-100 text-brand-900; }
 }
 
 /* As primitivas (ADR 0024).
@@ -102,22 +153,45 @@
    copiar classe sem consumidor traria para cá o defeito que aquele repositório passou nove ADRs
    consertando.
 
-   As 22 páginas **ainda não as adotam**: elas trocaram de cor pelos tokens e mantêm o
-   utilitário inline. Isto é o destino para onde migrar, não uma migração já feita. */
+   **As páginas as adotam desde a ADR 0026.** Até ali eram 1.331 utilitários inline e zero uso de
+   `.panel`, `.btn`, `.page-head` ou `.state` — o design system existia e ninguém o chamava, que é
+   por que o shell tinha ficado igual ao da referência e as telas, não. A guarda que impede a
+   volta é `src/test/primitivas.test.ts`. */
 @layer components {
   .panel {
     @apply rounded-2xl border border-line bg-white p-5;
     box-shadow: var(--shadow-card);
   }
+  /* Card **sem** padding próprio, para quem tem cabeçalho e lista dividida por dentro: o padding
+     precisa morar em cada faixa, senão o divisor não alcança a borda do cartão. É o formato mais
+     comum do produto (22 ocorrências antes da ADR 0026). */
+  .panel--flush { @apply overflow-hidden p-0; }
   .panel-heading { @apply mb-4 flex items-start justify-between gap-3; }
+  /* Cabeçalho com ícone à esquerda. O `justify-between` do base existe para "título à esquerda,
+     ação à direita" e aqui trabalharia contra: ícone e texto são o **mesmo** bloco, e sem isto o
+     título vai parar do outro lado da faixa. */
+  .panel-heading--icon { @apply items-center justify-start; }
   .panel-heading h2 { @apply m-0 text-base font-semibold tracking-[-0.02em] text-ink; }
+  /* O cabeçalho de um `.panel--flush` é uma faixa, não uma margem: leva o padding e o divisor. */
+  .panel--flush .panel-heading { @apply mb-0 items-center gap-3 border-b border-line px-5 py-4 sm:px-6; }
+  .panel-rows { @apply divide-y divide-line; }
+  /* A linha de lista. Correspondente das `.field-row`/`.setting-row`/`.member-row` de lá, que são
+     a mesma declaração três vezes — aqui é uma, porque o que muda entre elas é o conteúdo. */
+  .row { @apply flex flex-wrap items-center gap-4 px-5 py-4 sm:px-6; }
+  .row-main { @apply min-w-0 flex-1; }
+  .row-main strong { @apply block text-sm font-semibold text-ink; }
+  .row-main span { @apply mt-0.5 block text-xs text-muted; }
 
   /* O rótulo acima do título. É o principal lugar onde o laranja aparece como texto, e o
      `tracking` largo é o que o mantém legível em caixa alta e corpo pequeno. */
-  .eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.18em] text-accent; }
+  .eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.18em] text-brand-500; }
 
   .page-head { @apply mb-6 grid gap-1.5; }
-  .page-head h1 { @apply m-0 text-2xl font-semibold tracking-[-0.03em] text-ink; }
+  /* `text-3xl` e não `text-2xl` (ADR 0026): as 19 páginas já vinham escrevendo `text-3xl` inline,
+     e o `.hero h1` da referência também. A primitiva é que estava fora de passo — adotá-la com
+     `text-2xl` teria encolhido todo título do produto, regressão que o axe não pega e que todo
+     mundo vê. */
+  .page-head h1 { @apply m-0 text-3xl font-semibold tracking-[-0.03em] text-ink; }
   .page-head p { @apply m-0 max-w-2xl text-sm leading-6 text-muted; }
 
   .metric-card {
@@ -126,45 +200,210 @@
   }
   .metric-card strong { @apply text-2xl font-semibold tracking-[-0.03em] text-ink; }
   .metric-card span { @apply text-xs text-muted; }
-  .metric-icon { @apply grid size-9 place-items-center rounded-xl bg-accent-50 text-accent; }
+  .metric-icon { @apply grid size-9 place-items-center rounded-xl bg-brand-50 text-brand-500; }
 
   /* Botões. O primário é **preto**, não laranja: o acento vale mais por ser raro, e uma tela
      com seis botões laranja não tem acento nenhum. O laranja fica no hover e no foco. */
   .btn {
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5
-      text-sm font-semibold text-white transition hover:bg-accent-700
+      text-sm font-semibold text-white transition hover:bg-brand-700
       disabled:cursor-not-allowed disabled:opacity-60;
   }
   .btn--secondary {
-    @apply border border-line bg-white text-ink hover:border-accent hover:bg-accent-50 hover:text-accent-700;
+    @apply border border-line bg-white text-ink hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700;
   }
-  .btn--ghost { @apply bg-transparent text-muted hover:bg-accent-50 hover:text-ink; }
-  .btn--danger { @apply bg-red-700 text-white hover:bg-red-800; }
+  /* O primário de uma confirmação destrutiva, e o único botão vermelho do produto: só o
+     `ConfirmDialog` o usa, que é o único lugar onde a ação já foi pedida e o que resta é
+     assumi-la. `bg-danger` e não `bg-red-700` — são a mesma tinta, mas escrever o literal aqui
+     deixava a única primitiva de perigo fora do token de perigo, e `.btn--icon-danger` logo
+     abaixo já dizia `text-danger`. O hover vai para `ink`, não para um vermelho mais escuro:
+     escurecer o vermelho grita mais alto no momento em que a pessoa já decidiu. */
+  .btn--danger { @apply bg-danger text-white hover:bg-ink; }
+  /* Arquivar numa tela de detalhe: **neutro em repouso, vermelho na intenção** — a mesma tese do
+     `.btn--icon-danger`, em tamanho de botão. Quatro consumidores (cliente, projeto, funcionário
+     digital, oportunidade), e nenhum deles quer o vermelho sólido acima: `Arquivar` divide a
+     faixa com `Editar`, e pintá-lo de perigo em repouso faria toda tela de detalhe parecer um
+     aviso. O `hover:bg-white` cancela o `hover:bg-brand-50` que vem do `.btn--secondary` — laranja
+     no hover de um botão de arquivar diria a cor errada. */
+  .btn--secondary-danger { @apply text-muted hover:border-danger hover:bg-white hover:text-danger; }
+  /* Botão quadrado de ícone só. `min-h-11` do `.btn` já garante o alvo de toque; o que muda é
+     largura fixa e nenhum padding horizontal. */
+  .btn--icon { @apply size-11 min-h-0 shrink-0 p-0; }
+  /* Remover/arquivar numa linha de lista: neutro em repouso, vermelho na intenção. Vermelho
+     desde o repouso pintaria de perigo toda linha da tela, e aí nenhuma se destaca. */
+  .btn--icon-danger {
+    @apply size-9 min-h-0 shrink-0 border border-line bg-white p-0 text-muted
+      hover:border-red-200 hover:bg-red-50 hover:text-danger;
+  }
 
-  /* Item de menu. Duas peles, porque a sidebar é escura e o menu mobile é claro — e não uma
-     só com `dark:`, que este produto não tem. */
-  .nav-item {
-    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-white/70
-      transition hover:bg-white/10 hover:text-white;
+  /* ---------- Formulário ----------
+     `.form-label` é o literal mais repetido que este repositório tinha: **69 ocorrências** de
+     `grid gap-2 text-sm font-medium text-slate-700`. O `<label>` embrulha o `<input>`, então o
+     `grid` é o que empilha rótulo e campo. */
+  .form-label { @apply grid gap-2 text-sm font-medium text-slate-700; }
+  .form-grid { @apply grid gap-4 sm:grid-cols-2; }
+  /* A faixa de filtros e ações acima de uma lista. É um `.panel` que não empilha conteúdo. */
+  .toolbar { @apply flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-white p-5 sm:p-6;
+    box-shadow: var(--shadow-card); }
+
+  /* ---------- Estados ---------- */
+  .empty-state {
+    @apply rounded-xl border border-dashed border-line bg-slate-50/60 px-4 py-6 text-center
+      text-sm text-muted;
   }
-  .nav-item--active { @apply bg-white font-semibold text-ink hover:bg-white; }
-  .nav-item--light { @apply text-muted hover:bg-accent-50 hover:text-ink; }
-  .nav-item--light.nav-item--active { @apply bg-accent-50 font-semibold text-accent-700; }
+  /* A mensagem de falha. `.alert--error` e não `.state--3`: um selo rotula uma linha, um alerta
+     interrompe a tela — e só o segundo leva `role="alert"`. */
+  .alert--error {
+    @apply rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-danger;
+  }
+  .alert--ok {
+    @apply rounded-2xl border border-brand-100 bg-brand-50/60 p-4 text-sm text-brand-700;
+  }
+
+  /* A barra de filtros acima de uma lista (Leads, Clientes). Portada do `.filter-chip` de lá:
+     pastilha de contorno em repouso, tinta da marca quando ligada. O `bg-ink` de antes pintava o
+     filtro ativo com a cor do botão primário — e um filtro não é uma ação. */
+  .filter-bar { @apply flex flex-wrap gap-2; }
+  .filter-chip {
+    @apply rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold text-muted
+      transition-colors hover:border-brand-500 hover:text-brand-600;
+  }
+  .filter-chip--on { @apply border-brand-500 bg-brand-50 text-brand-700; }
+
+  /* O link que sobe um nível. Correspondente do `.admin-back` de lá; existe aqui em cinco telas
+     de detalhe e configuração. */
+  .back-link {
+    @apply inline-flex items-center gap-2 text-sm font-semibold text-brand-600 no-underline
+      transition-colors hover:text-ink;
+  }
+
+  /* Item de menu. **Uma pele só** (ADR 0025). Eram duas — `.nav-item` escura para a sidebar e
+     `.nav-item--light` para a gaveta do celular —, e a sidebar clara fez as duas colapsarem
+     numa. O modificador foi apagado junto do parâmetro `light` de `nav()` no `Layout.tsx`: um
+     modificador que não modifica nada é a próxima coisa que alguém aplica por engano. */
+  .nav-item {
+    @apply flex h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium text-muted
+      transition-colors hover:bg-slate-100 hover:text-ink;
+  }
+  .nav-item--active { @apply bg-brand-50 font-bold text-brand-700 hover:bg-brand-50; }
+  /* O contador à direita do item (pendências, avisos). Sem o número, um item de menu com
+     badge só diz "tem algo aqui", que é o que a pessoa já supunha ao ler o rótulo. */
+  .nav-item em {
+    @apply ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-slate-100 text-[10px]
+      not-italic text-muted;
+  }
+  .nav-item--active em { @apply bg-brand-100 text-brand-700; }
 
   /* Selos de estado. Os quatro tons são os do portal do cliente, recolorido o "informativo"
      para o acento. */
   .state { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold; }
-  .state--0 { @apply bg-accent-50 text-accent-700; }
+  .state--0 { @apply bg-brand-50 text-brand-700; }
   .state--1 { @apply bg-emerald-50 text-emerald-700; }
   .state--2 { @apply bg-amber-50 text-amber-700; }
   .state--3 { @apply bg-red-50 text-red-700; }
+  /* O tom neutro, que faltava (ADR 0026). "Desligada", "Arquivado", "Sem responsável" não são
+     atenção nem falha — são a ausência de um estado. Sem ele a migração empurraria essas linhas
+     para o âmbar do `--2`, e uma tela onde tudo é aviso não avisa nada. É o `.state--2` do portal
+     do cliente, que na escala de lá já é o cinza. */
+  .state--off { @apply bg-slate-100 text-slate-600; }
 
+  /* ---------- O shell (ADR 0025) ----------
+     Portado do `.sidebar` / `.topbar` do portal do cliente, e o que muda é só a cor. A barra
+     lateral deixou de ser preta: a forma passou a ser comum aos dois portais e quem identifica
+     qual deles está na tela é o matiz — roxo lá, clay aqui.
+
+     Os media queries de lá (761px / 980px / 760px) **não** vieram junto. Este repositório usa os
+     breakpoints do Tailwind, e `e2e/responsive.spec.ts` afirma o comportamento da sidebar em
+     `lg` = 1024px; trocar o ponto de corte quebraria aquele teste sem ganhar nada. */
+  /* Fixa e de altura de tela, com o menu rolando por dentro. Sem isso a barra tem 15 itens e
+     transborda em 800px de altura, de modo que "Configurações" e a nota do rodapé só aparecem
+     depois de rolar o **conteúdo** — a navegação some justamente quando a pessoa desce a
+     página, que é quando ela mais precisa dela. */
+  .sidebar {
+    @apply sticky top-0 h-screen w-[254px] shrink-0 flex-col border-r border-line bg-white
+      px-3.5 pt-6 pb-3.5;
+  }
+  .nav-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+  .brand-row { @apply mb-6 flex items-center gap-2.5 px-2; }
+  /* A sombra é colorida de propósito: um quadrado laranja com sombra cinza parece colado por
+     cima da tela, e este é o primeiro elemento que a pessoa vê. */
+  .brand-mark {
+    @apply grid size-8 shrink-0 place-items-center rounded-lg bg-brand-500 text-sm font-black text-white;
+    box-shadow: 0 4px 12px rgba(189, 74, 48, 0.32);
+  }
+  /* O rótulo de seção acima da lista. Cinza e não laranja: ele organiza, não chama.
+     **`muted` e não `slate-400`, e quem decidiu foi o axe.** O portal do cliente usa
+     `slate-400` aqui, que sobre branco dá ~3,0:1 e reprova AA — copiar o tom junto com a forma
+     trouxe a violação junto, nas 19 telas de uma vez. `muted` é o cinza quente da paleta e dá
+     7,4:1. Quando o axe e o tom discordam, cede o tom. */
+  .nav-label { @apply px-3 pb-2 text-[10px] font-extrabold uppercase tracking-[0.11em] text-muted; }
+  .sidebar-bottom { @apply shrink-0 pt-4; }
+  .sidebar-note { @apply rounded-xl border border-line bg-brand-50/60 p-3.5; }
+
+  .topbar {
+    @apply sticky top-0 z-20 flex h-[68px] items-center justify-between gap-3 border-b border-line
+      bg-canvas/85 px-5 backdrop-blur-xl lg:px-9;
+  }
+  .breadcrumb { @apply flex min-w-0 items-center gap-2 text-xs text-muted; }
+  .breadcrumb strong { @apply truncate font-semibold text-ink; }
+  .breadcrumb b { @apply font-normal text-slate-300; }
+  .topbar-actions { @apply flex shrink-0 items-center gap-3; }
+  /* `size-10` e não `size-9`: WCAG 2.5.8 pede 24×24 CSS px de alvo, e `e2e/responsive.spec.ts`
+     mede todo `header button` visível. A folga é o que impede um `p-1.5` colado depois de
+     reprovar sem ninguém entender por quê. */
+  .icon-button {
+    @apply grid size-10 place-items-center rounded-xl border border-line bg-white text-muted
+      transition-colors hover:border-brand-500 hover:text-brand-600;
+  }
+  .notification-dot {
+    @apply absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-brand-500
+      px-1 text-[10px] font-bold text-white;
+  }
+  .avatar {
+    @apply grid size-8 shrink-0 place-items-center rounded-full bg-brand-50 text-[11px]
+      font-extrabold text-brand-700;
+  }
+
+  /* ---------- Popovers ---------- */
   .popover {
-    @apply rounded-2xl border border-line bg-white p-2;
-    box-shadow: var(--shadow-raised);
+    @apply overflow-hidden rounded-2xl border border-line bg-white;
+    box-shadow: var(--shadow-pop);
+  }
+  .popover-head { @apply flex items-center justify-between gap-2 border-b border-line px-3.5 py-3; }
+  .popover-head strong { @apply text-sm font-semibold text-ink; }
+  .popover-row { @apply block w-full px-3.5 py-3 text-left text-sm transition-colors hover:bg-slate-50; }
+  .popover-menu { @apply p-1.5; }
+  .popover-user { @apply mb-1 grid gap-0.5 border-b border-line px-2.5 pt-2.5 pb-3; }
+  .popover-user strong { @apply block text-sm font-semibold text-ink; }
+  .popover-user small { @apply block truncate text-xs text-muted; }
+  .popover-item {
+    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-sm
+      font-medium text-muted transition-colors hover:bg-slate-100 hover:text-ink;
+  }
+
+  /* ---------- O painel de marca do login ----------
+     Com a sidebar clara da ADR 0025 esta virou a **única** superfície escura do produto, e por
+     isso é onde a cor da marca aparece inteira — um `bg-ink` chapado deixaria o login sem
+     identidade nenhuma.
+
+     **A direção do gradiente é resultado de medição, não de gosto.** O painel equivalente do
+     portal do cliente vai de `brand-900` a `brand-600`; traduzido para o clay isso reprova no
+     axe, porque o eyebrow em `brand-200` dá **2,28:1** sobre `brand-600`. Indo do clay profundo
+     ao preto quente a superfície inteira continua escura o bastante: 4,6:1 na ponta `brand-900`
+     e 7,2:1 na ponta `ink`, e as duas passam AA. Ver ADR 0025.
+
+     `display` fica de fora de propósito: o elemento é `hidden lg:flex`, e declarar `flex` aqui
+     obrigaria o utilitário a disputar camada com a primitiva. */
+  .auth-brand {
+    @apply relative overflow-hidden p-12 text-white;
+    background: linear-gradient(150deg, var(--color-brand-900) 0%, var(--color-ink) 100%);
   }
 }
 
 @utility field {
-  @apply w-full rounded-xl border bg-white px-3 py-3 text-sm text-slate-800 transition focus:border-accent focus:ring-4 focus:ring-accent/10;
+  @apply w-full rounded-xl border bg-white px-3 py-3 text-sm text-slate-800 transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
 }

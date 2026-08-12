@@ -33,13 +33,13 @@ export function AgentPanel({ agentKey, title, roles, placeholder }: { agentKey: 
     catch (cause) { setError((cause as Error).message); }
   }
 
-  return <section className="rounded-2xl border bg-white p-5 sm:p-6">
-    <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-50 text-accent"><Sparkles className="size-4" /></span><div><h2 className="font-semibold text-ink">{title}</h2><p className="text-sm text-slate-600">Sugestões para revisão humana — nada é executado automaticamente.</p></div></div>
-    <form className="mt-4 flex gap-2" onSubmit={event => void ask(event)}>
+  return <section className="panel sm:p-6">
+    <div className="panel-heading panel-heading--icon"><span className="metric-icon"><Sparkles className="size-4" /></span><div><h2>{title}</h2><p className="text-sm text-muted">Sugestões para revisão humana — nada é executado automaticamente.</p></div></div>
+    <form className="flex gap-2" onSubmit={event => void ask(event)}>
       <input className="field" value={question} onChange={event => setQuestion(event.target.value)} placeholder={placeholder || "Pergunte sobre esta área"} aria-label={`Pergunta ao ${title}`} />
-      <button className="shrink-0 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-ink disabled:opacity-60" type="submit" disabled={loading}>{loading ? "…" : "Perguntar"}</button>
+      <button className="btn shrink-0" type="submit" disabled={loading}>{loading ? "…" : "Perguntar"}</button>
     </form>
-    {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
+    {error && <p role="alert" className="alert--error mt-3">{error}</p>}
     {answer && <div className="mt-4"><p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{answer}</p>
       {/* A citação é o que separa resposta ancorada de resposta plausível (FDD 029). Vencida vai
           marcada: citar sem avisar legitimaria material velho. */}

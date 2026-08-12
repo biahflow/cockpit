@@ -25,3 +25,6 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0021 — Registro financeiro não arquiva: a exceção declarada ao soft delete da casa
 - 0022 — Recuperação do corpus interno neste repositório, com pgvector
 - 0023 — Resposta ancorada: citar ou declarar a lacuna (e o modelo declara o regime)
+- 0024 — Branco, preto e laranja, e a camada que faltava
+- 0025 — A sidebar clara, e o matiz como única identificação (revisa a 0024)
+- 0026 — As telas passam a chamar o design system (e a guarda que impede a volta)

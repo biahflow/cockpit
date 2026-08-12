@@ -6,10 +6,13 @@ import type { Invitation, Role, SessionUser } from "../types";
 
 const roleLabel: Record<Role, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
 
+// Devolve a **variante** do selo e não as cores dela: um `bg-emerald-50` escrito aqui é uma
+// segunda definição de "concluído", e ela diverge da primeira sem nada ficar vermelho.
 function invitationStatus(invitation: Invitation): { label: string; cls: string } {
-  if (invitation.accepted_at) return { label: "Aceito", cls: "bg-emerald-50 text-emerald-700" };
-  if (new Date(invitation.expires_at) < new Date()) return { label: "Expirado", cls: "bg-slate-100 text-slate-600" };
-  return { label: "Pendente", cls: "bg-amber-50 text-amber-700" };
+  if (invitation.accepted_at) return { label: "Aceito", cls: "state--1" };
+  // Expirado é ausência de estado, não aviso: quem expirou já não pede ação sobre si.
+  if (new Date(invitation.expires_at) < new Date()) return { label: "Expirado", cls: "state--off" };
+  return { label: "Pendente", cls: "state--2" };
 }
 
 export function TeamPage() {
@@ -32,26 +35,26 @@ export function TeamPage() {
   }
 
   return <section className="space-y-7">
-    <header><p className="text-sm font-semibold text-accent">Administração</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink">Equipe</h1><p className="mt-2 text-sm text-slate-600">Convide pessoas e acompanhe os acessos ao portal.</p></header>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-danger">{error}</p>}
-    {notice && <p className="rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">{notice}</p>}
+    <header className="page-head"><p className="eyebrow">Administração</p><h1>Equipe</h1><p>Convide pessoas e acompanhe os acessos ao portal.</p></header>
+    {error && <p role="alert" className="alert--error">{error}</p>}
+    {notice && <p className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">{notice}</p>}
 
     <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
-      <form className="space-y-4 rounded-2xl border bg-white p-5 sm:p-6" onSubmit={event => void invite(event)}>
-        <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-accent-50 text-accent"><MailPlus className="size-5" /></span><div><h2 className="font-semibold text-ink">Convidar pessoa</h2><p className="text-sm text-slate-600">Um e-mail com o link de ativação será enviado.</p></div></div>
-        <label className="grid gap-2 text-sm font-medium text-slate-700">E-mail<input className="field" type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="pessoa@empresa.com" required /></label>
-        <label className="grid gap-2 text-sm font-medium text-slate-700">Função<select className="field" value={role} onChange={event => setRole(event.target.value as Role)}>{(Object.keys(roleLabel) as Role[]).map(value => <option key={value} value={value}>{roleLabel[value]}</option>)}</select></label>
-        <button className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white hover:bg-ink" type="submit"><MailPlus className="size-4" />Enviar convite</button>
+      <form className="panel space-y-4 sm:p-6" onSubmit={event => void invite(event)}>
+        <div className="flex items-center gap-3"><span className="metric-icon size-10"><MailPlus className="size-5" /></span><div><h2 className="font-semibold text-ink">Convidar pessoa</h2><p className="text-sm text-muted">Um e-mail com o link de ativação será enviado.</p></div></div>
+        <label className="form-label">E-mail<input className="field" type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="pessoa@empresa.com" required /></label>
+        <label className="form-label">Função<select className="field" value={role} onChange={event => setRole(event.target.value as Role)}>{(Object.keys(roleLabel) as Role[]).map(value => <option key={value} value={value}>{roleLabel[value]}</option>)}</select></label>
+        <button className="btn w-full" type="submit"><MailPlus className="size-4" />Enviar convite</button>
       </form>
 
       <div className="space-y-5">
-        <section className="overflow-hidden rounded-2xl border bg-white">
-          <div className="border-b px-5 py-4 sm:px-6"><h2 className="font-semibold text-ink">Convites</h2></div>
-          {invitations.length ? <div className="divide-y">{invitations.map(invitation => { const status = invitationStatus(invitation); return <div className="flex items-center gap-3 px-5 py-3 sm:px-6" key={invitation.id}><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><MailPlus className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{invitation.email}</p><p className="text-xs text-slate-600">{roleLabel[invitation.role]}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${status.cls}`}>{status.label}</span></div>; })}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Nenhum convite ainda.</p>}
+        <section className="panel panel--flush">
+          <div className="panel-heading"><h2>Convites</h2></div>
+          {invitations.length ? <div className="panel-rows">{invitations.map(invitation => { const status = invitationStatus(invitation); return <div className="row gap-3 py-3" key={invitation.id}><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-muted"><MailPlus className="size-4" /></span><div className="row-main"><strong className="truncate">{invitation.email}</strong><span>{roleLabel[invitation.role]}</span></div><span className={`state shrink-0 ${status.cls}`}>{status.label}</span></div>; })}</div> : <p className="px-6 py-6 text-center text-sm text-muted">Nenhum convite ainda.</p>}
         </section>
-        <section className="overflow-hidden rounded-2xl border bg-white">
-          <div className="border-b px-5 py-4 sm:px-6"><h2 className="font-semibold text-ink">Usuários ativos</h2></div>
-          {users.length ? <div className="divide-y">{users.map(user => <div className="flex items-center gap-3 px-5 py-3 sm:px-6" key={user.id}><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-50 text-accent">{user.is_admin ? <ShieldCheck className="size-4" /> : <UserRound className="size-4" />}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{user.first_name || user.username}</p><p className="truncate text-xs text-slate-600">{user.email || user.username}</p></div><span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{user.is_admin ? roleLabel.admin : roleLabel[user.role]}</span></div>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Nenhum usuário.</p>}
+        <section className="panel panel--flush">
+          <div className="panel-heading"><h2>Usuários ativos</h2></div>
+          {users.length ? <div className="panel-rows">{users.map(user => <div className="row gap-3 py-3" key={user.id}><span className="metric-icon">{user.is_admin ? <ShieldCheck className="size-4" /> : <UserRound className="size-4" />}</span><div className="row-main"><strong className="truncate">{user.first_name || user.username}</strong><span className="truncate">{user.email || user.username}</span></div><span className="state state--off shrink-0">{user.is_admin ? roleLabel.admin : roleLabel[user.role]}</span></div>)}</div> : <p className="px-6 py-6 text-center text-sm text-muted">Nenhum usuário.</p>}
         </section>
       </div>
     </div>
