@@ -440,7 +440,7 @@ test("a decisão em rascunho aparece marcada como tal, e publicar é um clique",
   // O selo é a única coisa na tela que diz **se o cliente vê**: rascunho não entra no snapshot
   // (FDD 032), e é isso que faz a extração por IA não alcançar o portal antes de alguém olhar.
   stub();
-  render(<ProjectDetailPage />);
+  render(<ProjectDetailPage id={1} />);
 
   expect(await screen.findByText("Adotar fila gerenciada")).toBeTruthy();
   expect(screen.getByText("Custa menos que o Memorystore.")).toBeTruthy();
@@ -459,7 +459,7 @@ test("extrair decisões da transcrição chama a reunião, não a decisão", asy
   // O insumo é a transcrição, e é por isso que a action mora no `MeetingViewSet` — o mesmo lugar
   // do Discovery. Um botão que chamasse `/decisoes/` não teria de onde extrair.
   stub();
-  render(<ProjectDetailPage />);
+  render(<ProjectDetailPage id={1} />);
 
   fireEvent.click(await screen.findByRole("button", { name: "Decisões" }));
 
