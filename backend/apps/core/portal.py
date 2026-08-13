@@ -34,7 +34,7 @@ from django.db import transaction
 from django.db.models import Min, Q
 from django.utils import timezone
 
-from . import flags, health
+from . import flags, health, service_identity
 from .models import (
     Artifact,
     Decisao,
@@ -317,13 +317,25 @@ def build_snapshot(project: Project) -> dict[str, Any]:
 
 
 def _post(url: str, body: bytes, signature: str) -> None:
+    headers = {
+        "Content-Type": "application/json",
+        "X-Biahflow-Signature": f"sha256={signature}",
+    }
+    # Em homologação o portal do cliente sobe com ingress interno **e** IAM: sem
+    # identidade, o Cloud Run responde 403 antes de a aplicação existir, e o webhook
+    # some sem log nosso (ADR 0029). Fora do Cloud Run não há token, e a ausência é o
+    # caso normal — o compose fala com `host.docker.internal`, onde não há barreira.
+    #
+    # `Authorization` puro e não `X-Serverless-Authorization`: aqui ele está livre,
+    # porque quem autentica esta rota é a assinatura HMAC no header próprio.
+    token = service_identity.id_token_para(url)
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     request = urllib.request.Request(
         url,
         data=body,
-        headers={
-            "Content-Type": "application/json",
-            "X-Biahflow-Signature": f"sha256={signature}",
-        },
+        headers=headers,
         method="POST",
     )
     try:
