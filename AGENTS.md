@@ -1,5 +1,11 @@
 # Instruções para agentes e contribuidores
 
+## Contexto Engineering OS
+
+Leia [`docs/engineering-os/project-context.md`](docs/engineering-os/project-context.md) para as
+fontes canônicas do projeto, ciclo de features, perfis de validação e gates humanos. Ele complementa
+a Engineering OS global; não a substitui.
+
 1. Leia `PRD.md`, os FDDs relevantes e ADRs antes de alterar comportamento.
 2. Não exponha segredos, dados pessoais ou documentos em código, testes, logs ou commits.
 3. Toda funcionalidade relevante atualiza seu FDD; decisão técnica duradoura exige ADR; mudança transversal ou incompatível exige RFC.
