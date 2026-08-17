@@ -9,9 +9,9 @@ Portal interno para conduzir oportunidades comerciais até a execução de proje
 3. Crie o primeiro administrador com `docker compose exec api uv run python manage.py createsuperuser`.
 4. Abra `http://localhost:19173` e entre pela tela de login.
 
-O `createsuperuser` cria um superusuário, mas `User.role` nasce como `delivery` e o menu do SPA é
-filtrado pelo papel — ajuste para `admin` antes de explorar. Esse acerto e o percurso completo do
-produto (cliente → oportunidade → conversão → projeto → equipe → indicadores) estão em
+O `createsuperuser` cria um superusuário que já acessa o menu completo: o SPA usa `is_admin`, o
+mesmo predicado de autorização do backend, e não exige ajuste manual de `User.role`. O percurso
+completo do produto (cliente → oportunidade → conversão → projeto → equipe → indicadores) está em
 [`docs/runbooks/roteiro-de-teste.md`](docs/runbooks/roteiro-de-teste.md).
 
 Portas expostas pelo `docker compose` (faixa alta para evitar conflito com outros serviços):
@@ -37,6 +37,9 @@ E um serviço **`scheduler`**, que roda o trabalho periódico da aplicação: di
 
 ## Qualidade
 
-Execute `cd backend && uv run pytest`, `cd backend && uv run mypy apps config`, `cd frontend && npm test`, `cd frontend && npm run build` e `cd frontend && npm run e2e` antes de abrir um pull request. Veja [AGENTS.md](AGENTS.md) e `docs/runbooks/`.
+Selecione e execute os perfis aplicáveis descritos em
+[`docs/engineering-os/project-context.md`](docs/engineering-os/project-context.md); a fonte
+executável da suíte completa é [`.github/workflows/quality.yml`](.github/workflows/quality.yml).
+Veja também [AGENTS.md](AGENTS.md) e `docs/runbooks/`.
 
 O `npm run e2e` roda quatro projetos do Playwright: `e2e` (fluxo, desktop) e `mobile`/`tablet`/`desktop`, que percorrem a **matriz** de 17 telas — varredura do axe nas tags WCAG A e AA, ausência de rolagem horizontal, navegação alcançável, alvo de toque e foco de teclado visível (FDD 022). Tela nova entra por uma linha em `frontend/e2e/matrix.ts`. O `pytest` inclui o **orçamento de query** dos agregadores, que reprova N+1 comparando a mesma rota com duas bases de tamanhos diferentes (ADR 0014). Teste de carga com k6 é procedimento operado, fora do CI: [`docs/runbooks/testes-de-carga.md`](docs/runbooks/testes-de-carga.md).

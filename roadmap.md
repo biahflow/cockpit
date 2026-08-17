@@ -1,7 +1,49 @@
 # Roadmap — Portal Biahflow
 
-Atualizado em 05/08/2026. Separa o que já compõe a plataforma do que falta, e aponta o norte
-(jornada de consultoria assistida por IA). Marcações: `[x]` entregue, `[~]` parcial, `[ ]` pendente.
+Atualizado em 17/08/2026. Esta é a fonte canônica de inventário e estado das features/work items
+do projeto. Separa o que já compõe a plataforma do que falta, e aponta o norte (jornada de
+consultoria assistida por IA). Marcações: `[x]` entregue, `[~]` parcial, `[ ]` pendente.
+
+## Inventário de features/work items
+
+O inventário registra ID, nome, estado, prioridade quando definida e referência à especificação.
+As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD referenciada. Prioridade
+`—` significa que o roadmap não define prioridade explícita para o item.
+
+| ID | Feature/work item | Status | Prioridade | Especificação |
+| --- | --- | --- | --- | --- |
+| FDD 001 | CRM e pipeline comercial | Entregue | — | `docs/fdd/001-crm-e-pipeline-comercial.md` |
+| FDD 002 | Conversão de oportunidade em projeto | Entregue | — | `docs/fdd/002-conversao-de-oportunidade-em-projeto.md` |
+| FDD 003 | Execução de projetos e documentos | Entregue | — | `docs/fdd/003-execucao-de-projetos-e-documentos.md` |
+| FDD 004 | Sincronia de tarefas com ferramentas externas | Entregue | — | `docs/fdd/004-sincronia-de-tarefas-com-ferramentas-externas.md` |
+| FDD 005 | Reuniões e pendências do projeto | Entregue | — | `docs/fdd/005-reunioes-e-pendencias-do-projeto.md` |
+| FDD 006 | Agentes por área, previsão e avaliação | Entregue | — | `docs/fdd/006-agentes-por-area-previsao-e-avaliacao.md` |
+| FDD 007 | Discovery e Assessment por IA | Entregue | — | `docs/fdd/007-discovery-e-assessment-por-ia.md` |
+| FDD 008 | Kickoff automático na conversão | Entregue | — | `docs/fdd/008-kickoff-automatico-na-conversao.md` |
+| FDD 009 | Contrato por IA e lembrete de assinatura | Entregue | — | `docs/fdd/009-contrato-por-ia-e-lembrete-de-assinatura.md` |
+| FDD 010 | Notificações por e-mail e digest diário | Entregue | — | `docs/fdd/010-notificacoes-por-email-e-digest-diario.md` |
+| FDD 011 | Jornada de transformação | Entregue | — | `docs/fdd/011-jornada-de-transformacao.md` |
+| FDD 012 | Calendário para tarefas | Entregue | — | `docs/fdd/012-calendario-para-tarefas.md` |
+| FDD 013 | Agendamento, qualificação por IA e booking | Entregue | — | `docs/fdd/013-agendamento-qualificacao-ia-e-booking.md` |
+| FDD 014 | AI Score de maturidade de IA | Entregue | — | `docs/fdd/014-ai-score-de-maturidade-de-ia.md` |
+| FDD 015 | Três níveis de produto | Entregue | — | `docs/fdd/015-tres-niveis-de-produto.md` |
+| FDD 016 | Artefatos da jornada | Entregue | — | `docs/fdd/016-artefatos-da-jornada.md` |
+| FDD 017 | Endurecimento de segurança | Entregue | — | `docs/fdd/017-endurecimento-de-seguranca.md` |
+| FDD 018 | Equipe do projeto | Entregue | — | `docs/fdd/018-equipe-do-projeto.md` |
+| FDD 019 | Configuração de produção e transporte | Entregue | — | `docs/fdd/019-configuracao-de-producao-e-transporte.md` |
+| FDD 020 | Monitoramento e observabilidade | Entregue | — | `docs/fdd/020-monitoramento-e-observabilidade.md` |
+| FDD 021 | Backup, retenção e restauração | Entregue | — | `docs/fdd/021-backup-retencao-e-restauracao.md` |
+| FDD 022 | Matriz de testes, a11y, responsividade e carga | Entregue | — | `docs/fdd/022-matriz-de-testes-a11y-responsividade-e-carga.md` |
+| FDD 023 | Trabalho periódico agendado | Entregue | — | `docs/fdd/023-trabalho-periodico-agendado.md` |
+| FDD 024 | Sondas de integração | Entregue | — | `docs/fdd/024-sondas-de-integracao.md` |
+| FDD 025 | Arquivar e restaurar pela interface | Entregue | — | `docs/fdd/025-arquivar-e-restaurar-pela-interface.md` |
+| FDD 026 | Biblioteca de Funcionários Digitais | Entregue | — | `docs/fdd/026-biblioteca-de-funcionarios-digitais.md` |
+| FDD 027 | Repositório de cases com métrica | Entregue | — | `docs/fdd/027-repositorio-de-cases-com-metrica.md` |
+| FDD 028 | Contas a receber | Entregue (recorte) | — | `docs/fdd/028-contas-a-receber.md` |
+| FDD 029 | Base de conhecimento interna e frescor | Entregue | — | `docs/fdd/029-base-de-conhecimento-interna-e-frescor.md` |
+| FDD 030 | Indicação no pico de valor e enriquecimento de lead | Parcial | — | `docs/fdd/030-indicacao-no-pico-de-valor-e-enriquecimento-de-lead.md` |
+| FDD 031 | Aceitação que o portal não via | Entregue | — | `docs/fdd/031-a-aceitacao-que-o-portal-nao-via.md` |
+| FDD 032 | Decisão que ninguém registrava | Entregue | — | `docs/fdd/032-a-decisao-que-ninguem-registrava.md` |
 
 ## Base atual — entregue
 
