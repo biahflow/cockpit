@@ -1,6 +1,6 @@
-# Roadmap — Portal Biahflow
+# Roadmap — Cockpit (Biahflow)
 
-Atualizado em 17/08/2026. Esta é a fonte canônica de inventário e estado das features/work items
+Atualizado em 19/08/2026. Esta é a fonte canônica de inventário e estado das features/work items
 do projeto. Separa o que já compõe a plataforma do que falta, e aponta o norte (jornada de
 consultoria assistida por IA). Marcações: `[x]` entregue, `[~]` parcial, `[ ]` pendente.
 
@@ -44,6 +44,9 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 030 | Indicação no pico de valor e enriquecimento de lead | Parcial | — | `docs/fdd/030-indicacao-no-pico-de-valor-e-enriquecimento-de-lead.md` |
 | FDD 031 | Aceitação que o portal não via | Entregue | — | `docs/fdd/031-a-aceitacao-que-o-portal-nao-via.md` |
 | FDD 032 | Decisão que ninguém registrava | Entregue | — | `docs/fdd/032-a-decisao-que-ninguem-registrava.md` |
+| FDD 033 | Gates da jornada (decision gate 4-vias + quality gates) | Entregue | 1 | `docs/fdd/033-os-gates-da-jornada.md` |
+| FDD 034 | Risk Register do projeto | Entregue | 1 | `docs/fdd/034-risk-register-do-projeto.md` |
+| FDD 035 | Activities no CRM | Entregue | 1 | `docs/fdd/035-activities-no-crm.md` |
 
 ## Base atual — entregue
 
@@ -431,6 +434,31 @@ um radar que ele respeita.
       nove. **Aberto:** o pedido de indicação, que depende do teto de frequência e dos
       gatilhos do portal do cliente (FDD 022 de lá, ela própria bloqueada até o laço do funil
       fechar). Ver FDD 030.
+
+## Norte — Cockpit: a metodologia FDE materializada (ADR 0030)
+
+Desde 19/08/2026 o produto se chama **Cockpit** e é o sistema primário da operação (ADR 0030 —
+o Notion vira referência). A metodologia FDE consultável está em `docs/metodologia-fde.md` e no
+corpus de conhecimento; o princípio é **contexto vira comportamento**, não página para ler.
+
+Fase aprovada (blocos que o material já estabilizou):
+
+- [x] **FDD 033 — Gates da jornada.** Decision gate de quatro saídas (GO / CONDITIONAL GO /
+      REDESIGN / NO-GO) na `ProjectPhase`, com REDESIGN reabrindo a fase anterior, e quality
+      gates: checklist template por `JourneyPhase` respondida antes de concluir a fase.
+- [x] **FDD 034 — Risk Register.** Riscos do projeto (probabilidade, impacto, mitigação,
+      status), no molde de `Pendencia`; visível no detalhe do projeto e no contexto do agente
+      de Entrega. O estado tem quatro saídas (aberto / mitigado / aceito / materializado), e o
+      registro **não atravessa** para o portal do cliente.
+- [x] **FDD 035 — Activities no CRM.** Interações comerciais (ligação, reunião, e-mail, nota)
+      ligadas ao cliente e opcionalmente à oportunidade; timeline no detalhe do cliente e no
+      comercial.
+
+Deliberadamente adiado até haver Discoveries reais (a metade da regra antiga que sobrevive —
+ADR 0030): Discovery como dado estruturado (Processes, Pain Points, Evidence com
+FATO/HIPÓTESE/DESCONHECIDO, Business Cases), Value Ledger, Opportunity Backlog por conta,
+cockpit de reunião de Discovery e "Next Best Opportunity". A migração dos dados do Notion
+(Accounts/Contacts/Opportunities/Activities) fica nomeada e não feita.
 
 ## Princípios de entrega
 

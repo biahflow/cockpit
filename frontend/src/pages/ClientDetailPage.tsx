@@ -1,21 +1,25 @@
-import { ArrowLeft, Briefcase, Mail, Phone, Plus, Save, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, Briefcase, Mail, MessageSquareText, Phone, Plus, Save, Trash2, UserRound } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
-import type { Client, ClientOverview, ClientStatus, Contact, Vertical } from "../types";
+import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, Contact, Vertical } from "../types";
 
 const blankContact = { name: "", email: "", phone: "", job_title: "" };
+const blankActivity = { kind: "call" as ActivityKind, happened_on: new Date().toISOString().slice(0, 10), summary: "", notes: "" };
+const activityKindLabels: Record<ActivityKind, string> = { call: "Ligação", meeting: "Reunião", email: "E-mail", note: "Nota" };
 
 export function ClientDetailPage({ id }: { id: number }) {
   const [client, setClient] = useState<Client>();
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [overview, setOverview] = useState<ClientOverview>();
   const [verticals, setVerticals] = useState<Vertical[]>([]);
   const [form, setForm] = useState<{ name: string; legal_name: string; tax_id: string; status: ClientStatus; vertical: string }>({ name: "", legal_name: "", tax_id: "", status: "prospect", vertical: "" });
   const [contactDraft, setContactDraft] = useState(blankContact);
+  const [activityDraft, setActivityDraft] = useState(blankActivity);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [removingContact, setRemovingContact] = useState<Contact | null>(null);
@@ -23,14 +27,16 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [busy, setBusy] = useState(false);
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
+  const canWriteActivities = !!user && user.role !== "delivery";
 
   const load = useCallback(() => Promise.all([
     api<Client>(`/clients/${id}/`),
     api<Contact[]>(`/contacts/?client=${id}`),
+    api<Activity[]>(`/activities/?client=${id}`),
     api<ClientOverview>(`/clients/${id}/overview/`),
     api<Vertical[]>("/verticals/"),
-  ]).then(([loadedClient, loadedContacts, loadedOverview, loadedVerticals]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setOverview(loadedOverview); setVerticals(loadedVerticals);
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
@@ -51,6 +57,15 @@ export function ClientDetailPage({ id }: { id: number }) {
     try { await api(`/contacts/${removingContact.id}/`, { method: "DELETE" }); setRemovingContact(null); await load(); }
     catch (cause) { setRemovingContact(null); setError((cause as Error).message); }
     finally { setBusy(false); }
+  }
+  async function createActivity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try { await api("/activities/", { method: "POST", body: JSON.stringify({ client: id, ...activityDraft }) }); setActivityDraft(blankActivity); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function archiveActivity(activity: Activity) {
+    try { await api(`/activities/${activity.id}/`, { method: "DELETE" }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
   }
   async function archiveClient() {
     setBusy(true);
@@ -135,6 +150,27 @@ export function ClientDetailPage({ id }: { id: number }) {
         {contacts.length ? <div className="divide-y">{contacts.map(contact => <div className="flex items-start gap-3 py-3" key={contact.id}><span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><UserRound className="size-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-ink">{contact.name}</p>{contact.job_title && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Briefcase className="size-3" />{contact.job_title}</p>}{contact.email && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Mail className="size-3" />{contact.email}</p>}{contact.phone && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Phone className="size-3" />{contact.phone}</p>}</div><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Remover ${contact.name}`} onClick={() => setRemovingContact(contact)}><Trash2 className="size-4" /></button></div>)}</div> : <p className="empty-state">Nenhum contato cadastrado.</p>}
       </section>
     </div>
+
+    <section className="panel space-y-4 sm:p-6">
+      <p className="eyebrow">Histórico</p>
+      <h2 className="font-semibold text-ink">Interações</h2>
+      {canWriteActivities && <form className="form-grid" onSubmit={event => void createActivity(event)}>
+        <label className="form-label">Tipo<select className="field" value={activityDraft.kind} onChange={event => setActivityDraft({ ...activityDraft, kind: event.target.value as ActivityKind })}>{Object.entries(activityKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="form-label">Data<input className="field" type="date" value={activityDraft.happened_on} onChange={event => setActivityDraft({ ...activityDraft, happened_on: event.target.value })} required /></label>
+        <label className="form-label sm:col-span-2">Resumo<input className="field" value={activityDraft.summary} onChange={event => setActivityDraft({ ...activityDraft, summary: event.target.value })} placeholder="Do que se tratou o contato" required /></label>
+        <label className="form-label sm:col-span-2">Notas<textarea className="field min-h-20" value={activityDraft.notes} onChange={event => setActivityDraft({ ...activityDraft, notes: event.target.value })} placeholder="Opcional" /></label>
+        <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Registrar interação</button>
+      </form>}
+      {activities.length ? <div className="panel-rows">{activities.map(activity => <div className="row" key={activity.id}>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><MessageSquareText className="size-4" /></span>
+        <div className="row-main">
+          <strong>{activity.summary}</strong>
+          <span>{activity.kind_display} · {new Date(`${activity.happened_on}T12:00:00`).toLocaleDateString("pt-BR")}</span>
+          {activity.notes && <span>{activity.notes}</span>}
+        </div>
+        {canWriteActivities && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar interação: ${activity.summary}`} onClick={() => void archiveActivity(activity)}><Trash2 className="size-4" /></button>}
+      </div>)}</div> : <p className="empty-state">Nenhuma interação registrada.</p>}
+    </section>
   </section>;
 }
 

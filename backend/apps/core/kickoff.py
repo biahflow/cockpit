@@ -34,6 +34,10 @@ KICKOFF_TEMPLATE: list[dict] = [
 
 # Um cronograma por nível de produto: o Discovery Express dura uma semana e não merece os
 # 90 dias da implantação. Projetos sem nível (ou de serviço avulso) caem no template padrão.
+# Os textos carregam a leitura FDE dos níveis (ADR 0030, `docs/metodologia-fde.md`): o
+# Discovery + Assessment fecha com o gate recomendado, e a implantação é o PROVE — baseline e
+# critérios de sucesso antes de construir, evidência de produção controlada e decision gate
+# no fim. O template padrão continua genérico: serviço avulso não é PROVE.
 KICKOFF_TEMPLATES: dict[str, list[dict]] = {
     "discovery_express": [
         {"title": "Discovery", "offset": 7,
@@ -45,9 +49,22 @@ KICKOFF_TEMPLATES: dict[str, list[dict]] = {
          "tasks": ["Agendar a sessão de discovery", "Registrar a transcrição da reunião"]},
         {"title": "Assessment e recomendações", "offset": 21,
          "tasks": ["Gerar o assessment de maturidade", "Priorizar as recomendações",
-                   "Apresentar o plano de ação"]},
+                   "Apresentar o plano de ação",
+                   "Registrar o próximo passo recomendado (gate: PROVE ou Feasibility)"]},
     ],
-    "implantacao": KICKOFF_TEMPLATE,
+    "implantacao": [
+        {"title": "Kickoff e alinhamento", "offset": 7,
+         "tasks": ["Agendar reunião de kickoff", "Compartilhar plano de trabalho",
+                   "Registrar o baseline e os critérios de sucesso antes de construir"]},
+        {"title": "Descoberta e planejamento", "offset": 21,
+         "tasks": ["Levantar requisitos", "Detalhar cronograma"]},
+        {"title": "Execução em produção controlada", "offset": 60,
+         "tasks": ["Iniciar entregas do escopo"]},
+        {"title": "Encerramento", "offset": 90,
+         "tasks": ["Revisar entregáveis contra os critérios de sucesso",
+                   "Registrar a evidência de produção controlada e o decision gate",
+                   "Coletar feedback do cliente"]},
+    ],
 }
 
 

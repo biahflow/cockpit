@@ -66,22 +66,22 @@ jobs:
             docker push "$REGISTRO/$nome:$GITHUB_SHA"
             docker push "ghcr.io/${{ github.repository }}/$nome:$GITHUB_SHA"
           }
-          publica biahflow-api backend
-          publica biahflow-web frontend
+          publica cockpit-api backend
+          publica cockpit-web frontend
 
       # A imagem recusa subir com configuração insegura: o entrypoint roda
       # `check --deploy --fail-level WARNING --tag security` antes do gunicorn
       # (ADR 0011). Se um segredo faltar, o deploy morre aqui — e é onde deve.
       - name: Migra o banco
         run: |
-          gcloud run jobs update biahflow-migrate \
-            --image "$REGISTRO/biahflow-api:$GITHUB_SHA" \
+          gcloud run jobs update cockpit-migrate \
+            --image "$REGISTRO/cockpit-api:$GITHUB_SHA" \
             --region "$REGIAO" --quiet
-          gcloud run jobs execute biahflow-migrate --region "$REGIAO" --wait
+          gcloud run jobs execute cockpit-migrate --region "$REGIAO" --wait
 
       - name: Publica as revisões
         run: |
-          for s in biahflow-api biahflow-web; do
+          for s in cockpit-api cockpit-web; do
             gcloud run services update "$s" \
               --image "$REGISTRO/$s:$GITHUB_SHA" \
               --region "$REGIAO" --quiet
@@ -89,7 +89,7 @@ jobs:
 
       # O agendador (FDD 023: digest diário, sincronia de calendário, alerta de
       # backup velho) é um **worker pool**: Cloud Run sem HTTP. A imagem é a da
-      # `biahflow-api`, porque ele roda `manage.py` do mesmo código.
+      # `cockpit-api`, porque ele roda `manage.py` do mesmo código.
       #
       # Ele existia no `docker-compose.prod.yml` e não tinha casa em HML, o que
       # significa que as três rotinas não rodariam — incluindo a que avisa que o
@@ -97,8 +97,8 @@ jobs:
       # o silêncio parecer boa notícia.
       - name: Atualiza o agendador
         run: |
-          gcloud beta run worker-pools update biahflow-scheduler \
-            --image "$REGISTRO/biahflow-api:$GITHUB_SHA" \
+          gcloud beta run worker-pools update cockpit-scheduler \
+            --image "$REGISTRO/cockpit-api:$GITHUB_SHA" \
             --region "$REGIAO" --quiet
 
       # A sonda pergunta ao **provedor**, não ao ambiente — é a tese da FDD 024
@@ -115,18 +115,18 @@ jobs:
       - name: Sonda as integrações
         continue-on-error: true
         run: |
-          gcloud run jobs update biahflow-check \
-            --image "$REGISTRO/biahflow-api:$GITHUB_SHA" \
+          gcloud run jobs update cockpit-check \
+            --image "$REGISTRO/cockpit-api:$GITHUB_SHA" \
             --region "$REGIAO" --quiet
-          gcloud run jobs execute biahflow-check --region "$REGIAO" --wait || true
+          gcloud run jobs execute cockpit-check --region "$REGIAO" --wait || true
 
       - name: Fumaça
         run: |
           set -euo pipefail
-          url=$(gcloud run services describe biahflow-web --region "$REGIAO" --format='value(status.url)')
+          url=$(gcloud run services describe cockpit-web --region "$REGIAO" --format='value(status.url)')
           for tentativa in 1 2 3 4 5; do
             if curl -sf --max-time 10 "$url/" > /dev/null; then
-              echo "biahflow-web responde em $url"; exit 0
+              echo "cockpit-web responde em $url"; exit 0
             fi
             echo "tentativa $tentativa falhou; esperando"; sleep 10
           done

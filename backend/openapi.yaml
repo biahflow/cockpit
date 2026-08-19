@@ -3,6 +3,181 @@ info:
   title: Biahflow API
   version: 1.0.0
 paths:
+  /api/v1/activities/:
+    get:
+      operationId: v1_activities_list
+      description: Interação comercial com o cliente (ligação, reunião, e-mail, nota)
+        — FDD 035.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+          description: ''
+    post:
+      operationId: v1_activities_create
+      description: Interação comercial com o cliente (ligação, reunião, e-mail, nota)
+        — FDD 035.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Activity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Activity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Activity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+          description: ''
+  /api/v1/activities/{id}/:
+    get:
+      operationId: v1_activities_retrieve
+      description: Interação comercial com o cliente (ligação, reunião, e-mail, nota)
+        — FDD 035.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este activity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+          description: ''
+    put:
+      operationId: v1_activities_update
+      description: Interação comercial com o cliente (ligação, reunião, e-mail, nota)
+        — FDD 035.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este activity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Activity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Activity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Activity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+          description: ''
+    patch:
+      operationId: v1_activities_partial_update
+      description: Interação comercial com o cliente (ligação, reunião, e-mail, nota)
+        — FDD 035.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este activity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedActivity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedActivity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedActivity'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+          description: ''
+    delete:
+      operationId: v1_activities_destroy
+      description: Interação comercial com o cliente (ligação, reunião, e-mail, nota)
+        — FDD 035.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este activity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/activities/{id}/unarchive/:
+    post:
+      operationId: v1_activities_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este activity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/agents/{key}/:
     post:
       operationId: v1_agents_create
@@ -4288,6 +4463,153 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/phase-checklist-items/:
+    get:
+      operationId: v1_phase_checklist_items_list
+      description: Template do checklist de qualidade de cada fase (admin, FDD 033).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PhaseChecklistItem'
+          description: ''
+    post:
+      operationId: v1_phase_checklist_items_create
+      description: Template do checklist de qualidade de cada fase (admin, FDD 033).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhaseChecklistItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PhaseChecklistItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhaseChecklistItem'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseChecklistItem'
+          description: ''
+  /api/v1/phase-checklist-items/{id}/:
+    get:
+      operationId: v1_phase_checklist_items_retrieve
+      description: Template do checklist de qualidade de cada fase (admin, FDD 033).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase checklist item.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseChecklistItem'
+          description: ''
+    put:
+      operationId: v1_phase_checklist_items_update
+      description: Template do checklist de qualidade de cada fase (admin, FDD 033).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase checklist item.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhaseChecklistItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PhaseChecklistItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhaseChecklistItem'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseChecklistItem'
+          description: ''
+    patch:
+      operationId: v1_phase_checklist_items_partial_update
+      description: Template do checklist de qualidade de cada fase (admin, FDD 033).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase checklist item.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPhaseChecklistItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPhaseChecklistItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPhaseChecklistItem'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhaseChecklistItem'
+          description: ''
+    delete:
+      operationId: v1_phase_checklist_items_destroy
+      description: Template do checklist de qualidade de cada fase (admin, FDD 033).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este phase checklist item.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/phase-deliverables/:
     get:
       operationId: v1_phase_deliverables_list
@@ -4606,6 +4928,184 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/project-checklist-items/:
+    get:
+      operationId: v1_project_checklist_items_list
+      description: Checklist de qualidade por projeto — a equipe confere item a item
+        (delivery/admin).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectChecklistItem'
+          description: ''
+    post:
+      operationId: v1_project_checklist_items_create
+      description: Checklist de qualidade por projeto — a equipe confere item a item
+        (delivery/admin).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectChecklistItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectChecklistItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectChecklistItem'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectChecklistItem'
+          description: ''
+  /api/v1/project-checklist-items/{id}/:
+    get:
+      operationId: v1_project_checklist_items_retrieve
+      description: Checklist de qualidade por projeto — a equipe confere item a item
+        (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project checklist
+          item.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectChecklistItem'
+          description: ''
+    put:
+      operationId: v1_project_checklist_items_update
+      description: Checklist de qualidade por projeto — a equipe confere item a item
+        (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project checklist
+          item.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectChecklistItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectChecklistItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectChecklistItem'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectChecklistItem'
+          description: ''
+    patch:
+      operationId: v1_project_checklist_items_partial_update
+      description: Checklist de qualidade por projeto — a equipe confere item a item
+        (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project checklist
+          item.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectChecklistItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectChecklistItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectChecklistItem'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectChecklistItem'
+          description: ''
+    delete:
+      operationId: v1_project_checklist_items_destroy
+      description: Checklist de qualidade por projeto — a equipe confere item a item
+        (delivery/admin).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project checklist
+          item.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/project-checklist-items/{id}/unarchive/:
+    post:
+      operationId: v1_project_checklist_items_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project checklist
+          item.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/project-deliverables/:
     get:
       operationId: v1_project_deliverables_list
@@ -5310,6 +5810,46 @@ paths:
                 items:
                   $ref: '#/components/schemas/ProjectPhase'
           description: ''
+  /api/v1/projects/{id}/apply-gate/:
+    post:
+      operationId: v1_projects_apply_gate_create
+      description: |-
+        Registra o decision gate de quatro saídas na fase ativa (delivery/admin, FDD 033).
+
+        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as quatro saídas mexem em
+        até duas fases, e a tela precisa da lista atualizada, não do que mudou.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyGate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ApplyGate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ApplyGate'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectPhase'
+          description: ''
   /api/v1/projects/{id}/assistant/:
     post:
       operationId: v1_projects_assistant_create
@@ -5532,6 +6072,169 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecommendationsResponse'
+          description: ''
+  /api/v1/riscos/:
+    get:
+      operationId: v1_riscos_list
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Risco'
+          description: ''
+    post:
+      operationId: v1_riscos_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Risco'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Risco'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Risco'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Risco'
+          description: ''
+  /api/v1/riscos/{id}/:
+    get:
+      operationId: v1_riscos_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este risco.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Risco'
+          description: ''
+    put:
+      operationId: v1_riscos_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este risco.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Risco'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Risco'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Risco'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Risco'
+          description: ''
+    patch:
+      operationId: v1_riscos_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este risco.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRisco'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRisco'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRisco'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Risco'
+          description: ''
+    delete:
+      operationId: v1_riscos_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este risco.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/riscos/{id}/unarchive/:
+    post:
+      operationId: v1_riscos_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este risco.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
           description: ''
   /api/v1/risk/:
     get:
@@ -6226,6 +6929,64 @@ components:
       - password
       - token
       - username
+    Activity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        opportunity:
+          type: integer
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/ActivityKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        happened_on:
+          type: string
+          format: date
+        summary:
+          type: string
+          maxLength: 255
+        notes:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client
+      - created_at
+      - happened_on
+      - id
+      - kind
+      - kind_display
+      - owner
+      - summary
+      - updated_at
+    ActivityKindEnum:
+      enum:
+      - call
+      - meeting
+      - email
+      - note
+      type: string
+      description: |-
+        * `call` - Ligação
+        * `meeting` - Reunião
+        * `email` - E-mail
+        * `note` - Nota
     AgentRequest:
       type: object
       properties:
@@ -6309,6 +7070,15 @@ components:
       - pipeline
       - roi
       - win_rate
+    ApplyGate:
+      type: object
+      properties:
+        outcome:
+          $ref: '#/components/schemas/GateOutcomeEnum'
+        notes:
+          type: string
+      required:
+      - outcome
     AreaEnum:
       enum:
       - comercial
@@ -7027,6 +7797,18 @@ components:
       - original_name
       - signature_requests
       - uploaded_by
+    GateOutcomeEnum:
+      enum:
+      - go
+      - conditional_go
+      - redesign
+      - no_go
+      type: string
+      description: |-
+        * `go` - GO
+        * `conditional_go` - CONDITIONAL GO
+        * `redesign` - REDESIGN
+        * `no_go` - NO-GO
     HealthResponse:
       type: object
       properties:
@@ -7035,6 +7817,16 @@ components:
           items: {}
       required:
       - projects
+    ImpactEnum:
+      enum:
+      - low
+      - medium
+      - high
+      type: string
+      description: |-
+        * `low` - Baixo
+        * `medium` - Médio
+        * `high` - Alto
     Invitation:
       type: object
       properties:
@@ -7270,12 +8062,20 @@ components:
           format: int64
         active:
           type: boolean
+        requires_gate:
+          type: boolean
         deliverables:
           type: array
           items:
             $ref: '#/components/schemas/PhaseDeliverable'
           readOnly: true
+        checklist_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhaseChecklistItem'
+          readOnly: true
       required:
+      - checklist_items
       - deliverables
       - id
       - name
@@ -7845,6 +8645,42 @@ components:
       description: |-
         * `provider` - Fornecedor
         * `client` - Cliente
+    PatchedActivity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        opportunity:
+          type: integer
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/ActivityKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        happened_on:
+          type: string
+          format: date
+        summary:
+          type: string
+          maxLength: 255
+        notes:
+          type: string
+        owner:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedArtifact:
       type: object
       properties:
@@ -8416,10 +9252,17 @@ components:
           format: int64
         active:
           type: boolean
+        requires_gate:
+          type: boolean
         deliverables:
           type: array
           items:
             $ref: '#/components/schemas/PhaseDeliverable'
+          readOnly: true
+        checklist_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhaseChecklistItem'
           readOnly: true
     PatchedKnowledgeArea:
       type: object
@@ -8764,6 +9607,24 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedPhaseChecklistItem:
+      type: object
+      description: Item do quality gate no template de uma fase (config admin, FDD
+        033).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        phase:
+          type: integer
+        text:
+          type: string
+          maxLength: 255
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
     PatchedPhaseDeliverable:
       type: object
       description: Entregável do template de uma fase (config admin).
@@ -8876,6 +9737,38 @@ components:
           type: string
           readOnly: true
           default: ''
+    PatchedProjectChecklistItem:
+      type: object
+      description: Item do quality gate de um projeto — só `checked` é editável (FDD
+        033).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project_phase:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        checked:
+          type: boolean
+        checked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedProjectDeliverable:
       type: object
       description: Entregável de um projeto — só `status`/`document` são editáveis
@@ -8940,8 +9833,13 @@ components:
           readOnly: true
     PatchedProjectPhase:
       type: object
-      description: Fase da jornada de um projeto (estado). Só `target_date` é editável
-        pela equipe.
+      description: |-
+        Fase da jornada de um projeto (estado). A equipe edita `target_date` e a justificativa.
+
+        `gate_outcome`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
+        action `apply-gate`, que é onde moram as consequências de cada saída — concluir e avançar,
+        reabrir a fase anterior, ou parar. Um PATCH direto gravaria "REDESIGN" sem nada acontecer, e
+        o campo passaria a mentir sobre o estado da jornada.
       properties:
         id:
           type: integer
@@ -8961,6 +9859,9 @@ components:
         phase_position:
           type: integer
           readOnly: true
+        requires_gate:
+          type: boolean
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/ProjectPhaseStatusEnum'
@@ -8979,10 +9880,62 @@ components:
           type: string
           format: date
           nullable: true
+        gate_outcome:
+          allOf:
+          - $ref: '#/components/schemas/GateOutcomeEnum'
+          readOnly: true
+        gate_notes:
+          type: string
+          readOnly: true
+        checklist_waiver:
+          type: string
         deliverables:
           type: array
           items:
             $ref: '#/components/schemas/ProjectDeliverable'
+          readOnly: true
+        checklist_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectChecklistItem'
+          readOnly: true
+    PatchedRisco:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        probability:
+          $ref: '#/components/schemas/ProbabilityEnum'
+        impact:
+          $ref: '#/components/schemas/ImpactEnum'
+        mitigation:
+          type: string
+        status:
+          $ref: '#/components/schemas/RiscoStatusEnum'
+        owner:
+          type: integer
+          readOnly: true
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
           readOnly: true
     PatchedService:
       type: object
@@ -9137,6 +10090,28 @@ components:
       description: |-
         * `open` - Aberta
         * `resolved` - Resolvida
+    PhaseChecklistItem:
+      type: object
+      description: Item do quality gate no template de uma fase (config admin, FDD
+        033).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        phase:
+          type: integer
+        text:
+          type: string
+          maxLength: 255
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - id
+      - phase
+      - text
     PhaseDeliverable:
       type: object
       description: Entregável do template de uma fase (config admin).
@@ -9187,6 +10162,16 @@ components:
         * `open` - Aberta
         * `won` - Ganho
         * `lost` - Perdido
+    ProbabilityEnum:
+      enum:
+      - low
+      - medium
+      - high
+      type: string
+      description: |-
+        * `low` - Baixa
+        * `medium` - Média
+        * `high` - Alta
     Project:
       type: object
       properties:
@@ -9280,6 +10265,46 @@ components:
       - owner
       - start_date
       - updated_at
+    ProjectChecklistItem:
+      type: object
+      description: Item do quality gate de um projeto — só `checked` é editável (FDD
+        033).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project_phase:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        checked:
+          type: boolean
+        checked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - checked_at
+      - created_at
+      - id
+      - position
+      - project_phase
+      - text
+      - updated_at
     ProjectDeliverable:
       type: object
       description: Entregável de um projeto — só `status`/`document` são editáveis
@@ -9369,8 +10394,13 @@ components:
       - user_username
     ProjectPhase:
       type: object
-      description: Fase da jornada de um projeto (estado). Só `target_date` é editável
-        pela equipe.
+      description: |-
+        Fase da jornada de um projeto (estado). A equipe edita `target_date` e a justificativa.
+
+        `gate_outcome`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
+        action `apply-gate`, que é onde moram as consequências de cada saída — concluir e avançar,
+        reabrir a fase anterior, ou parar. Um PATCH direto gravaria "REDESIGN" sem nada acontecer, e
+        o campo passaria a mentir sobre o estado da jornada.
       properties:
         id:
           type: integer
@@ -9390,6 +10420,9 @@ components:
         phase_position:
           type: integer
           readOnly: true
+        requires_gate:
+          type: boolean
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/ProjectPhaseStatusEnum'
@@ -9408,20 +10441,38 @@ components:
           type: string
           format: date
           nullable: true
+        gate_outcome:
+          allOf:
+          - $ref: '#/components/schemas/GateOutcomeEnum'
+          readOnly: true
+        gate_notes:
+          type: string
+          readOnly: true
+        checklist_waiver:
+          type: string
         deliverables:
           type: array
           items:
             $ref: '#/components/schemas/ProjectDeliverable'
           readOnly: true
+        checklist_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectChecklistItem'
+          readOnly: true
       required:
+      - checklist_items
       - completed_at
       - deliverables
+      - gate_notes
+      - gate_outcome
       - id
       - phase
       - phase_description
       - phase_name
       - phase_position
       - project
+      - requires_gate
       - started_at
       - status
     ProjectPhaseStatusEnum:
@@ -9454,6 +10505,64 @@ components:
           items: {}
       required:
       - items
+    Risco:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        probability:
+          $ref: '#/components/schemas/ProbabilityEnum'
+        impact:
+          $ref: '#/components/schemas/ImpactEnum'
+        mitigation:
+          type: string
+        status:
+          $ref: '#/components/schemas/RiscoStatusEnum'
+        owner:
+          type: integer
+          readOnly: true
+          nullable: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - owner
+      - project
+      - resolved_at
+      - title
+      - updated_at
+    RiscoStatusEnum:
+      enum:
+      - open
+      - mitigated
+      - accepted
+      - materialized
+      type: string
+      description: |-
+        * `open` - Aberto
+        * `mitigated` - Mitigado
+        * `accepted` - Aceito
+        * `materialized` - Materializado
     RiskResponse:
       type: object
       properties:

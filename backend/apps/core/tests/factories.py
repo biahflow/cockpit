@@ -5,6 +5,7 @@ import factory
 from django.utils import timezone
 
 from apps.core.models import (
+    Activity,
     Artifact,
     Client,
     Invoice,
@@ -73,6 +74,17 @@ class OpportunityFactory(factory.django.DjangoModelFactory):
     stage = factory.SubFactory(PipelineStageFactory)
     owner = factory.SubFactory(UserFactory)
     expected_close_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=7))
+
+
+class ActivityFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Activity
+
+    client = factory.SubFactory(ClientFactory)
+    kind = Activity.Kind.CALL
+    happened_on = factory.LazyFunction(timezone.localdate)
+    summary = "Contato comercial"
+    owner = factory.SubFactory(UserFactory)
 
 
 class ProjectFactory(factory.django.DjangoModelFactory):

@@ -13,9 +13,11 @@ from .models import (
     Opportunity,
     Pendencia,
     Project,
+    ProjectChecklistItem,
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    Risco,
     Task,
     User,
     can_access_project,
@@ -37,9 +39,11 @@ PROJECT_OF = {
     Meeting: lambda obj: obj.project,
     Pendencia: lambda obj: obj.project,
     Decisao: lambda obj: obj.project,
+    Risco: lambda obj: obj.project,
     DigitalEmployee: lambda obj: obj.project,
     ProjectPhase: lambda obj: obj.project,
     ProjectDeliverable: lambda obj: obj.project_phase.project,
+    ProjectChecklistItem: lambda obj: obj.project_phase.project,
     ProjectMember: lambda obj: obj.project,
     Document: lambda obj: obj.project,
     Artifact: lambda obj: obj.project,
@@ -73,16 +77,16 @@ class RolePermission(BasePermission):
             # cliente é o comercial, mas emitir, baixar e cancelar são atos de admin — é dinheiro,
             # e a responsabilidade por afirmar que ele entrou não se delega.
             if resource in {"project", "project_phase", "project_deliverable",
-                            "digital_employee", "project_member", "risk", "health", "case",
-                            "invoice"}:
+                            "project_checklist_item", "digital_employee", "project_member",
+                            "risk", "health", "case", "invoice"}:
                 return request.method in SAFE_METHODS
             if resource == "knowledge":
                 return request.method in SAFE_METHODS or getattr(view, "action", None) == "verify"
             return resource in {"client", "contact", "opportunity", "document", "lead",
-                                "analytics", "artifact"}
+                                "analytics", "artifact", "activity"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
-                            "risk", "health", "case"}:
+                            "risk", "health", "case", "activity"}:
                 return request.method in SAFE_METHODS
             # Conhecimento: **todo mundo lê**, e o dono da área verifica. O dono pode ser de
             # qualquer papel, e avisá-lo sobre uma peça que ele não consegue abrir — ou não pode
@@ -101,8 +105,12 @@ class RolePermission(BasePermission):
             # participa. Quem produz o 403 é o `return False` abaixo — o mesmo mecanismo que fecha
             # `lead` e `analytics`, e a melhor propriedade deste modelo de permissão: recurso novo
             # nasce fechado sem uma linha de código.
+            # `risco` (o registro declarado da FDD 034) entra aqui, ao lado de `pendencia`, e
+            # **não** se confunde com `risk` lá em cima: aquele é a avaliação calculada, só de
+            # leitura para quem não é admin. Nomes vizinhos, recursos diferentes.
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
-                                "pendencia", "decisao", "project_phase", "project_deliverable",
+                                "pendencia", "decisao", "risco", "project_phase",
+                                "project_deliverable", "project_checklist_item",
                                 "digital_employee", "artifact"}
         return False
 
@@ -120,7 +128,7 @@ class RolePermission(BasePermission):
             # detalhe passa a ser caminho de verdade, porque é dela que sai a instanciação.
             if getattr(view, "resource", "") in CATALOG:
                 return request.method in SAFE_METHODS
-            if getattr(view, "resource", "") in {"client", "contact"}:
+            if getattr(view, "resource", "") in {"client", "contact", "activity"}:
                 return request.method in SAFE_METHODS
             # Conhecimento não é objeto de projeto e cairia no `return False` do fim — a Entrega
             # leria a lista e tomaria 403 no detalhe e no `verify`. É exatamente o defeito que a

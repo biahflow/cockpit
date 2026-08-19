@@ -24,7 +24,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -62,8 +62,10 @@ from .exceptions import (
     EmailUndeliverable,
     EsignUnavailable,
     PaymentsUnavailable,
+    StateConflict,
 )
 from .models import (
+    Activity,
     AiInteraction,
     AppSetting,
     Artifact,
@@ -86,12 +88,15 @@ from .models import (
     Notification,
     Opportunity,
     Pendencia,
+    PhaseChecklistItem,
     PhaseDeliverable,
     PipelineStage,
     Project,
+    ProjectChecklistItem,
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    Risco,
     Service,
     SignatureRequest,
     Task,
@@ -102,6 +107,7 @@ from .models import (
 from .permissions import RolePermission
 from .serializers import (
     AcceptInvitationSerializer,
+    ActivitySerializer,
     ArtifactSerializer,
     BlueprintVariantSerializer,
     BookingCreateSerializer,
@@ -126,12 +132,15 @@ from .serializers import (
     NotificationSerializer,
     OpportunitySerializer,
     PendenciaSerializer,
+    PhaseChecklistItemSerializer,
     PhaseDeliverableSerializer,
     PipelineStageSerializer,
+    ProjectChecklistItemSerializer,
     ProjectDeliverableSerializer,
     ProjectMemberSerializer,
     ProjectPhaseSerializer,
     ProjectSerializer,
+    RiscoSerializer,
     ServiceSerializer,
     SignatureRequestSerializer,
     TaskSerializer,
@@ -141,20 +150,6 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class StateConflict(APIException):
-    """Recusado porque outra coisa ainda depende deste registro.
-
-    409, não 400: o pedido está bem formado e a permissão existe — o que impede é o **estado** do
-    sistema, e é ele que muda para o pedido passar. Um 400 mandaria quem lê procurar erro no corpo.
-
-    Nasceu como `ArchiveConflict`, do arquivamento, e o nome ficou estreito: a exclusão **real**
-    (etapa do pipeline, fase da jornada) recusa pela mesma razão e com a mesma forma — contagem do
-    que depende, mais o caminho de saída. Ver FDD 025.
-    """
-
-    status_code = status.HTTP_409_CONFLICT
 
 
 class ArchiveModelViewSet(viewsets.ModelViewSet):
@@ -616,6 +611,24 @@ class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         return queryset.filter(scope).distinct() if scope else queryset
 
 
+class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """Interação comercial com o cliente (ligação, reunião, e-mail, nota) — FDD 035."""
+
+    resource = "activity"
+    queryset = Activity.objects.select_related("client", "opportunity", "owner").all()
+    serializer_class = ActivitySerializer
+    filter_fields = ("client", "opportunity")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        # Mesma fronteira do Contact: a Entrega só enxerga interações de clientes com projeto seu.
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: ActivitySerializer) -> None:
+        serializer.save(owner=self.request.user)
+
+
 class PipelineStageViewSet(viewsets.ModelViewSet):
     resource = "pipeline"
     queryset = PipelineStage.objects.all()
@@ -879,6 +892,34 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         journey.advance_phase(project)
         return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
 
+    @extend_schema(
+        request=inline_serializer(
+            "ApplyGate",
+            {
+                "outcome": serializers.ChoiceField(choices=ProjectPhase.GateOutcome.choices),
+                "notes": serializers.CharField(required=False, allow_blank=True),
+            },
+        ),
+        responses={200: ProjectPhaseSerializer(many=True)},
+    )
+    @action(detail=True, methods=["post"], url_path="apply-gate")
+    def apply_gate(self, request: Request, pk: str | None = None) -> Response:
+        """Registra o decision gate de quatro saídas na fase ativa (delivery/admin, FDD 033).
+
+        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as quatro saídas mexem em
+        até duas fases, e a tela precisa da lista atualizada, não do que mudou.
+        """
+        project = self.get_object()
+        outcome = str(request.data.get("outcome", "")).strip()
+        if outcome not in ProjectPhase.GateOutcome.values:
+            return Response(
+                {"detail": "Informe uma das quatro saídas: go, conditional_go, redesign, no_go."},
+                status=400,
+            )
+        notes = str(request.data.get("notes", "") or "")
+        journey.apply_gate(project, outcome, notes)
+        return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
+
     @action(detail=True, methods=["post"], url_path="next-steps")
     def next_steps(self, request: Request, pk: str | None = None) -> Response:
         project = self.get_object()
@@ -893,7 +934,7 @@ def _project_phases_qs(project: Project):  # type: ignore[no-untyped-def]
     return (
         ProjectPhase.objects.filter(project=project, archived_at__isnull=True)
         .select_related("phase")
-        .prefetch_related("deliverables")
+        .prefetch_related("deliverables", "checklist_items")
         .order_by("phase__position", "id")
     )
 
@@ -902,7 +943,7 @@ class JourneyPhaseViewSet(viewsets.ModelViewSet):
     """Template configurável das fases da jornada (admin). Espelha PipelineStage."""
 
     resource = "journey"
-    queryset = JourneyPhase.objects.prefetch_related("deliverables").all()
+    queryset = JourneyPhase.objects.prefetch_related("deliverables", "checklist_items").all()
     serializer_class = JourneyPhaseSerializer
     permission_classes = [RolePermission]
 
@@ -938,12 +979,22 @@ class PhaseDeliverableViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     filter_fields = ("phase",)
 
 
+class PhaseChecklistItemViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    """Template do checklist de qualidade de cada fase (admin, FDD 033)."""
+
+    resource = "journey"
+    queryset = PhaseChecklistItem.objects.select_related("phase").all()
+    serializer_class = PhaseChecklistItemSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("phase",)
+
+
 class ProjectPhaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """Estado da jornada por projeto (leitura para todos; equipe edita `target_date`)."""
 
     resource = "project_phase"
     queryset = ProjectPhase.objects.select_related("phase", "project").prefetch_related(
-        "deliverables"
+        "deliverables", "checklist_items"
     )
     serializer_class = ProjectPhaseSerializer
     filter_fields = ("project",)
@@ -976,6 +1027,23 @@ class ProjectDeliverableViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
         "project_phase", "project_phase__project"
     )
     serializer_class = ProjectDeliverableSerializer
+    filter_fields = ("project_phase",)
+
+    def scoped_project(self, validated_data: dict) -> Project | None:
+        phase = validated_data.get("project_phase")
+        return phase.project if phase is not None else None
+
+
+class ProjectChecklistItemViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """Checklist de qualidade por projeto — a equipe confere item a item (delivery/admin)."""
+
+    resource = "project_checklist_item"
+    project_path = "project_phase__project"  # o item não carrega o projeto direto
+    scope_payload_field = "project_phase"
+    queryset = ProjectChecklistItem.objects.select_related(
+        "project_phase", "project_phase__project"
+    )
+    serializer_class = ProjectChecklistItemSerializer
     filter_fields = ("project_phase",)
 
     def scoped_project(self, validated_data: dict) -> Project | None:
@@ -1554,6 +1622,20 @@ class DecisaoViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
     # interno e a publicada é a que o cliente vê. Sem ele, revisar a extração da IA obrigaria a
     # trazer as duas listas juntas e separá-las no navegador.
     filter_fields = ("project", "status")
+
+
+class RiscoViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    resource = "risco"
+    queryset = Risco.objects.select_related("project", "owner").all()
+    serializer_class = RiscoSerializer
+    filter_fields = ("project",)
+    # `status` vai em `filter_exact_fields` e não em `filter_fields`: aquele só aplica o filtro
+    # quando o valor é dígito (é para chave estrangeira), e um `?status=open` cairia no chão sem
+    # erro nenhum — a lista voltaria inteira, e a tela mostraria risco encerrado como aberto.
+    filter_exact_fields = ("status",)
+
+    def create_kwargs(self) -> dict:
+        return {"owner": self.request.user}
 
 
 class LeadViewSet(ArchiveModelViewSet):

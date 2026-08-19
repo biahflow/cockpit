@@ -219,6 +219,7 @@ KB_SOURCES: tuple[tuple[str, str, str], ...] = (
     ("docs/rfcs", Kind.REFERENCE, "produto"),
     ("docs/runbooks", Kind.PROCEDURE, "operacao"),
     ("docs/architecture.md", Kind.REFERENCE, "produto"),
+    ("docs/metodologia-fde.md", Kind.REFERENCE, "entrega"),
     ("docs/operacao.md", Kind.PROCEDURE, "operacao"),
     ("docs/captacao-de-leads.md", Kind.REFERENCE, "comercial"),
     ("PRD.md", Kind.REFERENCE, "produto"),

@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, CircleDollarSign, Download, FileText, GripVertical, Plus, RotateCcw, Save, SlidersHorizontal, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
+import { ArrowRight, CalendarDays, CircleDollarSign, Download, FileText, GripVertical, MessageSquareText, Plus, RotateCcw, Save, SlidersHorizontal, Sparkles, Trash2, UploadCloud, X } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import { api, documentDownloadUrl } from "../api";
@@ -6,10 +6,12 @@ import { useAuth } from "../auth";
 import { AgentPanel } from "../components/AgentPanel";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
-import type { Client, Contact, DocumentEntry, Opportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
+import type { Activity, ActivityKind, Client, Contact, DocumentEntry, Opportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const blankDraft = { title: "", client: "", estimated_value: "", stage: "", expected_close_date: "", service: "" };
+const blankActivity = { kind: "call" as ActivityKind, happened_on: new Date().toISOString().slice(0, 10), summary: "", notes: "" };
+const activityKindLabels: Record<ActivityKind, string> = { call: "Ligação", meeting: "Reunião", email: "E-mail", note: "Nota" };
 
 export function CommercialPage() {
   const { user, aiEnabled } = useAuth();
@@ -30,6 +32,8 @@ export function CommercialPage() {
   const [detailDraft, setDetailDraft] = useState({ title: "", scope: "", estimated_value: "", expected_close_date: "", contact: "", stage: "", service: "" });
   const [detailContacts, setDetailContacts] = useState<Contact[]>([]);
   const [detailDocs, setDetailDocs] = useState<DocumentEntry[]>([]);
+  const [detailActivities, setDetailActivities] = useState<Activity[]>([]);
+  const [activityDraft, setActivityDraft] = useState(blankActivity);
   const [archiving, setArchiving] = useState<Opportunity | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -45,11 +49,24 @@ export function CommercialPage() {
   async function openDetail(item: Opportunity) {
     setDetail(item);
     setDetailDraft({ title: item.title, scope: item.scope, estimated_value: item.estimated_value, expected_close_date: item.expected_close_date, contact: item.contact ? String(item.contact) : "", stage: String(item.stage), service: item.service ? String(item.service) : "" });
-    setDetailContacts([]); setDetailDocs([]); setAiText("");
+    setDetailContacts([]); setDetailDocs([]); setDetailActivities([]); setActivityDraft(blankActivity); setAiText("");
     try {
-      const [contacts, docs] = await Promise.all([api<Contact[]>(`/contacts/?client=${item.client}`), api<DocumentEntry[]>(`/documents/?opportunity=${item.id}`)]);
-      setDetailContacts(contacts); setDetailDocs(docs);
+      const [contacts, docs, activities] = await Promise.all([api<Contact[]>(`/contacts/?client=${item.client}`), api<DocumentEntry[]>(`/documents/?opportunity=${item.id}`), api<Activity[]>(`/activities/?opportunity=${item.id}`)]);
+      setDetailContacts(contacts); setDetailDocs(docs); setDetailActivities(activities);
     } catch (cause) { setError((cause as Error).message); }
+  }
+  async function createDetailActivity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!detail) return;
+    try {
+      await api("/activities/", { method: "POST", body: JSON.stringify({ client: detail.client, opportunity: detail.id, ...activityDraft }) });
+      setActivityDraft(blankActivity);
+      setDetailActivities(await api<Activity[]>(`/activities/?opportunity=${detail.id}`));
+    } catch (cause) { setError((cause as Error).message); }
+  }
+  async function archiveDetailActivity(activity: Activity) {
+    if (!detail) return;
+    try { await api(`/activities/${activity.id}/`, { method: "DELETE" }); setDetailActivities(await api<Activity[]>(`/activities/?opportunity=${detail.id}`)); }
+    catch (cause) { setError((cause as Error).message); }
   }
   async function saveDetail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!detail) return;
@@ -163,6 +180,24 @@ export function CommercialPage() {
         <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><FileText className="size-4 text-accent" />Documentos</h3>
         {detailDocs.length ? <div className="mt-3 divide-y">{detailDocs.map(doc => <div className="flex items-center gap-3 py-2" key={doc.id}><FileText className="size-4 shrink-0 text-slate-600" /><span className="min-w-0 flex-1 truncate text-sm text-ink">{doc.original_name}</span>{doc.drive_link && <a className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:text-accent" href={doc.drive_link} target="_blank" rel="noreferrer" aria-label={`Abrir ${doc.original_name} no Drive`}>Drive</a>}<a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-accent" href={documentDownloadUrl(doc.id)} aria-label={`Baixar ${doc.original_name}`}><Download className="size-4" /></a></div>)}</div> : <p className="mt-3 text-sm text-slate-600">Nenhum documento vinculado.</p>}
         <form className="mt-3 flex gap-2" onSubmit={event => void uploadDetailDoc(event)}><input className="field" type="file" ref={detailFile} aria-label="Arquivo da oportunidade" /><button className="btn btn--icon" aria-label="Enviar documento" type="submit"><UploadCloud className="size-4" /></button></form>
+      </div>
+      <div className="mt-6 border-t pt-5">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><MessageSquareText className="size-4 text-accent" />Interações</h3>
+        {detailActivities.length ? <div className="panel-rows mt-3">{detailActivities.map(activity => <div className="row" key={activity.id}>
+          <div className="row-main">
+            <strong>{activity.summary}</strong>
+            <span>{activity.kind_display} · {new Date(`${activity.happened_on}T12:00:00`).toLocaleDateString("pt-BR")}</span>
+            {activity.notes && <span>{activity.notes}</span>}
+          </div>
+          {user?.role !== "delivery" && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar interação: ${activity.summary}`} onClick={() => void archiveDetailActivity(activity)}><Trash2 className="size-4" /></button>}
+        </div>)}</div> : <p className="mt-3 text-sm text-slate-600">Nenhuma interação registrada.</p>}
+        {user?.role !== "delivery" && <form className="form-grid mt-3" onSubmit={event => void createDetailActivity(event)}>
+          <label className="form-label">Tipo<select className="field" value={activityDraft.kind} onChange={event => setActivityDraft({ ...activityDraft, kind: event.target.value as ActivityKind })}>{Object.entries(activityKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="form-label">Data<input className="field" type="date" value={activityDraft.happened_on} onChange={event => setActivityDraft({ ...activityDraft, happened_on: event.target.value })} required /></label>
+          <label className="form-label sm:col-span-2">Resumo<input className="field" value={activityDraft.summary} onChange={event => setActivityDraft({ ...activityDraft, summary: event.target.value })} placeholder="Do que se tratou o contato" required /></label>
+          <label className="form-label sm:col-span-2">Notas<textarea className="field min-h-20" value={activityDraft.notes} onChange={event => setActivityDraft({ ...activityDraft, notes: event.target.value })} placeholder="Opcional" /></label>
+          <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Registrar interação</button>
+        </form>}
       </div>
       {aiEnabled && <div className="mt-6 border-t pt-5">
         <div className="flex flex-wrap items-center gap-2"><Sparkles className="size-4 text-accent" /><h3 className="text-sm font-semibold text-ink">IA</h3><button type="button" className="btn btn--secondary ml-auto" onClick={() => void runAi("summary")} disabled={aiBusy}>Resumir</button><button type="button" className="btn btn--secondary" onClick={() => void runAi("proposal")} disabled={aiBusy}>Gerar proposta</button><button type="button" className="btn btn--secondary" onClick={() => void runAi("contract")} disabled={aiBusy}>Gerar contrato</button></div>

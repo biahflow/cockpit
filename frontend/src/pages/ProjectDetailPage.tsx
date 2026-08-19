@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, Sparkles, Trash2, Trophy, Video, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, listUsers } from "../api";
@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -15,6 +15,22 @@ const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_pr
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
 const blankMeeting = { title: "", date: "", meeting_url: "", recording_url: "", transcript: "" };
 const employeeStatusLabel: Record<DigitalEmployeeStatus, string> = { building: "Em construção", active: "Ativo", paused: "Pausado" };
+const gateLabel: Record<GateOutcome, string> = { go: "GO", conditional_go: "CONDITIONAL GO", redesign: "REDESIGN", no_go: "NO-GO" };
+// Variante, nunca a cor: uma segunda definição de "aprovado" diverge da primeira em silêncio
+// (ADR 0026). CONDITIONAL GO e REDESIGN dividem o âmbar porque os dois dizem a mesma coisa ao
+// olho — "seguiu, mas há dívida" —, e só o NO-GO é o vermelho de fato.
+const gateVariant: Record<GateOutcome, string> = { go: "state--1", conditional_go: "state--2", redesign: "state--2", no_go: "state--3" };
+// Risk Register (FDD 034). "Aceito" é **neutro**, não verde: conviver com o risco é uma decisão
+// consciente, e não um problema resolvido — a mesma leitura que faz "Arquivado" usar `state--off`.
+const riscoNivelLabel: Record<RiscoNivel, { probabilidade: string; impacto: string }> = {
+  low: { probabilidade: "Baixa", impacto: "Baixo" },
+  medium: { probabilidade: "Média", impacto: "Médio" },
+  high: { probabilidade: "Alta", impacto: "Alto" },
+};
+const riscoStatusLabel: Record<RiscoStatus, string> = { open: "Aberto", mitigated: "Mitigado", accepted: "Aceito", materialized: "Materializado" };
+const riscoStatusVariant: Record<RiscoStatus, string> = { open: "state--2", mitigated: "state--1", accepted: "state--off", materialized: "state--3" };
+const riscoNiveis: RiscoNivel[] = ["low", "medium", "high"];
+const riscoStatuses: RiscoStatus[] = ["open", "mitigated", "accepted", "materialized"];
 const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", kpi_unit: "" as KpiUnit, kpi_direction: "up" as KpiDirection, kpi_baseline: "", kpi_current: "", hours_saved_month: "", roi_month: "" };
 const kpiUnits: { value: KpiUnit; label: string }[] = [
   { value: "", label: "Sem unidade" }, { value: "percent", label: "Percentual (%)" },
@@ -39,6 +55,8 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [pendencias, setPendencias] = useState<Pendencia[]>([]);
   const [decisoes, setDecisoes] = useState<Decisao[]>([]);
+  const [riscos, setRiscos] = useState<Risco[]>([]);
+  const [archivingRisco, setArchivingRisco] = useState<Risco | null>(null);
   const [phases, setPhases] = useState<ProjectPhase[]>([]);
   const [error, setError] = useState("");
   const [milestoneDraft, setMilestoneDraft] = useState({ title: "", due_date: "" });
@@ -46,6 +64,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [meetingDraft, setMeetingDraft] = useState(blankMeeting);
   const [pendenciaDraft, setPendenciaDraft] = useState<{ title: string; party: Party }>({ title: "", party: "provider" });
   const [decisaoDraft, setDecisaoDraft] = useState({ title: "", rationale: "", decided_by: "" });
+  const [riscoDraft, setRiscoDraft] = useState<{ title: string; probability: RiscoNivel; impact: RiscoNivel; mitigation: string }>({ title: "", probability: "medium", impact: "medium", mitigation: "" });
   const [services, setServices] = useState<Service[]>([]);
   const [risk, setRisk] = useState<RiskAssessment>();
   const [health, setHealth] = useState<HealthAssessment>();
@@ -74,11 +93,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
     api<Meeting[]>(`/meetings/?project=${id}`),
     api<Pendencia[]>(`/pendencias/?project=${id}`),
     api<Decisao[]>(`/decisoes/?project=${id}`),
+    api<Risco[]>(`/riscos/?project=${id}`),
     api<ProjectPhase[]>(`/project-phases/?project=${id}`),
     api<HealthAssessment>(`/projects/${id}/health/`),
     api<ProjectMember[]>(`/project-members/?project=${id}`),
-  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedDecisoes, loadedPhases, loadedHealth, loadedMembers]) => {
-    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setDecisoes(loadedDecisoes); setPhases(loadedPhases); setHealth(loadedHealth); setMembers(loadedMembers);
+  ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedDecisoes, loadedRiscos, loadedPhases, loadedHealth, loadedMembers]) => {
+    setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setDecisoes(loadedDecisoes); setRiscos(loadedRiscos); setPhases(loadedPhases); setHealth(loadedHealth); setMembers(loadedMembers);
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
 
@@ -100,8 +120,27 @@ export function ProjectDetailPage({ id }: { id: number }) {
     void api<DigitalEmployeeBlueprint[]>(`/digital-employee-blueprints/?active=1${query}`).then(setCatalog).catch(() => setCatalog([]));
   }, [vertical, canManageJourney]);
 
+  // Os dois gates da FDD 033 recusam com **409 e mensagem** ("faltam 2 itens", "registre o
+  // decision gate"): limpar o erro antes de tentar é o que faz a recusa anterior sumir quando ela
+  // deixa de valer, em vez de acusar um bloqueio que já foi resolvido.
   async function advancePhase() {
+    setError("");
     try { const updated = await api<ProjectPhase[]>(`/projects/${id}/advance-phase/`, { method: "POST" }); setPhases(updated); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function applyGate(outcome: GateOutcome, notes: string) {
+    setError("");
+    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/apply-gate/`, { method: "POST", body: JSON.stringify({ outcome, notes }) }); setPhases(updated); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function toggleChecklistItem(itemId: number, checked: boolean) {
+    setError("");
+    try { await api(`/project-checklist-items/${itemId}/`, { method: "PATCH", body: JSON.stringify({ checked }) }); await refreshPhases(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function saveChecklistWaiver(phaseId: number, waiver: string) {
+    setError("");
+    try { await api(`/project-phases/${phaseId}/`, { method: "PATCH", body: JSON.stringify({ checklist_waiver: waiver }) }); await refreshPhases(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function refreshPhases() {
@@ -172,6 +211,23 @@ export function ProjectDetailPage({ id }: { id: number }) {
   async function toggleDecisao(decisaoId: number, isPublished: boolean) {
     try { await api(`/decisoes/${decisaoId}/`, { method: "PATCH", body: JSON.stringify({ status: isPublished ? "draft" : "published" }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
+  }
+  async function createRisco(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try { await api("/riscos/", { method: "POST", body: JSON.stringify({ project: id, ...riscoDraft }) }); setRiscoDraft({ title: "", probability: "medium", impact: "medium", mitigation: "" }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  // O estado do risco entra por seleção e não por alternador: são quatro saídas e três delas
+  // encerram por motivos diferentes — mitigado, aceito e materializado não são sinônimos, e um
+  // botão de dois estados obrigaria a inventar uma ordem entre eles.
+  async function setRiscoStatus(riscoId: number, status: RiscoStatus) {
+    try { await api(`/riscos/${riscoId}/`, { method: "PATCH", body: JSON.stringify({ status }) }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function archiveRisco() {
+    if (!archivingRisco) return;
+    try { await api(`/riscos/${archivingRisco.id}/`, { method: "DELETE" }); setArchivingRisco(null); await load(); }
+    catch (cause) { setArchivingRisco(null); setError((cause as Error).message); }
   }
   async function extrairDecisoes(meeting: Meeting) {
     setAiLoading(true);
@@ -340,6 +396,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
       confirmLabel="Arquivar" busy={employeeBusy}
       onCancel={() => setArchivingEmployee(null)} onConfirm={() => void archiveEmployee()}
     />}
+    {archivingRisco && <ConfirmDialog
+      title="Arquivar risco"
+      message={<>O risco <strong className="text-ink">{archivingRisco.title}</strong> sai do registro do projeto e do contexto do agente de Entrega. Nada é apagado — arquivar é o caminho para o que foi registrado por engano; o que aconteceu de verdade se marca como <strong className="text-ink">Materializado</strong>.</>}
+      confirmLabel="Arquivar"
+      onCancel={() => setArchivingRisco(null)} onConfirm={() => void archiveRisco()}
+    />}
     {archivingProject && <ConfirmDialog
       title="Arquivar projeto"
       message={<>O projeto <strong className="text-ink">{project.name}</strong> sai das listagens ativas, junto com o que pende dele. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
@@ -366,7 +428,14 @@ export function ProjectDetailPage({ id }: { id: number }) {
       <button className="btn self-start" type="submit"><Save className="size-4" />Salvar projeto</button>
     </form>}
 
-    <JourneySection phases={phases} canManage={canManageJourney} onAdvance={() => void advancePhase()} onMark={id => void markDeliverable(id)} onSetTarget={(phaseId, date) => void setPhaseTarget(phaseId, date)} />
+    <JourneySection
+      phases={phases} canManage={canManageJourney}
+      onAdvance={() => void advancePhase()} onMark={id => void markDeliverable(id)}
+      onSetTarget={(phaseId, date) => void setPhaseTarget(phaseId, date)}
+      onToggleChecklist={(itemId, checked) => void toggleChecklistItem(itemId, checked)}
+      onSaveWaiver={(phaseId, waiver) => void saveChecklistWaiver(phaseId, waiver)}
+      onApplyGate={(outcome, notes) => void applyGate(outcome, notes)}
+    />
 
     {health && <div className="flex items-center gap-2 text-sm"><span className="font-medium text-slate-600">Saúde do projeto:</span><HealthBadge level={health.level} score={health.score} />{health.signals.length === 0 && <span className="text-slate-600">sem sinais de alerta</span>}</div>}
 
@@ -503,7 +572,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
 
         O selo diz o que o cliente vê. Rascunho é interno — é o que a extração por IA grava, e é o
         que faz um palpite de modelo não alcançar a tela do cliente antes de alguém olhar. */}
-    <div className="grid gap-5">
+    <div className="grid gap-5 lg:grid-cols-2">
       <WorkColumn icon={<Scale className="size-4" />} title="Decisões" count={decisoes.length}>
         <form className="grid gap-3" onSubmit={event => void createDecisao(event)}>
           <input className="field" placeholder="O que foi decidido" value={decisaoDraft.title} onChange={event => setDecisaoDraft({ ...decisaoDraft, title: event.target.value })} required />
@@ -524,6 +593,37 @@ export function ProjectDetailPage({ id }: { id: number }) {
             </div>
           </div>;
         })}</div> : <p className="empty-state">Nenhuma decisão registrada.</p>}
+      </WorkColumn>
+
+      {/* Risk Register (FDD 034). Ao lado das Decisões porque são o mesmo tipo de registro: o que
+          a equipe sabe e não cabe em marco nem em tarefa. E abaixo dos "Sinais de atraso" porque
+          aquele painel é o risco **calculado** — o que já escorregou — e este é o declarado, o que
+          ainda não aconteceu e por isso ainda dá para evitar. */}
+      <WorkColumn icon={<ShieldAlert className="size-4" />} title="Riscos" count={riscos.length}>
+        <form className="grid gap-3" onSubmit={event => void createRisco(event)}>
+          <input className="field" placeholder="O que pode dar errado" value={riscoDraft.title} onChange={event => setRiscoDraft({ ...riscoDraft, title: event.target.value })} required />
+          <div className="flex gap-2">
+            <select className="field min-w-0 flex-1" aria-label="Probabilidade do risco" value={riscoDraft.probability} onChange={event => setRiscoDraft({ ...riscoDraft, probability: event.target.value as RiscoNivel })}>{riscoNiveis.map(nivel => <option key={nivel} value={nivel}>Probabilidade {riscoNivelLabel[nivel].probabilidade.toLowerCase()}</option>)}</select>
+            <select className="field min-w-0 flex-1" aria-label="Impacto do risco" value={riscoDraft.impact} onChange={event => setRiscoDraft({ ...riscoDraft, impact: event.target.value as RiscoNivel })}>{riscoNiveis.map(nivel => <option key={nivel} value={nivel}>Impacto {riscoNivelLabel[nivel].impacto.toLowerCase()}</option>)}</select>
+            <button className="btn btn--icon" aria-label="Adicionar risco" type="submit"><Plus className="size-4" /></button>
+          </div>
+          <textarea className="field min-h-20" placeholder="Plano de mitigação — o que se faz para o risco não virar fato" value={riscoDraft.mitigation} onChange={event => setRiscoDraft({ ...riscoDraft, mitigation: event.target.value })} />
+        </form>
+        {riscos.length ? <div className="divide-y">{riscos.map(risco => <div className="py-3" key={risco.id}>
+          <div className="flex items-start gap-3">
+            <span className="metric-icon shrink-0"><ShieldAlert className="size-4" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ink">{risco.title}</p>
+              <p className="mt-0.5 text-xs text-slate-600">Probabilidade {riscoNivelLabel[risco.probability].probabilidade.toLowerCase()} · impacto {riscoNivelLabel[risco.impact].impacto.toLowerCase()}</p>
+              <p className="mt-0.5 text-xs text-slate-600">{risco.mitigation || "Sem mitigação registrada"}</p>
+            </div>
+            <span className={`state shrink-0 ${riscoStatusVariant[risco.status]}`}>{riscoStatusLabel[risco.status]}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+            <select className="field w-auto" aria-label={`Estado de ${risco.title}`} value={risco.status} onChange={event => void setRiscoStatus(risco.id, event.target.value as RiscoStatus)}>{riscoStatuses.map(estado => <option key={estado} value={estado}>{riscoStatusLabel[estado]}</option>)}</select>
+            <button type="button" className="btn btn--secondary btn--secondary-danger" aria-label={`Arquivar ${risco.title}`} onClick={() => setArchivingRisco(risco)}><Trash2 className="size-3.5" />Arquivar</button>
+          </div>
+        </div>)}</div> : <p className="empty-state">Nenhum risco registrado.</p>}
       </WorkColumn>
     </div>
   </section>;
@@ -555,12 +655,26 @@ function AiScorePanel({ project, canManage, onTogglePublish }: { project: Projec
   </section>;
 }
 
-function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget }: { phases: ProjectPhase[]; canManage: boolean; onAdvance: () => void; onMark: (id: number) => void; onSetTarget: (phaseId: number, date: string) => void }) {
+type JourneySectionProps = {
+  phases: ProjectPhase[]; canManage: boolean;
+  onAdvance: () => void; onMark: (id: number) => void;
+  onSetTarget: (phaseId: number, date: string) => void;
+  onToggleChecklist: (itemId: number, checked: boolean) => void;
+  onSaveWaiver: (phaseId: number, waiver: string) => void;
+  onApplyGate: (outcome: GateOutcome, notes: string) => void;
+};
+
+function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onToggleChecklist, onSaveWaiver, onApplyGate }: JourneySectionProps) {
+  const [gateNotes, setGateNotes] = useState("");
+  const [waiverDraft, setWaiverDraft] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<GateOutcome | null>(null);
   if (!phases.length) return null;
   const done = phases.filter(phase => phase.status === "done").length;
   const active = phases.find(phase => phase.status === "active");
   const next = active ? phases.find(phase => phase.phase_position > active.phase_position) : undefined;
   const pct = Math.round((done / phases.length) * 100);
+  const checklist = active?.checklist_items ?? [];
+  const pending = checklist.filter(item => !item.checked).length;
 
   return <section className="panel space-y-5 sm:p-6">
     <div className="flex flex-wrap items-center gap-3">
@@ -573,7 +687,12 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget }: {
 
     <div className="flex flex-wrap gap-2">{phases.map(phase => {
       const isDone = phase.status === "done"; const isActive = phase.status === "active";
-      return <span key={phase.id} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "state--1" : isActive ? "bg-ink text-white" : "state--off"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>;
+      return <span key={phase.id} className="inline-flex items-center gap-1.5">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "state--1" : isActive ? "bg-ink text-white" : "state--off"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>
+        {/* O selo do gate acompanha a fase e não some quando ela fecha: é o registro de *como* a
+            jornada passou por ali — inclusive na fase que o REDESIGN trancou. */}
+        {phase.gate_outcome && <span className={`state ${gateVariant[phase.gate_outcome]}`} title={phase.gate_notes || undefined}>{gateLabel[phase.gate_outcome]}</span>}
+      </span>;
     })}</div>
 
     {active ? <div className="rounded-2xl border bg-slate-50/60 p-4 sm:p-5">
@@ -593,11 +712,58 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget }: {
         })}</div>
       </div>}
 
+      {checklist.length > 0 && <div className="mt-4">
+        {/* O quality gate (FDD 033). Distinto dos entregáveis logo acima: aquilo é o que sai da
+            fase, isto é a condição para que possa sair — e é só isto que trava a conclusão. */}
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Checklist de qualidade · {checklist.length - pending}/{checklist.length}</p>
+        <div className="divide-y">{checklist.map(item => <div className="flex items-center gap-3 py-2.5" key={item.id}>
+          <button className={`shrink-0 ${item.checked ? "text-emerald-600 hover:text-ink" : canManage ? "text-slate-300 hover:text-accent" : "text-slate-200"}`} aria-label={item.checked ? `Desmarcar ${item.text}` : `Marcar ${item.text}`} disabled={!canManage} onClick={() => onToggleChecklist(item.id, !item.checked)}>{item.checked ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
+          <span className={`flex-1 text-sm font-medium ${item.checked ? "text-slate-600 line-through" : "text-ink"}`}>{item.text}</span>
+        </div>)}</div>
+        {canManage && pending > 0 && <div className="mt-3 grid gap-2">
+          {/* Concluir com pendência é legítimo; fazê-lo em silêncio não é. A justificativa é o
+              que o backend aceita no lugar dos itens que faltam. */}
+          <label className="form-label">Justificativa para concluir com {pending} item(ns) pendente(s)
+            <textarea className="field min-h-16" placeholder="Por que esta fase pode fechar sem o checklist completo?" value={waiverDraft ?? active.checklist_waiver} onChange={event => setWaiverDraft(event.target.value)} />
+          </label>
+          <button type="button" className="btn btn--secondary justify-self-start" onClick={() => { onSaveWaiver(active.id, waiverDraft ?? active.checklist_waiver); setWaiverDraft(null); }}><Save className="size-4" />Registrar justificativa</button>
+        </div>}
+      </div>}
+
+      {active.requires_gate && canManage && <div className="mt-4 rounded-2xl border border-dashed p-4">
+        {/* O decision gate de quatro saídas (ADR 0030, FDD 033). As quatro ficam lado a lado
+            porque a metodologia pede uma escolha entre elas, não um "avançar" com ressalva
+            escondida atrás de um menu. */}
+        <p className="eyebrow">Decision gate</p>
+        <p className="mt-1 text-sm text-slate-600">Esta fase termina em decisão. REDESIGN reabre a fase anterior; NO-GO para a jornada aqui.</p>
+        <label className="form-label mt-3">Ressalvas, motivo ou condições
+          <textarea className="field min-h-16" placeholder="O que pesou na decisão — obrigatório na prática para CONDITIONAL GO, REDESIGN e NO-GO" value={gateNotes} onChange={event => setGateNotes(event.target.value)} />
+        </label>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className="btn" onClick={() => onApplyGate("go", gateNotes)}><CheckCircle2 className="size-4" />GO</button>
+          <button type="button" className="btn btn--secondary" onClick={() => onApplyGate("conditional_go", gateNotes)}>CONDITIONAL GO</button>
+          <button type="button" className="btn btn--secondary" onClick={() => setConfirming("redesign")}>REDESIGN</button>
+          <button type="button" className="btn btn--secondary btn--secondary-danger" onClick={() => setConfirming("no_go")}>NO-GO</button>
+        </div>
+      </div>}
+
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
         {canManage ? <label className="grid gap-1 text-xs font-medium text-slate-600">Previsão desta fase<input className="field w-44" type="date" value={active.target_date ?? ""} onChange={event => onSetTarget(active.id, event.target.value)} /></label> : active.target_date ? <p className="text-sm text-slate-600">Previsão: {formatDate(active.target_date)}</p> : <span />}
+        {/* O botão de avançar continua onde estava, e é ele que encosta nos dois gates: quando a
+            fase exige decisão ou tem checklist pendente, o 409 do backend vira o alerta da página. */}
         {canManage && <button type="button" className="btn" onClick={onAdvance}><CheckCircle2 className="size-4" />Concluir fase e avançar</button>}
       </div>
     </div> : <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700"><Trophy className="size-5 shrink-0" />Jornada de transformação concluída — todas as fases entregues.</div>}
+
+    {confirming && <ConfirmDialog
+      title={confirming === "redesign" ? "Registrar REDESIGN" : "Registrar NO-GO"}
+      message={confirming === "redesign"
+        ? <>A fase <strong className="text-ink">{active?.phase_name}</strong> volta para <strong className="text-ink">a fase anterior</strong>, que é reaberta para ser testada de novo. A decisão e o motivo ficam registrados nesta fase.</>
+        : <>A jornada <strong className="text-ink">para nesta fase</strong>. Nada é apagado e a fase continua em andamento — o que muda é o registro de que a hipótese não se sustentou.</>}
+      confirmLabel={confirming === "redesign" ? "Registrar REDESIGN" : "Registrar NO-GO"}
+      onCancel={() => setConfirming(null)}
+      onConfirm={() => { onApplyGate(confirming, gateNotes); setConfirming(null); }}
+    />}
   </section>;
 }
 

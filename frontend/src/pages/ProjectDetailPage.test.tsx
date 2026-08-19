@@ -34,6 +34,7 @@ function stub() {
     if (path.startsWith("/meetings")) return Promise.resolve([{ id: 1, project: 1, title: "Kickoff", date: "2026-08-05", recording_url: "https://rec/1", transcript: "Cliente descreveu suas dores.", status: "held" }]);
     if (path.startsWith("/pendencias")) return Promise.resolve([{ id: 1, project: 1, title: "Aprovar escopo", description: "", status: "open", party: "client", owner: null, resolved_at: null }]);
     if (path.startsWith("/decisoes")) return Promise.resolve([{ id: 1, project: 1, title: "Adotar fila gerenciada", rationale: "Custa menos que o Memorystore.", decided_on: "2026-08-06", decided_by: "Marina", status: "draft", source_meeting: 1, published_at: null }]);
+    if (path.startsWith("/riscos")) return Promise.resolve([{ id: 1, project: 1, title: "ERP do cliente pode atrasar a carga", description: "", probability: "high", impact: "medium", mitigation: "Janela alternativa negociada com o TI.", status: "open", owner: 2, resolved_at: null }]);
     if (path.startsWith("/project-members")) return Promise.resolve([{ id: 7, project: 1, user: 3, user_name: "Ana Lima", user_username: "ana", user_role: "delivery", added_by: 1, created_at: "2026-08-05T10:00:00Z" }]);
     return Promise.resolve([]);
   });
@@ -453,6 +454,68 @@ test("a decisão em rascunho aparece marcada como tal, e publicar é um clique",
     "/decisoes/1/",
     expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "published" }) }),
   ));
+});
+
+// --- Risk Register (FDD 034) ------------------------------------------------
+//
+// O painel "Sinais de atraso" logo acima é o risco **calculado** — o que já escorregou. Este é o
+// declarado: o que a equipe teme e ainda não aconteceu, que é o único momento em que mitigar
+// ainda é possível. Os dois convivem na mesma tela e não se substituem.
+
+test("o risco declarado aparece com probabilidade, impacto e mitigação", async () => {
+  stub();
+  render(<ProjectDetailPage id={1} />);
+
+  expect(await screen.findByText("ERP do cliente pode atrasar a carga")).toBeTruthy();
+  expect(screen.getByText("Probabilidade alta · impacto médio")).toBeTruthy();
+  expect(screen.getByText("Janela alternativa negociada com o TI.")).toBeTruthy();
+  expect(mocks.api).toHaveBeenCalledWith("/riscos/?project=1");
+});
+
+test("registra um risco novo com os dois eixos", async () => {
+  const user = userEvent.setup();
+  stub();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Projeto X");
+
+  await user.type(screen.getByPlaceholderText("O que pode dar errado"), "Equipe do cliente indisponível");
+  await user.selectOptions(screen.getByLabelText("Probabilidade do risco"), "low");
+  await user.selectOptions(screen.getByLabelText("Impacto do risco"), "high");
+  await user.type(screen.getByPlaceholderText("Plano de mitigação — o que se faz para o risco não virar fato"), "Antecipar as entrevistas.");
+  await user.click(screen.getByLabelText("Adicionar risco"));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/riscos/", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ project: 1, title: "Equipe do cliente indisponível", probability: "low", impact: "high", mitigation: "Antecipar as entrevistas." }),
+  })));
+});
+
+test("encerrar o risco é uma escolha entre quatro saídas, não um alternador", async () => {
+  // Mitigado, aceito e materializado não são sinônimos: o primeiro resolveu, o segundo decidiu
+  // conviver, o terceiro aconteceu. Um botão de dois estados obrigaria a inventar ordem entre eles.
+  const user = userEvent.setup();
+  stub();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("ERP do cliente pode atrasar a carga");
+
+  await user.selectOptions(screen.getByLabelText("Estado de ERP do cliente pode atrasar a carga"), "materialized");
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/riscos/1/", expect.objectContaining({
+    method: "PATCH", body: JSON.stringify({ status: "materialized" }),
+  })));
+});
+
+test("arquivar o risco pede confirmação", async () => {
+  const user = userEvent.setup();
+  stub();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("ERP do cliente pode atrasar a carga");
+
+  await user.click(screen.getByLabelText("Arquivar ERP do cliente pode atrasar a carga"));
+  expect(screen.getByText("Arquivar risco")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/riscos/1/", expect.objectContaining({ method: "DELETE" })));
 });
 
 test("extrair decisões da transcrição chama a reunião, não a decisão", async () => {
