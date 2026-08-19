@@ -41,6 +41,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Agendamento (qualificação IA + booking pelo site) | `AI_ENABLED`+`CALENDAR_ENABLED`, `GOOGLE_BOOKING_CALENDAR_ID`, `BOOKING_MIN_FIT` | OpenAI + Google (free/busy) | Pronto (desligado) |
 | Assinatura eletrônica | `ESIGN_ENABLED` (default `true`), `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `ESIGN_PROVIDER` roda em registro local (`mark-signed` manual); com fornecedor nomeado, exige token e segredo do webhook |
 | Gateway de pagamento (contas a receber) | `PAYMENTS_ENABLED` (default `true`), `PAYMENTS_PROVIDER`, `PAYMENTS_API_TOKEN`, `PAYMENTS_WEBHOOK_SECRET` | conta Stripe — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `PAYMENTS_PROVIDER` roda em registro local (`mark-paid` manual); com fornecedor nomeado, exige token e segredo do webhook. **Stripe sem homologação** |
+| **Régua de cobrança** (pré-aviso, lembrete, escalada) | `DUNNING_ENABLED` (default `false`), `SCHEDULER_DUNNING_AT` (09:30), `DUNNING_MIN_DAYS_BETWEEN_CONTACTS` (5) | **nenhuma** — usa o SMTP que já está configurado | Pronto (**desligada**). Não é integração: não fala com fornecedor nenhum, e por isso não tem `requires`. Desligada por decisão declarada, e não por custo — o gateway que *desarma* a régua (a baixa por webhook) segue sem homologação, e cobrar sobre reconciliação não exercitada é cobrar quem já pagou. Ligue depois da homologação do Stripe (runbook de homologação, seção 5). Marque em cada cliente quem **recebe cobrança** (contato), senão o degrau vira aviso interno |
 | Base de conhecimento interna | `AI_ENABLED`, `OPENAI_API_KEY`, `AI_EMBEDDING_MODEL`, `KB_MIN_SIMILARITY_PERCENT`, `KB_TOP_K`, `SCHEDULER_KNOWLEDGE_AT` | mesma chave do assistente | Segue a flag `ai`. O **inventário de frescor funciona sem IA**; só a recuperação com citação exige a chave. Popular: `manage.py ingest_knowledge` |
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) — liga sozinho quando as duas variáveis estiverem preenchidas; alternável em Configurações |
 | Enriquecimento de lead (CNPJ) | `ENRICHMENT_ENABLED` (default `false`), `ENRICHMENT_PROVIDER` (default `brasilapi`), `ENRICHMENT_API_BASE`, `ENRICHMENT_TIMEOUT_SECONDS` | **nenhuma** — cadastro público | Pronto (desligado). Desligado não por custo (BrasilAPI é gratuita) e sim porque manda o CNPJ do formulário público a um terceiro. Alimenta o `ai_fit` e preenche a vertical na conversão; falha do fornecedor **nunca** bloqueia o lead |
@@ -51,8 +52,11 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Envio do backup para fora do host | `BACKUP_S3_*` | bucket compatível com S3 | Pronto (desligado) — **recomendado**: cópia no mesmo host morre com o host |
 
 > **As nove integrações** (IA, Drive, Calendário, Assinatura, Pagamento, E-mail, Sincronia de
-> tarefas, Portal do cliente e Enriquecimento de lead) podem ser ligadas/desligadas em runtime por
-> um admin na tela **Configurações**
+> tarefas, Portal do cliente e Enriquecimento de lead) — mais a **régua de cobrança**, que é a
+> primeira flag da casa que **não** é integração: ela não fala com fornecedor nenhum, e por isso
+> não tem `requires`. São dez interruptores e nove fornecedores; a diferença importa, porque a
+> régua desligada não é credencial faltando, é decisão. Todos podem ser ligados/desligados em
+> runtime por um admin na tela **Configurações**
 > (`/configuracoes`), sem redeploy. O `.env` continua sendo o default e a casa dos segredos.
 >
 > Desde a ADR 0018, **credencial faltando vence qualquer intenção**: não liga pelo toggle, nem pelo

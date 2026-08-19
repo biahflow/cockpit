@@ -1,4 +1,4 @@
-import { BarChart3, Bell, BookMarked, BookOpen, ChevronDown, FileText, FolderKanban, Inbox, LayoutDashboard, LogOut, Menu, Package, Receipt, Route, Settings, Trophy, Users, UsersRound, WalletCards } from "lucide-react";
+import { BarChart3, Bell, BookMarked, BookOpen, ChevronDown, FileText, FolderKanban, HandCoins, Inbox, LayoutDashboard, LogOut, Menu, Package, Receipt, Route, Settings, Trophy, Users, UsersRound, WalletCards } from "lucide-react";
 import { type ComponentType, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useEscape } from "../a11y";
@@ -22,6 +22,10 @@ const links: NavLink[] = [
   // Vendas lê o recebível do próprio cliente; emitir, baixar e cancelar são de admin, e o
   // backend recusa (FDD 028). A Entrega não alcança nem a leitura — nem o link, nem a rota.
   ["/financeiro", "Financeiro", Receipt, ["admin", "sales"]],
+  // Mesmo recorte do Financeiro logo acima, e pela mesma razão (FDD 036): `resource = "cobranca"`
+  // é só-leitura para Vendas — que acompanha o que a casa disse ao cliente dela, mas não manda
+  // cobrança — e fechado para a Entrega, que não alcança o recebível nem para ler.
+  ["/cobranca", "Cobrança", HandCoins, ["admin", "sales"]],
   // Sem restrição de papel, de propósito: o dono de uma área pode ser de qualquer papel, e
   // avisá-lo sobre uma peça que ele não consegue abrir seria um laço quebrado (FDD 029).
   ["/conhecimento", "Conhecimento", BookOpen],

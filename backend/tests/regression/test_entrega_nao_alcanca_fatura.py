@@ -80,3 +80,21 @@ def test_vendas_le_e_nao_escreve():
         f"/api/v1/invoices/{fatura.id}/", {"amount": "1.00"}, format="json"
     ).status_code == 403
     assert api.post(f"/api/v1/invoices/{fatura.id}/issue/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_entrega_toma_403_em_toda_rota_de_cobranca(cenario):
+    """A régua herda a fronteira da fatura (FDD 036), pelo mesmo mecanismo: `cobranca` e
+    `cobranca_suspensao` não aparecem em nenhum conjunto da Entrega, e o `return False` do fim
+    produz o 403. Quem não alcança o recebível não alcança o que a casa disse sobre ele.
+
+    Vale para as ações penduradas na fatura também — elas são `resource = "invoice"`, então já
+    estavam fechadas; a asserção existe porque um `permission_classes` próprio numa action futura
+    reabriria o caminho sem tocar em `RolePermission`.
+    """
+    api, fatura, _ = cenario
+    assert api.get("/api/v1/cobranca/").status_code == 403
+    assert api.get("/api/v1/cobranca/suspensoes/").status_code == 403
+    assert api.post("/api/v1/cobranca/suspensoes/", {}, format="json").status_code == 403
+    for rota in ("cobranca/rascunhar", "cobranca/enviar"):
+        assert api.post(f"/api/v1/invoices/{fatura.id}/{rota}/").status_code == 403

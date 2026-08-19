@@ -124,3 +124,78 @@ def test_agregador_nao_cresce_com_a_base(api: APIClient, url: str) -> None:
         f"{url} emitiu mais queries com 4× a base — o custo cresce com o número de "
         f"clientes/projetos (N+1). Carregue em lote em vez de consultar dentro do laço."
     )
+
+
+# --- O painel de cobrança (FDD 036) -------------------------------------------------------------
+#
+# Fora da lista `AGGREGATES` de propósito, e não por esquecimento: o `seed` daquele bloco não cria
+# fatura nenhuma, então o painel responderia vazio e a constância seria provada sobre lista vazia —
+# o teste mais tranquilizador e mais inútil disponível. Dar faturas ao `seed` compartilhado, por sua
+# vez, mudaria a base das outras cinco rotas por uma razão que não é delas. Semente própria, então.
+
+
+def seed_cobranca(clients: int) -> None:
+    """Semeia a forma que o painel percorre, com **todas** as dimensões pré-carregadas ocupadas.
+
+    Cada uma existe porque uma dimensão vazia não exercita a pré-carga dela: sem suspensão, um
+    `suspensao_ativa` por fatura passaria despercebido; sem fatura paga, o total recebido; sem
+    contato gasto, o teto e a idempotência. É o mesmo motivo de o `seed` de cima dar filhos a cada
+    projeto.
+    """
+    from apps.core.models import CobrancaContato, CobrancaSuspensao, Contact, Invoice
+    from apps.core.tests.factories import InvoiceFactory
+
+    hoje = timezone.localdate()
+    for _ in range(clients):
+        client = ClientFactory()
+        project = ProjectFactory(client=client, due_date=hoje - timedelta(days=1))
+        Milestone.objects.create(
+            project=project, title="Marco", due_date=hoje - timedelta(days=1), owner=project.owner
+        )
+        Contact.objects.create(
+            client=client, name="Financeiro", email="fin@cliente.test", receives_billing=True
+        )
+        sequencial = Invoice.objects.count()
+        atrasada = InvoiceFactory(
+            client=client, project=project, status=Invoice.Status.OVERDUE,
+            number=f"2026-{sequencial + 1:05d}", due_date=hoje - timedelta(days=12),
+        )
+        InvoiceFactory(
+            client=client, project=project, status=Invoice.Status.ISSUED,
+            number=f"2026-{sequencial + 2:05d}", due_date=hoje - timedelta(days=3),
+        )
+        InvoiceFactory(
+            client=client, status=Invoice.Status.PAID, number=f"2026-{sequencial + 3:05d}",
+            due_date=hoje - timedelta(days=200),
+            paid_at=timezone.now() - timedelta(days=190),
+        )
+        CobrancaContato.objects.create(
+            invoice=atrasada, client=client, degrau="lembrete",
+            canal=CobrancaContato.Canal.EMAIL, sent_on=hoje - timedelta(days=30),
+            subject="Fatura em aberto", body="...",
+        )
+        CobrancaSuspensao.objects.create(
+            invoice=atrasada, owner=client.owner, until=hoje - timedelta(days=1),
+            reason="Suspensão vencida, para a régua ter voltado sozinha.",
+        )
+
+
+def test_o_painel_de_cobranca_nao_cresce_com_a_base(api: APIClient) -> None:
+    """`avaliar` faz quatro perguntas ao banco por fatura — suspensão, reincidência, degrau gasto e
+    teto —, e o painel é um laço sobre faturas: sem pré-carga são quatro N+1 simultâneos.
+
+    A asserção é comparativa pelo mesmo motivo do bloco de cima: sobrevive a refatoração que mude o
+    número absoluto e continua reprovando exatamente a inclinação.
+    """
+    seed_cobranca(clients=3)
+    baseline = count_queries(api, "/api/v1/cobranca/painel/")
+
+    seed_cobranca(clients=9)  # 4× a base: 3 → 12 clientes, 6 → 24 faturas cobráveis
+    from apps.core.models import Invoice
+
+    assert Invoice.objects.filter(status__in=("issued", "overdue")).count() == 24
+
+    assert count_queries(api, "/api/v1/cobranca/painel/") == baseline, (
+        "/api/v1/cobranca/painel/ emitiu mais queries com 4× a base — o custo cresce com o "
+        "número de faturas (N+1). Carregue em lote com `cobranca.contexto_do_painel`."
+    )

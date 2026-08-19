@@ -366,6 +366,20 @@ SCHEDULER_BACKUP_CHECK_AT = os.getenv("SCHEDULER_BACKUP_CHECK_AT", "09:00")
 # **Antes** do digest das 07:30, e a ordem é o ponto: quem lê o dia — tela, resumo, qualquer aviso
 # futuro — precisa encontrar o vencimento já apurado, não a apurar.
 SCHEDULER_INVOICES_AT = os.getenv("SCHEDULER_INVOICES_AT", "06:00")
+# **Depois** do vencimento das 06:00, e a ordem é a entrega: a régua pergunta "que degrau cabe
+# hoje?" ao estado da fatura, e rodar antes da apuração faria o D+1 ser lido como D+0. Às 09:30
+# porque cobrança é conversa de horário comercial — a RFC 0004 pede "teto duro de frequência e de
+# horário", e um e-mail de cobrança na madrugada é lido como robô hostil.
+SCHEDULER_DUNNING_AT = os.getenv("SCHEDULER_DUNNING_AT", "09:30")
+# A régua de cobrança (FDD 036, camada 3 da RFC 0004). **Nasce desligada, e não por custo nem por
+# credencial**: os dois pressupostos da RFC não se cumpriram — a medição pedida ("olhar dois ou
+# três meses") tem doze dias, e o gateway que *desarma* a régua nunca foi homologado. Construir
+# não é ligar. Ver a seção "O pressuposto que não se cumpriu" da FDD 036.
+DUNNING_ENABLED = _env_bool("DUNNING_ENABLED", False)
+# Um contato por cliente a cada N dias, somando todas as faturas dele. Quem tem três vencidas
+# recebe um e-mail, não três: três e-mails no mesmo minuto é a forma mais rápida de um sistema de
+# cobrança parecer um robô hostil, e a relação custa mais que a fatura.
+DUNNING_MIN_DAYS_BETWEEN_CONTACTS = _env_int("DUNNING_MIN_DAYS_BETWEEN_CONTACTS", 5)
 # Depois do digest, para não competir por atenção com ele, e antes do alerta de backup. Em horário
 # comercial de propósito: quem age sobre conhecimento vencido é gente, não um plantão.
 SCHEDULER_KNOWLEDGE_AT = os.getenv("SCHEDULER_KNOWLEDGE_AT", "08:00")

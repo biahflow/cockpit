@@ -140,6 +140,17 @@ def jobs() -> list[Job]:
             schedule=Daily(_parse_at(settings.SCHEDULER_INVOICES_AT, time(6, 0))),
             description="Fatura emitida com vencimento passado vira vencida (FDD 028)",
         ),
+        # **Depois** do vencimento das 06:00, e a ordem é a entrega: a régua pergunta "que degrau
+        # cabe hoje?" ao estado atual da fatura, e rodar antes da apuração leria D+1 como D+0.
+        # Pode não mandar nada — fim de semana, teto de frequência, suspensão e degrau já gasto são
+        # todos "não hoje" —, e isso é sucesso, não falha (ADR 0031). A regra da flag mora em
+        # `cobranca.executar`, como a do digest e a do calendário: esta tabela não a duplica.
+        Job(
+            name="dunning",
+            command="run_dunning",
+            schedule=Daily(_parse_at(settings.SCHEDULER_DUNNING_AT, time(9, 30))),
+            description="Régua de cobrança: o degrau que cabe hoje (FDD 036)",
+        ),
         Job(
             name="knowledge_freshness",
             command="check_knowledge_freshness",

@@ -11,6 +11,7 @@ a responder somente com base no material fornecido.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -20,7 +21,7 @@ from django.utils import timezone
 from . import flags
 
 if TYPE_CHECKING:
-    from .models import Lead, Meeting, Opportunity, Project, User
+    from .models import Activity, Invoice, Lead, Meeting, Opportunity, Project, User
 
 # Limite de caracteres da transcrição enviada ao modelo (controle de tokens/custo).
 MEETING_TRANSCRIPT_LIMIT = 12000
@@ -371,3 +372,102 @@ def complete(system: str, user: str, max_tokens: int | None = None) -> tuple[str
             "completion_tokens": getattr(usage, "completion_tokens", 0),
         },
     )
+
+
+def build_cobranca_context(invoice: Invoice, degrau: str = "", hoje: date | None = None) -> str:
+    """O contexto do rascunho de tom (FDD 036, camada 4 da RFC 0004).
+
+    **A cerca comercial é a razão de esta função existir separada**, e não de o prompt ser montado
+    na view. A RFC 0004 é literal: *"O valor da fatura é do cliente por direito; custo e margem
+    **nunca** saem."* Então o que entra aqui é o que o cliente já sabe (quanto, quando venceu, há
+    quantos dias) mais o que a casa precisa para escolher o **tom** — tempo de relação, se há
+    entrega atrasada e o **nível** de saúde da entrega.
+
+    Três ausências deliberadas, e cada uma é um vazamento que não acontece:
+
+    1. **`actual_value`, ROI e `roi_snapshot` não entram.** São a receita e o retorno como a *casa*
+       os calcula, e um parágrafo de cobrança que os cita entrega o número interno junto com a
+       cobrança. É o mesmo corte que `_case_lines` já faz com o `roi_snapshot` de terceiro.
+    2. **Nível de health, nunca o score nem os sinais.** "atenção" é o que ajusta o tom; "62/100,
+       2 entregas atrasadas" é a nossa medição da nossa própria falha, e ela não é assunto de um
+       e-mail de cobrança.
+    3. **Nenhuma fatura de outro cliente.** Tudo aqui pende desta fatura e deste cliente.
+
+    O corpus interno fica de fora de graça: `grounding` só é preenchido pelo `AgentView`, e o ponto
+    de injeção é único (FDD 029).
+    """
+    from . import cobranca
+    from . import health as health_module
+    from .models import Milestone, Task
+
+    dia = hoje or timezone.localdate()
+    client = invoice.client
+    dias = (dia - invoice.due_date).days
+    lines = [
+        f"Hoje é {dia}.",
+        f"Cliente: {client.name}",
+        f"Fatura: {invoice.number or 'sem número'}",
+        f"Valor: {invoice.amount}",
+        f"Vencimento: {invoice.due_date}",
+        (
+            f"Dias de atraso: {dias}"
+            if dias >= 0
+            else f"Ainda não venceu: faltam {-dias} dia(s)."
+        ),
+    ]
+    if invoice.description:
+        lines.append(f"Referente a: {invoice.description}")
+    if degrau:
+        lines.append(f"Degrau da régua: {degrau}")
+    anos = cobranca.tempo_de_casa_dias(client, dia) // 365
+    lines.append(
+        f"Tempo de casa: {anos} ano(s) completo(s)" if anos else "Tempo de casa: menos de um ano"
+    )
+    lines.append(
+        "Histórico: já atrasou antes."
+        if cobranca.reincidente(client, dia, ignorando=invoice)
+        else "Histórico: nunca atrasou antes."
+    )
+    project = invoice.project
+    if project is not None:
+        # **Só o nível.** Ver a razão 2 no docstring.
+        lines.append(f"Saúde da entrega: {health_module.assess_project_health(project)['level']}")
+        atrasados = sum(
+            1
+            for item in [
+                *Milestone.objects.filter(project=project, archived_at__isnull=True),
+                *Task.objects.filter(project=project, archived_at__isnull=True),
+            ]
+            if item.is_overdue
+        )
+        # Se a casa está devendo entrega, cobrar com tom firme é pedir para ouvir sobre o atraso
+        # dela — e quem redige precisa saber disso antes de escrever, não depois da resposta.
+        lines.append(
+            f"Entregas atrasadas neste projeto: {atrasados}"
+            if atrasados
+            else "Não há entrega atrasada neste projeto."
+        )
+    return "\n".join(lines)
+
+
+def build_resposta_de_cobranca_context(activity: Activity) -> str:
+    """O que a pessoa que atendeu registrou sobre a resposta do cliente (FDD 036).
+
+    Só a `Activity` e a fatura a que ela se refere. Classificar não precisa de mais que isso, e
+    tudo o que sobrasse aqui seria contexto de cliente entrando num prompt sem razão declarada.
+    """
+    lines = [
+        f"Cliente: {activity.client.name}",
+        f"Tipo de interação: {activity.get_kind_display()}",
+        f"Data: {activity.happened_on}",
+        f"Resumo: {activity.summary}",
+    ]
+    if activity.notes:
+        lines.append(f"Detalhes: {activity.notes}")
+    invoice = activity.invoice
+    if invoice is not None:
+        lines.append(
+            f"Fatura em questão: {invoice.number or 'sem número'}, {invoice.amount}, "
+            f"vencimento {invoice.due_date}, situação {invoice.get_status_display()}"
+        )
+    return "\n".join(lines)

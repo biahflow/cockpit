@@ -103,6 +103,11 @@ class Contact(TimestampedModel):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
     job_title = models.CharField(max_length=128, blank=True)
+    # Quem recebe cobrança neste cliente (FDD 036). **Default `False`, e é a decisão que importa:**
+    # a régua fala de dinheiro, e chutar o destinatário é o erro caro. Sem ninguém marcado, o
+    # degrau não vira e-mail ao cliente — vira escalada interna com o motivo escrito, que é o
+    # "cala quando não sabe" que a casa já usa no enriquecimento de lead (FDD 030).
+    receives_billing = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["name"]
@@ -652,9 +657,31 @@ class Activity(TimestampedModel):
         EMAIL = "email", "E-mail"
         NOTE = "note", "Nota"
 
+    class CobrancaSinal(models.TextChoices):
+        """Os três problemas que a mesma régua estraga (RFC 0004, camada 4).
+
+        Não é sentimento nem etiqueta de CRM: cada valor manda para um lugar diferente.
+        `esqueceu` já se resolveu com o lembrete; `nao_pode` pede renegociação, e cedo;
+        `insatisfeito` não é problema de cobrança — é problema de relação disfarçado, e insistir
+        piora tudo. A IA **grava o sinal e não age** (ADR 0031).
+        """
+
+        ESQUECEU = "esqueceu", "Esqueceu"
+        NAO_PODE = "nao_pode", "Não pôde pagar"
+        INSATISFEITO = "insatisfeito", "Insatisfeito"
+
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="activities")
     opportunity = models.ForeignKey(
         Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    )
+    # A resposta do cliente à cobrança chega por aqui, digitada por quem atendeu (FDD 036).
+    # `SET_NULL` como `Artifact.project`: a interação aconteceu, e sobrevive à fatura sumir do
+    # rascunho. Vazio na esmagadora maioria das interações, que não falam de dinheiro.
+    invoice = models.ForeignKey(
+        "Invoice", on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    )
+    cobranca_sinal = models.CharField(
+        max_length=16, choices=CobrancaSinal.choices, blank=True, default=""
     )
     kind = models.CharField(max_length=16, choices=Kind.choices)
     happened_on = models.DateField()
@@ -673,6 +700,11 @@ class Activity(TimestampedModel):
     def clean(self) -> None:
         if self.opportunity_id and self.opportunity and self.opportunity.client_id != self.client_id:
             raise ValidationError({"opportunity": "A oportunidade deve pertencer ao mesmo cliente."})
+        # Mesma checagem para a fatura, e pela mesma razão que a da oportunidade: sem ela, uma
+        # resposta de cobrança pode ficar pendurada na fatura de **outro** cliente — e é essa
+        # linha que a tela de cobrança lê para decidir o próximo passo.
+        if self.invoice_id and self.invoice and self.invoice.client_id != self.client_id:
+            raise ValidationError({"invoice": "A fatura deve pertencer ao mesmo cliente."})
 
 
 class Service(TimestampedModel):
@@ -1438,6 +1470,148 @@ class Invoice(TimestampedModel):
         mostraria "em aberto" para quem já venceu — e quem olha recebível não perdoa essa hora.
         """
         return self.status == self.Status.ISSUED and self.due_date < timezone.localdate()
+
+
+class CobrancaContato(TimestampedModel):
+    """O que a casa **já disse** sobre uma fatura vencida (FDD 036, camada 3 da RFC 0004).
+
+    Não é fila e não é agenda: é registro do que saiu. A régua é derivada do estado atual da
+    fatura (`cobranca.degrau_devido`), e este modelo só responde "este degrau já foi gasto?".
+    A diferença importa — uma fila de mensagens agendadas pode ser ultrapassada pelo pagamento,
+    e é assim que se cobra quem pagou de manhã (ADR 0031).
+
+    **`invoice` é `PROTECT` e não `CASCADE`.** A prova de que a casa cobrou não pode sumir com a
+    fatura: sem isto, apagar um rascunho apagaria junto o histórico de comunicação sobre ele, e a
+    pergunta "nós importunamos este cliente?" deixaria de ter resposta exatamente no caso em que
+    alguém quer escondê-la.
+
+    **`client` é desnormalizado de propósito.** O teto de frequência é por cliente somando *todas*
+    as faturas dele; sem esta coluna a consulta viraria um `JOIN` por avaliação de degrau, dentro
+    de um laço sobre faturas.
+
+    **Nunca arquiva**, pela mesma razão e com a mesma `CheckConstraint` da `Invoice` (ADR 0021):
+    é registro de comunicação sobre dinheiro, e esconder da lista sem desfazer o fato é pior que
+    apagar.
+    """
+
+    class Degrau(models.TextChoices):
+        PRE_AVISO = "pre_aviso", "Pré-aviso"
+        LEMBRETE = "lembrete", "Lembrete"
+        FIRME = "firme", "Cobrança firme"
+        ESCALADA = "escalada", "Escalada interna"
+        RENEGOCIACAO = "renegociacao", "Renegociação"
+
+    class Canal(models.TextChoices):
+        EMAIL = "email", "E-mail ao cliente"
+        INTERNO = "interno", "Aviso interno"
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="cobrancas")
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="cobrancas")
+    degrau = models.CharField(max_length=16, choices=Degrau.choices)
+    canal = models.CharField(max_length=8, choices=Canal.choices)
+    # **Data e não carimbo de relógio**, ao contrário de `Invoice.paid_at`. Toda regra da régua é
+    # aritmética de dias sobre o vencimento, e o comando aceita `--hoje` para exercício
+    # determinístico: gravar `now()` faria o teto de frequência comparar o dia simulado com o dia
+    # real e a régua se comportaria diferente em teste e no ar. O relógio de parede continua
+    # gravado — é o `created_at` herdado.
+    sent_on = models.DateField()
+    subject = models.CharField(max_length=255, blank=True, default="")
+    # Vazio quando o degrau é interno. Texto e não `EmailField` porque um degrau pode ir a mais de
+    # um contato de cobrança do mesmo cliente, e a prova é a lista inteira.
+    to_email = models.TextField(blank=True, default="")
+    # O texto que de fato saiu. É a prova, e é por isso que ele mora aqui e não é recomposto do
+    # template: a constante de código muda com o tempo, o que o cliente leu não muda.
+    body = models.TextField(blank=True, default="")
+    # Nulo = automático (o job). Preenchido = uma pessoa apertou enviar. Os dois caminhos até aqui
+    # são deliberados (ADR 0031) e se distinguem no registro, senão "quanto da nossa cobrança é
+    # automática?" vira arqueologia.
+    sent_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Preenchida só quando o texto veio de um rascunho de IA revisado por gente.
+    ai_interaction = models.ForeignKey(
+        AiInteraction, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-sent_on", "-id"]
+        indexes = [models.Index(fields=["client", "sent_on"])]
+        constraints = [
+            # **A idempotência do degrau mora aqui, e não numa guarda em Python.** Duas execuções
+            # no mesmo dia, ou o job e uma pessoa ao mesmo tempo, param no banco em vez de
+            # dependerem de quem leu antes.
+            models.UniqueConstraint(
+                fields=["invoice", "degrau"], name="unique_cobranca_degrau_por_fatura"
+            ),
+            models.CheckConstraint(
+                condition=Q(archived_at__isnull=True), name="cobranca_contato_is_never_archived"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_degrau_display()} — {self.client.name} ({self.sent_on})"
+
+
+class CobrancaSuspensao(TimestampedModel):
+    """Recuar, declarado (FDD 036, RFC 0004 "Segurança").
+
+    Suspender a cobrança de quem está insatisfeito ou de quem esperou uma entrega atrasada é a
+    regra certa e, nas palavras da RFC, *"a que mais apodrece na prática: vira desculpa para nunca
+    cobrar, e o recebível estraga invisível"*. Por isso ela é **linha no banco com dono, prazo e
+    motivo obrigatórios**, e não um `if` num relatório: dono para alguém responder por ela, prazo
+    para ela expirar sozinha, motivo para a próxima pessoa saber o que se combinou.
+
+    Vale para uma fatura **ou** para o cliente inteiro — exatamente um dos dois, no molde de
+    `Document.clean()`. Uma suspensão que valesse para os dois níveis ao mesmo tempo teria duas
+    leituras possíveis de "levantar", e a errada devolve a cobrança a quem ainda não devia ouvi-la.
+    """
+
+    invoice = models.ForeignKey(
+        Invoice, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
+    )
+    client = models.ForeignKey(
+        Client, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
+    )
+    # `PROTECT` e obrigatório: suspensão sem dono é a suspensão que apodrece. Apagar a conta de
+    # quem suspendeu não pode deixar a decisão órfã.
+    owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="cobrancas_suspensas")
+    # Inclusivo: a régua volta a falar no dia seguinte a `until`.
+    until = models.DateField()
+    reason = models.TextField()
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Encerrada antes do prazo, por gente. Não é "pular silencioso": tem autor e carimbo, e é o
+    # único jeito de desfazer uma suspensão criada por engano sem esperar o prazo inteiro.
+    lifted_at = models.DateTimeField(null=True, blank=True)
+    lifted_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-until", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(archived_at__isnull=True), name="cobranca_suspensao_is_never_archived"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        alvo = self.invoice or self.client
+        return f"Suspensão até {self.until} — {alvo}"
+
+    def clean(self) -> None:
+        links = [self.invoice_id, self.client_id]
+        if sum(value is not None for value in links) != 1:
+            raise ValidationError(
+                "A suspensão vale para exatamente uma fatura ou para um cliente."
+            )
+        if not (self.reason or "").strip():
+            raise ValidationError({"reason": "Diga por que a cobrança está suspensa."})
+
+    @property
+    def is_active(self) -> bool:
+        return self.lifted_at is None and self.until >= timezone.localdate()
 
 
 class KnowledgeArea(models.Model):

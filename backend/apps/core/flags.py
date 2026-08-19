@@ -158,6 +158,20 @@ FLAGS: dict[str, Flag] = {
         "Enriquecimento de lead (CNPJ público)",
         lambda: bool(settings.ENRICHMENT_ENABLED),
     ),
+    # Régua de cobrança (FDD 036). **Sem `requires`**, pelo precedente do `enrichment` logo acima:
+    # a régua não fala com fornecedor nenhum — ela lê fatura, escreve registro e manda e-mail pelo
+    # SMTP que a casa já usa —, então não existe variável cuja ausência denuncie falta de
+    # configuração, e cobrar uma recusaria a instalação que está certa.
+    #
+    # **E `env_default` falso**, que é o oposto do `payments` acima e merece ser lido junto: o
+    # gateway nasce ligado porque a camada 0 funciona inteira sem ele; a régua nasce desligada
+    # porque a camada 1 — a reconciliação que a *desarma* — nunca foi homologada. Ligar antes
+    # disso é cobrar quem já pagou, que é o único defeito desta funcionalidade que custa um
+    # cliente. Ver `DUNNING_ENABLED` em `config/settings.py`.
+    "cobranca": Flag(
+        "Régua de cobrança",
+        lambda: bool(settings.DUNNING_ENABLED),
+    ),
 }
 
 

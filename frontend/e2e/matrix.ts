@@ -30,6 +30,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/biblioteca", name: "Biblioteca de Funcionários Digitais", role: "admin" },
   { path: "/cases", name: "Cases", role: "admin" },
   { path: "/financeiro", name: "Financeiro", role: "admin" },
+  { path: "/cobranca", name: "Cobrança", role: "admin" },
   { path: "/conhecimento", name: "Conhecimento", role: "admin" },
   { path: "/equipe", name: "Equipe", role: "admin" },
   { path: "/configuracoes", name: "Configurações", role: "admin" },
@@ -121,6 +122,10 @@ const FIXTURES: Record<string, unknown> = {
       { key: "email", label: "Notificações por e-mail e digest", enabled: true, configured: true, toggleable: true, missing: [] },
       { key: "tasksync", label: "Sincronia de tarefas (Linear/GitHub)", enabled: false, configured: true, toggleable: true, missing: [] },
       { key: "portal", label: "Portal do cliente", enabled: true, configured: true, toggleable: true, missing: [] },
+      // A régua de cobrança (FDD 036), **desligada e sem credencial faltando** — que é a
+      // combinação que nenhuma outra linha desta fixture exercita: as outras desligadas devem
+      // isso a variável ausente, e esta é a única cujo `enabled: false` é uma decisão.
+      { key: "cobranca", label: "Régua de cobrança", enabled: false, configured: true, toggleable: true, missing: [] },
     ],
   },
   "/api/v1/dashboard/": {
@@ -248,6 +253,61 @@ const FIXTURES: Record<string, unknown> = {
     provider: "", external_reference: "", payment_url: index === 2 ? "https://pay.example.test/i/2" : "",
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   })),
+  // A régua de cobrança (FDD 036). `regua_ligada: false` **é o estado que o produto entrega**: a
+  // flag nasce desligada porque a reconciliação que a desarma nunca foi homologada. É também o que
+  // rende mais superfície nova para o axe medir — a faixa de aviso neutro e os botões desabilitados
+  // com o motivo à vista, que é o texto mais longo desta tela.
+  //
+  // Uma linha por motivo de silêncio, mais uma com degrau: o `motivo` é o que a tela traduz, e um
+  // mock com um só valor aprovaria quatro textos que nunca renderizaram.
+  "/api/v1/cobranca/painel/": [
+    { motivo: "", degrau: "lembrete", rotulo: "Lembrete", dias: 4, suspensa: false },
+    { motivo: "suspensa", degrau: null, rotulo: null, dias: 12, suspensa: true },
+    { motivo: "degrau_gasto", degrau: null, rotulo: null, dias: 3, suspensa: false },
+    { motivo: "teto_de_frequencia", degrau: null, rotulo: null, dias: 21, suspensa: false },
+    { motivo: "sem_degrau", degrau: null, rotulo: null, dias: -2, suspensa: false },
+  ].map((caso, indice) => ({
+    invoice: indice + 1, number: `2026-00${indice + 1}0`, client: 1, client_name: NOME_LONGO,
+    amount: "48750.90", due_date: VENCIDO,
+    status: caso.dias > 0 ? "overdue" : "issued",
+    status_display: caso.dias > 0 ? "Vencida" : "Emitida",
+    dias_de_atraso: caso.dias, payment_url: indice === 0 ? "https://pay.example.test/i/1" : "",
+    proximo_degrau: caso.degrau, proximo_degrau_display: caso.rotulo,
+    proximo_degrau_em: caso.degrau ? HOJE : null,
+    motivo: caso.motivo,
+    // A terceira linha vai sem projeto de propósito: "sem projeto ligado à fatura" é conteúdo de
+    // verdade na tela e precisa ser medido junto com o resto.
+    health_level: indice === 2 ? null : ["crítico", "atenção", "crítico", "saudável", "atenção"][indice],
+    tempo_de_casa_dias: [1460, 200, 45, 20, 900][indice],
+    reincidente: indice % 2 === 1,
+    regua: indice === 0 || indice === 4 ? "relacao_longa" : "padrao",
+    recebido_do_cliente: "180000.00",
+    suspensao: caso.suspensa
+      ? { id: 1, until: "2026-09-30", owner: 1, owner_name: "Maria de Lourdes Albuquerque" }
+      : null,
+    regua_ligada: false,
+  })),
+  "/api/v1/cobranca/": serie(2, index => ({
+    id: index, invoice: 1, invoice_number: "2026-0010", client: 1, client_name: NOME_LONGO,
+    degrau: index === 1 ? "pre_aviso" : "lembrete",
+    degrau_display: index === 1 ? "Pré-aviso" : "Lembrete",
+    canal: "email", canal_display: "E-mail ao cliente", sent_on: HOJE,
+    subject: `Fatura 2026-0010 em aberto — ${NOME_LONGO}`,
+    to_email: "financeiro@empresa.test", body: "Olá, passando para lembrar…",
+    sent_by: index === 1 ? null : 1, ai_interaction: null, created_at: `${HOJE}T09:00:00Z`,
+  })),
+  // A interação com sinal de cobrança lavrado (FDD 036, camada 4): sem ela a linha do sinal na
+  // timeline do cliente nunca renderiza, e a matriz aprovaria uma superfície que não abriu.
+  "/api/v1/activities/": serie(3, index => ({
+    id: index, client: 1, opportunity: null,
+    invoice: index === 1 ? 1 : null,
+    cobranca_sinal: index === 1 ? "nao_pode" : "",
+    cobranca_sinal_display: index === 1 ? "Não pôde pagar" : "",
+    kind: "call", kind_display: "Ligação", happened_on: HOJE,
+    summary: `Retorno do financeiro sobre a fatura em aberto — ${NOME_LONGO}`,
+    notes: "Pediu para reprogramar o pagamento para o próximo ciclo de faturamento.",
+    owner: 1, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  })),
   "/api/v1/knowledge-pieces/": serie(5, index => ({
     id: index, area: 1, area_name: "Operação",
     owner_name: index === 5 ? "" : "Maria de Lourdes Albuquerque",
@@ -361,6 +421,9 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/contacts/": serie(4, index => ({
     id: index, client: 1, name: `Pessoa de contato ${index}`,
     email: `pessoa${index}@empresa.test`, phone: "(11) 98888-0000", job_title: "Gerente de operações",
+    // Um marcado e três não: o selo "Recebe cobrança" (FDD 036) precisa renderizar, e a linha sem
+    // ele é a maioria dos contatos de verdade.
+    receives_billing: index === 1,
   })),
   "/api/v1/artifacts/": serie(4, index => ({
     id: index, kind: "proposal", kind_display: "Proposta", status: "draft",

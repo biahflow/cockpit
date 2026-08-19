@@ -25,12 +25,20 @@ export type Analytics = {
 };
 export type ClientStatus = "prospect" | "active";
 export type Client = { id: number; name: string; legal_name: string; tax_id: string; owner: number; status: ClientStatus; vertical: number | null; vertical_name: string };
-export type Contact = { id: number; client: number; name: string; email: string; phone: string; job_title: string };
+// `receives_billing` marca quem recebe cobrança (FDD 036). Sem ninguém marcado, o degrau **não**
+// vira e-mail ao cliente: vira escalada interna com o motivo escrito — a casa cala quando não sabe
+// em vez de chutar o destinatário de um e-mail sobre dinheiro.
+export type Contact = { id: number; client: number; name: string; email: string; phone: string; job_title: string; receives_billing: boolean };
 // Interação comercial com o cliente (FDD 035, ADR 0030) — a materialização das "Activities" do
 // CRM na leitura FDE. `opportunity` é opcional e, quando preenchida, tem de ser do mesmo cliente
 // (o backend recusa com 400; ver `docs/metodologia-fde.md`).
 export type ActivityKind = "call" | "meeting" | "email" | "note";
-export type Activity = { id: number; client: number; opportunity: number | null; kind: ActivityKind; kind_display: string; happened_on: string; summary: string; notes: string; owner: number | null; created_at: string; updated_at: string };
+// `cobranca_sinal` é lavrado por `POST /activities/{id}/classificar/` e é **só de leitura** aqui: a
+// IA grava o sinal e não age (ADR 0031). Os três valores roteiam condutas diferentes — `esqueceu` já
+// se resolveu com o lembrete, `nao_pode` pede renegociação, `insatisfeito` não é problema de
+// cobrança e é onde insistir piora tudo.
+export type CobrancaSinal = "" | "esqueceu" | "nao_pode" | "insatisfeito";
+export type Activity = { id: number; client: number; opportunity: number | null; invoice: number | null; cobranca_sinal: CobrancaSinal; cobranca_sinal_display: string; kind: ActivityKind; kind_display: string; happened_on: string; summary: string; notes: string; owner: number | null; created_at: string; updated_at: string };
 export type WorkItemStatus = "todo" | "in_progress" | "done";
 export type Party = "provider" | "client";
 export type Milestone = { id: number; project: number; title: string; description: string; owner: number; due_date: string; completed_at: string | null; status: WorkItemStatus; party: Party; is_overdue: boolean };
@@ -134,6 +142,34 @@ export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "renegotia
 export type InvoiceMethod = "pix" | "boleto" | "card" | "transfer" | "other" | "";
 export type Invoice = { id: number; client: number; client_name: string; project: number | null; project_name: string; service: number | null; service_name: string; number: string; amount: string; description: string; due_date: string; method: InvoiceMethod; method_display: string; status: InvoiceStatus; status_display: string; is_overdue: boolean; issued_at: string | null; issued_by: number | null; paid_at: string | null; settled_by: number | null; cancelled_at: string | null; cancelled_by: number | null; cancel_reason: string; provider: string; external_reference: string; payment_url: string; created_at: string; updated_at: string };
 export type InvoiceSummary = { open: string; overdue: string; paid: string; open_count: number; overdue_count: number; paid_count: number };
+
+// A régua de cobrança (FDD 036, ADR 0031). **Nada aqui é calculado no SPA.** Próximo degrau, régua
+// aplicada, reincidência e motivo do silêncio chegam prontos de `/cobranca/painel/` — reimplementar
+// qualquer um deles em TypeScript seria a segunda definição da régua, e as duas cópias não ficam
+// vermelhas ao divergir: elas só passam a discordar do relógio, em silêncio.
+export type CobrancaDegrau = "pre_aviso" | "lembrete" | "firme" | "escalada" | "renegociacao";
+export type CobrancaCanal = "email" | "interno";
+// Por que a régua se calou, com as mesmas constantes do backend. Vazio quando há degrau.
+export type CobrancaMotivo = "" | "suspensa" | "degrau_gasto" | "teto_de_frequencia" | "sem_degrau" | "estado_nao_cobravel";
+// `relacao_longa` é cliente de um ano de casa e sem reincidência: o lembrete atrasa, o degrau firme
+// não existe e o caso vai direto à escalada interna. Quem escolhe é o backend.
+export type CobrancaRegua = "padrao" | "relacao_longa";
+export type CobrancaSuspensaoResumo = { id: number; until: string; owner: number; owner_name: string };
+export type CobrancaPainelLinha = {
+  invoice: number; number: string; client: number; client_name: string;
+  amount: string; due_date: string; status: InvoiceStatus; status_display: string;
+  dias_de_atraso: number; payment_url: string;
+  proximo_degrau: CobrancaDegrau | null; proximo_degrau_display: string | null;
+  proximo_degrau_em: string | null; motivo: CobrancaMotivo;
+  // Só o **nível** da saúde, nunca o score nem os sinais: é a cerca comercial do backend, e a linha
+  // vai para a tela. Nulo quando a fatura não está presa a projeto nenhum.
+  health_level: HealthLevel | null; tempo_de_casa_dias: number; reincidente: boolean;
+  regua: CobrancaRegua; recebido_do_cliente: string;
+  suspensao: CobrancaSuspensaoResumo | null; regua_ligada: boolean;
+};
+export type CobrancaContato = { id: number; invoice: number; invoice_number: string; client: number; client_name: string; degrau: CobrancaDegrau; degrau_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
+export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; client: number | null; client_name: string; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };
+export type CobrancaRascunho = { text: string; interaction: number; degrau: CobrancaDegrau };
 
 // Base de conhecimento interna (FDD 029). `status` é derivado no backend — depende do dono da área
 // e do relógio —, então a tela **não** o recalcula: reproduzi-lo aqui seria a segunda expressão da

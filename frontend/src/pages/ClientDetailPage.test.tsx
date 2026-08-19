@@ -6,10 +6,23 @@ import { ClientDetailPage } from "./ClientDetailPage";
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
+  getConfig: vi.fn(),
   auth: { user: { id: 1, is_admin: true, role: "admin" } } as { user: { id: number; is_admin: boolean; role: string } },
 }));
-vi.mock("../api", () => ({ api: mocks.api }));
+vi.mock("../api", () => ({ api: mocks.api, getConfig: mocks.getConfig }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
+
+function atividade(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 9, client: 1, opportunity: null, invoice: null, cobranca_sinal: "", cobranca_sinal_display: "",
+    kind: "call", kind_display: "Ligação", happened_on: "2026-08-10", summary: "Alinhamento de escopo",
+    notes: "Cliente confirmou prazo.", owner: 1,
+    created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
+    ...overrides,
+  };
+}
+
+let atividades: unknown[] = [atividade()];
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
@@ -17,12 +30,20 @@ function stub() {
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
     if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 1, client: 1, name: "João", email: "j@x.com", phone: "", job_title: "CEO" }]);
-    if (path.startsWith("/activities")) return Promise.resolve([{ id: 9, client: 1, opportunity: null, kind: "call", kind_display: "Ligação", happened_on: "2026-08-10", summary: "Alinhamento de escopo", notes: "Cliente confirmou prazo.", owner: 1, created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z" }]);
+    if (path.startsWith("/activities")) return Promise.resolve(atividades);
+    if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     return Promise.resolve([]);
   });
 }
 
-beforeEach(() => { mocks.api.mockReset(); mocks.auth.user = { id: 1, is_admin: true, role: "admin" }; stub(); });
+beforeEach(() => {
+  mocks.api.mockReset();
+  mocks.getConfig.mockReset();
+  mocks.auth.user = { id: 1, is_admin: true, role: "admin" };
+  atividades = [atividade()];
+  mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
+  stub();
+});
 afterEach(cleanup);
 
 test("mostra cliente e seus contatos", async () => {
@@ -131,4 +152,82 @@ test("entrega não vê o formulário nem o botão de arquivar de interações", 
 
   expect(screen.queryByPlaceholderText("Do que se tratou o contato")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Arquivar interação: Alinhamento de escopo")).not.toBeInTheDocument();
+});
+
+test("classificar chama a rota e o sinal gravado volta com a conduta, não só com o selo", async () => {
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  // A segunda carga já traz o sinal lavrado pelo backend — a tela não o adivinha.
+  atividades = [atividade({ invoice: 4, cobranca_sinal: "insatisfeito", cobranca_sinal_display: "Insatisfeito" })];
+  await user.click(screen.getByLabelText("Classificar resposta: Alinhamento de escopo"));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
+    "/activities/9/classificar/", expect.objectContaining({ method: "POST" }),
+  ));
+  // O selo sozinho não muda o comportamento de ninguém: o que roteia a conduta é a linha ao lado.
+  expect(await screen.findByText(/insistir piora tudo/)).toBeInTheDocument();
+  expect(screen.getByText("Insatisfeito")).toBeInTheDocument();
+});
+
+test("a interação já classificada não oferece classificar de novo", async () => {
+  atividades = [atividade({ cobranca_sinal: "esqueceu", cobranca_sinal_display: "Esqueceu" })];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByText("Alinhamento de escopo");
+
+  expect(screen.queryByLabelText(/Classificar resposta/)).not.toBeInTheDocument();
+  expect(screen.getByText(/o lembrete já resolveu/)).toBeInTheDocument();
+});
+
+test("a tela diz, e não só o código, que a IA grava o sinal e não age", async () => {
+  render(<ClientDetailPage id={1} />);
+  await screen.findByText("Alinhamento de escopo");
+  expect(screen.getByText(/grava o sinal — não age/)).toBeInTheDocument();
+});
+
+test("com a IA desligada o botão de classificar some da tela", async () => {
+  mocks.getConfig.mockResolvedValue({ ai_enabled: false, calendar_enabled: false, esign_enabled: false, integrations: [] });
+  render(<ClientDetailPage id={1} />);
+  await screen.findByText("Alinhamento de escopo");
+
+  await waitFor(() => expect(mocks.getConfig).toHaveBeenCalled());
+  expect(screen.queryByLabelText(/Classificar resposta/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/grava o sinal — não age/)).not.toBeInTheDocument();
+});
+
+test("o 502 diz que nada foi gravado — é diferente de um palpite gravado em silêncio", async () => {
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  mocks.api.mockImplementationOnce(() => Promise.reject(
+    Object.assign(new Error("A IA não devolveu um sinal utilizável. Tente de novo."), { status: 502 }),
+  ));
+  await user.click(screen.getByLabelText("Classificar resposta: Alinhamento de escopo"));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/nada foi gravado — nenhum palpite entra no lugar/);
+});
+
+test("a interação pode responder a uma fatura, e é ela que dá contexto ao classificador", async () => {
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.type(screen.getByPlaceholderText("Do que se tratou o contato"), "Retorno sobre a fatura");
+  await user.selectOptions(await screen.findByLabelText("Responde a uma cobrança?"), "4");
+  await user.click(screen.getByRole("button", { name: "Registrar interação" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/activities/", expect.objectContaining({
+    method: "POST", body: expect.stringContaining('"invoice":4'),
+  })));
+});
+
+test("entrega não classifica nem pergunta pela flag: o recurso é fechado para ela", async () => {
+  mocks.auth.user = { id: 2, is_admin: false, role: "delivery" };
+  render(<ClientDetailPage id={1} />);
+  await screen.findByText("Alinhamento de escopo");
+
+  expect(screen.queryByLabelText(/Classificar resposta/)).not.toBeInTheDocument();
+  expect(mocks.getConfig).not.toHaveBeenCalled();
 });

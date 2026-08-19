@@ -23,6 +23,8 @@ from .models import (
     BlueprintVariant,
     Case,
     Client,
+    CobrancaContato,
+    CobrancaSuspensao,
     Contact,
     Decisao,
     DigitalEmployee,
@@ -105,18 +107,28 @@ class ClientSerializer(serializers.ModelSerializer[Client]):
 class ContactSerializer(serializers.ModelSerializer[Contact]):
     class Meta:
         model = Contact
-        fields = ["id", "client", "name", "email", "phone", "job_title", "created_at", "updated_at"]
+        fields = ["id", "client", "name", "email", "phone", "job_title", "receives_billing",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class ActivitySerializer(serializers.ModelSerializer[Activity]):
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    cobranca_sinal_display = serializers.CharField(
+        source="get_cobranca_sinal_display", read_only=True
+    )
 
     class Meta:
         model = Activity
-        fields = ["id", "client", "opportunity", "kind", "kind_display", "happened_on", "summary",
-                  "notes", "owner", "created_at", "updated_at"]
-        read_only_fields = ["id", "kind_display", "owner", "created_at", "updated_at"]
+        fields = ["id", "client", "opportunity", "invoice", "kind", "kind_display", "happened_on",
+                  "summary", "notes", "cobranca_sinal", "cobranca_sinal_display", "owner",
+                  "created_at", "updated_at"]
+        # `cobranca_sinal` é só de leitura: ele é lavrado por `POST /activities/{id}/classificar/`,
+        # que carrega a `AiInteraction` que o produziu. Um `PATCH` com o campo cru gravaria a mesma
+        # coluna sem procedência nenhuma — a distinção que a FDD 028 já fez entre "campo" e "ato"
+        # no `status` da fatura.
+        read_only_fields = ["id", "kind_display", "cobranca_sinal", "cobranca_sinal_display",
+                            "owner", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
@@ -126,6 +138,11 @@ class ActivitySerializer(serializers.ModelSerializer[Activity]):
         if opportunity and client and opportunity.client_id != client.id:
             raise serializers.ValidationError(
                 {"opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
+            )
+        invoice = cast(Invoice | None, attrs.get("invoice", getattr(self.instance, "invoice", None)))
+        if invoice and client and invoice.client_id != client.id:
+            raise serializers.ValidationError(
+                {"invoice": "A fatura deve pertencer ao mesmo cliente."}
             )
         return attrs
 
@@ -784,6 +801,66 @@ class InvoiceSerializer(serializers.ModelSerializer[Invoice]):
                 raise serializers.ValidationError(
                     {c: "Fatura emitida não se edita. Cancele e emita outra." for c in travados}
                 )
+        return attrs
+
+
+class CobrancaContatoSerializer(serializers.ModelSerializer[CobrancaContato]):
+    """O que a casa já disse sobre uma fatura (FDD 036). **Só de leitura pelo router.**
+
+    Nenhum campo é gravável aqui, e a ausência é a entrega: um `POST /cobranca/` criaria a prova de
+    um contato que não aconteceu. Contato nasce de `POST /invoices/{id}/cobranca/enviar/` ou do job
+    — os dois mandam o e-mail **antes** de gravar.
+    """
+
+    degrau_display = serializers.CharField(source="get_degrau_display", read_only=True)
+    canal_display = serializers.CharField(source="get_canal_display", read_only=True)
+    client_name = serializers.CharField(source="client.name", read_only=True)
+    invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
+
+    class Meta:
+        model = CobrancaContato
+        fields = ["id", "invoice", "invoice_number", "client", "client_name", "degrau",
+                  "degrau_display", "canal", "canal_display", "sent_on", "subject", "to_email",
+                  "body", "sent_by", "ai_interaction", "created_at"]
+        read_only_fields = fields
+
+
+class CobrancaSuspensaoSerializer(serializers.ModelSerializer[CobrancaSuspensao]):
+    """Suspender a cobrança — com dono, prazo e motivo, os três obrigatórios (RFC 0004).
+
+    A validação de "exatamente uma fatura ou um cliente" mora no `clean()` do modelo, como a do
+    `Document`, e é chamada daqui: uma suspensão que valesse para os dois níveis teria duas
+    leituras de "levantar", e a errada devolve a cobrança a quem ainda não devia ouvi-la.
+    """
+
+    client_name = serializers.CharField(source="client.name", read_only=True, default="")
+    invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
+    is_active = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = CobrancaSuspensao
+        fields = ["id", "invoice", "invoice_number", "client", "client_name", "owner", "until",
+                  "reason", "created_by", "lifted_at", "lifted_by", "is_active",
+                  "created_at", "updated_at"]
+        read_only_fields = ["id", "invoice_number", "client_name", "created_by", "lifted_at",
+                            "lifted_by", "is_active", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # Cai no que já está gravado quando o campo não veio no corpo — o molde do
+        # `ActivitySerializer` logo acima. Sem isto, um `PATCH` que só corrige o motivo montaria uma
+        # instância sem fatura nem cliente e seria recusado por "vale para exatamente uma fatura ou
+        # um cliente", que é o oposto do que a suspensão em disco diz.
+        def valor(campo: str) -> Any:
+            return attrs.get(campo, getattr(self.instance, campo, None))
+
+        instancia = CobrancaSuspensao(
+            **{campo: valor(campo) for campo in ("invoice", "client", "owner", "until")},
+            reason=str(valor("reason") or ""),
+        )
+        try:
+            instancia.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages) from exc
         return attrs
 
 
