@@ -100,6 +100,7 @@ from .models import (
     ProjectMember,
     ProjectPhase,
     Risco,
+    Satisfacao,
     Service,
     SignatureRequest,
     Task,
@@ -146,6 +147,7 @@ from .serializers import (
     ProjectPhaseSerializer,
     ProjectSerializer,
     RiscoSerializer,
+    SatisfacaoSerializer,
     ServiceSerializer,
     SignatureRequestSerializer,
     TaskSerializer,
@@ -1580,6 +1582,13 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
                 "health_level": serializers.CharField(allow_null=True),
                 "tempo_de_casa_dias": serializers.IntegerField(),
                 "reincidente": serializers.BooleanField(),
+                # A satisfação vigente (FDD 037). Os três são nulos juntos: ou há registro dentro
+                # da janela de 90 dias, ou não há nenhum. `fonte` vai junto do nível de propósito —
+                # é ela que diz se aquilo é o cliente falando ou a nossa leitura sobre ele, e é a
+                # declarada, não a percebida, que troca a régua (ADR 0032).
+                "satisfacao_nivel": serializers.CharField(allow_null=True),
+                "satisfacao_fonte": serializers.CharField(allow_null=True),
+                "satisfacao_dias": serializers.IntegerField(allow_null=True),
                 "regua": serializers.CharField(),
                 "recebido_do_cliente": serializers.DecimalField(
                     max_digits=12, decimal_places=2
@@ -1971,6 +1980,62 @@ class RiscoViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSe
 
     def create_kwargs(self) -> dict:
         return {"owner": self.request.user}
+
+
+class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
+
+    **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
+    obrigatório aqui é com o cliente e o projeto é opcional — o mixin recortaria por um campo que
+    pode estar vazio e esconderia justamente o cliente que não está mais em entrega, que é onde a
+    cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
+    por algum projeto.
+    """
+
+    resource = "satisfacao"
+    queryset = Satisfacao.objects.select_related(
+        "client", "project", "source_meeting", "registered_by"
+    ).all()
+    serializer_class = SatisfacaoSerializer
+    filter_fields = ("client", "project")
+    # `nivel` e `fonte` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
+    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?fonte=declarada`
+    # cairia no chão sem erro nenhum — a lista voltaria inteira, com a percebida junto.
+    filter_exact_fields = ("nivel", "fonte")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        # Mesma fronteira da `Activity`: a Entrega só enxerga clientes com projeto seu.
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def _assert_cliente_no_escopo(self, client: Client | None) -> None:
+        """A metade de escrita da mesma fronteira.
+
+        O `ActivityViewSet`, de quem este recorte é copiado, tem só a metade de leitura — e podia:
+        para a Entrega, `activity` é só-leitura, então nunca houve escrita a guardar. Aqui a
+        Entrega **escreve**, e sem esta guarda uma requisição bastaria para registrar satisfação
+        no cliente que a listagem esconde. É o mesmo argumento do `ProjectScopedMixin`, que cobre
+        leitura e escrita no mesmo lugar exatamente porque só a leitura é contornável.
+
+        A pergunta sai de `visible_to` (ADR 0010), a única expressão da regra.
+        """
+        user = self.request.user
+        if user.is_admin_role or user.role != User.Role.DELIVERY:
+            return
+        if client is None or not Project.objects.visible_to(user).filter(client=client).exists():
+            raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
+
+    def perform_create(self, serializer: SatisfacaoSerializer) -> None:
+        self._assert_cliente_no_escopo(serializer.validated_data.get("client"))
+        serializer.save(registered_by=self.request.user)
+
+    def perform_update(self, serializer: SatisfacaoSerializer) -> None:
+        # Só quando o corpo tenta *mudar* o cliente — o caminho inverso, que o
+        # `ProjectScopedMixin` também fecha: mover um registro próprio para um cliente alheio.
+        if "client" in serializer.validated_data:
+            self._assert_cliente_no_escopo(serializer.validated_data.get("client"))
+        super().perform_update(serializer)
 
 
 class LeadViewSet(ArchiveModelViewSet):

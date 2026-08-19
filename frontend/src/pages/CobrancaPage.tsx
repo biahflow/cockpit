@@ -4,9 +4,9 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api, getConfig } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog, Modal } from "../components/Modal";
-import { healthBadgeClass } from "../components/StatusDot";
+import { healthBadgeClass, satisfacaoBadgeClass } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
-import type { CobrancaContato, CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, SessionUser } from "../types";
+import type { CobrancaContato, CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, SatisfacaoFonte, SatisfacaoNivel, SessionUser } from "../types";
 
 /**
  * A tela onde se decide o próximo passo da cobrança (FDD 036, critério de aceite 7).
@@ -35,7 +35,33 @@ const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDate
 const REGUA: Record<CobrancaRegua, string> = {
   padrao: "régua padrão",
   relacao_longa: "régua de relação longa",
+  // O rótulo descreve a régua, não julga o cliente (FDD 037, ADR 0032): quem está "tensa" é a
+  // relação, não a pessoa. Insatisfação declarada tira o degrau firme e antecipa a escalada
+  // interna — a régua nunca cala por causa da satisfação, ela troca de escada.
+  relacao_tensa: "relação tensa",
 };
+
+// A satisfação vigente no card da fatura (FDD 037). Só o nível tem rótulo próprio aqui: a fonte já
+// vem pronta em `fonte_display` no cadastro de satisfação, mas o painel manda o **código**
+// (`declarada`/`percebida`), não o rótulo — mandar os dois seria duplicar o texto por dois
+// caminhos que podem discordar.
+const SATISFACAO_NIVEL: Record<SatisfacaoNivel, string> = {
+  promotor: "Promotor",
+  satisfeito: "Satisfeito",
+  neutro: "Neutro",
+  insatisfeito: "Insatisfeito",
+};
+const SATISFACAO_FONTE: Record<SatisfacaoFonte, string> = {
+  declarada: "declarada pelo cliente",
+  percebida: "percebida por quem entrega",
+};
+
+/** "há 12 dias" — a idade que faz alguém perguntar de novo (FDD 037). O corte é do backend. */
+function satisfacaoIdade(dias: number): string {
+  if (dias === 0) return "hoje";
+  if (dias === 1) return "há 1 dia";
+  return `há ${dias} dias`;
+}
 
 /** Dias de casa em prosa. Formatação do número que o backend entregou — o corte da régua é dele. */
 function tempoDeCasa(dias: number): string {
@@ -392,6 +418,19 @@ export function CobrancaPage() {
               <dt className="text-xs text-muted">Já recebido deste cliente</dt>
               <dd className="mt-1 text-sm font-semibold text-ink">{money.format(Number(linha.recebido_do_cliente))}</dd>
             </div>
+            {/* A satisfação vigente (FDD 037, ADR 0032), ao lado de saúde, tempo de casa e
+                reincidência — o mesmo "na mesma tela, não a dois cliques" da RFC 0004. Sem
+                registro na janela de 90 dias o campo some, no molde do que o card já faz com
+                `health_level` nulo — não inventa texto de ausência ruidoso. A fonte vai sempre
+                junto do nível: é o que diz se aquilo é o cliente falando ou a nossa leitura sobre
+                ele, e é a fonte declarada — não a percebida — que troca a régua para `relacao_tensa`. */}
+            {linha.satisfacao_nivel && linha.satisfacao_fonte && <div>
+              <dt className="text-xs text-muted">Satisfação</dt>
+              <dd className="mt-1 flex flex-wrap items-center gap-2">
+                <span className={`state ${satisfacaoBadgeClass(linha.satisfacao_nivel)}`}>{SATISFACAO_NIVEL[linha.satisfacao_nivel]}</span>
+                <span className="text-xs text-muted">{SATISFACAO_FONTE[linha.satisfacao_fonte]}{linha.satisfacao_dias != null ? ` · ${satisfacaoIdade(linha.satisfacao_dias)}` : ""}</span>
+              </dd>
+            </div>}
           </dl>
         </div>
 

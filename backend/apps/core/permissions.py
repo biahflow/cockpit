@@ -18,6 +18,7 @@ from .models import (
     ProjectMember,
     ProjectPhase,
     Risco,
+    Satisfacao,
     Task,
     User,
     can_access_project,
@@ -89,8 +90,13 @@ class RolePermission(BasePermission):
             # `cobranca_suspensao` é o único recurso financeiro em que Vendas **escreve**, e a
             # assimetria é deliberada: suspender é decisão de relação, e quem a carrega é quem
             # responde pelo cliente. Emitir, baixar e cobrar seguem de admin, porque são dinheiro.
+            # `satisfacao` é escrita pelos **dois** papéis (FDD 037), e é a diferença dela para
+            # os dois vizinhos: `risco` é só de Entrega e `activity` é escrita por Vendas e só
+            # lida por Entrega. Quem conversa com o cliente é de ambas as áreas, e um registro
+            # que só metade da casa pode fazer é um registro que não acontece.
             return resource in {"client", "contact", "opportunity", "document", "lead",
-                                "analytics", "artifact", "activity", "cobranca_suspensao"}
+                                "analytics", "artifact", "activity", "cobranca_suspensao",
+                                "satisfacao"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
                             "risk", "health", "case", "activity"}:
@@ -122,7 +128,7 @@ class RolePermission(BasePermission):
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
-                                "digital_employee", "artifact"}
+                                "digital_employee", "artifact", "satisfacao"}
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:  # type: ignore[no-untyped-def]
@@ -147,6 +153,13 @@ class RolePermission(BasePermission):
             # pode ser da Entrega, e é dele que se espera o ato de verificar.
             if getattr(view, "resource", "") == "knowledge":
                 return request.method in SAFE_METHODS or getattr(view, "action", None) == "verify"
+            if isinstance(obj, Satisfacao):
+                # **Não entra em `PROJECT_OF`**, e não por esquecimento: o `project` aqui é
+                # opcional, e um mapa que resolvesse `obj.project` devolveria `None` para o
+                # registro de cliente sem projeto — a Entrega tomaria 403 no detalhe de um
+                # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
+                # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
+                return Project.objects.visible_to(request.user).filter(client=obj.client).exists()
             if isinstance(obj, Opportunity):
                 return obj.is_won and request.method in SAFE_METHODS
             if isinstance(obj, ProjectMember):

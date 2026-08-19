@@ -152,9 +152,25 @@ export type CobrancaCanal = "email" | "interno";
 // Por que a régua se calou, com as mesmas constantes do backend. Vazio quando há degrau.
 export type CobrancaMotivo = "" | "suspensa" | "degrau_gasto" | "teto_de_frequencia" | "sem_degrau" | "estado_nao_cobravel";
 // `relacao_longa` é cliente de um ano de casa e sem reincidência: o lembrete atrasa, o degrau firme
-// não existe e o caso vai direto à escalada interna. Quem escolhe é o backend.
-export type CobrancaRegua = "padrao" | "relacao_longa";
+// não existe e o caso vai direto à escalada interna. `relacao_tensa` é insatisfação **declarada**
+// vigente (FDD 037, ADR 0032): o degrau firme também não existe, mas a escalada interna antecipa —
+// a régua nunca cala por causa da satisfação, ela troca de escada. Quem escolhe é o backend.
+export type CobrancaRegua = "padrao" | "relacao_longa" | "relacao_tensa";
 export type CobrancaSuspensaoResumo = { id: number; until: string; owner: number; owner_name: string };
+
+// A satisfação do cliente (FDD 037, ADR 0032). `declarada` é o cliente tendo dito; `percebida` é a
+// leitura de quem entrega. **Só a declarada move número** — Health Score e escada de cobrança — e é
+// essa distinção, não o nível, a decisão central da fatia: uma tela que tratasse as duas fontes
+// iguais desfaria o que a ADR 0032 decidiu.
+export type SatisfacaoNivel = "promotor" | "satisfeito" | "neutro" | "insatisfeito";
+export type SatisfacaoFonte = "declarada" | "percebida";
+export type Satisfacao = {
+  id: number; client: number; project: number | null; source_meeting: number | null;
+  nivel: SatisfacaoNivel; nivel_display: string; fonte: SatisfacaoFonte; fonte_display: string;
+  happened_on: string; note: string; registered_by: number | null;
+  created_at: string; updated_at: string;
+};
+
 export type CobrancaPainelLinha = {
   invoice: number; number: string; client: number; client_name: string;
   amount: string; due_date: string; status: InvoiceStatus; status_display: string;
@@ -166,6 +182,11 @@ export type CobrancaPainelLinha = {
   health_level: HealthLevel | null; tempo_de_casa_dias: number; reincidente: boolean;
   regua: CobrancaRegua; recebido_do_cliente: string;
   suspensao: CobrancaSuspensaoResumo | null; regua_ligada: boolean;
+  // A satisfação vigente (FDD 037): nível e fonte, ou os três `null` quando não há registro dentro
+  // da janela de 90 dias. A fonte vai junto do nível porque a linha precisa dizer se é o cliente
+  // falando ou a nossa leitura sobre ele — é o que separa o que move a régua do que não move.
+  satisfacao_nivel: SatisfacaoNivel | null; satisfacao_fonte: SatisfacaoFonte | null;
+  satisfacao_dias: number | null;
 };
 export type CobrancaContato = { id: number; invoice: number; invoice_number: string; client: number; client_name: string; degrau: CobrancaDegrau; degrau_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
 export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; client: number | null; client_name: string; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };

@@ -280,8 +280,16 @@ const FIXTURES: Record<string, unknown> = {
     health_level: indice === 2 ? null : ["crítico", "atenção", "crítico", "saudável", "atenção"][indice],
     tempo_de_casa_dias: [1460, 200, 45, 20, 900][indice],
     reincidente: indice % 2 === 1,
-    regua: indice === 0 || indice === 4 ? "relacao_longa" : "padrao",
+    // Uma régua de cada (FDD 037): a terceira linha entra tensa, com satisfação declarada
+    // insatisfeita vigente — a única combinação que rende o selo `state--3` novo na tela.
+    regua: indice === 0 || indice === 4 ? "relacao_longa" : indice === 2 ? "relacao_tensa" : "padrao",
     recebido_do_cliente: "180000.00",
+    // A satisfação vigente (FDD 037). Uma linha declarada insatisfeita (a que carrega a régua
+    // tensa), uma percebida promotora e as demais sem registro — o axe precisa medir o selo
+    // `.state` e o rótulo de fonte nos dois casos, e o card sem satisfação nenhuma.
+    satisfacao_nivel: indice === 2 ? "insatisfeito" : indice === 4 ? "promotor" : null,
+    satisfacao_fonte: indice === 2 ? "declarada" : indice === 4 ? "percebida" : null,
+    satisfacao_dias: indice === 2 ? 5 : indice === 4 ? 40 : null,
     suspensao: caso.suspensa
       ? { id: 1, until: "2026-09-30", owner: 1, owner_name: "Maria de Lourdes Albuquerque" }
       : null,
@@ -307,6 +315,17 @@ const FIXTURES: Record<string, unknown> = {
     summary: `Retorno do financeiro sobre a fatura em aberto — ${NOME_LONGO}`,
     notes: "Pediu para reprogramar o pagamento para o próximo ciclo de faturamento.",
     owner: 1, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  })),
+  // A satisfação do cliente (FDD 037, ADR 0032): uma declarada e uma percebida, para o axe medir
+  // o selo de nível e o rótulo de fonte nos dois casos — sem as duas, o painel de Satisfação do
+  // detalhe do cliente renderiza sempre a mesma metade da tela.
+  "/api/v1/satisfacoes/": [
+    { nivel: "insatisfeito", nivel_display: "Insatisfeito", fonte: "declarada", fonte_display: "Declarada pelo cliente", happened_on: HOJE, note: "Reclamou do prazo da última entrega na call de comitê." },
+    { nivel: "promotor", nivel_display: "Promotor", fonte: "percebida", fonte_display: "Percebida por quem entrega", happened_on: VENCIDO, note: "" },
+  ].map((registro, indice) => ({
+    id: indice + 1, client: 1, project: null, source_meeting: null,
+    registered_by: 1, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+    ...registro,
   })),
   "/api/v1/knowledge-pieces/": serie(5, index => ({
     id: index, area: 1, area_name: "Operação",

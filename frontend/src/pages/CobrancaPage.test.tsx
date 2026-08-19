@@ -23,6 +23,10 @@ function linha(overrides: Record<string, unknown> = {}) {
     health_level: "atenção", tempo_de_casa_dias: 1200, reincidente: false,
     regua: "relacao_longa", recebido_do_cliente: "180000.00",
     suspensao: null, regua_ligada: true,
+    // Satisfação (FDD 037): `null` por padrão — a maioria das faturas de verdade não tem registro
+    // dentro da janela de 90 dias, e é esse o caso que os testes que não mencionam satisfação
+    // precisam continuar cobrindo.
+    satisfacao_nivel: null, satisfacao_fonte: null, satisfacao_dias: null,
     ...overrides,
   };
 }
@@ -287,4 +291,42 @@ test("Vendas suspende mas não envia nem rascunha — a assimetria da FDD 036 ch
   expect(screen.queryByRole("button", { name: /Enviar cobrança/ })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Rascunhar no tom/ })).not.toBeInTheDocument();
   expect(mocks.getConfig).not.toHaveBeenCalled();
+});
+
+// --- satisfação (FDD 037, ADR 0032) --------------------------------------------------------------
+
+/**
+ * A satisfação vigente ao lado de saúde, tempo de casa e reincidência (FDD 037, critério de
+ * aceite 4) — a mesma exigência da RFC 0004 de decidir "na mesma tela, não a dois cliques". A
+ * fonte vai junto do nível: é o que diz se aquilo é o cliente falando ou a nossa leitura sobre
+ * ele, e é a declarada, não a percebida, que troca a régua para `relacao_tensa`.
+ */
+test("a satisfação vigente aparece no card, com nível, fonte e idade", async () => {
+  mocks.api.mockImplementation(stub([linha({
+    satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 12,
+  })]));
+  render(<CobrancaPage />);
+  const cartao = (await screen.findByRole("heading", { name: "Imobiliária Aurora" })).closest("article");
+  const dentro = within(cartao as HTMLElement);
+
+  expect(dentro.getByText("Insatisfeito")).toBeInTheDocument();
+  expect(dentro.getByText(/declarada pelo cliente/)).toBeInTheDocument();
+  expect(dentro.getByText(/há 12 dias/)).toBeInTheDocument();
+});
+
+test("sem registro de satisfação, o card não inventa texto de ausência", async () => {
+  mocks.api.mockImplementation(stub([linha()]));
+  render(<CobrancaPage />);
+  const cartao = (await screen.findByRole("heading", { name: "Imobiliária Aurora" })).closest("article");
+  const dentro = within(cartao as HTMLElement);
+
+  expect(dentro.queryByText("Satisfação")).not.toBeInTheDocument();
+});
+
+test("relacao_tensa tem rótulo próprio, que não julga o cliente", async () => {
+  mocks.api.mockImplementation(stub([linha({
+    regua: "relacao_tensa", satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 5,
+  })]));
+  render(<CobrancaPage />);
+  expect(await screen.findByText(/relação tensa/)).toBeInTheDocument();
 });

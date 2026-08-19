@@ -147,6 +147,41 @@ def test_delivery_agent_context_does_not_leak_risks_from_other_projects(delivery
     assert "Risco já mitigado" not in context  # encerrado não pede ação
 
 
+def test_delivery_agent_context_does_not_leak_satisfaction_from_other_clients(delivery, mine, theirs) -> None:  # type: ignore[no-untyped-def]
+    """Quarto conteúdo no mesmo contexto, quarto teste (FDD 037).
+
+    A satisfação é por **cliente** e não por projeto, então o recorte não é o mesmo dos três blocos
+    acima por acidente de caminho: ele passa pelo cliente dos projetos de `visible_to`. A nota é o
+    que o cliente disse — o texto mais sensível que este contexto carrega.
+    """
+    from datetime import date
+
+    from apps.core import agents
+    from apps.core.models import Satisfacao
+
+    hoje = timezone.localdate()
+    Satisfacao.objects.create(
+        client=mine.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        happened_on=hoje, note="Ficou quieto na última call.",
+    )
+    Satisfacao.objects.create(
+        client=theirs.client, nivel=Satisfacao.Nivel.INSATISFEITO,
+        fonte=Satisfacao.Fonte.DECLARADA, happened_on=hoje,
+        note="Segredo do cliente alheio.",
+    )
+    # Fora da janela de 90 dias: registro que já não é o estado de hoje não entra no contexto.
+    Satisfacao.objects.create(
+        client=mine.client, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+        happened_on=date(2000, 1, 1), note="Elogio de outra era.",
+    )
+
+    context = agents.build_delivery_context(delivery)
+
+    assert "Ficou quieto na última call." in context
+    assert "Segredo do cliente alheio." not in context
+    assert "Elogio de outra era." not in context
+
+
 def test_analytics_and_recommendations_stay_forbidden(api: APIClient) -> None:
     """Trava contra afrouxamento futuro: os dois varrem tudo e não foram parametrizados."""
     assert api.get(reverse("analytics")).status_code == 403

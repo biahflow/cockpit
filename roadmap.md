@@ -48,6 +48,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 034 | Risk Register do projeto | Entregue | 1 | `docs/fdd/034-risk-register-do-projeto.md` |
 | FDD 035 | Activities no CRM | Entregue | 1 | `docs/fdd/035-activities-no-crm.md` |
 | FDD 036 | Régua de cobrança e IA de tom | Entregue (desligada) | 1 | `docs/fdd/036-a-regua-que-cobra-sem-estragar-a-relacao.md` |
+| FDD 037 | Satisfação do cliente e camada 5 | Entregue | 1 | `docs/fdd/037-a-satisfacao-que-ninguem-registrava.md` |
 
 ## Base atual — entregue
 
@@ -393,6 +394,26 @@ um radar que ele respeita.
       sem ninguém a quem escalar **gastava o degrau** — a régua parava de falar com o cliente e
       ninguém ficava sabendo. Ver FDD 036 e ADR 0031. **Aberto:** a homologação do Stripe
       (runbook, seção 5), que é o gate para ligar em instalação real.
+- [x] **A satisfação que ninguém registrava — camada 5 da RFC 0004.** Três lugares diziam por
+      escrito que faltava: a docstring do `health.py` desde a Fase 2 (*"satisfação, bugs e
+      'acessos liberados' ficam de fora até existir onde registrá-los"*), o "fora deste recorte"
+      da FDD 036, e a exigência da RFC de distinguir *"está insatisfeito e está retendo pagamento
+      como sinal"*. O terceiro já era **código morto**: a IA da FDD 036 classificava a resposta do
+      cliente e gravava `cobranca_sinal`, e **nada lia o campo** — o rótulo era produzido e morria
+      ali, porque não existia para onde o sinal ir. Agora existe `Satisfacao`, e a decisão que a
+      define não é o modelo, é o campo `fonte`: **só a declarada move número**. O cliente ter dito
+      altera saúde e cobrança; a leitura de quem entrega aparece na tela e não altera nada
+      calculado — sem isso, o primeiro sinal do produto cuja fonte está *fora* da casa viraria a
+      opinião do time sobre si mesmo com aparência de medição, que é pior que sinal nenhum, porque
+      número errado se consulta com a mesma confiança de número certo. A trava de relação que a
+      camada 5 pede foi construída **sem calar a régua**: a RFC pede a trava e proíbe o "pular
+      silencioso" na mesma página, e a saída é uma terceira escada — com insatisfação declarada o
+      degrau **firme deixa de existir** e a escalada interna ocupa a janela dele. A régua não fica
+      muda; ela para de endurecer e **acorda gente**, que declara a suspensão com dono e prazo pelo
+      mecanismo que a FDD 036 já tinha. O sinal **envelhece** (90 dias), pela mesma razão que fez o
+      degrau virar janela naquela fatia. Ver FDD 037 e ADR 0032. **Fora, e nomeado**: pesquisa
+      respondida pelo cliente (canal novo, gate da ADR 0031), congelar satisfação no `Case` (ela já
+      nasce carimbada, ao contrário do health), e a IA gravar o registro sozinha (ADR 0006).
 - [x] **Base de conhecimento interna e frescor — Fase 8.** O corpus da metodologia — 68
       arquivos, 450 trechos — deixa de viver só no repositório e passa a ancorar a resposta dos
       agentes, **com citação exata** ("Runbook — backup e restauração › Restaurar") e lacuna

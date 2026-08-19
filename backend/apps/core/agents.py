@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
+from . import satisfacao as satisfacao_module
+
 if TYPE_CHECKING:
     from .models import User
 
@@ -68,8 +70,8 @@ _MAX_POR_BLOCO = 10
 
 
 def build_delivery_context(user: User) -> str:
-    """Contexto do agente de Entrega: o risco de cada projeto, **o que está atrasado** e os riscos
-    declarados que seguem abertos.
+    """Contexto do agente de Entrega: o risco de cada projeto, **o que está atrasado**, os riscos
+    declarados que seguem abertos e a satisfação vigente de cada cliente.
 
     A parte dos itens nasceu da rodada 2 da homologação (FDD 024): perguntado "o que está
     atrasado?", o agente respondia que não tinha os detalhes — e estava certo, porque o contexto
@@ -82,10 +84,15 @@ def build_delivery_context(user: User) -> str:
     deste portfólio?", o agente respondia com sintoma; agora responde também com o que foi
     declarado — que é o que a Delivery Sync semanal da metodologia pede.
 
+    O bloco de satisfação entrou com a FDD 037 e é o único que fala do **cliente** e não da
+    entrega: os três acima medem o nosso trabalho, e este diz se a outra parte da relação está
+    conosco. Entram as duas fontes, `declarada` e `percebida` — ao contrário do Health Score e da
+    régua de cobrança, que leem só a declarada (ADR 0032), porque aqui nada vira número.
+
     O recorte é o mesmo de antes e não afrouxa: tudo sai de `visible_to`, que é a única expressão
     da regra (ADR 0010). O que muda é que o vazamento possível deixou de ser o nome do projeto e
     passou a ser o título do item — por isso há um teste de regressão para cada um, e o risco
-    declarado ganhou o seu.
+    declarado e a satisfação ganharam o seu.
     """
     from . import risk
     from .models import Milestone, Project, Risco, Task
@@ -149,6 +156,30 @@ def build_delivery_context(user: User) -> str:
             )
         if len(riscos) > _MAX_POR_BLOCO:
             lines.append(f"- ... e mais {len(riscos) - _MAX_POR_BLOCO}")
+
+    # Satisfação vigente (FDD 037), e aqui entram **as duas fontes**.
+    #
+    # O Health Score e a régua de cobrança leem só a `declarada`, porque as duas produzem número e
+    # comportamento (ADR 0032). Este bloco é texto para uma pessoa ler: a leitura de quem entrega é
+    # justamente o que existe **antes** de alguém ter perguntado ao cliente, e é ela que faz alguém
+    # perguntar. Esconder a percebida aqui apagaria o único uso legítimo dela.
+    #
+    # Por cliente e não por projeto: a satisfação é da relação. O recorte continua saindo de
+    # `visible_to` (ADR 0010), pela lista `active` que o bloco de riscos já usa.
+    vigentes = satisfacao_module.vigentes_por_cliente(
+        {project.client_id for project in active}, hoje
+    )
+    if vigentes:
+        lines.append("Satisfação registrada (o mais recente por cliente, últimos 90 dias):")
+        registros = sorted(vigentes.values(), key=lambda registro: registro.client.name)
+        for registro in registros[:_MAX_POR_BLOCO]:
+            nota = registro.note.strip() or "sem nota"
+            lines.append(
+                f"- {registro.client.name}: {registro.get_nivel_display().lower()} "
+                f"({registro.get_fonte_display().lower()}, em {registro.happened_on}) — {nota}"
+            )
+        if len(registros) > _MAX_POR_BLOCO:
+            lines.append(f"- ... e mais {len(registros) - _MAX_POR_BLOCO}")
     return "\n".join(lines)
 
 

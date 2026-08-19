@@ -54,7 +54,10 @@ como entidade acompanhada por KPI e ROI.
 de maturidade, propostas e contratos gerados a partir da transcrição das reuniões — os quatro
 primeiros ficam **registrados como artefatos** com estado próprio, do rascunho à decisão do
 cliente, sempre com revisão humana pelo caminho. Indicadores de
-ROI, health score, previsão de atrasos com explicação dos sinais e recomendações revisáveis.
+ROI, health score, previsão de atrasos com explicação dos sinais e recomendações revisáveis. A
+**satisfação do cliente** é registrada com a fonte declarada (o cliente disse) separada da
+percebida (a leitura de quem entrega), e **só a declarada move número** — é insumo do health score
+e da régua de cobrança, nunca palpite virando medição (FDD 037, ADR 0032).
 
 **Plataforma.** Convites por e-mail, permissões por função, notificações in-app e por e-mail com
 digest diário, nove integrações atrás de flag alternável em runtime (IA, Drive, Calendário,

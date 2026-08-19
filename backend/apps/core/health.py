@@ -5,8 +5,12 @@
 traz seu peso (quanto tirou), preservando a explicabilidade.
 
 Só usa sinais com dado real no domínio: entregas atrasadas/fora do prazo, reuniões não
-realizadas, decisões pendentes (pesa mais quando o cliente é quem trava) e ROI negativo.
-Satisfação, bugs e "acessos liberados" ficam de fora até existir onde registrá-los.
+realizadas, decisões pendentes (pesa mais quando o cliente é quem trava), ROI negativo e
+insatisfação **declarada** do cliente (FDD 037). Bugs e "acessos liberados" ficam de fora até
+existir onde registrá-los.
+
+Os cinco primeiros medem o **nosso** trabalho; o sexto é o único que depende de o cliente ter
+dito alguma coisa — e por isso ele lê só `fonte=declarada`. Ver `assess_project_health`.
 """
 
 from __future__ import annotations
@@ -16,8 +20,10 @@ from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
+from . import satisfacao as satisfacao_module
+
 if TYPE_CHECKING:
-    from .models import Milestone, Pendencia, Project, Task
+    from .models import Milestone, Pendencia, Project, Satisfacao, Task
 
 
 def _level(score: int) -> str:
@@ -35,13 +41,20 @@ def assess_project_health(
     tasks: Sequence[Task] | None = None,
     missed_meetings: int | None = None,
     open_pendencias: Sequence[Pendencia] | None = None,
+    satisfacoes: Sequence[Satisfacao] | None = None,
 ) -> dict[str, Any]:
     """Avalia a saúde de um projeto. Os argumentos nomeados aceitam dado já carregado.
 
-    Omitidos, a função consulta o banco — quatro queries, irrelevantes no detalhe de um
+    Omitidos, a função consulta o banco — cinco queries, irrelevantes no detalhe de um
     projeto. Quem avalia uma lista usa `assess_projects_health` (FDD 022).
+
+    `satisfacoes` é **sequência, e não `Satisfacao | None`**, ao contrário do que a forma do
+    argumento sugeriria para um sinal que é no máximo um registro. Aqui `None` já significa
+    "consulte o banco", como nos outros quatro; se o tipo fosse o registro, "não há satisfação
+    registrada" e "consulte o banco" seriam o mesmo valor, e o lote não teria como dizer o
+    primeiro. `[]` diz "nenhuma" sem ambiguidade.
     """
-    from .models import Meeting, Milestone, Pendencia, Task, WorkItem
+    from .models import Meeting, Milestone, Pendencia, Satisfacao, Task, WorkItem
 
     today = date.today()
     signals: list[dict[str, Any]] = []
@@ -97,6 +110,33 @@ def assess_project_health(
         score -= weight
         signals.append({"label": "ROI negativo", "detail": "custo acima do valor entregue até aqui", "weight": weight})
 
+    # O sexto sinal, e o único que não mede o nosso próprio trabalho (FDD 037, ADR 0032).
+    #
+    # **Só a fonte `declarada` subtrai.** A `percebida` — a leitura de quem entrega — aparece na
+    # tela e no contexto do agente, e não move número nenhum. Sem essa separação, o sinal do
+    # cliente vira a opinião do time sobre si mesmo com aparência de medição: o escore passaria a
+    # descontar 20 pontos por palpite, e um número errado é consultado com a mesma confiança de um
+    # número certo. É a decisão central da fatia, e tem regressão dedicada.
+    #
+    # Só o nível `insatisfeito` pesa. Promotor **não soma**: o escore parte de 100 e só subtrai, e
+    # um sinal que somasse faria "100" deixar de significar "nenhum problema conhecido" — os cinco
+    # sinais acima teriam de ser reescritos para conviver com isso.
+    if satisfacoes is None:
+        satisfacoes = satisfacao_module.registros_vigentes_por_cliente(
+            [project.client_id], today
+        ).get(project.client_id, [])
+    insatisfacao = satisfacao_module.vigente(
+        satisfacoes, today, fonte=Satisfacao.Fonte.DECLARADA
+    )
+    if insatisfacao is not None and insatisfacao.nivel == Satisfacao.Nivel.INSATISFEITO:
+        weight = 20
+        score -= weight
+        signals.append({
+            "label": "Cliente insatisfeito",
+            "detail": f"declarada em {insatisfacao.happened_on.strftime('%d/%m/%Y')}",
+            "weight": weight,
+        })
+
     score = max(0, min(score, 100))
     return {
         "project_id": project.pk,
@@ -110,9 +150,12 @@ def assess_project_health(
 def assess_projects_health(projects: Iterable[Project]) -> list[dict[str, Any]]:
     """Avalia a saúde de uma lista com um número **constante** de queries.
 
-    São quatro modelos por projeto (marco, tarefa, reunião perdida, pendência aberta): a
-    versão projeto a projeto custava a `/health/` e à visão multi-cliente quatro queries por
-    projeto da casa. Aqui são quatro no total, distribuídas em memória (FDD 022).
+    São cinco modelos por projeto (marco, tarefa, reunião perdida, pendência aberta e satisfação
+    do cliente): a versão projeto a projeto custava a `/health/` e à visão multi-cliente cinco
+    queries por projeto da casa. Aqui são cinco no total, distribuídas em memória (FDD 022).
+
+    A quinta entrou com a FDD 037 e é **por cliente**, não por projeto: dois projetos do mesmo
+    cliente leem o mesmo registro, porque a satisfação é da relação e não da entrega.
     """
     from .models import Meeting, Milestone, Pendencia, Task
 
@@ -139,6 +182,9 @@ def assess_projects_health(projects: Iterable[Project]) -> list[dict[str, Any]]:
         project_id__in=ids, archived_at__isnull=True, status=Pendencia.Status.OPEN
     ):
         pendencias[pendencia.project_id].append(pendencia)
+    satisfacoes = satisfacao_module.registros_vigentes_por_cliente(
+        {project.client_id for project in items}, today
+    )
 
     return [
         assess_project_health(
@@ -147,6 +193,9 @@ def assess_projects_health(projects: Iterable[Project]) -> list[dict[str, Any]]:
             tasks=tasks[project.pk],
             missed_meetings=missed[project.pk],
             open_pendencias=pendencias[project.pk],
+            # `[]` e não `None`: cliente sem registro tem "nenhuma satisfação", não "vá ao banco
+            # descobrir" — e é essa distinção que mantém a contagem de queries constante.
+            satisfacoes=satisfacoes.get(project.client_id, []),
         )
         for project in items
     ]
