@@ -27,6 +27,11 @@ function linha(overrides: Record<string, unknown> = {}) {
     // dentro da janela de 90 dias, e é esse o caso que os testes que não mencionam satisfação
     // precisam continuar cobrindo.
     satisfacao_nivel: null, satisfacao_fonte: null, satisfacao_dias: null,
+    // A tensão e o sinal por registrar (FDD 038): nulos por padrão pelo mesmo motivo da satisfação
+    // — a maioria das faturas não tem tensão nem resposta classificada pendente, e é esse o caso
+    // que os testes que não os mencionam precisam continuar cobrindo.
+    tensao_causa: null,
+    sinal_kind: null, sinal_display: null, sinal_em: null, sinal_activity: null,
     ...overrides,
   };
 }
@@ -325,8 +330,118 @@ test("sem registro de satisfação, o card não inventa texto de ausência", asy
 
 test("relacao_tensa tem rótulo próprio, que não julga o cliente", async () => {
   mocks.api.mockImplementation(stub([linha({
-    regua: "relacao_tensa", satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 5,
+    regua: "relacao_tensa", tensao_causa: "satisfacao",
+    satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 5,
   })]));
   render(<CobrancaPage />);
   expect(await screen.findByText(/relação tensa/)).toBeInTheDocument();
+});
+
+// --- a camada 5 fechada: entrega e o sinal por registrar (FDD 038) -------------------------------
+
+/**
+ * A escada é a **mesma** nas duas origens da tensão, e é por isso que a causa vai na linha: sem
+ * ela a tela diria "relação tensa" e quem lê não saberia se conserta a entrega ou liga para o
+ * cliente. O texto é do mapa local; a decisão é do backend.
+ */
+test("a causa da tensão aparece junto do nome da régua", async () => {
+  mocks.api.mockImplementation(stub([linha({
+    regua: "relacao_tensa", tensao_causa: "entrega", health_level: "crítico",
+  })]));
+  render(<CobrancaPage />);
+
+  expect(await screen.findByText(/relação tensa, porque a nossa entrega está em estado crítico/)).toBeInTheDocument();
+});
+
+test("sem tensão a linha da régua não ganha causa nenhuma", async () => {
+  render(<CobrancaPage />);
+  const texto = await screen.findByText(/régua de relação longa/);
+  expect(texto.textContent).not.toMatch(/porque/);
+});
+
+test("a saúde mostrada é a da entrega do cliente, e sem projeto ativo não se inventa nível", async () => {
+  mocks.api.mockImplementation(stub([linha({ health_level: null })]));
+  render(<CobrancaPage />);
+  expect(await screen.findByText("Sem projeto ativo neste cliente")).toBeInTheDocument();
+});
+
+/**
+ * A armadilha que a FDD 030 nomeou ao recusar um segundo score: dois sinais parecidos na mesma tela
+ * viram dois números discordando sem que ninguém saiba qual olhar. A satisfação vigente é
+ * **registro** e move número; o sinal é **leitura de uma resposta** e não move nada — e a tela tem
+ * de dizer isso, não só mostrar os dois.
+ */
+test("o sinal da IA aparece rotulado como leitura por registrar, distinto da satisfação vigente", async () => {
+  mocks.api.mockImplementation(stub([linha({
+    satisfacao_nivel: "neutro", satisfacao_fonte: "percebida", satisfacao_dias: 30,
+    sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
+  })]));
+  render(<CobrancaPage />);
+  const cartao = (await screen.findByRole("heading", { name: "Imobiliária Aurora" })).closest("article");
+  const dentro = within(cartao as HTMLElement);
+
+  expect(dentro.getByText(/Resposta lida pela IA — por registrar/)).toBeInTheDocument();
+  expect(dentro.getByText(/não move o Health Score nem a régua/)).toBeInTheDocument();
+  expect(dentro.getByText("14/08/2026", { exact: false })).toBeInTheDocument();
+  // A satisfação vigente continua no seu lugar, com o rótulo dela — os dois não se confundem.
+  expect(dentro.getByText("Neutro")).toBeInTheDocument();
+  expect(dentro.getByText(/percebida por quem entrega/)).toBeInTheDocument();
+});
+
+test("sem sinal pendente a linha não oferece o atalho", async () => {
+  render(<CobrancaPage />);
+  await screen.findByRole("heading", { name: "Imobiliária Aurora" });
+  expect(screen.queryByRole("button", { name: /Registrar satisfação/ })).not.toBeInTheDocument();
+});
+
+test("o atalho registra a satisfação declarada, com a data do que aconteceu e o nível derivado", async () => {
+  mocks.api.mockImplementation(stub([linha({
+    sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
+  })]));
+  render(<CobrancaPage />);
+  await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
+
+  // Pré-preenchido, não decidido: o nível vem do sinal e a fonte é declarada porque quem falou foi
+  // o cliente. Quem salva é uma pessoa — a IA leu, ela não registrou (ADR 0032).
+  expect(await screen.findByLabelText("Nível")).toHaveValue("insatisfeito");
+  expect(screen.getByText(/declarada pelo cliente/)).toBeInTheDocument();
+  await userEvent.type(screen.getByLabelText("O que o cliente disse"), "Disse que o marco 2 atrasou duas vezes.");
+  await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
+    "/satisfacoes/",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        client: 1, source_activity: 31, nivel: "insatisfeito", fonte: "declarada",
+        happened_on: "2026-08-14", note: "Disse que o marco 2 atrasou duas vezes.",
+      }),
+    }),
+  ));
+});
+
+test("o sinal que fala de dinheiro nasce neutro, e não insatisfeito", async () => {
+  mocks.api.mockImplementation(stub([linha({
+    sinal_kind: "nao_pode", sinal_display: "Não pôde pagar", sinal_em: "2026-08-14", sinal_activity: 32,
+  })]));
+  render(<CobrancaPage />);
+  await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
+
+  expect(await screen.findByLabelText("Nível")).toHaveValue("neutro");
+});
+
+test("registrado o sinal, a linha é recarregada e o atalho some", async () => {
+  const comSinal = linha({ sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31 });
+  let registrado = false;
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path === "/satisfacoes/" && options?.method === "POST") { registrado = true; return Promise.resolve({}); }
+    return stub([registrado ? linha({ regua: "relacao_tensa", tensao_causa: "satisfacao" }) : comSinal])(path, options);
+  });
+  render(<CobrancaPage />);
+  await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
+  await userEvent.type(await screen.findByLabelText("O que o cliente disse"), "Disse que o marco 2 atrasou.");
+  await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
+
+  await waitFor(() => expect(screen.queryByRole("button", { name: /Registrar satisfação/ })).not.toBeInTheDocument());
+  expect(screen.getByText(/relação tensa/)).toBeInTheDocument();
 });

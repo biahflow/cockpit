@@ -25,13 +25,32 @@ from . import satisfacao as satisfacao_module
 if TYPE_CHECKING:
     from .models import Milestone, Pendencia, Project, Satisfacao, Task
 
+#: Os três níveis, **do pior para o melhor**. Constantes e não literais porque o nível atravessa
+#: para fora daqui: a régua de cobrança troca de escada quando encontra `CRITICAL` (FDD 038) e o
+#: painel mostra o pior nível do cliente. Um `"crítico"` digitado do outro lado seria uma segunda
+#: definição do vocabulário — e a que erra o acento não fica vermelha, ela só nunca casa.
+LEVELS_WORST_FIRST = ("crítico", "atenção", "saudável")
+CRITICAL = LEVELS_WORST_FIRST[0]
+
 
 def _level(score: int) -> str:
     if score >= 75:
-        return "saudável"
+        return LEVELS_WORST_FIRST[2]
     if score >= 50:
-        return "atenção"
-    return "crítico"
+        return LEVELS_WORST_FIRST[1]
+    return CRITICAL
+
+
+def worst_level(levels: Iterable[str]) -> str | None:
+    """O pior nível de um conjunto, ou `None` quando o conjunto é vazio.
+
+    Mora aqui, e não em quem pergunta, porque a ordem entre os níveis é parte da definição deles.
+    Quem tem dois projetos, um crítico e um saudável, não tem "meia saúde": tem um projeto em
+    frangalhos — e uma tela que mostrasse o saudável estaria contradizendo a régua, que já reagiu
+    ao crítico.
+    """
+    presentes = set(levels)
+    return next((level for level in LEVELS_WORST_FIRST if level in presentes), None)
 
 
 def assess_project_health(

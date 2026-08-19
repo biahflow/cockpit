@@ -27,6 +27,7 @@ from rest_framework.test import APIClient
 
 from apps.core import health, risk
 from apps.core.models import (
+    Activity,
     Meeting,
     Milestone,
     Pendencia,
@@ -141,9 +142,23 @@ def seed_cobranca(clients: int) -> None:
     `suspensao_ativa` por fatura passaria despercebido; sem fatura paga, o total recebido; sem
     contato gasto, o teto e a idempotência. É o mesmo motivo de o `seed` de cima dar filhos a cada
     projeto.
+
+    As duas últimas entraram com a FDD 038 e pela mesma razão: **dois** projetos ativos por cliente
+    (um deles crítico, para a guarda de entrega ter o que percorrer e o "pior nível do cliente"
+    precisar escolher) e uma resposta de cobrança classificada e não registrada, que é o sinal
+    pendente da linha. Sem elas, a constância seria provada sobre dimensão vazia — o teste mais
+    tranquilizador e mais inútil disponível.
     """
-    from apps.core.models import CobrancaContato, CobrancaSuspensao, Contact, Invoice
-    from apps.core.tests.factories import InvoiceFactory
+    from apps.core.models import (
+        Activity,
+        CobrancaContato,
+        CobrancaSuspensao,
+        Contact,
+        Invoice,
+        Meeting,
+        Pendencia,
+    )
+    from apps.core.tests.factories import ActivityFactory, InvoiceFactory
 
     hoje = timezone.localdate()
     for _ in range(clients):
@@ -151,6 +166,28 @@ def seed_cobranca(clients: int) -> None:
         project = ProjectFactory(client=client, due_date=hoje - timedelta(days=1))
         Milestone.objects.create(
             project=project, title="Marco", due_date=hoje - timedelta(days=1), owner=project.owner
+        )
+        # O segundo projeto, em estado crítico: é ele que troca a escada para `relacao_tensa` e
+        # obriga o painel a escolher o pior nível entre os dois.
+        critico = ProjectFactory(client=client, due_date=hoje - timedelta(days=1))
+        for indice in range(4):
+            Milestone.objects.create(
+                project=critico, title=f"Marco {indice}", due_date=hoje - timedelta(days=1),
+                owner=critico.owner,
+            )
+        for indice in range(2):
+            Meeting.objects.create(
+                project=critico, title=f"Reunião {indice}", date=hoje - timedelta(days=1),
+                status=Meeting.Status.SCHEDULED,
+            )
+        Pendencia.objects.create(
+            project=critico, title="Decisão travada", status=Pendencia.Status.OPEN,
+            party=WorkItem.Party.CLIENT,
+        )
+        # A resposta classificada e ainda não registrada: o atalho da linha.
+        ActivityFactory(
+            client=client, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+            happened_on=hoje - timedelta(days=2),
         )
         Contact.objects.create(
             client=client, name="Financeiro", email="fin@cliente.test", receives_billing=True
@@ -194,6 +231,10 @@ def test_o_painel_de_cobranca_nao_cresce_com_a_base(api: APIClient) -> None:
     from apps.core.models import Invoice
 
     assert Invoice.objects.filter(status__in=("issued", "overdue")).count() == 24
+    # A base cresceu **nas dimensões novas** também: sem isto, a constância continuaria sendo
+    # provada sobre a parte antiga do painel.
+    assert Project.objects.count() == 24
+    assert Activity.objects.exclude(cobranca_sinal="").count() == 12
 
     assert count_queries(api, "/api/v1/cobranca/painel/") == baseline, (
         "/api/v1/cobranca/painel/ emitiu mais queries com 4× a base — o custo cresce com o "

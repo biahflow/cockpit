@@ -166,6 +166,10 @@ export type SatisfacaoNivel = "promotor" | "satisfeito" | "neutro" | "insatisfei
 export type SatisfacaoFonte = "declarada" | "percebida";
 export type Satisfacao = {
   id: number; client: number; project: number | null; source_meeting: number | null;
+  // A resposta de cobrança que a IA classificou e que originou este registro (FDD 038). É o que
+  // faz o painel parar de oferecer o atalho depois do registro — sem ela, o mesmo sinal insistiria
+  // para sempre. Continua sendo **uma pessoa** que salva: a IA lê, ela não registra (ADR 0032).
+  source_activity: number | null;
   nivel: SatisfacaoNivel; nivel_display: string; fonte: SatisfacaoFonte; fonte_display: string;
   happened_on: string; note: string; registered_by: number | null;
   created_at: string; updated_at: string;
@@ -187,7 +191,16 @@ export type CobrancaPainelLinha = {
   // falando ou a nossa leitura sobre ele — é o que separa o que move a régua do que não move.
   satisfacao_nivel: SatisfacaoNivel | null; satisfacao_fonte: SatisfacaoFonte | null;
   satisfacao_dias: number | null;
+  // Por que a relação está tensa (FDD 038). É rótulo e não decisão: as duas origens levam à mesma
+  // escada, e quem diz qual escada vale continua sendo `regua`. Nulo quando não há tensão.
+  tensao_causa: CobrancaTensaoCausa | null;
+  // A leitura da IA sobre a última resposta do cliente que **ninguém registrou ainda** (ADR 0032).
+  // Os quatro são nulos juntos. Não é satisfação — é uma resposta lida —, e some da linha assim que
+  // alguém registrar a satisfação apontando para aquela interação.
+  sinal_kind: Exclude<CobrancaSinal, ""> | null; sinal_display: string | null;
+  sinal_em: string | null; sinal_activity: number | null;
 };
+export type CobrancaTensaoCausa = "satisfacao" | "entrega" | "ambas";
 export type CobrancaContato = { id: number; invoice: number; invoice_number: string; client: number; client_name: string; degrau: CobrancaDegrau; degrau_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
 export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; client: number | null; client_name: string; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };
 export type CobrancaRascunho = { text: string; interaction: number; degrau: CobrancaDegrau };

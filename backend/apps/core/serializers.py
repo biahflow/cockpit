@@ -397,14 +397,14 @@ class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
 
     class Meta:
         model = Satisfacao
-        fields = ["id", "client", "project", "source_meeting", "nivel", "nivel_display", "fonte",
-                  "fonte_display", "happened_on", "note", "registered_by", "created_at",
-                  "updated_at"]
+        fields = ["id", "client", "project", "source_meeting", "source_activity", "nivel",
+                  "nivel_display", "fonte", "fonte_display", "happened_on", "note",
+                  "registered_by", "created_at", "updated_at"]
         read_only_fields = ["id", "nivel_display", "fonte_display", "registered_by", "created_at",
                             "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
-        """As mesmas duas regras do `clean()` do modelo, repetidas aqui de propósito.
+        """As mesmas três regras do `clean()` do modelo, repetidas aqui de propósito.
 
         É o que o `ActivitySerializer` já faz: sem elas a API devolveria 500 no `full_clean` do
         `save()` em vez de um 400 com o campo errado apontado, e a tela não teria o que mostrar.
@@ -416,6 +416,17 @@ class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
         if project and client and project.client_id != client.id:
             raise serializers.ValidationError(
                 {"project": "O projeto deve pertencer ao mesmo cliente."}
+            )
+        # A atividade de origem (FDD 038) tem a mesma fronteira do projeto: o atalho do painel
+        # manda o id da interação, e uma resposta de outro cliente viraria a satisfação declarada
+        # deste — a linha que troca a escada e tira 20 pontos do Health Score.
+        source_activity = cast(
+            Activity | None,
+            attrs.get("source_activity", getattr(self.instance, "source_activity", None)),
+        )
+        if source_activity and client and source_activity.client_id != client.id:
+            raise serializers.ValidationError(
+                {"source_activity": "A interação deve pertencer ao mesmo cliente."}
             )
         nivel = attrs.get("nivel", getattr(self.instance, "nivel", None))
         note = cast(str, attrs.get("note", getattr(self.instance, "note", "")) or "")

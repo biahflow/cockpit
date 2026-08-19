@@ -185,12 +185,18 @@ snapshot; sobre ela entra a afirmação explícita de que esta chave não é par
   não o dá: ela constrói o registro **ao lado** dele, não em cima dele. Pôr os dois na mesma linha
   é defensável e é trabalho próprio — com o cuidado que a FDD 030 nomeou ao recusar um segundo
   score, porque dois sinais parecidos na mesma tela viram dois números discordando sem que
-  ninguém saiba qual olhar.
+  ninguém saiba qual olhar. *Feito pela FDD 038: o painel mostra o rótulo como leitura ainda não
+  registrada e oferece o atalho que abre o formulário de satisfação — quem salva continua sendo
+  gente, e a `Satisfacao.source_activity` é o que faz o aviso parar de insistir depois de
+  atendido.*
 - **Bugs e "acessos liberados"** — os outros dois sinais que a docstring do `health.py` declara
   faltando. Seguem sem onde ser registrados, e esta fatia não os inventou para fechar a lista.
 - **Suspensão automática por health crítico** — a outra metade da camada 5 ("travas plugadas nos
   sinais de entrega"). O sinal de entrega já existe e já está na tela de quem decide; automatizar
   o recuo esbarra na mesma frase da RFC que esta fatia respeitou, e pede decisão própria.
+  *Decidido pela ADR 0033 e construído pela FDD 038, e a decisão foi não suspender: entrega
+  crítica entra como quarta condição da escada e leva à mesma `RELACAO_TENSA`. Sinal ruim troca a
+  escada, nunca cria silêncio.*
 
 ## O que a construção decidiu
 

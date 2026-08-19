@@ -1589,6 +1589,17 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
                 "satisfacao_nivel": serializers.CharField(allow_null=True),
                 "satisfacao_fonte": serializers.CharField(allow_null=True),
                 "satisfacao_dias": serializers.IntegerField(allow_null=True),
+                # Por que a relação está tensa (FDD 038): `satisfacao`, `entrega`, `ambas` ou nulo.
+                # É rótulo, não decisão — as três causas levam à mesma escada, e quem diz qual
+                # escada vale é `regua`.
+                "tensao_causa": serializers.CharField(allow_null=True),
+                # A resposta de cobrança que a IA classificou e que **ninguém registrou ainda**
+                # (ADR 0032). Os quatro são nulos juntos. Não é satisfação: é leitura de uma
+                # resposta, e o painel a oferece como atalho para uma pessoa registrar.
+                "sinal_kind": serializers.CharField(allow_null=True),
+                "sinal_display": serializers.CharField(allow_null=True),
+                "sinal_em": serializers.DateField(allow_null=True),
+                "sinal_activity": serializers.IntegerField(allow_null=True),
                 "regua": serializers.CharField(),
                 "recebido_do_cliente": serializers.DecimalField(
                     max_digits=12, decimal_places=2
@@ -1994,7 +2005,7 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "satisfacao"
     queryset = Satisfacao.objects.select_related(
-        "client", "project", "source_meeting", "registered_by"
+        "client", "project", "source_meeting", "source_activity", "registered_by"
     ).all()
     serializer_class = SatisfacaoSerializer
     filter_fields = ("client", "project")

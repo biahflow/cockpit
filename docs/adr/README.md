@@ -32,3 +32,6 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0028 — O documento que não sobrevivia à revisão
 - 0029 — A identidade que o Django não sabia apresentar
 - 0030 — A operação sai do texto: o cockpit vira o sistema primário
+- 0031 — O degrau sai sozinho, o texto da IA não
+- 0032 — Só a declarada move número
+- 0033 — A camada 5 não suspende sozinha

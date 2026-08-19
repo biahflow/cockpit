@@ -754,6 +754,16 @@ class Satisfacao(TimestampedModel):
     source_meeting = models.ForeignKey(
         Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
     )
+    # A outra proveniência: a resposta de cobrança que a IA classificou (FDD 038). É ela que dá
+    # **leitor** ao `Activity.cobranca_sinal`, que até aqui era gravado e nunca lido por motor
+    # nenhum. O painel usa esta ligação para parar de oferecer o atalho depois do registro — sem
+    # ela, o mesmo sinal insistiria para sempre, mesmo já registrado.
+    #
+    # A IA continua sem gravar nada (ADR 0032): o atalho pré-preenche um formulário e quem salva é
+    # gente. O campo é o registro de que a leitura virou registro, não a leitura virando registro.
+    source_activity = models.ForeignKey(
+        Activity, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
+    )
     nivel = models.CharField(max_length=16, choices=Nivel.choices)
     # **Sem default**, ao contrário de quase todo `choices` desta casa. Um default faria a
     # distinção que decide se o registro move número ser escolhida por omissão, e o campo existe
@@ -776,6 +786,17 @@ class Satisfacao(TimestampedModel):
     def clean(self) -> None:
         if self.project_id and self.project and self.project.client_id != self.client_id:
             raise ValidationError({"project": "O projeto deve pertencer ao mesmo cliente."})
+        # Mesma checagem para a atividade de origem, e pela mesma razão: sem ela, a resposta de
+        # **outro** cliente viraria a satisfação declarada deste — e essa é a linha que troca a
+        # escada da cobrança e tira 20 pontos do Health Score.
+        if (
+            self.source_activity_id
+            and self.source_activity
+            and self.source_activity.client_id != self.client_id
+        ):
+            raise ValidationError(
+                {"source_activity": "A interação deve pertencer ao mesmo cliente."}
+            )
         # **Insatisfeito é o único nível que muda comportamento** — tira 20 pontos do Health Score
         # e troca a escada da régua —, e um sinal que muda comportamento sem motivo escrito é
         # exatamente o que apodrece: seis meses depois ninguém sabe o que o cliente disse, e a

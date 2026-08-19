@@ -275,14 +275,16 @@ const FIXTURES: Record<string, unknown> = {
     proximo_degrau: caso.degrau, proximo_degrau_display: caso.rotulo,
     proximo_degrau_em: caso.degrau ? HOJE : null,
     motivo: caso.motivo,
-    // A terceira linha vai sem projeto de propósito: "sem projeto ligado à fatura" é conteúdo de
-    // verdade na tela e precisa ser medido junto com o resto.
-    health_level: indice === 2 ? null : ["crítico", "atenção", "crítico", "saudável", "atenção"][indice],
+    // A terceira linha vai sem projeto ativo de propósito: "sem projeto ativo neste cliente" é
+    // conteúdo de verdade na tela e precisa ser medido junto com o resto. A segunda vai crítica
+    // pela razão oposta: é a que entra tensa **por entrega**, e um "atenção" ali deixaria o mock
+    // incoerente justamente onde a FDD 038 exige que a tela não contradiga o relógio.
+    health_level: indice === 2 ? null : ["saudável", "crítico", "crítico", "saudável", "atenção"][indice],
     tempo_de_casa_dias: [1460, 200, 45, 20, 900][indice],
     reincidente: indice % 2 === 1,
     // Uma régua de cada (FDD 037): a terceira linha entra tensa, com satisfação declarada
     // insatisfeita vigente — a única combinação que rende o selo `state--3` novo na tela.
-    regua: indice === 0 || indice === 4 ? "relacao_longa" : indice === 2 ? "relacao_tensa" : "padrao",
+    regua: indice === 0 || indice === 4 ? "relacao_longa" : indice === 1 || indice === 2 ? "relacao_tensa" : "padrao",
     recebido_do_cliente: "180000.00",
     // A satisfação vigente (FDD 037). Uma linha declarada insatisfeita (a que carrega a régua
     // tensa), uma percebida promotora e as demais sem registro — o axe precisa medir o selo
@@ -290,6 +292,17 @@ const FIXTURES: Record<string, unknown> = {
     satisfacao_nivel: indice === 2 ? "insatisfeito" : indice === 4 ? "promotor" : null,
     satisfacao_fonte: indice === 2 ? "declarada" : indice === 4 ? "percebida" : null,
     satisfacao_dias: indice === 2 ? 5 : indice === 4 ? 40 : null,
+    // A causa da tensão (FDD 038). A terceira linha é tensa por satisfação declarada; a segunda
+    // entra tensa **por entrega**, que é a combinação que rende o texto mais longo da faixa e a
+    // única em que a causa aparece sem satisfação nenhuma na linha.
+    tensao_causa: indice === 2 ? "satisfacao" : indice === 1 ? "entrega" : null,
+    // O sinal por registrar (FDD 038): selo neutro, data e o botão do atalho — superfície nova, e o
+    // axe precisa medir o contraste dela ao lado do selo colorido da satisfação vigente, que é
+    // justamente o par que a tela não pode deixar parecer a mesma coisa.
+    sinal_kind: indice === 1 ? "insatisfeito" : indice === 3 ? "nao_pode" : null,
+    sinal_display: indice === 1 ? "Insatisfeito" : indice === 3 ? "Não pôde pagar" : null,
+    sinal_em: indice === 1 || indice === 3 ? VENCIDO : null,
+    sinal_activity: indice === 1 ? 11 : indice === 3 ? 13 : null,
     suspensao: caso.suspensa
       ? { id: 1, until: "2026-09-30", owner: 1, owner_name: "Maria de Lourdes Albuquerque" }
       : null,

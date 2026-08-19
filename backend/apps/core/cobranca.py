@@ -44,6 +44,7 @@ from . import satisfacao as satisfacao_module
 
 if TYPE_CHECKING:
     from .models import (
+        Activity,
         AiInteraction,
         Client,
         CobrancaContato,
@@ -227,6 +228,15 @@ TETO_DE_FREQUENCIA = "teto_de_frequencia"
 FIM_DE_SEMANA = "fim_de_semana"
 FLAG_DESLIGADA = "flag_desligada"
 
+# Por que a relação está tensa. **Só para exibição** — a escada é a mesma nas três causas, e
+# nenhuma delas cala a régua. Constantes pela razão dos motivos de silêncio acima: são o que a tela
+# rotula e o que os testes nomeiam. Se elas colapsassem num rótulo só, o painel diria "régua tensa"
+# e não diria por quê, e as duas condutas que ele deveria sugerir são diferentes — uma pede
+# conversa sobre a relação, a outra pede conserto da entrega.
+TENSAO_SATISFACAO = "satisfacao"
+TENSAO_ENTREGA = "entrega"
+TENSAO_AMBAS = "ambas"
+
 
 class SemDestinatarioInterno(Exception):
     """Não há a quem escalar: nenhum admin ativo e nenhum dono ativo do cliente.
@@ -257,9 +267,15 @@ class PainelContexto:
     **Nasce para um dia.** O teto de frequência e a reincidência são recortes de `hoje`; `avaliar`
     recusa um contexto de outro dia em vez de responder errado em silêncio.
 
-    `health_por_projeto` guarda **só o `level`**, nunca o score nem os sinais — a mesma cerca
+    `health_por_cliente` guarda **só o `level`**, nunca o score nem os sinais — a mesma cerca
     comercial de `ai.build_cobranca_context`, aqui porque a linha do painel vai para a tela e "62 de
     100, 2 entregas atrasadas" é a nossa medição da nossa própria falha.
+
+    Ele é **por cliente e não por projeto** desde a FDD 038, e é o pior nível entre os projetos não
+    concluídos dele. A chave é a da pergunta: a régua pergunta por cliente, e fatura sem projeto
+    existe. Guardá-lo por projeto obrigaria a tela a escolher um — na prática o da fatura — e a
+    escolha discordaria da guarda no caso que ela existe para tratar: o cliente com dois projetos,
+    um crítico e um saudável, apareceria "saudável" com a régua já tensa.
     """
 
     hoje: date
@@ -269,7 +285,12 @@ class PainelContexto:
     clientes_no_teto: set[int] = field(default_factory=set)
     atrasos_por_cliente: dict[int, set[int]] = field(default_factory=dict)
     recebido_por_cliente: dict[int, Decimal] = field(default_factory=dict)
-    health_por_projeto: dict[int, str] = field(default_factory=dict)
+    health_por_cliente: dict[int, str] = field(default_factory=dict)
+    # A última resposta de cobrança que a IA classificou e que **ninguém registrou ainda** (FDD 038,
+    # ADR 0032). É leitura, não registro: o painel a mostra para oferecer o atalho, e ela some da
+    # linha assim que existir uma `Satisfacao` apontando para aquela atividade. Sem a pré-carga
+    # seria mais um N+1 por fatura, e por cliente e não por fatura porque a satisfação é da relação.
+    sinal_por_cliente: dict[int, Activity] = field(default_factory=dict)
     # Os registros **vigentes**, e não a satisfação já escolhida, porque as duas leituras desta
     # dimensão são diferentes: a linha do painel mostra a vigente de qualquer fonte (a percebida é
     # leitura útil para gente decidir) e a escada só reage à `declarada` (ADR 0032). Guardar uma
@@ -282,17 +303,19 @@ class PainelContexto:
 def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContexto:
     """Uma query por dimensão, e nenhuma dentro do laço.
 
-    Onze consultas no total, independentemente de quantas faturas entrem — cinco delas vindas de
+    Treze consultas no total, independentemente de quantas faturas entrem — cinco delas vindas de
     `health.assess_projects_health`, que já resolveu o mesmo problema para a saúde do projeto.
 
-    A satisfação vigente (FDD 037) é a última, e é consultada aqui mesmo o `health` já tendo
+    A satisfação vigente (FDD 037) é a penúltima, e é consultada aqui mesmo o `health` já tendo
     consultado a sua: aquela é a vigente **declarada** por cliente de projeto, esta é o conjunto
     vigente por cliente de fatura, e nem todo cliente com fatura tem projeto. Reaproveitar uma na
     outra faria a linha do painel depender de o cliente estar em entrega.
     """
     from . import health as health_module
-    from .models import CobrancaContato, CobrancaSuspensao
+    from .models import Activity, CobrancaContato, CobrancaSuspensao
     from .models import Invoice as InvoiceModel
+    from .models import Project as ProjectModel
+    from .models import Satisfacao as SatisfacaoModel
 
     if not invoices:
         return PainelContexto(hoje=hoje)
@@ -345,15 +368,51 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         .annotate(total=Sum("amount"))
     }
 
-    projetos = {
-        invoice.project_id: invoice.project
-        for invoice in invoices
-        if invoice.project_id is not None and invoice.project is not None
-    }
-    saude = {
-        avaliacao["project_id"]: avaliacao["level"]
-        for avaliacao in health_module.assess_projects_health(list(projetos.values()))
-    }
+    # A fonte do health são **os projetos não concluídos dos clientes das faturas**, e não os
+    # projetos das faturas (FDD 038). A pergunta da guarda é por cliente: fatura sem projeto existe,
+    # e o cliente cuja entrega está em frangalhos costuma ser justamente o que já saiu do projeto
+    # que gerou a fatura. Projeto concluído fica de fora de propósito — um crítico congelado no
+    # passado deixaria a trava ligada para sempre, que é como uma trava apodrece.
+    ativos = list(
+        ProjectModel.objects.filter(client_id__in=clientes, archived_at__isnull=True).exclude(
+            status=ProjectModel.Status.COMPLETED
+        )
+    )
+    cliente_do_projeto = {project.pk: project.client_id for project in ativos}
+    niveis: dict[int, list[str]] = defaultdict(list)
+    for avaliacao in health_module.assess_projects_health(ativos):
+        niveis[cliente_do_projeto[avaliacao["project_id"]]].append(avaliacao["level"])
+    saude: dict[int, str] = {}
+    for client_id, lista in niveis.items():
+        # O **pior** nível, e a ordem é de `health` (a definição de "crítico" mora lá, e o limiar
+        # não se redefine aqui). Cliente com um projeto em frangalhos e outro saudável não tem meia
+        # saúde: a régua já reagiu ao crítico, e mostrar o saudável seria a tela contradizendo o
+        # relógio.
+        pior = health_module.worst_level(lista)
+        if pior is not None:
+            saude[client_id] = pior
+
+    # A última resposta classificada e ainda não registrada, por cliente. O `exclude` sobre a
+    # relação reversa é o que faz o atalho parar de insistir depois do registro — e ele olha só a
+    # satisfação **não arquivada**, porque um registro que alguém arquivou deixou de valer e o
+    # sinal volta a estar por registrar.
+    sinais: dict[int, Activity] = {}
+    registradas = SatisfacaoModel.objects.filter(
+        source_activity__isnull=False, archived_at__isnull=True
+    ).values("source_activity_id")
+    for activity in (
+        Activity.objects.filter(client_id__in=clientes, archived_at__isnull=True)
+        .exclude(cobranca_sinal="")
+        # Subconsulta explícita, e **não** `.exclude(satisfacoes__archived_at__isnull=True)`: o
+        # `exclude` sobre relação reversa monta um LEFT JOIN, e para a atividade sem nenhuma
+        # satisfação a coluna vem nula — ou seja, ele excluiria justamente os sinais por registrar,
+        # que são todos os que esta linha existe para achar.
+        .exclude(pk__in=registradas)
+        # Explícito e não herdado do `Meta.ordering`: é a ordem que define qual é "a última", e ela
+        # não pode depender de uma linha de outro arquivo continuar onde está.
+        .order_by("-happened_on", "-created_at")
+    ):
+        sinais.setdefault(activity.client_id, activity)
 
     return PainelContexto(
         hoje=hoje,
@@ -363,7 +422,8 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         clientes_no_teto=no_teto,
         atrasos_por_cliente=dict(atrasos),
         recebido_por_cliente=recebido,
-        health_por_projeto=saude,
+        health_por_cliente=saude,
+        sinal_por_cliente=sinais,
         satisfacoes_por_cliente=satisfacao_module.registros_vigentes_por_cliente(clientes, hoje),
     )
 
@@ -490,6 +550,66 @@ def insatisfacao_declarada(
     return registro
 
 
+def entrega_critica(
+    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+) -> bool:
+    """A outra metade da camada 5: **a nossa entrega** está em estado crítico para este cliente?
+
+    A condição é ter ao menos um projeto **não concluído** com `level == "crítico"`. Projeto
+    concluído fica de fora porque um crítico congelado no passado deixaria a trava ligada para
+    sempre — e uma trava que nunca desliga é uma trava que ninguém respeita.
+
+    **Pergunta por cliente, e não pelo projeto da fatura** (FDD 038), pela mesma razão que a
+    `Satisfacao` liga ao cliente: a régua pergunta por cliente e fatura sem projeto existe. Ligar
+    ao projeto da fatura deixaria a trava sem alcance justamente em quem já saiu daquela entrega.
+
+    **Só o `level` atravessa**, nunca o score nem os sinais — a mesma cerca comercial do
+    `PainelContexto`. E o limiar é o de `health._level`: reescrevê-lo aqui criaria uma segunda
+    definição de "crítico", que diverge da primeira sem nada ficar vermelho.
+
+    `hoje` entra na assinatura para as três guardas de `regua_para` serem chamadas do mesmo jeito, e
+    não é usado: o Health Score é função pura sobre o agora e não recebe um dia por parâmetro.
+    """
+    from . import health as health_module
+    from .models import Project
+
+    if contexto is not None:
+        # A **mesma** leitura que a linha do painel mostra, e não uma segunda consulta: é isto que
+        # impede a tela de dizer "saudável" com a régua já tensa por entrega.
+        return contexto.health_por_cliente.get(client.pk) == health_module.CRITICAL
+    ativos = list(
+        Project.objects.filter(client=client, archived_at__isnull=True).exclude(
+            status=Project.Status.COMPLETED
+        )
+    )
+    return any(
+        avaliacao["level"] == health_module.CRITICAL
+        for avaliacao in health_module.assess_projects_health(ativos)
+    )
+
+
+def causa_da_tensao(
+    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+) -> str | None:
+    """Por que a relação está tensa — `satisfacao`, `entrega`, `ambas`, ou nada.
+
+    **Não participa da decisão.** `regua_para` não a chama: as duas condições levam à mesma escada,
+    e derivar a escada da causa transformaria um rótulo de tela em regra de dinheiro. O que ela
+    existe para evitar é o painel dizer "régua tensa" sem dizer por quê — as condutas que as duas
+    causas sugerem são diferentes, e uma é consertável por quem entrega.
+    """
+    dia = _hoje(hoje)
+    por_satisfacao = insatisfacao_declarada(client, dia, contexto=contexto) is not None
+    por_entrega = entrega_critica(client, dia, contexto=contexto)
+    if por_satisfacao and por_entrega:
+        return TENSAO_AMBAS
+    if por_satisfacao:
+        return TENSAO_SATISFACAO
+    if por_entrega:
+        return TENSAO_ENTREGA
+    return None
+
+
 def regua_para(
     client: Client,
     hoje: date | None = None,
@@ -503,9 +623,19 @@ def regua_para(
     insatisfeito é o caso mais perigoso da carteira, e a escada desenhada para proteger o cliente
     antigo não pode absorvê-lo em silêncio — ela adia o lembrete e depois escala, quando o que este
     caso precisa é de gente na conversa mais cedo, não de mais paciência do robô.
+
+    A tensão tem **duas** origens desde a FDD 038, e as duas levam à mesma escada: o cliente disse
+    que está insatisfeito, ou a nossa entrega está em estado crítico. O argumento acima vale inteiro
+    para a segunda — um cliente de anos com a entrega em frangalhos é o mesmo caso perigoso, só que
+    medido pelo nosso próprio trabalho em vez de dito por ele. Uma escada nova para a entrega
+    duplicaria a `RELACAO_TENSA` e, com chaves próprias, faria o mesmo lembrete sair duas vezes para
+    quem trocasse de escada entre duas execuções. Qual das duas origens está valendo é pergunta de
+    tela, e quem responde é `causa_da_tensao`.
     """
     dia = _hoje(hoje)
-    if insatisfacao_declarada(client, dia, contexto=contexto) is not None:
+    if insatisfacao_declarada(client, dia, contexto=contexto) is not None or entrega_critica(
+        client, dia, contexto=contexto
+    ):
         return RELACAO_TENSA
     if tempo_de_casa_dias(client, dia) >= RELACAO_LONGA_DIAS and not reincidente(
         client, dia, ignorando=ignorando, contexto=contexto
@@ -848,8 +978,11 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
 
     dia = _hoje(hoje)
     invoices = list(
+        # Sem `select_related("project")` desde a FDD 038: o health da linha deixou de ser o do
+        # projeto **da fatura** e passou a ser o pior nível do cliente, e nenhuma outra coluna lê o
+        # projeto. Um `select_related` sem leitor é um join pago por nada.
         Invoice.objects.filter(status__in=COBRAVEIS)
-        .select_related("client", "project")
+        .select_related("client")
         .order_by("due_date", "id")
     )
     contexto = contexto_do_painel(invoices, dia)
@@ -873,6 +1006,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
         regua = regua_para(invoice.client, dia, ignorando=invoice, contexto=contexto)
         suspensao = suspensao_ativa(invoice, dia, contexto=contexto)
         satisfacao = satisfacao_vigente(invoice.client, dia, contexto=contexto)
+        sinal = contexto.sinal_por_cliente.get(invoice.client_id)
         linhas.append({
             "invoice": invoice.pk,
             "number": invoice.number,
@@ -894,8 +1028,12 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
                 invoice.due_date + timedelta(days=degrau.de) if degrau else None
             ),
             "motivo": avaliacao.motivo,
-            # Só o nível. Ver a cerca comercial em `PainelContexto`.
-            "health_level": contexto.health_por_projeto.get(invoice.project_id or 0),
+            # Só o nível, e o **pior entre os projetos não concluídos do cliente** (FDD 038).
+            # Era o do projeto da fatura, e os dois discordavam: a guarda de entrega olha todos os
+            # projetos ativos do cliente, então a tela diria "saudável" com a régua já tensa. Nulo
+            # quando o cliente não tem projeto ativo nenhum. Ver a cerca comercial em
+            # `PainelContexto`.
+            "health_level": contexto.health_por_cliente.get(invoice.client_id),
             "tempo_de_casa_dias": tempo_de_casa_dias(invoice.client, dia),
             # A satisfação vigente, na mesma linha do próximo degrau (FDD 037) — a exigência da
             # RFC 0004 de decidir *"na mesma tela, não a dois cliques"*, agora com o sinal que
@@ -907,6 +1045,16 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             # Idade e não a data: o sinal envelhece, e "há 12 dias" é a leitura que faz alguém
             # perguntar de novo — a data crua exigiria a subtração de cabeça.
             "satisfacao_dias": (dia - satisfacao.happened_on).days if satisfacao else None,
+            # Por que a relação está tensa, quando está (FDD 038). Rótulo, não decisão: a escada
+            # é a mesma nas três causas, e é `regua` que diz qual escada vale.
+            "tensao_causa": causa_da_tensao(invoice.client, dia, contexto=contexto),
+            # A leitura da IA que **ninguém registrou ainda** (ADR 0032). Vai rotulada como leitura
+            # justamente para não se confundir com a satisfação vigente logo acima: aquela é
+            # registro, esta é uma resposta lida. Some da linha quando alguém registrar.
+            "sinal_kind": sinal.cobranca_sinal if sinal else None,
+            "sinal_display": sinal.get_cobranca_sinal_display() if sinal else None,
+            "sinal_em": sinal.happened_on if sinal else None,
+            "sinal_activity": sinal.pk if sinal else None,
             "reincidente": reincidente(invoice.client, dia, ignorando=invoice, contexto=contexto),
             "regua": _nome_da_regua(regua),
             # O "valor do cliente" que a RFC pede à vista: o que a casa já recebeu dele, e não o
@@ -962,9 +1110,16 @@ def executar(hoje: date | None = None) -> dict[str, object]:
 
     avaliadas = contatos = escaladas = falhas = 0
     calados: dict[str, int] = {}
-    for invoice in Invoice.objects.filter(status__in=COBRAVEIS).select_related("client__owner"):
+    # A lista materializada e **um** contexto para a passada inteira (FDD 038). O laço já era um
+    # N+1 de quatro perguntas por fatura; a guarda de entrega somaria o Health Score de cada
+    # cliente a isso, e o job roda sobre a carteira toda. É a mesma pré-carga do painel, e a
+    # equivalência entre os dois caminhos tem teste próprio — `contexto` troca a fonte do dado,
+    # nunca a regra.
+    cobraveis = list(Invoice.objects.filter(status__in=COBRAVEIS).select_related("client__owner"))
+    contexto = contexto_do_painel(cobraveis, dia)
+    for invoice in cobraveis:
         avaliadas += 1
-        avaliacao = avaliar(invoice, dia)
+        avaliacao = avaliar(invoice, dia, contexto=contexto)
         if avaliacao.degrau is None:
             calados[avaliacao.motivo] = calados.get(avaliacao.motivo, 0) + 1
             continue
@@ -987,6 +1142,13 @@ def executar(hoje: date | None = None) -> dict[str, object]:
             continue
         if contato.canal == "email":
             contatos += 1
+            # **O teto de frequência é a única dimensão que esta passada muda**, e é por cliente:
+            # sem esta linha, quem tem três faturas vencidas receberia três e-mails no mesmo dia —
+            # o contexto foi lido antes do primeiro envio e continuaria dizendo que a franquia está
+            # livre. Era o que a consulta fatura a fatura fazia de graça, e é o preço de pré-carregar
+            # o que o próprio laço altera. As outras dimensões (suspensão, reincidência, satisfação,
+            # health) não mudam por a régua ter falado.
+            contexto.clientes_no_teto.add(invoice.client_id)
         else:
             escaladas += 1
 
