@@ -1,0 +1,1063 @@
+"""A régua de cobrança (FDD 036, camadas 3 e 4 da RFC 0004).
+
+A escada é função pura sobre o estado da fatura, e é por isso que este arquivo começa por ela: o
+oráculo do resto é "que degrau cabe hoje?" respondido sem banco, sem e-mail e sem relógio.
+
+Nada aqui fala com provedor externo — a régua lê fatura, escreve registro e manda e-mail pelo SMTP
+que a casa já usa —, então nada aqui está atrás de `# pragma: no cover`.
+"""
+
+from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+from django.core import mail
+from django.core.management import call_command
+from django.test import override_settings
+from django.utils import timezone
+from rest_framework.test import APIClient
+
+from apps.core import ai, cobranca
+from apps.core.models import (
+    Activity,
+    Client,
+    CobrancaContato,
+    CobrancaSuspensao,
+    Contact,
+    Invoice,
+    Notification,
+    User,
+)
+
+from .factories import (
+    ActivityFactory,
+    ClientFactory,
+    InvoiceFactory,
+    ProjectFactory,
+    ProjectMemberFactory,
+    UserFactory,
+)
+
+HOJE = date(2026, 9, 2)  # uma quarta-feira: dia útil, para o fim de semana não mascarar nada
+
+
+def _fatura(**kwargs) -> Invoice:  # type: ignore[no-untyped-def]
+    """Uma fatura **emitida**, que é o estado em que a régua tem o que fazer.
+
+    O número sai de um sequencial porque a `UniqueConstraint` parcial de `Invoice.number` é real:
+    duas faturas com o mesmo número reprovam no insert, e é fácil escrever um cenário de dois
+    recebíveis do mesmo cliente sem perceber.
+    """
+    kwargs.setdefault("status", Invoice.Status.ISSUED)
+    kwargs.setdefault("number", f"2026-{Invoice.objects.count() + 1:04d}")
+    return InvoiceFactory(**kwargs)
+
+
+def _vencendo_em(dias: int, **kwargs) -> Invoice:  # type: ignore[no-untyped-def]
+    """Fatura cujo vencimento cai `dias` **antes** de HOJE (negativo = ainda vai vencer)."""
+    return _fatura(due_date=HOJE - timedelta(days=dias), **kwargs)
+
+
+def _com_contato_de_cobranca(client: Client, email: str = "financeiro@cliente.test") -> Contact:
+    return Contact.objects.create(
+        client=client, name="Financeiro", email=email, receives_billing=True
+    )
+
+
+# --- A escada -----------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("dias", "esperado"),
+    [
+        (-5, None),          # cedo demais: o pré-aviso ainda não abriu
+        (-3, "pre_aviso"),
+        (-1, "pre_aviso"),
+        (0, None),           # vence hoje: a janela do pré-aviso fechou e a carência começou
+        (1, None),           # carência
+        (2, None),           # carência
+        (3, "lembrete"),
+        (9, "lembrete"),
+        (10, "firme"),
+        (19, "firme"),
+        (20, "escalada"),
+        (29, "escalada"),
+        (30, "renegociacao"),
+        (400, "renegociacao"),
+    ],
+)
+def test_a_escada_padrao_responde_por_dia(dias: int, esperado: str | None) -> None:
+    invoice = _vencendo_em(dias)
+    degrau = cobranca.degrau_devido(invoice, HOJE)
+    assert (degrau.key if degrau else None) == esperado
+
+
+@pytest.mark.django_db
+def test_a_carencia_nao_existe_como_degrau() -> None:
+    """O silêncio entre D+0 e D+3 é o degrau. Representá-lo como uma entrada que não faz nada
+    convidaria alguém a preenchê-la."""
+    chaves = {d.key for d in cobranca.PADRAO}
+    assert "carencia" not in chaves
+    assert all(cobranca.degrau_devido(_vencendo_em(d), HOJE) is None for d in (0, 1, 2))
+
+
+@pytest.mark.django_db
+def test_o_pre_aviso_atrasado_nao_vira_mentira() -> None:
+    """A régua não rodou em D−3 (fim de semana, flag desligada, emissão em cima da hora).
+
+    Sem a janela fechada em D+0, o "sua fatura vence em 3 dias" sairia com a fatura já vencida —
+    uma mentira escrita pela casa, e a única do repertório que o cliente consegue conferir sozinho.
+    """
+    invoice = _vencendo_em(1)
+    assert CobrancaContato.objects.filter(invoice=invoice).count() == 0
+    assert cobranca.degrau_devido(invoice, HOJE) is None
+
+
+def _cliente_de_casa() -> Client:
+    """Cliente com mais de um ano de casa. `created_at` é `auto_now_add`, então só o `update` o
+    move."""
+    client = ClientFactory()
+    Client.objects.filter(pk=client.pk).update(created_at=timezone.now() - timedelta(days=800))
+    client.refresh_from_db()
+    return client
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("dias", "esperado"),
+    [(3, None), (5, "lembrete"), (12, "lembrete"), (20, "escalada"), (30, "renegociacao")],
+)
+def test_relacao_longa_atrasa_o_lembrete_e_nao_tem_degrau_firme(
+    dias: int, esperado: str | None
+) -> None:
+    """Requisito da seção Segurança da RFC: cinco dias de atraso de um cliente antigo não é o
+    mesmo evento que reincidência.
+
+    Uma fatura por cenário, e de propósito: duas faturas vencidas do mesmo cliente já **são**
+    reincidência, e o teste passaria a medir outra coisa.
+    """
+    antigo = _cliente_de_casa()
+    assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_LONGA
+    assert "firme" not in {d.key for d in cobranca.RELACAO_LONGA}
+
+    degrau = cobranca.degrau_devido(_vencendo_em(dias, client=antigo), HOJE)
+    assert (degrau.key if degrau else None) == esperado
+
+
+@pytest.mark.django_db
+def test_relacao_longa_exige_ausencia_de_reincidencia() -> None:
+    antigo = _cliente_de_casa()
+    InvoiceFactory(
+        client=antigo, status=Invoice.Status.PAID, number="2025-0009",
+        due_date=HOJE - timedelta(days=200),
+        paid_at=timezone.make_aware(
+            timezone.datetime(2026, 3, 1, 12, 0)
+        ),
+    )
+    assert cobranca.reincidente(antigo, HOJE) is True
+    assert cobranca.regua_para(antigo, HOJE) is cobranca.PADRAO
+
+
+@pytest.mark.django_db
+def test_a_reincidencia_ignora_a_propria_fatura() -> None:
+    """Sem esta exclusão, toda fatura vencida tornaria o próprio cliente reincidente — e a
+    `RELACAO_LONGA` seria inalcançável exatamente quando ela serve para alguma coisa."""
+    antigo = _cliente_de_casa()
+    atrasada = _vencendo_em(12, client=antigo, status=Invoice.Status.OVERDUE)
+
+    assert cobranca.reincidente(antigo, HOJE) is True
+    assert cobranca.reincidente(antigo, HOJE, ignorando=atrasada) is False
+    assert cobranca.regua_para(antigo, HOJE, ignorando=atrasada) is cobranca.RELACAO_LONGA
+
+
+@pytest.mark.django_db
+def test_pagamento_no_prazo_nao_e_reincidencia() -> None:
+    client = ClientFactory()
+    InvoiceFactory(
+        client=client, status=Invoice.Status.PAID,
+        due_date=HOJE - timedelta(days=30),
+        paid_at=timezone.make_aware(timezone.datetime(2026, 8, 3, 9, 0)),
+    )
+    assert cobranca.reincidente(client, HOJE) is False
+
+
+# --- As guardas, uma por uma --------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "estado",
+    [Invoice.Status.DRAFT, Invoice.Status.PAID, Invoice.Status.CANCELLED,
+     Invoice.Status.RENEGOTIATED],
+)
+def test_estado_nao_cobravel_nao_tem_degrau(estado: str) -> None:
+    invoice = _vencendo_em(12, status=estado)
+    assert cobranca.avaliar(invoice, HOJE).motivo == cobranca.ESTADO_NAO_COBRAVEL
+
+
+@pytest.mark.django_db
+def test_suspensao_ativa_cala_e_suspensao_vencida_devolve() -> None:
+    invoice = _vencendo_em(12)
+    suspensao = CobrancaSuspensao.objects.create(
+        invoice=invoice, owner=invoice.client.owner, until=HOJE, reason="Entrega atrasada."
+    )
+    assert cobranca.avaliar(invoice, HOJE).motivo == cobranca.SUSPENSA
+
+    # `until` é inclusivo: no dia seguinte a régua volta sozinha, sem intervenção.
+    assert cobranca.degrau_devido(invoice, HOJE + timedelta(days=1)).key == "firme"
+
+    suspensao.until = HOJE + timedelta(days=10)
+    suspensao.save()
+    assert cobranca.avaliar(invoice, HOJE + timedelta(days=1)).motivo == cobranca.SUSPENSA
+
+
+@pytest.mark.django_db
+def test_suspensao_do_cliente_cala_todas_as_faturas_dele() -> None:
+    client = ClientFactory()
+    uma = _vencendo_em(12, client=client)
+    outra = _vencendo_em(30, client=client)
+    CobrancaSuspensao.objects.create(
+        client=client, owner=client.owner, until=HOJE + timedelta(days=5), reason="Renegociando."
+    )
+    assert cobranca.degrau_devido(uma, HOJE) is None
+    assert cobranca.degrau_devido(outra, HOJE) is None
+
+
+@pytest.mark.django_db
+def test_suspensao_levantada_nao_cala_mais() -> None:
+    invoice = _vencendo_em(12)
+    CobrancaSuspensao.objects.create(
+        invoice=invoice, owner=invoice.client.owner, until=HOJE + timedelta(days=30),
+        reason="Engano.", lifted_at=timezone.now(),
+    )
+    assert cobranca.degrau_devido(invoice, HOJE).key == "firme"
+
+
+@pytest.mark.django_db
+def test_o_teto_de_frequencia_e_por_cliente_somando_todas_as_faturas() -> None:
+    """Quem tem três vencidas recebe um e-mail, não três."""
+    client = ClientFactory()
+    uma = _vencendo_em(12, client=client)
+    outra = _vencendo_em(4, client=client)
+    CobrancaContato.objects.create(
+        invoice=uma, client=client, degrau="firme", canal=CobrancaContato.Canal.EMAIL,
+        sent_on=HOJE, subject="x", body="y",
+    )
+    assert cobranca.avaliar(outra, HOJE).motivo == cobranca.TETO_DE_FREQUENCIA
+    # Passados os cinco dias, a franquia volta.
+    assert cobranca.pode_contatar(client, HOJE + timedelta(days=5)) is True
+    assert cobranca.pode_contatar(client, HOJE + timedelta(days=4)) is False
+
+
+@pytest.mark.django_db
+def test_o_teto_nao_cala_a_escalada_interna() -> None:
+    """O teto protege a caixa de entrada do cliente. A escalada não chega lá, e atrasá-la seria
+    calar justamente o degrau que existe para acordar gente."""
+    client = ClientFactory()
+    uma = _vencendo_em(4, client=client)
+    outra = _vencendo_em(22, client=client)
+    CobrancaContato.objects.create(
+        invoice=uma, client=client, degrau="lembrete", canal=CobrancaContato.Canal.EMAIL,
+        sent_on=HOJE, subject="x", body="y",
+    )
+    assert cobranca.degrau_devido(outra, HOJE).key == "escalada"
+
+
+@pytest.mark.django_db
+def test_aviso_interno_nao_gasta_a_franquia_do_cliente() -> None:
+    client = ClientFactory()
+    uma = _vencendo_em(22, client=client)
+    outra = _vencendo_em(4, client=client)
+    CobrancaContato.objects.create(
+        invoice=uma, client=client, degrau="escalada", canal=CobrancaContato.Canal.INTERNO,
+        sent_on=HOJE, subject="x", body="y",
+    )
+    assert cobranca.degrau_devido(outra, HOJE).key == "lembrete"
+
+
+@pytest.mark.django_db
+def test_degrau_gasto_nao_se_repete() -> None:
+    invoice = _vencendo_em(12)
+    CobrancaContato.objects.create(
+        invoice=invoice, client=invoice.client, degrau="firme",
+        canal=CobrancaContato.Canal.EMAIL, sent_on=HOJE, subject="x", body="y",
+    )
+    assert cobranca.avaliar(invoice, HOJE).motivo == cobranca.DEGRAU_GASTO
+
+
+# --- O job --------------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_flag_desligada_e_um_no_op_silencioso() -> None:
+    """A régua nasce desligada (FDD 036, "O pressuposto que não se cumpriu")."""
+    _vencendo_em(12)
+    resumo = cobranca.executar(HOJE)
+    assert resumo["motivo"] == cobranca.FLAG_DESLIGADA
+    assert CobrancaContato.objects.count() == 0
+    assert mail.outbox == []
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_a_regua_nao_roda_em_fim_de_semana() -> None:
+    _vencendo_em(12)
+    sabado = date(2026, 9, 5)
+    assert sabado.weekday() == 5
+    resumo = cobranca.executar(sabado)
+    assert resumo["motivo"] == cobranca.FIM_DE_SEMANA
+    assert CobrancaContato.objects.count() == 0
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_o_pre_aviso_sai_por_email_ao_contato_de_cobranca() -> None:
+    invoice = _vencendo_em(-3)
+    _com_contato_de_cobranca(invoice.client)
+    Contact.objects.create(client=invoice.client, name="Técnico", email="tech@cliente.test")
+
+    resumo = cobranca.executar(HOJE)
+
+    assert resumo["contatos"] == 1
+    (enviado,) = mail.outbox
+    # Só quem recebe cobrança. O contato técnico existe e não entra.
+    assert enviado.to == ["financeiro@cliente.test"]
+    assert "vence" in enviado.subject
+    contato = CobrancaContato.objects.get()
+    assert contato.degrau == "pre_aviso"
+    assert contato.canal == CobrancaContato.Canal.EMAIL
+    assert contato.sent_by_id is None  # nulo = automático
+    assert contato.body == enviado.body  # a prova é o texto que saiu
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_sem_contato_de_cobranca_o_degrau_vira_escalada_interna() -> None:
+    """Falha fechada: cala quando não sabe, e cala em voz alta."""
+    invoice = _vencendo_em(4)
+
+    cobranca.executar(HOJE)
+
+    contato = CobrancaContato.objects.get()
+    assert contato.degrau == "lembrete"
+    assert contato.canal == CobrancaContato.Canal.INTERNO
+    assert contato.to_email == ""
+    assert "recebe cobrança" in contato.body
+    assert Notification.objects.filter(user=invoice.client.owner, kind="cobranca").exists()
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_a_escalada_acorda_o_dono_do_cliente_e_os_admins_nao_a_equipe() -> None:
+    """O destinatário é quem responde pela relação, não a equipe do projeto — e por isso a
+    notificação sai **sem** `project=`, cujo filtro recortaria por participação."""
+    dono = UserFactory(role=User.Role.SALES)
+    admin = UserFactory(role=User.Role.ADMIN)
+    entrega = UserFactory(role=User.Role.DELIVERY)
+    client = ClientFactory(owner=dono)
+    projeto = ProjectFactory(client=client)
+    ProjectMemberFactory(project=projeto, user=entrega)
+    _vencendo_em(22, client=client, project=projeto)
+
+    resumo = cobranca.executar(HOJE)
+
+    assert resumo["escaladas"] == 1
+    avisados = set(Notification.objects.filter(kind="cobranca").values_list("user_id", flat=True))
+    assert dono.pk in avisados
+    assert admin.pk in avisados
+    assert entrega.pk not in avisados
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_o_resumo_conta_os_calados_e_por_que() -> None:
+    """Um job de cobrança que não manda nada é o caso comum; sem os motivos, a única leitura
+    possível do silêncio é supor que ele quebrou."""
+    calada = _vencendo_em(12)
+    CobrancaSuspensao.objects.create(
+        invoice=calada, owner=calada.client.owner, until=HOJE, reason="Entrega atrasada."
+    )
+    _vencendo_em(1)  # carência
+
+    resumo = cobranca.executar(HOJE)
+
+    assert resumo["avaliadas"] == 2
+    assert resumo["calados"] == {cobranca.SUSPENSA: 1, cobranca.SEM_DEGRAU: 1}
+    assert resumo["contatos"] == 0
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_o_email_que_nao_sai_nao_grava_contato(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Registro gravado sem o envio ter acontecido é a classe de defeito que a homologação de
+    integrações achou três vezes. Aqui ela custaria duas mentiras: o degrau constaria gasto (e a
+    `UniqueConstraint` impediria a retentativa) e a tela diria que o cliente foi avisado."""
+    invoice = _vencendo_em(4)
+    _com_contato_de_cobranca(invoice.client)
+
+    def explode(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise OSError("SMTP fora do ar")
+
+    monkeypatch.setattr(cobranca, "send_mail", explode)
+
+    resumo = cobranca.executar(HOJE)
+
+    assert resumo["falhas"] == 1
+    assert CobrancaContato.objects.count() == 0
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_o_comando_aceita_um_dia_fixo() -> None:
+    invoice = _vencendo_em(4)
+    _com_contato_de_cobranca(invoice.client)
+
+    call_command("run_dunning", f"--hoje={HOJE.isoformat()}")
+
+    assert CobrancaContato.objects.get().degrau == "lembrete"
+
+
+@pytest.mark.django_db
+def test_o_comando_recusa_uma_data_invalida() -> None:
+    from django.core.management.base import CommandError
+
+    with pytest.raises(CommandError):
+        call_command("run_dunning", "--hoje=ontem")
+
+
+def test_o_valor_sai_em_formato_brasileiro() -> None:
+    assert cobranca._moeda(Decimal("10000.01")) == "R$ 10.000,01"
+    assert cobranca._moeda(Decimal("999.50")) == "R$ 999,50"
+
+
+# --- O contrato -----------------------------------------------------------------------------
+
+
+@pytest.fixture
+def admin_api() -> APIClient:
+    api = APIClient()
+    api.force_authenticate(UserFactory(role=User.Role.ADMIN))
+    return api
+
+
+@pytest.mark.django_db
+def test_a_lista_de_cobranca_e_so_leitura(admin_api: APIClient) -> None:
+    """Um POST aqui criaria a prova de um contato que não aconteceu."""
+    invoice = _vencendo_em(12)
+    CobrancaContato.objects.create(
+        invoice=invoice, client=invoice.client, degrau="firme",
+        canal=CobrancaContato.Canal.EMAIL, sent_on=HOJE, subject="x", body="y",
+    )
+    assert len(admin_api.get("/api/v1/cobranca/").json()) == 1
+    assert admin_api.post("/api/v1/cobranca/", {}, format="json").status_code == 405
+
+
+@pytest.mark.django_db
+def test_a_rota_de_suspensoes_nao_e_engolida_pelo_detalhe_de_cobranca(admin_api: APIClient) -> None:
+    """`^cobranca/(?P<pk>[^/.]+)/$` casaria com `cobranca/suspensoes/` lendo "suspensoes" como pk."""
+    assert admin_api.get("/api/v1/cobranca/suspensoes/").status_code == 200
+
+
+@pytest.mark.django_db
+def test_suspender_exige_dono_prazo_e_motivo(admin_api: APIClient) -> None:
+    invoice = _vencendo_em(12)
+    dono = invoice.client.owner
+
+    sem_motivo = admin_api.post(
+        "/api/v1/cobranca/suspensoes/",
+        {"invoice": invoice.pk, "owner": dono.pk, "until": "2026-10-01", "reason": "  "},
+        format="json",
+    )
+    assert sem_motivo.status_code == 400
+
+    nos_dois = admin_api.post(
+        "/api/v1/cobranca/suspensoes/",
+        {"invoice": invoice.pk, "client": invoice.client_id, "owner": dono.pk,
+         "until": "2026-10-01", "reason": "Entrega atrasada."},
+        format="json",
+    )
+    assert nos_dois.status_code == 400
+
+    criada = admin_api.post(
+        "/api/v1/cobranca/suspensoes/",
+        {"invoice": invoice.pk, "owner": dono.pk, "until": "2026-10-01",
+         "reason": "Entrega atrasada."},
+        format="json",
+    )
+    assert criada.status_code == 201
+    assert CobrancaSuspensao.objects.get().created_by_id is not None
+
+
+@pytest.mark.django_db
+def test_levantar_uma_suspensao_tem_autor_e_carimbo(admin_api: APIClient) -> None:
+    invoice = _vencendo_em(12)
+    suspensao = CobrancaSuspensao.objects.create(
+        invoice=invoice, owner=invoice.client.owner, until=HOJE + timedelta(days=30),
+        reason="Engano.",
+    )
+    resp = admin_api.post(f"/api/v1/cobranca/suspensoes/{suspensao.pk}/levantar/")
+    assert resp.status_code == 200
+    suspensao.refresh_from_db()
+    assert suspensao.lifted_at is not None
+    assert suspensao.lifted_by_id is not None
+    # Levantar duas vezes é conflito de estado, não um segundo levantamento.
+    assert admin_api.post(
+        f"/api/v1/cobranca/suspensoes/{suspensao.pk}/levantar/"
+    ).status_code == 409
+
+
+@override_settings(DUNNING_ENABLED=True)  # o envio manual também passa pela flag
+@pytest.mark.django_db
+def test_enviar_manualmente_grava_o_autor_e_o_texto_revisado(admin_api: APIClient) -> None:
+    invoice = _vencendo_em(12)
+    _com_contato_de_cobranca(invoice.client)
+
+    resp = admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
+        {"degrau": "firme", "subject": "Sobre a fatura", "body": "Texto revisado por gente."},
+        format="json",
+    )
+
+    assert resp.status_code == 201
+    contato = CobrancaContato.objects.get()
+    assert contato.sent_by_id is not None  # preenchido = uma pessoa apertou enviar
+    assert contato.body == "Texto revisado por gente."
+    assert mail.outbox[0].body == "Texto revisado por gente."
+
+
+@override_settings(DUNNING_ENABLED=True)  # o envio manual também passa pela flag
+@pytest.mark.django_db
+def test_enviar_recusa_o_degrau_ja_gasto_com_409(admin_api: APIClient) -> None:
+    invoice = _vencendo_em(12)
+    _com_contato_de_cobranca(invoice.client)
+    corpo = {"degrau": "firme", "body": "Texto."}
+    assert admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/", corpo, format="json"
+    ).status_code == 201
+    assert admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/", corpo, format="json"
+    ).status_code == 409
+
+
+@override_settings(DUNNING_ENABLED=True)  # o envio manual também passa pela flag
+@pytest.mark.django_db
+def test_enviar_recusa_durante_a_suspensao(admin_api: APIClient) -> None:
+    """Recuar é declarado; passar por cima em silêncio faria a declaração não valer nada."""
+    invoice = _vencendo_em(12)
+    _com_contato_de_cobranca(invoice.client)
+    CobrancaSuspensao.objects.create(
+        invoice=invoice, owner=invoice.client.owner,
+        until=timezone.localdate() + timedelta(days=10), reason="Cliente insatisfeito.",
+    )
+    resp = admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
+        {"degrau": "firme", "body": "Texto."}, format="json",
+    )
+    assert resp.status_code == 409
+    assert CobrancaContato.objects.count() == 0
+
+
+@override_settings(DUNNING_ENABLED=True)  # o envio manual também passa pela flag
+@pytest.mark.django_db
+def test_enviar_recusa_fatura_paga(admin_api: APIClient) -> None:
+    invoice = _vencendo_em(12, status=Invoice.Status.PAID)
+    _com_contato_de_cobranca(invoice.client)
+    resp = admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
+        {"degrau": "firme", "body": "Texto."}, format="json",
+    )
+    assert resp.status_code == 409
+
+
+@override_settings(DUNNING_ENABLED=True)  # o envio manual também passa pela flag
+@pytest.mark.django_db
+def test_enviar_exige_texto_e_degrau_conhecido(admin_api: APIClient) -> None:
+    invoice = _vencendo_em(12)
+    assert admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
+        {"degrau": "carinhoso", "body": "Texto."}, format="json",
+    ).status_code == 400
+    assert admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
+        {"degrau": "firme", "body": "   "}, format="json",
+    ).status_code == 400
+
+
+@override_settings(DUNNING_ENABLED=True)  # o envio manual também passa pela flag
+@pytest.mark.django_db
+def test_o_e_mail_que_nao_sai_pela_api_nao_grava_contato(
+    admin_api: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    invoice = _vencendo_em(12)
+    _com_contato_de_cobranca(invoice.client)
+
+    def explode(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise OSError("SMTP fora do ar")
+
+    monkeypatch.setattr(cobranca, "send_mail", explode)
+
+    resp = admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
+        {"degrau": "firme", "body": "Texto."}, format="json",
+    )
+    assert resp.status_code == 502
+    assert CobrancaContato.objects.count() == 0
+
+
+# --- Camada 4: rascunho e classificação ---------------------------------------------------------
+
+
+@pytest.mark.django_db
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_rascunhar_devolve_texto_e_nao_envia(
+    admin_api: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0031: o texto de IA nunca sai sozinho."""
+    invoice = _vencendo_em(12)
+    _com_contato_de_cobranca(invoice.client)
+    monkeypatch.setattr(
+        ai, "complete", lambda s, u, **_: ("Olá, sobre a fatura...", {"prompt_tokens": 1})
+    )
+
+    resp = admin_api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {"degrau": "firme"}, format="json"
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["text"] == "Olá, sobre a fatura..."
+    assert resp.json()["degrau"] == "firme"
+    assert mail.outbox == []
+    assert CobrancaContato.objects.count() == 0
+
+
+@pytest.mark.django_db
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_rascunhar_sem_degrau_aplicavel_recusa(admin_api: APIClient) -> None:
+    invoice = _vencendo_em(1)  # carência: a régua não indica degrau nenhum hoje
+    resp = admin_api.post(f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {}, format="json")
+    assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_o_sinal_e_lido_do_json_e_o_desconhecido_e_descartado() -> None:
+    from apps.core.views import sinal_do_texto
+
+    assert sinal_do_texto('{"sinal": "nao_pode"}') == "nao_pode"
+    assert sinal_do_texto('Claro!\n```json\n{"sinal": "esqueceu"}\n```') == "esqueceu"
+    assert sinal_do_texto('{"sinal": "com_raiva"}') == ""
+    assert sinal_do_texto("não consegui classificar") == ""
+    assert sinal_do_texto('["esqueceu"]') == ""
+
+
+@pytest.mark.django_db
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_classificar_grava_o_sinal_e_nao_age(
+    admin_api: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    invoice = _vencendo_em(12)
+    activity = ActivityFactory(
+        client=invoice.client, invoice=invoice, summary="Cliente disse que o caixa apertou."
+    )
+    monkeypatch.setattr(
+        ai, "complete", lambda s, u, **_: ('{"sinal": "nao_pode"}', {"prompt_tokens": 1})
+    )
+
+    resp = admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
+
+    assert resp.status_code == 200
+    activity.refresh_from_db()
+    assert activity.cobranca_sinal == Activity.CobrancaSinal.NAO_PODE
+    # Classificar é leitura: nada foi suspenso, renegociado nem cobrado.
+    assert CobrancaSuspensao.objects.count() == 0
+    assert CobrancaContato.objects.count() == 0
+    invoice.refresh_from_db()
+    assert invoice.status == Invoice.Status.ISSUED
+
+
+@pytest.mark.django_db
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_classificar_sem_sinal_utilizavel_e_502(
+    admin_api: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gravar um valor chutado mandaria alguém insistir com quem está insatisfeito."""
+    activity = ActivityFactory()
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: ("sei lá", {"prompt_tokens": 1}))
+
+    resp = admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
+
+    assert resp.status_code == 502
+    activity.refresh_from_db()
+    assert activity.cobranca_sinal == ""
+
+
+@pytest.mark.django_db
+def test_o_sinal_nao_se_grava_por_patch(admin_api: APIClient) -> None:
+    """O sinal é ato com procedência (a `AiInteraction`), não campo."""
+    activity = ActivityFactory()
+    resp = admin_api.patch(
+        f"/api/v1/activities/{activity.pk}/", {"cobranca_sinal": "insatisfeito"}, format="json"
+    )
+    assert resp.status_code == 200
+    activity.refresh_from_db()
+    assert activity.cobranca_sinal == ""
+
+
+@pytest.mark.django_db
+def test_a_atividade_recusa_fatura_de_outro_cliente(admin_api: APIClient) -> None:
+    activity = ActivityFactory()
+    de_outro = _vencendo_em(12)
+    resp = admin_api.patch(
+        f"/api/v1/activities/{activity.pk}/", {"invoice": de_outro.pk}, format="json"
+    )
+    assert resp.status_code == 400
+
+
+# --- Permissões ---------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_vendas_le_cobranca_suspende_e_nao_envia() -> None:
+    invoice = _vencendo_em(12)
+    _com_contato_de_cobranca(invoice.client)
+    api = APIClient()
+    api.force_authenticate(UserFactory(role=User.Role.SALES))
+
+    assert api.get("/api/v1/cobranca/").status_code == 200
+    assert api.post(
+        "/api/v1/cobranca/suspensoes/",
+        {"invoice": invoice.pk, "owner": invoice.client.owner_id, "until": "2026-12-01",
+         "reason": "Cliente insatisfeito."},
+        format="json",
+    ).status_code == 201
+    assert api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
+        {"degrau": "firme", "body": "Texto."}, format="json",
+    ).status_code == 403
+    assert api.post(
+        f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {}, format="json"
+    ).status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_a_corrida_entre_duas_execucoes_para_no_banco(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Duas réguas no mesmo tique (deploy sobreposto, scheduler escalado por engano).
+
+    A guarda de `avaliar` é uma leitura, e leitura perde corrida. Quem arbitra é a
+    `UniqueConstraint(invoice, degrau)`, e o `IntegrityError` que ela levanta é contado como
+    "degrau gasto" — não como falha, porque é a idempotência funcionando.
+    """
+    invoice = _vencendo_em(12)
+    _com_contato_de_cobranca(invoice.client)
+    CobrancaContato.objects.create(
+        invoice=invoice, client=invoice.client, degrau="firme",
+        canal=CobrancaContato.Canal.EMAIL, sent_on=HOJE - timedelta(days=30), subject="x", body="y",
+    )
+    # Simula a outra execução tendo lido "cabe firme" antes de esta gravar.
+    monkeypatch.setattr(
+        cobranca, "avaliar",
+        lambda inv, dia=None: cobranca.Avaliacao(cobranca.PADRAO[2], ""),
+    )
+
+    resumo = cobranca.executar(HOJE)
+
+    assert resumo["falhas"] == 0
+    assert resumo["calados"] == {cobranca.DEGRAU_GASTO: 1}
+    assert CobrancaContato.objects.filter(invoice=invoice, degrau="firme").count() == 1
+
+
+# --- Achados da revisão do diff (FDD 036) ------------------------------------------------------
+# Os três nasceram de leitura e foram confirmados por execução antes de virar correção. Ficam aqui
+# porque cada um é uma guarda que sairia calada no próximo refactor.
+
+
+@pytest.mark.django_db
+def test_a_escalada_alcanca_o_superusuario_e_nao_so_o_papel_admin() -> None:
+    """`createsuperuser` cria com `role` no default, e ele é o único admin de uma instalação nova.
+
+    Filtrar por `role=admin` repetiria aqui o defeito que a FDD 017 corrigiu no SPA: quem autoriza
+    no backend é `User.is_admin_role`, que é `role == admin **ou** is_superuser`. Numa instalação
+    recém-subida, filtrar só pelo papel manda a escalada para ninguém — e o degrau é gasto uma vez.
+    """
+    root = User.objects.create_superuser("root", "root@example.test", "x")
+    assert root.role != User.Role.ADMIN and root.is_admin_role
+    dono = UserFactory(role=User.Role.SALES)
+    cliente = ClientFactory(owner=dono)
+
+    assert root in cobranca._internos(cliente)
+
+
+@pytest.mark.django_db
+def test_escalada_sem_ninguem_a_acordar_nao_gasta_o_degrau() -> None:
+    """O "pular silencioso" que a RFC recusa, na direção que ninguém olha.
+
+    Sem destinatário interno, gravar o contato produziria o pior dos dois mundos: a régua pararia
+    de falar com o cliente (o degrau interno assumiu) e ninguém ficaria sabendo. O degrau não é
+    gasto, a falha é contada, e ele volta a caber quando existir a quem escalar.
+    """
+    dono = UserFactory(role=User.Role.SALES, is_active=False)
+    cliente = ClientFactory(owner=dono)
+    fatura = _vencendo_em(21, client=cliente, status=Invoice.Status.OVERDUE)
+    assert cobranca._internos(cliente) == []
+
+    with pytest.raises(cobranca.SemDestinatarioInterno):
+        cobranca.aplicar(fatura, cobranca.degrau_devido(fatura, HOJE), HOJE)
+
+    assert not CobrancaContato.objects.filter(invoice=fatura).exists()
+    # E continua devido: a condição é consertável por gente, e a régua espera.
+    assert cobranca.degrau_devido(fatura, HOJE).key == "escalada"
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=False)
+def test_o_envio_manual_tambem_respeita_a_flag() -> None:
+    """A flag é o interruptor da funcionalidade, não só do relógio.
+
+    Sem esta guarda, "Régua de cobrança: desligada" na tela de Configurações seria mentira: o job
+    calaria e a API seguiria mandando cobrança ao cliente.
+    """
+    admin = UserFactory(role=User.Role.ADMIN)
+    fatura = _vencendo_em(5)
+    _com_contato_de_cobranca(fatura.client)
+    api = APIClient()
+    api.force_authenticate(admin)
+
+    resposta = api.post(
+        f"/api/v1/invoices/{fatura.pk}/cobranca/enviar/",
+        {"degrau": "lembrete", "body": "texto revisado"},
+        format="json",
+    )
+
+    assert resposta.status_code == 503
+    assert not CobrancaContato.objects.exists()
+    assert mail.outbox == []
+
+
+@pytest.mark.django_db
+def test_a_suspensao_aceita_correcao_parcial_do_motivo() -> None:
+    """`PATCH` só com o motivo não pode ser recusado por "vale para exatamente uma fatura ou um
+    cliente" — a suspensão em disco já responde essa pergunta, e recusar aqui obrigaria a reenviar
+    o vínculo a cada correção de texto."""
+    from apps.core.serializers import CobrancaSuspensaoSerializer
+
+    admin = UserFactory(role=User.Role.ADMIN)
+    suspensao = CobrancaSuspensao.objects.create(
+        client=ClientFactory(), owner=admin, until=HOJE + timedelta(days=7), reason="entrega atrasada"
+    )
+
+    serializer = CobrancaSuspensaoSerializer(suspensao, data={"reason": "renegociando"}, partial=True)
+
+    assert serializer.is_valid(), serializer.errors
+
+
+# --- O painel -----------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_o_painel_traz_a_relacao_a_vista(admin_api: APIClient) -> None:
+    """Critério de aceite 7 da FDD 036 e a exigência da seção Segurança da RFC: health, tempo de
+    casa e valor do cliente **na mesma linha** do próximo degrau."""
+    antigo = _cliente_de_casa()
+    projeto = ProjectFactory(client=antigo)
+    invoice = _vencendo_em(12, client=antigo, project=projeto)
+    InvoiceFactory(
+        client=antigo, status=Invoice.Status.PAID, number="2025-0100",
+        amount=Decimal("40000.00"), due_date=HOJE - timedelta(days=200),
+        paid_at=timezone.make_aware(timezone.datetime(2026, 2, 1, 9, 0)),
+    )
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["invoice"] == invoice.pk
+    assert linha["client_name"] == antigo.name
+    assert linha["dias_de_atraso"] == (timezone.localdate() - invoice.due_date).days
+    assert linha["health_level"] == "saudável"
+    assert linha["tempo_de_casa_dias"] >= 800
+    assert linha["reincidente"] is False
+    assert linha["regua"] == "relacao_longa"
+    # String e não número: `Decimal` pelo encoder do DRF viraria float, e centavo em ponto
+    # flutuante é como se perde um centavo que ninguém acha seis meses depois.
+    assert linha["recebido_do_cliente"] == "40000.00"
+    assert linha["amount"] == "1000.00"
+    assert linha["suspensao"] is None
+
+
+@pytest.mark.django_db
+def test_o_painel_nomeia_o_degrau_e_quando_a_janela_abriu(admin_api: APIClient) -> None:
+    invoice = _fatura(due_date=timezone.localdate() - timedelta(days=12))
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["proximo_degrau"] == "firme"
+    assert linha["proximo_degrau_display"] == "Cobrança firme"
+    # A janela do `firme` abre em D+10 — no passado, porque ele já cabe hoje.
+    assert linha["proximo_degrau_em"] == str(invoice.due_date + timedelta(days=10))
+    assert linha["motivo"] == ""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("cenario", "motivo"),
+    [("suspensa", cobranca.SUSPENSA), ("gasto", cobranca.DEGRAU_GASTO),
+     ("teto", cobranca.TETO_DE_FREQUENCIA), ("carencia", cobranca.SEM_DEGRAU)],
+)
+def test_o_painel_nomeia_o_silencio(admin_api: APIClient, cenario: str, motivo: str) -> None:
+    """Uma tela que só diz "nada hoje" ensina quem a usa a não confiar nela."""
+    hoje = timezone.localdate()
+    invoice = _fatura(due_date=hoje - timedelta(days=12))
+    if cenario == "suspensa":
+        CobrancaSuspensao.objects.create(
+            invoice=invoice, owner=invoice.client.owner, until=hoje + timedelta(days=5),
+            reason="Entrega atrasada.",
+        )
+    elif cenario == "gasto":
+        CobrancaContato.objects.create(
+            invoice=invoice, client=invoice.client, degrau="firme",
+            canal=CobrancaContato.Canal.INTERNO, sent_on=hoje - timedelta(days=30),
+            subject="x", body="y",
+        )
+    elif cenario == "teto":
+        outra = _fatura(due_date=hoje - timedelta(days=40), client=invoice.client)
+        CobrancaContato.objects.create(
+            invoice=outra, client=invoice.client, degrau="lembrete",
+            canal=CobrancaContato.Canal.EMAIL, sent_on=hoje, subject="x", body="y",
+        )
+    else:
+        invoice.due_date = hoje - timedelta(days=1)
+        invoice.save()
+
+    linhas = admin_api.get("/api/v1/cobranca/painel/").json()
+    linha = next(item for item in linhas if item["invoice"] == invoice.pk)
+
+    assert linha["proximo_degrau"] is None
+    assert linha["motivo"] == motivo
+
+
+@pytest.mark.django_db
+def test_o_painel_mostra_a_suspensao_com_prazo_e_dono(admin_api: APIClient) -> None:
+    hoje = timezone.localdate()
+    invoice = _fatura(due_date=hoje - timedelta(days=12))
+    suspensao = CobrancaSuspensao.objects.create(
+        client=invoice.client, owner=invoice.client.owner, until=hoje + timedelta(days=7),
+        reason="Cliente insatisfeito.",
+    )
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["suspensao"]["id"] == suspensao.pk
+    assert linha["suspensao"]["until"] == str(suspensao.until)
+    assert linha["suspensao"]["owner"] == invoice.client.owner_id
+
+
+@pytest.mark.django_db
+def test_o_painel_so_lista_faturas_cobraveis(admin_api: APIClient) -> None:
+    _fatura(due_date=timezone.localdate() - timedelta(days=12))
+    for estado in (Invoice.Status.PAID, Invoice.Status.CANCELLED, Invoice.Status.DRAFT):
+        _fatura(status=estado, due_date=timezone.localdate() - timedelta(days=40))
+
+    linhas = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert len(linhas) == 1
+    assert linhas[0]["status"] == Invoice.Status.ISSUED
+
+
+@pytest.mark.django_db
+def test_o_painel_nao_leva_custo_margem_nem_roi(admin_api: APIClient) -> None:
+    """A mesma cerca comercial do rascunho de tom: o painel mostra o que já foi **recebido**, e
+    nunca o que a casa calcula sobre si mesma."""
+    projeto = ProjectFactory(actual_value=Decimal("250000.00"))
+    _fatura(
+        client=projeto.client, project=projeto, due_date=timezone.localdate() - timedelta(days=12)
+    )
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert "250000" not in str(linha)
+    assert not {"actual_value", "roi", "roi_snapshot", "score", "signals"} & set(linha)
+
+
+@pytest.mark.django_db
+def test_o_painel_responde_com_a_flag_desligada_e_diz_isso(admin_api: APIClient) -> None:
+    """É leitura, e serve para decidir se vale ligar. Mas prometer um degrau que não vai sair
+    seria a tela mentindo por conta própria."""
+    _fatura(due_date=timezone.localdate() - timedelta(days=12))
+
+    (desligada,) = admin_api.get("/api/v1/cobranca/painel/").json()
+    assert desligada["regua_ligada"] is False
+    assert desligada["proximo_degrau"] == "firme"
+
+    with override_settings(DUNNING_ENABLED=True):
+        (ligada,) = admin_api.get("/api/v1/cobranca/painel/").json()
+    assert ligada["regua_ligada"] is True
+
+
+@pytest.mark.django_db
+def test_o_painel_nao_e_engolido_pelo_detalhe_de_cobranca(admin_api: APIClient) -> None:
+    """`^cobranca/(?P<pk>[^/.]+)/$` casaria com `cobranca/painel/` lendo "painel" como pk."""
+    assert admin_api.get("/api/v1/cobranca/painel/").status_code == 200
+
+
+@pytest.mark.django_db
+def test_vendas_le_o_painel_e_entrega_nao() -> None:
+    _fatura(due_date=timezone.localdate() - timedelta(days=12))
+
+    vendas = APIClient()
+    vendas.force_authenticate(UserFactory(role=User.Role.SALES))
+    assert vendas.get("/api/v1/cobranca/painel/").status_code == 200
+
+    entrega = APIClient()
+    entrega.force_authenticate(UserFactory(role=User.Role.DELIVERY))
+    assert entrega.get("/api/v1/cobranca/painel/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -> None:
+    """O risco real da pré-carga não é a query — é divergir da decisão que ela substitui.
+
+    Mesmo teste que a FDD 022 escreveu para `assess_projects_health`: se o agrupamento errar um
+    `client_id`, a tela passa a mostrar o degrau do vizinho, e nenhum orçamento de query notaria.
+    Os cenários são deliberadamente diferentes entre si para os resultados não coincidirem por acaso.
+    """
+    hoje = timezone.localdate()
+    calada = _fatura(due_date=hoje - timedelta(days=12))
+    CobrancaSuspensao.objects.create(
+        invoice=calada, owner=calada.client.owner, until=hoje + timedelta(days=3), reason="x."
+    )
+    gasta = _fatura(due_date=hoje - timedelta(days=12))
+    CobrancaContato.objects.create(
+        invoice=gasta, client=gasta.client, degrau="firme", canal=CobrancaContato.Canal.INTERNO,
+        sent_on=hoje - timedelta(days=30), subject="x", body="y",
+    )
+    no_teto = _fatura(due_date=hoje - timedelta(days=4))
+    CobrancaContato.objects.create(
+        invoice=_fatura(due_date=hoje - timedelta(days=40), client=no_teto.client),
+        client=no_teto.client, degrau="lembrete", canal=CobrancaContato.Canal.EMAIL,
+        sent_on=hoje, subject="x", body="y",
+    )
+    antigo = _cliente_de_casa()
+    longa = _fatura(due_date=hoje - timedelta(days=12), client=antigo)
+    normal = _fatura(due_date=hoje - timedelta(days=25))
+
+    faturas = [calada, gasta, no_teto, longa, normal]
+    contexto = cobranca.contexto_do_painel(faturas, hoje)
+
+    for invoice in faturas:
+        em_lote = cobranca.avaliar(invoice, hoje, contexto=contexto)
+        individual = cobranca.avaliar(invoice, hoje)
+        assert em_lote == individual, f"fatura {invoice.pk} divergiu"
+        assert cobranca.regua_para(
+            invoice.client, hoje, ignorando=invoice, contexto=contexto
+        ) is cobranca.regua_para(invoice.client, hoje, ignorando=invoice)
+    assert cobranca.contexto_do_painel([], hoje).atrasos_por_cliente == {}
+
+
+@pytest.mark.django_db
+def test_um_contexto_de_outro_dia_e_recusado() -> None:
+    """Silêncio (ou fala) calculado com o recorte do dia errado não deixaria nada vermelho."""
+    hoje = timezone.localdate()
+    invoice = _fatura(due_date=hoje - timedelta(days=12))
+    contexto = cobranca.contexto_do_painel([invoice], hoje)
+
+    with pytest.raises(ValueError):
+        cobranca.avaliar(invoice, hoje + timedelta(days=1), contexto=contexto)

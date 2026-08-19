@@ -39,6 +39,7 @@ from . import (
     booking,
     calendar_sync,
     cases,
+    cobranca,
     drive,
     enrichment,
     esign,
@@ -72,6 +73,8 @@ from .models import (
     BlueprintVariant,
     Case,
     Client,
+    CobrancaContato,
+    CobrancaSuspensao,
     Contact,
     Decisao,
     DigitalEmployee,
@@ -113,6 +116,8 @@ from .serializers import (
     BookingCreateSerializer,
     CaseSerializer,
     ClientSerializer,
+    CobrancaContatoSerializer,
+    CobrancaSuspensaoSerializer,
     ContactSerializer,
     DecisaoSerializer,
     DigitalEmployeeBlueprintSerializer,
@@ -341,6 +346,32 @@ def decisoes_do_texto(text: str) -> list[dict]:
             "decided_by": str(item.get("decided_by") or "").strip()[:160],
         })
     return decisoes
+
+
+def sinal_do_texto(text: str) -> str:
+    """Extrai o sinal de cobrança do que o modelo devolveu. Função pura, mesmo molde de
+    `decisoes_do_texto` e pela mesma razão: **o modelo não obedece à instrução de formato o tempo
+    todo**, e a falha típica é JSON válido embrulhado em prosa ou em cerca de markdown. Recortar do
+    primeiro ``{`` ao último ``}`` cobre os três casos com uma regra só.
+
+    **Sinal fora do vocabulário é descartado, não gravado.** Os três valores roteiam para condutas
+    diferentes (RFC 0004, camada 4) — um quarto valor inventado pelo modelo viraria uma coluna que
+    ninguém sabe ler. Descartado, a chamada devolve ``""`` e quem a invoca responde 502, que é
+    diferente de gravar "não sei" em silêncio.
+    """
+    from .models import Activity
+
+    inicio, fim = text.find("{"), text.rfind("}")
+    if inicio == -1 or fim <= inicio:
+        return ""
+    try:
+        bruto = json.loads(text[inicio : fim + 1])
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(bruto, dict):
+        return ""
+    sinal = str(bruto.get("sinal") or "").strip().lower()
+    return sinal if sinal in Activity.CobrancaSinal.values else ""
 
 
 def _ai_run(  # type: ignore[no-untyped-def]
@@ -627,6 +658,52 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def perform_create(self, serializer: ActivitySerializer) -> None:
         serializer.save(owner=self.request.user)
+
+    @extend_schema(request=None, responses=ActivitySerializer)
+    @action(detail=True, methods=["post"])
+    def classificar(self, request: Request, pk: str | None = None) -> Response:
+        """Lê a resposta do cliente e grava o sinal — **e não age** (FDD 036, camada 4).
+
+        Os três valores não são etiquetas de humor: cada um manda para uma conduta diferente e a
+        mesma régua estraga os três se tratá-los igual. `esqueceu` já se resolveu com o lembrete;
+        `nao_pode` pede renegociação, e cedo; `insatisfeito` não é problema de cobrança — é
+        problema de relação disfarçado, e é onde insistir piora tudo.
+
+        Gravar o sinal é o fim do que a IA faz aqui. Renegociar, dar desconto, suspender e escalar
+        seguem humanos (ADR 0006, ADR 0031).
+        """
+        activity = self.get_object()
+        system = (
+            "Você classifica a resposta de um cliente a uma cobrança. Devolva APENAS um objeto "
+            'JSON, sem texto antes ou depois, com a chave "sinal" e um destes três valores: '
+            '"esqueceu" (apenas não lembrou e vai pagar), "nao_pode" (tem dificuldade financeira '
+            'ou de fluxo de caixa) ou "insatisfeito" (está retendo o pagamento por insatisfação '
+            "com a entrega ou com a relação). Use APENAS o material fornecido: se ele não permitir "
+            "decidir, devolva um objeto vazio em vez de inferir."
+        )
+
+        def grava(text: str, interaction) -> dict:  # type: ignore[no-untyped-def]
+            sinal = sinal_do_texto(text)
+            if not sinal:
+                # Sem sinal utilizável não houve classificação — e isso é diferente de gravar um
+                # valor qualquer. A coluna roteia conduta; um valor chutado manda alguém insistir
+                # com quem está insatisfeito.
+                raise _ExtracaoSemResultado()
+            Activity.objects.filter(pk=activity.pk).update(cobranca_sinal=sinal)
+            activity.refresh_from_db()
+            return {"activity": ActivitySerializer(activity).data}
+
+        try:
+            return _ai_run(
+                request, "dunning_classify", system,
+                ai.build_resposta_de_cobranca_context(activity),
+                formato=_FORMATO_JSON, coletor=grava,
+            )
+        except _ExtracaoSemResultado:
+            return Response(
+                {"detail": "A IA não devolveu um sinal utilizável. Tente de novo."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
 
 class PipelineStageViewSet(viewsets.ModelViewSet):
@@ -1280,6 +1357,156 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return Response(InvoiceSerializer(cancelada).data)
 
     @extend_schema(
+        request=inline_serializer(
+            name="CobrancaRascunhoRequest",
+            fields={"degrau": serializers.CharField(required=False)},
+        ),
+        responses=inline_serializer(
+            name="CobrancaRascunho",
+            fields={
+                "text": serializers.CharField(),
+                "interaction": serializers.IntegerField(),
+                "degrau": serializers.CharField(),
+            },
+        ),
+    )
+    @action(detail=True, methods=["post"], url_path="cobranca/rascunhar")
+    def cobranca_rascunhar(self, request: Request, pk: str | None = None) -> Response:
+        """Rascunha o texto do degrau no tom certo — e **não envia** (FDD 036, ADR 0031).
+
+        A separação entre rascunhar e enviar é a decisão da ADR 0031, não uma etapa de UI: o degrau
+        determinístico sai sozinho porque seu texto é constante revisada uma vez; o texto de IA
+        muda a **redação**, que é exatamente o que uma pessoa revisaria. Aprovar em bloco um gerador
+        de texto de cobrança é aprovar o parágrafo que ainda não existe e que vai chamar de
+        caloteiro um cliente de cinco anos.
+
+        `grounding=None`: o corpus interno da metodologia não tem o que fazer num e-mail de
+        cobrança, e o anti-vazamento é estrutural — só o `AgentView` preenche aquele parâmetro.
+        """
+        invoice = self.get_object()
+        degrau = str(request.data.get("degrau", "")).strip() or (
+            getattr(cobranca.degrau_devido(invoice), "key", "")
+        )
+        if degrau not in CobrancaContato.Degrau.values:
+            return Response(
+                {"degrau": "Diga qual degrau rascunhar — hoje a régua não indica nenhum."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        rotulo = CobrancaContato.Degrau(degrau).label
+        system = (
+            "Você redige um e-mail de cobrança em português do Brasil, em nome de uma consultoria, "
+            f"no tom do degrau '{rotulo}'. O objetivo não é receber esta fatura a qualquer custo: é "
+            "receber e manter o cliente. Nunca acuse, nunca ameace e nunca insinue má-fé. Use "
+            "APENAS o material fornecido — não invente valores, datas nem combinados. Não cite "
+            "custo, margem nem retorno do projeto. É um rascunho para revisão humana."
+        )
+        return _ai_run(
+            request,
+            "dunning_draft",
+            system,
+            ai.build_cobranca_context(invoice, degrau),
+            project=invoice.project,
+            grounding=None,
+            coletor=lambda text, interaction: {"degrau": degrau},
+        )
+
+    @extend_schema(
+        request=inline_serializer(
+            name="CobrancaEnvioRequest",
+            fields={
+                "degrau": serializers.CharField(),
+                "subject": serializers.CharField(required=False),
+                "body": serializers.CharField(),
+                "ai_interaction": serializers.IntegerField(required=False),
+            },
+        ),
+        responses=CobrancaContatoSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="cobranca/enviar")
+    def cobranca_enviar(self, request: Request, pk: str | None = None) -> Response:
+        """Manda o degrau ao cliente com o texto que uma pessoa revisou (admin).
+
+        As guardas que valem tanto aqui quanto no job — estado cobrável, suspensão ativa e degrau
+        já gasto — são as mesmas funções de `cobranca.py`, e é isso que impede a tela e o relógio
+        de divergirem. **A que não vale aqui é o teto de frequência**: ele existe para conter o
+        robô que ninguém está olhando, e quem clica está olhando. Trocar o julgamento de quem vê a
+        tela pela contagem de dias seria proteger o cliente de uma decisão que já foi tomada.
+        """
+        if not cobranca.is_enabled():
+            # A flag é o interruptor **da funcionalidade**, não só do relógio (ADR 0031). Sem esta
+            # guarda, "Régua de cobrança: desligada" na tela de Configurações seria mentira: o job
+            # calaria e a API seguiria mandando cobrança ao cliente. É o mesmo 503 que o webhook de
+            # pagamento devolve com `payments` desligado.
+            return Response(
+                {"detail": "A régua de cobrança está desativada."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        invoice = self.get_object()
+        degrau_key = str(request.data.get("degrau", "")).strip()
+        degrau = next(
+            (d for d in cobranca.PADRAO + cobranca.RELACAO_LONGA if d.key == degrau_key), None
+        )
+        body = str(request.data.get("body", "")).strip()
+        if degrau is None:
+            return Response(
+                {"degrau": "Degrau desconhecido."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if not body:
+            return Response(
+                {"body": "O texto revisado é obrigatório — o envio manual não usa o template."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if invoice.status not in cobranca.COBRAVEIS:
+            raise StateConflict(
+                f"A fatura {invoice.number or invoice.pk} está {invoice.get_status_display()} "
+                "e não comporta cobrança."
+            )
+        suspensao = cobranca.suspensao_ativa(invoice)
+        if suspensao is not None:
+            raise StateConflict(
+                f"A cobrança está suspensa até {suspensao.until}. Levante a suspensão antes de "
+                "enviar — recuar e voltar a cobrar são atos declarados."
+            )
+        # A idempotência conferida **antes** do envio, e não só pela `UniqueConstraint` no fim: a
+        # constraint impediria a linha duplicada, mas o e-mail já teria saído. Quem leva o segundo
+        # "sua fatura está vencida" não se consola com a integridade do banco.
+        if CobrancaContato.objects.filter(invoice=invoice, degrau=degrau.key).exists():
+            raise StateConflict(f"O degrau '{degrau.key}' desta fatura já foi enviado.")
+        interaction = None
+        if request.data.get("ai_interaction"):
+            interaction = AiInteraction.objects.filter(
+                pk=request.data["ai_interaction"], user=request.user
+            ).first()
+        try:
+            contato = cobranca.enviar_ao_cliente(
+                invoice,
+                degrau,
+                subject=str(request.data.get("subject", "")).strip(),
+                body=body,
+                sent_by=request.user,
+                ai_interaction=interaction,
+            )
+        except IntegrityError as exc:
+            # A `UniqueConstraint(invoice, degrau)`. É o mesmo 409 que o job trata como "não hoje":
+            # o degrau já foi gasto, por uma pessoa ou pelo relógio.
+            raise StateConflict(
+                f"O degrau '{degrau.key}' desta fatura já foi enviado."
+            ) from exc
+        except cobranca.SemDestinatarioInterno as exc:
+            # Sem contato de cobrança **e** sem ninguém a quem escalar. O degrau não é gasto, e a
+            # mensagem nomeia a saída em vez de devolver 500 numa condição que gente conserta.
+            raise StateConflict(
+                f"{invoice.client.name} não tem contato marcado como 'recebe cobrança' e não há "
+                "administrador ativo a quem escalar. Cadastre o contato antes de enviar."
+            ) from exc
+        except OSError as exc:
+            # E-mail não saiu: **nada é gravado**. Registrar aqui afirmaria um contato que não
+            # aconteceu e ainda queimaria o degrau pela constraint, impedindo a retentativa.
+            logger.exception("envio de cobrança falhou para a fatura %s", invoice.pk)
+            raise EmailUndeliverable() from exc
+        return Response(CobrancaContatoSerializer(contato).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
         responses=inline_serializer(
             name="InvoiceSummary",
             fields={
@@ -1309,6 +1536,114 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
             **{f"{nome}_count": Count("id", filter=q) for nome, q in faixas.items()},
         )
         return Response(dados)
+
+
+class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
+    """O que a casa já disse sobre suas faturas (FDD 036, camada 3 da RFC 0004).
+
+    **Só leitura, e a ausência de escrita é a entrega.** Um `POST /cobranca/` criaria a prova de um
+    contato que não aconteceu — e é justamente a classe de defeito que a homologação de integrações
+    achou três vezes (registro gravado sem o fornecedor ter sido chamado). Contato nasce de
+    `POST /invoices/{id}/cobranca/enviar/` ou do job das 09:30, e os dois mandam o e-mail **antes**
+    de gravar.
+
+    Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, pelas mesmas duas razões da `InvoiceViewSet`
+    logo acima: registro de comunicação sobre dinheiro não se esconde da lista (ADR 0021), e dado
+    financeiro não é escopado por projeto — a Entrega não alcança nada disto, nem para ler.
+    """
+
+    resource = "cobranca"
+    queryset = CobrancaContato.objects.select_related("invoice", "client", "sent_by").all()
+    serializer_class = CobrancaContatoSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("client", "invoice")
+    filter_exact_fields = ("degrau", "canal")
+
+    @extend_schema(
+        responses=inline_serializer(
+            name="CobrancaPainelLinha",
+            fields={
+                "invoice": serializers.IntegerField(),
+                "number": serializers.CharField(),
+                "client": serializers.IntegerField(),
+                "client_name": serializers.CharField(),
+                "amount": serializers.DecimalField(max_digits=12, decimal_places=2),
+                "due_date": serializers.DateField(),
+                "status": serializers.CharField(),
+                "status_display": serializers.CharField(),
+                "dias_de_atraso": serializers.IntegerField(),
+                "payment_url": serializers.CharField(),
+                "proximo_degrau": serializers.CharField(allow_null=True),
+                "proximo_degrau_display": serializers.CharField(allow_null=True),
+                "proximo_degrau_em": serializers.DateField(allow_null=True),
+                "motivo": serializers.CharField(),
+                "health_level": serializers.CharField(allow_null=True),
+                "tempo_de_casa_dias": serializers.IntegerField(),
+                "reincidente": serializers.BooleanField(),
+                "regua": serializers.CharField(),
+                "recebido_do_cliente": serializers.DecimalField(
+                    max_digits=12, decimal_places=2
+                ),
+                "suspensao": serializers.DictField(allow_null=True),
+                "regua_ligada": serializers.BooleanField(),
+            },
+            many=True,
+        )
+    )
+    @action(detail=False, methods=["get"])
+    def painel(self, request: Request) -> Response:
+        """A tela onde se decide o próximo passo (FDD 036, critério de aceite 7).
+
+        Agregador, e por isso **não passa pelo queryset desta viewset**: ele lista faturas, não
+        contatos. O recorte de papel continua sendo o `resource = "cobranca"` da classe — só-leitura
+        para Vendas, fechado para a Entrega —, que é o mesmo mecanismo da FDD 028 e a razão de esta
+        rota não precisar de guarda própria.
+
+        Toda a decisão sai de `cobranca.painel()`, e nenhuma linha dela é recalculada aqui: a régua
+        tem uma definição só, e a tela lê a mesma que o relógio executa.
+        """
+        return Response(cobranca.painel())
+
+
+class CobrancaSuspensaoViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
+    """Suspender a cobrança — com dono, prazo e motivo (FDD 036, RFC 0004 "Segurança").
+
+    **Vendas escreve aqui e não escreve em `invoice` nem em `cobranca`**, e a assimetria é o ponto:
+    suspender é decisão de *relação*, e quem a carrega é quem responde pelo cliente. Emitir, baixar
+    e enviar cobrança seguem sendo atos de admin, porque são dinheiro.
+
+    Não arquiva: a suspensão vencida continua na lista, porque "por que ninguém cobrou este cliente
+    em março?" é uma pergunta que precisa de resposta — e um registro arquivado é o mesmo recebível
+    estragando invisível que a RFC nomeia.
+    """
+
+    resource = "cobranca_suspensao"
+    queryset = CobrancaSuspensao.objects.select_related(
+        "invoice", "client", "owner", "created_by"
+    ).all()
+    serializer_class = CobrancaSuspensaoSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("client", "invoice", "owner")
+
+    def perform_create(self, serializer: CobrancaSuspensaoSerializer) -> None:
+        serializer.save(created_by=self.request.user)
+
+    @extend_schema(request=None, responses=CobrancaSuspensaoSerializer)
+    @action(detail=True, methods=["post"])
+    def levantar(self, request: Request, pk: str | None = None) -> Response:
+        """Encerra a suspensão antes do prazo, com autor e carimbo.
+
+        Existe porque a alternativa é pior: sem ela, uma suspensão criada por engano cala a régua
+        pelo prazo inteiro e a única saída seria editar a linha, apagando o que houve. Levantar é
+        ato — o oposto do "pular silencioso" que a RFC recusa nos dois sentidos.
+        """
+        suspensao = self.get_object()
+        if suspensao.lifted_at is not None:
+            raise StateConflict("Esta suspensão já foi levantada.")
+        suspensao.lifted_at = timezone.now()
+        suspensao.lifted_by = request.user
+        suspensao.save(update_fields=["lifted_at", "lifted_by", "updated_at"])
+        return Response(CobrancaSuspensaoSerializer(suspensao).data)
 
 
 class KnowledgeAreaViewSet(viewsets.ModelViewSet):

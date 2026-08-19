@@ -59,8 +59,10 @@ ROI, health score, previsão de atrasos com explicação dos sinais e recomenda�
 **Plataforma.** Convites por e-mail, permissões por função, notificações in-app e por e-mail com
 digest diário, nove integrações atrás de flag alternável em runtime (IA, Drive, Calendário,
 Assinatura, Pagamento, E-mail, Sincronia de tarefas, Portal do cliente e Enriquecimento de lead) —
-nenhuma delas liga sem as credenciais que exige — arquivamento reversível com confirmação, e API
-versionada `/api/v1/`.
+nenhuma delas liga sem as credenciais que exige —, a **régua de cobrança**, que é o décimo
+interruptor e a única flag que não é integração (não consome credencial nenhuma e nasce desligada
+por decisão, não por falta de configuração — FDD 036), arquivamento reversível com confirmação, e
+API versionada `/api/v1/`.
 
 ## Fora de escopo
 

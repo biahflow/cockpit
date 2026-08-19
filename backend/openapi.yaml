@@ -156,6 +156,37 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/activities/{id}/classificar/:
+    post:
+      operationId: v1_activities_classificar_create
+      description: |-
+        Lê a resposta do cliente e grava o sinal — **e não age** (FDD 036, camada 4).
+
+        Os três valores não são etiquetas de humor: cada um manda para uma conduta diferente e a
+        mesma régua estraga os três se tratá-los igual. `esqueceu` já se resolveu com o lembrete;
+        `nao_pode` pede renegociação, e cedo; `insatisfeito` não é problema de cobrança — é
+        problema de relação disfarçado, e é onde insistir piora tudo.
+
+        Gravar o sinal é o fim do que a IA faz aqui. Renegociar, dar desconto, suspender e escalar
+        seguem humanos (ADR 0006, ADR 0031).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este activity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+          description: ''
   /api/v1/activities/{id}/unarchive/:
     post:
       operationId: v1_activities_unarchive_create
@@ -1133,6 +1164,321 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClientOverviewList'
+          description: ''
+  /api/v1/cobranca/:
+    get:
+      operationId: v1_cobranca_list
+      description: |-
+        O que a casa já disse sobre suas faturas (FDD 036, camada 3 da RFC 0004).
+
+        **Só leitura, e a ausência de escrita é a entrega.** Um `POST /cobranca/` criaria a prova de um
+        contato que não aconteceu — e é justamente a classe de defeito que a homologação de integrações
+        achou três vezes (registro gravado sem o fornecedor ter sido chamado). Contato nasce de
+        `POST /invoices/{id}/cobranca/enviar/` ou do job das 09:30, e os dois mandam o e-mail **antes**
+        de gravar.
+
+        Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, pelas mesmas duas razões da `InvoiceViewSet`
+        logo acima: registro de comunicação sobre dinheiro não se esconde da lista (ADR 0021), e dado
+        financeiro não é escopado por projeto — a Entrega não alcança nada disto, nem para ler.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CobrancaContato'
+          description: ''
+  /api/v1/cobranca/{id}/:
+    get:
+      operationId: v1_cobranca_retrieve
+      description: |-
+        O que a casa já disse sobre suas faturas (FDD 036, camada 3 da RFC 0004).
+
+        **Só leitura, e a ausência de escrita é a entrega.** Um `POST /cobranca/` criaria a prova de um
+        contato que não aconteceu — e é justamente a classe de defeito que a homologação de integrações
+        achou três vezes (registro gravado sem o fornecedor ter sido chamado). Contato nasce de
+        `POST /invoices/{id}/cobranca/enviar/` ou do job das 09:30, e os dois mandam o e-mail **antes**
+        de gravar.
+
+        Nem `ArchiveModelViewSet` nem `ProjectScopedMixin`, pelas mesmas duas razões da `InvoiceViewSet`
+        logo acima: registro de comunicação sobre dinheiro não se esconde da lista (ADR 0021), e dado
+        financeiro não é escopado por projeto — a Entrega não alcança nada disto, nem para ler.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este cobranca contato.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaContato'
+          description: ''
+  /api/v1/cobranca/painel/:
+    get:
+      operationId: v1_cobranca_painel_list
+      description: |-
+        A tela onde se decide o próximo passo (FDD 036, critério de aceite 7).
+
+        Agregador, e por isso **não passa pelo queryset desta viewset**: ele lista faturas, não
+        contatos. O recorte de papel continua sendo o `resource = "cobranca"` da classe — só-leitura
+        para Vendas, fechado para a Entrega —, que é o mesmo mecanismo da FDD 028 e a razão de esta
+        rota não precisar de guarda própria.
+
+        Toda a decisão sai de `cobranca.painel()`, e nenhuma linha dela é recalculada aqui: a régua
+        tem uma definição só, e a tela lê a mesma que o relógio executa.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CobrancaPainelLinha'
+          description: ''
+  /api/v1/cobranca/suspensoes/:
+    get:
+      operationId: v1_cobranca_suspensoes_list
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo (FDD 036, RFC 0004 "Segurança").
+
+        **Vendas escreve aqui e não escreve em `invoice` nem em `cobranca`**, e a assimetria é o ponto:
+        suspender é decisão de *relação*, e quem a carrega é quem responde pelo cliente. Emitir, baixar
+        e enviar cobrança seguem sendo atos de admin, porque são dinheiro.
+
+        Não arquiva: a suspensão vencida continua na lista, porque "por que ninguém cobrou este cliente
+        em março?" é uma pergunta que precisa de resposta — e um registro arquivado é o mesmo recebível
+        estragando invisível que a RFC nomeia.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CobrancaSuspensao'
+          description: ''
+    post:
+      operationId: v1_cobranca_suspensoes_create
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo (FDD 036, RFC 0004 "Segurança").
+
+        **Vendas escreve aqui e não escreve em `invoice` nem em `cobranca`**, e a assimetria é o ponto:
+        suspender é decisão de *relação*, e quem a carrega é quem responde pelo cliente. Emitir, baixar
+        e enviar cobrança seguem sendo atos de admin, porque são dinheiro.
+
+        Não arquiva: a suspensão vencida continua na lista, porque "por que ninguém cobrou este cliente
+        em março?" é uma pergunta que precisa de resposta — e um registro arquivado é o mesmo recebível
+        estragando invisível que a RFC nomeia.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CobrancaSuspensao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CobrancaSuspensao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CobrancaSuspensao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaSuspensao'
+          description: ''
+  /api/v1/cobranca/suspensoes/{id}/:
+    get:
+      operationId: v1_cobranca_suspensoes_retrieve
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo (FDD 036, RFC 0004 "Segurança").
+
+        **Vendas escreve aqui e não escreve em `invoice` nem em `cobranca`**, e a assimetria é o ponto:
+        suspender é decisão de *relação*, e quem a carrega é quem responde pelo cliente. Emitir, baixar
+        e enviar cobrança seguem sendo atos de admin, porque são dinheiro.
+
+        Não arquiva: a suspensão vencida continua na lista, porque "por que ninguém cobrou este cliente
+        em março?" é uma pergunta que precisa de resposta — e um registro arquivado é o mesmo recebível
+        estragando invisível que a RFC nomeia.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este cobranca suspensao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaSuspensao'
+          description: ''
+    put:
+      operationId: v1_cobranca_suspensoes_update
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo (FDD 036, RFC 0004 "Segurança").
+
+        **Vendas escreve aqui e não escreve em `invoice` nem em `cobranca`**, e a assimetria é o ponto:
+        suspender é decisão de *relação*, e quem a carrega é quem responde pelo cliente. Emitir, baixar
+        e enviar cobrança seguem sendo atos de admin, porque são dinheiro.
+
+        Não arquiva: a suspensão vencida continua na lista, porque "por que ninguém cobrou este cliente
+        em março?" é uma pergunta que precisa de resposta — e um registro arquivado é o mesmo recebível
+        estragando invisível que a RFC nomeia.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este cobranca suspensao.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CobrancaSuspensao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CobrancaSuspensao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CobrancaSuspensao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaSuspensao'
+          description: ''
+    patch:
+      operationId: v1_cobranca_suspensoes_partial_update
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo (FDD 036, RFC 0004 "Segurança").
+
+        **Vendas escreve aqui e não escreve em `invoice` nem em `cobranca`**, e a assimetria é o ponto:
+        suspender é decisão de *relação*, e quem a carrega é quem responde pelo cliente. Emitir, baixar
+        e enviar cobrança seguem sendo atos de admin, porque são dinheiro.
+
+        Não arquiva: a suspensão vencida continua na lista, porque "por que ninguém cobrou este cliente
+        em março?" é uma pergunta que precisa de resposta — e um registro arquivado é o mesmo recebível
+        estragando invisível que a RFC nomeia.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este cobranca suspensao.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCobrancaSuspensao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCobrancaSuspensao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCobrancaSuspensao'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaSuspensao'
+          description: ''
+    delete:
+      operationId: v1_cobranca_suspensoes_destroy
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo (FDD 036, RFC 0004 "Segurança").
+
+        **Vendas escreve aqui e não escreve em `invoice` nem em `cobranca`**, e a assimetria é o ponto:
+        suspender é decisão de *relação*, e quem a carrega é quem responde pelo cliente. Emitir, baixar
+        e enviar cobrança seguem sendo atos de admin, porque são dinheiro.
+
+        Não arquiva: a suspensão vencida continua na lista, porque "por que ninguém cobrou este cliente
+        em março?" é uma pergunta que precisa de resposta — e um registro arquivado é o mesmo recebível
+        estragando invisível que a RFC nomeia.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este cobranca suspensao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/cobranca/suspensoes/{id}/levantar/:
+    post:
+      operationId: v1_cobranca_suspensoes_levantar_create
+      description: |-
+        Encerra a suspensão antes do prazo, com autor e carimbo.
+
+        Existe porque a alternativa é pior: sem ela, uma suspensão criada por engano cala a régua
+        pelo prazo inteiro e a única saída seria editar a linha, apagando o que houve. Levantar é
+        ato — o oposto do "pular silencioso" que a RFC recusa nos dois sentidos.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este cobranca suspensao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaSuspensao'
           description: ''
   /api/v1/config/:
     get:
@@ -2517,6 +2863,90 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Invoice'
+          description: ''
+  /api/v1/invoices/{id}/cobranca/enviar/:
+    post:
+      operationId: v1_invoices_cobranca_enviar_create
+      description: |-
+        Manda o degrau ao cliente com o texto que uma pessoa revisou (admin).
+
+        As guardas que valem tanto aqui quanto no job — estado cobrável, suspensão ativa e degrau
+        já gasto — são as mesmas funções de `cobranca.py`, e é isso que impede a tela e o relógio
+        de divergirem. **A que não vale aqui é o teto de frequência**: ele existe para conter o
+        robô que ninguém está olhando, e quem clica está olhando. Trocar o julgamento de quem vê a
+        tela pela contagem de dias seria proteger o cliente de uma decisão que já foi tomada.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CobrancaEnvioRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CobrancaEnvioRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CobrancaEnvioRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaContato'
+          description: ''
+  /api/v1/invoices/{id}/cobranca/rascunhar/:
+    post:
+      operationId: v1_invoices_cobranca_rascunhar_create
+      description: |-
+        Rascunha o texto do degrau no tom certo — e **não envia** (FDD 036, ADR 0031).
+
+        A separação entre rascunhar e enviar é a decisão da ADR 0031, não uma etapa de UI: o degrau
+        determinístico sai sozinho porque seu texto é constante revisada uma vez; o texto de IA
+        muda a **redação**, que é exatamente o que uma pessoa revisaria. Aprovar em bloco um gerador
+        de texto de cobrança é aprovar o parágrafo que ainda não existe e que vai chamar de
+        caloteiro um cliente de cinco anos.
+
+        `grounding=None`: o corpus interno da metodologia não tem o que fazer num e-mail de
+        cobrança, e o anti-vazamento é estrutural — só o `AgentView` preenche aquele parâmetro.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este invoice.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CobrancaRascunhoRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CobrancaRascunhoRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CobrancaRascunhoRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaRascunho'
           description: ''
   /api/v1/invoices/{id}/issue/:
     post:
@@ -6940,6 +7370,9 @@ components:
         opportunity:
           type: integer
           nullable: true
+        invoice:
+          type: integer
+          nullable: true
         kind:
           $ref: '#/components/schemas/ActivityKindEnum'
         kind_display:
@@ -6953,6 +7386,13 @@ components:
           maxLength: 255
         notes:
           type: string
+        cobranca_sinal:
+          allOf:
+          - $ref: '#/components/schemas/CobrancaSinalEnum'
+          readOnly: true
+        cobranca_sinal_display:
+          type: string
+          readOnly: true
         owner:
           type: integer
           readOnly: true
@@ -6967,6 +7407,8 @@ components:
           readOnly: true
       required:
       - client
+      - cobranca_sinal
+      - cobranca_sinal_display
       - created_at
       - happened_on
       - id
@@ -7271,6 +7713,14 @@ components:
       required:
       - created
       - skipped
+    CanalEnum:
+      enum:
+      - email
+      - interno
+      type: string
+      description: |-
+        * `email` - E-mail ao cliente
+        * `interno` - Aviso interno
     Case:
       type: object
       description: |-
@@ -7437,6 +7887,278 @@ components:
       description: |-
         * `prospect` - Prospect
         * `active` - Ativo
+    CobrancaContato:
+      type: object
+      description: |-
+        O que a casa já disse sobre uma fatura (FDD 036). **Só de leitura pelo router.**
+
+        Nenhum campo é gravável aqui, e a ausência é a entrega: um `POST /cobranca/` criaria a prova de
+        um contato que não aconteceu. Contato nasce de `POST /invoices/{id}/cobranca/enviar/` ou do job
+        — os dois mandam o e-mail **antes** de gravar.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        invoice:
+          type: integer
+          readOnly: true
+        invoice_number:
+          type: string
+          readOnly: true
+          default: ''
+        client:
+          type: integer
+          readOnly: true
+        client_name:
+          type: string
+          readOnly: true
+        degrau:
+          allOf:
+          - $ref: '#/components/schemas/DegrauEnum'
+          readOnly: true
+        degrau_display:
+          type: string
+          readOnly: true
+        canal:
+          allOf:
+          - $ref: '#/components/schemas/CanalEnum'
+          readOnly: true
+        canal_display:
+          type: string
+          readOnly: true
+        sent_on:
+          type: string
+          format: date
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+        to_email:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        sent_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        ai_interaction:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ai_interaction
+      - body
+      - canal
+      - canal_display
+      - client
+      - client_name
+      - created_at
+      - degrau
+      - degrau_display
+      - id
+      - invoice
+      - invoice_number
+      - sent_by
+      - sent_on
+      - subject
+      - to_email
+    CobrancaEnvioRequest:
+      type: object
+      properties:
+        degrau:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        ai_interaction:
+          type: integer
+      required:
+      - body
+      - degrau
+    CobrancaPainelLinha:
+      type: object
+      properties:
+        invoice:
+          type: integer
+        number:
+          type: string
+        client:
+          type: integer
+        client_name:
+          type: string
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        due_date:
+          type: string
+          format: date
+        status:
+          type: string
+        status_display:
+          type: string
+        dias_de_atraso:
+          type: integer
+        payment_url:
+          type: string
+        proximo_degrau:
+          type: string
+          nullable: true
+        proximo_degrau_display:
+          type: string
+          nullable: true
+        proximo_degrau_em:
+          type: string
+          format: date
+          nullable: true
+        motivo:
+          type: string
+        health_level:
+          type: string
+          nullable: true
+        tempo_de_casa_dias:
+          type: integer
+        reincidente:
+          type: boolean
+        regua:
+          type: string
+        recebido_do_cliente:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        suspensao:
+          type: object
+          additionalProperties: {}
+          nullable: true
+        regua_ligada:
+          type: boolean
+      required:
+      - amount
+      - client
+      - client_name
+      - dias_de_atraso
+      - due_date
+      - health_level
+      - invoice
+      - motivo
+      - number
+      - payment_url
+      - proximo_degrau
+      - proximo_degrau_display
+      - proximo_degrau_em
+      - recebido_do_cliente
+      - regua
+      - regua_ligada
+      - reincidente
+      - status
+      - status_display
+      - suspensao
+      - tempo_de_casa_dias
+    CobrancaRascunho:
+      type: object
+      properties:
+        text:
+          type: string
+        interaction:
+          type: integer
+        degrau:
+          type: string
+      required:
+      - degrau
+      - interaction
+      - text
+    CobrancaRascunhoRequest:
+      type: object
+      properties:
+        degrau:
+          type: string
+    CobrancaSinalEnum:
+      enum:
+      - esqueceu
+      - nao_pode
+      - insatisfeito
+      type: string
+      description: |-
+        * `esqueceu` - Esqueceu
+        * `nao_pode` - Não pôde pagar
+        * `insatisfeito` - Insatisfeito
+    CobrancaSuspensao:
+      type: object
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo, os três obrigatórios (RFC 0004).
+
+        A validação de "exatamente uma fatura ou um cliente" mora no `clean()` do modelo, como a do
+        `Document`, e é chamada daqui: uma suspensão que valesse para os dois níveis teria duas
+        leituras de "levantar", e a errada devolve a cobrança a quem ainda não devia ouvi-la.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        invoice:
+          type: integer
+          nullable: true
+        invoice_number:
+          type: string
+          readOnly: true
+          default: ''
+        client:
+          type: integer
+          nullable: true
+        client_name:
+          type: string
+          readOnly: true
+          default: ''
+        owner:
+          type: integer
+        until:
+          type: string
+          format: date
+        reason:
+          type: string
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        lifted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        lifted_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client_name
+      - created_at
+      - created_by
+      - id
+      - invoice_number
+      - is_active
+      - lifted_at
+      - lifted_by
+      - owner
+      - reason
+      - until
+      - updated_at
     ConfigFlag:
       type: object
       properties:
@@ -7501,6 +8223,8 @@ components:
         job_title:
           type: string
           maxLength: 128
+        receives_billing:
+          type: boolean
         created_at:
           type: string
           format: date-time
@@ -7593,6 +8317,20 @@ components:
       description: |-
         * `draft` - Rascunho
         * `published` - Publicada
+    DegrauEnum:
+      enum:
+      - pre_aviso
+      - lembrete
+      - firme
+      - escalada
+      - renegociacao
+      type: string
+      description: |-
+        * `pre_aviso` - Pré-aviso
+        * `lembrete` - Lembrete
+        * `firme` - Cobrança firme
+        * `escalada` - Escalada interna
+        * `renegociacao` - Renegociação
     DigitalEmployee:
       type: object
       properties:
@@ -8656,6 +9394,9 @@ components:
         opportunity:
           type: integer
           nullable: true
+        invoice:
+          type: integer
+          nullable: true
         kind:
           $ref: '#/components/schemas/ActivityKindEnum'
         kind_display:
@@ -8669,6 +9410,13 @@ components:
           maxLength: 255
         notes:
           type: string
+        cobranca_sinal:
+          allOf:
+          - $ref: '#/components/schemas/CobrancaSinalEnum'
+          readOnly: true
+        cobranca_sinal_display:
+          type: string
+          readOnly: true
         owner:
           type: integer
           readOnly: true
@@ -8885,6 +9633,63 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedCobrancaSuspensao:
+      type: object
+      description: |-
+        Suspender a cobrança — com dono, prazo e motivo, os três obrigatórios (RFC 0004).
+
+        A validação de "exatamente uma fatura ou um cliente" mora no `clean()` do modelo, como a do
+        `Document`, e é chamada daqui: uma suspensão que valesse para os dois níveis teria duas
+        leituras de "levantar", e a errada devolve a cobrança a quem ainda não devia ouvi-la.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        invoice:
+          type: integer
+          nullable: true
+        invoice_number:
+          type: string
+          readOnly: true
+          default: ''
+        client:
+          type: integer
+          nullable: true
+        client_name:
+          type: string
+          readOnly: true
+          default: ''
+        owner:
+          type: integer
+        until:
+          type: string
+          format: date
+        reason:
+          type: string
+        created_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        lifted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        lifted_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedConfigPatch:
       type: object
       properties:
@@ -8913,6 +9718,8 @@ components:
         job_title:
           type: string
           maxLength: 128
+        receives_billing:
+          type: boolean
         created_at:
           type: string
           format: date-time

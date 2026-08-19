@@ -1,4 +1,4 @@
-import { AlertTriangle, Ban, CheckCircle2, ExternalLink, Receipt, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ExternalLink, HandCoins, Receipt, Send, Trash2 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
@@ -126,6 +126,10 @@ export function FinanceiroPage() {
       <h1>Contas a receber</h1>
       <p>Quem deve o quê, e desde quando. Antes desta tela a inadimplência era imensurável — não havia data de vencimento nem de pagamento em lugar nenhum do portal.</p>
     </header>
+
+    {/* O razão aponta para a decisão (FDD 036). Aqui está quem deve o quê; o que dizer a quem, e
+        se dizer, é outro trabalho — e por isso é outra tela. */}
+    <a href="/cobranca" className="btn btn--secondary"><HandCoins className="size-4" />Decidir o próximo passo em Cobrança</a>
 
     {error && <p role="alert" className="alert--error">{error}</p>}
     {notice && <p role="status" className="rounded-xl bg-accent-50/60 p-3 text-sm text-accent">{notice}</p>}

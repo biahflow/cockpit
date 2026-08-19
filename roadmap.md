@@ -47,6 +47,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 033 | Gates da jornada (decision gate 4-vias + quality gates) | Entregue | 1 | `docs/fdd/033-os-gates-da-jornada.md` |
 | FDD 034 | Risk Register do projeto | Entregue | 1 | `docs/fdd/034-risk-register-do-projeto.md` |
 | FDD 035 | Activities no CRM | Entregue | 1 | `docs/fdd/035-activities-no-crm.md` |
+| FDD 036 | Régua de cobrança e IA de tom | Entregue (desligada) | 1 | `docs/fdd/036-a-regua-que-cobra-sem-estragar-a-relacao.md` |
 
 ## Base atual — entregue
 
@@ -110,10 +111,11 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
   sempre, impossível de fechar pelo webhook, e ainda cobrada por lembrete a uma pessoa de verdade.
   **As quatro rodadas acharam defeito**, e três acharam a mesma classe.
 
-> **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. **As quatro
-> rodadas de homologação foram feitas** — e-mail, IA, Google e assinatura (FDD 024) — e as quatro
-> acharam defeito. Quase todo código que fala com provedor externo continua atrás de
-> `# pragma: no cover`.
+> **Leitura honesta deste roadmap.** Ele mede *código escrito*, não *código rodando*. **Cinco
+> rodadas de homologação foram feitas** — e-mail, IA, Google, assinatura (FDD 024) e base de
+> conhecimento (FDD 029) — e as cinco acharam defeito. A do **Stripe** (seção 5 do runbook) segue
+> pendente, e é o gate para ligar a régua de cobrança. Quase todo código que fala com provedor
+> externo continua atrás de `# pragma: no cover`.
 >
 > O que fica apagado numa instalação nova é **configuração, não código não exercitado** — e desde a
 > ADR 0018 é menos do que era: notificações/digest e assinatura eletrônica nascem ligadas (a
@@ -365,10 +367,32 @@ um radar que ele respeita.
       escolha da API de Invoices em vez de Checkout Session foi decidida por um fato: a sessão
       **expira em 24 h**, e um link para uma fatura de quinze dias morre antes de o cliente abrir.
       **O Stripe não foi homologado** — o roteiro existe (runbook, seção 5), a rodada não. As
-      quatro rodadas anteriores acharam defeito cada uma. Ficam de fora, e nomeadas: a régua de
-      cobrança e a IA de tom (camadas 3 e 4 — cobrar antes de reconciliar produz um agente que
-      importuna quem já pagou), a nota de crédito, a NFS-e e **trocar a fonte do ROI**, que segue
-      pedindo ADR próprio. Ver RFC 0004, FDD 028 e ADR 0021.
+      quatro rodadas anteriores acharam defeito cada uma. As camadas 3 e 4 saíram deste recorte e
+      são o item seguinte. Ficam de fora, e nomeadas: a nota de crédito, a NFS-e e **trocar a fonte
+      do ROI**, que segue pedindo ADR próprio. Ver RFC 0004, FDD 028 e ADR 0021.
+- [x] **A régua que cobra sem estragar a relação — camadas 3 e 4 da RFC 0004.** A FDD 028
+      deixou o portal sabendo quem está vencido e **avisando ninguém** — o docstring de
+      `mark_overdue` dizia isso com todas as letras, e era o começo desta fatia. Agora existe a
+      escada (pré-aviso em D−3, carência, lembrete, tom firme, escalada e renegociação), e a
+      propriedade que a define é **ser derivada do estado, nunca uma fila**: a cada execução se
+      pergunta "que degrau cabe hoje?" à fatura, e como `paga` é terminal, **o pagamento não
+      precisa cancelar nada**. Uma fila pode ser ultrapassada pelo pagamento — a baixa entra às
+      14h, o worker já tinha o e-mail na mão —, e é assim que se cobra quem pagou de manhã, que a
+      RFC chama de pecado capital. A segmentação por relação **não é refinamento, é requisito**: um
+      cliente de um ano sem reincidência não tem degrau firme, porque cobrar um cliente antigo com
+      tom de caloteiro é como se perde um cliente antigo por uma fatura. E recuar é **declarado** —
+      suspensão com dono, prazo e motivo obrigatórios, que expira sozinha —, porque a regra de
+      suspender é a que mais apodrece na prática. A IA entra nos dois lugares que a RFC autoriza e
+      em nenhum outro: **rascunha** o tom e **classifica** a resposta entre esqueceu / não pôde /
+      está insatisfeito. O degrau determinístico sai sozinho e o texto de IA nunca — a **ADR 0031**
+      registra por quê, e é a primeira vez que este produto manda algo para fora da casa sem
+      alguém apertando o botão naquele instante. **Nasce desligada**, e não por custo nem por
+      credencial: dos dois pressupostos que a RFC exige, a medição pedida ("olhar dois ou três
+      meses") tem doze dias, e o gateway que *desarma* a régua nunca foi homologado. Construir não
+      é ligar. De carona, a revisão do diff achou três defeitos, e o mais caro era mudo: escalada
+      sem ninguém a quem escalar **gastava o degrau** — a régua parava de falar com o cliente e
+      ninguém ficava sabendo. Ver FDD 036 e ADR 0031. **Aberto:** a homologação do Stripe
+      (runbook, seção 5), que é o gate para ligar em instalação real.
 - [x] **Base de conhecimento interna e frescor — Fase 8.** O corpus da metodologia — 68
       arquivos, 450 trechos — deixa de viver só no repositório e passa a ancorar a resposta dos
       agentes, **com citação exata** ("Runbook — backup e restauração › Restaurar") e lacuna

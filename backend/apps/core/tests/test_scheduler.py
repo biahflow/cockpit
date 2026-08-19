@@ -413,3 +413,18 @@ def test_a_tabela_marca_vencidas_antes_do_digest() -> None:
     assert tabela["invoices_overdue"].command == "mark_overdue_invoices"
     assert tabela["invoices_overdue"].schedule == scheduler.Daily(time(6, 0))
     assert tabela["invoices_overdue"].schedule.at < tabela["digest"].schedule.at
+
+
+def test_a_regua_de_cobranca_roda_depois_do_vencimento_apurado() -> None:
+    """A mesma ordem, um degrau adiante (FDD 036).
+
+    A régua pergunta "que degrau cabe hoje?" ao estado **atual** da fatura. Rodando antes das 06:00
+    ela leria como `issued` quem já é `overdue`, e o D+1 sairia com um dia de atraso — o erro
+    silencioso, porque o e-mail sai e ninguém confere a data contra o degrau.
+    """
+    with override_settings(SCHEDULER_INVOICES_AT="06:00", SCHEDULER_DUNNING_AT="09:30"):
+        tabela = {job.name: job for job in scheduler.jobs()}
+
+    assert tabela["dunning"].command == "run_dunning"
+    assert tabela["dunning"].schedule == scheduler.Daily(time(9, 30))
+    assert tabela["invoices_overdue"].schedule.at < tabela["dunning"].schedule.at

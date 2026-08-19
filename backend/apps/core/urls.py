@@ -15,6 +15,8 @@ from .views import (
     CalendarSyncView,
     CaseViewSet,
     ClientViewSet,
+    CobrancaSuspensaoViewSet,
+    CobrancaViewSet,
     ConfigView,
     ContactViewSet,
     DashboardView,
@@ -88,6 +90,12 @@ router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)
 router.register("invoices", InvoiceViewSet)
+# **`cobranca/suspensoes` antes de `cobranca`, e a ordem não é estética.** O `DefaultRouter` gera
+# `^cobranca/(?P<pk>[^/.]+)/$` para o detalhe, e essa rota casa com `cobranca/suspensoes/` lendo
+# "suspensoes" como pk — registrada primeiro, ela sequestraria a lista de suspensões e o sintoma
+# seria um 404 de detalhe onde deveria haver uma coleção.
+router.register("cobranca/suspensoes", CobrancaSuspensaoViewSet, basename="cobranca-suspensao")
+router.register("cobranca", CobrancaViewSet, basename="cobranca")
 router.register("knowledge-areas", KnowledgeAreaViewSet)
 router.register("knowledge-pieces", KnowledgePieceViewSet)
 router.register("leads", LeadViewSet)
