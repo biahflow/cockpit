@@ -9,6 +9,7 @@ export function JourneyConfigPage() {
   const [phases, setPhases] = useState<JourneyPhaseTemplate[]>([]);
   const [phaseDraft, setPhaseDraft] = useState({ name: "", description: "", position: "" });
   const [deliverableDraft, setDeliverableDraft] = useState<Record<number, string>>({});
+  const [checklistDraft, setChecklistDraft] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   const [removingPhase, setRemovingPhase] = useState<JourneyPhaseTemplate | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
@@ -21,7 +22,7 @@ export function JourneyConfigPage() {
   }
   async function savePhase(phase: JourneyPhaseTemplate) {
     setError("");
-    try { await api(`/journey-phases/${phase.id}/`, { method: "PATCH", body: JSON.stringify({ name: phase.name, description: phase.description, position: Number(phase.position), active: phase.active }) }); await load(); }
+    try { await api(`/journey-phases/${phase.id}/`, { method: "PATCH", body: JSON.stringify({ name: phase.name, description: phase.description, position: Number(phase.position), active: phase.active, requires_gate: phase.requires_gate }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function removePhase() {
@@ -48,6 +49,20 @@ export function JourneyConfigPage() {
     try { await api(`/phase-deliverables/${id}/`, { method: "DELETE" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
+  // O checklist é o **quality gate** da fase, e não uma segunda lista de entregáveis: o
+  // entregável é o que sai daqui, o item de checklist é a condição para que possa sair (FDD 033).
+  async function addChecklistItem(phaseId: number) {
+    const text = (checklistDraft[phaseId] ?? "").trim();
+    if (!text) return;
+    setError("");
+    try { await api("/phase-checklist-items/", { method: "POST", body: JSON.stringify({ phase: phaseId, text, position: 0 }) }); setChecklistDraft(prev => ({ ...prev, [phaseId]: "" })); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function removeChecklistItem(id: number) {
+    setError("");
+    try { await api(`/phase-checklist-items/${id}/`, { method: "DELETE" }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
 
   return <section className="space-y-7">
     {removingPhase && <ConfirmDialog
@@ -57,7 +72,7 @@ export function JourneyConfigPage() {
       onCancel={() => setRemovingPhase(null)} onConfirm={() => void removePhase()}
     />}
     <a href="/configuracoes" className="back-link"><ArrowLeft className="size-4" />Voltar para configurações</a>
-    <header className="page-head"><p className="eyebrow">Metodologia</p><h1>Jornada de Transformação</h1><p>Nomeie e ordene as fases e seus entregáveis. Cada projeto novo herda este modelo.</p></header>
+    <header className="page-head"><p className="eyebrow">Metodologia</p><h1>Jornada de Transformação</h1><p>Nomeie e ordene as fases, seus entregáveis e o checklist de qualidade; marque as que terminam em decision gate. Cada projeto novo herda este modelo.</p></header>
     {error && <p role="alert" className="alert--error">{error}</p>}
 
     <div className="space-y-4">{phases.map(phase => <section className="panel panel--flush" key={phase.id}>
@@ -68,8 +83,12 @@ export function JourneyConfigPage() {
         <button className="btn btn--icon-danger" aria-label={`Excluir fase ${phase.name}`} onClick={() => setRemovingPhase(phase)}><Trash2 className="size-4" /></button>
       </div>
       <div className="px-5 py-4 sm:px-6">
-        <label className="mb-4 flex items-center gap-2 text-sm text-muted"><input type="checkbox" className="size-4 rounded border-slate-300 text-brand-500" checked={phase.active} onChange={event => updateLocal(phase.id, { active: event.target.checked })} />Herdada por projetos novos</label>
+        <div className="mb-4 flex flex-wrap gap-x-6 gap-y-2">
+          <label className="flex items-center gap-2 text-sm text-muted"><input type="checkbox" className="size-4 rounded border-slate-300 text-brand-500" checked={phase.active} onChange={event => updateLocal(phase.id, { active: event.target.checked })} />Herdada por projetos novos</label>
+          <label className="flex items-center gap-2 text-sm text-muted"><input type="checkbox" className="size-4 rounded border-slate-300 text-brand-500" checked={phase.requires_gate} onChange={event => updateLocal(phase.id, { requires_gate: event.target.checked })} />Termina em decision gate</label>
+        </div>
         {!phase.active && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">Fase aposentada: não entra em projeto novo. Os projetos que já passaram por ela continuam com a delas.</p>}
+        {phase.requires_gate && <p className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">A equipe precisa registrar GO / CONDITIONAL GO / REDESIGN / NO-GO para fechar esta fase. REDESIGN reabre a fase anterior; NO-GO para a jornada aqui.</p>}
         <input className="field mb-4" value={phase.description} placeholder="Descrição da fase (opcional)" onChange={event => updateLocal(phase.id, { description: event.target.value })} aria-label={`Descrição da fase ${phase.name}`} />
         <p className="eyebrow mb-2">Entregáveis</p>
         <div className="divide-y divide-line">{phase.deliverables.map(deliverable => <div className="flex items-center gap-3 py-2" key={deliverable.id}>
@@ -79,6 +98,15 @@ export function JourneyConfigPage() {
         <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); void addDeliverable(phase.id); }}>
           <input className="field" value={deliverableDraft[phase.id] ?? ""} placeholder="Novo entregável" onChange={event => setDeliverableDraft(prev => ({ ...prev, [phase.id]: event.target.value }))} aria-label={`Novo entregável da fase ${phase.name}`} />
           <button className="btn btn--icon" aria-label={`Adicionar entregável à fase ${phase.name}`} type="submit"><Plus className="size-4" /></button>
+        </form>
+        <p className="eyebrow mb-2 mt-5">Checklist de qualidade</p>
+        <div className="divide-y divide-line">{phase.checklist_items.map(item => <div className="flex items-center gap-3 py-2" key={item.id}>
+          <span className="flex-1 text-sm text-ink">{item.text}</span>
+          <button className="btn btn--icon-danger size-8 rounded-lg" aria-label={`Excluir item ${item.text}`} onClick={() => void removeChecklistItem(item.id)}><Trash2 className="size-3.5" /></button>
+        </div>)}</div>
+        <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); void addChecklistItem(phase.id); }}>
+          <input className="field" value={checklistDraft[phase.id] ?? ""} placeholder="Nova pergunta (ex.: Baseline definido?)" onChange={event => setChecklistDraft(prev => ({ ...prev, [phase.id]: event.target.value }))} aria-label={`Novo item do checklist da fase ${phase.name}`} />
+          <button className="btn btn--icon" aria-label={`Adicionar item ao checklist da fase ${phase.name}`} type="submit"><Plus className="size-4" /></button>
         </form>
       </div>
     </section>)}</div>

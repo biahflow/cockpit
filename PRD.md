@@ -1,8 +1,10 @@
-# PRD — Portal Biahflow
+# PRD — Cockpit (Biahflow)
 
-> Atualizado em 05/08/2026. O escopo do MVP original (CRM → conversão → execução) foi entregue e
-> o produto avançou para a **jornada de consultoria assistida por IA** (RFC 0002). O estado de
-> entrega, item a item, vive no `roadmap.md`; este documento descreve o produto atual.
+> Atualizado em 19/08/2026. O escopo do MVP original (CRM → conversão → execução) foi entregue e
+> o produto avançou para a **jornada de consultoria assistida por IA** (RFC 0002). Desde a ADR
+> 0030 o produto se chama **Cockpit** e é o **sistema primário da operação** da Biahflow — o
+> Notion vira referência. O estado de entrega, item a item, vive no `roadmap.md`; este documento
+> descreve o produto atual.
 
 ## Problema
 
@@ -16,6 +18,23 @@ Usuários internos das áreas Administrativa, Vendas e Entrega. O portal é a **
 operação: registra clientes e leads, conduz oportunidades por um pipeline, transforma oportunidades
 ganhas em projetos acompanháveis e alimenta o portal do cliente. A IA **acelera, não decide**: tudo
 que ela produz é rascunho sujeito a revisão humana.
+
+## Metodologia — FDE
+
+A operação que o Cockpit materializa é a metodologia FDE (Forward Deployed Engineering), descrita
+em [`docs/metodologia-fde.md`](docs/metodologia-fde.md): a escada
+`Discover → Prioritize → [Feasibility] → Prove → Scale → Optimize`, com decision gate de quatro
+saídas (GO / CONDITIONAL GO / REDESIGN / NO-GO) ao fim de Feasibility e de PROVE, quality gates por
+fase e a regra comercial Account ≠ Opportunity (cada degrau vendido é uma oportunidade própria na
+mesma conta). O princípio da ADR 0030 governa como a metodologia entra no produto: **contexto vira
+comportamento** — checklist vira gate de fase, decisão de continuidade vira campo obrigatório,
+metodologia consultável entra no corpus de conhecimento — nunca página para ler.
+
+Correspondência com o domínio atual: os três níveis de produto (`Service.tier`) são os degraus
+comerciais da escada; a Jornada de Transformação (FDD 011) é onde os gates da metodologia se
+aplicam (FDD 033); as interações comerciais, riscos de projeto e registros de decisão são
+FDD 035, FDD 034 e FDD 032. A camada de Discovery estruturado (processos, dores, evidências,
+business cases, value ledger) é **deliberadamente adiada** até haver Discoveries reais — ADR 0030.
 
 ## Escopo
 

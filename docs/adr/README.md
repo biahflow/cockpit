@@ -29,3 +29,6 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0025 — A sidebar clara, e o matiz como única identificação (revisa a 0024)
 - 0026 — As telas passam a chamar o design system (e a guarda que impede a volta)
 - 0027 — A regra do snapshot que só existia em prosa (a guarda derivada de emissores)
+- 0028 — O documento que não sobrevivia à revisão
+- 0029 — A identidade que o Django não sabia apresentar
+- 0030 — A operação sai do texto: o cockpit vira o sistema primário

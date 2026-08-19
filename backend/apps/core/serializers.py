@@ -18,6 +18,7 @@ from .models import (
     ARTIFACT_TRANSITIONS,
     CASE_TRANSITIONS,
     INVOICE_TRANSITIONS,
+    Activity,
     Artifact,
     BlueprintVariant,
     Case,
@@ -38,12 +39,15 @@ from .models import (
     Notification,
     Opportunity,
     Pendencia,
+    PhaseChecklistItem,
     PhaseDeliverable,
     PipelineStage,
     Project,
+    ProjectChecklistItem,
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    Risco,
     Service,
     SignatureRequest,
     Task,
@@ -105,6 +109,27 @@ class ContactSerializer(serializers.ModelSerializer[Contact]):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class ActivitySerializer(serializers.ModelSerializer[Activity]):
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = Activity
+        fields = ["id", "client", "opportunity", "kind", "kind_display", "happened_on", "summary",
+                  "notes", "owner", "created_at", "updated_at"]
+        read_only_fields = ["id", "kind_display", "owner", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
+        opportunity = cast(
+            Opportunity | None, attrs.get("opportunity", getattr(self.instance, "opportunity", None))
+        )
+        if opportunity and client and opportunity.client_id != client.id:
+            raise serializers.ValidationError(
+                {"opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
+            )
+        return attrs
+
+
 class PipelineStageSerializer(serializers.ModelSerializer[PipelineStage]):
     class Meta:
         model = PipelineStage
@@ -121,14 +146,27 @@ class PhaseDeliverableSerializer(serializers.ModelSerializer[PhaseDeliverable]):
         read_only_fields = ["id"]
 
 
+class PhaseChecklistItemSerializer(serializers.ModelSerializer[PhaseChecklistItem]):
+    """Item do quality gate no template de uma fase (config admin, FDD 033)."""
+
+    class Meta:
+        model = PhaseChecklistItem
+        fields = ["id", "phase", "text", "position"]
+        read_only_fields = ["id"]
+
+
 class JourneyPhaseSerializer(serializers.ModelSerializer[JourneyPhase]):
     """Fase do template da Jornada de Transformação (config admin, vocabulário editável)."""
 
     deliverables = PhaseDeliverableSerializer(many=True, read_only=True)
+    checklist_items = PhaseChecklistItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = JourneyPhase
-        fields = ["id", "name", "description", "position", "active", "deliverables"]
+        fields = [
+            "id", "name", "description", "position", "active", "requires_gate",
+            "deliverables", "checklist_items",
+        ]
         read_only_fields = ["id"]
 
 
@@ -146,23 +184,47 @@ class ProjectDeliverableSerializer(serializers.ModelSerializer[ProjectDeliverabl
         ]
 
 
+class ProjectChecklistItemSerializer(serializers.ModelSerializer[ProjectChecklistItem]):
+    """Item do quality gate de um projeto — só `checked` é editável (FDD 033)."""
+
+    class Meta:
+        model = ProjectChecklistItem
+        fields = [
+            "id", "project_phase", "text", "position", "checked", "checked_at",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "project_phase", "text", "position", "checked_at", "created_at", "updated_at",
+        ]
+
+
 class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
-    """Fase da jornada de um projeto (estado). Só `target_date` é editável pela equipe."""
+    """Fase da jornada de um projeto (estado). A equipe edita `target_date` e a justificativa.
+
+    `gate_outcome`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
+    action `apply-gate`, que é onde moram as consequências de cada saída — concluir e avançar,
+    reabrir a fase anterior, ou parar. Um PATCH direto gravaria "REDESIGN" sem nada acontecer, e
+    o campo passaria a mentir sobre o estado da jornada.
+    """
 
     phase_name = serializers.CharField(source="phase.name", read_only=True)
     phase_description = serializers.CharField(source="phase.description", read_only=True)
     phase_position = serializers.IntegerField(source="phase.position", read_only=True)
+    requires_gate = serializers.BooleanField(source="phase.requires_gate", read_only=True)
     deliverables = ProjectDeliverableSerializer(many=True, read_only=True)
+    checklist_items = ProjectChecklistItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = ProjectPhase
         fields = [
             "id", "project", "phase", "phase_name", "phase_description", "phase_position",
-            "status", "started_at", "completed_at", "target_date", "deliverables",
+            "requires_gate", "status", "started_at", "completed_at", "target_date",
+            "gate_outcome", "gate_notes", "checklist_waiver", "deliverables", "checklist_items",
         ]
         read_only_fields = [
             "id", "project", "phase", "phase_name", "phase_description", "phase_position",
-            "status", "started_at", "completed_at", "deliverables",
+            "requires_gate", "status", "started_at", "completed_at", "gate_outcome",
+            "gate_notes", "deliverables", "checklist_items",
         ]
 
 
@@ -291,6 +353,17 @@ class DecisaoSerializer(serializers.ModelSerializer[Decisao]):
         fields = ["id", "project", "title", "rationale", "decided_on", "decided_by", "status",
                   "source_meeting", "published_at", "created_at", "updated_at"]
         read_only_fields = ["id", "published_at", "created_at", "updated_at"]
+
+
+class RiscoSerializer(serializers.ModelSerializer[Risco]):
+    # `owner` e `resolved_at` são read-only pelo motivo da `Pendencia` acima: o dono sai da sessão
+    # de quem registrou e o carimbo sai do `save()` do modelo. Aceitá-los do corpo deixaria
+    # reescrever quem viu o risco e quando ele deixou de ameaçar.
+    class Meta:
+        model = Risco
+        fields = ["id", "project", "title", "description", "probability", "impact", "mitigation",
+                  "status", "owner", "resolved_at", "created_at", "updated_at"]
+        read_only_fields = ["id", "owner", "resolved_at", "created_at", "updated_at"]
 
 
 class TaskSerializer(WorkItemSerializer):

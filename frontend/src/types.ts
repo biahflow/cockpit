@@ -26,6 +26,11 @@ export type Analytics = {
 export type ClientStatus = "prospect" | "active";
 export type Client = { id: number; name: string; legal_name: string; tax_id: string; owner: number; status: ClientStatus; vertical: number | null; vertical_name: string };
 export type Contact = { id: number; client: number; name: string; email: string; phone: string; job_title: string };
+// Interação comercial com o cliente (FDD 035, ADR 0030) — a materialização das "Activities" do
+// CRM na leitura FDE. `opportunity` é opcional e, quando preenchida, tem de ser do mesmo cliente
+// (o backend recusa com 400; ver `docs/metodologia-fde.md`).
+export type ActivityKind = "call" | "meeting" | "email" | "note";
+export type Activity = { id: number; client: number; opportunity: number | null; kind: ActivityKind; kind_display: string; happened_on: string; summary: string; notes: string; owner: number | null; created_at: string; updated_at: string };
 export type WorkItemStatus = "todo" | "in_progress" | "done";
 export type Party = "provider" | "client";
 export type Milestone = { id: number; project: number; title: string; description: string; owner: number; due_date: string; completed_at: string | null; status: WorkItemStatus; party: Party; is_overdue: boolean };
@@ -33,6 +38,11 @@ export type Task = Milestone & { milestone: number | null };
 export type Meeting = { id: number; project: number; title: string; date: string; meeting_url: string; recording_url: string; transcript: string; status: "scheduled" | "held" };
 export type Pendencia = { id: number; project: number; title: string; description: string; status: "open" | "resolved"; party: Party; owner: number | null; resolved_at: string | null };
 export type Decisao = { id: number; project: number; title: string; rationale: string; decided_on: string | null; decided_by: string; status: "draft" | "published"; source_meeting: number | null; published_at: string | null };
+// Risk Register do projeto (FDD 034) — o risco **declarado** por alguém, que não é o mesmo que a
+// `RiskAssessment` calculada logo abaixo. Aquela deriva de prazo e item atrasado; esta é escrita.
+export type RiscoNivel = "low" | "medium" | "high";
+export type RiscoStatus = "open" | "mitigated" | "accepted" | "materialized";
+export type Risco = { id: number; project: number; title: string; description: string; probability: RiscoNivel; impact: RiscoNivel; mitigation: string; status: RiscoStatus; owner: number | null; resolved_at: string | null };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 export type DocumentEntry = { id: number; client: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";
@@ -93,9 +103,14 @@ export type DigitalEmployeeBlueprint = { id: number; name: string; area: Bluepri
 export type JourneyPhaseStatus = "locked" | "active" | "done";
 export type ProjectDeliverableStatus = "pending" | "delivered";
 export type ProjectDeliverable = { id: number; project_phase: number; name: string; status: ProjectDeliverableStatus; document: number | null; position: number; delivered_at: string | null };
-export type ProjectPhase = { id: number; project: number; phase: number; phase_name: string; phase_description: string; phase_position: number; status: JourneyPhaseStatus; started_at: string | null; completed_at: string | null; target_date: string | null; deliverables: ProjectDeliverable[] };
+// As quatro saídas do decision gate (FDD 033). `""` é "ainda não decidido" — o gate não tem
+// default, porque um default seria uma decisão que ninguém tomou.
+export type GateOutcome = "go" | "conditional_go" | "redesign" | "no_go";
+export type ProjectChecklistItem = { id: number; project_phase: number; text: string; position: number; checked: boolean; checked_at: string | null };
+export type ProjectPhase = { id: number; project: number; phase: number; phase_name: string; phase_description: string; phase_position: number; requires_gate: boolean; status: JourneyPhaseStatus; started_at: string | null; completed_at: string | null; target_date: string | null; gate_outcome: GateOutcome | ""; gate_notes: string; checklist_waiver: string; deliverables: ProjectDeliverable[]; checklist_items: ProjectChecklistItem[] };
 export type PhaseDeliverableTemplate = { id: number; phase: number; name: string; position: number };
-export type JourneyPhaseTemplate = { id: number; name: string; description: string; position: number; active: boolean; deliverables: PhaseDeliverableTemplate[] };
+export type PhaseChecklistItemTemplate = { id: number; phase: number; text: string; position: number };
+export type JourneyPhaseTemplate = { id: number; name: string; description: string; position: number; active: boolean; requires_gate: boolean; deliverables: PhaseDeliverableTemplate[]; checklist_items: PhaseChecklistItemTemplate[] };
 export type LeadStatus = "new" | "contacted" | "qualified" | "discarded";
 export type LeadFit = "high" | "medium" | "low" | "";
 // O cadastro público que o enriquecimento trouxe (FDD 030). Todo campo é opcional porque o objeto

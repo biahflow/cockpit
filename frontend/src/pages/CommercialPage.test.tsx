@@ -4,9 +4,12 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { CommercialPage } from "./CommercialPage";
 
-const mocks = vi.hoisted(() => ({ api: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  api: vi.fn(),
+  auth: { user: { id: 1, username: "admin", first_name: "", last_name: "", email: "", role: "admin", is_admin: true }, aiEnabled: true } as { user: { id: number; username: string; first_name: string; last_name: string; email: string; role: string; is_admin: boolean }; aiEnabled: boolean },
+}));
 vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v1/documents/${id}/download/` }));
-vi.mock("../auth", () => ({ useAuth: () => ({ user: { id: 1, username: "admin", first_name: "", last_name: "", email: "", role: "admin", is_admin: true }, aiEnabled: true }) }));
+vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 const stages = [
   { id: 1, name: "Prospecção", kind: "open", position: 0 },
@@ -35,6 +38,7 @@ function stub() {
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
     if (path.startsWith("/documents/?opportunity")) return Promise.resolve([{ id: 9, client: null, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
+    if (path.startsWith("/activities/?opportunity")) return Promise.resolve([{ id: 4, client: 1, opportunity: 1, kind: "meeting", kind_display: "Reunião", happened_on: "2026-08-12", summary: "Apresentação da proposta", notes: "", owner: 1, created_at: "2026-08-12T10:00:00Z", updated_at: "2026-08-12T10:00:00Z" }]);
     if (path.includes("/convert-to-project/")) return Promise.resolve({ id: 7, name: "Oport X" });
     if (path.includes("/proposal/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4, artifact: proposalArtifact });
     if (path.includes("/summary/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4 });
@@ -43,7 +47,10 @@ function stub() {
   });
 }
 
-beforeEach(() => { mocks.api.mockReset(); artifacts = []; stub(); });
+beforeEach(() => {
+  mocks.api.mockReset(); artifacts = []; stub();
+  mocks.auth.user = { id: 1, username: "admin", first_name: "", last_name: "", email: "", role: "admin", is_admin: true };
+});
 afterEach(cleanup);
 
 test("mostra o pipeline e abre o detalhe da oportunidade", async () => {
@@ -197,7 +204,7 @@ test("arquiva a oportunidade a partir do detalhe, com confirmação", async () =
   await user.click(await screen.findByText("Oport X"));
   await screen.findByText("Detalhe da oportunidade");
 
-  await user.click(screen.getByRole("button", { name: /Arquivar/ }));
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
   // A confirmação abre por cima; o detalhe continua montado atrás.
   expect(screen.getByRole("dialog", { name: "Arquivar oportunidade" })).toBeInTheDocument();
   expect(screen.getByRole("dialog", { name: "Detalhe da oportunidade" })).toBeInTheDocument();
@@ -241,4 +248,46 @@ test("lista e restaura oportunidades arquivadas", async () => {
 
   await user.click(screen.getByRole("button", { name: /Restaurar/ }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/2/unarchive/", expect.objectContaining({ method: "POST" })));
+});
+
+// --- interações (FDD 035) -----------------------------------------------------------------------
+
+test("mostra e registra interações da oportunidade pelo detalhe", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+
+  expect(await screen.findByText("Apresentação da proposta")).toBeInTheDocument();
+  expect(screen.getByText(/Reunião · 12\/08\/2026/)).toBeInTheDocument();
+
+  await user.type(screen.getByPlaceholderText("Do que se tratou o contato"), "Follow-up por e-mail");
+  await user.click(screen.getByRole("button", { name: "Registrar interação" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/activities/", expect.objectContaining({
+    method: "POST", body: expect.stringContaining('"opportunity":1'),
+  })));
+});
+
+test("arquiva uma interação da oportunidade pelo detalhe", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+
+  await user.click(await screen.findByLabelText("Arquivar interação: Apresentação da proposta"));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/activities/4/", expect.objectContaining({ method: "DELETE" })));
+});
+
+test("entrega não vê o formulário nem o botão de arquivar de interações no detalhe", async () => {
+  mocks.auth.user = { id: 2, username: "entrega", first_name: "", last_name: "", email: "", role: "delivery", is_admin: false };
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+  await screen.findByText("Apresentação da proposta");
+
+  expect(screen.queryByPlaceholderText("Do que se tratou o contato")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Arquivar interação: Apresentação da proposta")).not.toBeInTheDocument();
 });

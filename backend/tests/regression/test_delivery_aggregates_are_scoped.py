@@ -126,6 +126,27 @@ def test_delivery_agent_context_does_not_leak_items_from_other_projects(delivery
     assert "Segredo do projeto alheio" not in context
 
 
+def test_delivery_agent_context_does_not_leak_risks_from_other_projects(delivery, mine, theirs) -> None:  # type: ignore[no-untyped-def]
+    """Terceiro conteúdo no mesmo contexto, terceiro teste (FDD 034).
+
+    O Risk Register é texto escrito por gente sobre o que pode dar errado num cliente — o bloco
+    mais sensível dos três que este contexto carrega. Só os abertos entram, e só os dos projetos
+    de que a pessoa participa.
+    """
+    from apps.core import agents
+    from apps.core.models import Risco
+
+    Risco.objects.create(project=mine, title="Dependência do ERP do cliente")
+    Risco.objects.create(project=mine, title="Risco já mitigado", status=Risco.Status.MITIGATED)
+    Risco.objects.create(project=theirs, title="Risco secreto do projeto alheio")
+
+    context = agents.build_delivery_context(delivery)
+
+    assert "Dependência do ERP do cliente" in context
+    assert "Risco secreto do projeto alheio" not in context
+    assert "Risco já mitigado" not in context  # encerrado não pede ação
+
+
 def test_analytics_and_recommendations_stay_forbidden(api: APIClient) -> None:
     """Trava contra afrouxamento futuro: os dois varrem tudo e não foram parametrizados."""
     assert api.get(reverse("analytics")).status_code == 403

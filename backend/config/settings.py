@@ -250,6 +250,10 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "ProjectStatusEnum": "apps.core.models.Project.Status",
         "WorkItemStatusEnum": "apps.core.models.WorkItem.Status",
+        # O gate aparece em dois lugares com conjuntos diferentes: o campo do modelo (que aceita
+        # o branco de "ainda não decidido") e o corpo da action `apply-gate` (onde as quatro
+        # saídas são obrigatórias). Sem o override, os dois disputam o mesmo nome de enum.
+        "GateOutcomeEnum": "apps.core.models.ProjectPhase.GateOutcome",
     },
 }
 SESSION_COOKIE_SECURE = not DEBUG

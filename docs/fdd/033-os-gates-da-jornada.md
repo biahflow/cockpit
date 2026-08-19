@@ -1,0 +1,159 @@
+# FDD 033 — Os gates da jornada
+
+## Jornada
+
+A metodologia FDE trazida pela ADR 0030 (`docs/metodologia-fde.md`) tem duas regras que travam a
+passagem de fase, e nenhuma das duas existia como comportamento aqui:
+
+> **Decision gate (obrigatório ao fim de Feasibility e de PROVE)** — exatamente uma de quatro
+> saídas, decidida por humano: GO, CONDITIONAL GO, REDESIGN, NO-GO.
+
+> **Quality gates (antes de entregar qualquer coisa ao cliente)** — Discovery: AS-IS validado?
+> Números sustentados por evidência? … Feasibility: baseline definido? amostra adequada? …
+
+A Jornada de Transformação (FDD 011) já tinha a escada de fases, o template configurável e os
+entregáveis. O que ela não tinha era **como uma fase se recusa a fechar**: `advance_phase`
+concluía a ativa e ativava a próxima, com o comentário explícito de que "não bloqueia por
+entregáveis pendentes — o avanço é uma decisão da equipe". Enquanto o gate morava numa página do
+Notion, isso era coerente: o sistema não podia cobrar uma regra que não conhecia.
+
+O princípio da ADR 0030 é justamente esse: **contexto vira comportamento do sistema, não página
+para ler.** Um checklist que só existe em documento é lido na primeira semana e esquecido na
+terceira; um decision gate que não trava nada é uma convenção que sobrevive à custa da memória de
+quem estava na reunião. E o pior caso não é a fase que avança cedo — é a que avança sem que reste
+registro de *por que* se decidiu avançar.
+
+## O que esta fatia entrega
+
+Os dois gates, materializados na jornada que já existe:
+
+- **Decision gate de quatro saídas.** O template `JourneyPhase` ganha `requires_gate`; a
+  instância `ProjectPhase` ganha `gate_outcome` e `gate_notes`. A decisão entra por uma action
+  nova, `POST /api/v1/projects/{id}/apply-gate/`, e cada saída faz uma coisa diferente com a
+  jornada — GO/CONDITIONAL GO concluem e avançam, REDESIGN reabre a fase anterior e tranca a
+  corrente, NO-GO registra e para ali.
+- **Quality gate (checklist).** `PhaseChecklistItem` no template e `ProjectChecklistItem` na
+  instância, espelhos exatos de `PhaseDeliverable`/`ProjectDeliverable`. Concluir a fase ativa
+  exige checklist completa **ou** `checklist_waiver` preenchida.
+
+Na tela: o checklist e o painel do gate na fase ativa do detalhe do projeto, o selo do outcome
+acompanhando a fase que já decidiu, e a configuração dos dois na tela de Jornada.
+
+## Critérios de aceite
+
+1. **Fase de gate não fecha sem decisão.** `advance_phase` recusa com 409 quando a fase ativa tem
+   `requires_gate` e `gate_outcome` vazio, e recusa de novo quando o outcome gravado é REDESIGN ou
+   NO-GO — o gate decidiu não seguir, e "avançar mesmo assim" não é uma quinta saída.
+2. **As quatro saídas não são quatro nomes para avançar.** REDESIGN reabre a fase anterior e
+   tranca a corrente; NO-GO deixa a fase ativa e não avança nada. Mudar o status do projeto
+   continua sendo ato humano, fora deste recorte.
+3. **REDESIGN limpa o que deixou de ser verdade, e só isso.** A fase reaberta perde
+   `completed_at` e o próprio gate; a fase trancada **mantém** `started_at` e o
+   `gate_outcome=redesign`, que é o registro de por que se voltou.
+4. **A checklist trava a conclusão por qualquer caminho.** Vale no `advance-phase` e na conclusão
+   embutida no `apply-gate` — a guarda mora em `journey.py`, não na view. Zero itens passa: as
+   fases semeadas antes desta FDD não têm checklist, e travá-las quebraria a jornada de todo
+   projeto existente.
+5. **Pular o quality gate é legítimo; fazê-lo em silêncio não é.** `checklist_waiver` preenchida
+   destrava a conclusão e fica como registro. É o mesmo desenho da recusa de exclusão de fase
+   (FDD 011/025): a saída existe, e ela é explícita.
+6. **Projeto novo herda a checklist; projeto existente não é reescrito.**
+   `materialize_journey` copia os itens junto dos entregáveis, e continua idempotente.
+7. **Vendas lê, Entrega escreve no que é dela.** `project_checklist_item` entra em
+   `RolePermission` e em `PROJECT_OF`: Vendas só-leitura, Entrega escreve dentro dos projetos de
+   que participa, e `apply-gate` herda a política do `advance-phase` (o corte da Entrega é por
+   ação, não por método).
+
+## Decisões
+
+### Por que `gate_outcome` só entra pela action
+
+`gate_outcome` e `gate_notes` são **read-only no `ProjectPhaseSerializer`**. Um PATCH direto
+gravaria "REDESIGN" sem que nada acontecesse: a fase anterior não reabriria, a corrente não
+trancaria, e o campo passaria a mentir sobre o estado da jornada — a pior forma de defeito, porque
+a tela mostraria a decisão certa sobre um sistema que não a executou. A action é o único lugar
+onde a decisão e a consequência dela são a mesma operação.
+
+`checklist_waiver`, ao contrário, é editável no serializer: ele não decide nada sozinho, apenas
+declara uma justificativa que a guarda vai consultar.
+
+### Por que REDESIGN limpa `completed_at` (e o precedente que ele segue)
+
+Há dois precedentes opostos na casa, e o gate segue o primeiro:
+
+- `Pendencia.save()` limpa `resolved_at` quando o status sai de "resolvida" — reabrir apaga o
+  carimbo, porque "resolvida em" é **estado corrente**;
+- `Decisao.published_at` sobrevive à despublicação (FDD 032) — é **fato histórico**: a data em que
+  uma decisão passou a valer aconteceu, e esconder a decisão do cliente não a desfaz.
+
+"Concluída em" é do primeiro tipo. Uma fase reaberta para ser refeita não está concluída, e manter
+a data faria a jornada afirmar duas coisas incompatíveis ao mesmo tempo. O mesmo raciocínio limpa
+o `gate_outcome` da fase que volta: o gate dela ainda vai ser decidido de novo.
+
+Já `started_at` da fase trancada **fica**. Ele não é estado corrente, é fato: passou-se por ali, e
+o `gate_outcome=redesign` preservado ao lado é o que explica por que se voltou.
+
+### Onde moram as guardas
+
+Em `journey.py`, levantando `StateConflict`. As duas recusas são regra de domínio: quem conclui
+uma fase por qualquer caminho tem de passar por elas, e uma guarda escrita na view só valeria para
+a rota que a chamou — hoje são duas (`advance-phase` e `apply-gate`) e nada impede uma terceira.
+
+Isso exigiu mover `StateConflict` de `views.py` para `exceptions.py`. `views` importa `journey`;
+`journey` importando `views` fecharia o ciclo, e o módulo precisa continuar importável sem
+request. `exceptions.py` não importa nada do domínio e já era o lugar conceitual da classe — o
+próprio docstring do `api_exception_handler` de lá a cita pelo nome ao explicar o 409.
+
+### Por que o checklist não é uma segunda lista de entregáveis
+
+Os dois modelos são espelhos, e a distinção é a que a metodologia faz: o **entregável** é o que
+sai da fase (um dashboard, um manual, um vídeo); o **item de checklist** é a condição de qualidade
+para que aquilo possa sair ("baseline definido?", "amostra adequada?", "T.O.E. avaliado?"). Marcar
+um entregável como entregue não afirma nada sobre qualidade — é por isso que só o checklist trava
+a conclusão, e o entregável continua não travando, como a FDD 011 decidiu.
+
+## Contrato
+
+Rotas novas, todas em `/api/v1/`:
+
+| Rota | Quem |
+| --- | --- |
+| `POST /projects/{id}/apply-gate/` | delivery no próprio projeto / admin |
+| `/phase-checklist-items/` (CRUD) | admin (`resource = "journey"`, como o template de entregáveis) |
+| `/project-checklist-items/` (CRUD + `?archived=1` + `unarchive`) | delivery no próprio projeto / admin; Vendas só lê |
+
+Campos novos: `JourneyPhase.requires_gate`; `ProjectPhase.gate_outcome`, `gate_notes`,
+`checklist_waiver` e o `requires_gate` derivado do template; `checklist_items` aninhado nos dois
+serializers de fase. Nada removido — a mudança é aditiva.
+
+`ENUM_NAME_OVERRIDES` ganha `GateOutcomeEnum`: as quatro saídas aparecem no esquema em dois
+conjuntos diferentes (o campo do modelo, que aceita o branco de "ainda não decidido", e o corpo da
+action, onde a escolha é obrigatória), e sem o override os dois disputavam o mesmo nome.
+
+## Testes
+
+- `apps/core/tests/test_journey.py` — as quatro saídas, a recusa sem outcome, a recusa depois de
+  REDESIGN/NO-GO, REDESIGN sem fase anterior, gate em fase que não é de gate (409) e outcome
+  inválido (400), o PATCH direto que não grava o gate, a herança do checklist na materialização, a
+  fase que não fecha com item pendente, a justificativa que destrava, o item arquivado que não
+  conta, o GO que esbarra no quality gate sem gravar o outcome, e o RBAC dos dois gates (Vendas
+  lê e não marca; Entrega só alcança o projeto de que participa; template só de admin).
+- `ProjectDetailJourney.test.tsx` — marcar item, registrar justificativa, aplicar GO com notas,
+  a confirmação de REDESIGN/NO-GO, o selo do outcome e o 409 do avanço exibido na tela.
+- `ProjectDetailJourneyReadonly.test.tsx` — Vendas lê o checklist, não o marca e não vê o painel
+  do gate.
+- `JourneyConfigPage.test.tsx` — o toggle do gate com o aviso do que ele passa a exigir, e o CRUD
+  do checklist do template.
+
+## Fora deste recorte
+
+- **Snapshot do portal do cliente (`portal.py`).** Os campos novos não atravessam. O gate é
+  linguagem interna de metodologia, e "NO-GO" numa tela de cliente é uma conversa que se tem
+  antes, não um selo que aparece. Decisão para uma fatia própria, com emenda na ADR 0003 se vier.
+- **Obrigar `gate_notes` no CONDITIONAL GO/REDESIGN/NO-GO.** A tela pede, o backend aceita vazio.
+  Exigir texto por API sem ter visto o uso real produz o campo preenchido com um ponto.
+- **Semear `requires_gate` nas fases padrão.** A semente da jornada (migração `0015`) não é
+  tocada: as fases de lá são o vocabulário Biahflow (Welcome → Optimize), não a escada FDE
+  (Feasibility, PROVE). Quem marca quais fases terminam em gate é o admin, na tela de Jornada.
+- **Mudar o status do projeto no NO-GO.** A jornada para; encerrar, pausar ou renegociar o projeto
+  é decisão humana com consequências comerciais próprias.

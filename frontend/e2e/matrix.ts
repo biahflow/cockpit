@@ -276,6 +276,12 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/journey-phases/": serie(5, index => ({
     id: index, name: `Fase ${index} — implantação assistida`, description: "", active: true,
     position: index, deliverables: serie(3, d => ({ id: d, phase: index, name: `Entregável ${d}`, position: d })),
+    // FDD 033: o contrato passou a enviar sempre os dois campos do gate; uma fase com gate e
+    // checklist para a tela renderizar as superfícies novas nas três larguras.
+    requires_gate: index === 2,
+    checklist_items: index === 2
+      ? serie(2, c => ({ id: c, phase: index, text: `Item de qualidade ${c}`, position: c }))
+      : [],
   })),
   "/api/v1/analytics/": {
     funnel: {
@@ -325,9 +331,19 @@ const FIXTURES: Record<string, unknown> = {
   })),
   "/api/v1/project-phases/": serie(4, index => ({
     id: index, project: 1, phase: index, phase_name: `Fase ${index} — implantação assistida`,
-    phase_description: "", phase_position: index, status: index === 1 ? "active" : "locked",
-    started_at: null, completed_at: null, target_date: HOJE,
+    phase_description: "", phase_position: index,
+    status: index === 0 ? "done" : index === 1 ? "active" : "locked",
+    started_at: null, completed_at: index === 0 ? `${HOJE}T08:00:00Z` : null, target_date: HOJE,
     deliverables: serie(2, d => ({ id: d, project_phase: index, name: `Entregável ${d}`, status: "pending", document: null, position: d, delivered_at: null })),
+    // FDD 033: a fase concluída carrega um outcome (o selo renderiza e o axe o mede) e a ativa
+    // termina em gate com checklist pendente — senão o e2e aprova superfícies que nunca abriu.
+    requires_gate: index === 1,
+    gate_outcome: index === 0 ? "conditional_go" : "",
+    gate_notes: index === 0 ? "Seguimos monitorando a acurácia do OCR." : "",
+    checklist_waiver: "",
+    checklist_items: index === 1
+      ? serie(2, c => ({ id: c, project_phase: index, text: `Item de qualidade ${c}`, position: c, checked: c === 0, checked_at: c === 0 ? `${HOJE}T08:00:00Z` : null }))
+      : [],
   })),
   "/api/v1/digital-employees/": serie(3, index => ({
     id: index, project: 1, name: `Agente de conciliação ${index}`, area: "Financeiro",

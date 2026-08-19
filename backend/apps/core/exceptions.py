@@ -117,6 +117,25 @@ class PaymentsUnavailable(UpstreamUnavailable):
     default_code = "payments_unavailable"
 
 
+class StateConflict(APIException):
+    """Recusado porque o **estado** do sistema não permite, não porque o pedido está malfeito.
+
+    409, não 400: o pedido está bem formado e a permissão existe — o que impede é o estado, e é
+    ele que muda para o pedido passar. Um 400 mandaria quem lê procurar erro no corpo.
+
+    Nasceu como `ArchiveConflict`, do arquivamento, e o nome ficou estreito: a exclusão **real**
+    (etapa do pipeline, fase da jornada) recusa pela mesma razão e com a mesma forma — contagem do
+    que depende, mais o caminho de saída. Ver FDD 025.
+
+    Mora aqui, e não nas views, desde a FDD 033: a recusa do decision gate e a do quality gate são
+    regra de **domínio** e vivem em `journey.py`, que precisa continuar importável sem request —
+    importar `views` de lá fecharia o ciclo (`views` importa `journey`). Este módulo não importa
+    nada do domínio, então é o único lugar de onde os dois lados podem levantar a mesma exceção.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+
+
 def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
     """Handler do DRF com `ProtectedError` traduzido para **409** (FDD 025).
 

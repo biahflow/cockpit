@@ -56,12 +56,17 @@ def test_discovery_assessment_gets_two_milestones():
 
 
 @pytest.mark.django_db
-def test_implementation_keeps_the_default_schedule():
+def test_implementation_gets_the_prove_schedule():
+    # ADR 0030: a implantação é o PROVE — baseline/critérios antes de construir e
+    # evidência + decision gate no encerramento fazem parte do cronograma semeado.
     project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.IMPLEMENTATION))
 
     milestones, _ = kickoff.seed_work_items(project)
 
-    assert milestones == len(kickoff.KICKOFF_TEMPLATE)
+    assert milestones == len(kickoff.KICKOFF_TEMPLATES["implantacao"])
+    tasks = list(Task.objects.filter(project=project).values_list("title", flat=True))
+    assert "Registrar o baseline e os critérios de sucesso antes de construir" in tasks
+    assert "Registrar a evidência de produção controlada e o decision gate" in tasks
 
 
 @pytest.mark.django_db

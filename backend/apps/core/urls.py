@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AcceptInvitationView,
+    ActivityViewSet,
     AgentView,
     AiFeedbackView,
     AiMetricsView,
@@ -39,14 +40,17 @@ from .views import (
     OpportunityViewSet,
     PaymentsWebhookView,
     PendenciaViewSet,
+    PhaseChecklistItemViewSet,
     PhaseDeliverableViewSet,
     PipelineStageViewSet,
     PortalProjectSnapshotView,
+    ProjectChecklistItemViewSet,
     ProjectDeliverableViewSet,
     ProjectMemberViewSet,
     ProjectPhaseViewSet,
     ProjectViewSet,
     RecommendationsView,
+    RiscoViewSet,
     RiskView,
     ServiceViewSet,
     TaskSyncIntakeView,
@@ -59,13 +63,16 @@ from .views import (
 router = DefaultRouter()
 router.register("clients", ClientViewSet)
 router.register("contacts", ContactViewSet)
+router.register("activities", ActivityViewSet)
 router.register("pipeline-stages", PipelineStageViewSet)
 router.register("opportunities", OpportunityViewSet)
 router.register("projects", ProjectViewSet)
 router.register("journey-phases", JourneyPhaseViewSet)
 router.register("phase-deliverables", PhaseDeliverableViewSet)
+router.register("phase-checklist-items", PhaseChecklistItemViewSet)
 router.register("project-phases", ProjectPhaseViewSet)
 router.register("project-deliverables", ProjectDeliverableViewSet)
+router.register("project-checklist-items", ProjectChecklistItemViewSet)
 router.register("project-members", ProjectMemberViewSet)
 router.register("digital-employees", DigitalEmployeeViewSet)
 router.register("milestones", MilestoneViewSet)
@@ -73,6 +80,10 @@ router.register("tasks", TaskViewSet)
 router.register("meetings", MeetingViewSet)
 router.register("pendencias", PendenciaViewSet)
 router.register("decisoes", DecisaoViewSet)
+# `riscos` (registro declarado, FDD 034) e não `risks` — a avaliação calculada já ocupa
+# `/projects/{id}/risk/` e `/risk/`, e dois nomes iguais em português e inglês seriam a pior
+# forma de distinguir duas coisas diferentes.
+router.register("riscos", RiscoViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)

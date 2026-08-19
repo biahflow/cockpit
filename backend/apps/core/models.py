@@ -471,6 +471,81 @@ class Decisao(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class Risco(TimestampedModel):
+    """Risco do projeto: o que pode dar errado, quanto pesa e o que se está fazendo a respeito.
+
+    É o Risk Register do Delivery System da metodologia FDE (ADR 0030,
+    `docs/metodologia-fde.md`), que até aqui só existia como página de texto — e um registro de
+    risco que vive fora do sistema é consultado na semana da reunião e esquecido na seguinte.
+
+    **Não confundir com a avaliação de risco calculada** (`risk.py`, `/projects/{id}/risk/`).
+    Aquela é derivada: o sistema olha prazos e itens atrasados e devolve um escore que ninguém
+    edita. Esta é declarada: uma pessoa da entrega escreve o que teme, com que probabilidade e
+    com que impacto. As duas respondem "qual o risco deste projeto" por caminhos que não se
+    substituem — a calculada só enxerga o que já escorregou; esta enxerga o que ainda não
+    aconteceu, que é o único momento em que mitigar é possível.
+    """
+
+    # Os dois eixos têm os mesmos três valores no banco e rótulos diferentes na tela, porque o
+    # português concorda: a probabilidade é *baixa*, o impacto é *baixo*. Uma classe só economizaria
+    # oito linhas e faria o contexto do agente dizer "probabilidade baixo".
+    class Probability(models.TextChoices):
+        LOW = "low", "Baixa"
+        MEDIUM = "medium", "Média"
+        HIGH = "high", "Alta"
+
+    class Impact(models.TextChoices):
+        LOW = "low", "Baixo"
+        MEDIUM = "medium", "Médio"
+        HIGH = "high", "Alto"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Aberto"
+        MITIGATED = "mitigated", "Mitigado"
+        ACCEPTED = "accepted", "Aceito"
+        MATERIALIZED = "materialized", "Materializado"
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="riscos")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    probability = models.CharField(
+        max_length=8, choices=Probability.choices, default=Probability.MEDIUM
+    )
+    impact = models.CharField(max_length=8, choices=Impact.choices, default=Impact.MEDIUM)
+    mitigation = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    owner = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="riscos"
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        # **Não** `["status", "-created_at"]` como na `Pendencia` logo acima, e a diferença é um
+        # acidente de alfabeto: lá "open" vem antes de "resolved" e o efeito é o desejado; aqui
+        # "open" vem depois de "accepted", "materialized" e "mitigated", e ordenar por status
+        # enterraria justamente os riscos abertos embaixo dos encerrados. Quem quer só os abertos
+        # pede `?status=open`, que é filtro e não ordem.
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def save(self, *args, **kwargs) -> None:
+        # O carimbo é **estado corrente**, como o `resolved_at` da `Pendencia` e ao contrário do
+        # `published_at` da `Decisao`: reabrir um risco apaga a data em que ele deixou de ameaçar.
+        #
+        # E ele só vale para "mitigado" e "aceito". "Materializado" também tira o risco da fila de
+        # abertos, mas não o resolve — o risco aconteceu. Carimbar ali faria "resolvido em" nomear
+        # o dia em que a coisa deu errado, que é a leitura oposta da que o campo promete. Quando
+        # (e se) a data da materialização importar, ela pede campo próprio, não este emprestado.
+        terminal = {self.Status.MITIGATED, self.Status.ACCEPTED}
+        if self.status in terminal and self.resolved_at is None:
+            self.resolved_at = timezone.now()
+        if self.status not in terminal:
+            self.resolved_at = None
+        super().save(*args, **kwargs)
+
+
 class Invitation(models.Model):
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=16, choices=User.Role.choices)
@@ -562,11 +637,56 @@ class Booking(TimestampedModel):
         return f"{self.lead.name} @ {self.starts_at:%Y-%m-%d %H:%M}"
 
 
+class Activity(TimestampedModel):
+    """Interação comercial com um cliente (ligação, reunião, e-mail, nota) — FDD 035.
+
+    É a materialização das "Activities" do CRM na leitura FDE (ADR 0030,
+    `docs/metodologia-fde.md`): o histórico de contato passa a viver como dado, não como texto
+    solto em algum lugar. Liga-se sempre a um cliente e, opcionalmente, a uma oportunidade —
+    desde que a oportunidade seja do mesmo cliente (`clean()` abaixo).
+    """
+
+    class Kind(models.TextChoices):
+        CALL = "call", "Ligação"
+        MEETING = "meeting", "Reunião"
+        EMAIL = "email", "E-mail"
+        NOTE = "note", "Nota"
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="activities")
+    opportunity = models.ForeignKey(
+        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    happened_on = models.DateField()
+    summary = models.CharField(max_length=255)
+    notes = models.TextField(blank=True, default="")
+    owner = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    )
+
+    class Meta:
+        ordering = ["-happened_on", "-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()}: {self.summary}"
+
+    def clean(self) -> None:
+        if self.opportunity_id and self.opportunity and self.opportunity.client_id != self.client_id:
+            raise ValidationError({"opportunity": "A oportunidade deve pertencer ao mesmo cliente."})
+
+
 class Service(TimestampedModel):
     """Catálogo de serviços e, quando `tier` estiver preenchido, os níveis de produto.
 
     Os três níveis da metodologia (Discovery Express grátis, Discovery + Assessment pago e
     Implantação) são registros semeados com `tier`; serviços avulsos ficam com `tier` vazio.
+
+    Na leitura FDE (`docs/metodologia-fde.md`, ADR 0030), os níveis são os degraus comerciais
+    da escada: Discovery Express é a porta de entrada (L0), Discovery + Assessment é o
+    Discovery Sprint e Implantação é o PROVE — produção controlada com baseline, critérios de
+    sucesso e decision gate. A Technical Feasibility, condicional na escada, **não tem tier**:
+    criá-lo mexe na constraint de um ativo por nível e na semente, e é decisão de produto que
+    espera o primeiro caso real que a exija.
     """
 
     class Tier(models.TextChoices):
@@ -689,6 +809,12 @@ class JourneyPhase(models.Model):
     # ser herdada por projeto novo (`journey.materialize_journey`) e os antigos ficam com a
     # delas. É a saída que a recusa da exclusão oferece (FDD 011, FDD 025).
     active = models.BooleanField(default=True)
+    # A fase termina em decision gate de quatro saídas (FDD 033, ADR 0030). Fica no **template**
+    # e não na instância porque quem decide que Feasibility e PROVE terminam em gate é a
+    # metodologia, não o projeto — e é o mesmo lugar de onde saem nome, ordem e entregáveis.
+    # `default=False` para que a semente da jornada e as fases já configuradas continuem
+    # concluindo como sempre: o gate é opt-in do admin.
+    requires_gate = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["position", "id"]
@@ -711,6 +837,29 @@ class PhaseDeliverable(models.Model):
         return self.name
 
 
+class PhaseChecklistItem(models.Model):
+    """Template do quality gate: a pergunta que a fase precisa responder antes de fechar.
+
+    Espelho exato de `PhaseDeliverable`, e a distinção entre os dois é o que a metodologia FDE
+    separa (ADR 0030, `docs/metodologia-fde.md`): o entregável é **o que sai** da fase (um
+    dashboard, um manual), e o item de checklist é **a condição de qualidade** para que aquilo
+    possa sair ("baseline definido?", "amostra adequada?"). Marcar um entregável como entregue
+    não afirma nada sobre qualidade; é por isso que só o checklist trava a conclusão.
+    """
+
+    phase = models.ForeignKey(
+        JourneyPhase, on_delete=models.CASCADE, related_name="checklist_items"
+    )
+    text = models.CharField(max_length=255)
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self) -> str:
+        return self.text
+
+
 class ProjectPhase(TimestampedModel):
     """Instância por projeto × fase — o estado da jornada de transformação do projeto.
 
@@ -723,12 +872,37 @@ class ProjectPhase(TimestampedModel):
         ACTIVE = "active", "Em andamento"
         DONE = "done", "Concluída"
 
+    class GateOutcome(models.TextChoices):
+        """As quatro saídas do decision gate (FDD 033, `docs/metodologia-fde.md`).
+
+        São exatamente quatro porque a metodologia diz quatro, e o valor delas está em *não*
+        colapsarem: "seguiu com ressalvas" e "seguiu" acabam no mesmo lugar da jornada, mas só
+        um dos dois deixa dívida nomeada para monitorar.
+        """
+
+        GO = "go", "GO"
+        CONDITIONAL_GO = "conditional_go", "CONDITIONAL GO"
+        REDESIGN = "redesign", "REDESIGN"
+        NO_GO = "no_go", "NO-GO"
+
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="phases")
     phase = models.ForeignKey(JourneyPhase, on_delete=models.PROTECT, related_name="project_phases")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.LOCKED)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     target_date = models.DateField(null=True, blank=True)  # a "prevista" mostrada na UI
+    # O gate decidido, e o porquê. Em branco enquanto ninguém decidiu — e é esse branco que
+    # `journey.advance_phase` recusa quando a fase do template exige gate. As notas não são
+    # opcionais de fato em três das quatro saídas: as ressalvas do CONDITIONAL GO e o motivo do
+    # REDESIGN/NO-GO são a única coisa que atravessa o tempo (FDD 033).
+    gate_outcome = models.CharField(
+        max_length=16, choices=GateOutcome.choices, blank=True, default=""
+    )
+    gate_notes = models.TextField(blank=True, default="")
+    # Concluir com checklist incompleta é legítimo — o que não é legítimo é fazê-lo em silêncio.
+    # Preenchido, este campo destrava a conclusão e fica como registro de quem decidiu pular o
+    # quality gate e por quê.
+    checklist_waiver = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["phase__position", "id"]
@@ -770,6 +944,36 @@ class ProjectDeliverable(TimestampedModel):
             self.delivered_at = timezone.now()
         if self.status != self.Status.DELIVERED:
             self.delivered_at = None
+        super().save(*args, **kwargs)
+
+
+class ProjectChecklistItem(TimestampedModel):
+    """Instância por projeto de um item do quality gate (FDD 033).
+
+    O `text` é copiado do template pelo mesmo motivo do `name` do entregável: reescrever a
+    pergunta no template não pode reescrever o que um projeto já respondeu.
+
+    O carimbo segue o `delivered_at` do entregável — desmarcar limpa a data, porque "conferido
+    em" só faz sentido enquanto o item estiver conferido. É o mesmo movimento do `resolved_at`
+    da `Pendencia`.
+    """
+
+    project_phase = models.ForeignKey(
+        ProjectPhase, on_delete=models.CASCADE, related_name="checklist_items"
+    )
+    text = models.CharField(max_length=255)
+    position = models.PositiveIntegerField(default=0)
+    checked = models.BooleanField(default=False)
+    checked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def save(self, *args, **kwargs) -> None:
+        if self.checked and self.checked_at is None:
+            self.checked_at = timezone.now()
+        if not self.checked:
+            self.checked_at = None
         super().save(*args, **kwargs)
 
 

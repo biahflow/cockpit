@@ -64,23 +64,31 @@ def build_commercial_context(user: User) -> str:
 
 # Teto por bloco, como no digest: contexto que vira parede de texto custa token e não ajuda o
 # modelo — a linha final diz quantos ficaram de fora.
-_MAX_ATRASADOS = 10
+_MAX_POR_BLOCO = 10
 
 
 def build_delivery_context(user: User) -> str:
-    """Contexto do agente de Entrega: o risco de cada projeto **e o que está atrasado**.
+    """Contexto do agente de Entrega: o risco de cada projeto, **o que está atrasado** e os riscos
+    declarados que seguem abertos.
 
     A parte dos itens nasceu da rodada 2 da homologação (FDD 024): perguntado "o que está
     atrasado?", o agente respondia que não tinha os detalhes — e estava certo, porque o contexto
     era um resumo de resumos (`risco médio — Itens atrasados`) sem dizer **quais**. A pergunta mais
     óbvia da área não tinha resposta.
 
+    O bloco de riscos veio com a FDD 034, e fecha a mesma lacuna por outro lado: o escore do
+    `risk.py` só enxerga o que **já** escorregou (prazo estourado, item parado), enquanto o Risk
+    Register guarda o que a equipe teme e ainda não aconteceu. Perguntado "quais são os riscos
+    deste portfólio?", o agente respondia com sintoma; agora responde também com o que foi
+    declarado — que é o que a Delivery Sync semanal da metodologia pede.
+
     O recorte é o mesmo de antes e não afrouxa: tudo sai de `visible_to`, que é a única expressão
     da regra (ADR 0010). O que muda é que o vazamento possível deixou de ser o nome do projeto e
-    passou a ser o título do item — por isso há um teste de regressão para cada um.
+    passou a ser o título do item — por isso há um teste de regressão para cada um, e o risco
+    declarado ganhou o seu.
     """
     from . import risk
-    from .models import Milestone, Project, Task
+    from .models import Milestone, Project, Risco, Task
 
     # Materializado: `assessments` e a busca de atrasados usam a mesma lista, e iterar o queryset
     # duas vezes o consultaria duas vezes.
@@ -116,10 +124,31 @@ def build_delivery_context(user: User) -> str:
         # projeto" é metade da resposta.
         lines += [
             f"- {item.title} — {item.project.name} (venceu {item.due_date})"
-            for item in atrasados[:_MAX_ATRASADOS]
+            for item in atrasados[:_MAX_POR_BLOCO]
         ]
-        if len(atrasados) > _MAX_ATRASADOS:
-            lines.append(f"- ... e mais {len(atrasados) - _MAX_ATRASADOS}")
+        if len(atrasados) > _MAX_POR_BLOCO:
+            lines.append(f"- ... e mais {len(atrasados) - _MAX_POR_BLOCO}")
+
+    # Só os abertos: mitigado, aceito e materializado já foram tratados, e enchê-los aqui gastaria
+    # o teto do bloco com o que não pede ação. A mitigação entra junto porque é ela que transforma
+    # "há um risco" em "há um risco e alguém está fazendo algo" — sem isso o agente só repete o
+    # medo de volta.
+    riscos = list(
+        Risco.objects.filter(
+            project_id__in=ids, archived_at__isnull=True, status=Risco.Status.OPEN
+        ).select_related("project")
+    )
+    if riscos:
+        lines.append("Riscos abertos (registro do projeto):")
+        for risco in riscos[:_MAX_POR_BLOCO]:
+            mitigacao = risco.mitigation.strip() or "sem mitigação registrada"
+            lines.append(
+                f"- {risco.title} — {risco.project.name} "
+                f"(probabilidade {risco.get_probability_display().lower()}, "
+                f"impacto {risco.get_impact_display().lower()}; mitigação: {mitigacao})"
+            )
+        if len(riscos) > _MAX_POR_BLOCO:
+            lines.append(f"- ... e mais {len(riscos) - _MAX_POR_BLOCO}")
     return "\n".join(lines)
 
 
