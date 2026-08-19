@@ -707,6 +707,86 @@ class Activity(TimestampedModel):
             raise ValidationError({"invoice": "A fatura deve pertencer ao mesmo cliente."})
 
 
+class Satisfacao(TimestampedModel):
+    """Satisfação do cliente: o único sinal do domínio cuja fonte está **fora** da casa (FDD 037).
+
+    Camada 5 da RFC 0004, e a lacuna que a docstring do `health.py` declarava desde a Fase 2. Todo
+    o resto que este produto usa para julgar uma relação é medida do nosso próprio trabalho —
+    prazo estourado (`risk.py`), entrega atrasada e reunião não realizada (`health.py`), ROI
+    (`cases.py`). Este é o primeiro que depende de o cliente ter dito alguma coisa.
+
+    **Liga ao cliente, e não ao projeto**, ao contrário dos três registros vizinhos (`Pendencia`,
+    `Decisao`, `Risco`): o molde aqui é a `Activity`. Os dois consumidores perguntam coisas
+    diferentes — o Health Score pergunta por projeto, a régua de cobrança pergunta por cliente —, e
+    cliente sem projeto ativo ainda pode ter fatura vencida. Ligar só ao projeto deixaria a camada
+    5 sem alcance justamente em quem não está mais em entrega, que é onde a cobrança dói.
+
+    Nada aqui sai da casa: não há canal, credencial nem flag. É registro interno digitado por quem
+    conversou com o cliente, e **não** atravessa para o portal do cliente (ADR 0032).
+    """
+
+    class Nivel(models.TextChoices):
+        PROMOTOR = "promotor", "Promotor"
+        SATISFEITO = "satisfeito", "Satisfeito"
+        NEUTRO = "neutro", "Neutro"
+        INSATISFEITO = "insatisfeito", "Insatisfeito"
+
+    class Fonte(models.TextChoices):
+        """De onde veio o sinal — e é a decisão inteira desta fatia (ADR 0032).
+
+        `declarada` é o cliente tendo dito; `percebida` é a leitura de quem entrega. Os dois são
+        úteis e não são a mesma coisa: um é evidência, o outro é hipótese. **Só a declarada move
+        número** — Health Score e escada de cobrança. Sem a separação, o sinal do cliente vira a
+        opinião do time sobre si mesmo com aparência de medição, que é pior que não ter sinal
+        nenhum, porque um número errado é consultado com a mesma confiança de um número certo.
+        """
+
+        DECLARADA = "declarada", "Declarada pelo cliente"
+        PERCEBIDA = "percebida", "Percebida por quem entrega"
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="satisfacoes")
+    project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
+    )
+    # A proveniência, no molde de `Decisao.source_meeting`: apagar a reunião não desfaz o que o
+    # cliente disse nela — o que se perde é só de onde veio, e perder isso é melhor que perder o
+    # registro.
+    source_meeting = models.ForeignKey(
+        Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
+    )
+    nivel = models.CharField(max_length=16, choices=Nivel.choices)
+    # **Sem default**, ao contrário de quase todo `choices` desta casa. Um default faria a
+    # distinção que decide se o registro move número ser escolhida por omissão, e o campo existe
+    # justamente para ninguém escolher por omissão.
+    fonte = models.CharField(max_length=16, choices=Fonte.choices)
+    # O dia do acontecido, não o do cadastro: o sinal envelhece por uma janela de 90 dias
+    # (`satisfacao.SATISFACAO_VALIDA_DIAS`), e é `happened_on` que a janela lê.
+    happened_on = models.DateField()
+    note = models.TextField(blank=True)
+    registered_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
+    )
+
+    class Meta:
+        ordering = ["-happened_on", "-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.get_nivel_display()} — {self.client.name} ({self.happened_on})"
+
+    def clean(self) -> None:
+        if self.project_id and self.project and self.project.client_id != self.client_id:
+            raise ValidationError({"project": "O projeto deve pertencer ao mesmo cliente."})
+        # **Insatisfeito é o único nível que muda comportamento** — tira 20 pontos do Health Score
+        # e troca a escada da régua —, e um sinal que muda comportamento sem motivo escrito é
+        # exatamente o que apodrece: seis meses depois ninguém sabe o que o cliente disse, e a
+        # cobrança segue abrandada por um registro que ninguém consegue avaliar. Mesma exigência
+        # que `CobrancaSuspensao.reason` já faz, e pela mesma razão.
+        if self.nivel == self.Nivel.INSATISFEITO and not (self.note or "").strip():
+            raise ValidationError(
+                {"note": "Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."}
+            )
+
+
 class Service(TimestampedModel):
     """Catálogo de serviços e, quando `tier` estiver preenchido, os níveis de produto.
 

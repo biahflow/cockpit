@@ -54,6 +54,7 @@ from .views import (
     RecommendationsView,
     RiscoViewSet,
     RiskView,
+    SatisfacaoViewSet,
     ServiceViewSet,
     TaskSyncIntakeView,
     TaskViewSet,
@@ -86,6 +87,7 @@ router.register("decisoes", DecisaoViewSet)
 # `/projects/{id}/risk/` e `/risk/`, e dois nomes iguais em português e inglês seriam a pior
 # forma de distinguir duas coisas diferentes.
 router.register("riscos", RiscoViewSet)
+router.register("satisfacoes", SatisfacaoViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)

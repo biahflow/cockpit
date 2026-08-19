@@ -26,6 +26,7 @@ from apps.core.models import (
     Contact,
     Invoice,
     Notification,
+    Satisfacao,
     User,
 )
 
@@ -169,6 +170,81 @@ def test_a_reincidencia_ignora_a_propria_fatura() -> None:
     assert cobranca.reincidente(antigo, HOJE) is True
     assert cobranca.reincidente(antigo, HOJE, ignorando=atrasada) is False
     assert cobranca.regua_para(antigo, HOJE, ignorando=atrasada) is cobranca.RELACAO_LONGA
+
+
+def _insatisfacao(client: Client, quando: date | None = None) -> Satisfacao:
+    """Insatisfação **declarada** e vigente — a que troca a escada (FDD 037, ADR 0032)."""
+    return Satisfacao.objects.create(
+        client=client,
+        nivel=Satisfacao.Nivel.INSATISFEITO,
+        fonte=Satisfacao.Fonte.DECLARADA,
+        happened_on=quando or HOJE,
+        note="Disse na call que a entrega do marco 2 atrasou duas vezes.",
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("dias", "esperado"),
+    [(-2, "pre_aviso"), (1, None), (5, "lembrete"), (10, "escalada"), (30, "renegociacao")],
+)
+def test_a_relacao_tensa_troca_o_degrau_firme_pela_escalada(dias: int, esperado: str | None) -> None:
+    """A régua **não cala**: ela para de endurecer e passa a acordar gente (ADR 0032).
+
+    O `firme` não existe e a escalada interna ocupa a janela que era dele (D+10) — quem então
+    recua é uma pessoa, declarando a suspensão com dono, prazo e motivo.
+    """
+    client = ClientFactory()
+    _insatisfacao(client)
+    assert cobranca.regua_para(client, HOJE) is cobranca.RELACAO_TENSA
+    assert "firme" not in {d.key for d in cobranca.RELACAO_TENSA}
+
+    degrau = cobranca.degrau_devido(_vencendo_em(dias, client=client), HOJE)
+    assert (degrau.key if degrau else None) == esperado
+
+
+@pytest.mark.django_db
+def test_a_escada_tensa_reusa_as_chaves_existentes() -> None:
+    """Chave nova faria o mesmo lembrete sair duas vezes para quem trocasse de escada entre duas
+    execuções — e trocar de escada aqui é fácil: basta alguém registrar a insatisfação de ontem."""
+    tensa = {d.key for d in cobranca.RELACAO_TENSA}
+
+    assert tensa <= {d.key for d in cobranca.PADRAO}
+
+
+@pytest.mark.django_db
+def test_a_tensao_vence_a_relacao_longa() -> None:
+    """Um cliente de anos e insatisfeito é o caso mais perigoso da carteira, e a escada desenhada
+    para proteger o cliente antigo não pode absorvê-lo."""
+    antigo = _cliente_de_casa()
+    assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_LONGA
+
+    _insatisfacao(antigo)
+
+    assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_TENSA
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dias", [89, 91])
+def test_a_insatisfacao_envelhece_e_a_escada_volta(dias: int) -> None:
+    client = ClientFactory()
+    _insatisfacao(client, HOJE - timedelta(days=dias))
+
+    esperada = cobranca.RELACAO_TENSA if dias == 89 else cobranca.PADRAO
+    assert cobranca.regua_para(client, HOJE) is esperada
+
+
+@pytest.mark.django_db
+def test_a_satisfacao_nao_produz_avaliacao_muda() -> None:
+    """Critério de aceite 3: nenhum caminho novo faz `avaliar` devolver uma avaliação sem degrau,
+    e nenhuma constante de motivo nova existe. Quem recua é gente (RFC 0004, "Segurança")."""
+    client = ClientFactory()
+    _insatisfacao(client)
+
+    avaliacao = cobranca.avaliar(_vencendo_em(10, client=client), HOJE)
+
+    assert avaliacao.degrau is not None
+    assert avaliacao.motivo == ""
 
 
 @pytest.mark.django_db
@@ -884,6 +960,61 @@ def test_o_painel_traz_a_relacao_a_vista(admin_api: APIClient) -> None:
 
 
 @pytest.mark.django_db
+def test_o_painel_traz_a_satisfacao_vigente_com_a_fonte(admin_api: APIClient) -> None:
+    """A camada 5 na mesma linha (FDD 037): nível, fonte e idade ao lado do próximo degrau.
+
+    A **fonte** vai junto e não é detalhe: é ela que diz se aquilo é o cliente falando ou a nossa
+    leitura sobre ele — a diferença entre o que muda a escada e o que não muda.
+    """
+    client = ClientFactory()
+    invoice = _fatura(due_date=timezone.localdate() - timedelta(days=12), client=client)
+    Satisfacao.objects.create(
+        client=client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        happened_on=timezone.localdate() - timedelta(days=4),
+    )
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["invoice"] == invoice.pk
+    assert linha["satisfacao_nivel"] == Satisfacao.Nivel.NEUTRO
+    assert linha["satisfacao_fonte"] == Satisfacao.Fonte.PERCEBIDA
+    assert linha["satisfacao_dias"] == 4
+    # A percebida aparece e **não** troca a escada.
+    assert linha["regua"] == "padrao"
+
+
+@pytest.mark.django_db
+def test_o_painel_nomeia_a_regua_tensa(admin_api: APIClient) -> None:
+    client = ClientFactory()
+    _fatura(due_date=timezone.localdate() - timedelta(days=12), client=client)
+    Satisfacao.objects.create(
+        client=client, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+        happened_on=timezone.localdate(), note="Reclamou do atraso do marco 2.",
+    )
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["regua"] == "relacao_tensa"
+    assert linha["satisfacao_fonte"] == Satisfacao.Fonte.DECLARADA
+    # O degrau firme deu lugar à escalada interna, e a linha não ficou muda.
+    assert linha["proximo_degrau"] == "escalada"
+    assert linha["motivo"] == ""
+
+
+@pytest.mark.django_db
+def test_o_painel_sem_registro_de_satisfacao_diz_nada_em_vez_de_omitir(
+    admin_api: APIClient,
+) -> None:
+    _fatura(due_date=timezone.localdate() - timedelta(days=12))
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["satisfacao_nivel"] is None
+    assert linha["satisfacao_fonte"] is None
+    assert linha["satisfacao_dias"] is None
+
+
+@pytest.mark.django_db
 def test_o_painel_nomeia_o_degrau_e_quando_a_janela_abriu(admin_api: APIClient) -> None:
     invoice = _fatura(due_date=timezone.localdate() - timedelta(days=12))
 
@@ -1038,8 +1169,18 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
     antigo = _cliente_de_casa()
     longa = _fatura(due_date=hoje - timedelta(days=12), client=antigo)
     normal = _fatura(due_date=hoje - timedelta(days=25))
+    # Um cliente antigo **e** insatisfeito: o caso em que a escolha da escada muda, e o único em
+    # que a pré-carga poderia divergir da consulta ao guardar a satisfação já escolhida — a
+    # percebida de hoje esconderia a declarada de ontem.
+    tenso = _cliente_de_casa()
+    _insatisfacao(tenso, hoje - timedelta(days=1))
+    Satisfacao.objects.create(
+        client=tenso, nivel=Satisfacao.Nivel.SATISFEITO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        happened_on=hoje,
+    )
+    tensa = _fatura(due_date=hoje - timedelta(days=12), client=tenso)
 
-    faturas = [calada, gasta, no_teto, longa, normal]
+    faturas = [calada, gasta, no_teto, longa, normal, tensa]
     contexto = cobranca.contexto_do_painel(faturas, hoje)
 
     for invoice in faturas:
@@ -1049,6 +1190,14 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
         assert cobranca.regua_para(
             invoice.client, hoje, ignorando=invoice, contexto=contexto
         ) is cobranca.regua_para(invoice.client, hoje, ignorando=invoice)
+        # A satisfação da linha do painel: de qualquer fonte, e a mesma pelos dois caminhos.
+        # É aqui que guardar a **escolha** em vez dos registros divergiria — o cliente `tenso`
+        # tem uma percebida de hoje por cima de uma declarada de ontem.
+        em_lote_satisfacao = cobranca.satisfacao_vigente(invoice.client, hoje, contexto=contexto)
+        individual_satisfacao = cobranca.satisfacao_vigente(invoice.client, hoje)
+        assert (em_lote_satisfacao and em_lote_satisfacao.pk) == (
+            individual_satisfacao and individual_satisfacao.pk
+        )
     assert cobranca.contexto_do_painel([], hoje).atrasos_por_cliente == {}
 
 

@@ -1,12 +1,12 @@
-import { ArrowLeft, Briefcase, Mail, MessageSquareText, Phone, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Phone, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, getConfig } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
-import { HealthBadge } from "../components/StatusDot";
+import { HealthBadge, satisfacaoBadgeClass } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
-import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Invoice, Vertical } from "../types";
+import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Invoice, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -16,6 +16,11 @@ const blankContact = { name: "", email: "", phone: "", job_title: "", receives_b
 // classificador o contexto do que o cliente está respondendo (FDD 036).
 const blankActivity = { kind: "call" as ActivityKind, happened_on: new Date().toISOString().slice(0, 10), summary: "", notes: "", invoice: "" };
 const activityKindLabels: Record<ActivityKind, string> = { call: "Ligação", meeting: "Reunião", email: "E-mail", note: "Nota" };
+// `happened_on` nasce hoje, no molde de `blankActivity` — quem registra corrige a data quando o
+// acontecido foi antes.
+const blankSatisfacao = { nivel: "satisfeito" as SatisfacaoNivel, fonte: "declarada" as SatisfacaoFonte, happened_on: new Date().toISOString().slice(0, 10), note: "" };
+const satisfacaoNivelLabels: Record<SatisfacaoNivel, string> = { promotor: "Promotor", satisfeito: "Satisfeito", neutro: "Neutro", insatisfeito: "Insatisfeito" };
+const satisfacaoFonteLabels: Record<SatisfacaoFonte, string> = { declarada: "Declarada pelo cliente", percebida: "Percebida por quem entrega" };
 
 /**
  * O que fazer com cada sinal — e é isto, não o selo, que a tela precisa comunicar.
@@ -50,6 +55,8 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [iaLigada, setIaLigada] = useState(false);
   const [classificando, setClassificando] = useState<number | null>(null);
+  const [satisfacoes, setSatisfacoes] = useState<Satisfacao[]>([]);
+  const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
   const canWriteActivities = !!user && user.role !== "delivery";
@@ -60,8 +67,9 @@ export function ClientDetailPage({ id }: { id: number }) {
     api<Activity[]>(`/activities/?client=${id}`),
     api<ClientOverview>(`/clients/${id}/overview/`),
     api<Vertical[]>("/verticals/"),
-  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals);
+    api<Satisfacao[]>(`/satisfacoes/?client=${id}`),
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
@@ -95,6 +103,17 @@ export function ClientDetailPage({ id }: { id: number }) {
     const { invoice, ...resto } = activityDraft;
     try { await api("/activities/", { method: "POST", body: JSON.stringify({ client: id, ...resto, invoice: invoice ? Number(invoice) : null }) }); setActivityDraft(blankActivity); await load(); }
     catch (cause) { setError((cause as Error).message); }
+  }
+  /**
+   * Registra a satisfação (FDD 037). `insatisfeito` sem `note` volta 400 com a mensagem no campo
+   * (`clean()`/`validate()` do backend) — `mensagemDeFalha` (ADR 0032, FDD 036) é quem traduz o
+   * corpo do erro sem uma segunda tabela de orientação nesta tela.
+   */
+  async function createSatisfacao(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try { await api("/satisfacoes/", { method: "POST", body: JSON.stringify({ client: id, ...satisfacaoDraft }) }); setSatisfacaoDraft(blankSatisfacao); await load(); }
+    catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   /**
    * Lê a resposta do cliente a uma cobrança e **grava o sinal** (FDD 036, camada 4).
@@ -168,6 +187,36 @@ export function ClientDetailPage({ id }: { id: number }) {
         </section>
       : <p className="empty-state">Sem projeto ativo — a saúde da relação aparece quando houver uma jornada em andamento.</p>
     )}
+
+    {/* A satisfação do cliente (FDD 037, ADR 0032) — logo depois da saúde da relação porque as
+        duas respondem à mesma pergunta por ângulos diferentes: uma é o nosso trabalho, a outra é o
+        que o cliente disse (ou o que a Entrega percebeu). **A fonte é a decisão inteira**: só a
+        declarada move Health Score e escada de cobrança, e uma tela que mostrasse as duas iguais
+        desfaria isso — por isso ela aparece na lista, não só no formulário, num selo próprio ao
+        lado do nível. */}
+    <section className="panel space-y-4 sm:p-6">
+      <div className="flex items-center gap-3"><span className="metric-icon"><HeartHandshake className="size-4" /></span><div><h2 className="font-semibold text-ink">Satisfação</h2><p className="text-sm text-slate-600">{satisfacoes.length} {satisfacoes.length === 1 ? "registro" : "registros"}</p></div></div>
+      <form className="form-grid" onSubmit={event => void createSatisfacao(event)}>
+        <label className="form-label">Nível<select className="field" value={satisfacaoDraft.nivel} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, nivel: event.target.value as SatisfacaoNivel })}>{Object.entries(satisfacaoNivelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="form-label">Fonte<select className="field" value={satisfacaoDraft.fonte} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, fonte: event.target.value as SatisfacaoFonte })}>{Object.entries(satisfacaoFonteLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="form-label">Data<input className="field" type="date" value={satisfacaoDraft.happened_on} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, happened_on: event.target.value })} required /></label>
+        <label className="form-label sm:col-span-2">Nota{satisfacaoDraft.nivel === "insatisfeito" && <span className="text-danger"> — obrigatória para insatisfeito</span>}<textarea className="field min-h-20" value={satisfacaoDraft.note} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, note: event.target.value })} placeholder="O que o cliente disse, ou o que foi percebido" /></label>
+        <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Registrar satisfação</button>
+      </form>
+      {satisfacoes.length ? <div className="panel-rows">{satisfacoes.map(registro => <div className="row" key={registro.id}>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><HeartHandshake className="size-4" /></span>
+        <div className="row-main">
+          <strong>{new Date(`${registro.happened_on}T12:00:00`).toLocaleDateString("pt-BR")}</strong>
+          {registro.note && <span>{registro.note}</span>}
+        </div>
+        {/* Fora de `.row-main` de propósito: `.row-main span`/`.row-main strong` sobrescrevem
+            display/cor de qualquer primitiva aninhada ali dentro (ver o comentário do bloco de
+            Interações abaixo) — um `.state` ou `.eyebrow` filho perderia a própria pele em
+            silêncio. Como irmãos do `.row-main`, os dois selos ficam com a pele que têm. */}
+        <span className={`state ${satisfacaoBadgeClass(registro.nivel)} shrink-0`}>{registro.nivel_display}</span>
+        <span className="eyebrow shrink-0">{registro.fonte_display}</span>
+      </div>)}</div> : <p className="empty-state">Nenhum registro de satisfação para este cliente.</p>}
+    </section>
 
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
       <form className="panel space-y-4 sm:p-6" onSubmit={event => void saveClient(event)}>

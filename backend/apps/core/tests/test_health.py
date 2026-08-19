@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import health
-from apps.core.models import Meeting, Pendencia, Task, WorkItem
+from apps.core.models import Meeting, Pendencia, Satisfacao, Task, WorkItem
 
 from .factories import ClientFactory, ProjectFactory, UserFactory
 
@@ -54,6 +54,78 @@ def test_health_penalizes_negative_roi():
     project = ProjectFactory(actual_value=100, cost=300)  # custo acima do entregue
     result = health.assess_project_health(project)
     assert "ROI negativo" in [signal["label"] for signal in result["signals"]]
+
+
+# --- O sexto sinal: a satisfação do cliente (FDD 037) -------------------------
+
+
+def _satisfacao(project, **kwargs):  # type: ignore[no-untyped-def]
+    campos = {
+        "client": project.client,
+        "nivel": Satisfacao.Nivel.INSATISFEITO,
+        "fonte": Satisfacao.Fonte.DECLARADA,
+        "happened_on": timezone.localdate(),
+        "note": "Reclamou do atraso do marco 2 na call de sexta.",
+    }
+    campos.update(kwargs)
+    return Satisfacao.objects.create(**campos)
+
+
+@pytest.mark.django_db
+def test_health_penalizes_declared_dissatisfaction():
+    project = ProjectFactory()
+    _satisfacao(project)
+
+    result = health.assess_project_health(project)
+
+    sinal = next(s for s in result["signals"] if s["label"] == "Cliente insatisfeito")
+    assert sinal["weight"] == 20
+    assert result["score"] == 80
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "nivel",
+    [Satisfacao.Nivel.PROMOTOR, Satisfacao.Nivel.SATISFEITO, Satisfacao.Nivel.NEUTRO],
+)
+def test_only_dissatisfaction_moves_the_score(nivel):
+    """Promotor **não soma**: o escore parte de 100 e só subtrai, e um sinal que somasse faria
+    "100" deixar de significar "nenhum problema conhecido"."""
+    project = ProjectFactory()
+    _satisfacao(project, nivel=nivel, note="")
+
+    result = health.assess_project_health(project)
+
+    assert result["score"] == 100
+    assert result["signals"] == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("dias", "esperado"), [(89, 80), (91, 100)])
+def test_the_signal_ages_out_of_the_window(dias, esperado):
+    project = ProjectFactory()
+    _satisfacao(project, happened_on=timezone.localdate() - timedelta(days=dias))
+
+    assert health.assess_project_health(project)["score"] == esperado
+
+
+@pytest.mark.django_db
+def test_dissatisfaction_of_another_client_does_not_touch_this_project():
+    project = ProjectFactory()
+    _satisfacao(ProjectFactory())
+
+    assert health.assess_project_health(project)["score"] == 100
+
+
+@pytest.mark.django_db
+def test_preloaded_empty_sequence_means_no_record_not_go_to_the_database():
+    """`[]` diz "nenhuma" e `None` diz "consulte o banco" — é essa distinção que mantém o lote
+    com contagem constante de queries."""
+    project = ProjectFactory()
+    _satisfacao(project)
+
+    assert health.assess_project_health(project, satisfacoes=[])["signals"] == []
+    assert health.assess_project_health(project)["signals"] != []
 
 
 @pytest.mark.django_db

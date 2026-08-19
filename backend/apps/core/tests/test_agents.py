@@ -1,12 +1,13 @@
 import pytest
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai
 from apps.core.models import AiInteraction, User
 
-from .factories import ProjectFactory, UserFactory
+from .factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 
 @pytest.fixture
@@ -33,6 +34,42 @@ def test_delivery_uses_entrega_agent_and_audits(fake_ai: None) -> None:
     body = resp.json()
     assert body["text"] == "Resposta do agente" and "interaction" in body
     assert AiInteraction.objects.get(pk=body["interaction"]).feature == "agent_entrega"
+
+
+@pytest.mark.django_db
+def test_o_contexto_de_entrega_leva_as_duas_fontes_de_satisfacao() -> None:
+    """O bloco de satisfação (FDD 037) é o único dos quatro que fala do cliente, e é o único que
+    lê **as duas fontes**.
+
+    Health Score e régua de cobrança leem só a `declarada`, porque as duas produzem número e
+    comportamento (ADR 0032). Aqui nada vira número: é texto para uma pessoa ler, e a leitura de
+    quem entrega é justamente o que existe antes de alguém ter perguntado ao cliente. Escondê-la
+    aqui apagaria o único uso legítimo dela.
+    """
+    from apps.core import agents
+    from apps.core.models import Satisfacao
+
+    delivery = UserFactory(role=User.Role.DELIVERY)
+    um, outro = ProjectFactory(), ProjectFactory()
+    for projeto in (um, outro):
+        ProjectMemberFactory(project=projeto, user=delivery)
+    hoje = timezone.localdate()
+    Satisfacao.objects.create(
+        client=um.client, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+        happened_on=hoje, note="Disse que o marco 2 atrasou duas vezes.",
+    )
+    Satisfacao.objects.create(
+        client=outro.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        happened_on=hoje,
+    )
+
+    context = agents.build_delivery_context(delivery)
+
+    assert "Satisfação registrada" in context
+    assert "insatisfeito (declarada pelo cliente" in context
+    assert "neutro (percebida por quem entrega" in context
+    assert "Disse que o marco 2 atrasou duas vezes." in context
+    assert "sem nota" in context  # o registro sem nota aparece dizendo que não tem
 
 
 @pytest.mark.django_db

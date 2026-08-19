@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -24,6 +24,23 @@ function atividade(overrides: Record<string, unknown> = {}) {
 
 let atividades: unknown[] = [atividade()];
 
+/** Um registro de satisfação (FDD 037). As duas fontes não são a mesma coisa (ADR 0032). */
+function satisfacaoRegistro(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 3, client: 1, project: null, source_meeting: null,
+    nivel: "insatisfeito", nivel_display: "Insatisfeito",
+    fonte: "declarada", fonte_display: "Declarada pelo cliente",
+    happened_on: "2026-08-10", note: "Reclamou do prazo da última entrega.",
+    registered_by: 1, created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
+    ...overrides,
+  };
+}
+
+// Vazia por padrão: os testes que não são sobre satisfação não devem ver um "Insatisfeito" ou um
+// "Promotor" a mais na tela — colidiria com o texto de outros selos (o `cobranca_sinal_display`
+// de Interações, por exemplo, também usa "Insatisfeito"). Cada teste de satisfação povoa a sua.
+let satisfacoes: unknown[] = [];
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active", vertical: null, vertical_name: "" });
@@ -32,6 +49,7 @@ function stub() {
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 1, client: 1, name: "João", email: "j@x.com", phone: "", job_title: "CEO" }]);
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
+    if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
     return Promise.resolve([]);
   });
 }
@@ -41,6 +59,7 @@ beforeEach(() => {
   mocks.getConfig.mockReset();
   mocks.auth.user = { id: 1, is_admin: true, role: "admin" };
   atividades = [atividade()];
+  satisfacoes = [];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -168,7 +187,10 @@ test("classificar chama a rota e o sinal gravado volta com a conduta, não só c
   ));
   // O selo sozinho não muda o comportamento de ninguém: o que roteia a conduta é a linha ao lado.
   expect(await screen.findByText(/insistir piora tudo/)).toBeInTheDocument();
-  expect(screen.getByText("Insatisfeito")).toBeInTheDocument();
+  // `selector: "strong"` (e não um `getByText` livre) desde a FDD 037: o painel de Satisfação
+  // logo acima tem um `<option>Insatisfeito</option>` no próprio select de Nível, e um texto solto
+  // colidiria com ele.
+  expect(screen.getByText("Insatisfeito", { selector: "strong" })).toBeInTheDocument();
 });
 
 test("a interação já classificada não oferece classificar de novo", async () => {
@@ -230,4 +252,67 @@ test("entrega não classifica nem pergunta pela flag: o recurso é fechado para 
 
   expect(screen.queryByLabelText(/Classificar resposta/)).not.toBeInTheDocument();
   expect(mocks.getConfig).not.toHaveBeenCalled();
+});
+
+// --- satisfação (FDD 037, ADR 0032) --------------------------------------------------------------
+
+test("a lista de satisfação distingue as duas fontes, não só o nível", async () => {
+  satisfacoes = [
+    satisfacaoRegistro(),
+    satisfacaoRegistro({ id: 4, nivel: "promotor", nivel_display: "Promotor", fonte: "percebida", fonte_display: "Percebida por quem entrega", happened_on: "2026-08-01", note: "" }),
+  ];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  expect(await screen.findByText("Satisfação")).toBeInTheDocument();
+  // Cada registro é a linha inteira: nível, fonte e nota juntos. Ancorar pela nota (única por
+  // registro) evita colidir com as opções do próprio `<select>` de fonte no formulário logo acima.
+  const declarada = (await screen.findByText("Reclamou do prazo da última entrega.")).closest(".row");
+  expect(declarada).not.toBeNull();
+  const dentroDeclarada = within(declarada as HTMLElement);
+  expect(dentroDeclarada.getByText("Insatisfeito")).toBeInTheDocument();
+  expect(dentroDeclarada.getByText("Declarada pelo cliente")).toBeInTheDocument();
+
+  const percebida = (await screen.findByText("01/08/2026")).closest(".row");
+  expect(percebida).not.toBeNull();
+  const dentroPercebida = within(percebida as HTMLElement);
+  expect(dentroPercebida.getByText("Promotor")).toBeInTheDocument();
+  expect(dentroPercebida.getByText("Percebida por quem entrega")).toBeInTheDocument();
+});
+
+test("registra uma satisfação nova", async () => {
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.selectOptions(screen.getByLabelText("Nível"), "promotor");
+  await user.selectOptions(screen.getByLabelText("Fonte"), "percebida");
+  await user.type(screen.getByPlaceholderText("O que o cliente disse, ou o que foi percebido"), "Elogiou a entrega na call de comitê.");
+  await user.click(screen.getByRole("button", { name: "Registrar satisfação" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
+    method: "POST", body: expect.stringContaining('"client":1'),
+  })));
+  expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
+    body: expect.stringContaining('"nivel":"promotor"'),
+  }));
+  expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
+    body: expect.stringContaining('"fonte":"percebida"'),
+  }));
+});
+
+test("insatisfeito sem nota volta 400 e a tela mostra a mensagem do campo, não uma falha genérica", async () => {
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  mocks.api.mockImplementationOnce(() => Promise.reject(
+    Object.assign(new Error("Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."), { status: 400 }),
+  ));
+  await user.selectOptions(screen.getByLabelText("Nível"), "insatisfeito");
+  await user.click(screen.getByRole("button", { name: "Registrar satisfação" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/insatisfeito sem nota não se avalia depois/);
+  // A tela continua inteira — o formulário não some, e o rascunho não se perde.
+  expect(screen.getByRole("button", { name: "Registrar satisfação" })).toBeInTheDocument();
 });

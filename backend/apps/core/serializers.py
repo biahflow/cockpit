@@ -50,6 +50,7 @@ from .models import (
     ProjectMember,
     ProjectPhase,
     Risco,
+    Satisfacao,
     Service,
     SignatureRequest,
     Task,
@@ -381,6 +382,48 @@ class RiscoSerializer(serializers.ModelSerializer[Risco]):
         fields = ["id", "project", "title", "description", "probability", "impact", "mitigation",
                   "status", "owner", "resolved_at", "created_at", "updated_at"]
         read_only_fields = ["id", "owner", "resolved_at", "created_at", "updated_at"]
+
+
+class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
+    """O registro de satisfação (FDD 037).
+
+    `registered_by` é só de leitura pelo motivo do `owner` do `Risco` acima: quem registrou sai da
+    sessão, não do corpo. Aqui pesa mais que lá — este registro muda o Health Score e a escada da
+    cobrança, e "quem ouviu isso do cliente" é metade do que torna o sinal avaliável depois.
+    """
+
+    nivel_display = serializers.CharField(source="get_nivel_display", read_only=True)
+    fonte_display = serializers.CharField(source="get_fonte_display", read_only=True)
+
+    class Meta:
+        model = Satisfacao
+        fields = ["id", "client", "project", "source_meeting", "nivel", "nivel_display", "fonte",
+                  "fonte_display", "happened_on", "note", "registered_by", "created_at",
+                  "updated_at"]
+        read_only_fields = ["id", "nivel_display", "fonte_display", "registered_by", "created_at",
+                            "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """As mesmas duas regras do `clean()` do modelo, repetidas aqui de propósito.
+
+        É o que o `ActivitySerializer` já faz: sem elas a API devolveria 500 no `full_clean` do
+        `save()` em vez de um 400 com o campo errado apontado, e a tela não teria o que mostrar.
+        """
+        client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
+        project = cast(
+            Project | None, attrs.get("project", getattr(self.instance, "project", None))
+        )
+        if project and client and project.client_id != client.id:
+            raise serializers.ValidationError(
+                {"project": "O projeto deve pertencer ao mesmo cliente."}
+            )
+        nivel = attrs.get("nivel", getattr(self.instance, "nivel", None))
+        note = cast(str, attrs.get("note", getattr(self.instance, "note", "")) or "")
+        if nivel == Satisfacao.Nivel.INSATISFEITO and not note.strip():
+            raise serializers.ValidationError(
+                {"note": "Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."}
+            )
+        return attrs
 
 
 class TaskSerializer(WorkItemSerializer):

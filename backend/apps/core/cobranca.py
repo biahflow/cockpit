@@ -40,6 +40,7 @@ from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from . import flags
+from . import satisfacao as satisfacao_module
 
 if TYPE_CHECKING:
     from .models import (
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
         CobrancaSuspensao,
         Contact,
         Invoice,
+        Satisfacao,
         User,
     )
 
@@ -183,6 +185,27 @@ RELACAO_LONGA: tuple[Degrau, ...] = (
     _RENEGOCIACAO,
 )
 
+#: Cliente com insatisfação **declarada** vigente (FDD 037, ADR 0032). A camada 5 da RFC 0004 pede
+#: *"travas de relação plugadas nos sinais de saúde e satisfação"*, e a seção Segurança da mesma
+#: RFC proíbe o que a leitura ingênua dessa frase produz: *"recuar precisa ser declarado […] nunca
+#: um 'pular' silencioso; vira desculpa para nunca cobrar, e o recebível estraga invisível"*.
+#:
+#: A saída que respeita as duas é esta: a régua **para de endurecer e passa a acordar gente**. O
+#: degrau `firme` não existe e a escalada interna ocupa a janela que era dele (D+10) — quem então
+#: recua é uma pessoa, declarando a suspensão com dono, prazo e motivo pelo mecanismo que a FDD 036
+#: já construiu. O robô nunca fica mudo; a trava existe e tem nome.
+#:
+#: Como na `RELACAO_LONGA`, os degraus **reusam as chaves existentes**: a idempotência é
+#: `UniqueConstraint(invoice, degrau)`, e uma chave nova faria o mesmo lembrete sair duas vezes
+#: para quem trocasse de escada entre duas execuções — e trocar de escada aqui é fácil, basta
+#: alguém registrar a insatisfação de ontem.
+RELACAO_TENSA: tuple[Degrau, ...] = (
+    _PRE_AVISO,
+    _LEMBRETE,
+    replace(_ESCALADA, de=10, ate=30),
+    _RENEGOCIACAO,
+)
+
 #: Um ano de casa. Não há nada de mágico no número; o que há é o requisito de existir um corte
 #: explícito e testável, em vez de "cliente antigo" virar julgamento de quem estiver de plantão.
 RELACAO_LONGA_DIAS = 365
@@ -247,13 +270,25 @@ class PainelContexto:
     atrasos_por_cliente: dict[int, set[int]] = field(default_factory=dict)
     recebido_por_cliente: dict[int, Decimal] = field(default_factory=dict)
     health_por_projeto: dict[int, str] = field(default_factory=dict)
+    # Os registros **vigentes**, e não a satisfação já escolhida, porque as duas leituras desta
+    # dimensão são diferentes: a linha do painel mostra a vigente de qualquer fonte (a percebida é
+    # leitura útil para gente decidir) e a escada só reage à `declarada` (ADR 0032). Guardar uma
+    # escolha só faria a segunda leitura se contentar com a sobra — uma percebida anotada depois de
+    # uma declarada esconderia a declarada, e a tela passaria a discordar do relógio exatamente no
+    # caso que esta fatia existe para tratar.
+    satisfacoes_por_cliente: dict[int, list[Satisfacao]] = field(default_factory=dict)
 
 
 def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContexto:
     """Uma query por dimensão, e nenhuma dentro do laço.
 
-    Sete consultas no total, independentemente de quantas faturas entrem — quatro delas vindas de
+    Onze consultas no total, independentemente de quantas faturas entrem — cinco delas vindas de
     `health.assess_projects_health`, que já resolveu o mesmo problema para a saúde do projeto.
+
+    A satisfação vigente (FDD 037) é a última, e é consultada aqui mesmo o `health` já tendo
+    consultado a sua: aquela é a vigente **declarada** por cliente de projeto, esta é o conjunto
+    vigente por cliente de fatura, e nem todo cliente com fatura tem projeto. Reaproveitar uma na
+    outra faria a linha do painel depender de o cliente estar em entrega.
     """
     from . import health as health_module
     from .models import CobrancaContato, CobrancaSuspensao
@@ -329,6 +364,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         atrasos_por_cliente=dict(atrasos),
         recebido_por_cliente=recebido,
         health_por_projeto=saude,
+        satisfacoes_por_cliente=satisfacao_module.registros_vigentes_por_cliente(clientes, hoje),
     )
 
 
@@ -406,15 +442,71 @@ def reincidente(
     return consulta.filter(_q_em_atraso(dia)).exists()
 
 
+def satisfacao_vigente(
+    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+) -> Satisfacao | None:
+    """O registro de satisfação que ainda vale hoje para este cliente, de **qualquer** fonte.
+
+    É o que a linha do painel mostra: quem decide o próximo degrau precisa ver também a leitura de
+    quem entrega, porque ela é o que existe antes de alguém ter perguntado. Ver `regua_para` para
+    a outra pergunta, a que muda comportamento.
+    """
+    dia = _hoje(hoje)
+    if contexto is not None:
+        registros = contexto.satisfacoes_por_cliente.get(client.pk, [])
+    else:
+        registros = satisfacao_module.registros_vigentes_por_cliente([client.pk], dia).get(
+            client.pk, []
+        )
+    return satisfacao_module.vigente(registros, dia)
+
+
+def insatisfacao_declarada(
+    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+) -> Satisfacao | None:
+    """A insatisfação que troca a escada: **declarada** pelo cliente e ainda vigente.
+
+    `fonte=declarada` e não as duas somadas, e essa linha é a decisão central da FDD 037
+    (ADR 0032): abrandar uma cobrança é ato com consequência em dinheiro, e precisa da palavra do
+    cliente — não da nossa leitura sobre ele. Somar as duas fontes num filtro só deixaria todos os
+    testes de comportamento passando e faria a régua recuar por palpite.
+
+    A escolha sai de `satisfacao.vigente(..., fonte=...)` e não de um filtro local, porque uma
+    percebida registrada depois de uma declarada esconderia a declarada se a escolha fosse feita
+    antes do filtro.
+    """
+    from .models import Satisfacao
+
+    dia = _hoje(hoje)
+    if contexto is not None:
+        registros = contexto.satisfacoes_por_cliente.get(client.pk, [])
+    else:
+        registros = satisfacao_module.registros_vigentes_por_cliente([client.pk], dia).get(
+            client.pk, []
+        )
+    registro = satisfacao_module.vigente(registros, dia, fonte=Satisfacao.Fonte.DECLARADA)
+    if registro is None or registro.nivel != Satisfacao.Nivel.INSATISFEITO:
+        return None
+    return registro
+
+
 def regua_para(
     client: Client,
     hoje: date | None = None,
     ignorando: Invoice | None = None,
     contexto: PainelContexto | None = None,
 ) -> tuple[Degrau, ...]:
-    """Qual das duas escadas vale para este cliente. Função pura sobre o cliente, no molde de
-    `health._level`: explicável em uma frase e testável sem montar cenário."""
+    """Qual das três escadas vale para este cliente. Função pura sobre o cliente, no molde de
+    `health._level`: explicável em uma frase e testável sem montar cenário.
+
+    **A tensão é testada primeiro**, antes da relação longa (FDD 037). Um cliente de anos que está
+    insatisfeito é o caso mais perigoso da carteira, e a escada desenhada para proteger o cliente
+    antigo não pode absorvê-lo em silêncio — ela adia o lembrete e depois escala, quando o que este
+    caso precisa é de gente na conversa mais cedo, não de mais paciência do robô.
+    """
     dia = _hoje(hoje)
+    if insatisfacao_declarada(client, dia, contexto=contexto) is not None:
+        return RELACAO_TENSA
     if tempo_de_casa_dias(client, dia) >= RELACAO_LONGA_DIAS and not reincidente(
         client, dia, ignorando=ignorando, contexto=contexto
     ):
@@ -730,6 +822,8 @@ def aplicar(invoice: Invoice, degrau: Degrau, hoje: date | None = None) -> Cobra
 
 
 def _nome_da_regua(regua: tuple[Degrau, ...]) -> str:
+    if regua is RELACAO_TENSA:
+        return "relacao_tensa"
     return "relacao_longa" if regua is RELACAO_LONGA else "padrao"
 
 
@@ -778,6 +872,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
         degrau = avaliacao.degrau
         regua = regua_para(invoice.client, dia, ignorando=invoice, contexto=contexto)
         suspensao = suspensao_ativa(invoice, dia, contexto=contexto)
+        satisfacao = satisfacao_vigente(invoice.client, dia, contexto=contexto)
         linhas.append({
             "invoice": invoice.pk,
             "number": invoice.number,
@@ -802,6 +897,16 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             # Só o nível. Ver a cerca comercial em `PainelContexto`.
             "health_level": contexto.health_por_projeto.get(invoice.project_id or 0),
             "tempo_de_casa_dias": tempo_de_casa_dias(invoice.client, dia),
+            # A satisfação vigente, na mesma linha do próximo degrau (FDD 037) — a exigência da
+            # RFC 0004 de decidir *"na mesma tela, não a dois cliques"*, agora com o sinal que
+            # vinha da outra parte da relação. Vai a **fonte** junto, e não só o nível, porque a
+            # linha precisa dizer se aquilo é o cliente falando ou a nossa leitura sobre ele: é o
+            # que separa o que muda a escada do que não muda.
+            "satisfacao_nivel": satisfacao.nivel if satisfacao else None,
+            "satisfacao_fonte": satisfacao.fonte if satisfacao else None,
+            # Idade e não a data: o sinal envelhece, e "há 12 dias" é a leitura que faz alguém
+            # perguntar de novo — a data crua exigiria a subtração de cabeça.
+            "satisfacao_dias": (dia - satisfacao.happened_on).days if satisfacao else None,
             "reincidente": reincidente(invoice.client, dia, ignorando=invoice, contexto=contexto),
             "regua": _nome_da_regua(regua),
             # O "valor do cliente" que a RFC pede à vista: o que a casa já recebeu dele, e não o

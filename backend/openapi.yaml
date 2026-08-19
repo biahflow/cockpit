@@ -6680,6 +6680,217 @@ paths:
               schema:
                 $ref: '#/components/schemas/RiskResponse'
           description: ''
+  /api/v1/satisfacoes/:
+    get:
+      operationId: v1_satisfacoes_list
+      description: |-
+        Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
+
+        **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
+        obrigatório aqui é com o cliente e o projeto é opcional — o mixin recortaria por um campo que
+        pode estar vazio e esconderia justamente o cliente que não está mais em entrega, que é onde a
+        cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
+        por algum projeto.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Satisfacao'
+          description: ''
+    post:
+      operationId: v1_satisfacoes_create
+      description: |-
+        Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
+
+        **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
+        obrigatório aqui é com o cliente e o projeto é opcional — o mixin recortaria por um campo que
+        pode estar vazio e esconderia justamente o cliente que não está mais em entrega, que é onde a
+        cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
+        por algum projeto.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Satisfacao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Satisfacao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Satisfacao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Satisfacao'
+          description: ''
+  /api/v1/satisfacoes/{id}/:
+    get:
+      operationId: v1_satisfacoes_retrieve
+      description: |-
+        Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
+
+        **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
+        obrigatório aqui é com o cliente e o projeto é opcional — o mixin recortaria por um campo que
+        pode estar vazio e esconderia justamente o cliente que não está mais em entrega, que é onde a
+        cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
+        por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este satisfacao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Satisfacao'
+          description: ''
+    put:
+      operationId: v1_satisfacoes_update
+      description: |-
+        Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
+
+        **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
+        obrigatório aqui é com o cliente e o projeto é opcional — o mixin recortaria por um campo que
+        pode estar vazio e esconderia justamente o cliente que não está mais em entrega, que é onde a
+        cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
+        por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este satisfacao.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Satisfacao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Satisfacao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Satisfacao'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Satisfacao'
+          description: ''
+    patch:
+      operationId: v1_satisfacoes_partial_update
+      description: |-
+        Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
+
+        **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
+        obrigatório aqui é com o cliente e o projeto é opcional — o mixin recortaria por um campo que
+        pode estar vazio e esconderia justamente o cliente que não está mais em entrega, que é onde a
+        cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
+        por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este satisfacao.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSatisfacao'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSatisfacao'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSatisfacao'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Satisfacao'
+          description: ''
+    delete:
+      operationId: v1_satisfacoes_destroy
+      description: |-
+        Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
+
+        **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
+        obrigatório aqui é com o cliente e o projeto é opcional — o mixin recortaria por um campo que
+        pode estar vazio e esconderia justamente o cliente que não está mais em entrega, que é onde a
+        cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
+        por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este satisfacao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/satisfacoes/{id}/unarchive/:
+    post:
+      operationId: v1_satisfacoes_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este satisfacao.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/services/:
     get:
       operationId: v1_services_list
@@ -8027,6 +8238,15 @@ components:
           type: integer
         reincidente:
           type: boolean
+        satisfacao_nivel:
+          type: string
+          nullable: true
+        satisfacao_fonte:
+          type: string
+          nullable: true
+        satisfacao_dias:
+          type: integer
+          nullable: true
         regua:
           type: string
         recebido_do_cliente:
@@ -8057,6 +8277,9 @@ components:
       - regua
       - regua_ligada
       - reincidente
+      - satisfacao_dias
+      - satisfacao_fonte
+      - satisfacao_nivel
       - status
       - status_display
       - suspensao
@@ -8535,6 +8758,14 @@ components:
       - original_name
       - signature_requests
       - uploaded_by
+    FonteEnum:
+      enum:
+      - declarada
+      - percebida
+      type: string
+      description: |-
+        * `declarada` - Declarada pelo cliente
+        * `percebida` - Percebida por quem entrega
     GateOutcomeEnum:
       enum:
       - go
@@ -9276,6 +9507,18 @@ components:
       - source
       - title
       - updated_at
+    NivelEnum:
+      enum:
+      - promotor
+      - satisfeito
+      - neutro
+      - insatisfeito
+      type: string
+      description: |-
+        * `promotor` - Promotor
+        * `satisfeito` - Satisfeito
+        * `neutro` - Neutro
+        * `insatisfeito` - Insatisfeito
     Notification:
       type: object
       properties:
@@ -10744,6 +10987,53 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedSatisfacao:
+      type: object
+      description: |-
+        O registro de satisfação (FDD 037).
+
+        `registered_by` é só de leitura pelo motivo do `owner` do `Risco` acima: quem registrou sai da
+        sessão, não do corpo. Aqui pesa mais que lá — este registro muda o Health Score e a escada da
+        cobrança, e "quem ouviu isso do cliente" é metade do que torna o sinal avaliável depois.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        project:
+          type: integer
+          nullable: true
+        source_meeting:
+          type: integer
+          nullable: true
+        nivel:
+          $ref: '#/components/schemas/NivelEnum'
+        nivel_display:
+          type: string
+          readOnly: true
+        fonte:
+          $ref: '#/components/schemas/FonteEnum'
+        fonte_display:
+          type: string
+          readOnly: true
+        happened_on:
+          type: string
+          format: date
+        note:
+          type: string
+        registered_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedService:
       type: object
       properties:
@@ -11388,6 +11678,64 @@ components:
         * `admin` - Administrador
         * `sales` - Vendas
         * `delivery` - Entrega
+    Satisfacao:
+      type: object
+      description: |-
+        O registro de satisfação (FDD 037).
+
+        `registered_by` é só de leitura pelo motivo do `owner` do `Risco` acima: quem registrou sai da
+        sessão, não do corpo. Aqui pesa mais que lá — este registro muda o Health Score e a escada da
+        cobrança, e "quem ouviu isso do cliente" é metade do que torna o sinal avaliável depois.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        project:
+          type: integer
+          nullable: true
+        source_meeting:
+          type: integer
+          nullable: true
+        nivel:
+          $ref: '#/components/schemas/NivelEnum'
+        nivel_display:
+          type: string
+          readOnly: true
+        fonte:
+          $ref: '#/components/schemas/FonteEnum'
+        fonte_display:
+          type: string
+          readOnly: true
+        happened_on:
+          type: string
+          format: date
+        note:
+          type: string
+        registered_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client
+      - created_at
+      - fonte
+      - fonte_display
+      - happened_on
+      - id
+      - nivel
+      - nivel_display
+      - registered_by
+      - updated_at
     Service:
       type: object
       properties:
