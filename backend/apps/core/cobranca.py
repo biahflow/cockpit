@@ -770,7 +770,7 @@ def degrau_devido(invoice: Invoice, hoje: date | None = None) -> Degrau | None:
     return avaliar(invoice, hoje).degrau
 
 
-def _moeda(valor: Decimal) -> str:
+def moeda(valor: Decimal) -> str:
     """`Decimal("10000.01")` vira `"R$ 10.000,01"`.
 
     À mão e não por `locale`: o formato depende de um locale instalado no contêiner, e a diferença
@@ -790,7 +790,7 @@ def texto_do_degrau(invoice: Invoice, degrau: Degrau, hoje: date | None = None) 
     campos = {
         "numero": invoice.number or f"#{invoice.pk}",
         "cliente": invoice.client.name,
-        "valor": _moeda(invoice.amount),
+        "valor": moeda(invoice.amount),
         "vencimento": invoice.due_date.strftime("%d/%m/%Y"),
         "dias": max(dias, 0),
         "dias_para_vencer": max(-dias, 0),

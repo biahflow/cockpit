@@ -692,8 +692,8 @@ def test_o_comando_recusa_uma_data_invalida() -> None:
 
 
 def test_o_valor_sai_em_formato_brasileiro() -> None:
-    assert cobranca._moeda(Decimal("10000.01")) == "R$ 10.000,01"
-    assert cobranca._moeda(Decimal("999.50")) == "R$ 999,50"
+    assert cobranca.moeda(Decimal("10000.01")) == "R$ 10.000,01"
+    assert cobranca.moeda(Decimal("999.50")) == "R$ 999,50"
 
 
 # --- O contrato -----------------------------------------------------------------------------

@@ -33,8 +33,14 @@ metodologia consultável entra no corpus de conhecimento — nunca página para 
 Correspondência com o domínio atual: os três níveis de produto (`Service.tier`) são os degraus
 comerciais da escada; a Jornada de Transformação (FDD 011) é onde os gates da metodologia se
 aplicam (FDD 033); as interações comerciais, riscos de projeto e registros de decisão são
-FDD 035, FDD 034 e FDD 032. A camada de Discovery estruturado (processos, dores, evidências,
-business cases, value ledger) é **deliberadamente adiada** até haver Discoveries reais — ADR 0030.
+FDD 035, FDD 034 e FDD 032. A camada de Discovery estruturado entrou pela **metade que o material define como regra
+pronta** (FDD 039, ADR 0034): processo com o P-S-D-T-E-R por etapa, evidência com forma e rótulo
+FATO/HIPÓTESE/DESCONHECIDO, e o custo do estado atual pela fórmula do método — ancorados no
+**cliente**, porque o mapa sobrevive à venda que o descobriu. A regra que governa: **só o fato
+sustenta número**, e só o custo sustentado atravessa para a proposta. Dores, business cases,
+value ledger, opportunity backlog e o Opportunity Score **seguem adiados** — nenhum deles existe
+no material como regra fechada, e o Score é cobrado por um quality gate sem nunca ter sido
+definido.
 
 ## Escopo
 

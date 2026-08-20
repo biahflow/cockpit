@@ -4216,6 +4216,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/Meeting'
           description: ''
+  /api/v1/meetings/{id}/estruturar/:
+    post:
+      operationId: v1_meetings_estruturar_create
+      description: |-
+        Mapeia processos, etapas e achados da transcrição — **tudo como hipótese** (FDD 039).
+
+        Mesmo molde do `extrair_decisoes` acima (JSON, coletor dentro de `atomic`, 502 quando não
+        veio lista), com duas diferenças que são o ponto desta fatia.
+
+        **A primeira é o que o modelo não decide.** Todo achado nasce rotulado como hipótese e com
+        a origem "entrevista", sempre, atribuídos aqui como constantes — o `_PROMPT_PROCESSOS` não
+        pergunta, e o `processos_do_texto` não lê. Um modelo lendo transcrição produz *o que foi
+        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:81-84`), não
+        prova; promover a fato é ato de gente, pela mesma razão que a ADR 0032 recusou à IA gravar
+        satisfação.
+
+        **A segunda é a recusa de reexecução**, e ela é divergência deliberada do `extrair_decisoes`:
+        lá cada execução cria `Decisao` em **rascunho**, um estado que a tela mostra como pendente
+        de revisão, e uma segunda rodada só dá mais rascunho para revisar. `Processo` não tem
+        estado de rascunho — a segunda extração dobraria o mapa da operação do cliente **em
+        silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
+        e como sair dele, que é para o que o `StateConflict` existe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
   /api/v1/meetings/{id}/extrair-decisoes/:
     post:
       operationId: v1_meetings_extrair_decisoes_create

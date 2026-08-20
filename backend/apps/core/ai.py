@@ -15,7 +15,7 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from . import flags
@@ -35,6 +35,11 @@ OPPORTUNITY_BLUEPRINT_LIMIT = 6
 # blueprint é escopo — precisa listar o que a venda inclui —, case é prova, e três provas boas
 # convencem mais que seis rasas.
 OPPORTUNITY_CASE_LIMIT = 3
+
+# Quantos processos mapeados do cliente a proposta carrega (FDD 039). Mesmo motivo dos dois tetos
+# acima: o mapa de uma operação inteira cresce sem limite, e um prompt que cresce com ele é custo
+# por chamada que ninguém pediu. Quatro processos descrevem a operação sem virar inventário.
+OPPORTUNITY_PROCESSO_LIMIT = 4
 
 
 class AiProviderError(Exception):
@@ -132,6 +137,7 @@ def build_opportunity_context(opportunity: Opportunity) -> str:
             lines.append(f"Escopo do nível: {service.summary}")
     lines.extend(_blueprint_lines(opportunity))
     lines.extend(_case_lines(opportunity))
+    lines.extend(_processo_lines(opportunity))
     return "\n".join(lines)
 
 
@@ -245,6 +251,77 @@ def _case_lines(opportunity: Opportunity) -> list[str]:
         saude = case.health_snapshot.get("score")
         if saude is not None:
             lines.append(f"  · Saúde da entrega ao encerrar: {saude}/100")
+    return lines
+
+
+def _processo_lines(opportunity: Opportunity) -> list[str]:
+    """O que o Discovery levantou da operação do cliente — e **só o número que tem fato atrás**
+    (FDD 039).
+
+    Quatro guardas, no molde de `_case_lines` acima, e a terceira é a razão de a função existir:
+
+    1. **Sem processo mapeado, nada é emitido.** Quem não fez Discovery estruturado segue com o
+       contexto de antes, como acontece sem case e sem catálogo.
+    2. **O mapa qualitativo sempre entra**: o nome do processo e os nomes das etapas. É descrição
+       do que foi levantado, não afirmação de quantidade — não depende de sustentação nenhuma.
+    3. **O número do custo só entra quando há evidência rotulada como fato por trás dele**
+       (`processos.custo_do_estado_atual` responde isso em `sustentacao`). Levar para uma proposta
+       que o cliente lê um custo apoiado só em hipótese é literalmente o que
+       `docs/metodologia-fde.md:86` proíbe: apresentar hipótese como fato. E o dano não é o número
+       errado — é que ele volta na reunião seguinte como compromisso da casa.
+    4. **A lacuna é dita, não silenciada.** Omitir o processo não sustentado deixaria o modelo
+       diante de um buraco, e diante de um buraco o modelo preenche — foi o defeito que a rodada 5
+       de homologação achou na base de conhecimento (FDD 029). Dizer "este não está sustentado, não
+       afirme número" é a instrução que o silêncio não dá. Mesmo movimento do "sem base registrada
+       no início" em `_case_lines`, e do `nao_apurado` que sai junto do total parcial.
+
+    O antivazamento fica intacto: isto lê os processos **deste** cliente, e nada de terceiros.
+    """
+    from . import processos as processos_module
+
+    # A formatação de dinheiro vem de `cobranca` e não é reescrita aqui: duas definições de
+    # "R$ 10.000,01" divergem no dia em que alguém corrigir uma só, e o sintoma seria a proposta e
+    # a cobrança escrevendo o mesmo valor de dois jeitos. O helper deixou de ser privado ao ganhar
+    # o segundo consumidor — sublinhado é o aviso de "não importe isto", e importá-lo assim mesmo
+    # deixaria uma renomeação em `cobranca.py` quebrar a proposta sem nada apontar para cá.
+    from .cobranca import moeda
+    from .models import Processo, ProcessoEtapa
+
+    mapeados = list(
+        Processo.objects.filter(client=opportunity.client_id, archived_at__isnull=True)
+        .prefetch_related(
+            # A etapa arquivada por conta própria (o processo vivo, ela não) é uma etapa que
+            # alguém removeu do mapa; ressuscitá-la no prompt desfaria a remoção.
+            Prefetch("etapas", queryset=ProcessoEtapa.objects.filter(archived_at__isnull=True))
+        )[:OPPORTUNITY_PROCESSO_LIMIT]
+    )
+    if not mapeados:
+        return []
+    lines = ["Processos da operação do cliente já mapeados no Discovery:"]
+    for processo in mapeados:
+        lines.append(f"- {processo.name}")
+        etapas = [etapa.name for etapa in processo.etapas.all()]
+        if etapas:
+            lines.append(f"  Etapas: {' → '.join(etapas)}")
+        custo = processos_module.custo_do_estado_atual(processo)
+        if custo["sustentacao"] != processos_module.SUSTENTADO:
+            lines.append(
+                "  Custo do estado atual: ainda NÃO sustentado por evidência — o que se sabe deste "
+                "processo é hipótese. NÃO afirme número de custo, economia ou retorno para ele."
+            )
+            continue
+        lines.append(
+            f"  Custo do estado atual: {moeda(custo['total'])} por mês, sustentado por evidência "
+            "registrada como fato."
+        )
+        if custo["nao_apurado"]:
+            # Um total parcial apresentado como fechado é o mesmo erro em escala menor: o que
+            # ficou de fora precisa sair junto do número, senão a soma vira o custo inteiro.
+            fora = ", ".join(custo["nao_apurado"])
+            lines.append(
+                f"  Esse total é parcial: {fora} não foi apurado e ficou de fora. Não estime valor "
+                "para o que falta."
+            )
     return lines
 
 
