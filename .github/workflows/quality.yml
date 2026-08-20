@@ -5,6 +5,22 @@ on:
   push:
     branches: [main]
 
+# Cancela o que foi superado **só em PR**, nunca em `main`.
+#
+# A assimetria é o ponto. Numa PR, o terceiro push torna os dois primeiros irrelevantes, e cada um
+# deles custa a suíte inteira mais o `backup-drill`, que sobe a topologia de produção em
+# containers, destrói banco e mídia e restaura — pagar isso por um commit que ninguém vai ler é
+# desperdício puro.
+#
+# Em `main` é o contrário, e por uma razão que só aparece quando dois PRs entram juntos: o merge é
+# commit de verdade, então a árvore mergeada não é a árvore de nenhuma das duas PRs. Foi o que
+# aconteceu com os PRs #13 e #14 — o segundo mergeou o primeiro junto, e aquela combinação nunca
+# tinha sido testada em lugar nenhum. Cancelar o run de `main` porque outro merge chegou depois
+# apagaria a única execução que viu o que de fato está no repositório.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   compose:
     runs-on: ubuntu-latest
