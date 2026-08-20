@@ -80,6 +80,7 @@ from .models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    Evidencia,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -94,6 +95,8 @@ from .models import (
     PhaseChecklistItem,
     PhaseDeliverable,
     PipelineStage,
+    Processo,
+    ProcessoEtapa,
     Project,
     ProjectChecklistItem,
     ProjectDeliverable,
@@ -124,6 +127,7 @@ from .serializers import (
     DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
     DocumentSerializer,
+    EvidenciaSerializer,
     InvitationSerializer,
     InvoiceSerializer,
     JourneyPhaseSerializer,
@@ -141,6 +145,8 @@ from .serializers import (
     PhaseChecklistItemSerializer,
     PhaseDeliverableSerializer,
     PipelineStageSerializer,
+    ProcessoEtapaSerializer,
+    ProcessoSerializer,
     ProjectChecklistItemSerializer,
     ProjectDeliverableSerializer,
     ProjectMemberSerializer,
@@ -2046,6 +2052,134 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         # `ProjectScopedMixin` também fecha: mover um registro próprio para um cliente alheio.
         if "client" in serializer.validated_data:
             self._assert_cliente_no_escopo(serializer.validated_data.get("client"))
+        super().perform_update(serializer)
+
+
+def _exige_cliente_no_escopo(user: User, client: Client | None) -> None:
+    """A metade de **escrita** da fronteira do Discovery estruturado (FDD 039).
+
+    Função e não método porque os três recursos abaixo fazem a mesma pergunta a partir de âncoras
+    diferentes (o processo tem o cliente; a etapa e a evidência chegam a ele pelo processo pai), e
+    três cópias divergiriam na primeira correção. O argumento é o do `_assert_cliente_no_escopo`
+    da `SatisfacaoViewSet`: só a leitura é contornável de graça — sem a guarda de escrita, uma
+    requisição bastaria para mapear processo, etapa e evidência dentro do cliente que a listagem
+    esconde.
+
+    A pergunta sai de `visible_to` (ADR 0010), a única expressão da regra.
+    """
+    if user.is_admin_role or user.role != User.Role.DELIVERY:
+        return
+    if client is None or not Project.objects.visible_to(user).filter(client=client).exists():
+        raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
+
+
+class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+    **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+    aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+    é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+    """
+
+    resource = "processo"
+    queryset = Processo.objects.select_related(
+        "client", "source_project", "source_meeting", "registered_by"
+    ).all()
+    serializer_class = ProcessoSerializer
+    filter_fields = ("client",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: ProcessoSerializer) -> None:
+        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("client"))
+        serializer.save(registered_by=self.request.user)
+
+    def perform_update(self, serializer: ProcessoSerializer) -> None:
+        # Só quando o corpo tenta *mudar* o cliente — o caminho inverso: mover um processo próprio
+        # para um cliente alheio seria o atalho para escrever lá dentro.
+        if "client" in serializer.validated_data:
+            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("client"))
+        super().perform_update(serializer)
+
+    @extend_schema(
+        responses=inline_serializer("ProcessoUnarchived", {"id": serializers.IntegerField()}),
+        request=None,
+    )
+    @action(detail=True, methods=["post"])
+    def unarchive(self, request: Request, pk: str | None = None) -> Response:
+        """Restaura o processo e o que este arquivamento levou junto (FDD 025, FDD 039).
+
+        Sobrescreve o `unarchive` do `ArchiveModelViewSet` porque aquele escreve `archived_at =
+        None` **direto no objeto**, sem passar pelo modelo — e passaria por cima da metade
+        simétrica da cascata, devolvendo um processo vazio, com as etapas e as evidências ainda
+        escondidas. A resolução pela queryset crua continua sendo a de lá, e pelo mesmo motivo:
+        `get_object()` filtra justamente o que se quer restaurar.
+        """
+        instance = get_object_or_404(self.queryset, pk=pk)
+        self.check_object_permissions(request, instance)
+        instance.unarchive()
+        return Response({"id": instance.pk})
+
+
+class ProcessoEtapaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039)."""
+
+    resource = "processo_etapa"
+    queryset = ProcessoEtapa.objects.select_related("processo", "processo__client").all()
+    serializer_class = ProcessoEtapaSerializer
+    filter_fields = ("processo",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "processo__client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: ProcessoEtapaSerializer) -> None:
+        # O cliente é resolvido **pelo processo pai**: é dele que a etapa herda a fronteira, e é
+        # por ele que ela vazaria se ninguém perguntasse.
+        processo = serializer.validated_data.get("processo")
+        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        serializer.save()
+
+    def perform_update(self, serializer: ProcessoEtapaSerializer) -> None:
+        if "processo" in serializer.validated_data:
+            processo = serializer.validated_data.get("processo")
+            _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        super().perform_update(serializer)
+
+
+class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O achado com forma e rótulo (FDD 039) — a distinção entre observado e suposto."""
+
+    resource = "evidencia"
+    queryset = Evidencia.objects.select_related(
+        "processo", "processo__client", "etapa", "source_meeting", "registered_by"
+    ).all()
+    serializer_class = EvidenciaSerializer
+    filter_fields = ("processo", "etapa")
+    # `rotulo` e `forma` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
+    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?rotulo=fato`
+    # cairia no chão sem erro nenhum — a lista voltaria inteira, com hipótese junto de fato, que é
+    # exatamente a mistura que esta fatia existe para desfazer.
+    filter_exact_fields = ("rotulo", "forma")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "processo__client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: EvidenciaSerializer) -> None:
+        processo = serializer.validated_data.get("processo")
+        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        serializer.save(registered_by=self.request.user)
+
+    def perform_update(self, serializer: EvidenciaSerializer) -> None:
+        if "processo" in serializer.validated_data:
+            processo = serializer.validated_data.get("processo")
+            _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
         super().perform_update(serializer)
 
 

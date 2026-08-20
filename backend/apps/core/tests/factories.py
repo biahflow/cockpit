@@ -8,10 +8,13 @@ from apps.core.models import (
     Activity,
     Artifact,
     Client,
+    Evidencia,
     Invoice,
     Meeting,
     Opportunity,
     PipelineStage,
+    Processo,
+    ProcessoEtapa,
     Project,
     ProjectMember,
     Service,
@@ -148,3 +151,44 @@ class InvoiceFactory(factory.django.DjangoModelFactory):
     amount = Decimal("1000.00")
     description = "Parcela única"
     due_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=15))
+
+
+class ProcessoFactory(factory.django.DjangoModelFactory):
+    """Processo mapeado, **sem nenhum insumo de custo** por padrão (FDD 039).
+
+    Vazio de propósito: o caso interessante do cálculo é a lacuna, e uma fábrica que preenchesse
+    os nove faria todo teste de `nao_apurado` começar desfazendo o que ela fez.
+    """
+
+    class Meta:
+        model = Processo
+
+    client = factory.SubFactory(ClientFactory)
+    name = "Faturamento mensal"
+
+
+class ProcessoEtapaFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ProcessoEtapa
+
+    processo = factory.SubFactory(ProcessoFactory)
+    name = "Conferir pedidos do mês"
+    pessoas = "Analista financeiro"
+    sistema = "ERP e planilha"
+
+
+class EvidenciaFactory(factory.django.DjangoModelFactory):
+    """Achado de entrevista rotulado como hipótese — o caso mais comum e o menos afirmativo.
+
+    `forma` e `rotulo` não têm default no modelo (é a decisão central da fatia); a fábrica escolhe
+    um valor explícito para não obrigar todo teste a repeti-lo, e quem testa a ausência monta o
+    payload à mão.
+    """
+
+    class Meta:
+        model = Evidencia
+
+    processo = factory.SubFactory(ProcessoFactory)
+    forma = Evidencia.Forma.ENTREVISTA
+    rotulo = Evidencia.Rotulo.HIPOTESE
+    content = "O time diz que o fechamento leva dois dias."
