@@ -92,6 +92,40 @@ Esse usuário entra como **administrador do portal**, com o menu completo — o 
 papel, e `User.role` fica no default `delivery`, mas o que decide é o `is_superuser`, que a API e a
 tela leem pelo mesmo campo `is_admin` (FDD 017). Os demais papéis saem de **Equipe → convidar**.
 
+### Caminho não interativo (`bootstrap_admin`)
+
+Um ambiente novo que sobe saudável e passa na sonda de fumaça pode continuar assim **sem
+administrador** se ninguém rodar o `createsuperuser` manual acima — é a mesma forma de defeito que
+a FDD 017 fechou na primeira instalação local, agora em ambiente remoto. Para automatizar:
+
+```bash
+docker compose -f docker-compose.prod.yml exec \
+  -e DJANGO_SUPERUSER_USERNAME=admin \
+  -e DJANGO_SUPERUSER_EMAIL=admin@exemplo.com \
+  -e DJANGO_SUPERUSER_PASSWORD='troque-por-uma-senha-forte' \
+  api python manage.py bootstrap_admin
+```
+
+São as mesmas três variáveis que o `createsuperuser --noinput` do Django já usa. A diferença que
+importa: `--noinput` **não roda os validadores de senha** (eles só valem no modo interativo), então
+o caminho automatizado aceitaria senha fraca justamente onde ninguém está olhando; `bootstrap_admin`
+valida antes de criar, e é por isso que ele existe. São os **quatro** validadores, e o quarto é o
+que quase se perde: o de similaridade só roda quando se passa a instância do usuário, então validar
+sem ela restauraria três e deixaria passar exatamente a senha parecida com o nome de usuário que o
+parágrafo acima promete recusar.
+
+É idempotente e seguro em **todo** deploy: se já existe um administrador ativo, não faz nada e não
+altera a senha de quem já existe. Senha fraca **sempre** reprova, com ou sem flag, e nada é criado.
+O que a `--exigir` muda é só o caso da ausência: sem ela, faltar variável sai limpo com um aviso —
+não reprova o deploy de quem não pretendia semear; com ela, vira `CommandError`, para que um
+pipeline trate "ambiente sem acesso" como deploy reprovado.
+
+Em ambiente gerenciado (Cloud Run), rodar isso a cada deploy exige um job próprio — e a declaração
+desse job é Terraform e mora no repositório de infraestrutura
+(`biahflow-portal-cliente/infra/terraform`, conforme o cabeçalho de
+`.github/workflows/deploy-hml.yml`). Este repositório entrega o comando; a infraestrutura que o
+executa fica fora do recorte.
+
 ## 4. Smoke test
 
 ```bash

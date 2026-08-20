@@ -86,6 +86,30 @@ escolher provedor e popular o cofre seguem sendo passos manuais, agora documenta
   `ADMINS`, para lugar nenhum. Um `LOGGING` mínimo joga tudo em stderr, que é o que o runtime de
   container coleta.
 
+## Administrador do ambiente remoto (19/08/2026)
+
+Nenhuma migração semeia administrador e nada no pipeline de deploy cria um: um ambiente novo subia
+saudável, passava na sonda de fumaça e ficava **inacessível por gente**. Medido no HML: zero logins
+bem-sucedidos em 90 dias, nenhum segredo de credencial, e o `createsuperuser` só documentado para o
+Docker local — a mesma forma de defeito que a FDD 017 fechou na primeira instalação, agora em
+ambiente remoto.
+
+O comando `bootstrap_admin` fecha o caminho não interativo: lê `DJANGO_SUPERUSER_USERNAME`,
+`DJANGO_SUPERUSER_EMAIL` e `DJANGO_SUPERUSER_PASSWORD` — as mesmas três que o `createsuperuser
+--noinput` do Django já usa —, é idempotente (não faz nada se já existe administrador ativo, nunca
+reseta senha de quem já existe) e recupera a validação de senha que o `--noinput` descarta: ele só
+roda no modo interativo, então o caminho automatizado aceitava senha fraca justamente onde ninguém
+estava olhando. `--exigir` deixa "ambiente sem acesso" reprovar um pipeline em vez de só avisar. O
+job que o chamaria em Cloud Run é declaração de infraestrutura e fica fora deste recorte (ver
+runbook).
+
+A revisão do diff achou o defeito que faltava, e ele é a meia-correção que parece correção inteira:
+validar com `validate_password(senha)` restaura **três** dos quatro validadores. O primeiro da lista
+é o de similaridade, e ele devolve cedo quando não recebe a instância do usuário — de modo que a
+senha igual ao nome de usuário passaria por uma guarda escrita justamente para recusá-la, e o
+runbook seguiria prometendo o contrário. A regressão que separa as duas versões é
+`test_senha_parecida_com_o_usuario_e_recusada`.
+
 ## Fora deste recorte
 
 Comprar domínio, terminar TLS, escolher provedor e popular o cofre — os passos manuais do runbook.
