@@ -17,7 +17,7 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core import ai, cobranca
+from apps.core import ai, cobranca, health
 from apps.core.models import (
     Activity,
     Client,
@@ -25,9 +25,14 @@ from apps.core.models import (
     CobrancaSuspensao,
     Contact,
     Invoice,
+    Meeting,
+    Milestone,
     Notification,
+    Pendencia,
+    Project,
     Satisfacao,
     User,
+    WorkItem,
 )
 
 from .factories import (
@@ -247,6 +252,144 @@ def test_a_satisfacao_nao_produz_avaliacao_muda() -> None:
     assert avaliacao.motivo == ""
 
 
+def _entrega_em_frangalhos(client: Client, **kwargs) -> Project:
+    """Um projeto cuja saúde é **crítica** pelos sinais que o `health.py` já mede.
+
+    Nada aqui escreve o nível à mão: o limiar é o de `health._level` e é ele que este cenário
+    exercita. Se os pesos dos sinais mudarem, a asserção do fim aponta o cenário — que é o que se
+    quer — em vez de deixar a trava sendo testada contra um projeto saudável.
+    """
+    ontem = timezone.localdate() - timedelta(days=1)
+    project = ProjectFactory(client=client, due_date=ontem, **kwargs)
+    for indice in range(4):
+        Milestone.objects.create(
+            project=project, title=f"Marco {indice}", due_date=ontem, owner=project.owner
+        )
+    for indice in range(2):
+        Meeting.objects.create(
+            project=project, title=f"Reunião {indice}", date=ontem,
+            status=Meeting.Status.SCHEDULED,
+        )
+    Pendencia.objects.create(
+        project=project, title="Decisão travada", status=Pendencia.Status.OPEN,
+        party=WorkItem.Party.CLIENT,
+    )
+    assert health.assess_project_health(project)["level"] == health.CRITICAL
+    return project
+
+
+@pytest.mark.django_db
+def test_a_entrega_critica_troca_a_escada() -> None:
+    """A outra metade da camada 5 (FDD 038): a régua reage ao **nosso** trabalho, não só ao que o
+    cliente disse. Mesma escada da insatisfação declarada — para de endurecer e acorda gente."""
+    client = ClientFactory()
+    assert cobranca.regua_para(client, HOJE) is cobranca.PADRAO
+
+    _entrega_em_frangalhos(client)
+
+    assert cobranca.entrega_critica(client, HOJE) is True
+    assert cobranca.regua_para(client, HOJE) is cobranca.RELACAO_TENSA
+    # E não cala: em D+12 sai a escalada interna, no lugar do degrau firme.
+    degrau = cobranca.degrau_devido(_vencendo_em(12, client=client), HOJE)
+    assert degrau is not None and degrau.key == "escalada"
+
+
+@pytest.mark.django_db
+def test_a_escada_da_entrega_reusa_as_chaves_existentes() -> None:
+    """Uma escada própria para a entrega faria o mesmo lembrete sair duas vezes para quem trocasse
+    de escada entre duas execuções — e aqui basta um marco vencer para a troca acontecer."""
+    client = ClientFactory()
+    _entrega_em_frangalhos(client)
+
+    regua = cobranca.regua_para(client, HOJE)
+
+    assert regua is cobranca.RELACAO_TENSA
+    assert {d.key for d in regua} <= {d.key for d in cobranca.PADRAO}
+
+
+@pytest.mark.django_db
+def test_a_tensao_por_entrega_vence_a_relacao_longa() -> None:
+    """Um cliente de anos com a entrega em frangalhos é o mesmo caso perigoso do cliente de anos
+    insatisfeito: a escada que existe para protegê-lo não pode absorvê-lo."""
+    antigo = _cliente_de_casa()
+    assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_LONGA
+
+    _entrega_em_frangalhos(antigo)
+
+    assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_TENSA
+
+
+@pytest.mark.django_db
+def test_projeto_concluido_em_frangalhos_nao_troca_a_escada() -> None:
+    """É o caso que faz uma trava apodrecer: um crítico congelado no passado a deixaria ligada para
+    sempre, e uma trava que nunca desliga é uma trava que ninguém respeita."""
+    client = ClientFactory()
+    projeto = _entrega_em_frangalhos(client)
+    assert cobranca.regua_para(client, HOJE) is cobranca.RELACAO_TENSA
+
+    projeto.status = Project.Status.COMPLETED
+    projeto.save(update_fields=["status"])
+
+    assert cobranca.entrega_critica(client, HOJE) is False
+    assert cobranca.regua_para(client, HOJE) is cobranca.PADRAO
+
+
+@pytest.mark.django_db
+def test_cliente_sem_projeto_continua_na_padrao() -> None:
+    """A régua pergunta por cliente, e fatura sem projeto existe — a guarda não pode estourar nem
+    inventar tensão onde não há entrega nenhuma."""
+    client = ClientFactory()
+
+    assert cobranca.entrega_critica(client, HOJE) is False
+    assert cobranca.causa_da_tensao(client, HOJE) is None
+    assert cobranca.regua_para(client, HOJE) is cobranca.PADRAO
+
+
+@pytest.mark.django_db
+def test_projeto_saudavel_nao_troca_a_escada() -> None:
+    """O complemento: cercar tudo não é cercar. Se qualquer projeto trocasse a escada, o teste de
+    cima passaria por ausência de projeto e não por ausência de crítico."""
+    client = ClientFactory()
+    ProjectFactory(client=client)
+
+    assert cobranca.entrega_critica(client, HOJE) is False
+    assert cobranca.regua_para(client, HOJE) is cobranca.PADRAO
+
+
+@pytest.mark.django_db
+def test_a_causa_da_tensao_nomeia_as_duas_origens() -> None:
+    """A escada é a mesma nas três causas; o que muda é o que a tela diz. Sem o nome, o painel diz
+    "régua tensa" e não diz por quê — e as duas condutas que ele deveria sugerir são diferentes."""
+    so_satisfacao = ClientFactory()
+    _insatisfacao(so_satisfacao)
+    so_entrega = ClientFactory()
+    _entrega_em_frangalhos(so_entrega)
+    ambas = ClientFactory()
+    _insatisfacao(ambas)
+    _entrega_em_frangalhos(ambas)
+
+    assert cobranca.causa_da_tensao(so_satisfacao, HOJE) == cobranca.TENSAO_SATISFACAO
+    assert cobranca.causa_da_tensao(so_entrega, HOJE) == cobranca.TENSAO_ENTREGA
+    assert cobranca.causa_da_tensao(ambas, HOJE) == cobranca.TENSAO_AMBAS
+    # A mesma escada nos três casos: a causa é rótulo, não decisão.
+    for client in (so_satisfacao, so_entrega, ambas):
+        assert cobranca.regua_para(client, HOJE) is cobranca.RELACAO_TENSA
+
+
+@pytest.mark.django_db
+def test_a_entrega_critica_nao_produz_avaliacao_muda() -> None:
+    """A trava da camada 5 **não suspende e não cala** (ADR 0033): ela troca a escada e escala.
+    Quem recua é gente, declarando a suspensão com dono, prazo e motivo."""
+    client = ClientFactory()
+    _entrega_em_frangalhos(client)
+
+    avaliacao = cobranca.avaliar(_vencendo_em(12, client=client), HOJE)
+
+    assert avaliacao.degrau is not None
+    assert avaliacao.motivo == ""
+    assert not CobrancaSuspensao.objects.exists()
+
+
 @pytest.mark.django_db
 def test_pagamento_no_prazo_nao_e_reincidencia() -> None:
     client = ClientFactory()
@@ -461,6 +604,52 @@ def test_o_resumo_conta_os_calados_e_por_que() -> None:
     assert resumo["avaliadas"] == 2
     assert resumo["calados"] == {cobranca.SUSPENSA: 1, cobranca.SEM_DEGRAU: 1}
     assert resumo["contatos"] == 0
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_uma_passada_nao_manda_dois_emails_ao_mesmo_cliente() -> None:
+    """Quem tem duas faturas vencidas recebe um e-mail, não dois — **dentro da mesma passada**.
+
+    O teto é a única dimensão que o próprio laço altera, e o job passou a ler tudo de um contexto
+    pré-carregado (FDD 038). Sem contar o envio no contexto, a franquia continuaria constando livre
+    depois do primeiro e-mail e o segundo sairia — regressão que a consulta fatura a fatura não
+    tinha, e que nenhum orçamento de query acusaria.
+    """
+    client = ClientFactory()
+    _com_contato_de_cobranca(client)
+    _vencendo_em(4, client=client)
+    _vencendo_em(5, client=client)
+
+    resumo = cobranca.executar(HOJE)
+
+    assert resumo["avaliadas"] == 2
+    assert resumo["contatos"] == 1
+    assert resumo["calados"] == {cobranca.TETO_DE_FREQUENCIA: 1}
+    assert len(mail.outbox) == 1
+
+
+@pytest.mark.django_db
+@override_settings(DUNNING_ENABLED=True)
+def test_a_passada_reage_a_entrega_critica_sem_suspender_nada() -> None:
+    """Ponta a ponta da camada 5: em D+12 o cliente com entrega crítica recebe a **escalada
+    interna** no lugar do degrau firme, e nenhuma suspensão nasce do job (ADR 0033)."""
+    dono = UserFactory(role=User.Role.SALES)
+    client = ClientFactory(owner=dono)
+    _com_contato_de_cobranca(client)
+    _entrega_em_frangalhos(client)
+    _vencendo_em(12, client=client)
+
+    resumo = cobranca.executar(HOJE)
+
+    assert resumo["escaladas"] == 1
+    assert resumo["contatos"] == 0
+    assert CobrancaContato.objects.get().degrau == "escalada"
+    # A escalada acorda gente e **não** fala com o cliente: o contato de cobrança não recebe nada
+    # (o e-mail que sai é a cópia da notificação interna).
+    destinos = {endereco for enviado in mail.outbox for endereco in enviado.to}
+    assert "financeiro@cliente.test" not in destinos
+    assert not CobrancaSuspensao.objects.exists()
 
 
 @pytest.mark.django_db
@@ -830,10 +1019,12 @@ def test_a_corrida_entre_duas_execucoes_para_no_banco(monkeypatch: pytest.Monkey
         invoice=invoice, client=invoice.client, degrau="firme",
         canal=CobrancaContato.Canal.EMAIL, sent_on=HOJE - timedelta(days=30), subject="x", body="y",
     )
-    # Simula a outra execução tendo lido "cabe firme" antes de esta gravar.
+    # Simula a outra execução tendo lido "cabe firme" antes de esta gravar. A assinatura espelha a
+    # de `avaliar` inclusive no `contexto=`, que `executar` passa desde a FDD 038: um duplo que
+    # aceita menos que o original faria este teste medir a assinatura em vez da corrida.
     monkeypatch.setattr(
         cobranca, "avaliar",
-        lambda inv, dia=None: cobranca.Avaliacao(cobranca.PADRAO[2], ""),
+        lambda inv, dia=None, contexto=None: cobranca.Avaliacao(cobranca.PADRAO[2], ""),
     )
 
     resumo = cobranca.executar(HOJE)
@@ -999,6 +1190,113 @@ def test_o_painel_nomeia_a_regua_tensa(admin_api: APIClient) -> None:
     # O degrau firme deu lugar à escalada interna, e a linha não ficou muda.
     assert linha["proximo_degrau"] == "escalada"
     assert linha["motivo"] == ""
+
+
+@pytest.mark.django_db
+def test_o_painel_nomeia_a_causa_da_tensao(admin_api: APIClient) -> None:
+    """A escada é a mesma nas duas origens, e é por isso que a causa vai na linha (FDD 038): sem
+    ela a tela diria "relação tensa" e quem lê não saberia se conserta a entrega ou liga para o
+    cliente."""
+    client = ClientFactory()
+    _fatura(due_date=timezone.localdate() - timedelta(days=12), client=client)
+    _entrega_em_frangalhos(client)
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["regua"] == "relacao_tensa"
+    assert linha["tensao_causa"] == cobranca.TENSAO_ENTREGA
+    assert linha["satisfacao_nivel"] is None
+    # A régua não ficou muda por causa da entrega: o degrau firme deu lugar à escalada interna.
+    assert linha["proximo_degrau"] == "escalada"
+    assert linha["motivo"] == ""
+
+
+@pytest.mark.django_db
+def test_o_painel_mostra_o_pior_health_do_cliente_e_nao_o_da_fatura(admin_api: APIClient) -> None:
+    """A linha não pode contradizer o relógio (FDD 038): a guarda olha **todos** os projetos ativos
+    do cliente, então mostrar o health do projeto da fatura diria "saudável" com a régua tensa."""
+    client = ClientFactory()
+    saudavel = ProjectFactory(client=client)
+    _entrega_em_frangalhos(client)
+    # A fatura está presa ao projeto **saudável**: é exatamente o caso em que as duas leituras
+    # discordavam.
+    _fatura(due_date=timezone.localdate() - timedelta(days=12), client=client, project=saudavel)
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["health_level"] == health.CRITICAL
+    assert linha["regua"] == "relacao_tensa"
+
+
+@pytest.mark.django_db
+def test_o_painel_sem_projeto_ativo_nao_inventa_health(admin_api: APIClient) -> None:
+    _fatura(due_date=timezone.localdate() - timedelta(days=12))
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["health_level"] is None
+    assert linha["tensao_causa"] is None
+
+
+@pytest.mark.django_db
+def test_o_painel_traz_o_sinal_da_ia_como_leitura_por_registrar(admin_api: APIClient) -> None:
+    """O `cobranca_sinal` ganha leitor (FDD 038): a resposta classificada aparece na linha como
+    **leitura ainda não registrada**, com data, e é o atalho para uma pessoa registrar.
+
+    Não é satisfação: nada aqui move o Health Score nem a escada — só o registro humano move
+    (ADR 0032).
+    """
+    client = ClientFactory()
+    _fatura(due_date=timezone.localdate() - timedelta(days=12), client=client)
+    velha = ActivityFactory(
+        client=client, cobranca_sinal=Activity.CobrancaSinal.ESQUECEU,
+        happened_on=timezone.localdate() - timedelta(days=9),
+    )
+    ultima = ActivityFactory(
+        client=client, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+        happened_on=timezone.localdate() - timedelta(days=2),
+    )
+
+    (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert linha["sinal_activity"] == ultima.pk != velha.pk
+    assert linha["sinal_kind"] == Activity.CobrancaSinal.INSATISFEITO
+    assert linha["sinal_display"] == "Insatisfeito"
+    assert linha["sinal_em"] == str(ultima.happened_on)
+    # A leitura da IA **não** é registro: a escada segue a padrão e a satisfação vigente é nenhuma.
+    assert linha["regua"] == "padrao"
+    assert linha["satisfacao_nivel"] is None
+
+
+@pytest.mark.django_db
+def test_o_sinal_some_da_linha_depois_de_registrado(admin_api: APIClient) -> None:
+    """Sem a ligação `source_activity`, o atalho insistiria para sempre — inclusive depois de a
+    pessoa ter feito exatamente o que ele pedia."""
+    client = ClientFactory()
+    _fatura(due_date=timezone.localdate() - timedelta(days=12), client=client)
+    activity = ActivityFactory(
+        client=client, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+        happened_on=timezone.localdate() - timedelta(days=2),
+    )
+
+    (antes,) = admin_api.get("/api/v1/cobranca/painel/").json()
+    assert antes["sinal_activity"] == activity.pk
+
+    Satisfacao.objects.create(
+        client=client, source_activity=activity, nivel=Satisfacao.Nivel.INSATISFEITO,
+        fonte=Satisfacao.Fonte.DECLARADA, happened_on=activity.happened_on,
+        note="Disse que a entrega do marco 2 atrasou duas vezes.",
+    )
+
+    (depois,) = admin_api.get("/api/v1/cobranca/painel/").json()
+
+    assert depois["sinal_activity"] is None
+    assert depois["sinal_kind"] is None
+    assert depois["sinal_display"] is None
+    assert depois["sinal_em"] is None
+    # E agora sim a escada mudou — porque houve **registro**, não porque a IA leu.
+    assert depois["regua"] == "relacao_tensa"
+    assert depois["tensao_causa"] == cobranca.TENSAO_SATISFACAO
 
 
 @pytest.mark.django_db
@@ -1179,8 +1477,15 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
         happened_on=hoje,
     )
     tensa = _fatura(due_date=hoje - timedelta(days=12), client=tenso)
+    # E um cliente tenso pela **entrega** (FDD 038), com dois projetos ativos de saúdes diferentes:
+    # é o caso em que guardar o health do projeto da fatura, e não o pior do cliente, faria o lote
+    # divergir da consulta.
+    em_frangalhos = ClientFactory()
+    saudavel = ProjectFactory(client=em_frangalhos)
+    _entrega_em_frangalhos(em_frangalhos)
+    critica = _fatura(due_date=hoje - timedelta(days=12), client=em_frangalhos, project=saudavel)
 
-    faturas = [calada, gasta, no_teto, longa, normal, tensa]
+    faturas = [calada, gasta, no_teto, longa, normal, tensa, critica]
     contexto = cobranca.contexto_do_painel(faturas, hoje)
 
     for invoice in faturas:
@@ -1198,6 +1503,13 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
         assert (em_lote_satisfacao and em_lote_satisfacao.pk) == (
             individual_satisfacao and individual_satisfacao.pk
         )
+        # A guarda da entrega pelos dois caminhos, e a causa que a tela mostra junto dela.
+        assert cobranca.entrega_critica(
+            invoice.client, hoje, contexto=contexto
+        ) is cobranca.entrega_critica(invoice.client, hoje)
+        assert cobranca.causa_da_tensao(
+            invoice.client, hoje, contexto=contexto
+        ) == cobranca.causa_da_tensao(invoice.client, hoje)
     assert cobranca.contexto_do_painel([], hoje).atrasos_por_cliente == {}
 
 

@@ -8247,6 +8247,22 @@ components:
         satisfacao_dias:
           type: integer
           nullable: true
+        tensao_causa:
+          type: string
+          nullable: true
+        sinal_kind:
+          type: string
+          nullable: true
+        sinal_display:
+          type: string
+          nullable: true
+        sinal_em:
+          type: string
+          format: date
+          nullable: true
+        sinal_activity:
+          type: integer
+          nullable: true
         regua:
           type: string
         recebido_do_cliente:
@@ -8280,10 +8296,15 @@ components:
       - satisfacao_dias
       - satisfacao_fonte
       - satisfacao_nivel
+      - sinal_activity
+      - sinal_display
+      - sinal_em
+      - sinal_kind
       - status
       - status_display
       - suspensao
       - tempo_de_casa_dias
+      - tensao_causa
     CobrancaRascunho:
       type: object
       properties:
@@ -11007,6 +11028,9 @@ components:
         source_meeting:
           type: integer
           nullable: true
+        source_activity:
+          type: integer
+          nullable: true
         nivel:
           $ref: '#/components/schemas/NivelEnum'
         nivel_display:
@@ -11696,6 +11720,9 @@ components:
           type: integer
           nullable: true
         source_meeting:
+          type: integer
+          nullable: true
+        source_activity:
           type: integer
           nullable: true
         nivel:

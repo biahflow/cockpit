@@ -48,7 +48,8 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 034 | Risk Register do projeto | Entregue | 1 | `docs/fdd/034-risk-register-do-projeto.md` |
 | FDD 035 | Activities no CRM | Entregue | 1 | `docs/fdd/035-activities-no-crm.md` |
 | FDD 036 | Régua de cobrança e IA de tom | Entregue (desligada) | 1 | `docs/fdd/036-a-regua-que-cobra-sem-estragar-a-relacao.md` |
-| FDD 037 | Satisfação do cliente e camada 5 | Entregue | 1 | `docs/fdd/037-a-satisfacao-que-ninguem-registrava.md` |
+| FDD 037 | Satisfação do cliente e camada 5 (satisfação) | Entregue | 1 | `docs/fdd/037-a-satisfacao-que-ninguem-registrava.md` |
+| FDD 038 | Camada 5 (entrega) e o leitor do sinal da IA | Entregue | 1 | `docs/fdd/038-os-dois-sinais-que-ninguem-lia.md` |
 
 ## Base atual — entregue
 
@@ -414,6 +415,31 @@ um radar que ele respeita.
       degrau virar janela naquela fatia. Ver FDD 037 e ADR 0032. **Fora, e nomeado**: pesquisa
       respondida pelo cliente (canal novo, gate da ADR 0031), congelar satisfação no `Case` (ela já
       nasce carimbada, ao contrário do health), e a IA gravar o registro sozinha (ADR 0006).
+- [x] **Os dois sinais que ninguém lia — a camada 5 fecha.** Uma fatia que não constrói sinal
+      nenhum: constrói **leitor**. Os dois dados já existiam, já custavam caro e já apareciam na
+      tela sem alcançar decisão alguma. O primeiro é a saúde do projeto — a linha do painel mostra
+      o nível desde a FDD 036, e mesmo assim um cliente com a entrega em frangalhos recebia
+      exatamente a mesma cobrança de um cliente cujo projeto ia bem, **degrau `firme` incluído**. O
+      segundo é o `cobranca_sinal`, código morto desde a FDD 036: a IA classificava a resposta do
+      cliente e nenhum motor lia o campo — a única leitura em todo o repositório era a timeline
+      exibindo o rótulo. Agora entrega crítica leva à **mesma** `RELACAO_TENSA` que a insatisfação
+      declarada já levava, e o rótulo vira **atalho de registro** — o painel oferece o formulário
+      pré-preenchido e quem salva é gente, que é exatamente o que a ADR 0032 pediu ao recusar
+      fechar o laço sozinha. A decisão que a fatia existe para tomar virou a **ADR 0033**, e é a
+      segunda recusa da leitura literal de *"travas plugadas"*: **sinal ruim troca a escada, nunca
+      cria silêncio** — nenhuma constante de motivo nova, nenhuma `CobrancaSuspensao` nascendo fora
+      de requisição. A alternativa séria era suspender com dono atribuído por regra, e o que a
+      derrubou é que atribuir o dono é justamente a parte que não se automatiza: uma suspensão que
+      ninguém sabe que tem é a variante mais perigosa do "pular silencioso", porque tem registro e
+      por isso não parece silêncio. Duas consequências que precisaram de tratamento explícito: a
+      guarda pergunta por **cliente** (a régua sempre perguntou), então a linha passou a mostrar o
+      **pior** health entre os projetos ativos, senão a tela diria "saudável" com o relógio tenso;
+      e o job passou a montar o contexto em lote, porque somar saúde de projeto ao N+1 que já
+      existia em `executar` sairia caro de verdade. Projeto **concluído** não conta — sem essa
+      exclusão, um contrato encerrado com health ruim abrandaria a cobrança do saldo para sempre,
+      que é literalmente o recebível que estraga invisível. Ver FDD 038 e ADR 0033. **Fora, e
+      nomeado**: bugs e "acessos liberados", as duas ausências que restam na docstring do
+      `health.py`. **Aberto:** segue a homologação do Stripe — construir não é ligar.
 - [x] **Base de conhecimento interna e frescor — Fase 8.** O corpus da metodologia — 68
       arquivos, 450 trechos — deixa de viver só no repositório e passa a ancorar a resposta dos
       agentes, **com citação exata** ("Runbook — backup e restauração › Restaurar") e lacuna
