@@ -50,6 +50,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 036 | Régua de cobrança e IA de tom | Entregue (desligada) | 1 | `docs/fdd/036-a-regua-que-cobra-sem-estragar-a-relacao.md` |
 | FDD 037 | Satisfação do cliente e camada 5 (satisfação) | Entregue | 1 | `docs/fdd/037-a-satisfacao-que-ninguem-registrava.md` |
 | FDD 038 | Camada 5 (entrega) e o leitor do sinal da IA | Entregue | 1 | `docs/fdd/038-os-dois-sinais-que-ninguem-lia.md` |
+| FDD 039 | Discovery estruturado (P-S-D-T-E-R, evidência e custo do estado atual) | Entregue (recorte) | 1 | `docs/fdd/039-o-achado-que-nao-sobrevivia-a-reuniao.md` |
 
 ## Base atual — entregue
 
@@ -525,11 +526,37 @@ Fase aprovada (blocos que o material já estabilizou):
       ligadas ao cliente e opcionalmente à oportunidade; timeline no detalhe do cliente e no
       comercial.
 
-Deliberadamente adiado até haver Discoveries reais (a metade da regra antiga que sobrevive —
-ADR 0030): Discovery como dado estruturado (Processes, Pain Points, Evidence com
-FATO/HIPÓTESE/DESCONHECIDO, Business Cases), Value Ledger, Opportunity Backlog por conta,
-cockpit de reunião de Discovery e "Next Best Opportunity". A migração dos dados do Notion
-(Accounts/Contacts/Opportunities/Activities) fica nomeada e não feita.
+- [x] **FDD 039 — O achado que não sobrevivia à reunião.** O Discovery estruturado, no recorte
+      que passa no **teste que a própria ADR 0030 escreveu** (*"existir no material como regra
+      pronta, não como ideia"*). Aplicado peça a peça, ele não devolve sim nem não: parte o bloco
+      em dois. Entram o **P-S-D-T-E-R** por etapa, as **cinco formas de evidência**, os rótulos
+      **FATO/HIPÓTESE/DESCONHECIDO** e a **fórmula do custo do estado atual** — as quatro peças que
+      o material define com enum fechado ou conta fechada. Três entidades ancoradas no **cliente**,
+      não no projeto, porque o mapa AS-IS sobrevive à venda que o descobriu (Account ≠ Opportunity)
+      — ancorar no projeto recriaria o levantamento do zero a cada degrau, que é o defeito que o
+      `DigitalEmployee` tinha antes da FDD 026. A decisão que a fatia existe para tomar virou a
+      **ADR 0034**: *só o fato sustenta número*, irmã da ADR 0032. O rótulo é obrigatório e **não
+      tem default** — nem `hipotese`, porque um default seguro ainda é a casa escolhendo pelo
+      silêncio de quem não escolheu, e apaga a diferença entre "achamos que é hipótese" e "ninguém
+      classificou". O custo sai sempre para dentro de casa, carimbado, mas **só o sustentado
+      atravessa para a proposta**; e quando não está sustentado a lacuna é **dita**, nunca
+      silenciada, porque diante de lacuna o modelo preenche — foi o que a rodada 5 de homologação
+      achou na FDD 029. A IA extrai a estrutura da transcrição e **todo achado nasce hipótese**,
+      com a imposição no coletor e o prompt sequer mencionando as chaves: pedir ao modelo e
+      sobrescrever depois deixaria no prompt a aparência de que ele decide. De carona, a revisão
+      fechou o que a FDD 025 cobra e passara batido — arquivar o processo leva etapas e evidências
+      junto, com a metade simétrica que **não** ressuscita o que alguém removeu de propósito antes.
+      Ver FDD 039 e ADR 0034.
+
+Segue adiado, agora com o motivo escrito ao lado do nome — que é a diferença entre backlog e
+lacuna. Reprovam no teste da ADR 0030: **Pain Points** (o termo não aparece em
+`docs/metodologia-fde.md`), **Business Cases** (uma menção, sem estrutura), **Value Ledger** (zero
+ocorrências no documento), **Opportunity Backlog por conta** (só como pauta de reunião mensal),
+**cockpit de reunião de Discovery** e **"Next Best Opportunity"** (existem só nesta lista, em
+lugar nenhum do material). E o **Opportunity Score**, que é o mais incômodo dos sete: o quality
+gate de Discovery já o **cobra** e a fórmula não existe em lugar nenhum — hoje só se responde
+"sim" no braço. É pergunta para o material responder antes de virar código. A migração dos dados
+do Notion (Accounts/Contacts/Opportunities/Activities) segue nomeada e não feita.
 
 ## Princípios de entrega
 

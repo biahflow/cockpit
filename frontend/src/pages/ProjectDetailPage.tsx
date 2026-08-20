@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, Workflow, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, listUsers } from "../api";
@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
+import { mensagemDeFalha } from "../erros";
 import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -59,6 +60,10 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [archivingRisco, setArchivingRisco] = useState<Risco | null>(null);
   const [phases, setPhases] = useState<ProjectPhase[]>([]);
   const [error, setError] = useState("");
+  // O que a extração acabou de mapear. Fica na tela porque o **resultado mora em outro lugar**: o
+  // processo é ancorado no cliente (FDD 039), não no projeto, então sem esta linha o sucesso seria
+  // silêncio — a pessoa clica, nada muda aqui, e não há como distinguir isso de uma falha.
+  const [processosMapeados, setProcessosMapeados] = useState(0);
   const [milestoneDraft, setMilestoneDraft] = useState({ title: "", due_date: "" });
   const [taskDraft, setTaskDraft] = useState({ title: "", due_date: "", milestone: "" });
   const [meetingDraft, setMeetingDraft] = useState(blankMeeting);
@@ -228,6 +233,29 @@ export function ProjectDetailPage({ id }: { id: number }) {
     if (!archivingRisco) return;
     try { await api(`/riscos/${archivingRisco.id}/`, { method: "DELETE" }); setArchivingRisco(null); await load(); }
     catch (cause) { setArchivingRisco(null); setError((cause as Error).message); }
+  }
+  /**
+   * Mapeia processos, etapas e achados da transcrição — **tudo como hipótese** (FDD 039).
+   *
+   * O achado nasce rotulado hipótese e com origem "entrevista", sempre: um modelo lendo
+   * transcrição produz *o que foi dito*, que é uma das cinco formas de evidência, não prova.
+   * Promover a fato é ato de gente, e acontece na tela do processo.
+   *
+   * **`mensagemDeFalha` e não o `(cause as Error).message` do resto desta página, de propósito.**
+   * A divergência de dialeto é o ponto: esta é a única ação daqui que recusa reexecução com 409, e
+   * o corpo desse 409 traz quantos processos a reunião já tem e qual é a saída ("arquive-os ou
+   * edite-os"). A tabela de `erros.ts` acrescenta a orientação que falta — "o estado mudou desde
+   * que esta tela carregou" —, e é ela que diz a quem clicou duas vezes por que o segundo clique
+   * não fez nada. Sem isso a pessoa lê uma frase sobre processos que ela não vê nesta tela, e
+   * conclui que quebrou.
+   */
+  async function estruturarProcessos(meeting: Meeting) {
+    setAiLoading(true); setError(""); setProcessosMapeados(0);
+    try {
+      const { processos } = await api<{ processos: { id: number }[] }>(`/meetings/${meeting.id}/estruturar/`, { method: "POST" });
+      setProcessosMapeados(processos.length);
+    }
+    catch (cause) { setError(mensagemDeFalha(cause)); } finally { setAiLoading(false); }
   }
   async function extrairDecisoes(meeting: Meeting) {
     setAiLoading(true);
@@ -545,9 +573,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
           {aiEnabled && meeting.transcript.trim() && <div className="mt-2 flex flex-wrap gap-2 pl-12">
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "discovery")}><Sparkles className="size-3.5 text-accent" />Discovery</button>
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "assessment")}><Sparkles className="size-3.5 text-accent" />Assessment</button>
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-accent" />AI Score</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void extrairDecisoes(meeting)}><Sparkles className="size-3.5 text-accent" />Decisões</button>
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-accent" />AI Score</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void extrairDecisoes(meeting)}><Sparkles className="size-3.5 text-accent" />Decisões</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void estruturarProcessos(meeting)}><Workflow className="size-3.5 text-accent" />Processos</button>
           </div>}
         </div>)}</div> : <p className="empty-state">Nenhuma reunião registrada.</p>}
+        {/* O mapa levantado não aparece nesta tela: ele pende do cliente e sobrevive a este
+            projeto. A linha diz quantos vieram e para onde ir revisá-los — todos em hipótese. */}
+        {processosMapeados > 0 && <p role="status" className="alert--ok">{processosMapeados} processo(s) mapeado(s) como hipótese. Abra o cliente para revisar e promover o que for fato.</p>}
         <ArtifactsPanel project={Number(id)} reloadToken={artifactsToken} />
       </WorkColumn>
 

@@ -808,6 +808,213 @@ class Satisfacao(TimestampedModel):
             )
 
 
+class Processo(TimestampedModel):
+    """Um processo da operação do cliente, mapeado no Discovery estruturado (FDD 039).
+
+    **Por que a entidade existe se a metodologia não a define.** O material
+    (`docs/metodologia-fde.md:75-79`) descreve o P-S-D-T-E-R como o esquema "para cada etapa de um
+    processo": o processo não é uma invenção deste modelo, é o que o próprio esquema exige para
+    que a etapa tenha onde pendurar. Por isso ele nasce com nome, ordem e os insumos da fórmula do
+    custo do estado atual — **e nada mais**. Sem `status`, sem `dono`, sem `nivel`: o que a
+    metodologia não define, este modelo não inventa, porque um campo inventado vira regra de
+    negócio no primeiro consumidor e depois ninguém sabe de onde ele veio.
+
+    **Não confundir com o `Artifact` de `kind=discovery`** (FDD 016), que já existe e continua
+    existindo. Aquele é a **narrativa**: o texto entregue ao cliente, com estado próprio
+    (rascunho → revisão → enviado). Este é o **dado**: o mapa da operação, consultável e somável.
+    Os dois convivem e não se substituem — a narrativa é o que se lê, o dado é o que se calcula —,
+    e é a mesma distinção que o `Risco` faz em relação ao `risk.py` calculado.
+
+    **Liga ao cliente e não ao projeto**, pelo argumento da `Satisfacao` acima: o processo mapeado
+    é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de Opportunity,
+    `docs/metodologia-fde.md:50-53`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
+    novo Discovery da mesma empresa — que é exatamente o defeito que o `DigitalEmployee` tinha
+    antes da FDD 026, quando o que valia morava só na instância e não no catálogo.
+    """
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="processos")
+    name = models.CharField(max_length=255)
+    position = models.PositiveIntegerField(default=0)
+    # Procedência, e não vínculo: apagar o projeto ou a reunião não desfaz o mapa levantado neles.
+    # É o `SET_NULL` da `Satisfacao.source_meeting`, pela mesma razão — o que se perde é de onde
+    # veio, e perder isso é melhor que perder o registro.
+    source_project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="processos_mapeados",
+    )
+    source_meeting = models.ForeignKey(
+        Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="processos"
+    )
+    registered_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="processos"
+    )
+
+    # Os nove insumos do custo do estado atual (`docs/metodologia-fde.md:87-88`):
+    # `Volume × Tempo × Pessoas × Custo + Retrabalho + Erros + Perdas + Espera + Risco`.
+    #
+    # Todos nulos, e **nulo aqui é "não apurado", nunca zero**: `processos.custo_do_estado_atual`
+    # devolve o que faltou em `nao_apurado` em vez de somar zero, porque zerar afirmaria que
+    # executar o processo não custa nada. É a lacuna dita e não preenchida, como em `ai.py` no
+    # KPI sem base registrada (FDD 027).
+    #
+    # **O sufixo `_mes` não é decoração.** `ProcessoEtapa` tem `tempo`, `erro` e `retrabalho`, e
+    # lá eles são **descrição** ("quanto demora", "o que pode dar errado"); aqui são dinheiro e
+    # quantidade. Nomes iguais para perguntas diferentes fariam a segunda resposta vencer a
+    # primeira em silêncio — quem lesse `retrabalho` não saberia se recebe um texto ou um valor.
+    volume_mes = models.PositiveIntegerField(null=True, blank=True)  # ocorrências por mês
+    tempo_horas = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True
+    )  # horas por ocorrência
+    pessoas = models.PositiveSmallIntegerField(null=True, blank=True)  # pessoas por ocorrência
+    custo_hora = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )  # R$/hora
+    retrabalho_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    erros_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    perdas_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    espera_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    risco_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def archive(self) -> None:
+        """Arquiva o processo **e o que pendura nele**, no mesmo instante.
+
+        A regra transversal da FDD 025 é que arquivar não cascateia — e que, quando os filhos
+        são listáveis por conta própria, quem os tem precisa escolher: recusar com 409 ou arquivar
+        junto. Etapa e evidência são listáveis (`/processo-etapas/?processo=`,
+        `/evidencias/?processo=`), então sem escolha ficariam visíveis apontando para um pai
+        oculto — e, pior aqui do que no caso geral, uma evidência órfã continua sendo uma
+        afirmação sobre a operação de um cliente, sem o processo que lhe dava contexto.
+
+        Arquivar junto, e não recusar: um mapa de processo se guarda inteiro. Obrigar a apagar
+        vinte etapas antes de guardar o processo transformaria "arquivar" em trabalho manual, e o
+        que não se consegue guardar acaba sendo apagado de verdade.
+
+        **O carimbo é o mesmo nos três**, e não é detalhe de implementação: é ele que o
+        `unarchive` lê para devolver exatamente o que esta chamada levou, sem ressuscitar o que
+        alguém tinha arquivado de propósito antes.
+        """
+        momento = timezone.now()
+        self.archived_at = momento
+        self.save(update_fields=["archived_at", "updated_at"])
+        self.etapas.filter(archived_at__isnull=True).update(archived_at=momento)
+        self.evidencias.filter(archived_at__isnull=True).update(archived_at=momento)
+
+    def unarchive(self) -> None:
+        """Restaura o processo e **só** os filhos que este arquivamento levou.
+
+        A metade simétrica, e a armadilha mora nela: restaurar tudo o que está arquivado traria
+        de volta a etapa que alguém removeu na semana passada, desfazendo uma decisão que ninguém
+        pediu para desfazer. O critério é o carimbo idêntico ao do pai — quem foi arquivado junto
+        volta junto, quem já estava arquivado antes continua onde estava.
+        """
+        momento = self.archived_at
+        self.archived_at = None
+        self.save(update_fields=["archived_at", "updated_at"])
+        if momento is None:
+            return
+        self.etapas.filter(archived_at=momento).update(archived_at=None)
+        self.evidencias.filter(archived_at=momento).update(archived_at=None)
+
+
+class ProcessoEtapa(TimestampedModel):
+    """Uma etapa do processo, descrita pelo P-S-D-T-E-R (`docs/metodologia-fde.md:75-79`).
+
+    Os seis campos abaixo são **exatamente** as seis letras, nessa ordem. É a única parte do
+    material que já é esquema de campos, e o valor dela está em não ser adaptada: renomear,
+    juntar ou acrescentar uma sétima pergunta faria o levantamento da reunião deixar de casar com
+    o formulário, e a conferência ("perguntei tudo?") deixaria de ser possível olhando a tela.
+    """
+
+    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="etapas")
+    name = models.CharField(max_length=255)
+    position = models.PositiveIntegerField(default=0)
+    pessoas = models.TextField(blank=True, default="")  # P — quem faz
+    sistema = models.TextField(blank=True, default="")  # S — onde faz
+    dados = models.TextField(blank=True, default="")  # D — o que entra/sai
+    tempo = models.TextField(blank=True, default="")  # T — quanto demora
+    erro = models.TextField(blank=True, default="")  # E — o que pode dar errado
+    retrabalho = models.TextField(blank=True, default="")  # R — o que acontece quando dá errado
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Evidencia(TimestampedModel):
+    """O que sustenta (ou não sustenta) cada achado do Discovery — a distinção central da FDD 039.
+
+    A metodologia exige duas coisas que a prosa de uma ata não guarda: que o achado venha de uma
+    das cinco formas de evidência, "nunca só entrevista" (`docs/metodologia-fde.md:81-84`), e que
+    todo achado seja rotulado FATO / HIPÓTESE / DESCONHECIDO, porque **"nunca se apresenta
+    hipótese como fato"** (`:86`). Guardar isso como campo é o que permite responder, depois da
+    reunião, quanto do mapa é observação e quanto é suposição da casa.
+    """
+
+    class Forma(models.TextChoices):
+        """As cinco formas de evidência (`docs/metodologia-fde.md:81-84`)."""
+
+        ENTREVISTA = "entrevista", "Entrevista (o que dizem)"
+        OBSERVACAO = "observacao", "Observação (o que fazem)"
+        ARTEFATO = "artefato", "Artefato (planilha, PDF, croqui)"
+        SISTEMA = "sistema", "Sistema (ERP, CRM, CAD, WhatsApp)"
+        DADO = "dado", "Dado (volume, tempo, custo, erro)"
+
+    class Rotulo(models.TextChoices):
+        """Os três rótulos (`docs/metodologia-fde.md:86`).
+
+        `DESCONHECIDO` é valor de primeira classe, e não ausência de valor: um Discovery que
+        nomeia o que ainda não sabe está fazendo o trabalho, não deixando de fazê-lo — é a postura
+        que o material pede ao sair da reunião (`:97-98`). Por isso ele é uma opção a escolher, e
+        não o que sobra quando ninguém escolheu.
+        """
+
+        FATO = "fato", "Fato"
+        HIPOTESE = "hipotese", "Hipótese"
+        DESCONHECIDO = "desconhecido", "Desconhecido"
+
+    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="evidencias")
+    # A etapa é opcional: nem todo achado é de uma etapa — "o volume é de 400 pedidos/mês" é do
+    # processo inteiro. Quando vier preenchida, o `clean()` abaixo exige que seja deste processo.
+    etapa = models.ForeignKey(
+        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
+    )
+    # **Sem default nos dois**, no precedente literal de `Satisfacao.fonte`: um default faria a
+    # casa escolher por quem não escolheu, e o erro cairia sempre para o mesmo lado — chamar
+    # suposição de fato, que é exatamente o que a metodologia proíbe. Escolher "desconhecido" é um
+    # ato; recebê-lo por omissão não diz nada sobre o achado.
+    forma = models.CharField(max_length=16, choices=Forma.choices)
+    rotulo = models.CharField(max_length=16, choices=Rotulo.choices)
+    content = models.TextField()
+    source_meeting = models.ForeignKey(
+        Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
+    )
+    registered_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_rotulo_display()} — {self.content[:60]}"
+
+    def clean(self) -> None:
+        # Mesma checagem da `Satisfacao.clean()`, e aqui ela é fronteira de conta: sem a guarda,
+        # uma evidência pode apontar para a etapa de um processo de **outro cliente** — vazamento
+        # entre contas por um campo opcional, que é a pior forma de vazar porque ninguém preenche
+        # o campo pensando nisso.
+        if self.etapa_id and self.etapa and self.etapa.processo_id != self.processo_id:
+            raise ValidationError({"etapa": "A etapa deve pertencer ao mesmo processo."})
+
+
 class Service(TimestampedModel):
     """Catálogo de serviços e, quando `tier` estiver preenchido, os níveis de produto.
 

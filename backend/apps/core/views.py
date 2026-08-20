@@ -15,7 +15,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.core import signing
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import Avg, Count, Max, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from django.middleware.csrf import get_token
@@ -80,6 +80,7 @@ from .models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    Evidencia,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -94,6 +95,8 @@ from .models import (
     PhaseChecklistItem,
     PhaseDeliverable,
     PipelineStage,
+    Processo,
+    ProcessoEtapa,
     Project,
     ProjectChecklistItem,
     ProjectDeliverable,
@@ -124,6 +127,7 @@ from .serializers import (
     DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
     DocumentSerializer,
+    EvidenciaSerializer,
     InvitationSerializer,
     InvoiceSerializer,
     JourneyPhaseSerializer,
@@ -141,6 +145,8 @@ from .serializers import (
     PhaseChecklistItemSerializer,
     PhaseDeliverableSerializer,
     PipelineStageSerializer,
+    ProcessoEtapaSerializer,
+    ProcessoSerializer,
     ProjectChecklistItemSerializer,
     ProjectDeliverableSerializer,
     ProjectMemberSerializer,
@@ -348,6 +354,116 @@ def decisoes_do_texto(text: str) -> list[dict]:
             "decided_by": str(item.get("decided_by") or "").strip()[:160],
         })
     return decisoes
+
+
+#: Os seis campos da etapa, na ordem das seis letras do P-S-D-T-E-R
+#: (`docs/metodologia-fde.md:75-79`). Tupla e não literal repetido no parser e no prompt: a ordem
+#: **é** a pergunta feita na reunião, e uma sétima chave inventada aqui deixaria de casar com o
+#: formulário da tela.
+_ETAPA_PSDTER: tuple[str, ...] = ("pessoas", "sistema", "dados", "tempo", "erro", "retrabalho")
+
+#: O que se pede ao modelo na extração estruturada (FDD 039).
+#:
+#: **Constante de módulo, e não literal dentro da action**, por uma razão que não é de estilo:
+#: `tests/regression/test_a_extracao_nasce_hipotese.py` lê este texto para provar que ele **não**
+#: pede rótulo nem forma de evidência ao modelo. Dentro da action, a leitura arrastaria junto o
+#: docstring e o coletor — que falam dos dois de propósito — e a guarda não teria como distinguir
+#: "o prompt pede" de "o código impõe", que é exatamente a distinção que ela existe para manter.
+#:
+#: Um modelo lendo transcrição produz **o que foi dito**, que é uma das cinco formas de evidência
+#: (`docs/metodologia-fde.md:81-84`) e não prova. Por isso as duas chaves são atribuídas como
+#: constantes em quem grava, e não pedidas aqui: pedir e sobrescrever depois transformaria a
+#: imposição em sugestão, e quem lesse este texto acharia que o modelo decide.
+_PROMPT_PROCESSOS = (
+    "Você mapeia os processos da operação do cliente a partir da transcrição de uma reunião. "
+    "Devolva APENAS um array JSON, sem texto antes ou depois, em que cada item é um processo com "
+    'as chaves "name" (o nome do processo em poucas palavras), "etapas" (a lista das etapas na '
+    'ordem em que acontecem) e "achados" (a lista do que foi levantado sobre o processo, cada '
+    'achado como uma string, uma frase por achado). Cada etapa tem "name" e as seis perguntas '
+    'do levantamento: "pessoas" (quem faz), "sistema" (onde faz), "dados" (o que entra e sai), '
+    '"tempo" (quanto demora), "erro" (o que pode dar errado) e "retrabalho" (o que acontece '
+    "quando dá errado). Deixe em branco a pergunta que a transcrição não responde. Prenda cada "
+    "achado ao processo, nunca a uma etapa. Use APENAS o material fornecido: se a transcrição não "
+    "descreve processo nenhum, devolva um array vazio em vez de inferir. É um rascunho para "
+    "revisão humana."
+)
+
+
+def _etapas_do_bruto(bruto: object) -> list[dict]:
+    """As etapas de um processo extraído, já normalizadas nos seis campos do P-S-D-T-E-R.
+
+    **Etapa sem nome sai fora sem derrubar o processo**, pelo argumento de `decisoes_do_texto`:
+    perder a quarta de sete não é razão para perder o processo inteiro, e quem revisa continua com
+    o mapa e com a transcrição para uma segunda passada.
+    """
+    if not isinstance(bruto, list):
+        return []
+    etapas: list[dict] = []
+    for item in bruto:
+        if not isinstance(item, dict):
+            continue
+        nome = str(item.get("name") or "").strip()
+        if not nome:
+            continue
+        etapa: dict = {"name": nome[:255]}
+        etapa.update({campo: str(item.get(campo) or "").strip() for campo in _ETAPA_PSDTER})
+        etapas.append(etapa)
+    return etapas
+
+
+def _achados_do_bruto(bruto: object) -> list[str]:
+    """Os achados de um processo — strings puras, e **só** strings.
+
+    Um item que chega como objeto (`{"content": "..."}`) é descartado em vez de convertido: o
+    `str()` de um dicionário gravaria o `repr` dele como achado, um texto que ninguém disse com a
+    aparência de citação de reunião.
+    """
+    if not isinstance(bruto, list):
+        return []
+    return [texto for item in bruto if isinstance(item, str) and (texto := item.strip())]
+
+
+def processos_do_texto(text: str) -> list[dict]:
+    """Extrai o mapa de processos do que o modelo devolveu. Função pura, mesmo molde de
+    `decisoes_do_texto` acima — inclusive o recorte do primeiro ``[`` ao último ``]``, o item
+    malformado descartado sem derrubar a extração e o ``[]`` de "não houve extração", que quem
+    chama traduz em 502 em vez de gravar zero em silêncio. Os porquês estão argumentados lá.
+
+    **Duas chaves não são lidas aqui, e a omissão é a fatia inteira (FDD 039).** O que rotula o
+    achado e a maneira como ele foi obtido são atribuídos por quem grava, como constantes, e o
+    modelo não opina: ler o que ele mandar — mesmo para sobrescrever em seguida — faria a
+    imposição parecer negociável para quem lesse o código depois.
+
+    **O achado é do processo, nunca da etapa.** O modelo não distingue com confiança a qual etapa
+    um achado pertence, e vínculo errado é pior que vínculo nenhum — `Evidencia.etapa` é opcional
+    exatamente para que uma pessoa o preencha depois, olhando o mapa.
+    """
+    inicio, fim = text.find("["), text.rfind("]")
+    if inicio == -1 or fim <= inicio:
+        return []
+    try:
+        bruto = json.loads(text[inicio : fim + 1])
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(bruto, list):
+        return []
+
+    extraidos: list[dict] = []
+    for item in bruto:
+        if not isinstance(item, dict):
+            continue
+        nome = str(item.get("name") or "").strip()
+        if not nome:
+            continue
+        extraidos.append({
+            # 255 porque `Processo.name` e `ProcessoEtapa.name` são `CharField(max_length=255)`, e
+            # o modelo não tem como saber disso: um nome de 4.000 caracteres viraria `DataError` no
+            # meio da gravação, derrubando o mapa inteiro por um item.
+            "name": nome[:255],
+            "etapas": _etapas_do_bruto(item.get("etapas")),
+            "achados": _achados_do_bruto(item.get("achados")),
+        })
+    return extraidos
 
 
 def sinal_do_texto(text: str) -> str:
@@ -1934,6 +2050,97 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
+    @action(detail=True, methods=["post"])
+    def estruturar(self, request: Request, pk: str | None = None) -> Response:
+        """Mapeia processos, etapas e achados da transcrição — **tudo como hipótese** (FDD 039).
+
+        Mesmo molde do `extrair_decisoes` acima (JSON, coletor dentro de `atomic`, 502 quando não
+        veio lista), com duas diferenças que são o ponto desta fatia.
+
+        **A primeira é o que o modelo não decide.** Todo achado nasce rotulado como hipótese e com
+        a origem "entrevista", sempre, atribuídos aqui como constantes — o `_PROMPT_PROCESSOS` não
+        pergunta, e o `processos_do_texto` não lê. Um modelo lendo transcrição produz *o que foi
+        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:81-84`), não
+        prova; promover a fato é ato de gente, pela mesma razão que a ADR 0032 recusou à IA gravar
+        satisfação.
+
+        **A segunda é a recusa de reexecução**, e ela é divergência deliberada do `extrair_decisoes`:
+        lá cada execução cria `Decisao` em **rascunho**, um estado que a tela mostra como pendente
+        de revisão, e uma segunda rodada só dá mais rascunho para revisar. `Processo` não tem
+        estado de rascunho — a segunda extração dobraria o mapa da operação do cliente **em
+        silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
+        e como sair dele, que é para o que o `StateConflict` existe.
+        """
+        meeting = self.get_object()
+        if not meeting.transcript.strip():
+            return Response({"detail": "A reunião não tem transcrição."}, status=400)
+        # **Antes** da IA, e não dentro do coletor: recusar depois de chamar o provedor gastaria a
+        # cota diária de quem clicou por um trabalho que já se sabia que seria descartado.
+        ja_mapeados = Processo.objects.filter(
+            source_meeting=meeting, archived_at__isnull=True
+        ).count()
+        if ja_mapeados:
+            raise StateConflict(
+                f"Esta reunião já tem {ja_mapeados} processo(s) mapeado(s). "
+                "Arquive-os ou edite-os em vez de extrair de novo."
+            )
+
+        def grava(text: str, interaction) -> dict:  # type: ignore[no-untyped-def]
+            extraidos = processos_do_texto(text)
+            if not extraidos:
+                # Mesma distinção do `extrair_decisoes`: sem lista não houve extração, e isso não
+                # é o mesmo que "a reunião não descreveu processo nenhum".
+                raise _ExtracaoSemResultado()
+            client = meeting.project.client
+            # A extração entra **depois** do que já foi mapeado à mão: `position` é a ordem em que
+            # a operação acontece, e intercalar processos vindos de um modelo no meio de uma
+            # sequência que alguém montou reescreveria essa ordem sem pedir licença.
+            ultima = Processo.objects.filter(client=client, archived_at__isnull=True).aggregate(
+                maior=Max("position")
+            )["maior"]
+            proxima = (ultima or 0) + 1
+            criados: list[Processo] = []
+            for indice, bruto in enumerate(extraidos):
+                processo = Processo.objects.create(
+                    client=client, name=bruto["name"], source_project=meeting.project,
+                    source_meeting=meeting, registered_by=request.user,
+                    position=proxima + indice,
+                )
+                ProcessoEtapa.objects.bulk_create([
+                    ProcessoEtapa(processo=processo, position=posicao, **etapa)
+                    for posicao, etapa in enumerate(bruto["etapas"], start=1)
+                ])
+                Evidencia.objects.bulk_create([
+                    Evidencia(
+                        processo=processo,
+                        # Sem etapa de propósito: o modelo não distingue com confiança a qual delas
+                        # o achado pertence, e um vínculo errado é pior que vínculo nenhum.
+                        etapa=None,
+                        rotulo=Evidencia.Rotulo.HIPOTESE,
+                        forma=Evidencia.Forma.ENTREVISTA,
+                        content=achado, source_meeting=meeting, registered_by=request.user,
+                    )
+                    for achado in bruto["achados"]
+                ])
+                criados.append(processo)
+            return {"processos": ProcessoSerializer(criados, many=True).data}
+
+        try:
+            # `atomic` pela razão do `extrair_decisoes`: se a gravação falhar no quinto processo,
+            # os quatro anteriores ficariam num mapa que a pessoa viu falhar — e, sem estado de
+            # rascunho para distingui-los, indistinguíveis do que foi levantado de verdade.
+            with transaction.atomic():
+                return _ai_run(
+                    request, "meeting_processos", _PROMPT_PROCESSOS,
+                    ai.build_meeting_context(meeting), project=meeting.project,
+                    formato=_FORMATO_JSON, coletor=grava,
+                )
+        except _ExtracaoSemResultado:
+            return Response(
+                {"detail": "A IA não devolveu processos em formato utilizável. Tente de novo."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
     @action(detail=True, methods=["post"], url_path="ai-score")
     def ai_score(self, request: Request, pk: str | None = None) -> Response:
         """Gera o AI Score de maturidade/oportunidade a partir da transcrição (FDD 014).
@@ -2046,6 +2253,134 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         # `ProjectScopedMixin` também fecha: mover um registro próprio para um cliente alheio.
         if "client" in serializer.validated_data:
             self._assert_cliente_no_escopo(serializer.validated_data.get("client"))
+        super().perform_update(serializer)
+
+
+def _exige_cliente_no_escopo(user: User, client: Client | None) -> None:
+    """A metade de **escrita** da fronteira do Discovery estruturado (FDD 039).
+
+    Função e não método porque os três recursos abaixo fazem a mesma pergunta a partir de âncoras
+    diferentes (o processo tem o cliente; a etapa e a evidência chegam a ele pelo processo pai), e
+    três cópias divergiriam na primeira correção. O argumento é o do `_assert_cliente_no_escopo`
+    da `SatisfacaoViewSet`: só a leitura é contornável de graça — sem a guarda de escrita, uma
+    requisição bastaria para mapear processo, etapa e evidência dentro do cliente que a listagem
+    esconde.
+
+    A pergunta sai de `visible_to` (ADR 0010), a única expressão da regra.
+    """
+    if user.is_admin_role or user.role != User.Role.DELIVERY:
+        return
+    if client is None or not Project.objects.visible_to(user).filter(client=client).exists():
+        raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
+
+
+class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+    **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+    aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+    é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+    """
+
+    resource = "processo"
+    queryset = Processo.objects.select_related(
+        "client", "source_project", "source_meeting", "registered_by"
+    ).all()
+    serializer_class = ProcessoSerializer
+    filter_fields = ("client",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: ProcessoSerializer) -> None:
+        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("client"))
+        serializer.save(registered_by=self.request.user)
+
+    def perform_update(self, serializer: ProcessoSerializer) -> None:
+        # Só quando o corpo tenta *mudar* o cliente — o caminho inverso: mover um processo próprio
+        # para um cliente alheio seria o atalho para escrever lá dentro.
+        if "client" in serializer.validated_data:
+            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("client"))
+        super().perform_update(serializer)
+
+    @extend_schema(
+        responses=inline_serializer("ProcessoUnarchived", {"id": serializers.IntegerField()}),
+        request=None,
+    )
+    @action(detail=True, methods=["post"])
+    def unarchive(self, request: Request, pk: str | None = None) -> Response:
+        """Restaura o processo e o que este arquivamento levou junto (FDD 025, FDD 039).
+
+        Sobrescreve o `unarchive` do `ArchiveModelViewSet` porque aquele escreve `archived_at =
+        None` **direto no objeto**, sem passar pelo modelo — e passaria por cima da metade
+        simétrica da cascata, devolvendo um processo vazio, com as etapas e as evidências ainda
+        escondidas. A resolução pela queryset crua continua sendo a de lá, e pelo mesmo motivo:
+        `get_object()` filtra justamente o que se quer restaurar.
+        """
+        instance = get_object_or_404(self.queryset, pk=pk)
+        self.check_object_permissions(request, instance)
+        instance.unarchive()
+        return Response({"id": instance.pk})
+
+
+class ProcessoEtapaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039)."""
+
+    resource = "processo_etapa"
+    queryset = ProcessoEtapa.objects.select_related("processo", "processo__client").all()
+    serializer_class = ProcessoEtapaSerializer
+    filter_fields = ("processo",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "processo__client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: ProcessoEtapaSerializer) -> None:
+        # O cliente é resolvido **pelo processo pai**: é dele que a etapa herda a fronteira, e é
+        # por ele que ela vazaria se ninguém perguntasse.
+        processo = serializer.validated_data.get("processo")
+        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        serializer.save()
+
+    def perform_update(self, serializer: ProcessoEtapaSerializer) -> None:
+        if "processo" in serializer.validated_data:
+            processo = serializer.validated_data.get("processo")
+            _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        super().perform_update(serializer)
+
+
+class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O achado com forma e rótulo (FDD 039) — a distinção entre observado e suposto."""
+
+    resource = "evidencia"
+    queryset = Evidencia.objects.select_related(
+        "processo", "processo__client", "etapa", "source_meeting", "registered_by"
+    ).all()
+    serializer_class = EvidenciaSerializer
+    filter_fields = ("processo", "etapa")
+    # `rotulo` e `forma` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
+    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?rotulo=fato`
+    # cairia no chão sem erro nenhum — a lista voltaria inteira, com hipótese junto de fato, que é
+    # exatamente a mistura que esta fatia existe para desfazer.
+    filter_exact_fields = ("rotulo", "forma")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "processo__client__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: EvidenciaSerializer) -> None:
+        processo = serializer.validated_data.get("processo")
+        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        serializer.save(registered_by=self.request.user)
+
+    def perform_update(self, serializer: EvidenciaSerializer) -> None:
+        if "processo" in serializer.validated_data:
+            processo = serializer.validated_data.get("processo")
+            _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
         super().perform_update(serializer)
 
 

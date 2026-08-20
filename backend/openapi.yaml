@@ -2537,6 +2537,181 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignatureRequest'
           description: ''
+  /api/v1/evidencias/:
+    get:
+      operationId: v1_evidencias_list
+      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
+        e suposto.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evidencia'
+          description: ''
+    post:
+      operationId: v1_evidencias_create
+      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
+        e suposto.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evidencia'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evidencia'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evidencia'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidencia'
+          description: ''
+  /api/v1/evidencias/{id}/:
+    get:
+      operationId: v1_evidencias_retrieve
+      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
+        e suposto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidencia.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidencia'
+          description: ''
+    put:
+      operationId: v1_evidencias_update
+      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
+        e suposto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidencia.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evidencia'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evidencia'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evidencia'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidencia'
+          description: ''
+    patch:
+      operationId: v1_evidencias_partial_update
+      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
+        e suposto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidencia.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEvidencia'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEvidencia'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEvidencia'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidencia'
+          description: ''
+    delete:
+      operationId: v1_evidencias_destroy
+      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
+        e suposto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidencia.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/evidencias/{id}/unarchive/:
+    post:
+      operationId: v1_evidencias_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidencia.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve
@@ -4041,6 +4216,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/Meeting'
           description: ''
+  /api/v1/meetings/{id}/estruturar/:
+    post:
+      operationId: v1_meetings_estruturar_create
+      description: |-
+        Mapeia processos, etapas e achados da transcrição — **tudo como hipótese** (FDD 039).
+
+        Mesmo molde do `extrair_decisoes` acima (JSON, coletor dentro de `atomic`, 502 quando não
+        veio lista), com duas diferenças que são o ponto desta fatia.
+
+        **A primeira é o que o modelo não decide.** Todo achado nasce rotulado como hipótese e com
+        a origem "entrevista", sempre, atribuídos aqui como constantes — o `_PROMPT_PROCESSOS` não
+        pergunta, e o `processos_do_texto` não lê. Um modelo lendo transcrição produz *o que foi
+        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:81-84`), não
+        prova; promover a fato é ato de gente, pela mesma razão que a ADR 0032 recusou à IA gravar
+        satisfação.
+
+        **A segunda é a recusa de reexecução**, e ela é divergência deliberada do `extrair_decisoes`:
+        lá cada execução cria `Decisao` em **rascunho**, um estado que a tela mostra como pendente
+        de revisão, e uma segunda rodada só dá mais rascunho para revisar. `Processo` não tem
+        estado de rascunho — a segunda extração dobraria o mapa da operação do cliente **em
+        silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
+        e como sair dele, que é para o que o `StateConflict` existe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este meeting.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meeting'
+          description: ''
   /api/v1/meetings/{id}/extrair-decisoes/:
     post:
       operationId: v1_meetings_extrair_decisoes_create
@@ -5358,6 +5585,381 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/processo-etapas/:
+    get:
+      operationId: v1_processo_etapas_list
+      description: As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessoEtapa'
+          description: ''
+    post:
+      operationId: v1_processo_etapas_create
+      description: As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessoEtapa'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessoEtapa'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessoEtapa'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessoEtapa'
+          description: ''
+  /api/v1/processo-etapas/{id}/:
+    get:
+      operationId: v1_processo_etapas_retrieve
+      description: As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo etapa.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessoEtapa'
+          description: ''
+    put:
+      operationId: v1_processo_etapas_update
+      description: As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo etapa.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessoEtapa'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessoEtapa'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessoEtapa'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessoEtapa'
+          description: ''
+    patch:
+      operationId: v1_processo_etapas_partial_update
+      description: As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo etapa.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessoEtapa'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessoEtapa'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessoEtapa'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessoEtapa'
+          description: ''
+    delete:
+      operationId: v1_processo_etapas_destroy
+      description: As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo etapa.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/processo-etapas/{id}/unarchive/:
+    post:
+      operationId: v1_processo_etapas_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo etapa.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/processos/:
+    get:
+      operationId: v1_processos_list
+      description: |-
+        O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Processo'
+          description: ''
+    post:
+      operationId: v1_processos_create
+      description: |-
+        O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Processo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Processo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Processo'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Processo'
+          description: ''
+  /api/v1/processos/{id}/:
+    get:
+      operationId: v1_processos_retrieve
+      description: |-
+        O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Processo'
+          description: ''
+    put:
+      operationId: v1_processos_update
+      description: |-
+        O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Processo'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Processo'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Processo'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Processo'
+          description: ''
+    patch:
+      operationId: v1_processos_partial_update
+      description: |-
+        O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProcesso'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProcesso'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProcesso'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Processo'
+          description: ''
+    delete:
+      operationId: v1_processos_destroy
+      description: |-
+        O processo da operação do cliente, mapeado no Discovery (FDD 039).
+
+        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
+        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
+        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/processos/{id}/unarchive/:
+    post:
+      operationId: v1_processos_unarchive_create
+      description: |-
+        Restaura o processo e o que este arquivamento levou junto (FDD 025, FDD 039).
+
+        Sobrescreve o `unarchive` do `ArchiveModelViewSet` porque aquele escreve `archived_at =
+        None` **direto no objeto**, sem passar pelo modelo — e passaria por cima da metade
+        simétrica da cascata, devolvendo um processo vazio, com as etapas e as evidências ainda
+        escondidas. A resolução pela queryset crua continua sendo a de lá, e pelo mesmo motivo:
+        `get_object()` filtra justamente o que se quer restaurar.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este processo.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessoUnarchived'
+          description: ''
   /api/v1/project-checklist-items/:
     get:
       operationId: v1_project_checklist_items_list
@@ -8779,6 +9381,61 @@ components:
       - original_name
       - signature_requests
       - uploaded_by
+    Evidencia:
+      type: object
+      description: |-
+        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:81-86`).
+
+        `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
+        corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
+        por quem não escolheu, sempre para o mesmo lado — chamar de fato o que ninguém confirmou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        processo:
+          type: integer
+        etapa:
+          type: integer
+          nullable: true
+        forma:
+          $ref: '#/components/schemas/FormaEnum'
+        forma_display:
+          type: string
+          readOnly: true
+        rotulo:
+          $ref: '#/components/schemas/RotuloEnum'
+        rotulo_display:
+          type: string
+          readOnly: true
+        content:
+          type: string
+        source_meeting:
+          type: integer
+          nullable: true
+        registered_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - content
+      - created_at
+      - forma
+      - forma_display
+      - id
+      - processo
+      - registered_by
+      - rotulo
+      - rotulo_display
+      - updated_at
     FonteEnum:
       enum:
       - declarada
@@ -8787,6 +9444,20 @@ components:
       description: |-
         * `declarada` - Declarada pelo cliente
         * `percebida` - Percebida por quem entrega
+    FormaEnum:
+      enum:
+      - entrevista
+      - observacao
+      - artefato
+      - sistema
+      - dado
+      type: string
+      description: |-
+        * `entrevista` - Entrevista (o que dizem)
+        * `observacao` - Observação (o que fazem)
+        * `artefato` - Artefato (planilha, PDF, croqui)
+        * `sistema` - Sistema (ERP, CRM, CAD, WhatsApp)
+        * `dado` - Dado (volume, tempo, custo, erro)
     GateOutcomeEnum:
       enum:
       - go
@@ -10188,6 +10859,50 @@ components:
           items:
             $ref: '#/components/schemas/SignatureRequest'
           readOnly: true
+    PatchedEvidencia:
+      type: object
+      description: |-
+        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:81-86`).
+
+        `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
+        corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
+        por quem não escolheu, sempre para o mesmo lado — chamar de fato o que ninguém confirmou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        processo:
+          type: integer
+        etapa:
+          type: integer
+          nullable: true
+        forma:
+          $ref: '#/components/schemas/FormaEnum'
+        forma_display:
+          type: string
+          readOnly: true
+        rotulo:
+          $ref: '#/components/schemas/RotuloEnum'
+        rotulo_display:
+          type: string
+          readOnly: true
+        content:
+          type: string
+        source_meeting:
+          type: integer
+          nullable: true
+        registered_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedInvoice:
       type: object
       description: |-
@@ -10729,6 +11444,144 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+    PatchedProcesso:
+      type: object
+      description: |-
+        O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
+
+        `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
+        aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
+        mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
+
+        `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
+        sai da sessão, não do corpo.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        client_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        source_project:
+          type: integer
+          nullable: true
+        source_meeting:
+          type: integer
+          nullable: true
+        registered_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        volume_mes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        tempo_horas:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          nullable: true
+        pessoas:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        custo_hora:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        retrabalho_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        erros_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        perdas_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        espera_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        risco_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        custo:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedProcessoEtapa:
+      type: object
+      description: |-
+        A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
+
+        Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
+        reunião, e um formulário fora de ordem faz quem preenche pular a pergunta que faltou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        processo:
+          type: integer
+        name:
+          type: string
+          maxLength: 255
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        pessoas:
+          type: string
+        sistema:
+          type: string
+        dados:
+          type: string
+        tempo:
+          type: string
+        erro:
+          type: string
+        retrabalho:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedProject:
       type: object
       properties:
@@ -11293,6 +12146,166 @@ components:
         * `low` - Baixa
         * `medium` - Média
         * `high` - Alta
+    Processo:
+      type: object
+      description: |-
+        O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
+
+        `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
+        aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
+        mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
+
+        `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
+        sai da sessão, não do corpo.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        client_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        source_project:
+          type: integer
+          nullable: true
+        source_meeting:
+          type: integer
+          nullable: true
+        registered_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        volume_mes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        tempo_horas:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,5}(?:\.\d{0,2})?$
+          nullable: true
+        pessoas:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        custo_hora:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        retrabalho_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        erros_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        perdas_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        espera_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        risco_mes:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        custo:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client
+      - client_name
+      - created_at
+      - custo
+      - id
+      - name
+      - registered_by
+      - updated_at
+    ProcessoEtapa:
+      type: object
+      description: |-
+        A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
+
+        Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
+        reunião, e um formulário fora de ordem faz quem preenche pular a pergunta que faltou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        processo:
+          type: integer
+        name:
+          type: string
+          maxLength: 255
+        position:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        pessoas:
+          type: string
+        sistema:
+          type: string
+        dados:
+          type: string
+        tempo:
+          type: string
+        erro:
+          type: string
+        retrabalho:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - processo
+      - updated_at
+    ProcessoUnarchived:
+      type: object
+      properties:
+        id:
+          type: integer
+      required:
+      - id
     Project:
       type: object
       properties:
@@ -11702,6 +12715,16 @@ components:
         * `admin` - Administrador
         * `sales` - Vendas
         * `delivery` - Entrega
+    RotuloEnum:
+      enum:
+      - fato
+      - hipotese
+      - desconhecido
+      type: string
+      description: |-
+        * `fato` - Fato
+        * `hipotese` - Hipótese
+        * `desconhecido` - Desconhecido
     Satisfacao:
       type: object
       description: |-

@@ -25,6 +25,7 @@ from .views import (
     DigitalEmployeeViewSet,
     DocumentViewSet,
     EsignWebhookView,
+    EvidenciaViewSet,
     HealthView,
     InvitationView,
     InvoiceViewSet,
@@ -46,6 +47,8 @@ from .views import (
     PhaseDeliverableViewSet,
     PipelineStageViewSet,
     PortalProjectSnapshotView,
+    ProcessoEtapaViewSet,
+    ProcessoViewSet,
     ProjectChecklistItemViewSet,
     ProjectDeliverableViewSet,
     ProjectMemberViewSet,
@@ -88,6 +91,11 @@ router.register("decisoes", DecisaoViewSet)
 # forma de distinguir duas coisas diferentes.
 router.register("riscos", RiscoViewSet)
 router.register("satisfacoes", SatisfacaoViewSet)
+# O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as três
+# rotas ficam fora de `/projects/`. Etapa e evidência pendem do processo, não do projeto.
+router.register("processos", ProcessoViewSet)
+router.register("processo-etapas", ProcessoEtapaViewSet)
+router.register("evidencias", EvidenciaViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)

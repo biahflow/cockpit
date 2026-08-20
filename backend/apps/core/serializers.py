@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import UploadedFile
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, drive, knowledge
+from . import blueprints, drive, knowledge, processos
 from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
@@ -30,6 +30,7 @@ from .models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    Evidencia,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -44,6 +45,8 @@ from .models import (
     PhaseChecklistItem,
     PhaseDeliverable,
     PipelineStage,
+    Processo,
+    ProcessoEtapa,
     Project,
     ProjectChecklistItem,
     ProjectDeliverable,
@@ -433,6 +436,110 @@ class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
         if nivel == Satisfacao.Nivel.INSATISFEITO and not note.strip():
             raise serializers.ValidationError(
                 {"note": "Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."}
+            )
+        return attrs
+
+
+class ProcessoSerializer(serializers.ModelSerializer[Processo]):
+    """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
+
+    `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
+    aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
+    mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
+
+    `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
+    sai da sessão, não do corpo.
+    """
+
+    client_name = serializers.CharField(source="client.name", read_only=True)
+    custo = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Processo
+        fields = ["id", "client", "client_name", "name", "position", "source_project",
+                  "source_meeting", "registered_by", "volume_mes", "tempo_horas", "pessoas",
+                  "custo_hora", "retrabalho_mes", "erros_mes", "perdas_mes", "espera_mes",
+                  "risco_mes", "custo", "created_at", "updated_at"]
+        read_only_fields = ["id", "client_name", "registered_by", "custo", "created_at",
+                            "updated_at"]
+
+    @extend_schema_field(serializers.DictField())
+    def get_custo(self, processo: Processo) -> dict[str, Any]:
+        """A conta à vista: parcelas, total, o que não foi apurado e se há fato sustentando.
+
+        Quem lê **não** pode concluir "custa zero" de um total zerado: é `nao_apurado` que separa
+        "não há insumo" de "medimos e deu zero" (ver `processos.custo_do_estado_atual`).
+
+        **Os valores saem como texto, e não é preciosismo.** `SerializerMethodField` entrega o que
+        devolver direto ao renderizador, e o encoder do DRF converte `Decimal` em `float`
+        (`rest_framework/utils/encoders.py`) — o próprio comentário de lá diz que aquele ramo
+        existe para quem escapa de um `DecimalField`, que é este caso. Sem a conversão,
+        `Decimal("5000.00")` chega ao cliente como `5000.0`, dinheiro trafega em ponto flutuante e
+        `Invoice.amount` (string, pelo `COERCE_DECIMAL_TO_STRING`) e o custo passam a ter formatos
+        diferentes na mesma API. Também contrariaria o `processos.py`, que evita `float` por dentro
+        justamente para não somar centavos com erro.
+
+        Um teste sobre `response.data` **não pega isto**: ali o valor ainda é `Decimal`, e a
+        conversão só acontece na renderização. A regressão afirma sobre o JSON renderizado.
+        """
+        custo = processos.custo_do_estado_atual(processo)
+        return {
+            **custo,
+            "total": str(custo["total"]),
+            "parcelas": [
+                {**parcela, "valor": str(parcela["valor"])} for parcela in custo["parcelas"]
+            ],
+        }
+
+
+class ProcessoEtapaSerializer(serializers.ModelSerializer[ProcessoEtapa]):
+    """A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
+
+    Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
+    reunião, e um formulário fora de ordem faz quem preenche pular a pergunta que faltou.
+    """
+
+    class Meta:
+        model = ProcessoEtapa
+        fields = ["id", "processo", "name", "position", "pessoas", "sistema", "dados", "tempo",
+                  "erro", "retrabalho", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class EvidenciaSerializer(serializers.ModelSerializer[Evidencia]):
+    """O achado com a forma de onde veio e o rótulo que a metodologia exige (`:81-86`).
+
+    `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
+    corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
+    por quem não escolheu, sempre para o mesmo lado — chamar de fato o que ninguém confirmou.
+    """
+
+    forma_display = serializers.CharField(source="get_forma_display", read_only=True)
+    rotulo_display = serializers.CharField(source="get_rotulo_display", read_only=True)
+
+    class Meta:
+        model = Evidencia
+        fields = ["id", "processo", "etapa", "forma", "forma_display", "rotulo", "rotulo_display",
+                  "content", "source_meeting", "registered_by", "created_at", "updated_at"]
+        read_only_fields = ["id", "forma_display", "rotulo_display", "registered_by", "created_at",
+                            "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """A mesma regra do `clean()` do modelo, repetida aqui pelo motivo da `Satisfacao` acima.
+
+        Sem ela o `save()` do DRF não chama `full_clean`, e a evidência apontando para a etapa de
+        **outro cliente** seria gravada em silêncio — a guarda do modelo só valeria para quem
+        passasse pelo admin ou pelo shell.
+        """
+        processo = cast(
+            Processo | None, attrs.get("processo", getattr(self.instance, "processo", None))
+        )
+        etapa = cast(
+            ProcessoEtapa | None, attrs.get("etapa", getattr(self.instance, "etapa", None))
+        )
+        if etapa and processo and etapa.processo_id != processo.id:
+            raise serializers.ValidationError(
+                {"etapa": "A etapa deve pertencer ao mesmo processo."}
             )
         return attrs
 

@@ -8,10 +8,13 @@ from .models import (
     Decisao,
     DigitalEmployee,
     Document,
+    Evidencia,
     Meeting,
     Milestone,
     Opportunity,
     Pendencia,
+    Processo,
+    ProcessoEtapa,
     Project,
     ProjectChecklistItem,
     ProjectDeliverable,
@@ -94,9 +97,14 @@ class RolePermission(BasePermission):
             # os dois vizinhos: `risco` é só de Entrega e `activity` é escrita por Vendas e só
             # lida por Entrega. Quem conversa com o cliente é de ambas as áreas, e um registro
             # que só metade da casa pode fazer é um registro que não acontece.
+            # `processo`, `processo_etapa` e `evidencia` (FDD 039) são escritos pelos **dois**
+            # papéis, pelo argumento que a FDD 037 usou para `satisfacao` logo acima: quem conduz
+            # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
+            # continua levantando dentro do projeto —, e um registro que só metade da casa pode
+            # fazer é um registro que não acontece.
             return resource in {"client", "contact", "opportunity", "document", "lead",
                                 "analytics", "artifact", "activity", "cobranca_suspensao",
-                                "satisfacao"}
+                                "satisfacao", "processo", "processo_etapa", "evidencia"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
                             "risk", "health", "case", "activity"}:
@@ -125,10 +133,14 @@ class RolePermission(BasePermission):
             # `risco` (o registro declarado da FDD 034) entra aqui, ao lado de `pendencia`, e
             # **não** se confunde com `risk` lá em cima: aquele é a avaliação calculada, só de
             # leitura para quem não é admin. Nomes vizinhos, recursos diferentes.
+            # Os três recursos do Discovery estruturado (FDD 039) entram aqui pelo mesmo motivo
+            # que estão no conjunto de Vendas: o levantamento é feito pelas duas áreas. O objeto
+            # abaixo decide qual cliente é o seu, e a âncora é o cliente — não o projeto.
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
-                                "digital_employee", "artifact", "satisfacao"}
+                                "digital_employee", "artifact", "satisfacao",
+                                "processo", "processo_etapa", "evidencia"}
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:  # type: ignore[no-untyped-def]
@@ -160,6 +172,13 @@ class RolePermission(BasePermission):
                 # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
                 # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
                 return Project.objects.visible_to(request.user).filter(client=obj.client).exists()
+            if isinstance(obj, Processo | ProcessoEtapa | Evidencia):
+                # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui
+                # não por o projeto ser opcional, mas por não existir: o processo mapeado é do
+                # cliente e sobrevive à venda que o descobriu (FDD 039). A etapa e a evidência
+                # chegam ao cliente pelo processo pai, que é o mesmo caminho da queryset delas.
+                client = obj.client if isinstance(obj, Processo) else obj.processo.client
+                return Project.objects.visible_to(request.user).filter(client=client).exists()
             if isinstance(obj, Opportunity):
                 return obj.is_won and request.method in SAFE_METHODS
             if isinstance(obj, ProjectMember):

@@ -530,3 +530,40 @@ test("extrair decisões da transcrição chama a reunião, não a decisão", asy
     "/meetings/1/extrair-decisoes/", expect.objectContaining({ method: "POST" }),
   ));
 });
+
+test("extrair processos mapeia a operação a partir da transcrição", async () => {
+  // Mesmo argumento do botão de decisões acima: o insumo é a transcrição, então a action mora no
+  // `MeetingViewSet`. O resultado, porém, não aparece aqui — o processo pende do cliente (FDD 039),
+  // e sem a linha de sucesso o clique não se distinguiria de uma falha silenciosa.
+  stub();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Projeto X");
+
+  mocks.api.mockImplementationOnce(() => Promise.resolve({ text: "[]", interaction: 9, processos: [{ id: 1 }, { id: 2 }] }));
+  fireEvent.click(screen.getByRole("button", { name: "Processos" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
+    "/meetings/1/estruturar/", expect.objectContaining({ method: "POST" }),
+  ));
+  expect(await screen.findByRole("status")).toHaveTextContent(/2 processo\(s\) mapeado\(s\) como hipótese/);
+});
+
+test("o 409 da extração mostra a mensagem do servidor, e não uma falha genérica", async () => {
+  // **A divergência de dialeto é deliberada** (ver `estruturarProcessos`): esta é a única ação da
+  // tela que recusa reexecução, e o corpo do 409 traz quantos processos já existem e qual é a
+  // saída. `mensagemDeFalha` acrescenta a orientação da tabela de `erros.ts`; o
+  // `(cause as Error).message` do resto da página entregaria a metade que não diz o que fazer.
+  stub();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Projeto X");
+
+  mocks.api.mockImplementationOnce(() => Promise.reject(Object.assign(
+    new Error("Esta reunião já tem 3 processo(s) mapeado(s). Arquive-os ou edite-os em vez de extrair de novo."),
+    { status: 409 },
+  )));
+  fireEvent.click(screen.getByRole("button", { name: "Processos" }));
+
+  const alerta = await screen.findByRole("alert");
+  expect(alerta).toHaveTextContent(/já tem 3 processo\(s\) mapeado\(s\)/);
+  expect(alerta).toHaveTextContent(/recarregue para ver o que vale agora/);
+});
