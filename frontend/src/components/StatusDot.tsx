@@ -1,4 +1,4 @@
-import type { HealthLevel, SatisfacaoNivel } from "../types";
+import type { CustoEstadoAtual, HealthLevel, SatisfacaoNivel } from "../types";
 
 // Semáforo de saúde 🟢🟡🔴 reutilizável (eleva o mapa antes duplicado em IndicadoresPage).
 // Variantes de `.state`, não as cores delas (ADR 0026): um `bg-emerald-50` escrito aqui é uma
@@ -32,6 +32,29 @@ const SATISFACAO_BADGE: Record<SatisfacaoNivel, string> = {
 
 export function satisfacaoBadgeClass(nivel: SatisfacaoNivel): string {
   return SATISFACAO_BADGE[nivel];
+}
+
+// A sustentação do custo do estado atual (FDD 039, ADR 0034). Mora aqui, ao lado dos dois mapas
+// acima, pela mesma razão deles: **duas telas leem o mesmo valor** — o painel de processos no
+// detalhe do cliente e a tela do processo —, e uma cópia por tela é a segunda definição que diverge
+// sem nada ficar vermelho.
+//
+// `hipotese` é `state--2` e não `state--3`: um número ainda não sustentado por fato não é falha, é
+// aviso de que aquilo não se apresenta como número fechado ao cliente. E o **texto** vem junto da
+// variante de propósito: `"sustentado"`/`"hipotese"` é vocabulário de API, e as duas telas
+// precisam dizer a mesma frase legível — separá-los faria uma delas escrever a outra metade à mão.
+type Sustentacao = CustoEstadoAtual["sustentacao"];
+const SUSTENTACAO_BADGE: Record<Sustentacao, string> = {
+  sustentado: "state--1",
+  hipotese: "state--2",
+};
+export const SUSTENTACAO_LABEL: Record<Sustentacao, string> = {
+  sustentado: "Sustentado por evidência",
+  hipotese: "Ainda em hipótese",
+};
+
+export function sustentacaoBadgeClass(sustentacao: Sustentacao): string {
+  return SUSTENTACAO_BADGE[sustentacao];
 }
 
 export function StatusDot({ level, title }: { level: HealthLevel | null; title?: string }) {

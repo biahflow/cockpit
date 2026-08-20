@@ -19,6 +19,7 @@ import { JourneyConfigPage } from "./pages/JourneyConfigPage";
 import { LeadsPage } from "./pages/LeadsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PipelinePage } from "./pages/PipelinePage";
+import { ProcessoDetailPage } from "./pages/ProcessoDetailPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ServicesPage } from "./pages/ServicesPage";
@@ -43,6 +44,12 @@ function resolvePage(path: string): ReactNode {
   const projectDetail = path.match(/^\/projetos\/(\d+)$/);
   if (projectDetail) return <ProjectDetailPage id={Number(projectDetail[1])} />;
   if (path === "/projetos") return <ProjectsPage />;
+  // A rota mais específica vem **antes** da do cliente. As duas são ancoradas, então hoje a ordem
+  // não decide nada — ela é o que impede que afrouxar o `$` do `clientDetail` amanhã torne esta
+  // aqui inalcançável em silêncio. Nada muda no menu: o `isActive` do `Layout` casa por prefixo,
+  // então "Clientes" já acende e o rastro do topo já mostra o rótulo do pai.
+  const processoDetail = path.match(/^\/clientes\/(\d+)\/processos\/(\d+)$/);
+  if (processoDetail) return <ProcessoDetailPage clientId={Number(processoDetail[1])} id={Number(processoDetail[2])} />;
   const clientDetail = path.match(/^\/clientes\/(\d+)$/);
   if (clientDetail) return <ClientDetailPage id={Number(clientDetail[1])} />;
   if (path === "/clientes") return <ClientsPage />;

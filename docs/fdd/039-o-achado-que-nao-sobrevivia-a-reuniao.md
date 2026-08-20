@@ -159,6 +159,31 @@ achou na base de conhecimento (FDD 029, ADR 0023): diante de lacuna, o modelo co
 - `tests/regression/test_hipotese_nao_sustenta_numero.py` — o número só atravessa para a proposta
   com fato vivo, e some quando ele é arquivado.
 
+## O que a construção decidiu
+
+Três coisas que a revisão do diff mudou, e nenhuma estava no plano.
+
+**O dinheiro viajava como `float`.** `get_custo` é `SerializerMethodField`, e o que ele devolve vai
+direto ao renderizador: o encoder do DRF converte `Decimal` em `float`, e o comentário do próprio
+DRF diz que aquele ramo existe para quem escapa de um `DecimalField`. `Decimal("5000.00")` chegava
+ao cliente como `5000.0`, na mesma API em que `Invoice.amount` viaja como string. O teste que
+existia não podia pegar — ele afirmava sobre `response.data`, onde o valor ainda é `Decimal`, e a
+conversão só acontece na renderização. A regressão nova afirma sobre `json.loads(response.content)`.
+
+**As parcelas não somavam o total.** Ao corrigir o formato apareceu `"5000.0000"`: `Decimal` soma
+expoentes na multiplicação, então o núcleo carrega quatro casas. Arredondar só na exibição
+resolveria a aparência e criaria coisa pior — linhas que não somam o número embaixo delas, numa
+tela cujo propósito inteiro é mostrar a conta. O arredondamento ficou na origem: **cada parcela vai
+a centavos e o total é a soma das parcelas já arredondadas**, não o arredondamento da soma.
+
+**O custo não tinha como sair de zero.** A extração traz o mapa, e os nove insumos nascem nulos;
+sem formulário para eles, `nao_apurado` ficaria cheio para sempre e a tela mostraria um total que
+nunca poderia ser outra coisa. O formulário entrou com a regra que o espelha no backend: **campo em
+branco vira `null`, nunca `0`** — mandar zero por omissão apagaria a diferença entre "não medimos" e
+"medimos e não há", e o total pareceria fechado sem nunca ter sido. Junto, o vínculo opcional do
+achado com a etapa, que esta FDD dizia existir "para ser preenchida por gente depois" sem que
+houvesse onde.
+
 ## Fora deste recorte
 
 - **As sete peças que reprovam no teste da ADR 0030**: Pain Point, Business Case, Value Ledger,

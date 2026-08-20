@@ -1,12 +1,13 @@
-import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Phone, Plus, Save, Sparkles, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Phone, Plus, Save, Sparkles, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, getConfig } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
-import { HealthBadge, satisfacaoBadgeClass } from "../components/StatusDot";
+import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
+import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Invoice, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Invoice, Processo, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -56,6 +57,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [iaLigada, setIaLigada] = useState(false);
   const [classificando, setClassificando] = useState<number | null>(null);
   const [satisfacoes, setSatisfacoes] = useState<Satisfacao[]>([]);
+  const [processos, setProcessos] = useState<Processo[]>([]);
   const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
@@ -68,8 +70,9 @@ export function ClientDetailPage({ id }: { id: number }) {
     api<ClientOverview>(`/clients/${id}/overview/`),
     api<Vertical[]>("/verticals/"),
     api<Satisfacao[]>(`/satisfacoes/?client=${id}`),
-  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes);
+    api<Processo[]>(`/processos/?client=${id}`),
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
@@ -216,6 +219,33 @@ export function ClientDetailPage({ id }: { id: number }) {
         <span className={`state ${satisfacaoBadgeClass(registro.nivel)} shrink-0`}>{registro.nivel_display}</span>
         <span className="eyebrow shrink-0">{registro.fonte_display}</span>
       </div>)}</div> : <p className="empty-state">Nenhum registro de satisfação para este cliente.</p>}
+    </section>
+
+    {/* Os processos mapeados no Discovery estruturado (FDD 039, ADR 0034) — logo depois da
+        Satisfação porque as duas dizem o que a casa sabe sobre este cliente: uma sobre a relação,
+        a outra sobre a operação. Aqui é índice e porta de entrada; o mapa inteiro mora na tela do
+        processo. O que a linha precisa responder é **quanto custa** e **se aquilo se sustenta** —
+        e é por isso que o total nunca aparece sem a marca de parcial: um custo apresentado inteiro
+        quando metade dos insumos não foi apurada é a casa afirmando ao cliente o oposto do que ela
+        sabe.
+
+        A contagem de etapas ficou de fora, e o motivo é o payload: `ProcessoSerializer` não expõe
+        `etapas` nem um contador, e `/processo-etapas/` só filtra por `?processo=` — mostrá-la aqui
+        custaria uma requisição por processo a cada `load()`, que esta tela dispara a cada contato,
+        interação ou satisfação criados. */}
+    <section className="panel space-y-4 sm:p-6">
+      <div className="flex items-center gap-3"><span className="metric-icon"><Workflow className="size-4" /></span><div><h2 className="font-semibold text-ink">Processos mapeados</h2><p className="text-sm text-slate-600">{processos.length} {processos.length === 1 ? "processo" : "processos"}</p></div></div>
+      {processos.length ? <div className="panel-rows">{processos.map(processo => <div className="row" key={processo.id}>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><Workflow className="size-4" /></span>
+        <div className="row-main">
+          <strong>{processo.name}</strong>
+          <span>{moeda(processo.custo.total)} por mês{processo.custo.nao_apurado.length > 0 && ` · total parcial, ${processo.custo.nao_apurado.length} sem apuração`}</span>
+        </div>
+        {/* Selo e link como irmãos do `.row-main`, pela razão escrita no bloco de Satisfação acima:
+            `.row-main span`/`strong` sobrescrevem display e cor de qualquer primitiva aninhada. */}
+        <span className={`state ${sustentacaoBadgeClass(processo.custo.sustentacao)} shrink-0`}>{SUSTENTACAO_LABEL[processo.custo.sustentacao]}</span>
+        <a className="btn btn--secondary shrink-0" href={`/clientes/${id}/processos/${processo.id}`}>Abrir o mapa</a>
+      </div>)}</div> : <p className="empty-state">Nenhum processo mapeado para este cliente.</p>}
     </section>
 
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">

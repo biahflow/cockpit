@@ -469,8 +469,27 @@ class ProcessoSerializer(serializers.ModelSerializer[Processo]):
 
         Quem lê **não** pode concluir "custa zero" de um total zerado: é `nao_apurado` que separa
         "não há insumo" de "medimos e deu zero" (ver `processos.custo_do_estado_atual`).
+
+        **Os valores saem como texto, e não é preciosismo.** `SerializerMethodField` entrega o que
+        devolver direto ao renderizador, e o encoder do DRF converte `Decimal` em `float`
+        (`rest_framework/utils/encoders.py`) — o próprio comentário de lá diz que aquele ramo
+        existe para quem escapa de um `DecimalField`, que é este caso. Sem a conversão,
+        `Decimal("5000.00")` chega ao cliente como `5000.0`, dinheiro trafega em ponto flutuante e
+        `Invoice.amount` (string, pelo `COERCE_DECIMAL_TO_STRING`) e o custo passam a ter formatos
+        diferentes na mesma API. Também contrariaria o `processos.py`, que evita `float` por dentro
+        justamente para não somar centavos com erro.
+
+        Um teste sobre `response.data` **não pega isto**: ali o valor ainda é `Decimal`, e a
+        conversão só acontece na renderização. A regressão afirma sobre o JSON renderizado.
         """
-        return processos.custo_do_estado_atual(processo)
+        custo = processos.custo_do_estado_atual(processo)
+        return {
+            **custo,
+            "total": str(custo["total"]),
+            "parcelas": [
+                {**parcela, "valor": str(parcela["valor"])} for parcela in custo["parcelas"]
+            ],
+        }
 
 
 class ProcessoEtapaSerializer(serializers.ModelSerializer[ProcessoEtapa]):

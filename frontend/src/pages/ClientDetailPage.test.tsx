@@ -41,6 +41,26 @@ function satisfacaoRegistro(overrides: Record<string, unknown> = {}) {
 // de Interações, por exemplo, também usa "Insatisfeito"). Cada teste de satisfação povoa a sua.
 let satisfacoes: unknown[] = [];
 
+/** Um processo mapeado (FDD 039). A conta chega pronta do backend — a tela não a calcula. */
+function processoMapeado(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 12, client: 1, client_name: "Cliente A", name: "Faturamento manual de notas",
+    position: 1, source_project: null, source_meeting: null, registered_by: 1,
+    volume_mes: 400, tempo_horas: "0.50", pessoas: 2, custo_hora: "80.00",
+    retrabalho_mes: "3200.00", erros_mes: null, perdas_mes: null, espera_mes: null, risco_mes: null,
+    custo: {
+      parcelas: [{ label: "Execução do processo", valor: "32000.00" }, { label: "Retrabalho", valor: "3200.00" }],
+      total: "35200.00", nao_apurado: ["Erros", "Perdas", "Espera", "Risco"], sustentacao: "hipotese",
+    },
+    created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
+    ...overrides,
+  };
+}
+
+// Vazia por padrão, pelo motivo da lista de satisfação acima: os testes que não são sobre processo
+// não devem ganhar um selo a mais na tela para colidir com o texto dos vizinhos.
+let processos: unknown[] = [];
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active", vertical: null, vertical_name: "" });
@@ -50,6 +70,7 @@ function stub() {
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
+    if (path.startsWith("/processos")) return Promise.resolve(processos);
     return Promise.resolve([]);
   });
 }
@@ -60,6 +81,7 @@ beforeEach(() => {
   mocks.auth.user = { id: 1, is_admin: true, role: "admin" };
   atividades = [atividade()];
   satisfacoes = [];
+  processos = [];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -315,4 +337,39 @@ test("insatisfeito sem nota volta 400 e a tela mostra a mensagem do campo, não 
   expect(await screen.findByRole("alert")).toHaveTextContent(/insatisfeito sem nota não se avalia depois/);
   // A tela continua inteira — o formulário não some, e o rascunho não se perde.
   expect(screen.getByRole("button", { name: "Registrar satisfação" })).toBeInTheDocument();
+});
+
+// --- Discovery estruturado (FDD 039, ADR 0034) ---------------------------------------------------
+
+test("o painel de processos leva ao mapa e diz se o número se sustenta", async () => {
+  processos = [
+    processoMapeado(),
+    processoMapeado({ id: 13, name: "Cobrança por planilha", custo: { parcelas: [{ label: "Execução do processo", valor: "9000.00" }], total: "9000.00", nao_apurado: [], sustentacao: "sustentado" } }),
+  ];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  expect(await screen.findByText("Processos mapeados")).toBeInTheDocument();
+
+  const emHipotese = (await screen.findByText("Faturamento manual de notas")).closest(".row");
+  expect(emHipotese).not.toBeNull();
+  const dentroHipotese = within(emHipotese as HTMLElement);
+  expect(dentroHipotese.getByText("Ainda em hipótese")).toBeInTheDocument();
+  // O total nunca vai sozinho quando é parcial: sem esta marca, R$ 35.200,00 é lido como a conta
+  // inteira de um processo cujos quatro últimos insumos ninguém apurou.
+  expect(dentroHipotese.getByText(/R\$ 35\.200,00 por mês · total parcial, 4 sem apuração/)).toBeInTheDocument();
+  expect(dentroHipotese.getByRole("link", { name: "Abrir o mapa" })).toHaveAttribute("href", "/clientes/1/processos/12");
+
+  const sustentado = (await screen.findByText("Cobrança por planilha")).closest(".row");
+  const dentroSustentado = within(sustentado as HTMLElement);
+  expect(dentroSustentado.getByText("Sustentado por evidência")).toBeInTheDocument();
+  // Conta completa: nada de "parcial" pendurado num total que é a conta inteira.
+  expect(dentroSustentado.getByText("R$ 9.000,00 por mês")).toBeInTheDocument();
+});
+
+test("cliente sem processo mapeado mostra o estado vazio, não um painel em branco", async () => {
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  expect(await screen.findByText("Nenhum processo mapeado para este cliente.")).toBeInTheDocument();
 });

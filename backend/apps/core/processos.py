@@ -19,7 +19,7 @@ não fecharia com o da seguinte por motivo nenhum.
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -50,6 +50,17 @@ FATORES_NUCLEO: tuple[str, ...] = ("volume_mes", "tempo_horas", "pessoas", "cust
 SUSTENTADO = "sustentado"
 HIPOTESE = "hipotese"
 
+#: Duas casas, porque é dinheiro. O núcleo é um produto de quatro fatores e `Decimal` **soma
+#: expoentes** na multiplicação: `0.50 × 100 × 1 × 80.00` sai como `4000.0000`. Deixar as quatro
+#: casas atravessarem faria a API devolver um valor com uma forma que ninguém digitou, diferente
+#: da de `Invoice.amount`, e obrigaria cada consumidor a arredondar por conta — que é como dois
+#: lugares passam a arredondar diferente.
+CENTAVOS = Decimal("0.01")
+
+
+def _centavos(valor: Decimal) -> Decimal:
+    return valor.quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+
 
 def custo_do_estado_atual(processo: Processo) -> dict[str, Any]:
     """Quanto o processo custa por mês como ele é hoje — com a conta à vista.
@@ -77,7 +88,9 @@ def custo_do_estado_atual(processo: Processo) -> dict[str, Any]:
     if all(fator is not None for fator in fatores):
         volume, tempo, pessoas, custo_hora = fatores
         # `Decimal * int` continua `Decimal`; o que não pode entrar aqui é `float`.
-        parcelas.append({"label": ROTULO_NUCLEO, "valor": tempo * volume * pessoas * custo_hora})
+        parcelas.append(
+            {"label": ROTULO_NUCLEO, "valor": _centavos(tempo * volume * pessoas * custo_hora)}
+        )
     else:
         nao_apurado.append(ROTULO_NUCLEO)
 
@@ -86,8 +99,17 @@ def custo_do_estado_atual(processo: Processo) -> dict[str, Any]:
         if valor is None:
             nao_apurado.append(rotulo)
         else:
-            parcelas.append({"label": rotulo, "valor": valor})
+            # Arredondado como o núcleo, e não porque o campo permita mais casas — ele é
+            # `decimal_places=2`. É que a parcela precisa ter **a mesma forma** venha de onde
+            # vier: uma instância ainda não salva (a prévia da tela, o rascunho da extração)
+            # carrega o que lhe deram, e uma parcela com três casas no meio de cinco com duas é a
+            # linha que faz a soma exibida não fechar.
+            parcelas.append({"label": rotulo, "valor": _centavos(valor)})
 
+    # O total é a soma das parcelas **já arredondadas**, e não o arredondamento da soma. Só assim
+    # a conta que a tela mostra fecha: somar em precisão cheia e arredondar no fim produz um total
+    # que difere em um centavo da soma das linhas exibidas, numa tela cujo propósito inteiro é
+    # mostrar a conta. Quem vê parcela que não bate com total para de confiar nas duas.
     total = sum((parcela["valor"] for parcela in parcelas), Decimal("0"))
 
     # `processo.pk` primeiro porque o gerente reverso recusa instância não salva: quem quiser a

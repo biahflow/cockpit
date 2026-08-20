@@ -19,6 +19,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/comercial", name: "Comercial", role: "admin" },
   { path: "/clientes", name: "Clientes", role: "admin" },
   { path: "/clientes/1", name: "Detalhe do cliente", role: "admin" },
+  { path: "/clientes/1/processos/1", name: "Processo mapeado", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
@@ -96,6 +97,57 @@ const riscos = serie(8, index => ({
   project_id: index, name: projetos[index - 1].name, score: 70, level: "alto",
   signals: [{ label: "Itens atrasados", detail: "3 item(ns) vencido(s)", weight: 30 }],
   forecast: { predicted_finish_date: "2026-09-30", delay_days: 45, basis: "40% concluído em 60 dia(s)" },
+}));
+
+// O Discovery estruturado (FDD 039, ADR 0034). `nao_apurado` vai **cheio** de propósito: o aviso
+// de que o total é parcial é a superfície mais importante da tela, e um mock com a conta completa
+// aprovaria três larguras sem que ele tivesse renderizado uma vez. Um processo sustentado e dois em
+// hipótese, para os dois selos aparecerem na lista do detalhe do cliente.
+const processos = serie(3, index => ({
+  id: index, client: 1, client_name: NOME_LONGO,
+  name: `Faturamento manual de notas de serviço — frente ${index}`,
+  position: index, source_project: 1, source_meeting: 1, registered_by: 1,
+  volume_mes: 400, tempo_horas: "0.50", pessoas: 2, custo_hora: "80.00",
+  retrabalho_mes: "3200.00", erros_mes: "1500.00",
+  perdas_mes: null, espera_mes: null, risco_mes: null,
+  custo: {
+    parcelas: [
+      { label: "Execução do processo", valor: "32000.00" },
+      { label: "Retrabalho", valor: "3200.00" },
+      { label: "Erros", valor: "1500.00" },
+    ],
+    total: "36700.00",
+    nao_apurado: ["Perdas", "Espera", "Risco"],
+    sustentacao: index === 1 ? "sustentado" : "hipotese",
+  },
+  created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+}));
+
+const processoEtapas = serie(3, index => ({
+  id: index, processo: 1, position: index,
+  name: `Etapa ${index} — conferência manual da nota fiscal no ERP`,
+  pessoas: "Analista de faturamento, duas pessoas em revezamento",
+  sistema: "ERP Protheus e uma planilha de conferência no Drive",
+  dados: "Entra o pedido aprovado; saem a nota emitida e o boleto",
+  tempo: "Cerca de 30 minutos por nota",
+  // A última etapa vai sem as duas últimas letras de propósito: "Não levantado" é conteúdo de
+  // verdade na tela — é a pergunta que a reunião não fez — e precisa ser medido junto com o resto.
+  erro: index === 3 ? "" : "CNPJ divergente do cadastro e item de serviço sem código fiscal",
+  retrabalho: index === 3 ? "" : "Cancelar a nota e reemitir no dia seguinte, com novo aceite",
+}));
+
+// **Uma evidência de cada rótulo**, e não é completude: são três selos diferentes (`state--1`,
+// `state--2`, `state--off`) e o botão "Promover a fato", que só existe nas duas que ainda não são
+// fato. Sem os três, o axe mediria a tela sem o par que ela não pode deixar parecer a mesma coisa.
+const evidencias = [
+  { rotulo: "fato", rotulo_display: "Fato", forma: "dado", forma_display: "Dado (volume, tempo, custo, erro)",
+    content: "O ERP registrou 412 notas emitidas no mês passado, com 37 canceladas e reemitidas." },
+  { rotulo: "hipotese", rotulo_display: "Hipótese", forma: "entrevista", forma_display: "Entrevista (o que dizem)",
+    content: "A equipe acredita que metade do retrabalho vem de cadastro de cliente desatualizado." },
+  { rotulo: "desconhecido", rotulo_display: "Desconhecido", forma: "observacao", forma_display: "Observação (o que fazem)",
+    content: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
+].map((registro, indice) => ({
+  id: indice + 1, processo: 1, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
 }));
 
 const saude = serie(8, index => ({
@@ -340,6 +392,13 @@ const FIXTURES: Record<string, unknown> = {
     registered_by: 1, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
     ...registro,
   })),
+  // O Discovery estruturado (FDD 039). **A chave é o pathname exato, com barra final**: uma rota
+  // não mapeada cai no fallback de lista vazia, nunca em 404, então uma chave errada aqui passa em
+  // silêncio e a matriz aprova uma tela que renderizou só o estado vazio.
+  "/api/v1/processos/": processos,
+  "/api/v1/processos/1/": processos[0],
+  "/api/v1/processo-etapas/": processoEtapas,
+  "/api/v1/evidencias/": evidencias,
   "/api/v1/knowledge-pieces/": serie(5, index => ({
     id: index, area: 1, area_name: "Operação",
     owner_name: index === 5 ? "" : "Maria de Lourdes Albuquerque",

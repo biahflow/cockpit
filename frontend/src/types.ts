@@ -51,6 +51,32 @@ export type Decisao = { id: number; project: number; title: string; rationale: s
 export type RiscoNivel = "low" | "medium" | "high";
 export type RiscoStatus = "open" | "mitigated" | "accepted" | "materialized";
 export type Risco = { id: number; project: number; title: string; description: string; probability: RiscoNivel; impact: RiscoNivel; mitigation: string; status: RiscoStatus; owner: number | null; resolved_at: string | null };
+// O Discovery estruturado (FDD 039, ADR 0034) — o **dado** do mapa da operação, que não é o
+// `Artifact` de `kind=discovery` (a narrativa entregue ao cliente): aquele se lê, este se soma.
+// Liga ao cliente e não ao projeto, porque o processo mapeado sobrevive à venda que o descobriu.
+//
+// **Os nove insumos são `string | null` e nulo é "não apurado", nunca zero.** Zerar afirmaria que
+// executar o processo não custa nada; o backend devolve o que faltou em `custo.nao_apurado` em vez
+// de somar zero, e a tela precisa poder dizer a mesma coisa.
+export type Processo = { id: number; client: number; client_name: string; name: string; position: number; source_project: number | null; source_meeting: number | null; registered_by: number | null; volume_mes: number | null; tempo_horas: string | null; pessoas: number | null; custo_hora: string | null; retrabalho_mes: string | null; erros_mes: string | null; perdas_mes: string | null; espera_mes: string | null; risco_mes: string | null; custo: CustoEstadoAtual; created_at: string; updated_at: string };
+// A conta do custo do estado atual, derivada e só de leitura. **Os valores são texto**, como
+// `Invoice.amount`: dinheiro em `number` soma centavos com erro, e este total existe para ser
+// levado a uma reunião. `nao_apurado` é o que separa "não há insumo" de "medimos e deu zero" —
+// um total mostrado sem ele vira "custo zero" na leitura rápida. `sustentacao` responde a outra
+// metade da metodologia: só há **fato** por trás do número, ou ainda é hipótese da casa.
+export type CustoEstadoAtual = { parcelas: { label: string; valor: string }[]; total: string; nao_apurado: string[]; sustentacao: "sustentado" | "hipotese" };
+// A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`). Os seis campos são exatamente as
+// seis letras, nessa ordem: é assim que a pergunta é feita na reunião, e um formulário fora de
+// ordem faz quem preenche pular a que faltou. Aqui `tempo`, `erro` e `retrabalho` são **descrição**
+// — os homônimos `_mes` do `Processo` são dinheiro e quantidade, e não se confundem.
+export type ProcessoEtapa = { id: number; processo: number; name: string; position: number; pessoas: string; sistema: string; dados: string; tempo: string; erro: string; retrabalho: string };
+export type EvidenciaForma = "entrevista" | "observacao" | "artefato" | "sistema" | "dado";
+// FATO / HIPÓTESE / DESCONHECIDO (`docs/metodologia-fde.md:86`). **`rotulo` não tem default no
+// banco (ADR 0034)** e não pode ganhar um na tela: um select que já abre em "hipótese" faz a casa
+// escolher por quem não escolheu, e o erro cai sempre para o mesmo lado. `desconhecido` é valor de
+// primeira classe — nomear o que ainda não se sabe é fazer o trabalho, não deixar de fazê-lo.
+export type EvidenciaRotulo = "fato" | "hipotese" | "desconhecido";
+export type Evidencia = { id: number; processo: number; etapa: number | null; forma: EvidenciaForma; forma_display: string; rotulo: EvidenciaRotulo; rotulo_display: string; content: string; source_meeting: number | null; registered_by: number | null };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 export type DocumentEntry = { id: number; client: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";

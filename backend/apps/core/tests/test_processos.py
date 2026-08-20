@@ -13,6 +13,7 @@ O oráculo do cálculo é função pura (`apps/core/processos.py`), testado sem 
 resto precisa de banco porque `sustentacao` pergunta pelas evidências vivas do processo.
 """
 
+import json
 from decimal import Decimal
 
 import pytest
@@ -483,7 +484,7 @@ def test_o_processo_devolve_a_conta_do_custo_no_corpo(client: APIClient) -> None
 
     corpo = client.get(reverse("processo-detail", args=[processo.id])).data
 
-    assert corpo["custo"]["total"] == Decimal("5000.00")
+    assert corpo["custo"]["total"] == "5000.00"
     assert corpo["custo"]["sustentacao"] == "hipotese"
     assert "Retrabalho" in corpo["custo"]["nao_apurado"]
     assert [parcela["label"] for parcela in corpo["custo"]["parcelas"]] == [
@@ -588,3 +589,54 @@ def test_arquivar_o_processo_tira_a_sustentacao_do_calculo() -> None:
     processo.archive()
 
     assert processos_module.custo_do_estado_atual(processo)["sustentacao"] == "hipotese"
+
+
+@pytest.mark.django_db
+def test_o_dinheiro_do_custo_viaja_como_texto_no_json_renderizado(client: APIClient) -> None:
+    """Afirma sobre `response.content`, e não sobre `.data` — é a única camada que pega isto.
+
+    `get_custo` é `SerializerMethodField`: o que ele devolve vai direto ao renderizador, e o
+    encoder do DRF converte `Decimal` em `float`. Um teste sobre `.data` continua vendo `Decimal`
+    e passa com o formato de fio errado — que foi exatamente como isto entrou.
+
+    O que está em jogo não é estética: `Invoice.amount` viaja como string, então dois formatos de
+    dinheiro na mesma API obrigam cada consumidor a adivinhar qual está lendo. E `float` de
+    dinheiro é o que o `processos.py` evita por dentro, com a razão escrita na docstring dele.
+    """
+    processo = ProcessoFactory(
+        volume_mes=100, tempo_horas=Decimal("0.50"), pessoas=1, custo_hora=Decimal("80.00"),
+        erros_mes=Decimal("18.99"),
+    )
+    client.force_authenticate(UserFactory(role=User.Role.ADMIN))
+
+    resposta = client.get(reverse("processo-detail", args=[processo.id]))
+    corpo = json.loads(resposta.content)
+
+    assert corpo["custo"]["total"] == "4018.99"
+    assert isinstance(corpo["custo"]["total"], str)
+    valores = {parcela["label"]: parcela["valor"] for parcela in corpo["custo"]["parcelas"]}
+    assert valores["Erros"] == "18.99"
+    # Os centavos são o ponto: como `float`, `4000.00` vira `4000.0` e o valor perde a forma em
+    # que foi digitado.
+    assert valores[processos_module.ROTULO_NUCLEO] == "4000.00"
+
+
+def test_as_parcelas_somam_exatamente_o_total() -> None:
+    """A conta que a tela mostra tem de fechar — e é o arredondamento que decide isso.
+
+    `Decimal` soma expoentes na multiplicação, então o núcleo sai com quatro casas. Arredondar só
+    o total (e não cada parcela) produziria linhas que não somam o número embaixo delas, em uma
+    tela cujo propósito é justamente mostrar a conta. Quem vê parcela que não bate com total para
+    de confiar nas duas.
+    """
+    processo = Processo(
+        volume_mes=3, tempo_horas=Decimal("0.335"), pessoas=7, custo_hora=Decimal("99.99"),
+        retrabalho_mes=Decimal("0.005"), erros_mes=Decimal("0.005"),
+    )
+
+    custo = processos_module.custo_do_estado_atual(processo)
+
+    assert sum(parcela["valor"] for parcela in custo["parcelas"]) == custo["total"]
+    # Duas casas em toda parcela e no total: é dinheiro, e a forma tem de ser a de `Invoice.amount`.
+    assert all(-parcela["valor"].as_tuple().exponent == 2 for parcela in custo["parcelas"])
+    assert -custo["total"].as_tuple().exponent == 2
