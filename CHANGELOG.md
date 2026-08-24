@@ -18,6 +18,8 @@ Todas as mudanças relevantes deste projeto serão registradas neste arquivo.
 
 ### Adicionado
 
+- **Pulse Design System, fundações r1** — ADR 0041, Issue #19, DAP r1 aprovado em 2026-08-24 (visual + valores da tabela). Tokens semânticos `success`/`warning` (hexes já medidos de emerald e amber) e `info` (alias de `brand-700`/`brand-50`); selos `.state--0..3` passam a consumi-los. Página de prova `/design-system` (admin). Contrato em `docs/design/pulse-design-system.md`. Sem matiz novo, sem Nexus, sem redesign de telas.
+
 - **Provisionamento de GitHub Issue a partir de um handoff Pulse** — FDD 040, ADR 0040, ADR 0037,
   ADR 0018, NFR-003, NFR-004, NFR-005, GitHub Issue #18 (M1.4). O Pulse passa a criar o Task
   Contract de engenharia no GitHub por API, sem LLM, sem ClickUp/Make e sem reusar o espelho
