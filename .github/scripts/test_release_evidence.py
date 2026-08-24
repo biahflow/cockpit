@@ -223,6 +223,15 @@ class WorkflowSafetyTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertNotIn(token, workflow)
 
+    def test_hml_publishes_once_then_copies_the_canonical_manifest(self) -> None:
+        workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "deploy-hml.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('docker push "$gcp_ref"', workflow)
+        self.assertNotIn('docker push "$ghcr_ref"', workflow)
+        self.assertIn('--tag "$ghcr_ref" "$gcp_repository@$gcp_digest"', workflow)
+        self.assertIn('if [ "$ghcr_digest" != "$gcp_digest" ]; then', workflow)
+
     def test_production_workflow_has_release_guards(self) -> None:
         workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "promote-prod.yml").read_text(
             encoding="utf-8"
