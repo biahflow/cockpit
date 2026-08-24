@@ -322,11 +322,15 @@ jobs:
           api_runtime_ref=$(service_ref "$PROD_API_SERVICE")
           web_runtime_ref=$(service_ref "$PROD_WEB_SERVICE")
           migrate_ref=$(gcloud run jobs describe "$PROD_MIGRATION_JOB" \
-            --project "$PROD_GCP_PROJECT_ID" --region "$PROD_GCP_REGION" \
-            --format='value(spec.template.template.containers[0].image)')
+            --project "$PROD_GCP_PROJECT_ID" --region "$PROD_GCP_REGION" --format=json \
+            | jq -er '.template.template.containers[0].image
+              // .spec.template.spec.template.spec.containers[0].image
+              // .spec.template.template.containers[0].image')
           scheduler_ref=$(gcloud beta run worker-pools describe "$PROD_SCHEDULER_WORKER_POOL" \
-            --project "$PROD_GCP_PROJECT_ID" --region "$PROD_GCP_REGION" \
-            --format='value(spec.template.containers[0].image)')
+            --project "$PROD_GCP_PROJECT_ID" --region "$PROD_GCP_REGION" --format=json \
+            | jq -er '.template.containers[0].image
+              // .spec.template.spec.containers[0].image
+              // .spec.template.containers[0].image')
 
           assert_ref "$PROD_API_SERVICE" "$BACKEND_PROD_REF" "$api_runtime_ref"
           assert_ref "$PROD_WEB_SERVICE" "$FRONTEND_PROD_REF" "$web_runtime_ref"

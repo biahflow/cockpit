@@ -210,10 +210,15 @@ jobs:
 
           api_runtime_ref=$(service_ref cockpit-api)
           web_runtime_ref=$(service_ref cockpit-web)
-          migrate_ref=$(gcloud run jobs describe cockpit-migrate --region "$REGIAO" \
-            --format='value(spec.template.template.containers[0].image)')
-          scheduler_ref=$(gcloud beta run worker-pools describe cockpit-scheduler --region "$REGIAO" \
-            --format='value(spec.template.containers[0].image)')
+          migrate_ref=$(gcloud run jobs describe cockpit-migrate --region "$REGIAO" --format=json \
+            | jq -er '.template.template.containers[0].image
+              // .spec.template.spec.template.spec.containers[0].image
+              // .spec.template.template.containers[0].image')
+          scheduler_ref=$(gcloud beta run worker-pools describe cockpit-scheduler \
+            --region "$REGIAO" --format=json \
+            | jq -er '.template.containers[0].image
+              // .spec.template.spec.containers[0].image
+              // .spec.template.containers[0].image')
 
           assert_ref cockpit-api "$API_REF" "$api_runtime_ref"
           assert_ref cockpit-web "$WEB_REF" "$web_runtime_ref"
