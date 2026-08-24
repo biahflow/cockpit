@@ -107,26 +107,27 @@ jobs:
               docker build \
                 --label "org.opencontainers.image.revision=$GITHUB_SHA" \
                 --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
-                -t "$gcp_ref" -t "$ghcr_ref" "$contexto"
+                -t "$gcp_ref" "$contexto"
               docker push "$gcp_ref"
-              docker push "$ghcr_ref"
-            elif [ -n "$gcp_digest" ] && [ -z "$ghcr_digest" ]; then
-              assert_revision "$gcp_repository@$gcp_digest"
-              docker buildx imagetools create --prefer-index=false \
-                --tag "$ghcr_ref" "$gcp_repository@$gcp_digest"
             elif [ -z "$gcp_digest" ] && [ -n "$ghcr_digest" ]; then
               assert_revision "$ghcr_repository@$ghcr_digest"
               docker buildx imagetools create --prefer-index=false \
                 --tag "$gcp_ref" "$ghcr_repository@$ghcr_digest"
+            fi
+
+            gcp_digest=$(digest_of "$gcp_ref")
+            assert_revision "$gcp_repository@$gcp_digest"
+            if [ "$ghcr_digest" != "$gcp_digest" ]; then
+              echo "$nome: sincronizando o manifest canônico no espelho GHCR."
+              docker buildx imagetools create --prefer-index=false \
+                --tag "$ghcr_ref" "$gcp_repository@$gcp_digest"
             else
               echo "$nome já existe nos dois registros; reutilizando o artefato imutável."
             fi
 
-            gcp_digest=$(digest_of "$gcp_ref")
             ghcr_digest=$(digest_of "$ghcr_ref")
             [ "$gcp_digest" = "$ghcr_digest" ] \
               || { echo "::error::$nome divergiu entre registros: $gcp_digest != $ghcr_digest"; return 1; }
-            assert_revision "$gcp_repository@$gcp_digest"
             assert_revision "$ghcr_repository@$ghcr_digest"
           }
 
