@@ -12,6 +12,7 @@ import { CobrancaPage } from "./pages/CobrancaPage";
 import { CommercialPage } from "./pages/CommercialPage";
 import { ConhecimentoPage } from "./pages/ConhecimentoPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { DesignSystemPage } from "./pages/DesignSystemPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { FinanceiroPage } from "./pages/FinanceiroPage";
 import { IndicadoresPage } from "./pages/IndicadoresPage";
@@ -41,6 +42,7 @@ function resolvePage(path: string): ReactNode {
   if (path === "/documentos") return <DocumentsPage />;
   if (path === "/equipe") return <TeamPage />;
   if (path === "/configuracoes") return <SettingsPage />;
+  if (path === "/design-system") return <DesignSystemPage />;
   const projectDetail = path.match(/^\/projetos\/(\d+)$/);
   if (projectDetail) return <ProjectDetailPage id={Number(projectDetail[1])} />;
   if (path === "/projetos") return <ProjectsPage />;

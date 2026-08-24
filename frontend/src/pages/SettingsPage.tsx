@@ -42,7 +42,7 @@ export function SettingsPage() {
   }
 
   return <section className="space-y-7">
-    <header className="page-head"><p className="eyebrow">Administração</p><h1>Configurações</h1><p>Ligue ou desligue integrações sem novo deploy. Credenciais continuam no ambiente.</p></header>
+    <header className="page-head"><p className="eyebrow">Administração</p><h1>Configurações</h1><p>Ligue ou desligue integrações sem novo deploy. Credenciais continuam no ambiente.</p><a href="/design-system" className="back-link">Design system</a></header>
     {error && <p role="alert" className="alert--error">{error}</p>}
     {syncResult && <p role="status" className="alert--ok">{syncResult}</p>}
 

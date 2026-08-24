@@ -10,6 +10,8 @@
 @import "@fontsource-variable/inter";
 
 /* Paleta e superfícies (ADR 0024, revista pela ADR 0025).
+   Pulse Design System (ADR 0041, DAP GH-19 r2): formaliza a linguagem clay já
+   medida — tokens semânticos, não matiz novo, não One, não Nexus.
    ---------------------------------------------------------------------------
    Branco, preto e laranja. O teal `ocean`/`mint` saiu; a paleta anterior está
    inteira em `docs/design/paleta-anterior.md`, com as razões, e o marco de git é
@@ -38,10 +40,13 @@
      em rótulo pequeno sem cair no cinza ilegível de sempre. */
   --color-muted: #57534e;
   --color-line: #e7e5e4;
+  --color-line-strong: #d6d3d1;
   /* Quase-branco e quente. **Não** é branco puro de propósito: com `canvas` e `.panel` ambos
      brancos, o card desaparece, e é justamente a hierarquia de superfície que faz o portal
      do cliente parecer acabado. */
   --color-canvas: #fafaf9;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f5f5f4;
 
   /* A escala de marca (ADR 0025). Antes eram quatro tokens `accent*` avulsos, que bastavam
      enquanto o laranja era só um detalhe sobre superfície branca. O shell claro precisa da
@@ -91,15 +96,40 @@
      aparece — passa AA nos dois. A única exceção deliberada é o contador de notificação, que
      era `bg-signal` por ser marca e não erro: ele fica em `brand-500`. */
   --color-danger: #b91c1c;
+  --color-danger-50: #fef2f2;
+
+  /* Pulse Design System (ADR 0041, DAP GH-19 r2). Sucesso e aviso são os hexes já
+     medidos de emerald-700/50 e amber-700/50 — mudança estrutural, não visual: os
+     selos `.state--1` e `.state--2` passam a apontar tokens semânticos em vez do
+     literal Tailwind. Informação tem par azul próprio, separado da marca. Sem
+     `brand-300`. Primário continua ink. Perigo ≠ marca. */
+  --color-success: #047857;
+  --color-success-50: #ecfdf5;
+  --color-warning: #b45309;
+  --color-warning-50: #fffbeb;
+  --color-info: #1d4ed8;
+  --color-info-50: #eff6ff;
 
   --font-sans: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  --text-display: 2rem;
+  --text-display--line-height: 2.375rem;
+  --text-metric: 1.75rem;
+  --text-metric--line-height: 2rem;
+  --text-title: 1rem;
+  --text-title--line-height: 1.5rem;
+  --text-body: .875rem;
+  --text-body--line-height: 1.375rem;
+  --text-label: .75rem;
+  --text-label--line-height: 1rem;
+  --text-meta: .6875rem;
+  --text-meta--line-height: 1rem;
 
   /* Sombras em **camadas**, portadas do portal do cliente: um contorno de 1px que define a
      borda e uma difusão ampla e suave que dá a profundidade. É a metade do acabamento que
      não é cor — o app inteiro tinha doze `shadow-sm` e nenhuma definição de card. */
-  --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.04), 0 12px 28px -18px rgba(18, 17, 15, 0.22);
-  --shadow-raised: 0 1px 2px rgba(18, 17, 15, 0.05), 0 20px 46px -22px rgba(18, 17, 15, 0.28);
-  --shadow-pop: 0 18px 50px -14px rgba(18, 17, 15, 0.24);
+  --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.06);
+  --shadow-raised: 0 8px 24px -12px rgba(18, 17, 15, 0.22);
+  --shadow-pop: 0 16px 40px -16px rgba(18, 17, 15, 0.28);
 }
 
 /* Compatibilidade de migração, e não desenho (ADR 0025).
@@ -142,7 +172,10 @@
 
      O anel passou a ser **laranja** com o redesenho, e é o uso mais importante do acento: é
      a única cor da tela cuja função é ser notada. */
-  :focus-visible { @apply outline-2 outline-offset-2 outline-brand-500; }
+  :focus-visible {
+    @apply outline-2 outline-offset-2;
+    outline-color: var(--color-brand-500);
+  }
   ::selection { @apply bg-brand-100 text-brand-900; }
 }
 
@@ -159,7 +192,7 @@
    volta é `src/test/primitivas.test.ts`. */
 @layer components {
   .panel {
-    @apply rounded-2xl border border-line bg-white p-5;
+    @apply rounded-xl border border-line bg-surface p-5;
     box-shadow: var(--shadow-card);
   }
   /* Card **sem** padding próprio, para quem tem cabeçalho e lista dividida por dentro: o padding
@@ -192,25 +225,31 @@
      `text-2xl` teria encolhido todo título do produto, regressão que o axe não pega e que todo
      mundo vê. */
   .page-head h1 { @apply m-0 text-3xl font-semibold tracking-[-0.03em] text-ink; }
-  .page-head p { @apply m-0 max-w-2xl text-sm leading-6 text-muted; }
+  .page-head h1 { font-size: var(--text-display); line-height: var(--text-display--line-height); font-weight: 650; }
+  .page-head p { @apply m-0 max-w-2xl text-sm text-muted; line-height: 1.375rem; }
+  .type-title { font-size:var(--text-title); line-height:var(--text-title--line-height); font-weight:650; }
+  .type-body { font-size:var(--text-body); line-height:var(--text-body--line-height); font-weight:400; }
+  .type-label { font-size:var(--text-label); line-height:var(--text-label--line-height); font-weight:600; }
+  .type-meta { font-size:var(--text-meta); line-height:var(--text-meta--line-height); font-weight:500; }
 
   .metric-card {
-    @apply grid gap-2 rounded-2xl border border-line bg-white p-4;
+    @apply grid gap-2 rounded-xl border border-line bg-surface p-4;
     box-shadow: var(--shadow-card);
   }
-  .metric-card strong { @apply text-2xl font-semibold tracking-[-0.03em] text-ink; }
+  .metric-card strong { @apply tracking-[-0.03em] text-ink; font-size: var(--text-metric); line-height: var(--text-metric--line-height); font-weight: 650; font-variant-numeric: tabular-nums; }
   .metric-card span { @apply text-xs text-muted; }
   .metric-icon { @apply grid size-9 place-items-center rounded-xl bg-brand-50 text-brand-500; }
 
   /* Botões. O primário é **preto**, não laranja: o acento vale mais por ser raro, e uma tela
      com seis botões laranja não tem acento nenhum. O laranja fica no hover e no foco. */
   .btn {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5
-      text-sm font-semibold text-white transition hover:bg-brand-700
-      disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2.5
+      text-sm font-semibold text-white transition hover:bg-brand-700 active:bg-brand-900
+      disabled:cursor-not-allowed disabled:border-line disabled:bg-line disabled:text-muted;
   }
   .btn--secondary {
-    @apply border border-line bg-white text-ink hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700;
+    @apply border border-line bg-surface text-ink hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700
+      active:border-brand-600 active:bg-brand-100 active:text-brand-600;
   }
   /* O primário de uma confirmação destrutiva, e o único botão vermelho do produto: só o
      `ConfirmDialog` o usa, que é o único lugar onde a ação já foi pedida e o que resta é
@@ -243,7 +282,7 @@
   .form-label { @apply grid gap-2 text-sm font-medium text-slate-700; }
   .form-grid { @apply grid gap-4 sm:grid-cols-2; }
   /* A faixa de filtros e ações acima de uma lista. É um `.panel` que não empilha conteúdo. */
-  .toolbar { @apply flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-white p-5 sm:p-6;
+  .toolbar { @apply flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-5 sm:p-6;
     box-shadow: var(--shadow-card); }
 
   /* ---------- Estados ---------- */
@@ -254,10 +293,10 @@
   /* A mensagem de falha. `.alert--error` e não `.state--3`: um selo rotula uma linha, um alerta
      interrompe a tela — e só o segundo leva `role="alert"`. */
   .alert--error {
-    @apply rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-danger;
+    @apply rounded-xl border border-danger-50 bg-danger-50 p-4 text-sm text-danger;
   }
   .alert--ok {
-    @apply rounded-2xl border border-brand-100 bg-brand-50/60 p-4 text-sm text-brand-700;
+    @apply rounded-xl border border-success-50 bg-success-50 p-4 text-sm text-success;
   }
 
   /* A barra de filtros acima de uma lista (Leads, Clientes). Portada do `.filter-chip` de lá:
@@ -294,13 +333,14 @@
   }
   .nav-item--active em { @apply bg-brand-100 text-brand-700; }
 
-  /* Selos de estado. Os quatro tons são os do portal do cliente, recolorido o "informativo"
-     para o acento. */
+  /* Selos de estado. Pulse Design System (ADR 0041, DAP GH-19 r2): os quatro tons
+     passam pelos tokens semânticos; informação é azul e perigo usa o próprio
+     par claro (perigo ≠ marca). */
   .state { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold; }
-  .state--0 { @apply bg-brand-50 text-brand-700; }
-  .state--1 { @apply bg-emerald-50 text-emerald-700; }
-  .state--2 { @apply bg-amber-50 text-amber-700; }
-  .state--3 { @apply bg-red-50 text-red-700; }
+  .state--0 { @apply bg-info-50 text-info; }
+  .state--1 { @apply bg-success-50 text-success; }
+  .state--2 { @apply bg-warning-50 text-warning; }
+  .state--3 { @apply bg-danger-50 text-danger; }
   /* O tom neutro, que faltava (ADR 0026). "Desligada", "Arquivado", "Sem responsável" não são
      atenção nem falha — são a ausência de um estado. Sem ele a migração empurraria essas linhas
      para o âmbar do `--2`, e uma tela onde tudo é aviso não avisa nada. É o `.state--2` do portal
@@ -370,7 +410,7 @@
 
   /* ---------- Popovers ---------- */
   .popover {
-    @apply overflow-hidden rounded-2xl border border-line bg-white;
+    @apply overflow-hidden rounded-xl border border-line bg-surface;
     box-shadow: var(--shadow-pop);
   }
   .popover-head { @apply flex items-center justify-between gap-2 border-b border-line px-3.5 py-3; }

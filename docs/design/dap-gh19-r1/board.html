@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DAP r1 — Pulse Design System</title>
+  <style>
+    :root {
+      --ink: #12110f;
+      --muted: #57534e;
+      --line: #e7e5e4;
+      --canvas: #fafaf9;
+      --brand-50: #fdf1ec;
+      --brand-100: #fadfd4;
+      --brand-200: #dd8b62;
+      --brand-500: #bd4a30;
+      --brand-600: #a8412a;
+      --brand-700: #9c3c26;
+      --brand-900: #5c2317;
+      --danger: #b91c1c;
+      --success: #047857;
+      --success-50: #ecfdf5;
+      --warning: #b45309;
+      --warning-50: #fffbeb;
+      --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.04), 0 12px 28px -18px rgba(18, 17, 15, 0.22);
+      --shadow-raised: 0 1px 2px rgba(18, 17, 15, 0.05), 0 20px 46px -22px rgba(18, 17, 15, 0.28);
+      --shadow-pop: 0 18px 50px -14px rgba(18, 17, 15, 0.24);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 15px/1.5 "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+    .banner {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .eyebrow {
+      margin: 0;
+      color: var(--brand-500);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 6px 0 8px; font-size: 30px; letter-spacing: -0.03em; }
+    .lead { margin: 0 0 28px; max-width: 40rem; color: var(--muted); font-size: 14px; }
+    h2 { margin: 0 0 12px; font-size: 16px; }
+    .grid { display: grid; gap: 16px; }
+    @media (min-width: 800px) { .cols-2 { grid-template-columns: 1fr 1fr; } }
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: var(--shadow-card);
+    }
+    .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+    .swatch { width: 92px; }
+    .chip {
+      height: 52px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+    }
+    .swatch span { display: block; margin-top: 6px; font-size: 11px; font-weight: 600; }
+    .swatch small { display: block; color: var(--muted); font-size: 11px; }
+    .bars { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+    .bar { background: var(--ink); height: 32px; }
+    .radii { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .radius {
+      width: 56px; height: 56px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .elev { display: flex; flex-wrap: wrap; gap: 16px; }
+    .elev > div {
+      min-width: 140px;
+      padding: 16px;
+      background: #fff;
+      border-radius: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 44px; padding: 10px 16px;
+      border: 0; border-radius: 12px;
+      background: var(--ink); color: #fff;
+      font: 600 14px/1 inherit;
+    }
+    .btn--secondary {
+      background: #fff; color: var(--ink); border: 1px solid var(--line);
+    }
+    .btn--danger { background: var(--danger); }
+    .btn[disabled] { opacity: 0.6; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .state {
+      display: inline-flex; align-items: center;
+      padding: 4px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+    }
+    .note {
+      margin-top: 28px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--brand-500);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    code { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="banner">DAP r1 — não é código de produção</p>
+    <p class="eyebrow">Pulse Design System</p>
+    <h1>Foundations r1</h1>
+    <p class="lead">
+      Aprovação humana em 2026-08-24: visual + valores da tabela.
+      Primário ink. Clay medido. Perigo ≠ marca. Sem brand-300. Sem Nexus. Sem One.
+    </p>
+
+    <div class="grid cols-2">
+      <section class="card">
+        <h2>Primitivos</h2>
+        <div class="swatches">
+          <div class="swatch"><div class="chip" style="background:var(--ink)"></div><span>ink</span><small>#12110f</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--muted)"></div><span>muted</span><small>#57534e</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--line)"></div><span>line</span><small>#e7e5e4</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--canvas)"></div><span>canvas</span><small>#fafaf9</small></div>
+        </div>
+        <h2 style="margin-top:20px">Marca</h2>
+        <div class="swatches">
+          <div class="swatch"><div class="chip" style="background:var(--brand-50)"></div><span>brand-50</span><small>#fdf1ec</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-100)"></div><span>brand-100</span><small>#fadfd4</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-200)"></div><span>brand-200</span><small>#dd8b62</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-500)"></div><span>brand-500</span><small>#bd4a30</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-600)"></div><span>brand-600</span><small>#a8412a</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-700)"></div><span>brand-700</span><small>#9c3c26</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-900)"></div><span>brand-900</span><small>#5c2317</small></div>
+        </div>
+        <h2 style="margin-top:20px">Semântica</h2>
+        <div class="swatches">
+          <div class="swatch"><div class="chip" style="background:var(--danger)"></div><span>danger</span><small>#b91c1c</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--success)"></div><span>success</span><small>#047857</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--success-50)"></div><span>success-50</span><small>#ecfdf5</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--warning)"></div><span>warning</span><small>#b45309</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--warning-50)"></div><span>warning-50</span><small>#fffbeb</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-700)"></div><span>info</span><small>brand-700</small></div>
+          <div class="swatch"><div class="chip" style="background:var(--brand-50)"></div><span>info-50</span><small>brand-50</small></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Tipo, espaço, raio, elevação</h2>
+        <p class="eyebrow">Eyebrow · 11px · tracking 0.18em</p>
+        <p style="margin:8px 0 0;font-size:30px;font-weight:600;letter-spacing:-0.03em">Título de página</p>
+        <p style="margin:6px 0 16px;color:var(--muted);font-size:14px">Texto secundário muted · 14px</p>
+        <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted)">Espaço w-1…w-8 (4px–32px)</p>
+        <div class="bars">
+          <div class="bar" style="width:4px"></div>
+          <div class="bar" style="width:8px"></div>
+          <div class="bar" style="width:12px"></div>
+          <div class="bar" style="width:16px"></div>
+          <div class="bar" style="width:20px"></div>
+          <div class="bar" style="width:24px"></div>
+          <div class="bar" style="width:28px"></div>
+          <div class="bar" style="width:32px"></div>
+        </div>
+        <p style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--muted)">Raios</p>
+        <div class="radii">
+          <div class="radius" style="border-radius:0"></div>
+          <div class="radius" style="border-radius:8px"></div>
+          <div class="radius" style="border-radius:12px"></div>
+          <div class="radius" style="border-radius:16px"></div>
+          <div class="radius" style="border-radius:999px;width:96px;height:28px"></div>
+        </div>
+        <p style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--muted)">Elevação</p>
+        <div class="elev">
+          <div style="box-shadow:var(--shadow-card)">card</div>
+          <div style="box-shadow:var(--shadow-raised)">raised</div>
+          <div style="box-shadow:var(--shadow-pop)">pop</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:16px">
+      <h2>Botões e selos</h2>
+      <div class="row">
+        <button class="btn" type="button">Primário</button>
+        <button class="btn" type="button" disabled>Primário desligado</button>
+        <button class="btn btn--secondary" type="button">Secundário</button>
+        <button class="btn btn--secondary" type="button" disabled>Secundário desligado</button>
+        <button class="btn btn--danger" type="button">Perigo</button>
+        <button class="btn btn--danger" type="button" disabled>Perigo desligado</button>
+      </div>
+      <div class="row">
+        <span class="state" style="background:var(--brand-50);color:var(--brand-700)">Informativo</span>
+        <span class="state" style="background:var(--success-50);color:var(--success)">Concluído</span>
+        <span class="state" style="background:var(--warning-50);color:var(--warning)">Atenção</span>
+        <span class="state" style="background:#fef2f2;color:var(--danger)">Falha</span>
+        <span class="state" style="background:#f1f5f9;color:#475569">Arquivado</span>
+      </div>
+    </section>
+
+    <p class="note">
+      Contraste: brand-500 sobre branco 4,96:1 AA · brand-500 sobre ink 3,82:1 falha — use brand-200.
+      Perigo ≠ marca. Copy dos mocks, fila de engenharia, dark theme e redesign de telas
+      <strong>não</strong> estão aprovados nesta revisão.
+    </p>
+  </div>
+</body>
+</html>

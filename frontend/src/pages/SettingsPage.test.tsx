@@ -22,6 +22,11 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
+test("oferece o design system", () => {
+  render(<SettingsPage />);
+  expect(screen.getByRole("link", { name: "Design system" })).toHaveAttribute("href", "/design-system");
+});
+
 test("liga uma integração configurada", async () => {
   const user = userEvent.setup();
   render(<SettingsPage />);
