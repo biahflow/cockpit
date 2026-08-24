@@ -16,30 +16,46 @@ build once on main
 
 Production must not rebuild application source.
 
-## Current baseline
+## Implemented topology
 
-`.github/workflows/deploy-hml.yml` currently builds `cockpit-api` and `cockpit-web` on `push` to `main`, publishes SHA-tagged images, and deploys HML from those tags.
+`.github/workflows/deploy-hml.yml` is the sole application build path. For every eligible SHA on
+`main`, it builds each application image at most once, publishes the result to Artifact Registry
+and GHCR, resolves the immutable manifest digest, and checks the OCI source-revision label. If a
+rerun finds only one copy, it copies that manifest to the missing registry without rebuilding.
 
-The hardening target is to make digest identity explicit and reusable as release evidence.
+HML migration, services and scheduler are all updated with digest-pinned references. The workflow
+then verifies the image reported by every runtime resource and writes a versioned evidence file.
+Its artifact name includes the source SHA, workflow run and attempt, so a rerun cannot overwrite or
+silently replace another candidate.
 
-## Required implementation
+`.github/workflows/promote-prod.yml` accepts only stable `vX.Y.Z` tags. It requires a protected tag
+whose target is reachable from `main`, identifies exactly one successful HML run for that SHA,
+downloads the evidence artifact and validates its archive digest and contents. Production copies
+the HML manifests to the configured Artifact Registry with `docker buildx imagetools create`; the
+workflow contains no application build step.
 
-1. HML pipeline builds each application image once per eligible `main` SHA.
-2. After push, resolve the immutable registry digest for each image.
-3. Persist/emit release evidence mapping:
-   - source SHA;
-   - image logical name;
-   - registry/repository;
-   - immutable digest;
-   - HML workflow run.
-4. Deploy HML using `repository@sha256:<digest>` or equivalent digest-pinned reference.
-5. Verify runtime revision corresponds to the expected digest.
-6. Production release is triggered by an authorized release tag pointing to a commit reachable from protected `main`.
-7. Production workflow retrieves the digest evidence associated with that SHA.
-8. If PROD uses a different registry/project, copy/retag the same manifest/blob by digest without executing a new application build.
-9. Deploy PROD using the promoted digest-pinned references.
-10. Verify runtime digest after deployment.
-11. Preserve audit evidence proving HML digest == PROD digest for each application image.
+After migration, service and scheduler updates, the production workflow verifies every runtime
+digest, writes production evidence containing both HML and PROD references, validates that the two
+digests are identical for each logical image, and uploads the result.
+
+## Evidence schema
+
+The schema is implemented and tested by `.github/scripts/release_evidence.py` and
+`.github/scripts/test_release_evidence.py`.
+
+HML evidence contains:
+
+- schema version, source repository and full source SHA;
+- HML workflow run ID and attempt;
+- logical image name (`backend` or `frontend`), immutable digest and source repository;
+- the digest-pinned runtime reference and every registry mirror verified at that digest.
+
+Production evidence adds the authorized stable release tag and records HML and PROD repositories,
+runtime references and digests side by side. Unknown fields, mutable references, invalid digests,
+unexpected repositories, stale run coordinates or divergent HML/PROD digests fail validation.
+
+The evidence artifacts use the repository retention configured by GitHub. Changing that retention
+is an administrative decision; the workflow does not invent a shorter policy.
 
 ## Safety
 
@@ -51,7 +67,28 @@ The hardening target is to make digest identity explicit and reusable as release
 
 ## Configuration boundary
 
-Concrete PROD project, registry, service and authorization values belong to environment/repository configuration. Do not hard-code secrets or invent environment identifiers when they are not already defined.
+The `production` GitHub environment must define these variables:
+
+- `PROD_GCP_PROJECT_ID`
+- `PROD_GCP_REGION`
+- `PROD_GCP_REGISTRY`
+- `PROD_GCP_WIF_PROVIDER`
+- `PROD_GCP_SERVICE_ACCOUNT`
+- `PROD_API_SERVICE`
+- `PROD_WEB_SERVICE`
+- `PROD_MIGRATION_JOB`
+- `PROD_SCHEDULER_WORKER_POOL`
+- `PROD_INTEGRATION_CHECK_JOB`
+
+The workflow validates all values before authentication and fails closed if any value is missing or
+malformed. Environment protection rules and a protected `v*` tag rule are external GitHub
+configuration and remain human gates.
+
+The configured production identity must be able to read the HML source manifests, write the PROD
+repository, update/execute the named Cloud Run jobs, update the services and worker pool, and read
+those resources back for runtime verification. The WIF provider must restrict trust to this
+repository and the authorized release-tag path. These IAM bindings remain infrastructure
+configuration; they are not created by the application workflow.
 
 ## Evidence
 
@@ -69,4 +106,6 @@ PROD frontend = digest B
 
 - `docs/adr/0042-trunk-based-main-hml-tag-producao.md`
 - `.github/workflows/deploy-hml.yml`
+- `.github/workflows/promote-prod.yml`
+- `.github/scripts/release_evidence.py`
 - `biahflow/engineeringOS/workflows/trunk-based-delivery.md`

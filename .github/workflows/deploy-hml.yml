@@ -1,10 +1,8 @@
 # Deploy de HML do Biahflow.
 #
-# Mesmo desenho do portal do cliente, e a mesma separação: **deploy de aplicação
-# não roda `terraform apply`**. O Terraform dos dois portais mora num lugar só
-# (`biahflow-portal-cliente/infra/terraform`), porque a rede, o registro, os
-# segredos e a identidade são compartilhados — dois estados sobre os mesmos
-# recursos é como se cria drift que ninguém consegue explicar.
+# O deploy de aplicação não roda `terraform apply`. Infraestrutura, rede, registros, segredos e
+# identidades continuam no repositório de infraestrutura compartilhado. Este workflow só constrói
+# as duas imagens da aplicação uma vez, fixa seus digests e projeta a `main` em HML.
 name: deploy-hml
 
 on:
@@ -30,21 +28,8 @@ env:
   REGISTRO: us-east1-docker.pkg.dev/biahflow-hml/hml
 
 jobs:
-  # Desiste na largada quando este commit já não é a ponta de `main`.
-  #
-  # A concorrência acima é `cancel-in-progress: false` de propósito, e continua sendo: matar um
-  # `gcloud run jobs execute cockpit-migrate` no meio é o único item desta pipeline que não se
-  # resolve reexecutando. Mas a fila tem um efeito colateral que a imagem marcada com
-  # `$GITHUB_SHA` torna visível — dois merges seguidos fazem o primeiro run construir, migrar e
-  # publicar por inteiro uma revisão que já nasceu velha, e o HML roda o código anterior até o
-  # segundo run chegar.
-  #
-  # Enfileirar sem cancelar e desistir antes de construir dá as duas coisas: nenhuma migração
-  # interrompida, e nenhum deploy de commit superado. Nada é pulado por ser dispensável — a
-  # migração é o primeiro passo do run seguinte, que roda com o commit certo.
-  #
-  # Job próprio e não um `if` em cada passo: são nove passos abaixo, e uma condição repetida nove
-  # vezes é oito lugares onde alguém esquece de repeti-la ao acrescentar o décimo.
+  # A fila não pode cancelar uma migração em curso, mas um SHA superado também não deve publicar
+  # uma revisão que já nasceu velha. Só a ponta atual da main segue para o build.
   guarda:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -55,10 +40,6 @@ jobs:
       - id: ponta
         run: |
           set -euo pipefail
-          # `FETCH_HEAD` e não `origin/main`: o `actions/checkout` configura o remoto com um
-          # refspec restrito ao ref conferido, então a referência remota de `main` pode
-          # simplesmente não existir aqui — e `rev-parse` de ref inexistente sai com erro, o que
-          # reprovaria o deploy legítimo em vez de liberá-lo.
           git fetch origin main --quiet
           topo=$(git rev-parse FETCH_HEAD)
           if [ "$topo" = "$GITHUB_SHA" ]; then
@@ -72,7 +53,7 @@ jobs:
     needs: guarda
     if: needs.guarda.outputs.seguir == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -82,92 +63,208 @@ jobs:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: hml-deploy@biahflow-hml.iam.gserviceaccount.com
 
-      # `beta` é declarado aqui e não instalado no passo que o usa: o worker pool do
-      # agendador só existe em `gcloud beta`, e o runner não traz esse componente. Sem
-      # esta linha o comando **pergunta** se pode instalá-lo — antes de olhar as flags,
-      # de modo que o `--quiet` que ele já tem não é lido —, e num shell não interativo
-      # isso é `exit 1` com uma mensagem que manda usar a flag que já está lá.
       - uses: google-github-actions/setup-gcloud@v2
         with:
           install_components: beta
 
+      - uses: docker/setup-buildx-action@v3
+
       - name: Autoriza os dois registros
         run: |
+          set -euo pipefail
           gcloud auth configure-docker "$REGIAO-docker.pkg.dev" --quiet
-          echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Constrói e publica
+      - name: Constrói uma vez, publica e resolve os digests
         run: |
           set -euo pipefail
+
+          digest_of() {
+            docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' \
+              | jq -er '.digest | select(test("^sha256:[0-9a-f]{64}$"))'
+          }
+
+          assert_revision() {
+            local reference="$1"
+            docker buildx imagetools inspect "$reference" --format '{{json .Image}}' \
+              | jq -e --arg sha "$GITHUB_SHA" \
+                  '.config.Labels["org.opencontainers.image.revision"] == $sha' >/dev/null \
+              || { echo "::error::$reference não declara revision=$GITHUB_SHA"; return 1; }
+          }
+
           publica() {
             local nome="$1" contexto="$2"
-            docker build -t "$REGISTRO/$nome:$GITHUB_SHA" \
-                         -t "ghcr.io/${{ github.repository }}/$nome:$GITHUB_SHA" "$contexto"
-            docker push "$REGISTRO/$nome:$GITHUB_SHA"
-            docker push "ghcr.io/${{ github.repository }}/$nome:$GITHUB_SHA"
+            local gcp_repository="$REGISTRO/$nome"
+            local ghcr_repository="ghcr.io/${{ github.repository }}/$nome"
+            local gcp_ref="$gcp_repository:$GITHUB_SHA"
+            local ghcr_ref="$ghcr_repository:$GITHUB_SHA"
+            local gcp_digest="" ghcr_digest=""
+
+            gcp_digest=$(digest_of "$gcp_ref" 2>/dev/null || true)
+            ghcr_digest=$(digest_of "$ghcr_ref" 2>/dev/null || true)
+
+            if [ -z "$gcp_digest" ] && [ -z "$ghcr_digest" ]; then
+              docker build \
+                --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+                --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+                -t "$gcp_ref" -t "$ghcr_ref" "$contexto"
+              docker push "$gcp_ref"
+              docker push "$ghcr_ref"
+            elif [ -n "$gcp_digest" ] && [ -z "$ghcr_digest" ]; then
+              assert_revision "$gcp_repository@$gcp_digest"
+              docker buildx imagetools create --prefer-index=false \
+                --tag "$ghcr_ref" "$gcp_repository@$gcp_digest"
+            elif [ -z "$gcp_digest" ] && [ -n "$ghcr_digest" ]; then
+              assert_revision "$ghcr_repository@$ghcr_digest"
+              docker buildx imagetools create --prefer-index=false \
+                --tag "$gcp_ref" "$ghcr_repository@$ghcr_digest"
+            else
+              echo "$nome já existe nos dois registros; reutilizando o artefato imutável."
+            fi
+
+            gcp_digest=$(digest_of "$gcp_ref")
+            ghcr_digest=$(digest_of "$ghcr_ref")
+            [ "$gcp_digest" = "$ghcr_digest" ] \
+              || { echo "::error::$nome divergiu entre registros: $gcp_digest != $ghcr_digest"; return 1; }
+            assert_revision "$gcp_repository@$gcp_digest"
+            assert_revision "$ghcr_repository@$ghcr_digest"
           }
+
           publica cockpit-api backend
           publica cockpit-web frontend
 
-      # A imagem recusa subir com configuração insegura: o entrypoint roda
-      # `check --deploy --fail-level WARNING --tag security` antes do gunicorn
-      # (ADR 0011). Se um segredo faltar, o deploy morre aqui — e é onde deve.
+          api_digest=$(digest_of "$REGISTRO/cockpit-api:$GITHUB_SHA")
+          web_digest=$(digest_of "$REGISTRO/cockpit-web:$GITHUB_SHA")
+          echo "API_DIGEST=$api_digest" >> "$GITHUB_ENV"
+          echo "WEB_DIGEST=$web_digest" >> "$GITHUB_ENV"
+          echo "API_REF=$REGISTRO/cockpit-api@$api_digest" >> "$GITHUB_ENV"
+          echo "WEB_REF=$REGISTRO/cockpit-web@$web_digest" >> "$GITHUB_ENV"
+
+      # A imagem recusa subir com configuração insegura. Migração continua sendo o primeiro uso do
+      # backend novo e bloqueia o deploy quando falha.
       - name: Migra o banco
         run: |
+          set -euo pipefail
           gcloud run jobs update cockpit-migrate \
-            --image "$REGISTRO/cockpit-api:$GITHUB_SHA" \
-            --region "$REGIAO" --quiet
+            --image "$API_REF" --region "$REGIAO" --quiet
           gcloud run jobs execute cockpit-migrate --region "$REGIAO" --wait
 
-      - name: Publica as revisões
+      - name: Publica as revisões por digest
         run: |
-          for s in cockpit-api cockpit-web; do
-            gcloud run services update "$s" \
-              --image "$REGISTRO/$s:$GITHUB_SHA" \
-              --region "$REGIAO" --quiet
-          done
+          set -euo pipefail
+          gcloud run services update cockpit-api \
+            --image "$API_REF" --region "$REGIAO" --quiet
+          gcloud run services update cockpit-web \
+            --image "$WEB_REF" --region "$REGIAO" --quiet
 
-      # O agendador (FDD 023: digest diário, sincronia de calendário, alerta de
-      # backup velho) é um **worker pool**: Cloud Run sem HTTP. A imagem é a da
-      # `cockpit-api`, porque ele roda `manage.py` do mesmo código.
-      #
-      # Ele existia no `docker-compose.prod.yml` e não tinha casa em HML, o que
-      # significa que as três rotinas não rodariam — incluindo a que avisa que o
-      # backup envelheceu. Um alerta de backup que não roda é pior que nenhum: faz
-      # o silêncio parecer boa notícia.
-      - name: Atualiza o agendador
+      - name: Atualiza o agendador por digest
         run: |
+          set -euo pipefail
           gcloud beta run worker-pools update cockpit-scheduler \
-            --image "$REGISTRO/cockpit-api:$GITHUB_SHA" \
-            --region "$REGIAO" --quiet
+            --image "$API_REF" --region "$REGIAO" --quiet
 
-      # A sonda pergunta ao **provedor**, não ao ambiente — é a tese da FDD 024
-      # aplicada ao deploy: "a variável está definida" não é a mesma pergunta que
-      # "a credencial funciona". Não falha o deploy, porque integração fora do ar
-      # não é motivo para reverter código que está bom; deixa o veredito no log.
-      #
-      # O `update` antes do `execute` **faltava**, e a ausência dele não deixava
-      # nada vermelho: este passo é `continue-on-error`, então executar um job que
-      # ainda estava na `imagem_bootstrap` falhava com `Application exec likely
-      # failed` e seguia em frente. O veredito que o comentário acima promete nunca
-      # foi escrito em lugar nenhum — a sonda estava desligada desde sempre, e
-      # dizendo no log da esteira que tinha rodado.
+      # A sonda continua não bloqueante: indisponibilidade de um fornecedor não reverte código bom,
+      # mas o step fica amarelo e registra a falha em vez de escondê-la com `|| true`.
       - name: Sonda as integrações
         continue-on-error: true
         run: |
+          set -euo pipefail
           gcloud run jobs update cockpit-check \
-            --image "$REGISTRO/cockpit-api:$GITHUB_SHA" \
-            --region "$REGIAO" --quiet
-          gcloud run jobs execute cockpit-check --region "$REGIAO" --wait || true
+            --image "$API_REF" --region "$REGIAO" --quiet
+          gcloud run jobs execute cockpit-check --region "$REGIAO" --wait
 
       - name: Fumaça
         run: |
           set -euo pipefail
           url=$(gcloud run services describe cockpit-web --region "$REGIAO" --format='value(status.url)')
           for tentativa in 1 2 3 4 5; do
-            if curl -sf --max-time 10 "$url/" > /dev/null; then
-              echo "cockpit-web responde em $url"; exit 0
+            if curl -sf --max-time 10 "$url/" >/dev/null; then
+              echo "cockpit-web responde em $url"
+              exit 0
             fi
-            echo "tentativa $tentativa falhou; esperando"; sleep 10
+            echo "tentativa $tentativa falhou; esperando"
+            sleep 10
           done
-          echo "::error::o Biahflow não respondeu depois do deploy"; exit 1
+          echo "::error::o Biahflow não respondeu depois do deploy"
+          exit 1
+
+      - name: Confere os digests efetivamente implantados
+        run: |
+          set -euo pipefail
+
+          service_ref() {
+            local service="$1" revision
+            revision=$(gcloud run services describe "$service" --region "$REGIAO" \
+              --format='value(status.latestReadyRevisionName)')
+            [ -n "$revision" ] || { echo "::error::$service não tem revisão pronta"; return 1; }
+            gcloud run revisions describe "$revision" --region "$REGIAO" \
+              --format='value(spec.containers[0].image)'
+          }
+
+          assert_ref() {
+            local resource="$1" expected="$2" actual="$3"
+            [ "$actual" = "$expected" ] \
+              || { echo "::error::$resource usa $actual; esperado $expected"; return 1; }
+          }
+
+          api_runtime_ref=$(service_ref cockpit-api)
+          web_runtime_ref=$(service_ref cockpit-web)
+          migrate_ref=$(gcloud run jobs describe cockpit-migrate --region "$REGIAO" \
+            --format='value(spec.template.template.containers[0].image)')
+          scheduler_ref=$(gcloud beta run worker-pools describe cockpit-scheduler --region "$REGIAO" \
+            --format='value(spec.template.containers[0].image)')
+
+          assert_ref cockpit-api "$API_REF" "$api_runtime_ref"
+          assert_ref cockpit-web "$WEB_REF" "$web_runtime_ref"
+          assert_ref cockpit-migrate "$API_REF" "$migrate_ref"
+          assert_ref cockpit-scheduler "$API_REF" "$scheduler_ref"
+
+          echo "HML_API_RUNTIME_REF=$api_runtime_ref" >> "$GITHUB_ENV"
+          echo "HML_WEB_RUNTIME_REF=$web_runtime_ref" >> "$GITHUB_ENV"
+
+      - name: Serializa a evidência HML
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/release_evidence.py write-hml \
+            --output hml-release-evidence.json \
+            --source-sha "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --backend-repository "$REGISTRO/cockpit-api" \
+            --backend-digest "$API_DIGEST" \
+            --backend-runtime-ref "$HML_API_RUNTIME_REF" \
+            --backend-mirror-repository "ghcr.io/$GITHUB_REPOSITORY/cockpit-api" \
+            --backend-mirror-digest "$API_DIGEST" \
+            --frontend-repository "$REGISTRO/cockpit-web" \
+            --frontend-digest "$WEB_DIGEST" \
+            --frontend-runtime-ref "$HML_WEB_RUNTIME_REF" \
+            --frontend-mirror-repository "ghcr.io/$GITHUB_REPOSITORY/cockpit-web" \
+            --frontend-mirror-digest "$WEB_DIGEST"
+          python3 .github/scripts/release_evidence.py validate-hml \
+            --file hml-release-evidence.json \
+            --source-sha "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Persiste a evidência imutável
+        id: evidence_artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hml-release-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: hml-release-evidence.json
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Resume a homologação
+        run: |
+          {
+            echo "## HML validado por digest"
+            echo
+            echo "- Source SHA: \`$GITHUB_SHA\`"
+            echo "- Backend: \`$API_DIGEST\`"
+            echo "- Frontend: \`$WEB_DIGEST\`"
+            echo "- Artifact digest: \`${{ steps.evidence_artifact.outputs.artifact-digest }}\`"
+            echo "- Artifact: ${{ steps.evidence_artifact.outputs.artifact-url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
