@@ -1,9 +1,13 @@
 # DAP r2 — Pulse Design System foundations
 
-**Issue:** [#19](https://github.com/biahflow/pulse/issues/19)  
-**ADR:** [0041](../../adr/0041-pulse-design-system-e-validacao-visual.md)  
-**Revisão:** 2  
-**Data da aprovação humana:** 2026-08-24  
+**Issue:** [#19](https://github.com/biahflow/pulse/issues/19)
+
+**ADR:** [0041](../../adr/0041-pulse-design-system-e-validacao-visual.md)
+
+**Revisão:** 2
+
+**Data da aprovação humana:** 2026-08-24
+
 **Artefato congelado:** `approved-board.png` — SHA-256 `0d7fc05eea0ba4e52d552c53dac17f42ed57308d1b92dd1c377be5429477615a`
 
 ## Aprovação

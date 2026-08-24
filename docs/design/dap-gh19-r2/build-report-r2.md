@@ -1,8 +1,13 @@
 # Builder Report — Issue #19 / revisão 2
 
-**Base:** `9c5fc6a3dd0d24e855686bffbd14cc9be55062b0`  
-**Worktree/branch:** `pulse-issue-19` / `issue-19-pulse-design-system`  
-**Feedback iterations:** 2 de 3  
+**Base original:** `9c5fc6a3dd0d24e855686bffbd14cc9be55062b0`
+
+**Base sincronizada:** `62be970c6fa5273c77c5e03c822ff985c3a7c5af` (merge humano da manutenção #25)
+
+**Worktree/branch:** `pulse-issue-19` / `issue-19-pulse-design-system`
+
+**Feedback iterations:** 2 de 3
+
 **Review round final:** 3 — `REVIEW_PASS`
 
 ## Entrega e evidência
@@ -19,6 +24,7 @@
 - `npm run build` — verde.
 - Playwright desktop/mobile da prova r2 — verde.
 - `npm run e2e` — 168 testes verdes.
+- Após sincronização com `main@62be970`: corpus 15/15 e geração sem diff; lint, 276 testes, build e 168 E2E novamente verdes.
 
 ## Proveniência
 
