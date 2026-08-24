@@ -8,11 +8,11 @@ Accepted
 
 O Pulse adota Pull Requests com Human Merge Gate, CI remoto obrigatório e branches de task curtas. Após merge, o repositório já possui um workflow `deploy-hml` disparado por `push` na `main` para mudanças de aplicação.
 
-Precisamos explicitar a relação entre integração, homologação e produção sem criar branches de ambiente que possam divergir da `main`.
+Precisamos explicitar a relação entre integração, homologação e produção sem criar branches de ambiente que possam divergir da `main`, e garantir que produção execute exatamente o mesmo artefato binário/container que foi homologado.
 
 ## Decisão
 
-Adotar trunk-based development com:
+Adotar trunk-based development com **build once, promote many**:
 
 ```text
 short-lived task branch / worktree
@@ -25,13 +25,19 @@ main
   ↓
 post-merge quality
   ↓
-automatic HML deployment
+BUILD ONCE
+  ↓
+immutable image digest
+  ↓
+automatic HML deployment of that digest
   ↓
 HML validation
   ↓
 READY_FOR_PRODUCTION
   ↓
 release tag created from approved main commit
+  ↓
+PROMOTE SAME DIGEST
   ↓
 PROD
 ```
@@ -43,39 +49,68 @@ PROD
 - Tasks usam branches curtas e worktrees dedicados conforme EngineeringOS.
 - Integração ocorre exclusivamente por Pull Request e Human Merge Gate.
 
-### 2. Merge em `main` promove para HML
+### 2. Merge em `main` constrói uma vez e promove para HML
 
 Mudança de aplicação mergeada em `main` dispara:
 
 1. validação pós-merge da revisão real integrada;
-2. deploy automático para HML;
-3. smoke/runtime/integration checks definidos pela pipeline.
+2. build único das imagens de aplicação;
+3. publicação em registry com identificação por SHA;
+4. resolução e registro dos digests imutáveis publicados;
+5. deploy automático para HML usando o artefato/digest produzido;
+6. smoke/runtime/integration checks;
+7. verificação de que HML executa o digest esperado.
 
 HML é uma projeção da `main`, não uma fonte de verdade paralela.
 
-Deve ser possível identificar o SHA da `main` atualmente publicado em HML.
+Deve ser possível identificar tanto o SHA da `main` quanto os digests atualmente publicados em HML.
 
-### 3. Produção é promovida por tag imutável
+### 3. Produção é promovida por tag, sem rebuild
 
-Produção somente deve ser disparada por uma release tag apontando para commit já alcançável pela história protegida da `main`.
+Produção somente deve ser disparada por uma release tag apontando para commit já alcançável pela história protegida da `main` e homologado com artefatos conhecidos.
 
 Exemplo:
 
 ```text
 main @ abc123
   ↓
-HML abc123 validado
+backend digest sha256:AAA
+frontend digest sha256:BBB
+  ↓
+HML validado com AAA/BBB
   ↓
 tag v1.4.0 → abc123
   ↓
-PROD abc123
+PROMOTE AAA/BBB
+  ↓
+PROD usa AAA/BBB
 ```
 
-A pipeline de produção MUST verificar deterministicamente que o commit apontado pela tag pertence à história da `main` antes de qualquer deploy.
+A pipeline de produção MUST verificar deterministicamente, antes do deploy:
+
+- que o commit apontado pela tag pertence à história protegida da `main`;
+- que existem digests registrados para o SHA;
+- que HML validou exatamente esses digests;
+- que os artefatos ainda existem e seus digests conferem;
+- que o deploy de PROD utilizará/promoverá os mesmos digests;
+- que nenhuma etapa de `docker build` ou equivalente será executada para aplicação em produção.
+
+Se HML e PROD utilizarem registries/projetos diferentes, a promoção pode copiar ou retaggear o mesmo manifest/blob por digest. Isso não é rebuild.
 
 A tag representa decisão explícita de release e não pode ser criada automaticamente pelo Builder como efeito colateral de uma Issue comum.
 
-### 4. `PR merged` não significa produção
+### 4. Invariante de identidade do artefato
+
+A prova principal de release é:
+
+```text
+HML backend digest  == PROD backend digest
+HML frontend digest == PROD frontend digest
+```
+
+Tags são referências humanas de release; digest é a identidade imutável usada para provar que o mesmo artefato percorreu os ambientes.
+
+### 5. `PR merged` não significa produção
 
 Estados conceituais:
 
@@ -84,10 +119,13 @@ MERGED_TO_MAIN
 POST_MERGE_CI_PENDING
 POST_MERGE_CI_FAILED
 POST_MERGE_CI_GREEN
+ARTIFACT_BUILDING
+ARTIFACT_READY
 HML_DEPLOYING
 HML_DEPLOY_FAILED
 HML_READY
 READY_FOR_PRODUCTION
+PRODUCTION_PROMOTING
 PRODUCTION_DEPLOYING
 PRODUCTION_DEPLOY_FAILED
 PRODUCTION_READY
@@ -95,21 +133,11 @@ PRODUCTION_READY
 
 Merge integra engenharia e inicia a promoção para HML. Produção continua sendo um lifecycle separado.
 
-### 5. Artefato imutável
+### 6. Rollback
 
-Estado desejado de hardening:
+Rollback preferencial é redeploy de um digest anteriormente conhecido e validado, sem reconstruir código-fonte.
 
-```text
-build once
-→ verify
-→ deploy HML
-→ promote same immutable artifact
-→ PROD
-```
-
-Enquanto a pipeline ainda rebuildar a partir do mesmo SHA/tag, a origem e os inputs de build devem permanecer imutáveis e auditáveis. Promover exatamente o mesmo artefato verificado em HML é a evolução preferida.
-
-### 6. Hotfixes
+### 7. Hotfixes
 
 Hotfix também converge para o trunk:
 
@@ -117,8 +145,10 @@ Hotfix também converge para o trunk:
 fix branch
 → PR / emergency human gate
 → main
+→ build once
 → validação adequada ao risco
 → tag de release
+→ promote same digest
 → PROD
 ```
 
@@ -129,17 +159,18 @@ Não manter correção somente em produção ou em branch paralela sem retorno p
 ### Positivas
 
 - uma única linha canônica de código;
-- reduz drift entre HML, PROD e `main`;
-- promoção para produção é auditável por tag/SHA;
-- simplifica rollback e rastreabilidade;
-- combina com branches curtas/worktrees e PRs pequenos;
-- elimina necessidade de merge entre branches de ambiente.
+- elimina drift causado por rebuild diferente entre HML e PROD;
+- promoção para produção é auditável por tag, SHA e digest;
+- rollback pode reutilizar artefato conhecido;
+- reduz variabilidade de toolchain/dependências entre ambientes;
+- combina com branches curtas/worktrees e PRs pequenos.
 
 ### Trade-offs
 
+- exige persistir/descobrir o digest produzido no deploy de HML;
+- registries separados podem exigir cópia/promote de manifest;
+- garbage collection/retention não pode apagar artefato ainda elegível para release/rollback;
 - `main` precisa permanecer saudável e deployável;
-- mudanças incompletas podem exigir feature flags;
-- falha pós-merge fica visível na `main` e deve ser tratada rapidamente;
 - produção exige disciplina de release/tag e validação de HML.
 
 ## Evidência mínima de release
@@ -148,12 +179,14 @@ Quando aplicável, registrar:
 
 - merge/main SHA;
 - post-merge CI run;
+- artifact repository/name;
+- backend/frontend digest(s);
 - HML deployment run;
-- SHA/revisão em HML;
+- SHA/digest efetivamente executado em HML;
 - smoke/runtime validation;
 - release tag;
-- PROD deployment run;
-- SHA/revisão em PROD;
+- PROD promotion/deployment run;
+- SHA/digest efetivamente executado em PROD;
 - aprovação/gate de release.
 
 ## Relação com EngineeringOS
