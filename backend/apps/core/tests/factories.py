@@ -8,6 +8,7 @@ from apps.core.models import (
     Activity,
     Artifact,
     Client,
+    EngineeringHandoff,
     Evidencia,
     Invoice,
     Meeting,
@@ -110,6 +111,19 @@ class ProjectMemberFactory(factory.django.DjangoModelFactory):
 
     project = factory.SubFactory(ProjectFactory)
     user = factory.SubFactory(UserFactory)
+
+
+class EngineeringHandoffFactory(factory.django.DjangoModelFactory):
+    """Handoff pendente válido — o caso que a API cria antes de falar com o GitHub."""
+
+    class Meta:
+        model = EngineeringHandoff
+
+    project = factory.SubFactory(ProjectFactory)
+    pulse_work_item_id = factory.Sequence(lambda n: f"pulse-work-{n}")
+    title = "Provision GitHub Issue from Pulse handoff"
+    objective = "Create the engineering Task Contract as a GitHub Issue."
+    acceptance_criteria = "The issue exists, is idempotent, and records correlation ids."
 
 
 class MeetingFactory(factory.django.DjangoModelFactory):

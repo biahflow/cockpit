@@ -517,6 +517,9 @@ LINEAR_STATE_IN_PROGRESS = os.getenv("LINEAR_STATE_IN_PROGRESS", "")
 LINEAR_STATE_DONE = os.getenv("LINEAR_STATE_DONE", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "")  # formato "owner/repo"
+# Provisionamento de GitHub Issue a partir de um handoff de engenharia (FDD 040, ADR 0040).
+# Distinto da sincronia de tarefas (FDD 004). Zero LLM; desligado por padrão.
+GITHUB_PROVISIONING_ENABLED = os.getenv("GITHUB_PROVISIONING_ENABLED", "false").lower() == "true"
 
 # Captação de leads pelo site: token compartilhado e CORS restrito ao endpoint de intake.
 LEAD_INTAKE_TOKEN = os.getenv("LEAD_INTAKE_TOKEN", "")

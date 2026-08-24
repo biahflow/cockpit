@@ -132,3 +132,14 @@ def test_pagamentos_com_provedor_exige_token_e_segredo() -> None:
     """Sem o segredo do webhook a baixa leva 401 e a fatura nunca fecha — a falha mais cara aqui."""
     assert flags.missing("payments") == ["PAYMENTS_API_TOKEN", "PAYMENTS_WEBHOOK_SECRET"]
     assert flags.is_enabled("payments") is False
+
+
+@pytest.mark.django_db
+@override_settings(
+    GITHUB_PROVISIONING_ENABLED=True, GITHUB_TOKEN="", GITHUB_REPO="acme/repo"
+)
+def test_github_provisioning_sem_token_nao_liga() -> None:
+    """Credencial faltando vence a intenção (ADR 0018) — o adaptador é fail-closed."""
+    assert flags.desired("github_provisioning") is True
+    assert flags.is_enabled("github_provisioning") is False
+    assert "GITHUB_TOKEN" in flags.missing("github_provisioning")

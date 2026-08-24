@@ -46,17 +46,20 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Webhook p/ portal do cliente | `PORTAL_WEBHOOK_URL`, `PORTAL_WEBHOOK_SECRET` | repo `portal_cliente` | Pronto (desligado) — liga sozinho quando as duas variáveis estiverem preenchidas; alternável em Configurações |
 | Enriquecimento de lead (CNPJ) | `ENRICHMENT_ENABLED` (default `false`), `ENRICHMENT_PROVIDER` (default `brasilapi`), `ENRICHMENT_API_BASE`, `ENRICHMENT_TIMEOUT_SECONDS` | **nenhuma** — cadastro público | Pronto (desligado). Desligado não por custo (BrasilAPI é gratuita) e sim porque manda o CNPJ do formulário público a um terceiro. Alimenta o `ai_fit` e preenche a vertical na conversão; falha do fornecedor **nunca** bloqueia o lead |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
+| Provisionamento GitHub de engenharia | `GITHUB_PROVISIONING_ENABLED` (default `false`), `GITHUB_TOKEN`, `GITHUB_REPO` | conta GitHub | Pronto (desligado) — distinto da sincronia FDD 004: cria a Issue-contrato do EngineeringOS, não vincula uma `Task` |
 | Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
 | Rastreamento de erro (Sentry) | `SENTRY_DSN` (API) e `VITE_SENTRY_DSN` (SPA, build arg) | conta Sentry | Pronto (desligado) |
 | Backup do banco e dos documentos | — (sidecar do compose de produção) | — | **Sempre ligado** em produção ✅ — agendado por `BACKUP_CRON` |
 | Envio do backup para fora do host | `BACKUP_S3_*` | bucket compatível com S3 | Pronto (desligado) — **recomendado**: cópia no mesmo host morre com o host |
 
-> **As nove integrações** (IA, Drive, Calendário, Assinatura, Pagamento, E-mail, Sincronia de
-> tarefas, Portal do cliente e Enriquecimento de lead) — mais a **régua de cobrança**, que é a
-> primeira flag da casa que **não** é integração: ela não fala com fornecedor nenhum, e por isso
-> não tem `requires`. São dez interruptores e nove fornecedores; a diferença importa, porque a
-> régua desligada não é credencial faltando, é decisão. Todos podem ser ligados/desligados em
-> runtime por um admin na tela **Configurações**
+> **As dez integrações** (IA, Drive, Calendário, Assinatura, Pagamento, E-mail, Sincronia de
+> tarefas, Portal do cliente, Enriquecimento de lead e Provisionamento GitHub de engenharia) —
+> mais a **régua de cobrança**, que é a primeira flag da casa que **não** é integração: ela não
+> fala com fornecedor nenhum, e por isso não tem `requires`. São onze interruptores e dez
+> fornecedores; a diferença importa, porque a régua desligada não é credencial faltando, é
+> decisão. O provisionamento GitHub de engenharia (FDD 040) é outro interruptor, distinto da
+> sincronia de tarefas (FDD 004): um cria a Issue-contrato, o outro espelha status de `Task`.
+> Todos podem ser ligados/desligados em runtime por um admin na tela **Configurações**
 > (`/configuracoes`), sem redeploy. O `.env` continua sendo o default e a casa dos segredos.
 >
 > Desde a ADR 0018, **credencial faltando vence qualquer intenção**: não liga pelo toggle, nem pelo
@@ -189,6 +192,9 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   `X-Sync-Token: <TASKSYNC_TOKEN>` e corpo `{source, external_id, external_status}` (normalizado).
 - **Testar:** mudar o status da issue vinculada → a tarefa muda no portal (e repropaga ao portal do
   cliente); mudar a tarefa no portal → a issue é atualizada. A entrada nunca gera loop (guard de eco).
+- **Não confundir** com o provisionamento de Issue de engenharia (FDD 040, flag
+  `github_provisioning`): aquele cria o Task Contract no GitHub a partir de um handoff Pulse e
+  **não** passa por `link-external` / `push-external` / `tasks/sync`.
 
 ## Equipe do projeto e visibilidade
 

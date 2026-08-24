@@ -41,6 +41,7 @@ from . import (
     cases,
     cobranca,
     drive,
+    engineering_provisioning,
     enrichment,
     esign,
     flags,
@@ -80,6 +81,7 @@ from .models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    EngineeringHandoff,
     Evidencia,
     Invitation,
     Invoice,
@@ -127,6 +129,7 @@ from .serializers import (
     DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
     DocumentSerializer,
+    EngineeringHandoffSerializer,
     EvidenciaSerializer,
     InvitationSerializer,
     InvoiceSerializer,
@@ -2198,6 +2201,58 @@ class RiscoViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSe
 
     def create_kwargs(self) -> dict:
         return {"owner": self.request.user}
+
+
+class EngineeringHandoffViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """Handoffs de engenharia: provisionam GitHub Issue a partir do Pulse (FDD 040)."""
+
+    resource = "engineering_handoff"
+    queryset = EngineeringHandoff.objects.select_related("project", "source_task").all()
+    serializer_class = EngineeringHandoffSerializer
+    filter_fields = ("project",)
+    filter_exact_fields = ("status",)
+
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        if not engineering_provisioning.is_enabled():
+            return Response(
+                {"detail": "Provisionamento GitHub desativado."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        pulse_id = str(serializer.validated_data["pulse_work_item_id"])
+        existing = EngineeringHandoff.objects.filter(pulse_work_item_id=pulse_id).first()
+        if existing is not None:
+            self.check_object_permissions(request, existing)
+            engineering_provisioning.provision(existing)
+            existing.refresh_from_db()
+            return Response(self.get_serializer(existing).data)
+        try:
+            with transaction.atomic():
+                self.perform_create(serializer)
+        except IntegrityError:
+            raced = EngineeringHandoff.objects.get(pulse_work_item_id=pulse_id)
+            engineering_provisioning.provision(raced)
+            raced.refresh_from_db()
+            return Response(self.get_serializer(raced).data)
+        handoff = serializer.instance
+        engineering_provisioning.provision(handoff)
+        handoff.refresh_from_db()
+        return Response(self.get_serializer(handoff).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=None, responses={200: EngineeringHandoffSerializer})
+    @action(detail=True, methods=["post"], url_path="retry")
+    def retry(self, request: Request, pk: str | None = None) -> Response:
+        """Reexecuta o provisionamento; no-op se a Issue já existe."""
+        if not engineering_provisioning.is_enabled():
+            return Response(
+                {"detail": "Provisionamento GitHub desativado."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        handoff = self.get_object()
+        engineering_provisioning.provision(handoff)
+        handoff.refresh_from_db()
+        return Response(self.get_serializer(handoff).data)
 
 
 class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):

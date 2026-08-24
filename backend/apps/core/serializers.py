@@ -30,6 +30,7 @@ from .models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    EngineeringHandoff,
     Evidencia,
     Invitation,
     Invoice,
@@ -554,6 +555,78 @@ class TaskSerializer(WorkItemSerializer):
         milestone = cast(Milestone | None, attrs.get("milestone", getattr(self.instance, "milestone", None)))
         if milestone and project and milestone.project_id != project.id:
             raise serializers.ValidationError({"milestone": "O marco deve pertencer ao mesmo projeto."})
+        return attrs
+
+
+class EngineeringHandoffSerializer(serializers.ModelSerializer[EngineeringHandoff]):
+    """Handoff de engenharia (FDD 040). Número/URL/status saem do provisionamento, não do corpo.
+
+    O UniqueValidator de `pulse_work_item_id` é desligado de propósito: o POST duplicado não é
+    400, é 200 no registro existente — a chave de idempotência.
+    """
+
+    class Meta:
+        model = EngineeringHandoff
+        fields = [
+            "id", "project", "source_task", "pulse_work_item_id", "title", "objective",
+            "context", "acceptance_criteria", "scope_text", "out_of_scope_text",
+            "repository", "milestone_ref", "adr_refs", "nfr_refs", "fdd_refs",
+            "correlation_id", "github_issue_number", "github_issue_url", "github_node_id",
+            "status", "attempt_count", "last_attempt_at", "last_error_code",
+            "last_error_message", "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "correlation_id", "github_issue_number", "github_issue_url",
+            "github_node_id", "status", "attempt_count", "last_attempt_at",
+            "last_error_code", "last_error_message", "created_at", "updated_at",
+        ]
+        extra_kwargs: dict[str, dict[str, list[object]]] = {
+            "pulse_work_item_id": {"validators": []},
+        }
+        validators: list[Any] = []
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        def valor(campo: str, default: object = "") -> object:
+            if campo in attrs:
+                return attrs[campo]
+            if self.instance is not None:
+                return getattr(self.instance, campo)
+            return default
+
+        if "pulse_work_item_id" in attrs:
+            attrs["pulse_work_item_id"] = str(attrs["pulse_work_item_id"] or "").strip()
+        pulse_id = str(valor("pulse_work_item_id") or "").strip()
+        if self.instance is not None and "pulse_work_item_id" in attrs:
+            if pulse_id != self.instance.pulse_work_item_id:
+                raise serializers.ValidationError(
+                    {"pulse_work_item_id": "O identificador Pulse não muda depois de criado."}
+                )
+
+        instancia = EngineeringHandoff(
+            project=cast(Project | None, valor("project", None)),
+            source_task=cast(Task | None, valor("source_task", None)),
+            pulse_work_item_id=pulse_id,
+            title=str(valor("title") or ""),
+            objective=str(valor("objective") or ""),
+            context=str(valor("context") or ""),
+            acceptance_criteria=str(valor("acceptance_criteria") or ""),
+            scope_text=str(valor("scope_text") or ""),
+            out_of_scope_text=str(valor("out_of_scope_text") or ""),
+            repository=str(valor("repository") or ""),
+            milestone_ref=str(valor("milestone_ref") or ""),
+            adr_refs=valor("adr_refs", []),
+            nfr_refs=valor("nfr_refs", []),
+            fdd_refs=valor("fdd_refs", []),
+            status=str(valor("status", EngineeringHandoff.Status.PENDING) or ""),
+            github_issue_number=cast(int | None, valor("github_issue_number", None)),
+            github_issue_url=str(valor("github_issue_url") or ""),
+        )
+        try:
+            instancia.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(
+                exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+            ) from exc
         return attrs
 
 

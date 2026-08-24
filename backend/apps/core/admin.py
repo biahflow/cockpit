@@ -7,6 +7,7 @@ from .models import (
     Contact,
     Decisao,
     Document,
+    EngineeringHandoff,
     Invitation,
     Meeting,
     Milestone,
@@ -22,7 +23,7 @@ from .models import (
 admin.site.register(User, UserAdmin)
 admin.site.register(
     [Client, Contact, PipelineStage, Opportunity, Project, Milestone, Task, Document, Invitation,
-     AppSetting, Meeting, Pendencia, Decisao]
+     AppSetting, Meeting, Pendencia, Decisao, EngineeringHandoff]
 )
 
 

@@ -24,6 +24,7 @@ from .views import (
     DigitalEmployeeBlueprintViewSet,
     DigitalEmployeeViewSet,
     DocumentViewSet,
+    EngineeringHandoffViewSet,
     EsignWebhookView,
     EvidenciaViewSet,
     HealthView,
@@ -90,6 +91,7 @@ router.register("decisoes", DecisaoViewSet)
 # `/projects/{id}/risk/` e `/risk/`, e dois nomes iguais em português e inglês seriam a pior
 # forma de distinguir duas coisas diferentes.
 router.register("riscos", RiscoViewSet)
+router.register("engineering-handoffs", EngineeringHandoffViewSet)
 router.register("satisfacoes", SatisfacaoViewSet)
 # O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as três
 # rotas ficam fora de `/projects/`. Etapa e evidência pendem do processo, não do projeto.
