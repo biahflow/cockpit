@@ -160,3 +160,7 @@ def test_sonda_de_pagamento_usa_o_ping_do_adaptador(monkeypatch: pytest.MonkeyPa
 
 def test_pagamento_entra_no_registro_de_sondas() -> None:
     assert "payments" in integrations.PROBES
+
+
+def test_github_provisioning_entra_no_registro_de_sondas() -> None:
+    assert "github_provisioning" in integrations.PROBES

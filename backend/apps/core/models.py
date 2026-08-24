@@ -356,6 +356,96 @@ class Task(WorkItem):
             raise ValidationError({"milestone": "O marco deve pertencer ao mesmo projeto."})
 
 
+class EngineeringHandoff(TimestampedModel):
+    """Handoff de engenharia: Pulse persiste o contrato e provisiona a GitHub Issue (FDD 040).
+
+    Distinto da sincronia de tarefas (FDD 004 / `tasksync`): aqui a Issue **é** o Task Contract
+    do EngineeringOS, não o espelho de uma `Task`. Zero LLM — o corpo é markdown determinístico
+    a partir dos campos estruturados. Ver ADR 0040.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendente"
+        PROVISIONED = "provisioned", "Provisionado"
+        FAILED = "failed", "Falhou"
+
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="engineering_handoffs"
+    )
+    source_task = models.ForeignKey(
+        Task,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="engineering_handoffs",
+    )
+    pulse_work_item_id = models.CharField(max_length=128)
+    title = models.CharField(max_length=255)
+    objective = models.TextField()
+    context = models.TextField(blank=True, default="")
+    acceptance_criteria = models.TextField()
+    scope_text = models.TextField(blank=True, default="")
+    out_of_scope_text = models.TextField(blank=True, default="")
+    # Vazio na hora de provisionar cai em `settings.GITHUB_REPO`. Persistido com o valor efetivo
+    # depois do sucesso, para a unique `(repository, github_issue_number)` valer de verdade.
+    repository = models.CharField(max_length=255, blank=True, default="")
+    milestone_ref = models.CharField(max_length=255, blank=True, default="")
+    adr_refs = models.JSONField(default=list, blank=True)
+    nfr_refs = models.JSONField(default=list, blank=True)
+    fdd_refs = models.JSONField(default=list, blank=True)
+    correlation_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    github_issue_number = models.PositiveIntegerField(null=True, blank=True)
+    github_issue_url = models.URLField(blank=True, default="")
+    github_node_id = models.CharField(max_length=128, blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    attempt_count = models.PositiveIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    last_error_code = models.CharField(max_length=64, blank=True, default="")
+    last_error_message = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pulse_work_item_id"],
+                name="unique_engineering_handoff_pulse_work_item",
+            ),
+            models.UniqueConstraint(
+                fields=["repository", "github_issue_number"],
+                condition=Q(github_issue_number__isnull=False) & ~Q(repository=""),
+                name="unique_engineering_handoff_github_issue",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def clean(self) -> None:
+        errors: dict[str, str] = {}
+        if not (self.pulse_work_item_id or "").strip():
+            errors["pulse_work_item_id"] = "Informe o identificador do item no Pulse."
+        if not (self.title or "").strip():
+            errors["title"] = "Informe o título."
+        if not (self.objective or "").strip():
+            errors["objective"] = "Informe o objetivo."
+        if not (self.acceptance_criteria or "").strip():
+            errors["acceptance_criteria"] = "Informe os critérios de aceite."
+        if self.status == self.Status.PROVISIONED:
+            if not self.github_issue_number or not (self.github_issue_url or "").strip():
+                errors["status"] = (
+                    "Um handoff provisionado precisa do número e da URL da GitHub Issue."
+                )
+        if (
+            self.source_task_id
+            and self.source_task
+            and self.project_id
+            and self.source_task.project_id != self.project_id
+        ):
+            errors["source_task"] = "A tarefa de origem deve pertencer ao mesmo projeto."
+        if errors:
+            raise ValidationError(errors)
+
+
 class Document(TimestampedModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, null=True, blank=True)

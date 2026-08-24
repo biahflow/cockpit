@@ -2518,6 +2518,203 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/engineering-handoffs/:
+    get:
+      operationId: v1_engineering_handoffs_list
+      description: 'Handoffs de engenharia: provisionam GitHub Issue a partir do Pulse
+        (FDD 040).'
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EngineeringHandoff'
+          description: ''
+    post:
+      operationId: v1_engineering_handoffs_create
+      description: 'Handoffs de engenharia: provisionam GitHub Issue a partir do Pulse
+        (FDD 040).'
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngineeringHandoff'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EngineeringHandoff'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EngineeringHandoff'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineeringHandoff'
+          description: ''
+  /api/v1/engineering-handoffs/{id}/:
+    get:
+      operationId: v1_engineering_handoffs_retrieve
+      description: 'Handoffs de engenharia: provisionam GitHub Issue a partir do Pulse
+        (FDD 040).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engineering handoff.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineeringHandoff'
+          description: ''
+    put:
+      operationId: v1_engineering_handoffs_update
+      description: 'Handoffs de engenharia: provisionam GitHub Issue a partir do Pulse
+        (FDD 040).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engineering handoff.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngineeringHandoff'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EngineeringHandoff'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EngineeringHandoff'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineeringHandoff'
+          description: ''
+    patch:
+      operationId: v1_engineering_handoffs_partial_update
+      description: 'Handoffs de engenharia: provisionam GitHub Issue a partir do Pulse
+        (FDD 040).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engineering handoff.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEngineeringHandoff'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEngineeringHandoff'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEngineeringHandoff'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineeringHandoff'
+          description: ''
+    delete:
+      operationId: v1_engineering_handoffs_destroy
+      description: 'Handoffs de engenharia: provisionam GitHub Issue a partir do Pulse
+        (FDD 040).'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engineering handoff.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/engineering-handoffs/{id}/retry/:
+    post:
+      operationId: v1_engineering_handoffs_retry_create
+      description: Reexecuta o provisionamento; no-op se a Issue já existe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engineering handoff.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineeringHandoff'
+          description: ''
+  /api/v1/engineering-handoffs/{id}/unarchive/:
+    post:
+      operationId: v1_engineering_handoffs_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engineering handoff.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/esign/webhook/:
     post:
       operationId: v1_esign_webhook_create
@@ -9381,6 +9578,116 @@ components:
       - original_name
       - signature_requests
       - uploaded_by
+    EngineeringHandoff:
+      type: object
+      description: |-
+        Handoff de engenharia (FDD 040). Número/URL/status saem do provisionamento, não do corpo.
+
+        O UniqueValidator de `pulse_work_item_id` é desligado de propósito: o POST duplicado não é
+        400, é 200 no registro existente — a chave de idempotência.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        source_task:
+          type: integer
+          nullable: true
+        pulse_work_item_id:
+          type: string
+          maxLength: 128
+        title:
+          type: string
+          maxLength: 255
+        objective:
+          type: string
+        context:
+          type: string
+        acceptance_criteria:
+          type: string
+        scope_text:
+          type: string
+        out_of_scope_text:
+          type: string
+        repository:
+          type: string
+          maxLength: 255
+        milestone_ref:
+          type: string
+          maxLength: 255
+        adr_refs: {}
+        nfr_refs: {}
+        fdd_refs: {}
+        correlation_id:
+          type: string
+          format: uuid
+          readOnly: true
+        github_issue_number:
+          type: integer
+          readOnly: true
+          nullable: true
+        github_issue_url:
+          type: string
+          format: uri
+          readOnly: true
+        github_node_id:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/EngineeringHandoffStatusEnum'
+          readOnly: true
+        attempt_count:
+          type: integer
+          readOnly: true
+        last_attempt_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_error_code:
+          type: string
+          readOnly: true
+        last_error_message:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - acceptance_criteria
+      - attempt_count
+      - correlation_id
+      - created_at
+      - github_issue_number
+      - github_issue_url
+      - github_node_id
+      - id
+      - last_attempt_at
+      - last_error_code
+      - last_error_message
+      - objective
+      - project
+      - pulse_work_item_id
+      - status
+      - title
+      - updated_at
+    EngineeringHandoffStatusEnum:
+      enum:
+      - pending
+      - provisioned
+      - failed
+      type: string
+      description: |-
+        * `pending` - Pendente
+        * `provisioned` - Provisionado
+        * `failed` - Falhou
     Evidencia:
       type: object
       description: |-
@@ -10858,6 +11165,88 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureRequest'
+          readOnly: true
+    PatchedEngineeringHandoff:
+      type: object
+      description: |-
+        Handoff de engenharia (FDD 040). Número/URL/status saem do provisionamento, não do corpo.
+
+        O UniqueValidator de `pulse_work_item_id` é desligado de propósito: o POST duplicado não é
+        400, é 200 no registro existente — a chave de idempotência.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        source_task:
+          type: integer
+          nullable: true
+        pulse_work_item_id:
+          type: string
+          maxLength: 128
+        title:
+          type: string
+          maxLength: 255
+        objective:
+          type: string
+        context:
+          type: string
+        acceptance_criteria:
+          type: string
+        scope_text:
+          type: string
+        out_of_scope_text:
+          type: string
+        repository:
+          type: string
+          maxLength: 255
+        milestone_ref:
+          type: string
+          maxLength: 255
+        adr_refs: {}
+        nfr_refs: {}
+        fdd_refs: {}
+        correlation_id:
+          type: string
+          format: uuid
+          readOnly: true
+        github_issue_number:
+          type: integer
+          readOnly: true
+          nullable: true
+        github_issue_url:
+          type: string
+          format: uri
+          readOnly: true
+        github_node_id:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/EngineeringHandoffStatusEnum'
+          readOnly: true
+        attempt_count:
+          type: integer
+          readOnly: true
+        last_attempt_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_error_code:
+          type: string
+          readOnly: true
+        last_error_message:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
           readOnly: true
     PatchedEvidencia:
       type: object

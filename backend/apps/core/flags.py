@@ -130,6 +130,15 @@ FLAGS: dict[str, Flag] = {
         ("TASKSYNC_TOKEN",),
         requires_any=(("LINEAR_API_KEY", "GITHUB_TOKEN"),),
     ),
+    # Provisionamento de GitHub Issue a partir de um handoff de engenharia (FDD 040, ADR 0040).
+    # Distinto de `tasksync`: aqui a Issue é o Task Contract, não o espelho de uma `Task`.
+    # Os dois `requires` são os que o adaptador dereferenceia — sem token a chamada nem sai,
+    # sem repo o handoff sem `repository` próprio não tem para onde ir.
+    "github_provisioning": Flag(
+        "Provisionamento GitHub (engenharia)",
+        lambda: bool(settings.GITHUB_PROVISIONING_ENABLED),
+        ("GITHUB_TOKEN", "GITHUB_REPO"),
+    ),
     # Portal do cliente: o default é "ligado se URL+secret estão presentes", mas o admin pode
     # desligar pela tela sem mexer no ambiente — parar de emitir num incidente do portal era, antes,
     # trabalho de deploy. Quem respeita o toggle é `portal.emit`.

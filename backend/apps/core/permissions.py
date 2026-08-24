@@ -8,6 +8,7 @@ from .models import (
     Decisao,
     DigitalEmployee,
     Document,
+    EngineeringHandoff,
     Evidencia,
     Meeting,
     Milestone,
@@ -51,6 +52,7 @@ PROJECT_OF = {
     ProjectMember: lambda obj: obj.project,
     Document: lambda obj: obj.project,
     Artifact: lambda obj: obj.project,
+    EngineeringHandoff: lambda obj: obj.project,
     # O case é prova social, mas nasce de um projeto e herda a fronteira dele: a Entrega lê o case
     # dos projetos de que participa e não a vitrine inteira da casa (ADR 0010, FDD 027).
     Case: lambda obj: obj.project,
@@ -140,7 +142,8 @@ class RolePermission(BasePermission):
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
                                 "digital_employee", "artifact", "satisfacao",
-                                "processo", "processo_etapa", "evidencia"}
+                                "processo", "processo_etapa", "evidencia",
+                                "engineering_handoff"}
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:  # type: ignore[no-untyped-def]

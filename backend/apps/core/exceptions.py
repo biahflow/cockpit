@@ -101,6 +101,20 @@ class EsignUnavailable(UpstreamUnavailable):
     default_code = "esign_unavailable"
 
 
+class GitHubIssuesUnavailable(UpstreamUnavailable):
+    """A API do GitHub recusou o provisionamento da Issue de engenharia (FDD 040).
+
+    A view de create prefere persistir `failed` e devolver 201 com o id — quem opera precisa
+    do registro para o retry. Esta exceção existe para o caso em que a rota quiser traduzir
+    a falha do fornecedor em 502, no mesmo molde das irmãs.
+    """
+
+    default_detail = (
+        "O GitHub não aceitou o provisionamento da issue. Tente de novo em instantes."
+    )
+    default_code = "github_issues_unavailable"
+
+
 class PaymentsUnavailable(UpstreamUnavailable):
     """O gateway de pagamento não aceitou a cobrança (FDD 028).
 

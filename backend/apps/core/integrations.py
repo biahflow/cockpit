@@ -129,6 +129,13 @@ def _probe_tasksync() -> tuple[bool, str]:
     return True, NAO_SONDAVEL
 
 
+def _probe_github_provisioning() -> tuple[bool, str]:
+    """GET no repositório configurado: valida token e existência, sem criar Issue (FDD 024)."""
+    from . import github_issues
+
+    return github_issues.ping_repository()
+
+
 def _probe_portal() -> tuple[bool, str]:
     """O portal do cliente é destino de webhook, não fonte: sondá-lo exigiria entregar um evento
     de mentira a um sistema de produção. O snapshot é quem prova o caminho, sob demanda."""
@@ -172,6 +179,7 @@ PROBES = {
     "payments": _probe_payments,
     "email": _probe_email,
     "tasksync": _probe_tasksync,
+    "github_provisioning": _probe_github_provisioning,
     "portal": _probe_portal,
     "enrichment": _probe_enrichment,
     "storage": _probe_storage,
