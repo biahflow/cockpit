@@ -35,6 +35,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/conhecimento", name: "Conhecimento", role: "admin" },
   { path: "/equipe", name: "Equipe", role: "admin" },
   { path: "/configuracoes", name: "Configurações", role: "admin" },
+  { path: "/design-system", name: "Design system", role: "admin" },
   // Entrega sem projeto: o estado vazio é uma tela de verdade e tem seu próprio texto.
   { path: "/projetos", name: "Projetos (Entrega, sem equipe)", role: "delivery" },
   { path: "/", name: "Login", role: null },

@@ -10,6 +10,8 @@
 @import "@fontsource-variable/inter";
 
 /* Paleta e superfícies (ADR 0024, revista pela ADR 0025).
+   Pulse Design System (ADR 0041, DAP GH-19 r1): formaliza a linguagem clay já
+   medida — tokens semânticos, não matiz novo, não One, não Nexus.
    ---------------------------------------------------------------------------
    Branco, preto e laranja. O teal `ocean`/`mint` saiu; a paleta anterior está
    inteira em `docs/design/paleta-anterior.md`, com as razões, e o marco de git é
@@ -92,6 +94,16 @@
      era `bg-signal` por ser marca e não erro: ele fica em `brand-500`. */
   --color-danger: #b91c1c;
 
+  /* Pulse Design System (ADR 0041, DAP GH-19 r1). Sucesso e aviso são os hexes já
+     medidos de emerald-700/50 e amber-700/50 — mudança estrutural, não visual: os
+     selos `.state--1` e `.state--2` passam a apontar tokens semânticos em vez do
+     literal Tailwind. Info é o par brand-700/50, via `@theme inline`. Sem
+     `brand-300`. Primário continua ink. Perigo ≠ marca. */
+  --color-success: #047857;
+  --color-success-50: #ecfdf5;
+  --color-warning: #b45309;
+  --color-warning-50: #fffbeb;
+
   --font-sans: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
 
   /* Sombras em **camadas**, portadas do portal do cliente: um contorno de 1px que define a
@@ -122,6 +134,10 @@
 @theme inline {
   --color-accent: var(--color-brand-500);
   --color-accent-50: var(--color-brand-50);
+  /* Info = o par informativo da marca (DAP GH-19 r1). Inline para o utilitário
+     resolver na geração, como os apelidos accent*. */
+  --color-info: var(--color-brand-700);
+  --color-info-50: var(--color-brand-50);
 }
 
 @layer base {
@@ -294,13 +310,14 @@
   }
   .nav-item--active em { @apply bg-brand-100 text-brand-700; }
 
-  /* Selos de estado. Os quatro tons são os do portal do cliente, recolorido o "informativo"
-     para o acento. */
+  /* Selos de estado. Pulse Design System (ADR 0041, DAP GH-19 r1): os quatro tons
+     passam pelos tokens semânticos; o visual é o mesmo hex de brand/emerald/amber
+     já medido. `--3` permanece red-50 + text-danger (perigo ≠ marca). */
   .state { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold; }
-  .state--0 { @apply bg-brand-50 text-brand-700; }
-  .state--1 { @apply bg-emerald-50 text-emerald-700; }
-  .state--2 { @apply bg-amber-50 text-amber-700; }
-  .state--3 { @apply bg-red-50 text-red-700; }
+  .state--0 { @apply bg-info-50 text-info; }
+  .state--1 { @apply bg-success-50 text-success; }
+  .state--2 { @apply bg-warning-50 text-warning; }
+  .state--3 { @apply bg-red-50 text-danger; }
   /* O tom neutro, que faltava (ADR 0026). "Desligada", "Arquivado", "Sem responsável" não são
      atenção nem falha — são a ausência de um estado. Sem ele a migração empurraria essas linhas
      para o âmbar do `--2`, e uma tela onde tudo é aviso não avisa nada. É o `.state--2` do portal
