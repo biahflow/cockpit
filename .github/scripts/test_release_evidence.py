@@ -232,6 +232,18 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertIn('--tag "$ghcr_ref" "$gcp_repository@$gcp_digest"', workflow)
         self.assertIn('if [ "$ghcr_digest" != "$gcp_digest" ]; then', workflow)
 
+    def test_runtime_guards_handle_cloud_run_v1_and_v2_resource_shapes(self) -> None:
+        for filename in ("deploy-hml.yml", "promote-prod.yml"):
+            workflow = (REPOSITORY_ROOT / ".github" / "workflows" / filename).read_text(
+                encoding="utf-8"
+            )
+            with self.subTest(filename=filename):
+                self.assertNotIn("value(spec.template.template.containers[0].image)", workflow)
+                self.assertIn(".template.template.containers[0].image", workflow)
+                self.assertIn(".spec.template.spec.template.spec.containers[0].image", workflow)
+                self.assertIn(".template.containers[0].image", workflow)
+                self.assertIn(".spec.template.spec.containers[0].image", workflow)
+
     def test_production_workflow_has_release_guards(self) -> None:
         workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "promote-prod.yml").read_text(
             encoding="utf-8"
