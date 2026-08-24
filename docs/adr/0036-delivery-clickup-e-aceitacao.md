@@ -1,45 +1,36 @@
 # ADR 0036 — ClickUp como SoR de Delivery e aceitação separada do merge
 
-**Status:** Accepted  
+**Status:** Superseded by ADR 0040  
 **Data:** 2026-08-24
 
-## Contexto
+## Contexto histórico
 
-O fluxo anterior tratava tarefas internas como fonte principal e sincronizava ferramentas externas. O novo operating model define ClickUp como fila de trabalho e sistema da verdade de Delivery, enquanto GitHub é a fonte da verdade da execução de engenharia.
+Esta ADR registrou uma etapa intermediária da arquitetura em que ClickUp seria o sistema da verdade de Delivery e GitHub seria a fonte da verdade da execução de engenharia.
 
-Merge técnico não equivale a valor aceito pelo cliente.
+A decisão de separar merge técnico de aceite de negócio permanece válida, mas o ownership de Delivery foi simplificado posteriormente.
 
-## Decisão
+## Decisão superseded
 
-ClickUp será o sistema da verdade para backlog, prioridade, responsável, datas e status de Delivery.
-
-O lifecycle mínimo de Delivery será:
-
-`BACKLOG → READY → IN_PROGRESS → INTERNAL_REVIEW → CLIENT_REVIEW → ACCEPTED → DONE`
-
-`BLOCKED` pode interromper qualquer estado executável.
-
-Para itens de engenharia:
+O desenho anterior era:
 
 `ClickUp Task → GitHub Issue → Build → PR → CI/Review → Merge → CLIENT_REVIEW`
 
-Um `pull_request.merged` **nunca** move automaticamente a task para `DONE`. O máximo permitido é `CLIENT_REVIEW`/`READY_FOR_ACCEPTANCE`.
+ClickUp manteria backlog, prioridade, responsável, datas e status de Delivery.
 
-`DONE` exige evidência de aceitação de negócio ou regra explícita de autoaceitação para classes de trabalho que não exigem homologação externa.
+## Regra preservada
 
-## Evidência de aceitação
+Um `pull_request.merged` **não** equivale automaticamente a `DONE` quando há necessidade de aceite de negócio.
 
-A aceitação deve registrar, no mínimo:
+A regra preservada é:
 
-- quem aceitou;
-- quando;
-- qual versão/entrega foi aceita;
-- comentário ou evidência quando aplicável;
-- `correlation_id` do fluxo.
+`PR merged → READY_FOR_ACCEPTANCE → CLIENT_REVIEW → ACCEPTED → DONE`
 
-## Consequências
+A aceitação deve registrar evidência suficiente para auditoria, incluindo ator, timestamp, versão/entrega e identificadores de correlação quando aplicável.
 
-- A sincronização de tarefas existente deve ser adaptada de bidirecional para integração orientada a ownership.
-- Pulse exibe o estado de Delivery, mas não decide unilateralmente o status canônico.
-- One pode expor pendências de homologação e registrar a decisão do cliente por contrato explícito.
-- Automação de GitHub deve respeitar o human/client gate.
+## Substituição
+
+A ADR 0040 substitui a escolha de ClickUp e define o core operacional como:
+
+`Pulse ↔ GitHub API/Webhooks ↔ One`
+
+GitHub Issues passam a ser o Source of Truth do trabalho de engenharia; Pulse mantém o estado operacional de negócio; One registra a experiência e o aceite do cliente.
