@@ -4,17 +4,38 @@ Portal interno para conduzir oportunidades comerciais até a execução de proje
 
 ## Desenvolvimento
 
-1. Copie `.env.example` para `.env` e substitua credenciais antes de qualquer ambiente compartilhado.
-2. Execute `docker compose up --build`.
-3. Crie o primeiro administrador com `docker compose exec api uv run python manage.py createsuperuser`.
-4. Abra `http://localhost:19173` e entre pela tela de login.
+O caminho mais simples é via Docker Compose:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+As migrações rodam automaticamente. Depois, em outro terminal, crie o administrador:
+
+```bash
+docker compose exec api uv run python manage.py createsuperuser
+```
+
+Informe usuário, e-mail e senha quando solicitado. Para criar sem interação, de forma idempotente:
+
+```bash
+docker compose exec \
+  -e DJANGO_SUPERUSER_USERNAME=admin \
+  -e DJANGO_SUPERUSER_EMAIL=admin@local.test \
+  -e DJANGO_SUPERUSER_PASSWORD='SenhaLocal123!' \
+  api uv run python manage.py bootstrap_admin --exigir
+```
+
+Use somente credenciais locais como as do exemplo; substitua-as antes de qualquer ambiente
+compartilhado.
 
 O `createsuperuser` cria um superusuário que já acessa o menu completo: o SPA usa `is_admin`, o
 mesmo predicado de autorização do backend, e não exige ajuste manual de `User.role`. O percurso
 completo do produto (cliente → oportunidade → conversão → projeto → equipe → indicadores) está em
 [`docs/runbooks/roteiro-de-teste.md`](docs/runbooks/roteiro-de-teste.md).
 
-Portas expostas pelo `docker compose` (faixa alta para evitar conflito com outros serviços):
+Acesse:
 
 | Serviço | URL |
 | --- | --- |
@@ -23,7 +44,36 @@ Portas expostas pelo `docker compose` (faixa alta para evitar conflito com outro
 | Documentação da API | `http://localhost:19000/api/docs/` |
 | Caixa de e-mail (Mailpit) | `http://localhost:19025` |
 
-Para executar fora do Docker, use `uv sync` em `backend/` e `npm install` em `frontend/`. Nesse modo a API roda na porta padrão `8000` e o frontend em `5173` (o Vite faz proxy de `/api` para `http://localhost:8000`).
+Para subir em background e acompanhar os serviços:
+
+```bash
+docker compose up -d --build
+docker compose logs -f api web
+```
+
+Não existe um comando de seed completo com dados de demonstração. As migrações já semeiam
+estruturas básicas, como pipeline, jornada e níveis de serviço; clientes, oportunidades e projetos
+podem ser criados pela interface.
+
+Sem Docker, opcionalmente:
+
+```bash
+cd backend
+uv sync
+uv run python manage.py migrate
+uv run python manage.py runserver
+```
+
+Em outro terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Nesse modo, API e frontend ficam em `http://localhost:8000` e `http://localhost:5173`,
+respectivamente. O Vite faz proxy de `/api` para a API local.
 
 ## Produção
 
