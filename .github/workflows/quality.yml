@@ -1,9 +1,20 @@
 name: Qualidade
 
+# TEMPORARY SPEED MODE — 2026-08-24
+#
+# Automatic PR/main execution is intentionally paused while delivery velocity is prioritized.
+# Local validation remains the active engineering gate during this period.
+#
+# To re-enable the previous behavior, restore:
+#
+# on:
+#   pull_request:
+#   push:
+#     branches: [main]
+#
+# Keep this workflow available manually for spot checks before important merges/releases.
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # Cancela o que foi superado **só em PR**, nunca em `main`.
 #
