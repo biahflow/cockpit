@@ -1,5 +1,7 @@
 # DAP r1 — Pulse Design System foundations
 
+> **Superado pela [revisão 2](../dap-gh19-r2/README.md).** A aprovação histórica desta revisão não é a autoridade do Design Approval Gate atual da Issue #19.
+
 **Issue:** [#19](https://github.com/biahflow/pulse/issues/19)
 **ADR:** [0041](../../adr/0041-pulse-design-system-e-validacao-visual.md)
 **Revisão:** 1

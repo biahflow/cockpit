@@ -12,6 +12,9 @@ afterEach(cleanup);
 test("admin vê o título", () => {
   render(<DesignSystemPage />);
   expect(screen.getByRole("heading", { name: "Design system" })).toBeInTheDocument();
+  expect(screen.getByText(/DAP r2/)).toBeInTheDocument();
+  expect(screen.getByTestId("ds-primary")).toHaveClass("btn");
+  expect(screen.getByTestId("ds-secondary")).toHaveClass("btn--secondary");
 });
 
 test("não-admin vê sem permissão", () => {

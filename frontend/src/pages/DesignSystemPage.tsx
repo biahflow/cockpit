@@ -1,4 +1,4 @@
-import { LoaderCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert, Info, LoaderCircle, XCircle } from "lucide-react";
 
 import { useAuth } from "../auth";
 
@@ -6,7 +6,10 @@ const SWATCHES = [
   ["ink", "bg-ink"],
   ["muted", "bg-muted"],
   ["line", "bg-line"],
+  ["line-strong", "bg-line-strong"],
   ["canvas", "bg-canvas"],
+  ["surface", "bg-surface"],
+  ["surface-subtle", "bg-surface-subtle"],
   ["brand-50", "bg-brand-50"],
   ["brand-100", "bg-brand-100"],
   ["brand-200", "bg-brand-200"],
@@ -15,6 +18,7 @@ const SWATCHES = [
   ["brand-700", "bg-brand-700"],
   ["brand-900", "bg-brand-900"],
   ["danger", "bg-danger"],
+  ["danger-50", "bg-danger-50"],
   ["success", "bg-success"],
   ["success-50", "bg-success-50"],
   ["warning", "bg-warning"],
@@ -24,21 +28,14 @@ const SWATCHES = [
 ] as const;
 
 const ESPACOS = [
-  ["w-1", "w-1"],
-  ["w-2", "w-2"],
-  ["w-3", "w-3"],
-  ["w-4", "w-4"],
-  ["w-5", "w-5"],
-  ["w-6", "w-6"],
-  ["w-7", "w-7"],
-  ["w-8", "w-8"],
+  ["4", "w-1"], ["8", "w-2"], ["12", "w-3"], ["16", "w-4"],
+  ["20", "w-5"], ["24", "w-6"], ["32", "w-8"], ["40", "w-10"], ["48", "w-12"],
 ] as const;
 
 const RAIOS = [
-  ["none", "rounded-none"],
-  ["lg", "rounded-lg"],
-  ["xl", "rounded-xl"],
-  ["2xl", "rounded-2xl"],
+  ["4 detalhe", "rounded"],
+  ["8 controle", "rounded-lg"],
+  ["12 cartão", "rounded-xl"],
   ["full", "rounded-full"],
 ] as const;
 
@@ -52,7 +49,7 @@ export function DesignSystemPage() {
     <header className="page-head">
       <p className="eyebrow">Pulse Design System</p>
       <h1>Design system</h1>
-      <p>Fundações medidas (ADR 0041, DAP r1). Paleta clay, primário ink, perigo separado da marca.</p>
+      <p>Fundações aprovadas (ADR 0041, DAP r2). Comando calmo: clay é identidade, informação é azul e perigo é vermelho.</p>
       <a href="/configuracoes" className="back-link">Configurações</a>
     </header>
 
@@ -71,8 +68,10 @@ export function DesignSystemPage() {
     <section className="panel">
       <div className="panel-heading"><h2>Tipo</h2></div>
       <p className="eyebrow">Operação</p>
-      <p className="mt-2 text-sm leading-6 text-slate-800">Texto de corpo. Inter Variable, slate-800 sobre canvas.</p>
-      <p className="mt-1 text-sm text-muted">Legenda secundária. muted sobre canvas passa AA com folga.</p>
+      <p className="type-title mt-2 text-ink">Título de seção — 16/24 650</p>
+      <p className="type-body mt-1 text-ink">Texto de corpo — 14/22 400.</p>
+      <p className="type-label mt-1 text-muted">Label — 12/16 600.</p>
+      <p className="type-meta mt-1 text-muted">Meta — 11/16 500.</p>
     </section>
 
     <section className="panel">
@@ -102,19 +101,19 @@ export function DesignSystemPage() {
     <section className="panel">
       <div className="panel-heading"><h2>Superfície</h2></div>
       <div className="flex flex-wrap gap-4">
-        <div className="panel max-w-xs"><p className="text-sm text-muted">Painel com sombra card.</p></div>
-        <div className="max-w-xs rounded-xl bg-white p-3 shadow-raised"><p className="text-sm text-muted">Sombra raised.</p></div>
-        <div className="max-w-xs rounded-xl bg-white p-3 shadow-pop"><p className="text-sm text-muted">Sombra pop.</p></div>
+        <div className="panel max-w-xs"><p className="text-sm text-muted">Card: 1 px, sombra contida.</p></div>
+        <div className="max-w-xs rounded-xl bg-surface p-3 shadow-raised"><p className="text-sm text-muted">Raised: ação contextual.</p></div>
+        <div className="max-w-xs rounded-xl bg-surface p-3 shadow-pop"><p className="text-sm text-muted">Popover: sobreposição.</p></div>
       </div>
     </section>
 
     <section className="panel">
       <div className="panel-heading"><h2>Botões</h2></div>
       <div className="flex flex-wrap gap-3">
-        <button type="button" className="btn">Primário</button>
-        <button type="button" className="btn" disabled>Primário desligado</button>
-        <button type="button" className="btn btn--secondary">Secundário</button>
-        <button type="button" className="btn btn--secondary" disabled>Secundário desligado</button>
+        <button type="button" className="btn" data-testid="ds-primary">Primário</button>
+        <button type="button" className="btn" data-testid="ds-primary-disabled" disabled>Primário desligado</button>
+        <button type="button" className="btn btn--secondary" data-testid="ds-secondary">Secundário</button>
+        <button type="button" className="btn btn--secondary" data-testid="ds-secondary-disabled" disabled>Secundário desligado</button>
         <button type="button" className="btn btn--danger">Perigo</button>
         <button type="button" className="btn btn--danger" disabled>Perigo desligado</button>
       </div>
@@ -123,10 +122,10 @@ export function DesignSystemPage() {
     <section className="panel">
       <div className="panel-heading"><h2>Selos</h2></div>
       <div className="flex flex-wrap gap-2">
-        <span className="state state--0">Informativo</span>
-        <span className="state state--1">Concluído</span>
-        <span className="state state--2">Atenção</span>
-        <span className="state state--3">Falha</span>
+        <span className="state state--0"><Info className="size-3" aria-hidden="true" />Informativo</span>
+        <span className="state state--1"><CheckCircle2 className="size-3" aria-hidden="true" />Concluído</span>
+        <span className="state state--2"><CircleAlert className="size-3" aria-hidden="true" />Atenção</span>
+        <span className="state state--3"><XCircle className="size-3" aria-hidden="true" />Falha</span>
         <span className="state state--off">Arquivado</span>
       </div>
     </section>

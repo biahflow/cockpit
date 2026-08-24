@@ -1,10 +1,10 @@
 # Pulse Design System — contrato de consumo
 
 **ADR:** [0041](../adr/0041-pulse-design-system-e-validacao-visual.md)
-**DAP:** [r1](dap-gh19-r1/README.md), aprovado 2026-08-24 (visual + valores da tabela)
+**DAP:** [r2](dap-gh19-r2/README.md), aprovado 2026-08-24
 **Fonte dos tokens:** `frontend/src/index.css` (`@theme` / `@theme inline` / `@layer components`)
 
-Este é o contrato para telas novas e alterações visuais no Pulse. A forma já existente (ADR 0024–0026) continua; r1 só nomeia o que já estava medido e acrescenta tokens semânticos sem mudar o matiz.
+Este é o contrato para telas novas e alterações visuais no Pulse. A forma já existente (ADR 0024–0026) continua; r2 explicita a hierarquia compacta para operação e os tokens semânticos aprovados.
 
 ## Identidade
 
@@ -21,7 +21,9 @@ Valores novos só entram com DAP aprovado. Não inventar matiz. Não acrescentar
 | `ink` | `#12110f` | texto, títulos, **botão primário** |
 | `muted` | `#57534e` | texto secundário |
 | `line` | `#e7e5e4` | borda |
+| `line-strong` | `#d6d3d1` | borda enfatizada |
 | `canvas` | `#fafaf9` | fundo da página |
+| `surface` / `surface-subtle` | `#ffffff` / `#f5f5f4` | superfícies |
 | `brand-50` | `#fdf1ec` | tinte da marca |
 | `brand-100` | `#fadfd4` | tinte mais carregado |
 | `brand-200` | `#dd8b62` | único acento que sobrevive a fundo escuro |
@@ -29,10 +31,10 @@ Valores novos só entram com DAP aprovado. Não inventar matiz. Não acrescentar
 | `brand-600` | `#a8412a` | hover da marca |
 | `brand-700` | `#9c3c26` | texto sobre `brand-50` |
 | `brand-900` | `#5c2317` | clay profundo (login) |
-| `danger` | `#b91c1c` | erro e ação destrutiva — **não é marca** |
+| `danger` / `danger-50` | `#b91c1c` / `#fef2f2` | erro e ação destrutiva — **não é marca** |
 | `success` / `success-50` | `#047857` / `#ecfdf5` | semântico; hexes emerald-700/50 |
 | `warning` / `warning-50` | `#b45309` / `#fffbeb` | semântico; hexes amber-700/50 |
-| `info` / `info-50` | alias de `brand-700` / `brand-50` | informativo |
+| `info` / `info-50` | `#1d4ed8` / `#eff6ff` | informativo, separado da marca |
 
 `accent` e `accent-50` são apelidos de migração para `brand-500` / `brand-50`. Em código novo escreva `brand-*`.
 
@@ -51,7 +53,7 @@ Use a classe. Não reescreva o literal. A guarda é `frontend/src/test/primitiva
 | `.state--0` | informativo (`info`) |
 | `.state--1` | sucesso |
 | `.state--2` | aviso |
-| `.state--3` | perigo (`red-50` + `text-danger`) |
+| `.state--3` | perigo (`danger-50` + `danger`) |
 | `.state--off` | neutro (arquivado, desligado) |
 | `.alert--error` / `.alert--ok` | alerta de tela, não selo |
 | `.empty-state` | vazio |
@@ -63,7 +65,7 @@ Mapa de estado devolve **variante** (`"state--1"`), nunca a cor (`"bg-emerald-50
 
 Quando o axe e o tom discordam, cede o tom. Gate: `frontend/e2e/a11y.spec.ts` (WCAG 2.0/2.1 A e AA).
 
-Medições já registradas: `ink` sobre branco 18,9:1; `brand-500` sobre branco 4,96:1; `brand-500` sobre `ink` **3,82:1** (reprova — use `brand-200`); `brand-700` sobre `brand-50` 6,1:1; `muted` sobre `canvas` 7,4:1; `danger` sobre branco 5,9:1 e sobre `red-50` 5,6:1.
+Medições aprovadas em r2: `ink`/`canvas` 18,07:1; `muted`/`canvas` 7,30:1; `brand-500`/branco 5,02:1; `brand-700`/`brand-50` 6,14:1; `brand-200`/`ink` 7,14:1; sucesso 5,21:1; aviso 4,84:1; perigo 5,91:1; informação 6,16:1.
 
 ## Página de prova
 
@@ -71,4 +73,4 @@ Medições já registradas: `ink` sobre branco 18,9:1; `brand-500` sobre branco 
 
 ## Fora deste contrato
 
-Dark theme, redesign das telas existentes, clone do One, identidade Nexus, copy dos mocks do DAP.
+Tema escuro (exige novo DAP), redesign amplo das telas/shell, clone do One, identidade Nexus, copy dos mocks do DAP.
