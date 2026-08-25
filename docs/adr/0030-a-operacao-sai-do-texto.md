@@ -1,6 +1,6 @@
 # ADR 0030 — A operação sai do texto: o cockpit vira o sistema primário
 
-**Status:** aceito
+**Status:** aceito — superado em parte pela ADR 0035 (nome do produto)
 **Data:** 19/08/2026
 **Fase:** transversal — posicionamento do produto e fonte primária da operação
 **Relacionadas:** RFC 0002 (jornada de consultoria assistida por IA), ADR 0006 (agentes

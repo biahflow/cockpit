@@ -1,4 +1,4 @@
-# Roadmap — Cockpit (Biahflow)
+# Roadmap — Pulse (Biahflow)
 
 Atualizado em 19/08/2026. Esta é a fonte canônica de inventário e estado das features/work items
 do projeto. Separa o que já compõe a plataforma do que falta, e aponta o norte (jornada de
@@ -507,11 +507,13 @@ um radar que ele respeita.
       gatilhos do portal do cliente (FDD 022 de lá, ela própria bloqueada até o laço do funil
       fechar). Ver FDD 030.
 
-## Norte — Cockpit: a metodologia FDE materializada (ADR 0030)
+## Norte — Pulse: a metodologia FDE materializada (ADR 0030, ADR 0035)
 
-Desde 19/08/2026 o produto se chama **Cockpit** e é o sistema primário da operação (ADR 0030 —
-o Notion vira referência). A metodologia FDE consultável está em `docs/metodologia-fde.md` e no
-corpus de conhecimento; o princípio é **contexto vira comportamento**, não página para ler.
+Desde 19/08/2026 este produto é o sistema primário da operação (ADR 0030 — o Notion vira
+referência); desde a ADR 0035 o produto se chama **Pulse** — **Cockpit** foi o nome que a ADR
+0030 adotou e permanece como referência histórica. A metodologia FDE consultável está em
+`docs/metodologia-fde.md` e no corpus de conhecimento; o princípio é **contexto vira
+comportamento**, não página para ler.
 
 Fase aprovada (blocos que o material já estabilizou):
 

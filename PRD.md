@@ -1,10 +1,11 @@
-# PRD — Cockpit (Biahflow)
+# PRD — Pulse (Biahflow)
 
 > Atualizado em 19/08/2026. O escopo do MVP original (CRM → conversão → execução) foi entregue e
 > o produto avançou para a **jornada de consultoria assistida por IA** (RFC 0002). Desde a ADR
-> 0030 o produto se chama **Cockpit** e é o **sistema primário da operação** da Biahflow — o
-> Notion vira referência. O estado de entrega, item a item, vive no `roadmap.md`; este documento
-> descreve o produto atual.
+> 0030 este é o **sistema primário da operação** da Biahflow — o Notion vira referência; desde a
+> ADR 0035 o produto se chama **Pulse** (**Cockpit** foi o nome que a ADR 0030 adotou e permanece
+> como referência histórica). O estado de entrega, item a item, vive no `roadmap.md`; este
+> documento descreve o produto atual.
 
 ## Problema
 
@@ -21,7 +22,7 @@ que ela produz é rascunho sujeito a revisão humana.
 
 ## Metodologia — FDE
 
-A operação que o Cockpit materializa é a metodologia FDE (Forward Deployed Engineering), descrita
+A operação que o Pulse materializa é a metodologia FDE (Forward Deployed Engineering), descrita
 em [`docs/metodologia-fde.md`](docs/metodologia-fde.md): a escada
 `Discover → Prioritize → [Feasibility] → Prove → Scale → Optimize`, com decision gate de quatro
 saídas (GO / CONDITIONAL GO / REDESIGN / NO-GO) ao fim de Feasibility e de PROVE, quality gates por
