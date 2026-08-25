@@ -14,7 +14,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 REPOSITORY_RE = re.compile(r"^[a-z0-9.-]+(?::[0-9]+)?/[A-Za-z0-9._/-]+$")
 RELEASE_TAG_RE = re.compile(r"^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
-LOGICAL_IMAGES = {"backend": "cockpit-api", "frontend": "cockpit-web"}
+LOGICAL_IMAGES = {"backend": "pulse-api", "frontend": "pulse-web"}
 
 
 class EvidenceError(ValueError):
@@ -240,7 +240,7 @@ def build_hml(args: argparse.Namespace) -> dict[str, Any]:
         },
         "images": {
             "backend": {
-                "logical_name": "cockpit-api",
+                "logical_name": "pulse-api",
                 "digest": args.backend_digest,
                 "source_repository": args.backend_repository,
                 "runtime_ref": args.backend_runtime_ref,
@@ -252,7 +252,7 @@ def build_hml(args: argparse.Namespace) -> dict[str, Any]:
                 ],
             },
             "frontend": {
-                "logical_name": "cockpit-web",
+                "logical_name": "pulse-web",
                 "digest": args.frontend_digest,
                 "source_repository": args.frontend_repository,
                 "runtime_ref": args.frontend_runtime_ref,
@@ -286,7 +286,7 @@ def build_production(args: argparse.Namespace) -> dict[str, Any]:
         },
         "images": {
             "backend": {
-                "logical_name": "cockpit-api",
+                "logical_name": "pulse-api",
                 "hml_repository": hml["images"]["backend"]["source_repository"],
                 "hml_digest": hml["images"]["backend"]["digest"],
                 "hml_runtime_ref": hml["images"]["backend"]["runtime_ref"],
@@ -295,7 +295,7 @@ def build_production(args: argparse.Namespace) -> dict[str, Any]:
                 "runtime_ref": args.backend_runtime_ref,
             },
             "frontend": {
-                "logical_name": "cockpit-web",
+                "logical_name": "pulse-web",
                 "hml_repository": hml["images"]["frontend"]["source_repository"],
                 "hml_digest": hml["images"]["frontend"]["digest"],
                 "hml_runtime_ref": hml["images"]["frontend"]["runtime_ref"],
