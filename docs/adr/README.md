@@ -3,7 +3,7 @@
 Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequências e status. Numere arquivos sequencialmente.
 
 - 0001 — Django, React e PostgreSQL
-- 0002 — Autenticação, autorização e documentos privados
+- 0002 — Acesso privado
 - 0003 — Webhook para o portal do cliente
 - 0004 — Gestão de tarefas: espelho vs. sistema de registro externo
 - 0005 — Alimentação do portal: reuniões, pendências e resultados
@@ -35,3 +35,13 @@ Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequ
 - 0031 — O degrau sai sozinho, o texto da IA não
 - 0032 — Só a declarada move número
 - 0033 — A camada 5 não suspende sozinha
+- 0034 — Só o fato sustenta número
+- 0035 — Fontes da verdade e fronteiras operacionais
+- 0036 — ClickUp como SoR de Delivery e aceitação separada do merge
+- 0037 — Backbone event-driven, Outbox e idempotência
+- 0038 — OpenTelemetry como padrão canônico e Grafana Cloud como backend inicial
+- 0039 — LangGraph como runtime agentic e LangSmith para observabilidade/evals de IA
+- 0040 — Pulse + GitHub + One sem ClickUp ou Make
+- 0041 — Pulse Design System e validação visual
+- 0042 — Trunk-based: `main` promove HML e tag da `main` promove produção
+- 0043 — A marca Pulse no shell, e as fundações r2 finalmente consumidas
