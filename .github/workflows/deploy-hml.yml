@@ -6,17 +6,19 @@
 # escrita, porque a resposta é contraintuitiva (ADR 0044,
 # `docs/adr/0044-a-infra-do-pulse-mora-no-outro-repositorio.md`):
 #
-# 1. NÃO é `biahflow/infra`, apesar do nome e da descrição dele. Os cinco recursos `cockpit-*`
+# 1. NÃO é `biahflow/infra`, apesar do nome e da descrição dele. Os cinco recursos `pulse-*`
 #    que este workflow atualiza são declarados em `biahflow/portal-cliente`, em
 #    `infra/terraform/ambientes/hml-biahflow/servicos.tf`, sobre a fundação de HML que fica ao
 #    lado, em `ambientes/hml`. Lá é onde se muda escala, ingress, rede, variável e segredo; aqui
 #    só se troca a imagem por digest. `apply` é `workflow_dispatch` com flag, e é Human Gate.
-# 2. `cockpit-*` é PREFIXO HISTÓRICO do Pulse — os recursos herdaram o nome do repositório, que a
-#    ADR 0030 rebatizou de `portal` para `cockpit` antes de a ADR 0035 nomear o produto de Pulse.
-#    O rename para `pulse-*` está decidido e sai por PR daquele repositório, tocando os dois
-#    stacks no mesmo lote: a chave do serviço em `servicos.tf` e o literal `origem_do_crm` em
-#    `ambientes/hml/cloudflare.tf`, que é de outro state e já quebrou uma vez neste movimento.
-#    Produção, que ainda não existe, nasce `pulse-*`: os nomes de lá saem de `vars.PROD_*`.
+# 2. Estes nomes já foram `biahflow-*` e `cockpit-*`, e o segundo rename saiu em 25/08/2026
+#    (ADR 0070 daquele repositório) para alinhá-los ao nome do produto. Renomear em Cloud Run é
+#    destruir e recriar, e a `run.app` muda junto — mas quem o navegador digita é
+#    `app.biahflow.ai`, que a fundação define e a Cloudflare serve. Se um dia estes nomes mudarem
+#    de novo, mudam LÁ primeiro: o `servicos.tf` e o literal `origem_do_crm` de
+#    `ambientes/hml/cloudflare.tf`, que é outro state e já ficou para trás uma vez (ADR 0065).
+#    A guarda de lá cobre aquele lado; ESTE arquivo nenhum portão confere contra a nuvem.
+
 name: deploy-hml
 
 on:
@@ -145,37 +147,37 @@ jobs:
             assert_revision "$ghcr_repository@$ghcr_digest"
           }
 
-          publica cockpit-api backend
-          publica cockpit-web frontend
+          publica pulse-api backend
+          publica pulse-web frontend
 
-          api_digest=$(digest_of "$REGISTRO/cockpit-api:$GITHUB_SHA")
-          web_digest=$(digest_of "$REGISTRO/cockpit-web:$GITHUB_SHA")
+          api_digest=$(digest_of "$REGISTRO/pulse-api:$GITHUB_SHA")
+          web_digest=$(digest_of "$REGISTRO/pulse-web:$GITHUB_SHA")
           echo "API_DIGEST=$api_digest" >> "$GITHUB_ENV"
           echo "WEB_DIGEST=$web_digest" >> "$GITHUB_ENV"
-          echo "API_REF=$REGISTRO/cockpit-api@$api_digest" >> "$GITHUB_ENV"
-          echo "WEB_REF=$REGISTRO/cockpit-web@$web_digest" >> "$GITHUB_ENV"
+          echo "API_REF=$REGISTRO/pulse-api@$api_digest" >> "$GITHUB_ENV"
+          echo "WEB_REF=$REGISTRO/pulse-web@$web_digest" >> "$GITHUB_ENV"
 
       # A imagem recusa subir com configuração insegura. Migração continua sendo o primeiro uso do
       # backend novo e bloqueia o deploy quando falha.
       - name: Migra o banco
         run: |
           set -euo pipefail
-          gcloud run jobs update cockpit-migrate \
+          gcloud run jobs update pulse-migrate \
             --image "$API_REF" --region "$REGIAO" --quiet
-          gcloud run jobs execute cockpit-migrate --region "$REGIAO" --wait
+          gcloud run jobs execute pulse-migrate --region "$REGIAO" --wait
 
       - name: Publica as revisões por digest
         run: |
           set -euo pipefail
-          gcloud run services update cockpit-api \
+          gcloud run services update pulse-api \
             --image "$API_REF" --region "$REGIAO" --quiet
-          gcloud run services update cockpit-web \
+          gcloud run services update pulse-web \
             --image "$WEB_REF" --region "$REGIAO" --quiet
 
       - name: Atualiza o agendador por digest
         run: |
           set -euo pipefail
-          gcloud beta run worker-pools update cockpit-scheduler \
+          gcloud beta run worker-pools update pulse-scheduler \
             --image "$API_REF" --region "$REGIAO" --quiet
 
       # A sonda continua não bloqueante: indisponibilidade de um fornecedor não reverte código bom,
@@ -184,17 +186,17 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          gcloud run jobs update cockpit-check \
+          gcloud run jobs update pulse-check \
             --image "$API_REF" --region "$REGIAO" --quiet
-          gcloud run jobs execute cockpit-check --region "$REGIAO" --wait
+          gcloud run jobs execute pulse-check --region "$REGIAO" --wait
 
       - name: Fumaça
         run: |
           set -euo pipefail
-          url=$(gcloud run services describe cockpit-web --region "$REGIAO" --format='value(status.url)')
+          url=$(gcloud run services describe pulse-web --region "$REGIAO" --format='value(status.url)')
           for tentativa in 1 2 3 4 5; do
             if curl -sf --max-time 10 "$url/" >/dev/null; then
-              echo "cockpit-web responde em $url"
+              echo "pulse-web responde em $url"
               exit 0
             fi
             echo "tentativa $tentativa falhou; esperando"
@@ -222,22 +224,22 @@ jobs:
               || { echo "::error::$resource usa $actual; esperado $expected"; return 1; }
           }
 
-          api_runtime_ref=$(service_ref cockpit-api)
-          web_runtime_ref=$(service_ref cockpit-web)
-          migrate_ref=$(gcloud run jobs describe cockpit-migrate --region "$REGIAO" --format=json \
+          api_runtime_ref=$(service_ref pulse-api)
+          web_runtime_ref=$(service_ref pulse-web)
+          migrate_ref=$(gcloud run jobs describe pulse-migrate --region "$REGIAO" --format=json \
             | jq -er '.template.template.containers[0].image
               // .spec.template.spec.template.spec.containers[0].image
               // .spec.template.template.containers[0].image')
-          scheduler_ref=$(gcloud beta run worker-pools describe cockpit-scheduler \
+          scheduler_ref=$(gcloud beta run worker-pools describe pulse-scheduler \
             --region "$REGIAO" --format=json \
             | jq -er '.template.containers[0].image
               // .spec.template.spec.containers[0].image
               // .spec.template.containers[0].image')
 
-          assert_ref cockpit-api "$API_REF" "$api_runtime_ref"
-          assert_ref cockpit-web "$WEB_REF" "$web_runtime_ref"
-          assert_ref cockpit-migrate "$API_REF" "$migrate_ref"
-          assert_ref cockpit-scheduler "$API_REF" "$scheduler_ref"
+          assert_ref pulse-api "$API_REF" "$api_runtime_ref"
+          assert_ref pulse-web "$WEB_REF" "$web_runtime_ref"
+          assert_ref pulse-migrate "$API_REF" "$migrate_ref"
+          assert_ref pulse-scheduler "$API_REF" "$scheduler_ref"
 
           echo "HML_API_RUNTIME_REF=$api_runtime_ref" >> "$GITHUB_ENV"
           echo "HML_WEB_RUNTIME_REF=$web_runtime_ref" >> "$GITHUB_ENV"
@@ -251,15 +253,15 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --run-id "$GITHUB_RUN_ID" \
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --backend-repository "$REGISTRO/cockpit-api" \
+            --backend-repository "$REGISTRO/pulse-api" \
             --backend-digest "$API_DIGEST" \
             --backend-runtime-ref "$HML_API_RUNTIME_REF" \
-            --backend-mirror-repository "ghcr.io/$GITHUB_REPOSITORY/cockpit-api" \
+            --backend-mirror-repository "ghcr.io/$GITHUB_REPOSITORY/pulse-api" \
             --backend-mirror-digest "$API_DIGEST" \
-            --frontend-repository "$REGISTRO/cockpit-web" \
+            --frontend-repository "$REGISTRO/pulse-web" \
             --frontend-digest "$WEB_DIGEST" \
             --frontend-runtime-ref "$HML_WEB_RUNTIME_REF" \
-            --frontend-mirror-repository "ghcr.io/$GITHUB_REPOSITORY/cockpit-web" \
+            --frontend-mirror-repository "ghcr.io/$GITHUB_REPOSITORY/pulse-web" \
             --frontend-mirror-digest "$WEB_DIGEST"
           python3 .github/scripts/release_evidence.py validate-hml \
             --file hml-release-evidence.json \

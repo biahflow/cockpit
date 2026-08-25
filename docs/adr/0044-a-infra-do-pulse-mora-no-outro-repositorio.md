@@ -110,6 +110,20 @@ acoplamento entre eles é justamente o que já falhou uma vez:
 É `destroy` mais `create` dos cinco recursos, com janela de indisponibilidade em HML. Os dois
 `plan` vão publicados no PR, e a ordem entre eles é parte do plano, não detalhe de execução.
 
+*Executado em 25/08/2026, na ADR 0070 do `biahflow/portal-cliente`. A ordem que a prática impôs
+é esta, e a razão dela é que o `infra-hml.yml` de lá roda **sem** `-var tag_imagem`, de modo que
+serviço recém-criado nasce com a imagem de bootstrap:*
+
+```text
+apply de ambientes/hml-biahflow   → destrói cockpit-*, cria pulse-* com bootstrap
+apply de ambientes/hml            → borda passa a apontar para pulse-web
+merge do PR deste repositório     → deploy-hml publica as imagens reais em pulse-*
+```
+
+*Entre o primeiro apply e o último passo, `app.biahflow.ai` serve o container de bootstrap, e
+qualquer push na `main` daqui que dispare o `deploy-hml` antes do merge falha — porque o
+workflow ainda nomearia `cockpit-api`. Os dois PRs foram preparados juntos por isso.*
+
 ### 4. Produção nasce `pulse-*`
 
 `envs/prd/servicos` — ou o que ocupar o lugar dele depois da migração — declara os recursos já

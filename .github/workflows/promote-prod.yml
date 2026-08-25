@@ -242,8 +242,8 @@ jobs:
             echo "${key^^}_PROD_REF=$target_repository@$digest" >> "$GITHUB_ENV"
           }
 
-          promove backend cockpit-api
-          promove frontend cockpit-web
+          promove backend pulse-api
+          promove frontend pulse-web
 
       - name: Migra o banco
         run: |

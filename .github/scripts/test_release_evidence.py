@@ -31,18 +31,18 @@ def hml_payload() -> dict:
         "hml": {"workflow_run_id": 123, "workflow_run_attempt": 2, "status": "validated"},
         "images": {
             "backend": {
-                "logical_name": "cockpit-api",
+                "logical_name": "pulse-api",
                 "digest": DIGEST,
-                "source_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-api",
-                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-api@{DIGEST}",
-                "mirrors": [{"repository": "ghcr.io/biahflow/pulse/cockpit-api", "digest": DIGEST}],
+                "source_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-api",
+                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-api@{DIGEST}",
+                "mirrors": [{"repository": "ghcr.io/biahflow/pulse/pulse-api", "digest": DIGEST}],
             },
             "frontend": {
-                "logical_name": "cockpit-web",
+                "logical_name": "pulse-web",
                 "digest": DIGEST,
-                "source_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-web",
-                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-web@{DIGEST}",
-                "mirrors": [{"repository": "ghcr.io/biahflow/pulse/cockpit-web", "digest": DIGEST}],
+                "source_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-web",
+                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-web@{DIGEST}",
+                "mirrors": [{"repository": "ghcr.io/biahflow/pulse/pulse-web", "digest": DIGEST}],
             },
         },
     }
@@ -62,22 +62,22 @@ def production_payload() -> dict:
         },
         "images": {
             "backend": {
-                "logical_name": "cockpit-api",
-                "hml_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-api",
+                "logical_name": "pulse-api",
+                "hml_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-api",
                 "hml_digest": DIGEST,
-                "hml_runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-api@{DIGEST}",
-                "production_repository": "us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-api",
+                "hml_runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-api@{DIGEST}",
+                "production_repository": "us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-api",
                 "production_digest": DIGEST,
-                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-api@{DIGEST}",
+                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-api@{DIGEST}",
             },
             "frontend": {
-                "logical_name": "cockpit-web",
-                "hml_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-web",
+                "logical_name": "pulse-web",
+                "hml_repository": "us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-web",
                 "hml_digest": DIGEST,
-                "hml_runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/cockpit-web@{DIGEST}",
-                "production_repository": "us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-web",
+                "hml_runtime_ref": f"us-east1-docker.pkg.dev/biahflow-hml/hml/pulse-web@{DIGEST}",
+                "production_repository": "us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-web",
                 "production_digest": DIGEST,
-                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-web@{DIGEST}",
+                "runtime_ref": f"us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-web@{DIGEST}",
             },
         },
     }
@@ -155,15 +155,15 @@ class ProductionEvidenceTests(unittest.TestCase):
                 release_tag="v1.2.3",
                 run_id=456,
                 run_attempt=3,
-                backend_repository="us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-api",
+                backend_repository="us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-api",
                 backend_digest=DIGEST,
                 backend_runtime_ref=(
-                    f"us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-api@{DIGEST}"
+                    f"us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-api@{DIGEST}"
                 ),
-                frontend_repository="us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-web",
+                frontend_repository="us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-web",
                 frontend_digest=DIGEST,
                 frontend_runtime_ref=(
-                    f"us-east1-docker.pkg.dev/biahflow-prod/prod/cockpit-web@{DIGEST}"
+                    f"us-east1-docker.pkg.dev/biahflow-prod/prod/pulse-web@{DIGEST}"
                 ),
             )
             evidence = release_evidence.build_production(args)
