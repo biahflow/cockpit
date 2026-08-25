@@ -59,6 +59,43 @@ f4c661f5faa28e1573700d4b88dfdda1920610c11ecd61e171115094dd7bd944
 Uma renderização depende de fonte, navegador e plataforma; a captura congelada é o que a aprovação
 de fato nomeia.
 
+## Evidência de runtime (posterior à aprovação)
+
+Produzida na implementação, **depois** do gate. Não altera o que foi aprovado e não faz parte do
+pacote que o humano avaliou — o `approved-board.png` e seu SHA continuam sendo isso. É a prova de
+que o construído confere com o aprovado, exigida por esta classificação ser `BROWSER_REQUIRED`.
+
+**Cada captura nomeia a revisão em que foi tirada.** Evidência de "antes" sem revisão nomeada é
+imagem solta: daqui a dois meses ninguém sabe dizer se aquilo é o estado anterior ou uma versão
+intermediária que nunca existiu em lugar nenhum.
+
+| Arquivo | Revisão | O que mostra |
+| --- | --- | --- |
+| `antes-desktop.png` | `main@2eac470` | sidebar com o glifo `B` e o wordmark "Biahflow", rastro `Biahflow / Visão geral`, em 1280 |
+| `antes-mobile.png` | `main@2eac470` | gaveta aberta em 390 — **sem lockup nenhum**, o menu começa direto no primeiro item |
+| `antes-login-desktop.png` | `main@2eac470` | painel escuro do login com o `B` em tile branco e o eyebrow "Portal operacional" |
+| `browser-desktop.png` | a entrega | sidebar, topbar e visão geral em 1280 |
+| `browser-mobile.png` | a entrega | gaveta **aberta** em 390, já com o lockup denso |
+| `browser-login-desktop.png` | a entrega | painel escuro do login, com a variante invertida do mark |
+| `focus-desktop.png` | a entrega | link da marca com foco por teclado |
+
+As `browser-*` e a `focus-*` saem de `frontend/` por
+`PULSE_DAP_EVIDENCE_DIR=../docs/design/dap-gh26-r1 npx playwright test e2e/marca.spec.ts`, com lint,
+Vitest e build verdes — mesmo desenho da r2. O spec **afirma** o que essas capturas mostram, de modo
+que a evidência não é uma imagem solta que envelhece em silêncio.
+
+As `antes-*` vieram de um **spec temporário rodado contra `main`**, e não do `e2e/marca.spec.ts`.
+Não poderia ser de outro jeito, e a razão é o ponto: aquele spec não existe em `main`, e as
+asserções dele — mark canônico no sidebar, raiz `Pulse` no rastro, lockup na gaveta, variante
+invertida no login — **reprovariam** lá. O spec temporário não foi para o repositório: ele existiria
+para rodar contra um código que a entrega substitui.
+
+Duas divergências conhecidas entre as capturas **da entrega** e o `board.html`, ambas
+**intencionais**: o wordmark sai em 16px (papel *título*) e não nos 20px do quadro, e o mark em 32px
+e não em 40px. O contrato r2 não tem papel de 20px, e quando o pacote e o design system divergem **a
+fonte vence e o pacote é que está velho** — a regra que este próprio README enuncia na seção de
+proveniência.
+
 ## Superfícies e estados no pacote
 
 | Superfície | Estado | No pacote |

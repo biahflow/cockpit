@@ -1,16 +1,19 @@
 # Pulse Design System — contrato de consumo
 
-**ADR:** [0041](../adr/0041-pulse-design-system-e-validacao-visual.md)
-**DAP:** [r2](dap-gh19-r2/README.md), aprovado 2026-08-24
+**ADR:** [0041](../adr/0041-pulse-design-system-e-validacao-visual.md) · [0043](../adr/0043-a-marca-pulse-no-shell-e-as-fundacoes-r2-consumidas.md)
+**DAP:** [r2](dap-gh19-r2/README.md), aprovado 2026-08-24 (fundações normativas) · [GH-26 r1](dap-gh26-r1/README.md), aprovado 2026-08-25 (marca e shell)
 **Fonte dos tokens:** `frontend/src/index.css` (`@theme` / `@theme inline` / `@layer components`)
 
 Este é o contrato para telas novas e alterações visuais no Pulse. A forma já existente (ADR 0024–0026) continua; r2 explicita a hierarquia compacta para operação e os tokens semânticos aprovados.
+
+**O shell consome o contrato desde a ADR 0043.** Até ali r2 era declaração: os papéis tipográficos e o contrato de raio existiam em `@theme` e o shell escrevia `text-[13px]` e `rounded-xl` à mão. Sidebar, gaveta, topbar, popovers, campos e a visão geral passaram a consumir os papéis e os raios. As duas exceções ao contrato de raio estão declaradas: `.icon-button` mantém `size-10` por WCAG 2.5.8 (muda o raio, não o alvo) e `.filter-chip` segue `rounded-full`, reservado no DAP GH-26 r1 para quando Leads e Clientes entrarem em escopo.
 
 ## Identidade
 
 - O nome é **Pulse Design System**. `Nexus` não é produto, namespace, token nem identidade.
 - Pulse não clona o One. Princípios compartilhados não implicam a mesma pele.
 - O que identifica este portal é o matiz **clay** (`#bd4a30`). O portal do cliente é o roxo. Nunca use um no outro.
+- **O produto se apresenta como Pulse; Biahflow é a casa** (ADR 0043). Marca no shell é o asset canônico consumido pelo `PulseBrand` — `frontend/src/assets/brand/`, nunca SVG colado inline. Superfície escura usa `pulse-mark-inverse.svg` (`tone="dark"`): o clay sobre `brand-900` dá 2,45:1 e o mark some. O mark é decorativo, então **o axe não pega isto** — a regra `color-contrast` mede texto.
 
 ## Tokens
 
@@ -58,6 +61,9 @@ Use a classe. Não reescreva o literal. A guarda é `frontend/src/test/primitiva
 | `.alert--error` / `.alert--ok` | alerta de tela, não selo |
 | `.empty-state` | vazio |
 | `.form-label` + `field` | rótulo e campo |
+| `.metric-card--dark` | o cartão escuro da visão geral (ADR 0043) |
+| `.metric-icon--danger` / `--dark` | tinta do quadrado de ícone; escreva a variante, não `bg-red-50` |
+| `.user-button` | o botão de usuário da topbar |
 
 Mapa de estado devolve **variante** (`"state--1"`), nunca a cor (`"bg-emerald-50 …"`).
 
