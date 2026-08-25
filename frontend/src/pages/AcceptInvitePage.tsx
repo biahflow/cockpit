@@ -25,7 +25,7 @@ export function AcceptInvitePage() {
       </div> : <>
         <p className="eyebrow">Bem-vindo</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">Ative seu acesso</h1>
-        <p className="mt-2 text-sm text-muted">Defina seu usuário e senha para entrar no Portal Biahflow.</p>
+        <p className="mt-2 text-sm text-muted">Defina seu usuário e senha para entrar no Pulse.</p>
         {error && <p role="alert" className="alert--error mt-4">{error}</p>}
         <form className="mt-6 grid gap-4" onSubmit={event => void submit(event)}>
           <label className="form-label">Token do convite<input className="field" value={form.token} onChange={event => setForm({ ...form, token: event.target.value })} placeholder="Cole o token recebido por e-mail" required /></label>

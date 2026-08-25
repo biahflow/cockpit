@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title desc">
+  <title id="title">Pulse</title>
+  <desc id="desc">Marca Pulse invertida, para superfície escura: tile branco com traço de pulso em clay</desc>
+  <rect width="48" height="48" rx="10" fill="#FFFFFF"/>
+  <path d="M10 25h8l3.25-8 5.5 16 3.5-8H38" fill="none" stroke="#BD4A30" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
