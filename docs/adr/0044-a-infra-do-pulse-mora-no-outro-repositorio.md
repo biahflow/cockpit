@@ -135,6 +135,14 @@ continua proibido.
   no state como worker pool. Não há exceção a declarar.
 - A ADR 0030, que nomeia o cockpit como sistema primário e renomeia o repositório para ele,
   continua válida como registro histórico. Ela não é afetada.
+- **`deploy-hml` verde não prova que alguém alcança o produto, e isso ficou medido em vez de
+  suposto.** A sonda de fumaça deste workflow bate na URL `run.app` do serviço, que é a que o
+  próprio deploy acabou de publicar. O host que o usuário digita é `app.biahflow.ai`, que passa
+  pela borda Cloudflare — outro state, outro repositório. Em 25/08/2026 os dois discordavam: a
+  borda apontava para `biahflow-web`, serviço que não existe desde 19/08, e seis dias de deploy
+  verde não acusaram nada. A lacuna fica registrada aqui; fechá-la é escopo próprio, e esbarra no
+  Cloudflare Access, que responde 302 antes de a origem ser exercida — foi ele que escondeu a
+  falha de qualquer sonda anônima.
 
 ## Verificação
 
