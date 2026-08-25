@@ -1,8 +1,21 @@
-# Deploy de HML do Biahflow.
+# Deploy de HML do Pulse.
 #
 # O deploy de aplicação não roda `terraform apply`. Infraestrutura, rede, registros, segredos e
 # identidades continuam no repositório de infraestrutura compartilhado. Este workflow só constrói
 # as duas imagens da aplicação uma vez, fixa seus digests e projeta a `main` em HML.
+#
+# Duas ressalvas, ambas decididas na ADR 0044 (`docs/adr/0044-adotar-antes-de-renomear.md`):
+#
+# 1. A fronteira acima descreve o desenho, e não o estado. Os recursos que este workflow atualiza
+#    — os cinco `cockpit-*` abaixo — ainda NÃO estão declarados em `biahflow/infra`: foram criados
+#    à mão e não são governados por Terraform nenhum. Enquanto isso valer, a configuração estável
+#    deles (env, ingress, escala, service account) existe só no recurso vivo. Não destrua nem
+#    renomeie nada aqui antes que o stack exista e o `plan` tenha sido revisado e aplicado.
+# 2. `cockpit-*` é PREFIXO HISTÓRICO do Pulse — os recursos herdaram o nome do repositório, que a
+#    ADR 0030 rebatizou de `portal` para `cockpit` antes de a ADR 0035 nomear o produto de Pulse.
+#    O rename está decidido, mas represado atrás da adoção no Terraform, porque em
+#    Cloud Run renomear é destruir e recriar com URL nova. Produção, que ainda não existe, nasce
+#    `pulse-*`: os nomes de lá saem de `vars.PROD_*`, não daqui.
 name: deploy-hml
 
 on:
@@ -186,7 +199,7 @@ jobs:
             echo "tentativa $tentativa falhou; esperando"
             sleep 10
           done
-          echo "::error::o Biahflow não respondeu depois do deploy"
+          echo "::error::o Pulse não respondeu depois do deploy"
           exit 1
 
       - name: Confere os digests efetivamente implantados

@@ -47,3 +47,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0041 — Pulse Design System e validação visual
 - 0042 — Trunk-based: `main` promove HML e tag da `main` promove produção
 - 0043 — A marca Pulse no shell, e as fundações r2 finalmente consumidas
+- 0044 — Adotar antes de renomear: os recursos que nenhum Terraform declarava
