@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>DAP GH-26 r1 — Marca Pulse e fundações r2 no shell</title>
+<style>
+  :root{
+    --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+    --canvas:#fafaf9; --surface:#fff; --subtle:#f5f5f4;
+    --b50:#fdf1ec; --b100:#fadfd4; --b200:#dd8b62; --b500:#bd4a30; --b600:#a8412a; --b700:#9c3c26; --b900:#5c2317;
+    --danger:#b91c1c; --danger50:#fef2f2; --success:#047857; --success50:#ecfdf5;
+    --warning:#b45309; --warning50:#fffbeb; --info:#1d4ed8; --info50:#eff6ff;
+    --shadow-card:0 1px 2px rgba(18,17,15,.06);
+    --shadow-raised:0 8px 24px -12px rgba(18,17,15,.22);
+    --shadow-pop:0 16px 40px -16px rgba(18,17,15,.28);
+  }
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--canvas);color:var(--ink);margin:0;padding:48px 32px 96px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:32px;line-height:38px;font-weight:650;letter-spacing:-.03em;margin:0 0 8px}
+  .sub{color:var(--muted);font-size:14px;line-height:22px;margin:0 0 40px}
+  h2{font-size:16px;line-height:24px;font-weight:650;margin:56px 0 6px;letter-spacing:-.02em}
+  h2:first-of-type{margin-top:40px}
+  .lead{color:var(--muted);font-size:14px;line-height:22px;margin:0 0 20px;max-width:70ch}
+  .eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--b500);margin:0 0 6px}
+  code{background:var(--subtle);padding:2px 5px;border-radius:4px;font-size:12px}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:0 0 8px}
+  td,th{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--subtle);font-weight:650}
+  .sw{display:inline-block;width:14px;height:14px;border:1px solid var(--line-strong);border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+  .cap{font-size:11px;line-height:16px;font-weight:500;color:var(--muted);margin:8px 0 0}
+  .tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:3px 7px;border-radius:999px}
+  .tag--old{background:var(--subtle);color:var(--muted)}
+  .tag--new{background:var(--b50);color:var(--b700)}
+  .tag--res{background:var(--warning50);color:var(--warning)}
+  .frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow-card)}
+
+  /* ---- shell mock ---- */
+  .shell{display:grid;grid-template-columns:254px 1fr;min-height:520px}
+  .side{border-right:1px solid var(--line);background:#fff;padding:24px 14px 14px;display:flex;flex-direction:column}
+  .brandrow{display:flex;align-items:center;gap:10px;padding:0 8px;margin-bottom:24px}
+  .wm{font-size:16px;line-height:24px;font-weight:650;letter-spacing:-.03em;display:block}
+  .wmsub{font-size:11px;line-height:16px;font-weight:500;color:var(--muted);display:block}
+  .navlabel{padding:0 12px 8px;font-size:11px;line-height:16px;font-weight:700;text-transform:uppercase;letter-spacing:.11em;color:var(--muted)}
+  .navi{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:8px;font-size:12px;line-height:16px;font-weight:600;color:var(--muted);margin-bottom:2px}
+  .navi--on{background:var(--b50);color:var(--b700)}
+  .dot{width:16px;height:16px;border-radius:4px;background:currentColor;opacity:.35;flex:none}
+  .sidenote{margin-top:auto;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--b50) 60%,#fff);padding:14px}
+  .top{height:68px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:0 24px;background:color-mix(in srgb,var(--canvas) 85%,#fff)}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:11px;line-height:16px;font-weight:500;color:var(--muted)}
+  .crumb b{font-weight:400;color:var(--line-strong)}
+  .crumb strong{font-size:12px;line-height:16px;font-weight:600;color:var(--ink)}
+  .acts{display:flex;align-items:center;gap:12px}
+  .iconbtn{width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--muted)}
+  .userbtn{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 10px 6px 6px}
+  .avatar{width:32px;height:32px;display:grid;place-items:center;border-radius:999px;background:var(--b50);color:var(--b700);font-size:11px;line-height:16px;font-weight:800}
+  .uname{font-size:12px;line-height:16px;font-weight:600;display:block}
+  .urole{font-size:11px;line-height:16px;font-weight:500;color:var(--muted);display:block}
+  .body{padding:28px 24px;background:var(--canvas)}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .mcard{border:1px solid var(--line);border-radius:12px;background:#fff;padding:16px;box-shadow:var(--shadow-card)}
+  .mcard--dark{background:var(--ink);border-color:var(--ink);color:#fff}
+  .mrow{display:flex;align-items:flex-start;justify-content:space-between}
+  .mlab{font-size:14px;line-height:22px;font-weight:500;color:var(--muted)}
+  .mcard--dark .mlab{color:rgba(255,255,255,.85)}
+  .micon{width:36px;height:36px;display:grid;place-items:center;border-radius:8px;background:var(--b50);color:var(--b500)}
+  .micon--danger{background:var(--danger50);color:var(--danger)}
+  .micon--dark{background:rgba(255,255,255,.1);color:var(--b200)}
+  .mval{display:block;margin-top:24px;font-size:28px;line-height:32px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .mmeta{display:block;margin-top:4px;font-size:11px;line-height:16px;font-weight:500;color:var(--muted)}
+  .mcard--dark .mmeta{color:rgba(255,255,255,.7)}
+  .pop{position:absolute;right:0;top:100%;margin-top:8px;width:300px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:var(--shadow-pop);overflow:hidden;text-align:left}
+  .pophead{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:12px 14px;font-size:14px;line-height:22px;font-weight:600}
+  .poprow{padding:12px 14px;font-size:14px;line-height:22px;border-bottom:1px solid var(--line)}
+  .poprow:last-child{border-bottom:0}
+  .popempty{padding:24px 14px;text-align:center;font-size:14px;line-height:22px;color:var(--muted)}
+  .popitem{display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;font-size:14px;line-height:22px;font-weight:500;color:var(--muted)}
+  .popuser{border-bottom:1px solid var(--line);padding:10px 10px 12px;margin-bottom:4px}
+
+  /* ---- legado ---- */
+  .old-mark{width:32px;height:32px;display:grid;place-items:center;border-radius:8px;background:var(--b500);color:#fff;font-size:14px;font-weight:900;box-shadow:0 4px 12px rgba(189,74,48,.32)}
+  .old-wm{font-size:17px;line-height:1.15;font-weight:700;letter-spacing:-.03em;display:block}
+  .old-sub{font-size:11px;color:var(--muted);display:block}
+  .old-navi{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:12px;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:2px}
+  .old-navi--on{background:var(--b50);color:var(--b700);font-weight:700}
+  .old-iconbtn{width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--muted)}
+
+  /* ---- auth ---- */
+  .auth{position:relative;overflow:hidden;padding:40px;color:#fff;background:linear-gradient(150deg,var(--b900) 0%,var(--ink) 100%);min-height:400px;display:flex;flex-direction:column;border-radius:12px}
+  .auth .blob{position:absolute;right:-64px;top:40px;width:220px;height:220px;border-radius:999px;background:rgba(189,74,48,.25);filter:blur(2px)}
+  .auth-lock{position:relative;display:flex;align-items:center;gap:12px}
+  .auth-wm{font-size:20px;font-weight:650;letter-spacing:-.03em}
+  .auth-mid{position:relative;margin:auto 0;max-width:26rem}
+  .auth-eyebrow{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.18em;color:var(--b200);margin:0 0 12px}
+  .auth-h{font-size:32px;line-height:38px;font-weight:650;letter-spacing:-.03em;margin:0}
+  .auth-p{margin:16px 0 0;font-size:14px;line-height:22px;color:rgba(255,255,255,.78)}
+  .auth-foot{position:relative;font-size:14px;line-height:22px;color:rgba(255,255,255,.8)}
+
+  .drawer{width:340px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .drawer-top{height:60px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:0 14px}
+  .drawer-nav{border-bottom:1px solid var(--line);padding:14px}
+  ul.notes{font-size:13px;line-height:21px;color:var(--muted);padding-left:20px;max-width:78ch}
+  ul.notes li{margin-bottom:7px}
+  ul.notes strong{color:var(--ink)}
+</style>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package · GH-26 · revisão 1</p>
+<h1>Marca Pulse v1 e fundações r2 no shell</h1>
+<p class="sub">Renderização auto-contida — abre sem build, sem toolchain e sem rede. Congelado para revisão em 25/08/2026.<br>
+Este artefato é <strong>evidência para um gate humano</strong>. Não é implementação e não deve ser copiado para dentro do código de produção.</p>
+
+<h2>Direção</h2>
+<p class="lead"><strong>O produto se apresenta como Pulse; Biahflow é a casa.</strong> A r2 aprovou os tokens e excluiu explicitamente o shell
+(<code>dap-gh19-r2/README.md:44</code>). Esta revisão pede aprovação para a composição do shell: a marca canônica no lugar do
+<code>B</code> legado, e as fundações r2 — raio, elevação e papéis tipográficos — aplicadas ao sidebar, à gaveta mobile, à topbar
+e à superfície de visão geral. A forma da ADR 0025 (barra lateral clara, 254 px, menu rolando por dentro) é preservada.</p>
+
+<h2>1 · A marca no sidebar — antes e depois</h2>
+<div class="grid2">
+  <div>
+    <div class="frame" style="padding:24px 14px">
+      <div class="brandrow">
+        <span class="old-mark">B</span>
+        <span><span class="old-wm">Biah<span style="color:var(--b500)">flow</span></span><span class="old-sub">Portal operacional</span></span>
+      </div>
+      <div class="navlabel" style="font-size:10px;font-weight:800">Operação</div>
+      <div class="old-navi old-navi--on"><span class="dot"></span>Visão geral</div>
+      <div class="old-navi"><span class="dot"></span>Comercial</div>
+      <div class="old-navi"><span class="dot"></span>Clientes</div>
+    </div>
+    <p class="cap"><span class="tag tag--old">hoje</span> Glifo <code>B</code> desenhado em CSS, wordmark literal, sombra clay
+      <code>rgba(189,74,48,.32)</code>, item de menu em 13 px / raio 12 px.</p>
+  </div>
+  <div>
+    <div class="frame" style="padding:24px 14px">
+      <div class="brandrow">
+        <svg width="32" height="32" viewBox="0 0 48 48" aria-hidden="true" style="flex:none">
+          <rect width="48" height="48" rx="10" fill="#BD4A30"/>
+          <path d="M10 25h8l3.25-8 5.5 16 3.5-8H38" fill="none" stroke="#FFFFFF" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span><span class="wm">Pulse</span><span class="wmsub">Operação Biahflow</span></span>
+      </div>
+      <div class="navlabel">Operação</div>
+      <div class="navi navi--on"><span class="dot"></span>Visão geral</div>
+      <div class="navi"><span class="dot"></span>Comercial</div>
+      <div class="navi"><span class="dot"></span>Clientes</div>
+    </div>
+    <p class="cap"><span class="tag tag--new">proposto</span> Mark canônico <code>pulse-mark.svg</code> consumido como asset,
+      wordmark <strong>Pulse</strong>, subtítulo <strong>Operação Biahflow</strong>. Item de menu no papel <em>label</em>
+      (12/16, 600) e raio de controle (8 px). Sem sombra colorida.</p>
+  </div>
+</div>
+
+<h2>2 · Topbar, breadcrumb e popovers</h2>
+<div class="frame">
+  <div class="top">
+    <div class="crumb"><span>Pulse</span><b>/</b><strong>Visão geral</strong></div>
+    <div class="acts">
+      <div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div>
+      <div class="userbtn"><span class="avatar">DC</span><span><span class="uname">Daniel</span><span class="urole">Administrador</span></span></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;padding:24px;background:var(--canvas)">
+    <div style="position:relative;height:230px">
+      <div class="pop" style="position:static;width:auto;margin:0">
+        <div class="pophead"><span>Notificações</span><span style="font-size:12px;font-weight:600;color:var(--b600)">Marcar todas</span></div>
+        <div class="poprow"><span style="display:inline-block;width:6px;height:6px;border-radius:999px;background:var(--b500);margin-right:6px;vertical-align:middle"></span>Proposta aprovada em Acme</div>
+        <div class="poprow" style="color:var(--muted)">Tarefa concluída em Onboarding</div>
+      </div>
+      <p class="cap">Sino · com itens</p>
+    </div>
+    <div style="position:relative;height:230px">
+      <div class="pop" style="position:static;width:auto;margin:0">
+        <div class="pophead"><span>Notificações</span></div>
+        <div class="popempty">Sem notificações.</div>
+      </div>
+      <p class="cap">Sino · <strong>vazio</strong></p>
+    </div>
+    <div style="position:relative;height:230px">
+      <div class="pop" style="position:static;width:auto;margin:0;padding:6px">
+        <div class="popuser"><strong style="display:block;font-size:14px;line-height:22px;font-weight:600">Daniel</strong><small style="display:block;font-size:11px;line-height:16px;font-weight:500;color:var(--muted)">daniel@biahflow.com</small></div>
+        <div class="popitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>Sair</div>
+      </div>
+      <p class="cap">Menu de usuário</p>
+    </div>
+  </div>
+</div>
+<p class="cap" style="margin-top:12px">Breadcrumb com raiz <strong>Pulse</strong>. Botão de usuário deixa de ser literal escrito à mão e passa a primitiva.
+  Botão de ícone continua com <strong>40&nbsp;px de alvo</strong> (WCAG 2.5.8) — muda o raio, não o tamanho. Popovers em raio 12 px e <code>--shadow-pop</code>.</p>
+
+<h2>3 · Visão geral — sucesso</h2>
+<div class="frame">
+  <div class="body">
+    <p class="eyebrow">Visão geral</p>
+    <h1 style="font-size:32px;margin:0 0 4px">Sua operação, em movimento.</h1>
+    <p class="lead" style="margin-bottom:24px">Acompanhe a saúde comercial e as entregas que pedem atenção.</p>
+    <div class="cards">
+      <div class="mcard">
+        <div class="mrow"><span class="mlab">Projetos ativos</span><span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></span></div>
+        <strong class="mval">12</strong><span class="mmeta">Atualizado em tempo real</span>
+      </div>
+      <div class="mcard">
+        <div class="mrow"><span class="mlab">Itens em atraso</span><span class="micon micon--danger"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span></div>
+        <strong class="mval" style="color:var(--danger)">3</strong><span class="mmeta">Atualizado em tempo real</span>
+      </div>
+      <div class="mcard mcard--dark">
+        <div class="mrow"><span class="mlab">Pipeline estimado</span><span class="micon micon--dark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg></span></div>
+        <strong class="mval">R$ 480.000</strong><span class="mmeta">Potencial em negociação</span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="cap" style="margin-top:12px">O terceiro cartão é hoje um literal integral
+  (<code>rounded-2xl bg-ink p-5 text-white shadow-lg shadow-ink/10</code>) que não chama nenhuma primitiva. Passa a ser
+  <code>.metric-card .metric-card--dark</code>. O ícone de perigo deixa de ser <code>bg-red-50</code> literal e passa a
+  <code>.metric-icon--danger</code> sobre o token <code>danger-50</code>. Métrica no papel <em>métrica</em> (28/32, 650, tabular).</p>
+
+<h2>4 · Visão geral — vazio, erro e carregando</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:start">
+  <div>
+    <div class="frame" style="padding:20px">
+      <div style="border:1px solid var(--line);border-radius:12px;background:#fff;padding:16px;box-shadow:var(--shadow-card)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg></span><span style="font-size:16px;line-height:24px;font-weight:650">Próximas entregas</span></div>
+        <p style="text-align:center;font-size:14px;line-height:22px;color:var(--muted);margin:24px 0">Nenhuma tarefa próxima.</p>
+      </div>
+    </div>
+    <p class="cap"><strong>Vazio.</strong> Sem tarefa próxima, e o funil ausente para a Entrega (RFC 0003).</p>
+  </div>
+  <div>
+    <div class="frame" style="padding:20px">
+      <div style="border:1px solid var(--danger50);border-radius:12px;background:var(--danger50);color:var(--danger);padding:16px;font-size:14px;line-height:22px">Não foi possível carregar a visão geral.</div>
+    </div>
+    <p class="cap"><strong>Erro.</strong> <code>.alert--error</code> com <code>role="alert"</code>, inalterado.</p>
+  </div>
+  <div>
+    <div class="frame" style="padding:20px">
+      <div style="height:36px;width:60%;border-radius:8px;background:var(--subtle);margin-bottom:20px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="height:96px;border-radius:12px;border:1px solid var(--line);background:var(--surface)"></div>
+        <div style="height:96px;border-radius:12px;border:1px solid var(--line);background:var(--surface)"></div>
+      </div>
+    </div>
+    <p class="cap"><strong>Carregando.</strong> O esqueleto passa a usar tokens de superfície no lugar de <code>bg-slate-200</code>,
+      e o raio do cartão vazio acompanha o do cartão real.</p>
+  </div>
+</div>
+
+<h2>5 · Gaveta mobile</h2>
+<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+  <div>
+    <div class="drawer">
+      <div class="drawer-top">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="iconbtn" style="width:36px;height:36px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+          <svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="10" fill="#BD4A30"/><path d="M10 25h8l3.25-8 5.5 16 3.5-8H38" fill="none" stroke="#FFFFFF" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="font-size:16px;line-height:24px;font-weight:650;letter-spacing:-.03em">Pulse</span>
+        </div>
+        <span class="avatar">DC</span>
+      </div>
+      <div class="drawer-nav">
+        <div class="navi navi--on"><span class="dot"></span>Visão geral</div>
+        <div class="navi"><span class="dot"></span>Comercial</div>
+        <div class="navi"><span class="dot"></span>Clientes</div>
+        <div class="navi"><span class="dot"></span>Projetos</div>
+      </div>
+    </div>
+    <p class="cap" style="max-width:340px">A gaveta recebe o mark <strong>compacto</strong> e o wordmark, e nada além disso muda de comportamento.
+      Continua sendo o mesmo <code>nav()</code> do sidebar, com o mesmo filtro por papel.</p>
+  </div>
+  <ul class="notes" style="flex:1;min-width:320px">
+    <li><strong>Preservado, não melhorado.</strong> A gaveta não ganha <em>overlay</em>, <em>focus trap</em>, <code>aria-modal</code>
+      nem <code>Escape</code>. Ela não tem nenhum deles hoje; acrescentá-los é ampliação de escopo e fica <span class="tag tag--res">reservado</span>.</li>
+    <li><strong>O mark compacto precisa de nome acessível.</strong> Hoje <code>PulseBrand.tsx:11</code> renderiza o SVG com
+      <code>alt=""</code> e <code>aria-hidden="true"</code>; no modo <code>compact</code> não sobra texto algum, e o link
+      <code>&lt;a href="/"&gt;</code> ficaria <strong>sem nome acessível</strong> — violação <code>link-name</code> do axe. Corrigido na implementação.</li>
+    <li><strong>O menu continua um só.</strong> <code>nav()</code> serve sidebar e gaveta; duplicar a marcação faria um item novo
+      aparecer só numa das larguras.</li>
+  </ul>
+</div>
+
+<h2>6 · Superfície escura — o painel de login</h2>
+<div class="grid2">
+  <div>
+    <div class="auth">
+      <div class="blob"></div>
+      <div class="auth-lock">
+        <span style="width:40px;height:40px;display:grid;place-items:center;border-radius:8px;background:#fff;color:var(--ink);font-size:16px;font-weight:900">B</span>
+        <span class="auth-wm">Biah<span style="color:var(--b200)">flow</span></span>
+      </div>
+      <div class="auth-mid">
+        <p class="auth-eyebrow">Portal operacional</p>
+        <p class="auth-h">Clareza para vender, entregar e crescer.</p>
+        <p class="auth-p">A jornada inteira do cliente, do pipeline à execução.</p>
+      </div>
+      <p class="auth-foot">Biahflow · processos que fluem</p>
+    </div>
+    <p class="cap"><span class="tag tag--old">hoje</span> Glifo <code>B</code> em <em>tile</em> branco, wordmark Biahflow.</p>
+  </div>
+  <div>
+    <div class="auth">
+      <div class="blob"></div>
+      <div class="auth-lock">
+        <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
+          <rect width="48" height="48" rx="10" fill="#FFFFFF"/>
+          <path d="M10 25h8l3.25-8 5.5 16 3.5-8H38" fill="none" stroke="#BD4A30" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="auth-wm">Pulse</span>
+      </div>
+      <div class="auth-mid">
+        <p class="auth-eyebrow">Operação Biahflow</p>
+        <p class="auth-h">Clareza para vender, entregar e crescer.</p>
+        <p class="auth-p">A jornada inteira do cliente, do pipeline à execução.</p>
+      </div>
+      <p class="auth-foot">Biahflow · processos que fluem</p>
+    </div>
+    <p class="cap"><span class="tag tag--new">proposto</span> <strong>Variante invertida do mark</strong>: mesma geometria,
+      mesmo <code>viewBox</code>, mesmo <code>rx</code>, mesmo <em>path</em> e mesma espessura — troca-se apenas o preenchimento.
+      Rodapé mantém Biahflow como assinatura da casa.</p>
+  </div>
+</div>
+<table style="margin-top:20px">
+  <tr><th>Medição</th><th>Par</th><th>Razão</th><th>Veredito</th></tr>
+  <tr><td>Mark clay sobre a ponta escura</td><td><span class="sw" style="background:#bd4a30"></span><code>#BD4A30</code> sobre <span class="sw" style="background:#5c2317"></span><code>#5C2317</code></td><td><strong>2,45:1</strong></td><td>O mark <em>some</em>. Por isso a variante existe.</td></tr>
+  <tr><td>Mark invertido sobre a ponta escura</td><td><span class="sw" style="background:#fff"></span><code>#FFFFFF</code> sobre <span class="sw" style="background:#5c2317"></span><code>#5C2317</code></td><td><strong>12,3:1</strong></td><td>Legível com folga.</td></tr>
+  <tr><td>Traço clay dentro do tile branco</td><td><span class="sw" style="background:#bd4a30"></span><code>#BD4A30</code> sobre <span class="sw" style="background:#fff"></span><code>#FFFFFF</code></td><td><strong>5,02:1</strong></td><td>Passa AA.</td></tr>
+  <tr><td>Eyebrow sobre a ponta escura</td><td><span class="sw" style="background:#dd8b62"></span><code>brand-200</code> sobre <span class="sw" style="background:#5c2317"></span><code>brand-900</code></td><td><strong>4,6:1</strong></td><td>Inalterado (ADR 0025).</td></tr>
+</table>
+<p class="cap">O mark é decorativo (<code>aria-hidden</code>), então o axe <em>não</em> reprovaria o clay sobre escuro — a regra
+  <code>color-contrast</code> mede texto. Esta é uma decisão de legibilidade tomada aqui, e não um portão automático.</p>
+
+<h2>7 · Fundações r2 aplicadas ao shell</h2>
+<table>
+  <tr><th style="width:15%">Fundação</th><th style="width:26%">Contrato r2</th><th style="width:29%">Shell hoje</th><th>Proposto</th></tr>
+  <tr>
+    <td><strong>Raio</strong></td>
+    <td>4 detalhe · 8 controles · 12 cartões/popover · <code>full</code> só status e avatar · <em>sem botões pill</em></td>
+    <td><code>.nav-item</code> 12 · <code>.icon-button</code> 12 · <code>field</code> 12 · cartão do login 24 · <code>.popover</code> 12 ✓ · <code>.panel</code> 12 ✓</td>
+    <td>Controles caem para <strong>8</strong> (<code>.nav-item</code>, <code>.icon-button</code>, <code>field</code>, botão de usuário); cartão do login sobe para <strong>12</strong>; cartões e popovers já estão certos.</td>
+  </tr>
+  <tr>
+    <td><strong>Elevação</strong></td>
+    <td><code>--shadow-card</code> · <code>--shadow-raised</code> · <code>--shadow-pop</code></td>
+    <td><code>.brand-mark</code> com sombra clay <code>rgba(189,74,48,.32)</code>; cartão de pipeline com <code>shadow-lg shadow-ink/10</code></td>
+    <td>As duas sombras avulsas saem. <code>.brand-mark</code> perde o último consumidor e é <strong>removida</strong>.</td>
+  </tr>
+  <tr>
+    <td><strong>Tipografia</strong></td>
+    <td>display 32/38 650 · título 16/24 650 · corpo 14/22 400 · label 12/16 600 · meta 11/16 500 · métrica 28/32 650</td>
+    <td><code>text-[17px]</code>, <code>text-[13px]</code>, <code>text-[11px]</code>, <code>text-[10px]</code> cravados no shell</td>
+    <td>Wordmark → <em>título</em>; item de menu → <em>label</em>; subtítulo, breadcrumb, avatar e meta de cartão → <em>meta</em>; linhas de lista → <em>corpo</em>; métrica → <em>métrica</em>.</td>
+  </tr>
+</table>
+
+<h2>8 · Proveniência de cada valor</h2>
+<table>
+  <tr><th>Valor</th><th>Origem</th><th>Novo?</th></tr>
+  <tr><td>Toda a paleta usada (<code>ink</code>, <code>muted</code>, <code>line</code>, <code>canvas</code>, <code>surface</code>, <code>brand-*</code>, <code>danger*</code>, <code>success*</code>, <code>warning*</code>, <code>info*</code>)</td><td><code>docs/design/pulse-design-system.md</code> · <code>index.css</code> <code>@theme</code></td><td>não</td></tr>
+  <tr><td>Escala tipográfica, espaço, raio, elevação</td><td><code>docs/design/dap-gh19-r2/README.md</code> (fundações normativas)</td><td>não</td></tr>
+  <tr><td>Geometria do mark (<code>viewBox 0 0 48 48</code>, <code>rx 10</code>, <em>path</em> do pulso, traço 3,25)</td><td><code>frontend/src/assets/brand/pulse-mark.svg</code> (v1, PR #27)</td><td>não</td></tr>
+  <tr><td><strong>Variante invertida do mark</strong> (tile branco, traço <code>brand-500</code>)</td><td>—</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Subtítulo “Operação Biahflow”</strong></td><td>—</td><td><strong>sim — decidido aqui</strong> (substitui o default em inglês de <code>PulseBrand.tsx:8</code>)</td></tr>
+  <tr><td><strong>Raiz do breadcrumb “Pulse”</strong></td><td>—</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Variante <code>.metric-card--dark</code></strong></td><td>formaliza o literal que já existe em <code>DashboardPage.tsx:30</code></td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Variante <code>.metric-icon--danger</code></strong></td><td>substitui <code>bg-red-50</code> literal por <code>danger-50</code></td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td>Forma do shell: barra lateral clara, 254 px, menu rolando por dentro, breakpoint <code>lg</code></td><td>ADR 0025</td><td>não — <strong>preservada</strong></td></tr>
+</table>
+<p class="cap">Design system consultado: <code>docs/design/pulse-design-system.md</code> e <code>docs/design/dap-gh19-r2/README.md</code>, lidos em 25/08/2026.
+  Se este pacote e essa fonte divergirem, <strong>a fonte vence</strong> e este pacote está velho.</p>
+
+<h2>9 · Entregue vs. reservado</h2>
+<table>
+  <tr><th>Elemento</th><th>Esta entrega</th><th>Reservado para</th><th>Vira real quando</th></tr>
+  <tr><td>Sidebar, gaveta mobile, topbar/breadcrumb, popovers</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Visão geral (sucesso, vazio, erro, carregando)</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Login e aceitar convite</td><td>entrega — <strong>ampliação de escopo autorizada por humano nesta sessão</strong></td><td>—</td><td>—</td></tr>
+  <tr><td><em>Focus trap</em>, <code>Escape</code> e <code>aria-modal</code> na gaveta mobile</td><td>não entrega</td><td>Issue própria</td><td>Defeito preexistente for priorizado</td></tr>
+  <tr><td><code>.filter-chip</code> em <code>rounded-full</code> — pill de controle, contra a regra “<code>full</code> só status/avatar”</td><td>não entrega</td><td>Issue própria</td><td>Leads e Clientes entrarem em escopo</td></tr>
+  <tr><td>As outras 20 telas de produto</td><td>não entrega</td><td>—</td><td>Issue própria por tela ou família</td></tr>
+  <tr><td>Tema escuro</td><td>não entrega</td><td>—</td><td>DAP próprio (<code>dap-gh19-r2/README.md:44</code>)</td></tr>
+</table>
+<p class="cap">Nenhum elemento reservado é desenhado como controle inerte nesta entrega: o que não entra simplesmente
+  não muda. Não há placeholder ligado sem função.</p>
+
+<h2>10 · Decisões que este pacote carrega</h2>
+<ul class="notes">
+  <li><strong>O produto se chama Pulse no shell.</strong> Biahflow permanece como guarda-chuva no subtítulo do sidebar
+    (“Operação Biahflow”), no rodapé do login (“Biahflow · processos que fluem”) e na copy do convite. Aprovar o visual
+    <em>não</em> aprova copy automaticamente — por isso cada string está escrita acima.</li>
+  <li><strong>A variante escura do mark é decidida aqui, não na implementação.</strong> Sem ela, o mark clay sobre
+    <code>brand-900</code> dá 2,45:1 e desaparece. A geometria não muda; muda o preenchimento.</li>
+  <li><strong>O item de menu adota o papel <em>label</em> (12/16, 600).</strong> É a decisão mais discutível do pacote: hoje são
+    13 px com peso 500, e o contrato r2 não tem um papel intermediário. Cai um pixel e sobe o peso. <em>Alternativa registrada:</em>
+    manter 13 px e declarar no contrato um papel “nav” — o que significa acrescentar um papel ao design system, e não
+    consumi-lo.</li>
+  <li><strong>O cartão escuro da visão geral continua escuro</strong>, mas deixa de ser literal e passa a variante nomeada.
+    A meta do cartão sobe de <code>text-white/50</code> (≈4,7:1, margem fina contra o mínimo AA de 4,5) para
+    <code>text-white/70</code>.</li>
+  <li><strong>Toda classe tem consumidor.</strong> <code>.brand-mark</code> perde o último e sai no mesmo diff; as variantes
+    novas nascem já chamadas.</li>
+</ul>
+
+<h2>11 · Questões em aberto</h2>
+<p class="lead">Nada aqui é resolvido por agente durante a implementação. O que ficar em aberto continua em aberto depois da aprovação.</p>
+<ul class="notes">
+  <li>O <code>roadmap.md:512</code> ainda chama o produto de <strong>Cockpit</strong> (ADR 0030), enquanto a ADR 0041 o chama de
+    <strong>Pulse</strong>. Esta entrega não reconcilia a nomenclatura do roadmap.</li>
+  <li>O favicon e o <code>&lt;title&gt;</code> do documento não estão neste pacote e não mudam nesta entrega.</li>
+  <li>Não há decisão sobre a marca em e-mail transacional, documento gerado ou exportação.</li>
+</ul>
+
+<h2>12 · Notas para quem implementa</h2>
+<ul class="notes">
+  <li><strong>Intencional e a preservar:</strong> a forma da ADR 0025 (barra clara, 254 px, menu rolando por dentro,
+    breakpoint <code>lg</code>); <code>.icon-button</code> em 40 px por WCAG 2.5.8; <code>.nav-label</code> em
+    <code>muted</code> e nunca <code>slate-400</code>; o filtro de navegação por papel e <code>is_admin</code>;
+    <code>useEscape</code> devolvendo foco ao botão que abriu; um único <code>nav()</code> para as duas larguras.</li>
+  <li><strong>Ilustrativo e a não tratar como especificação:</strong> os números (12, 3, R$ 480.000), os nomes
+    (“Daniel”, “Acme”, “Onboarding”), os ícones desenhados à mão neste quadro e o recorte exato dos <em>blobs</em> do login.</li>
+  <li><strong>O que este quadro não consegue mostrar:</strong> ordem de foco, comportamento de teclado, leitor de tela,
+    truncamento com nome longo, <em>reflow</em> entre 390 e 1280 px, e movimento. Tudo isso é validado em runtime
+    (<code>BROWSER_REQUIRED</code>), não aqui.</li>
+  <li><strong>Consumir o asset canônico.</strong> O SVG deste quadro é <em>mock</em>. No produto, importa-se
+    <code>assets/brand/pulse-mark.svg</code> — nunca se cola o SVG inline (<code>assets/brand/README.md:20</code>).</li>
+</ul>
+
+</div>

@@ -5,6 +5,7 @@ import { useEscape } from "../a11y";
 import { listNotifications, markAllNotificationsRead, markNotificationRead } from "../api";
 import { useAuth } from "../auth";
 import type { Notification as NotificationT, Role, SessionUser } from "../types";
+import { PulseBrand } from "./PulseBrand";
 
 type NavLink = readonly [string, string, ComponentType<{ className?: string }>, Role[]?];
 
@@ -95,10 +96,10 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[254px_1fr]">
     <aside className="sidebar hidden lg:flex">
-      <a href="/" className="brand-row">
-        <span className="brand-mark">B</span>
-        <span><strong className="block text-[17px] font-bold leading-tight tracking-[-0.03em] text-ink">Biah<span className="text-brand-500">flow</span></strong><small className="text-[11px] text-muted">Portal operacional</small></span>
-      </a>
+      {/* O produto se apresenta como **Pulse**; Biahflow é a casa, e fica no subtítulo (ADR 0043,
+          DAP GH-26 r1). O lockup é o componente e o mark é o asset canônico — colar o SVG inline
+          aqui é o que `assets/brand/README.md` proíbe, porque duplica a geometria da marca. */}
+      <a href="/" className="brand-row"><PulseBrand /></a>
       <p className="nav-label">Operação</p>
       {/* Só a barra lateral rola por dentro. A gaveta do celular recebe o mesmo `nav()` sem o
           container: lá a altura é a do conteúdo, e um `overflow-y-auto` cortaria o menu. */}
@@ -110,13 +111,18 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="min-w-0">
       <header className="topbar">
         <button className="icon-button lg:hidden" aria-label="Abrir menu" onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}><Menu className="size-5" /></button>
-        <p className="breadcrumb">Biahflow{currentLabel && <><b>/</b><strong>{currentLabel}</strong></>}</p>
+        <p className="breadcrumb">Pulse{currentLabel && <><b>/</b><strong>{currentLabel}</strong></>}</p>
         <div className="topbar-actions">
           <div className="relative"><button className="icon-button" aria-label="Notificações" aria-expanded={isBellOpen} ref={botaoSino} onClick={() => setBellOpen(open => !open)}><Bell className="size-4" />{unread > 0 && <span className="notification-dot">{unread}</span>}</button>{isBellOpen && <><button className="fixed inset-0 z-30 cursor-default" aria-label="Fechar notificações" onClick={() => setBellOpen(false)} /><div className="absolute right-0 top-full z-40 popover mt-2 w-80"><div className="popover-head"><strong>Notificações</strong>{unread > 0 && <button className="text-xs font-semibold text-brand-600 hover:text-brand-700" onClick={() => void readAll()}>Marcar todas</button>}</div><div className="max-h-80 divide-y divide-line overflow-y-auto">{notifications.length ? notifications.slice(0, 20).map(notification => <button key={notification.id} className={`popover-row ${notification.read ? "text-muted" : "font-medium text-ink"}`} onClick={() => void readOne(notification)}>{!notification.read && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-brand-500 align-middle" />}{notification.message}</button>) : <p className="px-3.5 py-6 text-center text-sm text-muted">Sem notificações.</p>}</div></div></>}</div>
-          <div className="relative"><button className="flex items-center gap-2 rounded-xl border border-line bg-white py-1.5 pl-1.5 pr-2.5 transition-colors hover:border-brand-500" aria-haspopup="menu" aria-expanded={isUserMenuOpen} ref={botaoMenu} onClick={() => setUserMenuOpen(open => !open)}><span className="avatar">{displayName.slice(0, 2).toUpperCase()}</span><span className="hidden text-left sm:block"><span className="block text-xs font-semibold text-ink">{displayName}</span><span className="block text-[11px] text-muted">{labelFor(user)}</span></span><ChevronDown className={`size-3 text-muted transition ${isUserMenuOpen ? "rotate-180" : ""}`} /></button>{isUserMenuOpen && <><button className="fixed inset-0 z-30 cursor-default" aria-label="Fechar menu" onClick={() => setUserMenuOpen(false)} /><div className="absolute right-0 top-full z-40 popover popover-menu mt-2 w-56" role="menu"><div className="popover-user"><strong>{displayName}</strong><small>{user.email || labelFor(user)}</small></div><button className="popover-item hover:text-danger" role="menuitem" onClick={() => void handleLogout()}><LogOut className="size-4" />Sair</button></div></>}</div>
+          <div className="relative"><button className="user-button" aria-haspopup="menu" aria-expanded={isUserMenuOpen} ref={botaoMenu} onClick={() => setUserMenuOpen(open => !open)}><span className="avatar">{displayName.slice(0, 2).toUpperCase()}</span><span className="hidden text-left sm:block"><span className="block text-xs font-semibold text-ink">{displayName}</span><span className="block text-[11px] text-muted">{labelFor(user)}</span></span><ChevronDown className={`size-3 text-muted transition ${isUserMenuOpen ? "rotate-180" : ""}`} /></button>{isUserMenuOpen && <><button className="fixed inset-0 z-30 cursor-default" aria-label="Fechar menu" onClick={() => setUserMenuOpen(false)} /><div className="absolute right-0 top-full z-40 popover popover-menu mt-2 w-56" role="menu"><div className="popover-user"><strong>{displayName}</strong><small>{user.email || labelFor(user)}</small></div><button className="popover-item hover:text-danger" role="menuitem" onClick={() => void handleLogout()}><LogOut className="size-4" />Sair</button></div></>}</div>
         </div>
       </header>
-      {isMobileMenuOpen && <div className="border-b border-line bg-white p-4 lg:hidden">{nav()}</div>}
+      {/* A gaveta ganha o lockup denso — mark + wordmark, sem subtítulo: no celular a barra lateral
+          não está em cena e sem ele o menu abre sem dizer de que produto é. **Preservada e não
+          melhorada**: continua sem overlay, sem `focus trap`, sem `aria-modal` e sem `Escape` —
+          nada disso existe hoje, e acrescentá-los está explicitamente reservado no DAP GH-26 r1.
+          O menu continua sendo o mesmo `nav()` do sidebar, com o mesmo filtro por papel. */}
+      {isMobileMenuOpen && <div className="border-b border-line bg-white p-4 lg:hidden"><a href="/" className="brand-row"><PulseBrand subtitle={null} /></a>{nav()}</div>}
       <main className="mx-auto w-full max-w-7xl px-5 py-8 lg:px-9 lg:py-10">{children}</main>
     </div>
   </div>;

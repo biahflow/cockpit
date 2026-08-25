@@ -237,8 +237,30 @@
     box-shadow: var(--shadow-card);
   }
   .metric-card strong { @apply tracking-[-0.03em] text-ink; font-size: var(--text-metric); line-height: var(--text-metric--line-height); font-weight: 650; font-variant-numeric: tabular-nums; }
-  .metric-card span { @apply text-xs text-muted; }
-  .metric-icon { @apply grid size-9 place-items-center rounded-xl bg-brand-50 text-brand-500; }
+  .metric-card span { @apply text-muted; font-size: var(--text-meta); line-height: var(--text-meta--line-height); font-weight: 500; }
+  /* O cartão escuro da visão geral (DAP GH-26 r1). Era um literal integral —
+     `rounded-2xl bg-ink p-5 text-white shadow-lg shadow-ink/10` — e nenhuma primitiva o descrevia,
+     de modo que o único cartão preto do produto divergia dos brancos sem nada ficar vermelho.
+     A sombra avulsa some: cartão é `--shadow-card`, aqui como nos outros.
+
+     Os três níveis de leitura sobre o preto são opacidade e não tons novos: o valor em branco
+     cheio, o rótulo em 85% e a meta em 70%. A meta era `text-white/50` (≈4,7:1, margem fina
+     contra o mínimo AA de 4,5) e sobe para 70%. */
+  .metric-card--dark {
+    @apply border-ink bg-ink text-white;
+    box-shadow: var(--shadow-card);
+  }
+  .metric-card--dark strong { @apply text-white; }
+  .metric-card--dark span { @apply text-white/85; }
+  .metric-card--dark p { @apply text-white/70; font-size: var(--text-meta); line-height: var(--text-meta--line-height); font-weight: 500; }
+  /* Raio de **controle** (8px): é um quadrado de ícone, não um cartão (fundações r2). */
+  .metric-icon { @apply grid size-9 place-items-center rounded-lg bg-brand-50 text-brand-500; }
+  /* As duas variantes de tinta do ícone. **Classe dupla de propósito**: dentro de um
+     `.metric-card` o seletor `.metric-card span` (0,1,1) é mais específico que `.metric-icon`
+     (0,1,0) e venceria a cor — foi por isso que a versão anterior escreveu `bg-red-50 text-danger`
+     inline. `.metric-icon.metric-icon--danger` dá (0,2,0) e ganha sem precisar do literal. */
+  .metric-icon.metric-icon--danger { @apply bg-danger-50 text-danger; }
+  .metric-icon.metric-icon--dark { @apply bg-white/10 text-brand-200; }
 
   /* Botões. O primário é **preto**, não laranja: o acento vale mais por ser raro, e uma tela
      com seis botões laranja não tem acento nenhum. O laranja fica no hover e no foco. */
@@ -320,9 +342,16 @@
      `.nav-item--light` para a gaveta do celular —, e a sidebar clara fez as duas colapsarem
      numa. O modificador foi apagado junto do parâmetro `light` de `nav()` no `Layout.tsx`: um
      modificador que não modifica nada é a próxima coisa que alguém aplica por engano. */
+  /* Raio de controle (8px) e papel *label* (12/16, 600) das fundações r2. Era `text-[13px]` com
+     peso 500 — um pixel que o contrato não tem. Cai o corpo, sobe o peso: a alternativa registrada
+     no DAP GH-26 r1 (manter 13px e acrescentar um papel "nav" ao design system) foi **rejeitada**,
+     porque seria estender o contrato em vez de consumi-lo. */
   .nav-item {
-    @apply flex h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-medium text-muted
+    @apply flex h-10 items-center gap-3 rounded-lg px-3 text-muted
       transition-colors hover:bg-slate-100 hover:text-ink;
+    font-size: var(--text-label);
+    line-height: var(--text-label--line-height);
+    font-weight: 600;
   }
   .nav-item--active { @apply bg-brand-50 font-bold text-brand-700 hover:bg-brand-50; }
   /* O contador à direita do item (pendências, avisos). Sem o número, um item de menu com
@@ -368,19 +397,26 @@
     scrollbar-width: thin;
     scrollbar-color: var(--color-line) transparent;
   }
+  /* A faixa que embrulha o lockup. Continua existindo depois da marca Pulse porque o que ela dá
+     é **espaço**, não desenho — o recuo lateral que alinha o lockup à lista e a distância até o
+     rótulo de seção. Quem desenha o lockup é `PulseBrand`.
+
+     `.brand-mark` saiu daqui: o glifo `B` em CSS perdeu o último consumidor quando o `<img>` do
+     mark canônico entrou, e a sombra clay `rgba(189,74,48,.32)` saiu junto — era a única sombra
+     colorida do produto e não há mais quadrado laranja para ela sustentar. Classe sem chamador é
+     dívida, não histórico (ADR 0043). */
   .brand-row { @apply mb-6 flex items-center gap-2.5 px-2; }
-  /* A sombra é colorida de propósito: um quadrado laranja com sombra cinza parece colado por
-     cima da tela, e este é o primeiro elemento que a pessoa vê. */
-  .brand-mark {
-    @apply grid size-8 shrink-0 place-items-center rounded-lg bg-brand-500 text-sm font-black text-white;
-    box-shadow: 0 4px 12px rgba(189, 74, 48, 0.32);
-  }
   /* O rótulo de seção acima da lista. Cinza e não laranja: ele organiza, não chama.
      **`muted` e não `slate-400`, e quem decidiu foi o axe.** O portal do cliente usa
      `slate-400` aqui, que sobre branco dá ~3,0:1 e reprova AA — copiar o tom junto com a forma
      trouxe a violação junto, nas 19 telas de uma vez. `muted` é o cinza quente da paleta e dá
      7,4:1. Quando o axe e o tom discordam, cede o tom. */
-  .nav-label { @apply px-3 pb-2 text-[10px] font-extrabold uppercase tracking-[0.11em] text-muted; }
+  .nav-label {
+    @apply px-3 pb-2 uppercase tracking-[0.11em] text-muted;
+    font-size: var(--text-meta);
+    line-height: var(--text-meta--line-height);
+    font-weight: 700;
+  }
   .sidebar-bottom { @apply shrink-0 pt-4; }
   .sidebar-note { @apply rounded-xl border border-line bg-brand-50/60 p-3.5; }
 
@@ -388,24 +424,48 @@
     @apply sticky top-0 z-20 flex h-[68px] items-center justify-between gap-3 border-b border-line
       bg-canvas/85 px-5 backdrop-blur-xl lg:px-9;
   }
-  .breadcrumb { @apply flex min-w-0 items-center gap-2 text-xs text-muted; }
-  .breadcrumb strong { @apply truncate font-semibold text-ink; }
+  /* O rastro no papel *meta*; a rota atual, que é o que se lê, no papel *label*. */
+  .breadcrumb {
+    @apply flex min-w-0 items-center gap-2 text-muted;
+    font-size: var(--text-meta);
+    line-height: var(--text-meta--line-height);
+    font-weight: 500;
+  }
+  .breadcrumb strong {
+    @apply truncate text-ink;
+    font-size: var(--text-label);
+    line-height: var(--text-label--line-height);
+    font-weight: 600;
+  }
   .breadcrumb b { @apply font-normal text-slate-300; }
   .topbar-actions { @apply flex shrink-0 items-center gap-3; }
   /* `size-10` e não `size-9`: WCAG 2.5.8 pede 24×24 CSS px de alvo, e `e2e/responsive.spec.ts`
      mede todo `header button` visível. A folga é o que impede um `p-1.5` colado depois de
      reprovar sem ninguém entender por quê. */
   .icon-button {
-    @apply grid size-10 place-items-center rounded-xl border border-line bg-white text-muted
+    @apply grid size-10 place-items-center rounded-lg border border-line bg-white text-muted
       transition-colors hover:border-brand-500 hover:text-brand-600;
+  }
+  /* O botão de usuário da topbar. Era literal escrito à mão no `Layout.tsx`, e a única forma do
+     shell sem nome — o que basta para a próxima cópia dele nascer com outro padding. Raio de
+     controle (8px), como o `.icon-button` ao lado. */
+  .user-button {
+    @apply flex items-center gap-2 rounded-lg border border-line bg-surface py-1.5 pl-1.5 pr-2.5
+      transition-colors hover:border-brand-500;
   }
   .notification-dot {
     @apply absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-brand-500
       px-1 text-[10px] font-bold text-white;
   }
+  /* Corpo do papel *meta* (11/16), mas o peso continua `extrabold`: duas iniciais dentro de um
+     círculo de 32px no peso 500 do papel viram borrão, e o que se lê aqui é a sigla, não um
+     rótulo. Mesma licença que o `.nav-label` toma logo acima. `rounded-full` é legítimo — o
+     contrato r2 reserva `full` justamente para status e avatar. */
   .avatar {
-    @apply grid size-8 shrink-0 place-items-center rounded-full bg-brand-50 text-[11px]
-      font-extrabold text-brand-700;
+    @apply grid size-8 shrink-0 place-items-center rounded-full bg-brand-50 font-extrabold
+      text-brand-700;
+    font-size: var(--text-meta);
+    line-height: var(--text-meta--line-height);
   }
 
   /* ---------- Popovers ---------- */
@@ -414,15 +474,20 @@
     box-shadow: var(--shadow-pop);
   }
   .popover-head { @apply flex items-center justify-between gap-2 border-b border-line px-3.5 py-3; }
-  .popover-head strong { @apply text-sm font-semibold text-ink; }
-  .popover-row { @apply block w-full px-3.5 py-3 text-left text-sm transition-colors hover:bg-slate-50; }
+  /* Texto do popover no papel *corpo* (14/22) e a linha secundária no papel *meta* (11/16). Onde
+     havia peso declarado ele fica: `font-semibold`/`font-medium` são utilitários e vencem o 400
+     do papel, que descreve o corpo do texto e não a ênfase. */
+  .popover-head strong { @apply font-semibold text-ink; font-size: var(--text-body); line-height: var(--text-body--line-height); }
+  .popover-row { @apply block w-full px-3.5 py-3 text-left transition-colors hover:bg-slate-50; font-size: var(--text-body); line-height: var(--text-body--line-height); }
   .popover-menu { @apply p-1.5; }
   .popover-user { @apply mb-1 grid gap-0.5 border-b border-line px-2.5 pt-2.5 pb-3; }
-  .popover-user strong { @apply block text-sm font-semibold text-ink; }
-  .popover-user small { @apply block truncate text-xs text-muted; }
+  .popover-user strong { @apply block font-semibold text-ink; font-size: var(--text-body); line-height: var(--text-body--line-height); }
+  .popover-user small { @apply block truncate text-muted; font-size: var(--text-meta); line-height: var(--text-meta--line-height); font-weight: 500; }
   .popover-item {
-    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-sm
+    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left
       font-medium text-muted transition-colors hover:bg-slate-100 hover:text-ink;
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
   }
 
   /* ---------- O painel de marca do login ----------
@@ -444,6 +509,7 @@
   }
 }
 
+/* Raio de controle (8px) das fundações r2: um campo é controle, não cartão. */
 @utility field {
-  @apply w-full rounded-xl border bg-white px-3 py-3 text-sm text-slate-800 transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
+  @apply w-full rounded-lg border bg-white px-3 py-3 text-sm text-slate-800 transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
 }

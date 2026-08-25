@@ -29,7 +29,9 @@ function renderComo(user: { role: string; is_admin: boolean }) {
 const temLink = (nome: string) => screen.queryAllByRole("link", { name: nome }).length > 0;
 
 beforeEach(() => { mocks.listNotifications.mockResolvedValue([]); });
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+// A rota volta para a raiz: o `Layout` lê `window.location.pathname` direto, e um `pushState`
+// deixado para trás mudaria o item ativo do teste seguinte.
+afterEach(() => { cleanup(); vi.clearAllMocks(); window.history.pushState({}, "", "/"); });
 
 test("Entrega não vê os itens de administração", () => {
   renderComo({ role: "delivery", is_admin: false });
@@ -72,4 +74,34 @@ test("o rótulo segue o poder, não o campo", () => {
 test("quem é Entrega de verdade continua rotulado como Entrega", () => {
   renderComo({ role: "delivery", is_admin: false });
   expect(screen.getAllByText("Entrega").length).toBeGreaterThan(0);
+});
+
+// A marca não tinha um único teste: até aqui nada ficaria vermelho se o shell voltasse a se
+// chamar Biahflow, ou se o lockup sumisse de vez. As três asserções abaixo cobrem o que a ADR
+// 0043 decidiu — o produto é Pulse, Biahflow é a casa, e o link da marca tem nome.
+test("o shell se identifica como Pulse, e não mais como Biahflow", () => {
+  renderComo({ role: "admin", is_admin: true });
+  // O lockup aparece duas vezes (barra lateral e gaveta do celular), como o menu.
+  expect(screen.getAllByText("Pulse").length).toBeGreaterThan(0);
+  // Biahflow permanece como guarda-chuva no subtítulo, e só ali.
+  expect(screen.getByText("Operação Biahflow")).toBeTruthy();
+  expect(screen.queryByText("Portal operacional")).toBeNull();
+  expect(screen.queryByText("flow")).toBeNull();
+});
+
+test("a raiz do rastro é Pulse e a rota atual aparece nele", () => {
+  window.history.pushState({}, "", "/projetos");
+  // Por classe e não por texto: "Pulse" também é o wordmark do lockup, e uma consulta por texto
+  // encontraria os dois. O rastro é o único elemento que compõe raiz + rota.
+  const { container } = renderComo({ role: "admin", is_admin: true });
+  expect(container.querySelector(".breadcrumb")?.textContent).toBe("Pulse/Projetos");
+});
+
+test("o link da marca tem nome acessível", () => {
+  // A violação `link-name` do axe que este trabalho corrige: o `<img>` do mark é decorativo, e
+  // sem texto o `<a href="/">` que o embrulha ficaria anônimo para leitor de tela.
+  renderComo({ role: "admin", is_admin: true });
+  const marca = screen.queryAllByRole("link", { name: /Pulse/ });
+  expect(marca.length).toBeGreaterThan(0);
+  for (const link of marca) expect(link.getAttribute("href")).toBe("/");
 });

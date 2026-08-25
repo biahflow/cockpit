@@ -142,21 +142,41 @@ inline — em código novo escreva `brand-*`. Eram quatro: `accent-200` e `accen
 nunca terem tido um consumidor, que é a mesma dívida de uma classe sem chamador.
 
 O shell é o do portal do cliente: **barra lateral clara**, fixa, com o menu rolando por dentro
-(`.sidebar`, `.brand-row`, `.brand-mark`, `.nav-label`, `.nav-scroll`), e topbar com `.breadcrumb`
+(`.sidebar`, `.brand-row`, `.nav-label`, `.nav-scroll`), e topbar com `.breadcrumb`
 derivado do mesmo array `links` que desenha o menu. `.nav-item` tem **uma pele só** desde a ADR
 0025 — a barra clara fez a `.nav-item--light` da gaveta mobile deixar de ter o que modificar. A
 única superfície escura do produto é o painel do login (`.auth-brand`), e o gradiente dele vai de
 `brand-900` ao `ink` **porque a direção do portal do cliente reprova aqui** (o eyebrow em
 `brand-200` dá 2,28:1 sobre `brand-600`).
 
+**O produto se apresenta como `Pulse` no shell; Biahflow é a casa** (ADR 0043, DAP GH-26 r1). A
+marca é o asset canônico (`src/assets/brand/pulse-mark.svg`) consumido pelo componente
+`PulseBrand` — **nunca SVG colado inline**, que é o que `assets/brand/README.md` proíbe. Sidebar,
+gaveta mobile e raiz do `.breadcrumb` dizem Pulse; Biahflow fica no subtítulo do sidebar
+("Operação Biahflow"), no eyebrow e no rodapé do login e na copy de acesso. Superfície escura usa
+`pulse-mark-inverse.svg` (`tone="dark"`): o clay sobre `brand-900` dá **2,45:1** e o mark some, e o
+axe não pegaria — o mark é decorativo e `color-contrast` mede texto. `.brand-mark` (o glifo `B` em
+CSS, com a única sombra colorida do produto) saiu junto, por perder o último consumidor.
+
+O shell **consome** as fundações r2 desde a ADR 0043, em vez de só declará-las: raio de controle
+(8px) em `.nav-item`, `.icon-button`, `.user-button`, `.metric-icon` e `field`; raio de cartão
+(12px) em `.panel`, `.popover`, `.metric-card` e no cartão do login; papéis tipográficos
+(`--text-title`/`-body`/`-label`/`-meta`, com as classes `.type-*`) no lugar de pixel cravado. Duas
+exceções ficam declaradas: `.icon-button` mantém `size-10` por WCAG 2.5.8 (`e2e/responsive.spec.ts`
+mede) e `.filter-chip` segue `rounded-full`, reservado no DAP para quando Leads e Clientes entrarem
+em escopo.
+
 Tudo em `src/index.css`, junto de uma `@layer components` com `.panel`/`.panel--flush`/`.row`,
-`.eyebrow`, `.page-head`, `.metric-card`, `.btn` (+ `--secondary`, `--secondary-danger`,
-`--danger`, `--icon`, `--icon-danger`), `.form-label`, `.form-grid`, `.toolbar`, `.state` (`--0..3`
+`.eyebrow`, `.page-head`, `.metric-card` (+ `--dark`), `.metric-icon` (+ `--danger`, `--dark`),
+`.user-button`, `.btn` (+ `--secondary`, `--secondary-danger`, `--danger`, `--icon`,
+`--icon-danger`), `.form-label`, `.form-grid`, `.toolbar`, `.state` (`--0..3`
 e `--off`, o **neutro**: "Desligada" e "Arquivado" não são aviso), `.filter-chip`, `.empty-state`,
 `.alert--error`/`--ok`, `.back-link`, `.nav-item`, `.popover*` e `.avatar`.
 
 **Toda classe daqui tem consumidor, e isso é uma invariante, não uma observação.** `.btn--ghost` e
-`.card-grid` saíram por não terem nenhum; `.btn--danger` ficou porque tinha um que ninguém tinha
+`.card-grid` saíram por nunca terem tido nenhum; `.brand-mark` saiu por ter perdido o seu quando o
+mark canônico entrou (ADR 0043) — nascer sem chamador e ficar sem chamador são a mesma dívida, e
+ela vale igual para prop de componente. `.btn--danger` ficou porque tinha um que ninguém tinha
 notado (o `ConfirmDialog`). Os dois botões de perigo dizem coisas diferentes e não se substituem:
 `--danger` é vermelho sólido e só aparece na confirmação, quando a ação já foi pedida;
 `--secondary-danger` é neutro em repouso e vermelho no hover, e é o `Arquivar` que divide a faixa
@@ -175,7 +195,7 @@ nunca casou com este produto; não a siga aqui. O anterior está em `docs/design
 e na tag `design/antes-do-redesenho`; o que foi portado de lá, em
 `docs/design/referencia-portal-do-cliente.md`.
 
-Toda mudança de cor passa por `e2e/a11y.spec.ts` — 21 telas × 3 larguras, contraste AA incluído.
+Toda mudança de cor passa por `e2e/a11y.spec.ts` — 24 telas × 3 larguras, contraste AA incluído.
 **Quando o axe e o tom discordam, cede o tom.** Vale inclusive contra a fonte: copiar a forma
 copia junto os defeitos de contraste dela, e foi assim que o `slate-400` do `.nav-label` do portal
 do cliente reprovou 19 telas de uma vez ao chegar aqui.
