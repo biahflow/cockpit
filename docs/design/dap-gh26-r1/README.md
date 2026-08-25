@@ -2,7 +2,7 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Awaiting approval**
+Status: **Approved**
 Data: 2026-08-25
 Produzido por: harness (Claude Code), sob `workflows/design-approval.md`
 
@@ -24,11 +24,24 @@ revisão, do mesmo modo que aprovar esta revisão não aprovará a próxima.
 
 | Campo | Valor |
 | --- | --- |
-| O que se pede aprovar | **visual e copy** da composição do shell, da visão geral e das telas de autenticação |
-| Aprovado por | _pendente_ |
-| Data | _pendente_ |
-| Revisão aprovada | _pendente_ |
+| O que foi aprovado | **visual e copy** da composição do shell, da visão geral e das telas de autenticação |
+| Aprovado por | o solicitante, explicitamente, nesta sessão |
+| Data | 2026-08-25 |
+| Revisão aprovada | **1** |
 | Explicitamente **não** aprovado | tema escuro; as outras 20 telas de produto; `focus trap`/`Escape`/`aria-modal` na gaveta mobile; `.filter-chip` em `rounded-full`; nomenclatura do `roadmap.md`; favicon e `<title>`; marca em e-mail, documento gerado ou exportação |
+
+A aprovação foi dada em duas decisões separadas, porque aprovar visual não aprova copy:
+
+1. **Visual** — a revisão 1 como está, incluindo o item de menu no papel _label_ (12/16, 600). A
+   alternativa registrada na decisão 3 abaixo (manter 13 px e estender o contrato com um papel
+   "nav") foi **rejeitada**.
+2. **Copy** — as strings exatas: sidebar `Pulse` + `Operação Biahflow`; raiz do breadcrumb `Pulse`;
+   login com eyebrow `Operação Biahflow` e rodapé `Biahflow · processos que fluem` (inalterado);
+   convite passa de `Portal Biahflow` para `Pulse`.
+
+Esta é a autoridade de design para a implementação da Issue #26. Aprovação da revisão 1 não é
+aprovação de uma revisão posterior: um pacote materialmente alterado é revisão nova e precisa do
+próprio registro.
 
 ## Artefato
 
