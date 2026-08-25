@@ -1,21 +1,22 @@
 # Deploy de HML do Pulse.
 #
-# O deploy de aplicação não roda `terraform apply`. Infraestrutura, rede, registros, segredos e
-# identidades continuam no repositório de infraestrutura compartilhado. Este workflow só constrói
-# as duas imagens da aplicação uma vez, fixa seus digests e projeta a `main` em HML.
+# O deploy de aplicação não roda `terraform apply`. Este workflow só constrói as duas imagens da
+# aplicação uma vez, fixa seus digests e projeta a `main` em HML. Infraestrutura, rede, registros,
+# segredos e identidades são de outro repositório — e QUAL repositório é a parte que precisa estar
+# escrita, porque a resposta é contraintuitiva (ADR 0044,
+# `docs/adr/0044-a-infra-do-pulse-mora-no-outro-repositorio.md`):
 #
-# Duas ressalvas, ambas decididas na ADR 0044 (`docs/adr/0044-adotar-antes-de-renomear.md`):
-#
-# 1. A fronteira acima descreve o desenho, e não o estado. Os recursos que este workflow atualiza
-#    — os cinco `cockpit-*` abaixo — ainda NÃO estão declarados em `biahflow/infra`: foram criados
-#    à mão e não são governados por Terraform nenhum. Enquanto isso valer, a configuração estável
-#    deles (env, ingress, escala, service account) existe só no recurso vivo. Não destrua nem
-#    renomeie nada aqui antes que o stack exista e o `plan` tenha sido revisado e aplicado.
+# 1. NÃO é `biahflow/infra`, apesar do nome e da descrição dele. Os cinco recursos `cockpit-*`
+#    que este workflow atualiza são declarados em `biahflow/portal-cliente`, em
+#    `infra/terraform/ambientes/hml-biahflow/servicos.tf`, sobre a fundação de HML que fica ao
+#    lado, em `ambientes/hml`. Lá é onde se muda escala, ingress, rede, variável e segredo; aqui
+#    só se troca a imagem por digest. `apply` é `workflow_dispatch` com flag, e é Human Gate.
 # 2. `cockpit-*` é PREFIXO HISTÓRICO do Pulse — os recursos herdaram o nome do repositório, que a
 #    ADR 0030 rebatizou de `portal` para `cockpit` antes de a ADR 0035 nomear o produto de Pulse.
-#    O rename está decidido, mas represado atrás da adoção no Terraform, porque em
-#    Cloud Run renomear é destruir e recriar com URL nova. Produção, que ainda não existe, nasce
-#    `pulse-*`: os nomes de lá saem de `vars.PROD_*`, não daqui.
+#    O rename para `pulse-*` está decidido e sai por PR daquele repositório, tocando os dois
+#    stacks no mesmo lote: a chave do serviço em `servicos.tf` e o literal `origem_do_crm` em
+#    `ambientes/hml/cloudflare.tf`, que é de outro state e já quebrou uma vez neste movimento.
+#    Produção, que ainda não existe, nasce `pulse-*`: os nomes de lá saem de `vars.PROD_*`.
 name: deploy-hml
 
 on:
