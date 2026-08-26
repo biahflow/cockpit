@@ -9,9 +9,16 @@ through to project execution. Backend is Django + DRF (Python 3.12) serving a ve
 `/api/v1/` API; frontend is a React + Vite + TypeScript SPA styled with Tailwind v4.
 The product spec, scope, and roadmap live in `PRD.md` and `roadmap.md`; most project
 documentation is in Portuguese (pt-BR). Read
-[`docs/engineering-os/project-context.md`](docs/engineering-os/project-context.md) before planning
+[`docs/project-context.md`](docs/project-context.md) before planning
 or changing work: it identifies the project's canonical sources, validation profiles, and human
 approval gates. It complements the global Engineering OS and does not replace it.
+
+The global layer is vendored and pinned at
+[`docs/engineering-os/`](docs/engineering-os/PROVENANCE.md), tag `v0.1.0`. It is the **first**
+source on conflict (ADR 0045), and the precedence is asymmetric: this repository may *add*
+constraint and may never weaken a global guardrail or remove a human gate. The mirror is a
+faithful copy and is not edited here — a change to a global rule is a pull request against the
+origin, and reaches this repository as a reviewed pin bump.
 
 ## Commands
 
@@ -49,7 +56,7 @@ mappings differ. Running locally without Docker uses the defaults (API `8000`,
 web `5173`). The README table is the source of truth for host URLs.
 
 Before opening a PR, select the applicable validation profiles from
-[`docs/engineering-os/project-context.md`](docs/engineering-os/project-context.md). The executable
+[`docs/project-context.md`](docs/project-context.md). The executable
 source of truth for the complete CI suite is [`.github/workflows/quality.yml`](.github/workflows/quality.yml).
 
 ## Architecture

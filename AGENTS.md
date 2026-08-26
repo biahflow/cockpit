@@ -2,7 +2,22 @@
 
 ## Contexto Engineering OS
 
-Leia [`docs/engineering-os/project-context.md`](docs/engineering-os/project-context.md) para as
+A camada global da Engineering OS está vendorizada e pinada em
+[`docs/engineering-os/`](docs/engineering-os/PROVENANCE.md), na tag `v0.1.0` — alcançável do
+próprio checkout, por CI e por colaborador novo, não só por quem tem um bootstrap pessoal
+instalado. Ela é a **primeira** fonte em caso de conflito (ADR 0045): guardrails, princípios,
+[Definition of Done](docs/engineering-os/core/definition-of-done.md), contratos de
+[Planner](docs/engineering-os/agents/planner.md),
+[Builder](docs/engineering-os/agents/builder.md) e
+[Reviewer](docs/engineering-os/agents/reviewer.md), e os gates humanos.
+
+A precedência é **assimétrica**: este repositório pode *acrescentar* restrição — mais teste,
+mais revisão, mais evidência — e **não pode enfraquecer** guardrail global nem remover gate
+humano. Documento daqui mais estrito que o global vale; mais frouxo é defeito, e o conserto é
+aqui. O espelho não se edita: mudança na regra global é PR na origem, e chega como avanço de
+pino, revisado.
+
+Leia [`docs/project-context.md`](docs/project-context.md) para as
 fontes canônicas do projeto, ciclo de features, perfis de validação e gates humanos. Ele complementa
 a Engineering OS global; não a substitui.
 
