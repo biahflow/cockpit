@@ -88,7 +88,7 @@ E um serviço **`scheduler`**, que roda o trabalho periódico da aplicação: di
 ## Qualidade
 
 Selecione e execute os perfis aplicáveis descritos em
-[`docs/engineering-os/project-context.md`](docs/engineering-os/project-context.md); a fonte
+[`docs/project-context.md`](docs/project-context.md); a fonte
 executável da suíte completa é [`.github/workflows/quality.yml`](.github/workflows/quality.yml).
 Veja também [AGENTS.md](AGENTS.md) e `docs/runbooks/`.
 

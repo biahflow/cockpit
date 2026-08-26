@@ -11,13 +11,13 @@ procedimentos.
 
 | Responsabilidade | Fonte canônica | Uso |
 | --- | --- | --- |
-| Produto, escopo e critérios de sucesso | [`PRD.md`](../../PRD.md) | Entender o produto atual e seus limites. |
-| Inventário e estado de features/work items | [`roadmap.md`](../../roadmap.md) | Localizar ID, estado e FDD de cada item relevante. A localização na raiz é uma exceção documentada do projeto. |
-| Especificação de features | [`docs/fdd/`](../fdd/) | Ler a FDD relevante antes de mudar comportamento. |
-| Decisões arquiteturais | [`docs/adr/`](../adr/) | Preservar decisões duráveis e seus limites. |
-| Mudanças transversais ou incompatíveis | [`docs/rfcs/`](../rfcs/) | Consultar RFCs antes de alterar contratos amplos. |
-| Arquitetura e operação | [`docs/architecture.md`](../architecture.md) e [`docs/runbooks/`](../runbooks/) | Entender topologia, limites e procedimentos operacionais. |
-| Validação executável | [`.github/workflows/quality.yml`](../../.github/workflows/quality.yml) | Fonte canônica dos gates automatizados de CI. |
+| Produto, escopo e critérios de sucesso | [`PRD.md`](../PRD.md) | Entender o produto atual e seus limites. |
+| Inventário e estado de features/work items | [`roadmap.md`](../roadmap.md) | Localizar ID, estado e FDD de cada item relevante. A localização na raiz é uma exceção documentada do projeto. |
+| Especificação de features | [`docs/fdd/`](fdd/) | Ler a FDD relevante antes de mudar comportamento. |
+| Decisões arquiteturais | [`docs/adr/`](adr/) | Preservar decisões duráveis e seus limites. |
+| Mudanças transversais ou incompatíveis | [`docs/rfcs/`](rfcs/) | Consultar RFCs antes de alterar contratos amplos. |
+| Arquitetura e operação | [`docs/architecture.md`](architecture.md) e [`docs/runbooks/`](runbooks/) | Entender topologia, limites e procedimentos operacionais. |
+| Validação executável | [`.github/workflows/quality.yml`](../.github/workflows/quality.yml) | Fonte canônica dos gates automatizados de CI. |
 
 `CHANGELOG.md` é histórico de releases; não é fonte de estado de feature. Quando duas fontes
 operacionais divergirem, registre `SOURCE_OF_TRUTH_CONFLICT` e peça decisão humana antes de
@@ -66,7 +66,7 @@ Aplicam-se os guardrails globais de Git, banco e produção, além destes gates 
 
 ## Adaptadores
 
-[`AGENTS.md`](../../AGENTS.md) é o adaptador para Codex e [`CLAUDE.md`](../../CLAUDE.md) é o
+[`AGENTS.md`](../AGENTS.md) é o adaptador para Codex e [`CLAUDE.md`](../CLAUDE.md) é o
 adaptador para Claude Code. Ambos devem apontar para este contexto e não podem enfraquecer as
 regras globais da Engineering OS.
 

@@ -62,6 +62,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: uv run python ../.github/scripts/test_release_evidence.py
+      - run: uv run python ../.github/scripts/test_docs_links.py
       - run: uv run ruff check .
       - run: uv run mypy apps config
       - run: uv run pip-audit
