@@ -2,7 +2,7 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Pendente de aprovação**
+Status: **Approved**
 Data: 2026-08-27
 Produzido por: harness (Claude Code), sob `workflows/design-approval.md`
 
@@ -110,10 +110,16 @@ Registradas aqui porque afetam o custo, não o desenho:
 
 | Campo | Valor |
 | --- | --- |
-| O que se pede aprovar | **visual** e **copy** da revisão 1 das duas superfícies |
-| Aprovado por | — |
-| Data | — |
-| Revisão aprovada | — |
+| O que foi aprovado | **visual** e **copy** da revisão 1 das duas superfícies |
+| Aprovado por | o solicitante, explicitamente, nesta sessão |
+| Data | 2026-08-27 |
+| Revisão aprovada | **1** |
+| Explicitamente **não** aprovado | o que está na seção "Explicitamente fora desta aprovação" abaixo |
+
+A aprovação veio como um "aprovado" único, cobrindo as duas decisões que haviam sido pedidas em
+separado. O harness registrou essa leitura de forma explícita ao solicitante no momento do
+registro, para que uma aprovação mais estreita pudesse ser corrigida antes de qualquer
+implementação.
 
 Aprovação da revisão 1 não é aprovação de uma revisão posterior: um pacote materialmente alterado é
 revisão nova e precisa do próprio registro.
