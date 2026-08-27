@@ -10,6 +10,7 @@ from .models import (
     Document,
     EngineeringHandoff,
     Evidencia,
+    GithubProjection,
     Meeting,
     Milestone,
     Opportunity,
@@ -53,6 +54,11 @@ PROJECT_OF = {
     Document: lambda obj: obj.project,
     Artifact: lambda obj: obj.project,
     EngineeringHandoff: lambda obj: obj.project,
+    # A projeção do GitHub (FDD 041) chega ao projeto **pelo handoff**, que é onde ela pendura.
+    # Sem esta linha ela cairia no `return False` do fim de `has_object_permission` — que é a
+    # melhor propriedade deste modelo de permissão e, aqui, seria 403 no detalhe de uma linha que
+    # a listagem do próprio projeto mostra.
+    GithubProjection: lambda obj: obj.handoff.project,
     # O case é prova social, mas nasce de um projeto e herda a fronteira dele: a Entrega lê o case
     # dos projetos de que participa e não a vitrine inteira da casa (ADR 0010, FDD 027).
     Case: lambda obj: obj.project,
@@ -138,12 +144,18 @@ class RolePermission(BasePermission):
             # Os três recursos do Discovery estruturado (FDD 039) entram aqui pelo mesmo motivo
             # que estão no conjunto de Vendas: o levantamento é feito pelas duas áreas. O objeto
             # abaixo decide qual cliente é o seu, e a âncora é o cliente — não o projeto.
+            # `github_projection` (FDD 041) segue `engineering_handoff` e **não aparece em
+            # nenhum conjunto de Vendas**: quem não alcança o contrato de engenharia não alcança o
+            # estado dele. Quem produz o 403 é o `return False` abaixo. O painel continua na tela
+            # de Vendas com a mesma copy, haja ou não referência — um painel que some por papel
+            # faria a mesma tela ter duas formas por motivo invisível, e uma copy que muda com a
+            # existência de referência vazaria justamente o que o 403 protege (DAP GH-41 r1).
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
                                 "digital_employee", "artifact", "satisfacao",
                                 "processo", "processo_etapa", "evidencia",
-                                "engineering_handoff"}
+                                "engineering_handoff", "github_projection"}
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:  # type: ignore[no-untyped-def]

@@ -3,6 +3,10 @@
 Zero LLM: o corpo da Issue é markdown determinístico a partir do `IssueDraft`. Falha fechada —
 sem token, sem repositório, 4xx/5xx ou timeout levantam `GitHubIssuesError`; nunca devolvem
 `IssueRef` vazio. `str()` do erro e os logs nunca carregam o token (NFR-004).
+
+A FDD 041 acrescentou as **leituras** de que a reconciliação da projeção precisa — Issue, PR e
+estado de check por SHA — neste mesmo arquivo e nesta mesma classe. Um segundo cliente HTTP para
+o mesmo fornecedor traria uma segunda política de timeout, de erro e de redação de token.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol
 
 from django.conf import settings
@@ -71,11 +76,38 @@ class IssueDraft:
     correlation_id: str
 
 
+@dataclass(frozen=True)
+class IssueSnapshot:
+    """O que a projeção precisa saber de uma Issue: estado, título e o carimbo **de lá**."""
+
+    state: str
+    title: str
+    updated_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PullRequestSnapshot:
+    number: int
+    state: str
+    merged: bool
+    head_sha: str
+    updated_at: datetime | None
+
+
 class GitHubIssuesClient(Protocol):
     def create_issue(self, draft: IssueDraft) -> IssueRef: ...
     def find_by_handoff_id(
         self, repository: str, pulse_work_item_id: str
     ) -> IssueRef | None: ...
+
+
+# Protocolo **separado** do de escrita, e não uma extensão dele: o provisionamento (FDD 040) já
+# aceita um cliente de dois métodos, e alargar aquele contrato obrigaria todo dublê existente a
+# implementar leituras que ele não usa.
+class GithubReadClient(Protocol):
+    def get_issue(self, repository: str, number: int) -> IssueSnapshot: ...
+    def get_pull_request(self, repository: str, number: int) -> PullRequestSnapshot: ...
+    def get_check_state(self, repository: str, sha: str) -> str: ...
 
 
 def render_issue_body(draft: IssueDraft) -> str:
@@ -217,7 +249,7 @@ class GithubIssuesApi:
         try:
             payload = _request("GET", url)
         except GitHubIssuesError as exc:
-            status = _http_status_from_error(exc)
+            status = http_status_from_error(exc)
             if status in {404, 422}:
                 return None
             raise
@@ -228,8 +260,102 @@ class GithubIssuesApi:
             raise GitHubIssuesError("GitHub search returned a malformed issue")
         return _parse_issue(items[0], repository)
 
+    # --- Leituras da projeção (FDD 041) --------------------------------------
 
-def _http_status_from_error(exc: GitHubIssuesError) -> int | None:
+    def get_issue(self, repository: str, number: int) -> IssueSnapshot:
+        repository = _require_token_and_repo(repository)
+        owner, repo = repository.split("/", 1)
+        payload = _request("GET", f"{_API_ROOT}/repos/{owner}/{repo}/issues/{int(number)}")
+        return IssueSnapshot(
+            state=str(payload.get("state") or "").strip().lower(),
+            title=str(payload.get("title") or "")[:255],
+            updated_at=parse_github_datetime(payload.get("updated_at")),
+        )
+
+    def get_pull_request(self, repository: str, number: int) -> PullRequestSnapshot:
+        repository = _require_token_and_repo(repository)
+        owner, repo = repository.split("/", 1)
+        payload = _request("GET", f"{_API_ROOT}/repos/{owner}/{repo}/pulls/{int(number)}")
+        head = payload.get("head")
+        return PullRequestSnapshot(
+            number=int(number),
+            state=str(payload.get("state") or "").strip().lower(),
+            merged=bool(payload.get("merged")),
+            head_sha=str((head or {}).get("sha") or "") if isinstance(head, dict) else "",
+            updated_at=parse_github_datetime(payload.get("updated_at")),
+        )
+
+    def get_check_state(self, repository: str, sha: str) -> str:
+        """Agrega os check runs de um commit em **um** dos quatro estados do painel.
+
+        Agregação e não lista: a linha do painel responde "aquela revisão passou?", e enumerar
+        jobs ali seria reconstruir a tela do GitHub dentro do Pulse — que é exatamente o que a
+        ADR 0040 diz para não fazer.
+        """
+        repository = _require_token_and_repo(repository)
+        owner, repo = repository.split("/", 1)
+        commit = urllib.parse.quote(str(sha).strip(), safe="")
+        payload = _request(
+            "GET", f"{_API_ROOT}/repos/{owner}/{repo}/commits/{commit}/check-runs?per_page=100"
+        )
+        runs = payload.get("check_runs")
+        if not isinstance(runs, list) or not runs:
+            return CI_NONE
+        return aggregate_check_runs(
+            [
+                (
+                    str(run.get("status") or "").strip().lower(),
+                    str(run.get("conclusion") or "").strip().lower(),
+                )
+                for run in runs
+                if isinstance(run, dict)
+            ]
+        )
+
+
+CI_NONE = "none"
+CI_PENDING = "pending"
+CI_SUCCESS = "success"
+CI_FAILURE = "failure"
+
+# Conclusões que reprovam. `neutral`, `skipped` e `stale` **não** entram: um job pulado não é uma
+# reprovação, e pintá-lo de vermelho ensinaria a ignorar o vermelho.
+_CHECK_FAILURE = {"failure", "timed_out", "cancelled", "action_required", "startup_failure"}
+
+
+def aggregate_check_runs(runs: list[tuple[str, str]]) -> str:
+    """`[(status, conclusion)]` → um estado de CI. Separada do I/O para ficar testável."""
+    if not runs:
+        return CI_NONE
+    if any(status != "completed" for status, _ in runs):
+        return CI_PENDING
+    if any(conclusion in _CHECK_FAILURE for _, conclusion in runs):
+        return CI_FAILURE
+    return CI_SUCCESS
+
+
+def parse_github_datetime(value: object) -> datetime | None:
+    """ISO 8601 do GitHub (`2026-08-27T10:00:00Z`) em `datetime` ciente de fuso.
+
+    Devolve `None` em vez de levantar: um carimbo ilegível não pode derrubar a entrega inteira
+    do webhook — ele só faz a guarda de ordem não ter o que comparar naquele evento.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def http_status_from_error(exc: GitHubIssuesError) -> int | None:
+    """O status HTTP por trás do erro, quando houve um.
+
+    Público desde a FDD 041: é ele que separa "GitHub fora do ar" (sem status) de "permissão
+    negada" (401/403) e "referência ausente" (404) — três erros com ações corretivas diferentes,
+    e é essa diferença que decide quem age.
+    """
     cause = exc.__cause__
     if isinstance(cause, urllib.error.HTTPError):
         return int(cause.code)

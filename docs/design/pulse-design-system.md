@@ -1,7 +1,7 @@
 # Pulse Design System — contrato de consumo
 
 **ADR:** [0041](../adr/0041-pulse-design-system-e-validacao-visual.md) · [0043](../adr/0043-a-marca-pulse-no-shell-e-as-fundacoes-r2-consumidas.md)
-**DAP:** [r2](dap-gh19-r2/README.md), aprovado 2026-08-24 (fundações normativas) · [GH-26 r1](dap-gh26-r1/README.md), aprovado 2026-08-25 (marca e shell)
+**DAP:** [r2](dap-gh19-r2/README.md), aprovado 2026-08-24 (fundações normativas) · [GH-26 r1](dap-gh26-r1/README.md), aprovado 2026-08-25 (marca e shell) · [GH-41 r1](dap-gh41-r1/README.md), aprovado 2026-08-27 (papel de código)
 **Fonte dos tokens:** `frontend/src/index.css` (`@theme` / `@theme inline` / `@layer components`)
 
 Este é o contrato para telas novas e alterações visuais no Pulse. A forma já existente (ADR 0024–0026) continua; r2 explicita a hierarquia compacta para operação e os tokens semânticos aprovados.
@@ -38,6 +38,7 @@ Valores novos só entram com DAP aprovado. Não inventar matiz. Não acrescentar
 | `success` / `success-50` | `#047857` / `#ecfdf5` | semântico; hexes emerald-700/50 |
 | `warning` / `warning-50` | `#b45309` / `#fffbeb` | semântico; hexes amber-700/50 |
 | `info` / `info-50` | `#1d4ed8` / `#eff6ff` | informativo, separado da marca |
+| `--font-mono` | pilha do sistema (`ui-monospace`…) | **o papel de código** (DAP GH-41 r1). Sem webfont: a mono aparece em sete caracteres de SHA, e a Inter já custa um download |
 
 `accent` e `accent-50` são apelidos de migração para `brand-500` / `brand-50`. Em código novo escreva `brand-*`.
 
@@ -53,6 +54,7 @@ Use a classe. Não reescreva o literal. A guarda é `frontend/src/test/primitiva
 | `.btn--secondary` | contorno |
 | `.btn--danger` | confirmação destrutiva já pedida |
 | `.btn--secondary-danger` | arquivar: neutro em repouso, vermelho na intenção |
+| `.type-code` | identificador que se lê caractere a caractere — SHA, `owner/repo#numero`, código de ocorrência. Declara a **família** e só ela: o corpo vem do papel ao lado (`.type-body`, `.type-meta`), porque o mesmo identificador aparece em dois tamanhos na mesma linha |
 | `.state--0` | informativo (`info`) |
 | `.state--1` | sucesso |
 | `.state--2` | aviso |
@@ -72,6 +74,10 @@ Mapa de estado devolve **variante** (`"state--1"`), nunca a cor (`"bg-emerald-50
 Quando o axe e o tom discordam, cede o tom. Gate: `frontend/e2e/a11y.spec.ts` (WCAG 2.0/2.1 A e AA).
 
 Medições aprovadas em r2: `ink`/`canvas` 18,07:1; `muted`/`canvas` 7,30:1; `brand-500`/branco 5,02:1; `brand-700`/`brand-50` 6,14:1; `brand-200`/`ink` 7,14:1; sucesso 5,21:1; aviso 4,84:1; perigo 5,91:1; informação 6,16:1.
+
+Acrescentadas no GH-41 r1: `.state--off` (`slate-600` sobre `slate-100`) **6,92:1** — é o par que carrega a regra do obsoleto; `ink` sobre `surface-subtle` 17,30:1 (o SHA dentro do chip de código); `brand-600` sobre `surface` 6,08:1 (o link canônico da referência).
+
+**Estado obsoleto nunca veste a cor do estado observado** (GH-41 r1). Quando o backend diz que a projeção envelheceu, todo selo cai para `.state--off` e o âmbar **troca de lugar** — sai dos selos e vai para a linha de proveniência, que passa a ser o dado principal. Assim o âmbar continua querendo dizer uma coisa só na tela inteira: "atenção neste dado", e não "velho".
 
 ## Página de prova
 

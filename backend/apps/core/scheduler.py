@@ -163,6 +163,17 @@ def jobs() -> list[Job]:
             schedule=Daily(_parse_at(settings.SCHEDULER_BACKUP_CHECK_AT, time(9, 0))),
             description="Alerta de backup velho (FDD 021)",
         ),
+        # Por intervalo e não por hora de parede, como o calendário: entrega de webhook perdida
+        # não espera o expediente, e a releitura é idempotente. É a **rede de baixo** do webhook —
+        # um evento que não chegou não avisa que não chegou (FDD 041).
+        Job(
+            name="github_projection",
+            command="reconcile_github_projections",
+            schedule=Every(
+                timedelta(minutes=settings.SCHEDULER_GITHUB_RECONCILE_EVERY_MINUTES)
+            ),
+            description="Estado de engenharia do GitHub reconciliado por leitura (FDD 041)",
+        ),
     ]
 
 

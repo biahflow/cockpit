@@ -517,6 +517,48 @@ const FIXTURES: Record<string, unknown> = {
     // ele é a maioria dos contatos de verdade.
     receives_billing: index === 1,
   })),
+  // O painel Engenharia (FDD 041). **Três linhas e não uma**, porque a regra que o DAP GH-41 r1
+  // aprovou só é mensurável no contraste de *dois* conjuntos: o fresco, com cada selo na cor do
+  // estado, e o obsoleto/em erro, com todo selo em `.state--off` e a proveniência em `.state--2`.
+  // Com uma linha só, o axe nunca veria o par slate-600/slate-100, que é o que carrega o pacote.
+  "/api/v1/github-projections/": [
+    {
+      id: 1, handoff: 1, project: 1, repository: "biahflow/pulse", issue_number: 41,
+      issue_url: "https://github.com/biahflow/pulse/issues/41",
+      reference: "biahflow/pulse#41", issue_state: "open",
+      issue_title: `Projetar estado de engenharia do GitHub — ${NOME_LONGO}`,
+      pr_number: 90, pr_state: "open", head_sha: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      ci_state: "success", observed_at: `${HOJE}T12:00:00Z`, observed_via: "webhook",
+      age_seconds: 120, is_stale: false,
+      last_error_kind: "", last_error_at: null, last_error_age_seconds: null,
+      source_updated_at: `${HOJE}T11:59:00Z`,
+      created_at: `${HOJE}T10:00:00Z`, updated_at: `${HOJE}T12:00:00Z`,
+    },
+    {
+      id: 2, handoff: 2, project: 1, repository: "biahflow/pulse", issue_number: 37,
+      issue_url: "https://github.com/biahflow/pulse/issues/37",
+      reference: "biahflow/pulse#37", issue_state: "closed",
+      issue_title: "Régua de cobrança sem estragar a relação",
+      pr_number: 88, pr_state: "merged", head_sha: "9f0e7c2a1b2c3d4e5f60718293a4b5c6d7e8f901",
+      ci_state: "success", observed_at: `${HOJE}T09:00:00Z`, observed_via: "reconciliation",
+      age_seconds: 10800, is_stale: true,
+      last_error_kind: "", last_error_at: null, last_error_age_seconds: null,
+      source_updated_at: `${HOJE}T08:59:00Z`,
+      created_at: `${HOJE}T08:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+    },
+    {
+      id: 3, handoff: 3, project: 1, repository: "biahflow/pulse", issue_number: 44,
+      issue_url: "https://github.com/biahflow/pulse/issues/44",
+      reference: "biahflow/pulse#44", issue_state: "open",
+      issue_title: "Referência apagada no GitHub",
+      pr_number: null, pr_state: "none", head_sha: "", ci_state: "none",
+      observed_at: `${HOJE}T11:52:00Z`, observed_via: "reconciliation",
+      age_seconds: 480, is_stale: false,
+      last_error_kind: "missing", last_error_at: `${HOJE}T11:52:00Z`,
+      last_error_age_seconds: 480, source_updated_at: `${HOJE}T11:00:00Z`,
+      created_at: `${HOJE}T08:00:00Z`, updated_at: `${HOJE}T11:52:00Z`,
+    },
+  ],
   "/api/v1/artifacts/": serie(4, index => ({
     id: index, kind: "proposal", kind_display: "Proposta", status: "draft",
     status_display: "Rascunho", title: `Proposta — ${NOME_LONGO}`,

@@ -13,6 +13,8 @@ from apps.core.github_issues import (
     GithubIssuesApi,
     GitHubIssuesError,
     IssueDraft,
+    http_status_from_error,
+    parse_github_datetime,
     render_issue_body,
 )
 
@@ -345,3 +347,94 @@ def test_canary_token_ausente_de_logs_e_excecao(
         assert CANARY not in record.getMessage()
         if record.args:
             assert CANARY not in str(record.args)
+
+
+# --- Leituras da projeção (FDD 041) ------------------------------------------
+
+
+def _leitura(monkeypatch: pytest.MonkeyPatch, payload: dict) -> dict[str, object]:
+    """Aponta o `urlopen` para um corpo fixo e devolve o que a chamada capturou."""
+    capturado: dict[str, object] = {}
+
+    def fake_urlopen(request: object, timeout: object = None) -> _FakeResponse:
+        capturado["url"] = getattr(request, "full_url", "")
+        return _FakeResponse(json.dumps(payload).encode(), status=200)
+
+    monkeypatch.setattr("apps.core.github_issues.urllib.request.urlopen", fake_urlopen)
+    return capturado
+
+
+@override_settings(GITHUB_TOKEN=CANARY, GITHUB_REPO="acme/repo")
+def test_get_issue_le_estado_titulo_e_carimbo(monkeypatch: pytest.MonkeyPatch) -> None:
+    capturado = _leitura(
+        monkeypatch,
+        {"state": "CLOSED", "title": "Do GitHub", "updated_at": "2026-08-27T12:00:00Z"},
+    )
+
+    snapshot = GithubIssuesApi().get_issue("acme/repo", 41)
+
+    assert capturado["url"] == "https://api.github.com/repos/acme/repo/issues/41"
+    assert snapshot.state == "closed"
+    assert snapshot.title == "Do GitHub"
+    assert snapshot.updated_at is not None
+    assert snapshot.updated_at.tzinfo is not None
+
+
+@override_settings(GITHUB_TOKEN=CANARY, GITHUB_REPO="acme/repo")
+def test_get_pull_request_le_merge_e_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    capturado = _leitura(
+        monkeypatch,
+        {"state": "closed", "merged": True, "head": {"sha": "b" * 40},
+         "updated_at": "2026-08-27T12:00:00Z"},
+    )
+
+    snapshot = GithubIssuesApi().get_pull_request("acme/repo", 90)
+
+    assert capturado["url"] == "https://api.github.com/repos/acme/repo/pulls/90"
+    assert snapshot.merged is True
+    assert snapshot.head_sha == "b" * 40
+
+
+@override_settings(GITHUB_TOKEN=CANARY, GITHUB_REPO="acme/repo")
+def test_get_check_state_agrega_os_runs_do_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    capturado = _leitura(
+        monkeypatch,
+        {"check_runs": [
+            {"status": "completed", "conclusion": "success"},
+            {"status": "completed", "conclusion": "failure"},
+        ]},
+    )
+
+    assert GithubIssuesApi().get_check_state("acme/repo", "c" * 40) == "failure"
+    assert capturado["url"] == (
+        f"https://api.github.com/repos/acme/repo/commits/{'c' * 40}/check-runs?per_page=100"
+    )
+
+
+@override_settings(GITHUB_TOKEN=CANARY, GITHUB_REPO="acme/repo")
+def test_commit_sem_check_configurado_e_ausencia_e_nao_reprovacao(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _leitura(monkeypatch, {"check_runs": []})
+
+    assert GithubIssuesApi().get_check_state("acme/repo", "c" * 40) == "none"
+
+
+@override_settings(GITHUB_TOKEN=CANARY, GITHUB_REPO="acme/repo")
+def test_get_issue_404_levanta_com_o_status_recuperavel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """É `http_status_from_error` que separa os três erros do painel (FDD 041)."""
+
+    def fake_urlopen(request: object, timeout: object = None) -> _FakeResponse:
+        raise _http_error("https://api.github.com/repos/acme/repo/issues/41", 404)
+
+    monkeypatch.setattr("apps.core.github_issues.urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(GitHubIssuesError) as capturado:
+        GithubIssuesApi().get_issue("acme/repo", 41)
+    assert http_status_from_error(capturado.value) == 404
+
+
+def test_carimbo_ilegivel_nao_derruba_a_entrega() -> None:
+    assert parse_github_datetime("nao e data") is None
+    assert parse_github_datetime(None) is None
+    assert parse_github_datetime("2026-08-27T12:00:00+00:00") is not None
