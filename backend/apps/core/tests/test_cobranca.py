@@ -66,7 +66,7 @@ def _vencendo_em(dias: int, **kwargs) -> Invoice:  # type: ignore[no-untyped-def
 
 def _com_contato_de_cobranca(client: Client, email: str = "financeiro@cliente.test") -> Contact:
     return Contact.objects.create(
-        client=client, name="Financeiro", email=email, receives_billing=True
+        client=client, first_name="Financeiro", email=email, receives_billing=True
     )
 
 
@@ -534,7 +534,7 @@ def test_a_regua_nao_roda_em_fim_de_semana() -> None:
 def test_o_pre_aviso_sai_por_email_ao_contato_de_cobranca() -> None:
     invoice = _vencendo_em(-3)
     _com_contato_de_cobranca(invoice.client)
-    Contact.objects.create(client=invoice.client, name="Técnico", email="tech@cliente.test")
+    Contact.objects.create(client=invoice.client, first_name="Técnico", email="tech@cliente.test")
 
     resumo = cobranca.executar(HOJE)
 

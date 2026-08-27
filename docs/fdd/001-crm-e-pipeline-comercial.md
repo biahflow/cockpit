@@ -16,6 +16,12 @@ Vendas cria ou seleciona cliente e contato, registra uma oportunidade com títul
 - Etapas abertas podem ser renomeadas e reordenadas por administradores.
 - Há exatamente uma etapa terminal `Ganho` e uma `Perdido`.
 - Apenas Vendas e Administração editam oportunidades.
+- **O contato tem nome e sobrenome separados** (issue #55): sobrenome é opcional. `name`
+  continua existindo na API como campo **derivado e só-leitura** (nome + sobrenome, sem espaço
+  solto quando não há sobrenome); quem cria ou edita um contato manda `first_name`/`last_name` —
+  mudança de contrato de escrita deliberada e incompatível para quem integrava mandando `name`
+  (ver CHANGELOG). Vendas e Administração editam contato existente pelo mesmo painel de criação;
+  Entrega só lê.
 
 ## Aceite
 

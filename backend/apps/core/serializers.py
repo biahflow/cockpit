@@ -112,11 +112,16 @@ class ClientSerializer(serializers.ModelSerializer[Client]):
 
 
 class ContactSerializer(serializers.ModelSerializer[Contact]):
+    # Nome composto e só-leitura (issue #55, FDD 001): quem escreve manda `first_name`/
+    # `last_name`, nunca este campo — mudança de contrato de escrita deliberada, registrada no
+    # CHANGELOG. Lê de `Contact.full_name`, a única definição de "nome composto" (CLAUDE.md).
+    name = serializers.ReadOnlyField(source="full_name")
+
     class Meta:
         model = Contact
-        fields = ["id", "client", "name", "email", "phone", "job_title", "receives_billing",
-                  "created_at", "updated_at"]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        fields = ["id", "client", "first_name", "last_name", "name", "email", "phone",
+                  "job_title", "receives_billing", "created_at", "updated_at"]
+        read_only_fields = ["id", "name", "created_at", "updated_at"]
 
 
 class ActivitySerializer(serializers.ModelSerializer[Activity]):

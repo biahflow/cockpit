@@ -85,7 +85,8 @@ def test_a_passada_da_regua_nao_cria_suspensao() -> None:
     """O job roda sobre a carteira com a entrega em frangalhos e não recua por conta própria."""
     client = ClientFactory()
     Contact.objects.create(
-        client=client, name="Financeiro", email="financeiro@cliente.test", receives_billing=True
+        client=client, first_name="Financeiro", email="financeiro@cliente.test",
+        receives_billing=True,
     )
     _entrega_em_frangalhos(client)
     _vencida(client, 12, "2026-0001")

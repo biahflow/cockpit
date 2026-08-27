@@ -9613,9 +9613,18 @@ components:
           readOnly: true
         client:
           type: integer
+        first_name:
+          type: string
+          maxLength: 128
+        last_name:
+          type: string
+          maxLength: 128
         name:
           type: string
-          maxLength: 255
+          description: |-
+            Nome composto — a única definição (CLAUDE.md): `ContactSerializer.name` e `ai.py`
+            leem daqui em vez de recompor o mesmo espaço-e-strip em dois lugares.
+          readOnly: true
         email:
           type: string
           format: email
@@ -9639,6 +9648,7 @@ components:
       required:
       - client
       - created_at
+      - first_name
       - id
       - name
       - updated_at
@@ -11483,9 +11493,18 @@ components:
           readOnly: true
         client:
           type: integer
+        first_name:
+          type: string
+          maxLength: 128
+        last_name:
+          type: string
+          maxLength: 128
         name:
           type: string
-          maxLength: 255
+          description: |-
+            Nome composto — a única definição (CLAUDE.md): `ContactSerializer.name` e `ai.py`
+            leem daqui em vez de recompor o mesmo espaço-e-strip em dois lugares.
+          readOnly: true
         email:
           type: string
           format: email
