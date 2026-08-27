@@ -1,6 +1,6 @@
 # ADR 0037 — Backbone event-driven, Outbox e idempotência
 
-**Status:** Accepted  
+**Status:** aceita
 **Data:** 2026-08-24
 
 ## Contexto

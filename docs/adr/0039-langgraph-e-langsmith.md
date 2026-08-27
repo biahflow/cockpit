@@ -1,6 +1,6 @@
 # ADR 0039 — LangGraph como runtime agentic e LangSmith para observabilidade/evals de IA
 
-**Status:** Accepted  
+**Status:** aceita
 **Data:** 2026-08-24
 
 ## Contexto

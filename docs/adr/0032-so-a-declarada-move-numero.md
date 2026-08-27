@@ -1,11 +1,11 @@
 # ADR 0032 — Só a declarada move número
 
-- **Status:** aceita
-- **Data:** 19/08/2026
-- **Contexto:** FDD 037 (o registro de satisfação), RFC 0004 (cobrança relacional, camada 5),
-  FDD 036 / ADR 0031 (a régua de cobrança), FDD 034 (Risk Register — o precedente do registro
-  declarado), ADR 0006 (agentes por área), ADR 0010 (visibilidade por participação),
-  ADR 0014 (custo constante nos agregadores)
+**Status:** aceita
+**Data:** 19/08/2026
+**Contexto:** FDD 037 (o registro de satisfação), RFC 0004 (cobrança relacional, camada 5),
+FDD 036 / ADR 0031 (a régua de cobrança), FDD 034 (Risk Register — o precedente do registro
+declarado), ADR 0006 (agentes por área), ADR 0010 (visibilidade por participação),
+ADR 0014 (custo constante nos agregadores)
 
 ## Contexto
 

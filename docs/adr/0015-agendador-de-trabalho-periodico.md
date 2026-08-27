@@ -1,6 +1,6 @@
 # ADR 0015 — Agendador de trabalho periódico na aplicação, com carimbo durável no banco
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

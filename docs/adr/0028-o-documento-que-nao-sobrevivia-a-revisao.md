@@ -1,6 +1,6 @@
 # ADR 0028 — O documento que não sobrevivia à revisão
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 12/08/2026
 **Fase:** transversal — armazenamento de documento
 **Fecha:** a pendência de `docs/architecture.md` ("migrar os blobs para S3/MinIO — ou remover o

@@ -1,6 +1,6 @@
 # ADR 0030 — A operação sai do texto: o cockpit vira o sistema primário
 
-**Status:** aceito — superado em parte pela ADR 0035 (nome do produto)
+**Status:** superada em parte pela ADR 0035
 **Data:** 19/08/2026
 **Fase:** transversal — posicionamento do produto e fonte primária da operação
 **Relacionadas:** RFC 0002 (jornada de consultoria assistida por IA), ADR 0006 (agentes
@@ -50,7 +50,9 @@ Activities do CRM (FDD 035).
 ## Consequências
 
 - O repositório é renomeado para `cockpit`; a marca visual continua Biahflow (o design system
-  da ADR 0024/0025 não muda). Título da SPA e referências de nome acompanham.
+  da ADR 0024/0025 não muda). Título da SPA e referências de nome acompanham. O nome do produto
+  foi superado em parte pela ADR 0035, que renomeia o produto para Pulse; o restante desta
+  decisão permanece.
 - A metodologia FDE entra destilada em `docs/metodologia-fde.md` e no manifesto do corpus
   (`KB_SOURCES`), consultável com citação — o antídoto declarado ao "texto demais".
 - FDD 033, 034 e 035 nascem desta decisão e entram no roadmap como próximos work items.

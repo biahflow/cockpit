@@ -1,6 +1,6 @@
 # ADR 0008 — Artefatos da jornada como entidade
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

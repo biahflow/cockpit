@@ -1,6 +1,6 @@
 # ADR 0040 — Pulse + GitHub + One sem ClickUp ou Make
 
-**Status:** Accepted  
+**Status:** aceita
 **Data:** 2026-08-24
 
 ## Contexto

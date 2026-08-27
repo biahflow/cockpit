@@ -1,9 +1,9 @@
 # ADR 0023 — Resposta ancorada: citar ou declarar a lacuna, e quem declara o regime é o modelo
 
-- **Status:** aceita
-- **Data:** 07/08/2026
-- **Contexto:** FDD 029 (base de conhecimento interna), ADR 0006 (motor de agentes), ADR 0022
-  (recuperação com pgvector), FDD 024 (homologação como método)
+**Status:** aceita
+**Data:** 07/08/2026
+**Contexto:** FDD 029 (base de conhecimento interna), ADR 0006 (motor de agentes), ADR 0022
+(recuperação com pgvector), FDD 024 (homologação como método)
 
 ## Contexto
 

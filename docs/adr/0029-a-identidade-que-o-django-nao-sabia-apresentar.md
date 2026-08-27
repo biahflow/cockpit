@@ -1,6 +1,6 @@
 # ADR 0029 — A identidade que o Django não sabia apresentar
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 12/08/2026
 **Fecha:** metade do "fica aberto" da ADR 0048 do portal do cliente — o nosso lado
 **Relacionadas:** ADR 0003 (integração com o portal), ADR 0016 (auth do Google sem chave),

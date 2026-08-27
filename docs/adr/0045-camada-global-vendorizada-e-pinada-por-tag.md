@@ -1,6 +1,6 @@
 # ADR 0045 — A camada global vem vendorizada e pinada, e o Project Context sai de baixo dela
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 26/08/2026
 **Fase:** transversal — governança e contexto de agentes
 

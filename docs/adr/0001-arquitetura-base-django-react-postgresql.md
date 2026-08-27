@@ -1,6 +1,6 @@
 # ADR 0001 — Django, React e PostgreSQL
 
-**Status:** aceito
+**Status:** aceita
 
 ## Decisão
 

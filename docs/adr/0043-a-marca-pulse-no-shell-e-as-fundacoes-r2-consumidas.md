@@ -1,6 +1,6 @@
 # ADR 0043 — A marca Pulse no shell, e as fundações r2 finalmente consumidas
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 25/08/2026
 **Fase:** transversal — front-end do portal operacional
 **Revisa:** ADR 0024 e ADR 0025 (na parte de marca) · **Consome:** ADR 0041

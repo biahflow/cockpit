@@ -1,9 +1,9 @@
 # ADR 0022 — Recuperação do corpus interno neste repositório, com pgvector
 
-- **Status:** aceita
-- **Data:** 07/08/2026
-- **Contexto:** FDD 029 (base de conhecimento interna), ADR 0006 (motor de agentes), ADR 0013
-  (backup lógico em container próprio), FDD 024 (sondas de integração), FDD 022 (matriz de testes)
+**Status:** aceita
+**Data:** 07/08/2026
+**Contexto:** FDD 029 (base de conhecimento interna), ADR 0006 (motor de agentes), ADR 0013
+(backup lógico em container próprio), FDD 024 (sondas de integração), FDD 022 (matriz de testes)
 
 ## Contexto
 

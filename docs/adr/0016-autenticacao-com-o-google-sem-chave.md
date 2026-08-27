@@ -1,9 +1,9 @@
 # ADR 0016 — Autenticação com o Google sem chave de conta de serviço
 
-- **Status:** aceita
-- **Data:** 06/08/2026
-- **Contexto:** FDD 024 (sondas e homologação), FDD 012 (calendário), FDD 013 (agendamento),
-  FDD 003 (documentos)
+**Status:** aceita
+**Data:** 06/08/2026
+**Contexto:** FDD 024 (sondas e homologação), FDD 012 (calendário), FDD 013 (agendamento),
+FDD 003 (documentos)
 
 ## Contexto
 

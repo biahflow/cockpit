@@ -1,6 +1,6 @@
 # ADR 0013 — Backup lógico em container próprio, com restauração exercitada no CI
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

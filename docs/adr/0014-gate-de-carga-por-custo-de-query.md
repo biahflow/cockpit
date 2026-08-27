@@ -1,6 +1,6 @@
 # ADR 0014 — Gate de carga por custo de query no CI, k6 como procedimento operado
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

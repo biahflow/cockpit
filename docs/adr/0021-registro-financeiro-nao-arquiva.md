@@ -1,10 +1,10 @@
 # ADR 0021 — Registro financeiro não arquiva: a exceção declarada ao soft delete da casa
 
-- **Status:** aceita
-- **Data:** 07/08/2026
-- **Contexto:** FDD 028 (contas a receber), RFC 0004 (cobrança relacional), FDD 025 (arquivar e
-  restaurar pela interface), ADR 0017 (retenção de dado pessoal arquivado), ADR 0020 (case como
-  fotografia)
+**Status:** aceita
+**Data:** 07/08/2026
+**Contexto:** FDD 028 (contas a receber), RFC 0004 (cobrança relacional), FDD 025 (arquivar e
+restaurar pela interface), ADR 0017 (retenção de dado pessoal arquivado), ADR 0020 (case como
+fotografia)
 
 ## Contexto
 
