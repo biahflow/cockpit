@@ -61,12 +61,23 @@ function processoMapeado(overrides: Record<string, unknown> = {}) {
 // não devem ganhar um selo a mais na tela para colidir com o texto dos vizinhos.
 let processos: unknown[] = [];
 
+/** Um contato (issue #55). `name` já vem composto, como o backend devolveria. */
+function contato(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1, client: 1, first_name: "João", last_name: "", name: "João",
+    email: "j@x.com", phone: "", job_title: "CEO", receives_billing: false,
+    ...overrides,
+  };
+}
+
+let contacts: unknown[] = [contato()];
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active", vertical: null, vertical_name: "" });
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
     if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
-    if (path.startsWith("/contacts")) return Promise.resolve([{ id: 1, client: 1, name: "João", email: "j@x.com", phone: "", job_title: "CEO" }]);
+    if (path.startsWith("/contacts")) return Promise.resolve(contacts);
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
@@ -82,6 +93,7 @@ beforeEach(() => {
   atividades = [atividade()];
   satisfacoes = [];
   processos = [];
+  contacts = [contato()];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -102,22 +114,100 @@ test("salva o cliente, cria e remove contato", async () => {
   const user = userEvent.setup();
   render(<ClientDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
+  const cliente = within(screen.getByTestId("client-form"));
+  const painel = within(screen.getByTestId("contacts-panel"));
 
-  await user.clear(screen.getByLabelText("Nome"));
-  await user.type(screen.getByLabelText("Nome"), "Cliente B");
-  await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
+  await user.clear(cliente.getByLabelText("Nome"));
+  await user.type(cliente.getByLabelText("Nome"), "Cliente B");
+  await user.click(cliente.getByRole("button", { name: "Salvar alterações" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "PATCH" })));
 
-  await user.type(screen.getByPlaceholderText("Nome"), "Maria");
-  await user.type(screen.getByPlaceholderText("E-mail"), "maria@x.com");
-  await user.type(screen.getByPlaceholderText("Telefone"), "1199");
-  await user.type(screen.getByPlaceholderText("Cargo"), "CTO");
-  await user.click(screen.getByRole("button", { name: "Adicionar contato" }));
+  await user.type(painel.getByLabelText("Nome"), "Maria");
+  await user.type(painel.getByLabelText("E-mail"), "maria@x.com");
+  await user.type(painel.getByLabelText("Telefone"), "1199");
+  await user.type(painel.getByLabelText("Cargo"), "CTO");
+  await user.click(painel.getByRole("button", { name: "Adicionar contato" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/contacts/", expect.objectContaining({ method: "POST" })));
 
-  await user.click(screen.getByLabelText("Remover João"));
+  await user.click(painel.getByLabelText("Remover João"));
   await user.click(screen.getByRole("button", { name: "Remover" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/contacts/1/", expect.objectContaining({ method: "DELETE" })));
+});
+
+test("o formulário de contato tem campo Nome e campo Sobrenome", async () => {
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  expect(painel.getByLabelText("Nome")).toBeInTheDocument();
+  expect(painel.getByLabelText("Sobrenome")).toBeInTheDocument();
+});
+
+test("o lápis carrega o contato no formulário e salva com PATCH", async () => {
+  contacts = [contato({ id: 5, first_name: "Maria", last_name: "Souza", name: "Maria Souza", email: "maria@x.com" })];
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  await user.click(painel.getByLabelText("Editar Maria Souza"));
+
+  expect(painel.getByLabelText("Nome")).toHaveValue("Maria");
+  expect(painel.getByLabelText("Sobrenome")).toHaveValue("Souza");
+  expect(painel.getByRole("heading", { name: "Editando Maria Souza" })).toBeInTheDocument();
+
+  await user.clear(painel.getByLabelText("Sobrenome"));
+  await user.type(painel.getByLabelText("Sobrenome"), "Souza Lima");
+  await user.click(painel.getByRole("button", { name: "Salvar alterações" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/contacts/5/", expect.objectContaining({ method: "PATCH" })));
+});
+
+test("cancelar a edição de contato volta ao modo de criação sem requisição", async () => {
+  contacts = [contato({ id: 5, first_name: "Maria", last_name: "Souza", name: "Maria Souza" })];
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  await user.click(painel.getByLabelText("Editar Maria Souza"));
+  mocks.api.mockClear();
+
+  await user.click(painel.getByRole("button", { name: "Cancelar" }));
+
+  expect(painel.getByRole("button", { name: "Adicionar contato" })).toBeInTheDocument();
+  expect(painel.getByLabelText("Nome")).toHaveValue("");
+  expect(mocks.api).not.toHaveBeenCalled();
+});
+
+test("arquivar o contato em edição sai do modo de edição", async () => {
+  // Sem isto o formulário segue apontando para uma linha que `ArchiveModelViewSet` já não
+  // devolve, e o "Salvar alterações" seguinte vira um 404 sem explicação.
+  contacts = [contato({ id: 5, first_name: "Maria", last_name: "Souza", name: "Maria Souza" })];
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  await user.click(painel.getByLabelText("Editar Maria Souza"));
+  expect(painel.getByRole("heading", { name: "Editando Maria Souza" })).toBeInTheDocument();
+
+  contacts = [];
+  await user.click(painel.getByLabelText("Remover Maria Souza"));
+  await user.click(screen.getByRole("button", { name: "Remover" }));
+
+  await waitFor(() => expect(painel.getByRole("button", { name: "Adicionar contato" })).toBeInTheDocument());
+  expect(painel.queryByRole("heading", { name: "Editando Maria Souza" })).not.toBeInTheDocument();
+  expect(painel.getByLabelText("Nome")).toHaveValue("");
+});
+
+test("contato sem sobrenome não renderiza espaço solto", async () => {
+  contacts = [contato({ id: 1, first_name: "Madonna", last_name: "", name: "Madonna" })];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  expect(painel.getByText("Madonna", { exact: true })).toBeInTheDocument();
 });
 
 test("corrige a situação do cliente e leva o status no PATCH", async () => {

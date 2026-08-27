@@ -60,7 +60,7 @@ def test_cliente_com_oportunidade_aberta_nao_arquiva(admin_client: APIClient) ->
 @pytest.mark.django_db
 def test_cliente_limpo_arquiva_e_leva_os_contatos_junto(admin_client: APIClient) -> None:
     cliente = ClientFactory()
-    contato = Contact.objects.create(client=cliente, name="Quem decide", email="a@b.test")
+    contato = Contact.objects.create(client=cliente, first_name="Quem decide", email="a@b.test")
 
     resposta = admin_client.delete(reverse("client-detail", args=[cliente.pk]))
 

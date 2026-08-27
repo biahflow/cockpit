@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Phone, Plus, Save, Sparkles, Trash2, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, getConfig } from "../api";
@@ -12,7 +12,7 @@ import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, Cobr
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
 // casa cala quando não sabe, em vez de chutar o destinatário de um e-mail sobre dinheiro.
-const blankContact = { name: "", email: "", phone: "", job_title: "", receives_billing: false };
+const blankContact = { first_name: "", last_name: "", email: "", phone: "", job_title: "", receives_billing: false };
 // `invoice` é opcional no backend e a classificação funciona sem ela — mas é a fatura que dá ao
 // classificador o contexto do que o cliente está respondendo (FDD 036).
 const blankActivity = { kind: "call" as ActivityKind, happened_on: new Date().toISOString().slice(0, 10), summary: "", notes: "", invoice: "" };
@@ -47,6 +47,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [verticals, setVerticals] = useState<Vertical[]>([]);
   const [form, setForm] = useState<{ name: string; legal_name: string; tax_id: string; status: ClientStatus; vertical: string }>({ name: "", legal_name: "", tax_id: "", status: "prospect", vertical: "" });
   const [contactDraft, setContactDraft] = useState(blankContact);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [activityDraft, setActivityDraft] = useState(blankActivity);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -62,6 +63,9 @@ export function ClientDetailPage({ id }: { id: number }) {
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
   const canWriteActivities = !!user && user.role !== "delivery";
+  // Mesma regra de `canWriteActivities` — a Entrega só lê `contact` (RolePermission,
+  // `permissions.py`) —, com nome próprio porque é o painel de Contatos que ela gate-ia aqui.
+  const canWriteContacts = !!user && user.role !== "delivery";
 
   const load = useCallback(() => Promise.all([
     api<Client>(`/clients/${id}/`),
@@ -89,15 +93,30 @@ export function ClientDetailPage({ id }: { id: number }) {
     try { await api(`/clients/${id}/`, { method: "PATCH", body: JSON.stringify({ ...form, vertical: form.vertical ? Number(form.vertical) : null }) }); setSaved(true); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
-  async function createContact(event: FormEvent<HTMLFormElement>) {
+  /**
+   * Cria ou edita um contato, conforme `editingContact` (issue #55). No erro, o rascunho e o modo
+   * de edição ficam como estavam: o que foi digitado não se perde e a edição não é abandonada.
+   */
+  async function saveContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    try { await api("/contacts/", { method: "POST", body: JSON.stringify({ client: id, ...contactDraft }) }); setContactDraft(blankContact); await load(); }
-    catch (cause) { setError((cause as Error).message); }
+    try {
+      if (editingContact) await api(`/contacts/${editingContact.id}/`, { method: "PATCH", body: JSON.stringify(contactDraft) });
+      else await api("/contacts/", { method: "POST", body: JSON.stringify({ client: id, ...contactDraft }) });
+      setContactDraft(blankContact); setEditingContact(null); await load();
+    } catch (cause) { setError((cause as Error).message); }
   }
+  function startContactEdit(contact: Contact) {
+    setEditingContact(contact);
+    setContactDraft({ first_name: contact.first_name, last_name: contact.last_name, email: contact.email, phone: contact.phone, job_title: contact.job_title, receives_billing: contact.receives_billing });
+  }
+  function cancelContactEdit() { setEditingContact(null); setContactDraft(blankContact); }
   async function removeContact() {
     if (!removingContact) return;
     setBusy(true);
-    try { await api(`/contacts/${removingContact.id}/`, { method: "DELETE" }); setRemovingContact(null); await load(); }
+    // Arquivar quem está em edição precisa sair do modo de edição junto: o formulário seguiria
+    // apontando para uma linha que `ArchiveModelViewSet` já não devolve, e o "Salvar alterações"
+    // viraria um 404 sem explicação.
+    try { await api(`/contacts/${removingContact.id}/`, { method: "DELETE" }); if (editingContact?.id === removingContact.id) cancelContactEdit(); setRemovingContact(null); await load(); }
     catch (cause) { setRemovingContact(null); setError((cause as Error).message); }
     finally { setBusy(false); }
   }
@@ -249,7 +268,7 @@ export function ClientDetailPage({ id }: { id: number }) {
     </section>
 
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
-      <form className="panel space-y-4 sm:p-6" onSubmit={event => void saveClient(event)}>
+      <form className="panel space-y-4 sm:p-6" onSubmit={event => void saveClient(event)} data-testid="client-form">
         <h2 className="font-semibold text-ink">Dados do cliente</h2>
         <Field label="Nome"><input className="field" value={form.name} onChange={event => { setForm({ ...form, name: event.target.value }); setSaved(false); }} required /></Field>
         <Field label="Razão social"><input className="field" value={form.legal_name} onChange={event => { setForm({ ...form, legal_name: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>
@@ -265,20 +284,38 @@ export function ClientDetailPage({ id }: { id: number }) {
         {saved && <p className="text-sm font-medium text-emerald-700">Dados atualizados.</p>}
       </form>
 
-      <section className="panel space-y-4 sm:p-6">
-        <div className="flex items-center gap-3"><span className="metric-icon"><UserRound className="size-4" /></span><div><h2 className="font-semibold text-ink">Contatos</h2><p className="text-sm text-slate-600">{contacts.length} {contacts.length === 1 ? "contato" : "contatos"}</p></div></div>
-        <form className="grid gap-3 sm:grid-cols-2" onSubmit={event => void createContact(event)}>
-          <input className="field" placeholder="Nome" value={contactDraft.name} onChange={event => setContactDraft({ ...contactDraft, name: event.target.value })} required />
-          <input className="field" type="email" placeholder="E-mail" value={contactDraft.email} onChange={event => setContactDraft({ ...contactDraft, email: event.target.value })} />
-          <input className="field" placeholder="Telefone" value={contactDraft.phone} onChange={event => setContactDraft({ ...contactDraft, phone: event.target.value })} />
-          <input className="field" placeholder="Cargo" value={contactDraft.job_title} onChange={event => setContactDraft({ ...contactDraft, job_title: event.target.value })} />
-          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 sm:col-span-2">
+      <section className="panel space-y-4 sm:p-6" data-testid="contacts-panel">
+        <div className="flex items-center gap-3"><span className="metric-icon"><UserRound className="size-4" /></span><div><h2 className="font-semibold text-ink">{editingContact ? `Editando ${editingContact.name}` : "Contatos"}</h2><p className="text-sm text-slate-600">{contacts.length} {contacts.length === 1 ? "contato" : "contatos"}</p></div></div>
+        {canWriteContacts && <form className="space-y-3" onSubmit={event => void saveContact(event)}>
+          <div className="form-grid">
+            <label className="form-label">Nome<input className="field" value={contactDraft.first_name} onChange={event => setContactDraft({ ...contactDraft, first_name: event.target.value })} required /></label>
+            <label className="form-label">Sobrenome<input className="field" value={contactDraft.last_name} onChange={event => setContactDraft({ ...contactDraft, last_name: event.target.value })} /></label>
+            <label className="form-label">E-mail<input className="field" type="email" value={contactDraft.email} onChange={event => setContactDraft({ ...contactDraft, email: event.target.value })} /></label>
+            <label className="form-label">Telefone<input className="field" value={contactDraft.phone} onChange={event => setContactDraft({ ...contactDraft, phone: event.target.value })} /></label>
+          </div>
+          <label className="form-label">Cargo<input className="field" value={contactDraft.job_title} onChange={event => setContactDraft({ ...contactDraft, job_title: event.target.value })} /></label>
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <input type="checkbox" className="size-4" checked={contactDraft.receives_billing} onChange={event => setContactDraft({ ...contactDraft, receives_billing: event.target.checked })} />
             Recebe cobrança — sem ninguém marcado, a régua escala internamente em vez de escrever ao cliente
           </label>
-          <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Adicionar contato</button>
-        </form>
-        {contacts.length ? <div className="divide-y">{contacts.map(contact => <div className="flex items-start gap-3 py-3" key={contact.id}><span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><UserRound className="size-4" /></span><div className="min-w-0 flex-1"><p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink">{contact.name}{contact.receives_billing && <span className="state state--0">Recebe cobrança</span>}</p>{contact.job_title && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Briefcase className="size-3" />{contact.job_title}</p>}{contact.email && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Mail className="size-3" />{contact.email}</p>}{contact.phone && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Phone className="size-3" />{contact.phone}</p>}</div><button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Remover ${contact.name}`} onClick={() => setRemovingContact(contact)}><Trash2 className="size-4" /></button></div>)}</div> : <p className="empty-state">Nenhum contato cadastrado.</p>}
+          <div className="flex gap-2">
+            <button className="btn" type="submit">{editingContact ? <><Save className="size-4" />Salvar alterações</> : <><Plus className="size-4" />Adicionar contato</>}</button>
+            {editingContact && <button type="button" className="btn btn--secondary" onClick={cancelContactEdit}>Cancelar</button>}
+          </div>
+        </form>}
+        {contacts.length ? <div className="divide-y">{contacts.map(contact => <div className={`flex items-start gap-3 py-3 ${editingContact?.id === contact.id ? "opacity-50" : ""}`} key={contact.id}>
+          <span className="avatar mt-0.5">{contactInitials(contact)}</span>
+          <div className="min-w-0 flex-1">
+            <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink">{contact.name}{contact.receives_billing && <span className="state state--0">Recebe cobrança</span>}</p>
+            {contact.job_title && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Briefcase className="size-3" />{contact.job_title}</p>}
+            {contact.email && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Mail className="size-3" />{contact.email}</p>}
+            {contact.phone && <p className="flex items-center gap-1.5 text-xs text-slate-600"><Phone className="size-3" />{contact.phone}</p>}
+          </div>
+          {canWriteContacts && <div className="flex shrink-0 gap-1.5">
+            <button type="button" className="btn btn--icon btn--secondary" aria-label={`Editar ${contact.name}`} onClick={() => startContactEdit(contact)}><Pencil className="size-4" /></button>
+            <button type="button" className="btn btn--icon btn--secondary btn--secondary-danger" aria-label={`Remover ${contact.name}`} onClick={() => setRemovingContact(contact)}><Trash2 className="size-4" /></button>
+          </div>}
+        </div>)}</div> : <p className="empty-state">Nenhum contato cadastrado.</p>}
       </section>
     </div>
 
@@ -328,3 +365,11 @@ export function ClientDetailPage({ id }: { id: number }) {
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="form-label">{label}{children}</label>; }
 
 function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-slate-50 px-4 py-3"><p className="text-xs text-slate-600">{label}</p><p className="mt-1 text-sm font-semibold text-ink">{value}</p></div>; }
+
+// Duas letras quando há sobrenome, uma quando não há — a mesma regra do nome composto: nunca
+// inventa o que não foi cadastrado.
+function contactInitials(contact: Contact): string {
+  const first = contact.first_name.slice(0, 1).toUpperCase();
+  const last = contact.last_name.trim() ? contact.last_name.slice(0, 1).toUpperCase() : "";
+  return `${first}${last}`;
+}

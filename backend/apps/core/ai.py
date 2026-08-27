@@ -125,7 +125,7 @@ def build_opportunity_context(opportunity: Opportunity) -> str:
         f"Previsão de fechamento: {opportunity.expected_close_date}",
     ]
     if opportunity.contact:
-        lines.append(f"Contato: {opportunity.contact.name}")
+        lines.append(f"Contato: {opportunity.contact.full_name}")
     if opportunity.scope:
         lines.append(f"Escopo: {opportunity.scope}")
     service = opportunity.service

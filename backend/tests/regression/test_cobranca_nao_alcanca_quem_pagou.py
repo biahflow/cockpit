@@ -36,7 +36,7 @@ def vencida() -> Invoice:
         due_date=HOJE - timedelta(days=9),
     )
     Contact.objects.create(
-        client=invoice.client, name="Financeiro", email="financeiro@cliente.test",
+        client=invoice.client, first_name="Financeiro", email="financeiro@cliente.test",
         receives_billing=True,
     )
     return invoice

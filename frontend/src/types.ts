@@ -28,7 +28,9 @@ export type Client = { id: number; name: string; legal_name: string; tax_id: str
 // `receives_billing` marca quem recebe cobrança (FDD 036). Sem ninguém marcado, o degrau **não**
 // vira e-mail ao cliente: vira escalada interna com o motivo escrito — a casa cala quando não sabe
 // em vez de chutar o destinatário de um e-mail sobre dinheiro.
-export type Contact = { id: number; client: number; name: string; email: string; phone: string; job_title: string; receives_billing: boolean };
+// `name` é derivado e só-leitura (issue #55, FDD 001) — `first_name` + `last_name`, sem espaço
+// solto quando não há sobrenome. Quem escreve manda `first_name`/`last_name`, nunca `name`.
+export type Contact = { id: number; client: number; first_name: string; last_name: string; name: string; email: string; phone: string; job_title: string; receives_billing: boolean };
 // Interação comercial com o cliente (FDD 035, ADR 0030) — a materialização das "Activities" do
 // CRM na leitura FDE. `opportunity` é opcional e, quando preenchida, tem de ser do mesmo cliente
 // (o backend recusa com 400; ver `docs/metodologia-fde.md`).

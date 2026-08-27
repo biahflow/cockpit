@@ -99,7 +99,10 @@ class Client(TimestampedModel):
 
 class Contact(TimestampedModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="contacts")
-    name = models.CharField(max_length=255)
+    first_name = models.CharField(max_length=128)
+    # Sobrenome é opcional (issue #55, FDD 001): nem todo contato cadastrado tem um, e exigi-lo
+    # obrigaria quem cadastra a inventar um valor só para satisfazer o formulário.
+    last_name = models.CharField(max_length=128, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
     job_title = models.CharField(max_length=128, blank=True)
@@ -110,7 +113,13 @@ class Contact(TimestampedModel):
     receives_billing = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["first_name", "last_name"]
+
+    @property
+    def full_name(self) -> str:
+        """Nome composto — a única definição (CLAUDE.md): `ContactSerializer.name` e `ai.py`
+        leem daqui em vez de recompor o mesmo espaço-e-strip em dois lugares."""
+        return f"{self.first_name} {self.last_name}".strip()
 
 
 class PipelineStage(models.Model):

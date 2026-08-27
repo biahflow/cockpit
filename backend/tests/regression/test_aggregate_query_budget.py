@@ -190,7 +190,8 @@ def seed_cobranca(clients: int) -> None:
             happened_on=hoje - timedelta(days=2),
         )
         Contact.objects.create(
-            client=client, name="Financeiro", email="fin@cliente.test", receives_billing=True
+            client=client, first_name="Financeiro", email="fin@cliente.test",
+            receives_billing=True,
         )
         sequencial = Invoice.objects.count()
         atrasada = InvoiceFactory(

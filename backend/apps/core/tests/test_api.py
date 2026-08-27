@@ -219,13 +219,102 @@ def test_task_list_filters_by_project(api_client: APIClient, admin_user: User):
 def test_contact_list_filters_by_client(api_client: APIClient, admin_user: User):
     client = ClientFactory(owner=admin_user)
     other = ClientFactory(owner=admin_user)
-    Contact.objects.create(client=client, name="Contato certo")
-    Contact.objects.create(client=other, name="Contato errado")
+    Contact.objects.create(client=client, first_name="Contato certo")
+    Contact.objects.create(client=other, first_name="Contato errado")
     api_client.force_authenticate(admin_user)
 
     response = api_client.get(reverse("contact-list"), {"client": client.id})
 
     assert [contact["name"] for contact in response.data] == ["Contato certo"]
+
+
+# --- edição de contato (issue #55, FDD 001) -------------------------------------------------
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", [User.Role.SALES, User.Role.ADMIN])
+def test_contact_patch_altera_nome_e_sobrenome_por_sales_e_admin(api_client: APIClient, role: str):
+    user = UserFactory(role=role)
+    client = ClientFactory(owner=user)
+    contact = Contact.objects.create(client=client, first_name="Ana", last_name="Silva")
+    api_client.force_authenticate(user)
+
+    response = api_client.patch(
+        reverse("contact-detail", args=[contact.id]),
+        {"first_name": "Ana Paula", "last_name": "Souza"}, format="json",
+    )
+
+    assert response.status_code == 200, response.data
+    contact.refresh_from_db()
+    assert contact.first_name == "Ana Paula"
+    assert contact.last_name == "Souza"
+    assert response.data["name"] == "Ana Paula Souza"
+
+
+@pytest.mark.django_db
+def test_contact_patch_e_negado_para_delivery(api_client: APIClient):
+    delivery = UserFactory(role=User.Role.DELIVERY)
+    client = ClientFactory()
+    contact = Contact.objects.create(client=client, first_name="Ana", last_name="Silva")
+    api_client.force_authenticate(delivery)
+
+    response = api_client.patch(
+        reverse("contact-detail", args=[contact.id]), {"first_name": "Outro"}, format="json",
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_contact_sem_sobrenome_e_aceito_e_name_nao_sobra_espaco(api_client: APIClient, admin_user: User):
+    client = ClientFactory(owner=admin_user)
+    api_client.force_authenticate(admin_user)
+
+    response = api_client.post(
+        reverse("contact-list"), {"client": client.id, "first_name": "Madonna"}, format="json",
+    )
+
+    assert response.status_code == 201, response.data
+    assert response.data["name"] == "Madonna"
+    assert not response.data["name"].endswith(" ")
+
+
+@pytest.mark.django_db
+def test_contact_name_e_somente_leitura(api_client: APIClient, admin_user: User):
+    client = ClientFactory(owner=admin_user)
+    api_client.force_authenticate(admin_user)
+
+    response = api_client.post(
+        reverse("contact-list"),
+        {"client": client.id, "first_name": "Ana", "last_name": "Silva", "name": "Nome Ignorado"},
+        format="json",
+    )
+
+    assert response.status_code == 201, response.data
+    contact = Contact.objects.get(pk=response.data["id"])
+    assert contact.first_name == "Ana"
+    assert contact.last_name == "Silva"
+    assert response.data["name"] == "Ana Silva"
+
+    patch_response = api_client.patch(
+        reverse("contact-detail", args=[contact.id]), {"name": "Ainda Ignorado"}, format="json",
+    )
+    contact.refresh_from_db()
+    assert patch_response.status_code == 200, patch_response.data
+    assert contact.first_name == "Ana"
+    assert contact.last_name == "Silva"
+
+
+@pytest.mark.django_db
+def test_contact_arquivado_nao_aparece_na_listagem_padrao(api_client: APIClient, admin_user: User):
+    client = ClientFactory(owner=admin_user)
+    contact = Contact.objects.create(client=client, first_name="Ana")
+    contact.archive()
+    api_client.force_authenticate(admin_user)
+
+    response = api_client.get(reverse("contact-list"), {"client": client.id})
+
+    assert response.data == []
 
 
 @pytest.mark.django_db

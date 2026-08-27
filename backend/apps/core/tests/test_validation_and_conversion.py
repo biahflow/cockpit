@@ -33,7 +33,7 @@ def test_opportunity_rejects_contact_from_different_client(sales_client: tuple[A
     client, _ = sales_client
     first = ClientFactory()
     second = ClientFactory()
-    contact = second.contacts.create(name="Contato externo")
+    contact = second.contacts.create(first_name="Contato externo")
     response = client.post(reverse("opportunity-list"), {
         "client": first.id,
         "contact": contact.id,

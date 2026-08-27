@@ -511,7 +511,8 @@ const FIXTURES: Record<string, unknown> = {
     description: "", status: "open", party: "client", owner: null, resolved_at: null,
   })),
   "/api/v1/contacts/": serie(4, index => ({
-    id: index, client: 1, name: `Pessoa de contato ${index}`,
+    id: index, client: 1, first_name: "Pessoa", last_name: `de contato ${index}`,
+    name: `Pessoa de contato ${index}`,
     email: `pessoa${index}@empresa.test`, phone: "(11) 98888-0000", job_title: "Gerente de operações",
     // Um marcado e três não: o selo "Recebe cobrança" (FDD 036) precisa renderizar, e a linha sem
     // ele é a maioria dos contatos de verdade.
