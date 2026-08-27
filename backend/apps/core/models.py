@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -444,6 +444,167 @@ class EngineeringHandoff(TimestampedModel):
             errors["source_task"] = "A tarefa de origem deve pertencer ao mesmo projeto."
         if errors:
             raise ValidationError(errors)
+
+
+class GithubDeliveryProjection(TimestampedModel):
+    """Projeta o estado de engenharia do GitHub sobre um item de entrega do Pulse (FDD 041).
+
+    Direção de **leitura**, complementar ao provisionamento (FDD 040, que é a de escrita): aqui o
+    Pulse referencia `repository` + Issue/PR e projeta o estado *observado*, sem virar fonte da
+    verdade do ciclo de Issue/PR/CI (ADR 0046, que herda a fronteira da ADR 0040). O que a
+    engenharia decide continua no GitHub; o Pulse só espelha para operar.
+
+    **Nunca inventa status.** Uma referência não confirmada aparece como `stale`/`unavailable`/
+    `permission_denied`/`reference_missing`, distinta de um estado confirmado (`current`). Os campos
+    de engenharia (`issue_state`, `pr_state`, `head_sha`, `ci_state`, ...) são somente-projeção:
+    uma edição normal do Pulse não os reescreve — quem os move é o webhook ou a reconciliação. Zero
+    LLM: parsing, comparação de SHA/status e serialização são determinísticos.
+    """
+
+    class ProjectionStatus(models.TextChoices):
+        PENDING = "pending", "Pendente"  # criada, nunca observada
+        CURRENT = "current", "Atual"  # confirmada por evento ou reconciliação
+        UNAVAILABLE = "unavailable", "Indisponível"  # GitHub não respondeu
+        PERMISSION_DENIED = "permission_denied", "Sem permissão"  # 403
+        REFERENCE_MISSING = "reference_missing", "Referência ausente"  # 404
+
+    class IssueState(models.TextChoices):
+        UNKNOWN = "unknown", "Desconhecido"
+        OPEN = "open", "Aberta"
+        CLOSED = "closed", "Fechada"
+
+    class PullState(models.TextChoices):
+        UNKNOWN = "unknown", "Desconhecido"
+        NONE = "none", "Sem PR"
+        DRAFT = "draft", "Rascunho"
+        OPEN = "open", "Aberto"
+        CLOSED = "closed", "Fechado"
+        MERGED = "merged", "Mesclado"
+
+    class ReviewState(models.TextChoices):
+        UNKNOWN = "unknown", "Desconhecido"
+        PENDING = "pending", "Em revisão"
+        APPROVED = "approved", "Aprovado"
+        CHANGES_REQUESTED = "changes_requested", "Mudanças pedidas"
+
+    class CiState(models.TextChoices):
+        UNKNOWN = "unknown", "Desconhecido"
+        PENDING = "pending", "Em execução"
+        SUCCESS = "success", "Verde"
+        FAILURE = "failure", "Vermelho"
+
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="github_projections"
+    )
+    # Proveniência da direção de escrita: quando a referência veio de um handoff provisionado
+    # (FDD 040), guardamos o vínculo. Opcional — um projeto pode mapear uma Issue que o Pulse não
+    # criou. `SET_NULL` para não perder a projeção se o handoff for removido.
+    handoff = models.OneToOneField(
+        "EngineeringHandoff",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="projection",
+    )
+    repository = models.CharField(max_length=255)  # formato "owner/repo"
+    issue_number = models.PositiveIntegerField()
+    issue_url = models.URLField(blank=True, default="")
+
+    projection_status = models.CharField(
+        max_length=24, choices=ProjectionStatus.choices, default=ProjectionStatus.PENDING
+    )
+    issue_state = models.CharField(
+        max_length=16, choices=IssueState.choices, default=IssueState.UNKNOWN
+    )
+    pr_state = models.CharField(
+        max_length=16, choices=PullState.choices, default=PullState.UNKNOWN
+    )
+    pr_number = models.PositiveIntegerField(null=True, blank=True)
+    pr_url = models.URLField(blank=True, default="")
+    head_sha = models.CharField(max_length=64, blank=True, default="")
+    head_ref = models.CharField(max_length=255, blank=True, default="")
+    review_state = models.CharField(
+        max_length=24, choices=ReviewState.choices, default=ReviewState.UNKNOWN
+    )
+    ci_state = models.CharField(
+        max_length=16, choices=CiState.choices, default=CiState.UNKNOWN
+    )
+
+    # Proveniência e frescor: quando foi confirmado, por qual evento, e o erro da última tentativa.
+    observed_at = models.DateTimeField(null=True, blank=True)  # última confirmação (evento/poll)
+    last_event_at = models.DateTimeField(null=True, blank=True)  # marca d'água contra out-of-order
+    last_delivery_id = models.CharField(max_length=128, blank=True, default="")
+    last_event_type = models.CharField(max_length=64, blank=True, default="")
+    last_error_code = models.CharField(max_length=64, blank=True, default="")
+    last_error_message = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        constraints = [
+            # Uma Issue projeta para exatamente um item de entrega — a chave de resolução do webhook.
+            models.UniqueConstraint(
+                fields=["repository", "issue_number"],
+                name="unique_github_delivery_projection_ref",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.repository}#{self.issue_number}"
+
+    def clean(self) -> None:
+        errors: dict[str, str] = {}
+        repo = (self.repository or "").strip()
+        parts = repo.split("/")
+        if len(parts) != 2 or not parts[0] or not parts[1] or any(c in repo for c in " ?&#"):
+            errors["repository"] = "O repositório deve estar no formato owner/repo."
+        if not self.issue_number:
+            errors["issue_number"] = "Informe o número da Issue no GitHub."
+        if self.handoff_id and self.handoff and self.project_id:
+            if self.handoff.project_id != self.project_id:
+                errors["handoff"] = "O handoff de origem deve pertencer ao mesmo projeto."
+        if errors:
+            raise ValidationError(errors)
+
+    def display_state(self, stale_after_seconds: int, now: datetime | None = None) -> str:
+        """Estado *visível*: dobra o frescor no estado persistido (FDD 041).
+
+        `current` só sobrevive enquanto a observação é recente; passado o limite vira `stale`. A
+        regra é aqui, e não no serializer, para o webhook, a reconciliação e a API concordarem — uma
+        segunda definição de "atual" divergiria da primeira em silêncio.
+        """
+        if self.projection_status != self.ProjectionStatus.CURRENT:
+            return str(self.projection_status)
+        if self.observed_at is None:
+            return "stale"
+        reference = now if now is not None else timezone.now()
+        age = (reference - self.observed_at).total_seconds()
+        return "stale" if age > stale_after_seconds else "current"
+
+
+class GithubWebhookDelivery(models.Model):
+    """Inbox de idempotência dos webhooks GitHub (ADR 0037 como contexto, FDD 041).
+
+    A reentrega duplicada do GitHub carrega o mesmo `X-GitHub-Delivery`; a segunda vez a linha já
+    existe e o handler vira no-op. Não é recurso de negócio — é registro operacional e **não
+    arquiva** (não estende `TimestampedModel`).
+    """
+
+    delivery_id = models.CharField(max_length=128, unique=True)
+    event_type = models.CharField(max_length=64, blank=True, default="")
+    received_at = models.DateTimeField(auto_now_add=True)
+    projection = models.ForeignKey(
+        GithubDeliveryProjection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        ordering = ["-received_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.delivery_id
 
 
 class Document(TimestampedModel):

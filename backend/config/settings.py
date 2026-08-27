@@ -223,6 +223,9 @@ REST_FRAMEWORK = {
         # `invoice.payment_succeeded`). Um 429 aqui não é inofensivo como no e-sign — ele atrasa a
         # conciliação por dias, e é exatamente o atraso que faz a régua cobrar quem já pagou.
         "payments_webhook": os.getenv("PAYMENTS_WEBHOOK_RATE", "600/hour"),
+        # Projeção de entrega (FDD 041): teto generoso porque um repositório ativo emite muitos
+        # eventos de Issue/PR/CI, e um 429 aqui faz o GitHub re-tentar e atrasar a projeção.
+        "github_webhook": os.getenv("GITHUB_WEBHOOK_RATE", "600/hour"),
     },
     # Atrás de proxy, sem isso todo mundo compartilha o IP do container e o limite por IP
     # vira um limite global. Ver docs/operacao.md.
@@ -527,6 +530,16 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "")  # formato "owner/repo"
 # Provisionamento de GitHub Issue a partir de um handoff de engenharia (FDD 040, ADR 0040).
 # Distinto da sincronia de tarefas (FDD 004). Zero LLM; desligado por padrão.
 GITHUB_PROVISIONING_ENABLED = os.getenv("GITHUB_PROVISIONING_ENABLED", "false").lower() == "true"
+
+# Projeção de entrega: lê Issue/PR/CI do GitHub para dentro do Pulse (FDD 041, ADR 0046). Direção
+# de leitura, complementar ao provisionamento. Webhook-first (segredo HMAC) com reconciliação por
+# poll (token). Zero LLM; desligado por padrão. `GITHUB_REPO` não é exigido aqui: o repositório é
+# por-projeção, não global.
+GITHUB_DELIVERY_ENABLED = os.getenv("GITHUB_DELIVERY_ENABLED", "false").lower() == "true"
+GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "")
+# Além deste tempo sem confirmação, uma projeção `current` passa a ser exibida como `stale` — o que
+# torna "referência não confirmada" explícito em vez de deixar um estado velho se passar por atual.
+GITHUB_PROJECTION_STALE_AFTER_SECONDS = _env_int("GITHUB_PROJECTION_STALE_AFTER_SECONDS", 3600)
 
 # Captação de leads pelo site: token compartilhado e CORS restrito ao endpoint de intake.
 LEAD_INTAKE_TOKEN = os.getenv("LEAD_INTAKE_TOKEN", "")

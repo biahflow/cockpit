@@ -51,6 +51,17 @@ export type Decisao = { id: number; project: number; title: string; rationale: s
 export type RiscoNivel = "low" | "medium" | "high";
 export type RiscoStatus = "open" | "mitigated" | "accepted" | "materialized";
 export type Risco = { id: number; project: number; title: string; description: string; probability: RiscoNivel; impact: RiscoNivel; mitigation: string; status: RiscoStatus; owner: number | null; resolved_at: string | null };
+// Projeção de entrega GitHub (FDD 041, ADR 0046) — leitura do estado de engenharia (Issue/PR/CI)
+// sobre um item de entrega. **Somente-projeção**: a tela lê e nunca reescreve o estado do GitHub.
+// `state` é o estado *visível* já com o frescor dobrado (`current`/`stale`/…), distinto do
+// `projection_status` persistido — nunca inventa status.
+export type GithubProjectionStatus = "pending" | "current" | "unavailable" | "permission_denied" | "reference_missing";
+export type GithubProjectionState = "pending" | "current" | "stale" | "unavailable" | "permission_denied" | "reference_missing";
+export type GithubIssueState = "unknown" | "open" | "closed";
+export type GithubPullState = "unknown" | "none" | "draft" | "open" | "closed" | "merged";
+export type GithubReviewState = "unknown" | "pending" | "approved" | "changes_requested";
+export type GithubCiState = "unknown" | "pending" | "success" | "failure";
+export type GithubDeliveryProjection = { id: number; project: number; handoff: number | null; repository: string; issue_number: number; issue_url: string; projection_status: GithubProjectionStatus; state: GithubProjectionState; stale_after_seconds: number; issue_state: GithubIssueState; pr_state: GithubPullState; pr_number: number | null; pr_url: string; head_sha: string; head_ref: string; review_state: GithubReviewState; ci_state: GithubCiState; observed_at: string | null; last_event_at: string | null; last_delivery_id: string; last_event_type: string; last_error_code: string; last_error_message: string; created_at: string; updated_at: string };
 // O Discovery estruturado (FDD 039, ADR 0034) — o **dado** do mapa da operação, que não é o
 // `Artifact` de `kind=discovery` (a narrativa entregue ao cliente): aquele se lê, este se soma.
 // Liga ao cliente e não ao projeto, porque o processo mapeado sobrevive à venda que o descobriu.

@@ -2909,6 +2909,248 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/github-projections/:
+    get:
+      operationId: v1_github_projections_list
+      description: |-
+        Projeção de entrega GitHub (FDD 041): Issue/PR/CI espelhados no projeto Pulse.
+
+        Direção de leitura, complementar ao provisionamento (FDD 040). O corpo só grava o mapeamento
+        (projeto + repo + Issue); o estado de engenharia vem do webhook e da reconciliação, nunca de um
+        PATCH — a fronteira da ADR 0046. Escopo de projeto e nega-por-padrão como as irmãs.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GithubDeliveryProjection'
+          description: ''
+    post:
+      operationId: v1_github_projections_create
+      description: |-
+        Projeção de entrega GitHub (FDD 041): Issue/PR/CI espelhados no projeto Pulse.
+
+        Direção de leitura, complementar ao provisionamento (FDD 040). O corpo só grava o mapeamento
+        (projeto + repo + Issue); o estado de engenharia vem do webhook e da reconciliação, nunca de um
+        PATCH — a fronteira da ADR 0046. Escopo de projeto e nega-por-padrão como as irmãs.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GithubDeliveryProjection'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GithubDeliveryProjection'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GithubDeliveryProjection'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubDeliveryProjection'
+          description: ''
+  /api/v1/github-projections/{id}/:
+    get:
+      operationId: v1_github_projections_retrieve
+      description: |-
+        Projeção de entrega GitHub (FDD 041): Issue/PR/CI espelhados no projeto Pulse.
+
+        Direção de leitura, complementar ao provisionamento (FDD 040). O corpo só grava o mapeamento
+        (projeto + repo + Issue); o estado de engenharia vem do webhook e da reconciliação, nunca de um
+        PATCH — a fronteira da ADR 0046. Escopo de projeto e nega-por-padrão como as irmãs.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este github delivery projection.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubDeliveryProjection'
+          description: ''
+    put:
+      operationId: v1_github_projections_update
+      description: |-
+        Projeção de entrega GitHub (FDD 041): Issue/PR/CI espelhados no projeto Pulse.
+
+        Direção de leitura, complementar ao provisionamento (FDD 040). O corpo só grava o mapeamento
+        (projeto + repo + Issue); o estado de engenharia vem do webhook e da reconciliação, nunca de um
+        PATCH — a fronteira da ADR 0046. Escopo de projeto e nega-por-padrão como as irmãs.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este github delivery projection.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GithubDeliveryProjection'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GithubDeliveryProjection'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GithubDeliveryProjection'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubDeliveryProjection'
+          description: ''
+    patch:
+      operationId: v1_github_projections_partial_update
+      description: |-
+        Projeção de entrega GitHub (FDD 041): Issue/PR/CI espelhados no projeto Pulse.
+
+        Direção de leitura, complementar ao provisionamento (FDD 040). O corpo só grava o mapeamento
+        (projeto + repo + Issue); o estado de engenharia vem do webhook e da reconciliação, nunca de um
+        PATCH — a fronteira da ADR 0046. Escopo de projeto e nega-por-padrão como as irmãs.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este github delivery projection.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGithubDeliveryProjection'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGithubDeliveryProjection'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGithubDeliveryProjection'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubDeliveryProjection'
+          description: ''
+    delete:
+      operationId: v1_github_projections_destroy
+      description: |-
+        Projeção de entrega GitHub (FDD 041): Issue/PR/CI espelhados no projeto Pulse.
+
+        Direção de leitura, complementar ao provisionamento (FDD 040). O corpo só grava o mapeamento
+        (projeto + repo + Issue); o estado de engenharia vem do webhook e da reconciliação, nunca de um
+        PATCH — a fronteira da ADR 0046. Escopo de projeto e nega-por-padrão como as irmãs.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este github delivery projection.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/github-projections/{id}/reconcile/:
+    post:
+      operationId: v1_github_projections_reconcile_create
+      description: 'Reconciliação por poll: confirma a projeção e recupera eventos
+        perdidos.'
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este github delivery projection.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubDeliveryProjection'
+          description: ''
+  /api/v1/github-projections/{id}/unarchive/:
+    post:
+      operationId: v1_github_projections_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este github delivery projection.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/github/webhook/:
+    post:
+      operationId: v1_github_webhook_create
+      description: |-
+        Entrada dos webhooks de entrega GitHub (FDD 041). Autentica pelo HMAC-SHA256 do corpo cru.
+
+        Idempotente: a reentrega com o mesmo `X-GitHub-Delivery` vira no-op no inbox. Evento de tipo
+        desconhecido ou sem projeção correspondente responde 200 "ignorado" — um erro faria o GitHub
+        reentregar para sempre, e o Pulse não inventa referência que não mapeou. Zero LLM.
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubDeliveryProjection'
+          description: ''
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve
@@ -8945,6 +9187,18 @@ components:
         * `draft` - Rascunho
         * `review` - Em revisão
         * `published` - Publicado
+    CiStateEnum:
+      enum:
+      - unknown
+      - pending
+      - success
+      - failure
+      type: string
+      description: |-
+        * `unknown` - Desconhecido
+        * `pending` - Em execução
+        * `success` - Verde
+        * `failure` - Vermelho
     Client:
       type: object
       properties:
@@ -9917,6 +10171,134 @@ components:
         * `conditional_go` - CONDITIONAL GO
         * `redesign` - REDESIGN
         * `no_go` - NO-GO
+    GithubDeliveryProjection:
+      type: object
+      description: |-
+        Projeção de entrega GitHub (FDD 041). O corpo só escreve o **mapeamento**.
+
+        `project`, `handoff`, `repository` e `issue_number` são a referência canônica; todo o estado de
+        engenharia (`issue_state`, `pr_state`, `head_sha`, `ci_state`, ...) é **somente-leitura** — quem
+        o move é o webhook ou a reconciliação, nunca um PATCH do Pulse. É a fronteira da ADR 0046 escrita
+        no serializer: uma edição normal do Pulse não reescreve o estado do GitHub.
+
+        `repository`/`issue_number` não mudam depois de criados: re-ancorar uma projeção é reescrever
+        qual Issue ela espelha, e isso está fora deste recorte.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        handoff:
+          type: integer
+          nullable: true
+        repository:
+          type: string
+          maxLength: 255
+        issue_number:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        issue_url:
+          type: string
+          format: uri
+          readOnly: true
+        projection_status:
+          allOf:
+          - $ref: '#/components/schemas/ProjectionStatusEnum'
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        stale_after_seconds:
+          type: integer
+          readOnly: true
+        issue_state:
+          allOf:
+          - $ref: '#/components/schemas/IssueStateEnum'
+          readOnly: true
+        pr_state:
+          allOf:
+          - $ref: '#/components/schemas/PrStateEnum'
+          readOnly: true
+        pr_number:
+          type: integer
+          readOnly: true
+          nullable: true
+        pr_url:
+          type: string
+          format: uri
+          readOnly: true
+        head_sha:
+          type: string
+          readOnly: true
+        head_ref:
+          type: string
+          readOnly: true
+        review_state:
+          allOf:
+          - $ref: '#/components/schemas/ReviewStateEnum'
+          readOnly: true
+        ci_state:
+          allOf:
+          - $ref: '#/components/schemas/CiStateEnum'
+          readOnly: true
+        observed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_event_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_delivery_id:
+          type: string
+          readOnly: true
+        last_event_type:
+          type: string
+          readOnly: true
+        last_error_code:
+          type: string
+          readOnly: true
+        last_error_message:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ci_state
+      - created_at
+      - head_ref
+      - head_sha
+      - id
+      - issue_number
+      - issue_state
+      - issue_url
+      - last_delivery_id
+      - last_error_code
+      - last_error_message
+      - last_event_at
+      - last_event_type
+      - observed_at
+      - pr_number
+      - pr_state
+      - pr_url
+      - project
+      - projection_status
+      - repository
+      - review_state
+      - stale_after_seconds
+      - state
+      - updated_at
     HealthResponse:
       type: object
       properties:
@@ -10150,6 +10532,16 @@ components:
       - overdue_count
       - paid
       - paid_count
+    IssueStateEnum:
+      enum:
+      - unknown
+      - open
+      - closed
+      type: string
+      description: |-
+        * `unknown` - Desconhecido
+        * `open` - Aberta
+        * `closed` - Fechada
     JourneyPhase:
       type: object
       description: Fase do template da Jornada de Transformação (config admin, vocabulário
@@ -11428,6 +11820,109 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedGithubDeliveryProjection:
+      type: object
+      description: |-
+        Projeção de entrega GitHub (FDD 041). O corpo só escreve o **mapeamento**.
+
+        `project`, `handoff`, `repository` e `issue_number` são a referência canônica; todo o estado de
+        engenharia (`issue_state`, `pr_state`, `head_sha`, `ci_state`, ...) é **somente-leitura** — quem
+        o move é o webhook ou a reconciliação, nunca um PATCH do Pulse. É a fronteira da ADR 0046 escrita
+        no serializer: uma edição normal do Pulse não reescreve o estado do GitHub.
+
+        `repository`/`issue_number` não mudam depois de criados: re-ancorar uma projeção é reescrever
+        qual Issue ela espelha, e isso está fora deste recorte.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        handoff:
+          type: integer
+          nullable: true
+        repository:
+          type: string
+          maxLength: 255
+        issue_number:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        issue_url:
+          type: string
+          format: uri
+          readOnly: true
+        projection_status:
+          allOf:
+          - $ref: '#/components/schemas/ProjectionStatusEnum'
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        stale_after_seconds:
+          type: integer
+          readOnly: true
+        issue_state:
+          allOf:
+          - $ref: '#/components/schemas/IssueStateEnum'
+          readOnly: true
+        pr_state:
+          allOf:
+          - $ref: '#/components/schemas/PrStateEnum'
+          readOnly: true
+        pr_number:
+          type: integer
+          readOnly: true
+          nullable: true
+        pr_url:
+          type: string
+          format: uri
+          readOnly: true
+        head_sha:
+          type: string
+          readOnly: true
+        head_ref:
+          type: string
+          readOnly: true
+        review_state:
+          allOf:
+          - $ref: '#/components/schemas/ReviewStateEnum'
+          readOnly: true
+        ci_state:
+          allOf:
+          - $ref: '#/components/schemas/CiStateEnum'
+          readOnly: true
+        observed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_event_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_delivery_id:
+          type: string
+          readOnly: true
+        last_event_type:
+          type: string
+          readOnly: true
+        last_error_code:
+          type: string
+          readOnly: true
+        last_error_message:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -12780,6 +13275,22 @@ components:
         * `open` - Aberta
         * `won` - Ganho
         * `lost` - Perdido
+    PrStateEnum:
+      enum:
+      - unknown
+      - none
+      - draft
+      - open
+      - closed
+      - merged
+      type: string
+      description: |-
+        * `unknown` - Desconhecido
+        * `none` - Sem PR
+        * `draft` - Rascunho
+        * `open` - Aberto
+        * `closed` - Fechado
+        * `merged` - Mesclado
     ProbabilityEnum:
       enum:
       - low
@@ -13329,6 +13840,20 @@ components:
       - next_phase
       - phases
       - project
+    ProjectionStatusEnum:
+      enum:
+      - pending
+      - current
+      - unavailable
+      - permission_denied
+      - reference_missing
+      type: string
+      description: |-
+        * `pending` - Pendente
+        * `current` - Atual
+        * `unavailable` - Indisponível
+        * `permission_denied` - Sem permissão
+        * `reference_missing` - Referência ausente
     RecommendationsResponse:
       type: object
       properties:
@@ -13337,6 +13862,18 @@ components:
           items: {}
       required:
       - items
+    ReviewStateEnum:
+      enum:
+      - unknown
+      - pending
+      - approved
+      - changes_requested
+      type: string
+      description: |-
+        * `unknown` - Desconhecido
+        * `pending` - Em revisão
+        * `approved` - Aprovado
+        * `changes_requested` - Mudanças pedidas
     Risco:
       type: object
       properties:
