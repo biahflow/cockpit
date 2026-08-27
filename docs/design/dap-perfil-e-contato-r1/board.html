@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — Meu perfil e edição de contato · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-100:#fadfd4; --brand-200:#dd8b62; --brand-500:#bd4a30;
+  --brand-600:#a8412a; --brand-700:#9c3c26; --brand-900:#5c2317;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650;margin:28px 0 10px}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:var(--text-body)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface-subtle);font-weight:650}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+
+/* ---- primitivas espelhadas de src/index.css ---- */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:20px;box-shadow:var(--shadow-card)}
+.field{width:100%;border-radius:var(--radius-control);border:1px solid var(--line-strong);
+  background:#fff;padding:12px;font-size:var(--text-body);color:#292524;font-family:inherit}
+.field::placeholder{color:#a8a29e}
+.field:focus{outline:none;border-color:var(--brand-500);box-shadow:0 0 0 4px rgba(189,74,48,.1)}
+.form-label{display:grid;gap:8px;font-size:var(--text-body);font-weight:500;color:#334155}
+.form-grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn--secondary-danger{background:var(--surface);color:var(--muted);border-color:var(--line)}
+.btn[disabled]{background:var(--line);color:var(--muted);border-color:var(--line)}
+.btn--icon{padding:10px;min-width:44px}
+.avatar{display:grid;width:32px;height:32px;flex:0 0 auto;place-items:center;border-radius:9999px;
+  background:var(--brand-50);font-weight:800;color:var(--brand-700);
+  font-size:var(--text-meta);line-height:var(--lh-meta)}
+.alert--error{border-radius:var(--radius-control);border:1px solid var(--danger-50);
+  background:var(--danger-50);padding:16px;font-size:var(--text-body);color:var(--danger);margin:0 0 16px}
+.alert--ok{border-radius:var(--radius-control);border:1px solid var(--success-50);
+  background:var(--success-50);padding:16px;font-size:var(--text-body);color:var(--success);margin:0 0 16px}
+.page-head{display:grid;gap:6px;margin-bottom:24px}
+.page-head h1{margin:0}
+.page-head p{margin:0;max-width:42rem;font-size:var(--text-body);color:var(--muted)}
+.type-label{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+.row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.popover{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  box-shadow:0 12px 32px rgba(18,17,15,.12);padding:6px;width:236px}
+.popover-user{padding:10px 10px 12px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.popover-user strong{display:block;font-size:var(--text-body);font-weight:600}
+.popover-user small{display:block;font-size:var(--text-meta);line-height:var(--lh-meta);color:var(--muted);margin-top:2px}
+.popover-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;
+  background:none;border-radius:var(--radius-control);font-size:var(--text-body);color:var(--ink);
+  font-family:inherit;text-align:left}
+.popover-item--new{background:var(--brand-50);color:var(--brand-700);font-weight:600}
+.user-button{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);
+  background:var(--surface);border-radius:var(--radius-control);padding:6px 10px}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.new{display:inline-block;background:var(--brand-50);color:var(--brand-700);border:1px solid var(--brand-100);
+  border-radius:9999px;padding:1px 8px;font-size:var(--text-meta);font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;vertical-align:middle;margin-left:6px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+.photo{width:72px;height:72px;border-radius:9999px;object-fit:cover;display:block}
+.photo--initials{display:grid;place-items:center;background:var(--brand-50);color:var(--brand-700);
+  font-weight:800;font-size:1.5rem}
+.bar{height:4px;border-radius:9999px;background:var(--line);overflow:hidden;margin-top:8px}
+.bar>i{display:block;height:100%;width:62%;background:var(--brand-500)}
+.sep{border:0;border-top:1px solid var(--line);margin:24px 0}
+.stack{display:grid;gap:16px}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.mobile{max-width:340px;margin:0 auto}
+.mobile .form-grid{grid-template-columns:1fr}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package</p>
+<h1>Meu perfil e edição de contato</h1>
+<p class="lede">Classificação <code>INTERFACE_CHANGE</code> · <code>BROWSER_REQUIRED</code> ·
+Revisão <strong>1</strong> · Status <strong>Pendente de aprovação</strong> · 2026-08-27</p>
+<p class="note">Renderização auto-contida: abre sem build, sem toolchain e sem rede. Toda cor,
+corpo de texto, raio e sombra desta página é uma cópia literal dos tokens de
+<code>frontend/src/index.css</code> — a tabela de procedência no fim cita a origem de cada valor.
+A fonte Inter não é embutida; se ela não estiver instalada, a página cai no fallback declarado no
+próprio token <code>--font-sans</code>, e o que muda é o desenho da letra, não a decisão em
+aprovação.</p>
+
+<h2>1 · O que esta revisão decide</h2>
+<p class="note">Duas superfícies, pedidas na mesma conversa e desenhadas juntas porque compartilham
+o mesmo par de campos (nome/sobrenome) e o mesmo padrão de formulário:</p>
+<table>
+<tr><th>Superfície</th><th>O que passa a existir</th></tr>
+<tr><td><strong>Meu perfil</strong> (<code>/perfil</code>)</td><td>Rota nova, alcançada pelo popover
+do usuário. Edita nome e sobrenome, troca a foto e troca a senha.</td></tr>
+<tr><td><strong>Contatos do cliente</strong></td><td>O campo único "Nome" vira "Nome" + "Sobrenome",
+e a linha do contato ganha a ação <em>Editar</em>, que hoje não existe.</td></tr>
+</table>
+
+<h2>2 · Popover do usuário — a porta de entrada</h2>
+<div class="grid">
+  <figure class="spec"><figcaption>Antes — o que existe hoje</figcaption>
+    <div class="stage" style="display:grid;gap:10px;justify-items:end">
+      <div class="user-button"><span class="avatar">DA</span>
+        <span style="display:grid"><span class="type-label">daniel</span>
+        <span class="type-meta" style="color:var(--muted)">Administrador</span></span>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="popover">
+        <div class="popover-user"><strong>daniel</strong><small>daniel@biahflow.ai</small></div>
+        <button class="popover-item" style="color:var(--danger)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>Sair</button>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Nome e e-mail são texto morto: não há como editar
+    nada a partir daqui. <code>Layout.tsx:117</code></p>
+  </figure>
+
+  <figure class="spec"><figcaption>Depois — revisão 1</figcaption>
+    <div class="stage" style="display:grid;gap:10px;justify-items:end">
+      <div class="user-button"><span class="avatar">DA</span>
+        <span style="display:grid"><span class="type-label">daniel</span>
+        <span class="type-meta" style="color:var(--muted)">Administrador</span></span>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="popover">
+        <div class="popover-user"><strong>daniel</strong><small>daniel@biahflow.ai</small></div>
+        <button class="popover-item popover-item--new">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>Meu perfil</button>
+        <button class="popover-item" style="color:var(--danger)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>Sair</button>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Um item novo <span class="new">novo</span>, acima de
+    Sair. Ele usa <code>.popover-item</code>, que já existe; o realce clay aqui é só para você
+    localizar a mudança no board — <strong>na tela ele é neutro como o "Sair"</strong>.</p>
+  </figure>
+</div>
+<p class="note"><strong>Por que o avatar do topo continua sendo as iniciais neste desenho:</strong>
+o <code>.avatar</code> de 32px passa a mostrar a foto quando houver uma. Com foto ausente ele
+permanece exatamente como está hoje. Esse é o mesmo componente nos dois casos, não dois.</p>
+
+<h2>3 · <code>/perfil</code> — estado padrão</h2>
+<div class="stage">
+  <div style="max-width:660px">
+    <div class="page-head">
+      <p class="eyebrow">Conta</p>
+      <h1>Meu perfil</h1>
+      <p>Seus dados de acesso ao Pulse. Só você vê e edita esta página.</p>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px">
+      <h3 style="margin-top:0">Foto e nome</h3>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+        <div style="display:grid;gap:10px;justify-items:center">
+          <div class="photo photo--initials">DA</div>
+          <span class="type-meta" style="color:var(--muted)">Sem foto</span>
+        </div>
+        <div style="flex:1;min-width:260px;display:grid;gap:14px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn--secondary">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M20 16v3a2 2 0 01-2 2H6a2 2 0 01-2-2v-3"/></svg>Enviar foto</button>
+            <button class="btn btn--secondary-danger" disabled>
+              <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>Remover</button>
+          </div>
+          <p class="type-meta" style="color:var(--muted);margin:0">JPG, PNG ou WebP, até 2 MB.
+          "Remover" fica desligado enquanto não houver foto.</p>
+        </div>
+      </div>
+      <hr class="sep">
+      <div class="form-grid">
+        <label class="form-label">Nome<input class="field" value="Daniel"></label>
+        <label class="form-label">Sobrenome<input class="field" value="Campos"></label>
+      </div>
+      <label class="form-label" style="margin-top:16px">E-mail
+        <input class="field" value="daniel@biahflow.ai" disabled
+               style="background:var(--surface-subtle);color:var(--muted)"></label>
+      <p class="type-meta" style="color:var(--muted);margin:8px 0 0">O e-mail é a sua identidade de
+      acesso e só um administrador pode alterá-lo.</p>
+      <div style="display:flex;justify-content:flex-end;margin-top:20px"><button class="btn">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>Salvar</button></div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin-top:0">Senha</h3>
+      <div class="stack" style="max-width:340px">
+        <label class="form-label">Senha atual<input class="field" type="password" value="········"></label>
+        <label class="form-label">Nova senha<input class="field" type="password" value="············"></label>
+        <label class="form-label">Confirmar nova senha<input class="field" type="password" value="············"></label>
+      </div>
+      <p class="type-meta" style="color:var(--muted);margin:12px 0 0">A regra de força é a mesma
+      já aplicada no convite (validadores do Django).</p>
+      <div style="display:flex;justify-content:flex-end;margin-top:20px">
+        <button class="btn">Trocar senha</button></div>
+    </div>
+  </div>
+</div>
+<p class="note"><strong>Dois cartões e dois botões, não um.</strong> Trocar senha e editar nome são
+transações diferentes: a primeira exige a senha atual e pode falhar por credencial, a segunda não.
+Um "Salvar" único faria a troca de nome falhar por causa de um campo de senha que a pessoa nem
+queria preencher.</p>
+
+<h2>4 · <code>/perfil</code> — os outros estados</h2>
+<div class="grid">
+  <figure class="spec"><figcaption>Com foto · e o "Remover" ativo</figcaption>
+    <div class="stage"><div class="panel">
+      <div style="display:flex;gap:16px;align-items:center">
+        <svg class="photo" viewBox="0 0 72 72" role="img" aria-label="Foto de perfil">
+          <defs><clipPath id="c"><circle cx="36" cy="36" r="36"/></clipPath></defs>
+          <g clip-path="url(#c)"><rect width="72" height="72" fill="#dbeafe"/>
+          <circle cx="36" cy="29" r="13" fill="#94a3b8"/>
+          <ellipse cx="36" cy="66" rx="22" ry="20" fill="#94a3b8"/></g></svg>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn--secondary">Trocar foto</button>
+          <button class="btn btn--secondary-danger">Remover</button></div>
+      </div></div></div>
+    <p class="note" style="margin-bottom:0">A miniatura é a foto real recortada em círculo.
+    Recorte é <code>object-fit:cover</code>, sem editor: quem envia retrato já enviou enquadrado.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Enviando a foto</figcaption>
+    <div class="stage"><div class="panel">
+      <div style="display:flex;gap:16px;align-items:center">
+        <div class="photo photo--initials" style="opacity:.5">DA</div>
+        <div style="flex:1">
+          <button class="btn" disabled>Enviando…</button>
+          <div class="bar"><i></i></div>
+        </div></div></div></div>
+    <p class="note" style="margin-bottom:0">Botão desabilitado com <code>.btn[disabled]</code>, que
+    já existe. A barra é o único elemento gráfico novo desta revisão.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Erro — arquivo recusado</figcaption>
+    <div class="stage"><div class="panel">
+      <p class="alert--error" role="alert">A imagem excede o limite de 2 MB.</p>
+      <div style="display:flex;gap:16px;align-items:center">
+        <div class="photo photo--initials">DA</div>
+        <button class="btn btn--secondary">Enviar foto</button></div></div></div>
+    <p class="note" style="margin-bottom:0"><code>.alert--error</code> com
+    <code>role="alert"</code>, dentro do cartão que falhou — não no topo da página.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Erro — senha atual incorreta</figcaption>
+    <div class="stage"><div class="panel">
+      <h3 style="margin-top:0">Senha</h3>
+      <p class="alert--error" role="alert">A senha atual está incorreta.</p>
+      <label class="form-label">Senha atual<input class="field" type="password" value="····"
+        style="border-color:var(--danger)"></label>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px">
+        <button class="btn">Trocar senha</button></div></div></div>
+    <p class="note" style="margin-bottom:0">O erro fica no cartão da senha. O cartão de nome/foto
+    acima não é afetado nem perde o que estava digitado.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Sucesso</figcaption>
+    <div class="stage"><div class="panel">
+      <p class="alert--ok" role="status">Senha alterada.</p>
+      <h3 style="margin-top:0">Senha</h3>
+      <div class="stack" style="max-width:300px">
+        <label class="form-label">Senha atual<input class="field" type="password" placeholder=""></label>
+      </div></div></div>
+    <p class="note" style="margin-bottom:0"><code>.alert--ok</code> com <code>role="status"</code>,
+    e os três campos de senha voltam vazios. Mesmo par usado na correção do modal comercial.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Carregando a página</figcaption>
+    <div class="stage"><div class="panel">
+      <div style="display:flex;gap:16px;align-items:center">
+        <div class="photo" style="background:var(--surface-subtle)"></div>
+        <div style="flex:1;display:grid;gap:8px">
+          <div style="height:12px;width:60%;border-radius:6px;background:var(--surface-subtle)"></div>
+          <div style="height:12px;width:40%;border-radius:6px;background:var(--surface-subtle)"></div>
+        </div></div></div></div>
+    <p class="note" style="margin-bottom:0">Esqueleto em <code>--color-surface-subtle</code>,
+    sem animação. Estado curto: o usuário já está em sessão e o dado vem de
+    <code>/auth/me/</code>.</p>
+  </figure>
+</div>
+
+<h3>Mobile — 360px</h3>
+<div class="stage">
+  <div class="mobile">
+    <div class="page-head"><p class="eyebrow">Conta</p><h1 style="font-size:1.5rem">Meu perfil</h1></div>
+    <div class="panel">
+      <div style="display:grid;gap:14px;justify-items:center">
+        <div class="photo photo--initials">DA</div>
+        <button class="btn btn--secondary" style="width:100%">Enviar foto</button>
+      </div>
+      <hr class="sep">
+      <div class="form-grid">
+        <label class="form-label">Nome<input class="field" value="Daniel"></label>
+        <label class="form-label">Sobrenome<input class="field" value="Campos"></label>
+      </div>
+      <button class="btn" style="width:100%;margin-top:16px">Salvar</button>
+    </div>
+  </div>
+</div>
+<p class="note">A <code>.form-grid</code> já colapsa para uma coluna abaixo de <code>sm</code> —
+comportamento existente, não desenho novo. O botão ocupa a largura inteira, como nas outras telas
+estreitas do produto.</p>
+
+<h2>5 · Contatos — nome dividido e ação de editar</h2>
+<div class="grid">
+  <figure class="spec"><figcaption>Antes — o que existe hoje</figcaption>
+    <div class="stage"><div class="panel">
+      <div class="between" style="margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:center"><span class="avatar">C</span>
+        <div><strong style="font-size:var(--text-title)">Contatos</strong>
+        <div class="type-meta" style="color:var(--muted)">2 contatos</div></div></div></div>
+      <div class="form-grid">
+        <input class="field" placeholder="Nome">
+        <input class="field" placeholder="E-mail">
+        <input class="field" placeholder="Telefone">
+        <input class="field" placeholder="Cargo">
+      </div>
+      <button class="btn" style="width:100%;margin-top:14px">+ Adicionar contato</button>
+      <div class="row"><span class="avatar">DP</span><div style="flex:1">
+        <strong>Daniel Pilar</strong>
+        <div class="type-meta" style="color:var(--muted)">dangerpilar@gmail.com</div></div>
+        <button class="btn btn--secondary-danger btn--icon" aria-label="Arquivar">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button></div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Um campo "Nome" só, e a linha tem uma ação apenas:
+    arquivar. Digitou errado, resta apagar e recriar. <code>ClientDetailPage.tsx:268-282</code></p>
+  </figure>
+
+  <figure class="spec"><figcaption>Depois — revisão 1</figcaption>
+    <div class="stage"><div class="panel">
+      <div class="between" style="margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:center"><span class="avatar">C</span>
+        <div><strong style="font-size:var(--text-title)">Contatos</strong>
+        <div class="type-meta" style="color:var(--muted)">2 contatos</div></div></div></div>
+      <div class="form-grid">
+        <input class="field" placeholder="Nome">
+        <input class="field" placeholder="Sobrenome">
+        <input class="field" placeholder="E-mail">
+        <input class="field" placeholder="Telefone">
+      </div>
+      <label class="form-label" style="margin-top:16px">Cargo<input class="field" placeholder="Cargo"></label>
+      <button class="btn" style="width:100%;margin-top:14px">+ Adicionar contato</button>
+      <div class="row"><span class="avatar">DP</span><div style="flex:1">
+        <strong>Daniel Pilar</strong>
+        <div class="type-meta" style="color:var(--muted)">dangerpilar@gmail.com</div></div>
+        <button class="btn btn--secondary btn--icon" aria-label="Editar contato">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+        <button class="btn btn--secondary-danger btn--icon" aria-label="Arquivar">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button></div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">"Sobrenome" <span class="new">novo</span> entra como
+    segundo campo, e o lápis <span class="new">novo</span> divide a faixa com a lixeira — o mesmo
+    par <code>.btn--secondary</code> + <code>.btn--secondary-danger</code> que o CLAUDE.md descreve
+    para "Editar/Arquivar".</p>
+  </figure>
+</div>
+
+<h3>O modo de edição reaproveita o formulário que já está na tela</h3>
+<div class="grid">
+  <figure class="spec"><figcaption>Editando — o formulário troca de papel</figcaption>
+    <div class="stage"><div class="panel">
+      <div class="between" style="margin-bottom:12px">
+        <strong style="font-size:var(--text-title)">Editando Daniel Pilar</strong>
+        <button class="btn btn--secondary" style="min-height:36px;padding:6px 12px">Cancelar</button></div>
+      <div class="form-grid">
+        <input class="field" value="Daniel" style="border-color:var(--brand-500)">
+        <input class="field" value="Pilar">
+        <input class="field" value="dangerpilar@gmail.com">
+        <input class="field" placeholder="Telefone">
+      </div>
+      <label class="form-label" style="margin-top:16px">Cargo<input class="field" placeholder="Cargo"></label>
+      <button class="btn" style="width:100%;margin-top:14px">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg>Salvar alterações</button>
+      <div class="row" style="opacity:.45"><span class="avatar">DP</span><div style="flex:1">
+        <strong>Daniel Pilar</strong>
+        <div class="type-meta" style="color:var(--muted)">em edição</div></div></div>
+    </div></div>
+    <p class="note" style="margin-bottom:0"><strong>Sem modal.</strong> O lápis carrega o contato no
+    formulário que já está no alto do painel; o cabeçalho passa a nomear quem está sendo editado, o
+    botão vira "Salvar alterações" e aparece um "Cancelar". A linha correspondente esmaece para
+    ligar o formulário ao registro.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Erro ao salvar a edição</figcaption>
+    <div class="stage"><div class="panel">
+      <p class="alert--error" role="alert">Informe um e-mail válido.</p>
+      <div class="between" style="margin-bottom:12px">
+        <strong style="font-size:var(--text-title)">Editando Daniel Pilar</strong>
+        <button class="btn btn--secondary" style="min-height:36px;padding:6px 12px">Cancelar</button></div>
+      <div class="form-grid">
+        <input class="field" value="Daniel"><input class="field" value="Pilar">
+        <input class="field" value="dangerpilar@" style="border-color:var(--danger)">
+        <input class="field" placeholder="Telefone">
+      </div></div></div>
+    <p class="note" style="margin-bottom:0">O que a pessoa digitou não é descartado, e o modo de
+    edição não é abandonado.</p>
+  </figure>
+</div>
+
+<h3>Lista — o contato sem sobrenome continua legítimo</h3>
+<div class="stage"><div class="panel" style="max-width:520px">
+  <div class="row" style="border-top:0"><span class="avatar">DP</span><div style="flex:1">
+    <strong>Daniel Pilar</strong>
+    <div class="type-meta" style="color:var(--muted)">Diretor · dangerpilar@gmail.com</div></div>
+    <button class="btn btn--secondary btn--icon" aria-label="Editar contato">
+    <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+    <button class="btn btn--secondary-danger btn--icon" aria-label="Arquivar">
+    <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button></div>
+  <div class="row"><span class="avatar">M</span><div style="flex:1">
+    <strong>Madonna</strong>
+    <div class="type-meta" style="color:var(--muted)">sem sobrenome cadastrado</div></div>
+    <button class="btn btn--secondary btn--icon" aria-label="Editar contato">
+    <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+    <button class="btn btn--secondary-danger btn--icon" aria-label="Arquivar">
+    <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button></div>
+</div></div>
+<p class="note">Sobrenome é opcional. A lista exibe <code>nome + sobrenome</code> com um espaço
+quando há os dois, e só o nome quando não há — nunca um espaço solto ou um travessão de
+preenchimento. As iniciais do <code>.avatar</code> seguem a mesma regra: duas letras com sobrenome,
+uma sem.</p>
+
+<h2>6 · Estado vazio e sem permissão</h2>
+<div class="grid">
+  <figure class="spec"><figcaption>Cliente sem nenhum contato</figcaption>
+    <div class="stage"><div class="panel">
+      <div class="form-grid">
+        <input class="field" placeholder="Nome"><input class="field" placeholder="Sobrenome">
+        <input class="field" placeholder="E-mail"><input class="field" placeholder="Telefone"></div>
+      <button class="btn" style="width:100%;margin-top:14px">+ Adicionar contato</button>
+      <p class="type-meta" style="color:var(--muted);text-align:center;margin:16px 0 0">
+        Nenhum contato cadastrado.</p></div></div>
+    <p class="note" style="margin-bottom:0">Inalterado exceto pelo campo novo.</p>
+  </figure>
+  <figure class="spec"><figcaption>Papel Entrega — contato é só leitura</figcaption>
+    <div class="stage"><div class="panel">
+      <div class="row" style="border-top:0"><span class="avatar">DP</span><div style="flex:1">
+        <strong>Daniel Pilar</strong>
+        <div class="type-meta" style="color:var(--muted)">dangerpilar@gmail.com</div></div></div>
+      <div class="row"><span class="avatar">M</span><div style="flex:1"><strong>Madonna</strong></div></div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Sem formulário, sem lápis, sem lixeira — o papel
+    <code>delivery</code> já tem contato restrito a <code>SAFE_METHODS</code>
+    (<code>permissions.py:112-115</code>). O desenho não inventa permissão: só deixa de mostrar o
+    que a API recusaria. <strong>Meu perfil, ao contrário, é visível para os três papéis</strong> —
+    é o próprio usuário editando a si mesmo.</p>
+  </figure>
+</div>
+
+<h2>7 · Procedência de cada valor visual</h2>
+<table>
+<tr><th>Valor</th><th>Token / primitiva</th><th>Origem</th><th>Novo?</th></tr>
+<tr><td>Fundo da página</td><td><code>--color-canvas</code> <code>#fafaf9</code></td><td><code>index.css:44</code></td><td>não</td></tr>
+<tr><td>Texto e botão primário</td><td><code>--color-ink</code> <code>#12110f</code></td><td><code>index.css:36</code></td><td>não</td></tr>
+<tr><td>Texto secundário</td><td><code>--color-muted</code> <code>#57534e</code></td><td><code>index.css:40</code></td><td>não</td></tr>
+<tr><td>Cartão</td><td><code>.panel</code> — raio 12px, borda <code>line</code>, <code>--shadow-card</code></td><td><code>index.css:~200</code></td><td>não</td></tr>
+<tr><td>Campo de formulário</td><td><code>.field</code> — raio 8px, foco <code>brand-500</code> + anel 10%</td><td><code>index.css:513</code></td><td>não</td></tr>
+<tr><td>Rótulo de campo</td><td><code>.form-label</code></td><td><code>index.css:304</code></td><td>não</td></tr>
+<tr><td>Par de colunas</td><td><code>.form-grid</code></td><td><code>index.css:305</code></td><td>não</td></tr>
+<tr><td>Botão primário</td><td><code>.btn</code> — <code>min-h-11</code> (WCAG 2.5.8)</td><td><code>index.css:~262</code></td><td>não</td></tr>
+<tr><td>Botão "Enviar foto" / "Editar"</td><td><code>.btn--secondary</code></td><td><code>index.css:272</code></td><td>não</td></tr>
+<tr><td>Botão "Remover" / "Arquivar"</td><td><code>.btn--secondary-danger</code></td><td><code>index.css:289</code></td><td>não</td></tr>
+<tr><td>Mensagem de falha</td><td><code>.alert--error</code> + <code>role="alert"</code></td><td><code>index.css:317</code></td><td>não</td></tr>
+<tr><td>Mensagem de sucesso</td><td><code>.alert--ok</code> + <code>role="status"</code></td><td><code>index.css:320</code></td><td>não</td></tr>
+<tr><td>Iniciais no topo</td><td><code>.avatar</code> — 32px, <code>rounded-full</code> reservado a avatar pelo contrato r2</td><td><code>index.css:464</code></td><td>não</td></tr>
+<tr><td>Item do menu do usuário</td><td><code>.popover-item</code></td><td><code>index.css:~480</code></td><td>não</td></tr>
+<tr><td>Título da página</td><td><code>.page-head</code> + <code>--text-display</code> 32/38 650</td><td><code>index.css:222-228</code></td><td>não</td></tr>
+<tr><td>Rótulo de seção</td><td><code>.eyebrow</code> — 11px, 700, <code>brand-500</code></td><td><code>index.css:220</code></td><td>não</td></tr>
+<tr><td>Esqueleto de carregamento</td><td><code>--color-surface-subtle</code> <code>#f5f5f4</code></td><td><code>index.css:46</code></td><td>não</td></tr>
+<tr><td><strong>Foto de perfil 72px</strong></td><td><code>border-radius:9999px</code>, <code>object-fit:cover</code></td><td>—</td><td><strong>SIM</strong></td></tr>
+<tr><td><strong>Barra de progresso do envio</strong></td><td>trilho <code>line</code>, preenchimento <code>brand-500</code>, 4px, <code>rounded-full</code></td><td>—</td><td><strong>SIM</strong></td></tr>
+</table>
+<p class="note"><strong>Só duas coisas são novas, e as duas estão em aprovação aqui:</strong> a
+miniatura circular de 72px e a barra de progresso de 4px. Todo o resto é consumo de primitiva
+existente. Nenhuma cor nova, nenhum corpo de texto fora dos papéis
+<code>display/title/body/label/meta</code>, nenhum raio fora do par 8px/12px das fundações r2 —
+com a exceção do <code>rounded-full</code>, que o contrato r2 já reserva a status e avatar.</p>
+
+<h2>8 · Contraste — o que foi pré-calculado</h2>
+<table>
+<tr><th>Par</th><th>Razão</th><th>AA texto normal</th></tr>
+<tr><td><code>ink</code> sobre <code>surface</code></td><td>18,9:1</td><td>passa</td></tr>
+<tr><td><code>muted</code> sobre <code>canvas</code></td><td>7,4:1</td><td>passa</td></tr>
+<tr><td><code>brand-700</code> sobre <code>brand-50</code> (avatar, item novo do popover)</td><td>6,1:1</td><td>passa</td></tr>
+<tr><td><code>danger</code> sobre <code>danger-50</code> (<code>.alert--error</code>)</td><td>5,6:1</td><td>passa</td></tr>
+<tr><td><code>success</code> sobre <code>success-50</code> (<code>.alert--ok</code>)</td><td>já em uso em 4 telas</td><td>passa</td></tr>
+</table>
+<p class="note">Estes números vêm dos comentários de <code>index.css:29-32</code> e da ADR 0025;
+não substituem o <code>e2e/a11y.spec.ts</code>, que é o árbitro e roda 24 telas × 3 larguras. A tela
+nova entra nessa matriz. <strong>Quando o axe e o tom discordarem, cede o tom.</strong></p>
+
+<h2>9 · Entregue nesta revisão × reservado</h2>
+<table>
+<tr><th>Entregue</th><th>Reservado — não faz parte desta aprovação</th></tr>
+<tr><td>Rota <code>/perfil</code> e o item no popover</td><td>Item de "Meu perfil" na sidebar</td></tr>
+<tr><td>Editar nome e sobrenome do próprio usuário</td><td>Admin editar o nome de outro usuário pela tela Equipe</td></tr>
+<tr><td>Enviar, trocar e remover a própria foto</td><td>Recorte/zoom da imagem antes de enviar; foto de outros usuários</td></tr>
+<tr><td>Trocar a própria senha com a senha atual</td><td>"Esqueci minha senha" por e-mail; 2FA; expirar sessões ativas após a troca</td></tr>
+<tr><td>Foto no <code>.avatar</code> do topbar</td><td>Foto em e-mail, documento gerado ou exportação</td></tr>
+<tr><td>Contato com Nome + Sobrenome e ação Editar</td><td>Contato principal do cliente; mesclar contatos duplicados</td></tr>
+<tr><td>Migração dos nomes já cadastrados</td><td>Reverter a divisão para campo único</td></tr>
+</table>
+<div class="panel reserved" style="margin-top:14px">
+  <p class="type-meta" style="margin:0;color:var(--brand-700);font-weight:700">HACHURADO = RESERVADO</p>
+  <p class="note" style="margin:6px 0 0">Nada nesta revisão está desenhado como reservado — o
+  hachurado existe só para registrar a convenção. Tudo que aparece nos quadros acima é para
+  construir.</p>
+</div>
+
+<h2>10 · Decisões que quero registradas</h2>
+<table>
+<tr><th>#</th><th>Decisão</th><th>Alternativa rejeitada</th></tr>
+<tr><td>1</td><td>Perfil em rota própria <code>/perfil</code></td><td>Aba dentro de Configurações — mistura dado pessoal com configuração de produto, e Configurações é <code>admin</code>-only, o que excluiria vendas e entrega do próprio perfil</td></tr>
+<tr><td>2</td><td>Dois cartões, dois botões</td><td>Um "Salvar" único — faria a troca de nome falhar por um campo de senha não pedido</td></tr>
+<tr><td>3</td><td>E-mail somente leitura</td><td>E-mail editável — é a credencial de login; mudá-lo sem confirmação por e-mail é sequestro de conta silencioso</td></tr>
+<tr><td>4</td><td>Edição de contato reaproveita o formulário do painel</td><td>Modal dedicado — mais superfície nova para o mesmo trabalho, e o painel já tem o formulário pronto</td></tr>
+<tr><td>5</td><td>Sobrenome opcional</td><td>Obrigatório — travaria cadastro rápido e invalidaria os contatos já existentes sem sobrenome</td></tr>
+<tr><td>6</td><td>Sem recorte de imagem</td><td>Editor de recorte — dependência e superfície desproporcionais a um avatar de 32px</td></tr>
+</table>
+
+<h2>11 · O que esta aprovação não é</h2>
+<p class="note">Aprovar a revisão 1 não aprova uma revisão posterior: um pacote materialmente
+alterado é revisão nova e precisa do próprio registro. Aprovar o <strong>visual</strong> não aprova
+a <strong>copy</strong> — as duas decisões são pedidas em separado, como no DAP GH-26 r1. As
+strings exatas em aprovação: <em>"Meu perfil"</em>, <em>"Foto e nome"</em>, <em>"Senha"</em>,
+<em>"Enviar foto"</em>, <em>"Trocar foto"</em>, <em>"Remover"</em>, <em>"Trocar senha"</em>,
+<em>"Salvar alterações"</em>, <em>"Sobrenome"</em>, <em>"Editando &lt;nome&gt;"</em>,
+<em>"Seus dados de acesso ao Pulse. Só você vê e edita esta página."</em>,
+<em>"O e-mail é a sua identidade de acesso e só um administrador pode alterá-lo."</em>,
+<em>"JPG, PNG ou WebP, até 2 MB."</em></p>
+
+</div>
+</body>
+</html>
