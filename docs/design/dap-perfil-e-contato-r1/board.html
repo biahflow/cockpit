@@ -547,12 +547,21 @@ nova entra nessa matriz. <strong>Quando o axe e o tom discordarem, cede o tom.</
 <p class="note">Aprovar a revisão 1 não aprova uma revisão posterior: um pacote materialmente
 alterado é revisão nova e precisa do próprio registro. Aprovar o <strong>visual</strong> não aprova
 a <strong>copy</strong> — as duas decisões são pedidas em separado, como no DAP GH-26 r1. As
-strings exatas em aprovação: <em>"Meu perfil"</em>, <em>"Foto e nome"</em>, <em>"Senha"</em>,
-<em>"Enviar foto"</em>, <em>"Trocar foto"</em>, <em>"Remover"</em>, <em>"Trocar senha"</em>,
-<em>"Salvar alterações"</em>, <em>"Sobrenome"</em>, <em>"Editando &lt;nome&gt;"</em>,
+strings exatas em aprovação, <strong>atribuídas por superfície</strong> — a r1 as listava numa
+lista só, e isso fez a implementação usar o "Salvar alterações" do contato no botão do perfil:</p>
+<table>
+<tr><th>Superfície</th><th>Strings</th></tr>
+<tr><td><code>/perfil</code></td><td><em>"Meu perfil"</em>, <em>"Foto e nome"</em>,
+<em>"Senha"</em>, <em>"Enviar foto"</em>, <em>"Trocar foto"</em>, <em>"Remover"</em>,
+<em>"Salvar"</em>, <em>"Trocar senha"</em>,
 <em>"Seus dados de acesso ao Pulse. Só você vê e edita esta página."</em>,
 <em>"O e-mail é a sua identidade de acesso e só um administrador pode alterá-lo."</em>,
-<em>"JPG, PNG ou WebP, até 2 MB."</em></p>
+<em>"JPG, PNG ou WebP, até 2 MB."</em></td></tr>
+<tr><td>Contatos</td><td><em>"Sobrenome"</em>, <em>"Editando &lt;nome&gt;"</em>,
+<em>"Salvar alterações"</em>, <em>"Cancelar"</em></td></tr>
+</table>
+<p class="note">O botão do cartão "Foto e nome" é <strong>"Salvar"</strong>, como desenhado na
+seção 3 — não "Salvar alterações", que pertence ao modo de edição do contato.</p>
 
 </div>
 </body>
