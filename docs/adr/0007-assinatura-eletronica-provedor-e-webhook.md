@@ -1,6 +1,6 @@
 # ADR 0007 — Assinatura eletrônica: provedor homologado e webhook de status
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

@@ -1,6 +1,6 @@
 # ADR 0027 — A regra do snapshot que só existia em prosa
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 12/08/2026
 **Fase:** transversal — integração com o portal do cliente
 **Completa:** ADR 0003 (e as quatro emendas dela)

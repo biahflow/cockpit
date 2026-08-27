@@ -1,6 +1,6 @@
 # ADR 0024 — Branco, preto e laranja, e a camada que faltava
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 07/08/2026
 **Fase:** transversal — front-end do portal operacional
 

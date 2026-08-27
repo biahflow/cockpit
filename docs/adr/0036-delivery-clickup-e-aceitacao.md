@@ -1,6 +1,6 @@
 # ADR 0036 — ClickUp como SoR de Delivery e aceitação separada do merge
 
-**Status:** Superseded by ADR 0040  
+**Status:** superada pela ADR 0040
 **Data:** 2026-08-24
 
 ## Contexto histórico

@@ -1,10 +1,10 @@
 # ADR 0031 — O degrau sai sozinho, o texto da IA não
 
-- **Status:** aceita
-- **Data:** 19/08/2026
-- **Contexto:** RFC 0004 (cobrança relacional, camadas 3 e 4), FDD 036 (a régua), FDD 028
-  (contas a receber), FDD 023 / ADR 0015 (trabalho periódico agendado), ADR 0006 (agentes por
-  área), FDD 010 (digest diário)
+**Status:** aceita
+**Data:** 19/08/2026
+**Contexto:** RFC 0004 (cobrança relacional, camadas 3 e 4), FDD 036 (a régua), FDD 028
+(contas a receber), FDD 023 / ADR 0015 (trabalho periódico agendado), ADR 0006 (agentes por
+área), FDD 010 (digest diário)
 
 ## Contexto
 

@@ -1,8 +1,8 @@
 # ADR 0017 — Retenção de dado pessoal arquivado
 
-- **Status:** aceita
-- **Data:** 06/08/2026
-- **Contexto:** FDD 021 (backup e retenção), ADR 0002 (documentos privados), LGPD
+**Status:** aceita
+**Data:** 06/08/2026
+**Contexto:** FDD 021 (backup e retenção), ADR 0002 (documentos privados), LGPD
 
 ## Contexto
 

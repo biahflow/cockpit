@@ -1,6 +1,6 @@
 # ADR 0005 — Alimentação do portal: reuniões, pendências e resultados
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

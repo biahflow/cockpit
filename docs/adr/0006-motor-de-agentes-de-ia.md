@@ -1,6 +1,6 @@
 # ADR 0006 — Motor de agentes de IA (especializados, RBAC, auditoria e avaliação)
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

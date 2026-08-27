@@ -1,11 +1,11 @@
 # ADR 0034 — Só o fato sustenta número
 
-- **Status:** aceita
-- **Data:** 20/08/2026
-- **Contexto:** FDD 039 (Discovery estruturado), ADR 0030 (o cockpit como sistema primário, e o
-  adiamento desta camada), ADR 0032 (só a declarada move número — a irmã desta), ADR 0033 (a
-  camada 5 não suspende sozinha), FDD 027 / ADR 0020 (o case como fotografia, e a ausência dita),
-  FDD 029 / ADR 0023 (citar ou declarar a lacuna), FDD 016 / ADR 0008 (artefatos da jornada)
+**Status:** aceita
+**Data:** 20/08/2026
+**Contexto:** FDD 039 (Discovery estruturado), ADR 0030 (o cockpit como sistema primário, e o
+adiamento desta camada), ADR 0032 (só a declarada move número — a irmã desta), ADR 0033 (a
+camada 5 não suspende sozinha), FDD 027 / ADR 0020 (o case como fotografia, e a ausência dita),
+FDD 029 / ADR 0023 (citar ou declarar a lacuna), FDD 016 / ADR 0008 (artefatos da jornada)
 
 ## Contexto
 

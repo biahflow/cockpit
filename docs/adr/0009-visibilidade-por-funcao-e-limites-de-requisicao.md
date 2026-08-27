@@ -1,6 +1,6 @@
 # ADR 0009 — Visibilidade por função e limites de requisição
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

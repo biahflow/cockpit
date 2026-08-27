@@ -1,6 +1,6 @@
 # ADR 0010 — Equipe do projeto como fronteira de acesso
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

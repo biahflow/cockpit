@@ -1,6 +1,6 @@
 # ADR 0035 — Fontes da verdade e fronteiras operacionais
 
-**Status:** Accepted  
+**Status:** aceita
 **Data:** 2026-08-24
 
 ## Contexto

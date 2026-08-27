@@ -1,11 +1,11 @@
 # ADR 0033 — A camada 5 não suspende sozinha
 
-- **Status:** aceita
-- **Data:** 19/08/2026
-- **Contexto:** FDD 038 (esta fatia), RFC 0004 (cobrança relacional, camada 5), FDD 036 /
-  ADR 0031 (a régua de cobrança e o que sai sozinho), FDD 037 / ADR 0032 (a satisfação e a
-  terceira escada), ADR 0006 (agentes não executam efeito colateral autônomo), ADR 0014 (custo
-  constante nos agregadores)
+**Status:** aceita
+**Data:** 19/08/2026
+**Contexto:** FDD 038 (esta fatia), RFC 0004 (cobrança relacional, camada 5), FDD 036 /
+ADR 0031 (a régua de cobrança e o que sai sozinho), FDD 037 / ADR 0032 (a satisfação e a
+terceira escada), ADR 0006 (agentes não executam efeito colateral autônomo), ADR 0014 (custo
+constante nos agregadores)
 
 ## Contexto
 

@@ -1,10 +1,10 @@
 # ADR 0020 — Case como fotografia: números persistidos, não recalculados
 
-- **Status:** aceita
-- **Data:** 07/08/2026
-- **Contexto:** FDD 027 (repositório de cases com métrica), FDD 026 (biblioteca de Funcionários
-  Digitais), FDD 014 (AI Score, revisão humana antes de publicar), FDD 022 (custo de query como
-  gate), ADR 0008 (artefato da jornada como entidade)
+**Status:** aceita
+**Data:** 07/08/2026
+**Contexto:** FDD 027 (repositório de cases com métrica), FDD 026 (biblioteca de Funcionários
+Digitais), FDD 014 (AI Score, revisão humana antes de publicar), FDD 022 (custo de query como
+gate), ADR 0008 (artefato da jornada como entidade)
 
 ## Contexto
 

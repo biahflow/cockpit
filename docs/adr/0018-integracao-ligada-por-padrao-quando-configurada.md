@@ -1,9 +1,9 @@
 # ADR 0018 — Integração ligada por padrão quando configurada
 
-- **Status:** aceita
-- **Data:** 06/08/2026
-- **Contexto:** FDD 024 (sondas de integração), ADR 0003 (webhook do portal), ADR 0007 (assinatura
-  eletrônica), FDD 010 (notificações e digest)
+**Status:** aceita
+**Data:** 06/08/2026
+**Contexto:** FDD 024 (sondas de integração), ADR 0003 (webhook do portal), ADR 0007 (assinatura
+eletrônica), FDD 010 (notificações e digest)
 
 ## Contexto
 

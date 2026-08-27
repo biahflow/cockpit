@@ -2,6 +2,8 @@
 
 Cada ADR registra uma decisão difícil de reverter: contexto, decisão, consequências e status. Numere arquivos sequencialmente.
 
+O campo Status usa um conjunto **fechado** de três valores, em pt-BR: `aceita`, `superada pela ADR NNNN` ou `superada em parte pela ADR NNNN`. Ele é sempre inline — `**Status:** <valor>` — e é a primeira linha não vazia depois do `# ADR NNNN — Título`; não há bullet nem `## Status` próprio. Sucessão se escreve no próprio status, com a referência à ADR que sucede; o motivo da sucessão, quando não cabe na frase, mora no corpo. `backend/tests/test_status_das_adrs.py` reprova o que sair disso.
+
 O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#` do arquivo, sem o prefixo `ADR NNNN — `. Não anote, não encurte, não reescreva — o que o título precisa dizer, diga no `#` do arquivo, que é o único lugar onde ele vale. Relação com outra ADR tem campo próprio no cabeçalho (`**Revisa:**`, `**Completa:**`), e é lá que ela é registrada. `backend/tests/test_indice_de_adrs.py` reprova a divergência.
 
 - 0001 — Django, React e PostgreSQL

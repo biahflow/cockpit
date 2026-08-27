@@ -1,9 +1,9 @@
 # ADR 0019 — Variante de blueprint como tabela, não como JSON
 
-- **Status:** aceita
-- **Data:** 07/08/2026
-- **Contexto:** FDD 026 (biblioteca de Funcionários Digitais), FDD 011 (template global + cópia por
-  instância), FDD 015 (níveis de produto), FDD 025 (arquivar e restaurar pela interface)
+**Status:** aceita
+**Data:** 07/08/2026
+**Contexto:** FDD 026 (biblioteca de Funcionários Digitais), FDD 011 (template global + cópia por
+instância), FDD 015 (níveis de produto), FDD 025 (arquivar e restaurar pela interface)
 
 ## Contexto
 

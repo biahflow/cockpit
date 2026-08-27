@@ -1,8 +1,6 @@
 # ADR 0042 — Trunk-based: `main` promove HML e tag da `main` promove produção
 
-## Status
-
-Accepted
+**Status:** aceita
 
 ## Contexto
 

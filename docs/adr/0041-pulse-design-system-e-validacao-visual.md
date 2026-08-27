@@ -1,6 +1,6 @@
 # ADR 0041 — Pulse Design System e validação visual
 
-**Status:** Accepted  
+**Status:** aceita
 **Data:** 2026-08-24
 
 ## Contexto

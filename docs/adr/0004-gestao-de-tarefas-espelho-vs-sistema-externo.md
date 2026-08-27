@@ -1,6 +1,6 @@
 # ADR 0004 — Gestão de tarefas: espelho vs. sistema de registro externo
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

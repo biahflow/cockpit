@@ -1,6 +1,6 @@
 # ADR 0038 — OpenTelemetry como padrão canônico e Grafana Cloud como backend inicial
 
-**Status:** Accepted  
+**Status:** aceita
 **Data:** 2026-08-24
 
 ## Contexto

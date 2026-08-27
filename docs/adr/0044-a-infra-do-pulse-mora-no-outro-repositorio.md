@@ -1,6 +1,6 @@
 # ADR 0044 — A infraestrutura do Pulse mora no repositório do outro produto
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 25/08/2026
 **Fase:** transversal — infraestrutura e esteira de entrega
 **Completa:** ADR 0042 · **Contexto de marca:** ADR 0035 e ADR 0043

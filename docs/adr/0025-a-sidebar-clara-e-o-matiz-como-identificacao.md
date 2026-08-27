@@ -1,6 +1,6 @@
 # ADR 0025 — A sidebar clara, e o matiz como única identificação
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 07/08/2026
 **Fase:** transversal — front-end do portal operacional
 **Revisa:** ADR 0024

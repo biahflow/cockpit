@@ -1,6 +1,6 @@
 # ADR 0011 — Processo de produção e TLS na borda
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

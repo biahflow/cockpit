@@ -1,6 +1,6 @@
 # ADR 0026 — As telas passam a chamar o design system (e a guarda que impede a volta)
 
-**Status:** aceito
+**Status:** aceita
 **Data:** 08/08/2026
 **Fase:** transversal — front-end do portal operacional
 **Completa:** ADR 0024, ADR 0025

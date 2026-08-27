@@ -1,6 +1,6 @@
 # ADR 0012 — Observabilidade: identidade de requisição, sondas e rastreamento de erro
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 

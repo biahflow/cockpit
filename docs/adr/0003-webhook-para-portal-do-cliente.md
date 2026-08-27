@@ -1,6 +1,6 @@
 # ADR 0003 — Webhook para o portal do cliente
 
-**Status:** aceito
+**Status:** aceita
 
 ## Contexto
 
