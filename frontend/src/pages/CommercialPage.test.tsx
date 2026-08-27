@@ -291,3 +291,87 @@ test("entrega não vê o formulário nem o botão de arquivar de interações no
   expect(screen.queryByPlaceholderText("Do que se tratou o contato")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Arquivar interação: Apresentação da proposta")).not.toBeInTheDocument();
 });
+
+// --- feedback do modal de detalhe (defeito: erros e sucessos ficavam invisíveis) ----------------
+//
+// O banner de erro da página vive atrás do backdrop do modal (z-index maior). Todo handler que só
+// roda com o modal aberto precisa avisar dentro dele, não na página.
+
+test("o erro do upload aparece dentro do modal", async () => {
+  const user = userEvent.setup();
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    const method = options?.method?.toUpperCase() ?? "GET";
+    if (path === "/pipeline-stages/") return Promise.resolve(stages);
+    if (path === "/opportunities/" && method === "GET") return Promise.resolve([opp]);
+    if (path === "/services/") return Promise.resolve(services);
+    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
+    if (path.startsWith("/documents/?opportunity")) return Promise.resolve([{ id: 9, client: null, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
+    if (path.startsWith("/activities/?opportunity")) return Promise.resolve([]);
+    if (path === "/documents/" && method === "POST") return Promise.reject(new Error("Tipo de arquivo não aceito."));
+    return Promise.resolve({});
+  });
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+  const file = new File(["x"], "novo.exe", { type: "application/octet-stream" });
+  await user.upload(screen.getByLabelText("Arquivo da oportunidade"), file);
+  await user.click(screen.getByRole("button", { name: "Enviar documento" }));
+
+  // `within(dialogo)` e não `screen`: o banner de erro da página também tem `role="alert"`, e é
+  // exatamente ele que o defeito acionava — atrás do backdrop, invisível. Procurar no documento
+  // inteiro faria este teste passar no código defeituoso, que é o mesmo que não o ter.
+  const dialogo = await screen.findByRole("dialog", { name: "Detalhe da oportunidade" });
+  expect(await within(dialogo).findByRole("alert")).toHaveTextContent("Tipo de arquivo não aceito.");
+});
+
+test("enviar sem arquivo avisa em vez de silenciar", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+  mocks.api.mockClear();
+
+  await user.click(screen.getByRole("button", { name: "Enviar documento" }));
+
+  expect(await screen.findByText("Escolha um arquivo para enviar.")).toBeInTheDocument();
+  expect(mocks.api).not.toHaveBeenCalledWith("/documents/", expect.anything());
+});
+
+test("salvar a oportunidade fecha o modal e confirma", async () => {
+  const user = userEvent.setup();
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+
+  await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+  const aviso = await screen.findByRole("status");
+  expect(aviso).toHaveTextContent("Oportunidade salva.");
+  expect(screen.queryByText("Detalhe da oportunidade")).not.toBeInTheDocument();
+});
+
+test("erro ao salvar mantém o modal aberto", async () => {
+  const user = userEvent.setup();
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    const method = options?.method?.toUpperCase() ?? "GET";
+    if (path === "/pipeline-stages/") return Promise.resolve(stages);
+    if (path === "/opportunities/" && method === "GET") return Promise.resolve([opp]);
+    if (path === "/services/") return Promise.resolve(services);
+    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
+    if (path.startsWith("/documents/?opportunity")) return Promise.resolve([]);
+    if (path.startsWith("/activities/?opportunity")) return Promise.resolve([]);
+    if (path === "/opportunities/1/" && method === "PATCH") return Promise.reject(new Error("Não foi possível salvar."));
+    return Promise.resolve({});
+  });
+  render(<CommercialPage />);
+  await user.click(await screen.findByText("Oport X"));
+  await screen.findByText("Detalhe da oportunidade");
+
+  await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+  // Mesma razão do teste do upload: o alerta tem de estar DENTRO do diálogo que continua aberto.
+  const dialogo = await screen.findByRole("dialog", { name: "Detalhe da oportunidade" });
+  expect(await within(dialogo).findByRole("alert")).toHaveTextContent("Não foi possível salvar.");
+});

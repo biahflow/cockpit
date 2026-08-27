@@ -23,12 +23,15 @@ export function CommercialPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState(blankDraft);
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [converting, setConverting] = useState<Opportunity | null>(null);
   const [created, setCreated] = useState<Project | null>(null);
   const [dates, setDates] = useState({ start_date: "", due_date: "" });
   const [detail, setDetail] = useState<Opportunity | null>(null);
+  const [detailError, setDetailError] = useState("");
+  const [detailNotice, setDetailNotice] = useState("");
   const [detailDraft, setDetailDraft] = useState({ title: "", scope: "", estimated_value: "", expected_close_date: "", contact: "", stage: "", service: "" });
   const [detailContacts, setDetailContacts] = useState<Contact[]>([]);
   const [detailDocs, setDetailDocs] = useState<DocumentEntry[]>([]);
@@ -48,54 +51,65 @@ export function CommercialPage() {
 
   async function openDetail(item: Opportunity) {
     setDetail(item);
+    setDetailError(""); setDetailNotice(""); setNotice("");
     setDetailDraft({ title: item.title, scope: item.scope, estimated_value: item.estimated_value, expected_close_date: item.expected_close_date, contact: item.contact ? String(item.contact) : "", stage: String(item.stage), service: item.service ? String(item.service) : "" });
     setDetailContacts([]); setDetailDocs([]); setDetailActivities([]); setActivityDraft(blankActivity); setAiText("");
     try {
       const [contacts, docs, activities] = await Promise.all([api<Contact[]>(`/contacts/?client=${item.client}`), api<DocumentEntry[]>(`/documents/?opportunity=${item.id}`), api<Activity[]>(`/activities/?opportunity=${item.id}`)]);
       setDetailContacts(contacts); setDetailDocs(docs); setDetailActivities(activities);
-    } catch (cause) { setError((cause as Error).message); }
+    } catch (cause) { setDetailError((cause as Error).message); }
   }
   async function createDetailActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!detail) return;
+    setDetailError(""); setDetailNotice("");
     try {
       await api("/activities/", { method: "POST", body: JSON.stringify({ client: detail.client, opportunity: detail.id, ...activityDraft }) });
       setActivityDraft(blankActivity);
       setDetailActivities(await api<Activity[]>(`/activities/?opportunity=${detail.id}`));
-    } catch (cause) { setError((cause as Error).message); }
+    } catch (cause) { setDetailError((cause as Error).message); }
   }
   async function archiveDetailActivity(activity: Activity) {
     if (!detail) return;
+    setDetailError(""); setDetailNotice("");
     try { await api(`/activities/${activity.id}/`, { method: "DELETE" }); setDetailActivities(await api<Activity[]>(`/activities/?opportunity=${detail.id}`)); }
-    catch (cause) { setError((cause as Error).message); }
+    catch (cause) { setDetailError((cause as Error).message); }
   }
   async function saveDetail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!detail) return;
+    setDetailError(""); setDetailNotice(""); setNotice("");
     try {
-      const updated = await api<Opportunity>(`/opportunities/${detail.id}/`, { method: "PATCH", body: JSON.stringify({ title: detailDraft.title, scope: detailDraft.scope, estimated_value: detailDraft.estimated_value, expected_close_date: detailDraft.expected_close_date, contact: detailDraft.contact ? Number(detailDraft.contact) : null, stage: Number(detailDraft.stage), service: detailDraft.service ? Number(detailDraft.service) : null }) });
-      setDetail(updated); await load();
-    } catch (cause) { setError((cause as Error).message); }
+      await api<Opportunity>(`/opportunities/${detail.id}/`, { method: "PATCH", body: JSON.stringify({ title: detailDraft.title, scope: detailDraft.scope, estimated_value: detailDraft.estimated_value, expected_close_date: detailDraft.expected_close_date, contact: detailDraft.contact ? Number(detailDraft.contact) : null, stage: Number(detailDraft.stage), service: detailDraft.service ? Number(detailDraft.service) : null }) });
+      await load();
+      setDetail(null);
+      setNotice("Oportunidade salva.");
+    } catch (cause) { setDetailError((cause as Error).message); }
   }
   async function uploadDetailDoc(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const file = detailFile.current?.files?.[0]; if (!file || !detail) return;
+    event.preventDefault(); if (!detail) return;
+    setDetailError(""); setDetailNotice("");
+    const file = detailFile.current?.files?.[0];
+    if (!file) { setDetailError("Escolha um arquivo para enviar."); return; }
     try {
       const body = new FormData(); body.append("opportunity", String(detail.id)); body.append("file", file);
       await api("/documents/", { method: "POST", body });
       if (detailFile.current) detailFile.current.value = "";
       setDetailDocs(await api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`));
-    } catch (cause) { setError((cause as Error).message); }
+      setDetailNotice("Documento enviado.");
+    } catch (cause) { setDetailError((cause as Error).message); }
   }
   function startConversion(item: Opportunity) { setDetail(null); setConverting(item); }
   async function runAi(kind: "summary" | "proposal" | "contract") {
-    if (!detail) return; setAiBusy(true); setAiText("");
+    if (!detail) return; setDetailError(""); setDetailNotice(""); setAiBusy(true); setAiText("");
     try {
       const result = await api<{ text: string; artifact?: unknown }>(`/opportunities/${detail.id}/${kind}/`, { method: "POST" });
       // Proposta e contrato viram artefato registrado (FDD 016); o resumo segue efêmero.
       if (result.artifact) setArtifactsToken(token => token + 1); else setAiText(result.text);
     }
-    catch (cause) { setError((cause as Error).message); } finally { setAiBusy(false); }
+    catch (cause) { setDetailError((cause as Error).message); } finally { setAiBusy(false); }
   }
   async function saveSummaryAsDocument() {
     if (!detail || !aiText.trim()) return;
+    setDetailError(""); setDetailNotice("");
     try {
       const body = new FormData();
       body.append("opportunity", String(detail.id));
@@ -103,7 +117,8 @@ export function CommercialPage() {
       await api("/documents/", { method: "POST", body });
       setDetailDocs(await api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`));
       setAiText("");
-    } catch (cause) { setError((cause as Error).message); }
+      setDetailNotice("Resumo salvo como documento.");
+    } catch (cause) { setDetailError((cause as Error).message); }
   }
   // O kanban não comporta uma coluna de arquivados — o quadro dá lugar a uma lista simples.
   const loadArchived = useCallback(
@@ -134,7 +149,7 @@ export function CommercialPage() {
 
   const sellableServices = services.filter(service => service.active);
 
-  return <section className="space-y-7"><header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">Comercial</p><h1>Pipeline de oportunidades</h1><p>Mova negociações adiante e transforme ganhos em projetos.</p></div><div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">{user?.is_admin && <a href="/pipeline" className="btn btn--secondary"><SlidersHorizontal className="size-4 text-brand-500" />Configurar etapas</a>}<div className="filter-bar"><button className={`filter-chip ${showArchived ? "" : "filter-chip--on"}`} onClick={() => setShowArchived(false)}>Pipeline</button><button className={`filter-chip ${showArchived ? "filter-chip--on" : ""}`} onClick={() => setShowArchived(true)}>Arquivadas</button></div><button className="btn" onClick={() => setComposerOpen(true)}><Plus className="size-4" />Nova oportunidade</button></div></header>{error && <p role="alert" className="alert--error">{error}</p>}
+  return <section className="space-y-7"><header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">Comercial</p><h1>Pipeline de oportunidades</h1><p>Mova negociações adiante e transforme ganhos em projetos.</p></div><div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">{user?.is_admin && <a href="/pipeline" className="btn btn--secondary"><SlidersHorizontal className="size-4 text-brand-500" />Configurar etapas</a>}<div className="filter-bar"><button className={`filter-chip ${showArchived ? "" : "filter-chip--on"}`} onClick={() => setShowArchived(false)}>Pipeline</button><button className={`filter-chip ${showArchived ? "filter-chip--on" : ""}`} onClick={() => setShowArchived(true)}>Arquivadas</button></div><button className="btn" onClick={() => setComposerOpen(true)}><Plus className="size-4" />Nova oportunidade</button></div></header>{error && <p role="alert" className="alert--error">{error}</p>}{notice && <p role="status" className="alert--ok">{notice}</p>}
     {created && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><span>Projeto <strong>{created.name}</strong> criado, com marcos e tarefas do nível de produto.</span><span className="flex items-center gap-3"><a className="inline-flex items-center gap-1.5 font-semibold text-emerald-900 underline underline-offset-2" href={`/projetos/${created.id}`}>Abrir projeto <ArrowRight className="size-3.5" /></a><button type="button" aria-label="Fechar aviso" className="rounded-lg p-1 text-emerald-900/70 hover:bg-emerald-100" onClick={() => setCreated(null)}><X className="size-4" /></button></span></div>}
     <AgentPanel agentKey="comercial" title="Agente Comercial" roles={["sales"]} placeholder="Ex.: quais oportunidades estão paradas?" />
     {/* `tabIndex`/`role`/`aria-label`: uma faixa que rola na horizontal precisa receber foco,
@@ -162,7 +177,9 @@ export function CommercialPage() {
       onCancel={() => setArchiving(null)}
       onConfirm={() => void archiveOpportunity()}
     />}
-    {detail && <Modal title="Detalhe da oportunidade" width="3xl" onClose={() => setDetail(null)}>
+    {detail && <Modal title="Detalhe da oportunidade" width="3xl" onClose={() => { setDetail(null); setDetailError(""); setDetailNotice(""); }}>
+      {detailError && <p role="alert" className="alert--error mb-4">{detailError}</p>}
+      {detailNotice && <p role="status" className="alert--ok mb-4">{detailNotice}</p>}
       <form className="grid gap-4" onSubmit={event => void saveDetail(event)}>
         <Field label="Título"><input className="field" value={detailDraft.title} onChange={event => setDetailDraft({ ...detailDraft, title: event.target.value })} required /></Field>
         <Field label="Escopo"><textarea className="field min-h-20" value={detailDraft.scope} onChange={event => setDetailDraft({ ...detailDraft, scope: event.target.value })} placeholder="Descreva o escopo da negociação" /></Field>
