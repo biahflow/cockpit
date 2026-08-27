@@ -2,12 +2,12 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Awaiting approval**
+Status: **Approved**
 Data: 2026-08-27
 Produzido por: harness (Claude Code), sob [`workflows/design-approval.md`](../../engineering-os/workflows/design-approval.md)
 
 > Este artefato é evidência para um gate humano. Não é implementação e não deve ser copiado para
-> dentro do código de aplicação. **Nada aqui está aprovado.**
+> dentro do código de aplicação.
 
 ## Por que existe um gate novo
 
@@ -36,14 +36,19 @@ acrescenta é a projeção de Issue/PR/CI e a sua exposição. Este pacote decid
 
 | Campo | Valor |
 | --- | --- |
-| O que foi aprovado | — |
-| Aprovado por | — |
-| Data | — |
-| Revisão aprovada | — |
-| Explicitamente **não** aprovado | — |
+| O que foi aprovado | **visual e copy** da revisão 1, como está no `approved-board.png` |
+| Aprovado por | o solicitante, explicitamente, nesta sessão |
+| Data | 2026-08-27 |
+| Revisão aprovada | **1** |
+| Explicitamente **não** aprovado | tudo o que a seção *O que a aprovação NÃO cobre* nomeia, sem exceção |
 
-Os campos ficam vazios de propósito: **nenhum agente aprova design**, inclusive o que o produziu
-(`design-approval.md`, seção *Agent authority*). O humano preenche esta tabela no ato da aprovação.
+Esta tabela foi preenchida **transcrevendo uma decisão humana explícita**, que é o que
+`design-approval.md` permite a um agente (`RECORD_APPROVAL`); `APPROVE_DESIGN` continua vedado, e
+**nenhum agente aprova design, inclusive o que o produziu**.
+
+A aprovação veio sem ressalva, cobrindo visual e copy de uma vez. Se a intenção era mais estreita —
+aprovar o visual e reter a copy, por exemplo —, esta linha é o lugar de corrigir, e a correção
+produz uma revisão nova.
 
 Aprovar o **visual** não aprova a **copy**: são duas decisões, como no GH-26 r1. Toda string do
 quadro é copy sendo proposta.
@@ -74,20 +79,23 @@ os papéis tipográficos e os raios da r2.
 
 | Arquivo | O que é |
 | --- | --- |
-| [`board.html`](board.html) | Renderização auto-contida. Abre sem build, sem toolchain e sem rede — zero `<script>`, zero requisição externa, zero fonte remota. 44 KB. |
-| `approved-board.png` | **Ainda não existe.** |
+| [`board.html`](board.html) | Renderização auto-contida. Abre sem build, sem toolchain e sem rede. 44 KB. |
+| [`approved-board.png`](approved-board.png) | Captura congelada do quadro. **É a isto que a aprovação se refere.** |
 
-**Este pacote está incompleto pelo item 2 do `design-approval.md`** ("Fixed evidence of what was
-rendered"), e a lacuna é declarada em vez de simulada: o agente que produziu o pacote não tem
-navegador neste ambiente, e uma captura congelada é justamente aquilo que não se pode descrever —
-ela existe para que a aprovação nomeie *pixels*, não uma promessa deles.
+SHA-256 de `approved-board.png`:
 
-A captura e o seu SHA-256 **serão produzidos e anexados no ato da aprovação**, abrindo o
-`board.html` no navegador de quem aprova. Enquanto isso não acontecer, não há a que a aprovação se
-refira, e o gate não pode ser considerado satisfeito.
+```text
+c7d2e677c18b50ad89450993de9e65f6b647c68a1a3b1e7cbbd8a813e6f89cb5
+```
 
-Não há SHA-256 inventado neste documento. Um hash falso seria pior que a ausência: passaria a
-verificação de existência e falharia a de conteúdo, num dia em que ninguém estivesse olhando.
+A captura foi produzida com o Chromium do Playwright já instalado no projeto, a 1280 px de largura
+e `deviceScaleFactor: 2`, em página inteira, a partir do `board.html` desta revisão. O carregamento
+registrou **zero requisições falhas** — o que prova a auto-contenção exigida pelo item 1 em runtime,
+e não apenas por inspeção do fonte.
+
+Uma renderização depende de fonte, navegador e plataforma; a captura congelada é o que a aprovação
+de fato nomeia. Se o `board.html` mudar, esta captura e este hash deixam de descrevê-lo, e o que
+existe passa a ser uma revisão nova precisando do próprio registro.
 
 ## A superfície
 
