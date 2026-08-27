@@ -6,7 +6,7 @@ test("autentica e libera o painel", async ({ page }) => {
   await page.route("**/api/v1/auth/me/", route => route.fulfill({ status: 403, json: { detail: "Credenciais ausentes." } }));
   await page.route("**/api/v1/auth/csrf/", route => route.fulfill({ json: { csrfToken: "test" } }));
   await page.route("**/api/v1/auth/login/", route => route.fulfill({ json: user }));
-  await page.route("**/api/v1/dashboard/", route => route.fulfill({ json: { pipeline: [], active_projects: 0, overdue_count: 0, upcoming_tasks: [] } }));
+  await page.route("**/api/v1/dashboard/", route => route.fulfill({ json: { pipeline: [], active_projects: 0, overdue_count: 0, upcoming_tasks: [], account_ladder: [] } }));
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Entre na sua operação" })).toBeVisible();

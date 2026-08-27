@@ -1,4 +1,4 @@
-import type { CustoEstadoAtual, HealthLevel, SatisfacaoNivel } from "../types";
+import type { CustoEstadoAtual, GateOutcome, HealthLevel, SatisfacaoNivel } from "../types";
 
 // Semáforo de saúde 🟢🟡🔴 reutilizável (eleva o mapa antes duplicado em IndicadoresPage).
 // Variantes de `.state`, não as cores delas (ADR 0026): um `bg-emerald-50` escrito aqui é uma
@@ -55,6 +55,21 @@ export const SUSTENTACAO_LABEL: Record<Sustentacao, string> = {
 
 export function sustentacaoBadgeClass(sustentacao: Sustentacao): string {
   return SUSTENTACAO_BADGE[sustentacao];
+}
+
+// As quatro saídas do decision gate (FDD 033, `docs/metodologia-fde.md:42-48`). Subiu da
+// `ProjectDetailPage` para cá quando a escada FDE da conta (FDD 042) passou a exibir o mesmo
+// selo: **duas telas leem o mesmo valor**, e é exatamente a condição que trouxe os três mapas
+// acima para este arquivo. Um segundo mapa de gate diria "aprovado" com outra cor sem nada ficar
+// vermelho.
+//
+// CONDITIONAL GO e REDESIGN dividem o âmbar porque os dois dizem a mesma coisa ao olho — "seguiu,
+// mas há dívida" —, e só o NO-GO é o vermelho de fato.
+export const GATE_LABEL: Record<GateOutcome, string> = { go: "GO", conditional_go: "CONDITIONAL GO", redesign: "REDESIGN", no_go: "NO-GO" };
+const GATE_BADGE: Record<GateOutcome, string> = { go: "state--1", conditional_go: "state--2", redesign: "state--2", no_go: "state--3" };
+
+export function gateBadgeClass(outcome: GateOutcome): string {
+  return GATE_BADGE[outcome];
 }
 
 export function StatusDot({ level, title }: { level: HealthLevel | null; title?: string }) {

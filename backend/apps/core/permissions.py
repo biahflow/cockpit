@@ -3,6 +3,7 @@ from typing import Any
 from rest_framework.permissions import BasePermission
 
 from .models import (
+    AccountRung,
     Artifact,
     Case,
     Decisao,
@@ -110,12 +111,17 @@ class RolePermission(BasePermission):
             # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
             # continua levantando dentro do projeto —, e um registro que só metade da casa pode
             # fazer é um registro que não acontece.
+            # `account_rung` (a escada FDE, FDD 042) é escrita por Vendas ao lado de `opportunity`,
+            # e a assimetria com a Entrega é a decisão: cada degrau **é uma venda** na mesma conta
+            # (`docs/metodologia-fde.md:50`), então quem move a escada é quem responde pela conta.
+            # A Entrega lê — e lê a *forma*, não o conteúdo comercial (ver o serializer).
             return resource in {"client", "contact", "opportunity", "document", "lead",
                                 "analytics", "artifact", "activity", "cobranca_suspensao",
-                                "satisfacao", "processo", "processo_etapa", "evidencia"}
+                                "satisfacao", "processo", "processo_etapa", "evidencia",
+                                "account_rung"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
-                            "risk", "health", "case", "activity"}:
+                            "risk", "health", "case", "activity", "account_rung"}:
                 return request.method in SAFE_METHODS
             # Conhecimento: **todo mundo lê**, e o dono da área verifica. O dono pode ser de
             # qualquer papel, e avisá-lo sobre uma peça que ele não consegue abrir — ou não pode
@@ -186,6 +192,13 @@ class RolePermission(BasePermission):
                 # registro de cliente sem projeto — a Entrega tomaria 403 no detalhe de um
                 # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
                 # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
+                return Project.objects.visible_to(request.user).filter(client=obj.client).exists()
+            if isinstance(obj, AccountRung):
+                # **Fora de `PROJECT_OF`**, e pela razão da `Satisfacao` acima: a escada FDE é da
+                # **conta** e atravessa várias oportunidades — o degrau pode não ter projeto
+                # nenhum (não vendido, pulado), e um mapa que resolvesse `obj.project` devolveria
+                # `None` para exatamente os degraus que a listagem mostra. A pergunta certa é a da
+                # conta, e ela sai de `visible_to`, a única expressão da regra (ADR 0010).
                 return Project.objects.visible_to(request.user).filter(client=obj.client).exists()
             if isinstance(obj, Processo | ProcessoEtapa | Evidencia):
                 # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui

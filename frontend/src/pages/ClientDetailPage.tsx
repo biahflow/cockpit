@@ -3,11 +3,12 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 
 import { api, getConfig } from "../api";
 import { useAuth } from "../auth";
+import { FdeLadder } from "../components/FdeLadder";
 import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Invoice, Processo, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import type { AccountRung, Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Invoice, Processo, ProjectPhase, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -58,6 +59,13 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [classificando, setClassificando] = useState<number | null>(null);
   const [satisfacoes, setSatisfacoes] = useState<Satisfacao[]>([]);
   const [processos, setProcessos] = useState<Processo[]>([]);
+  // A escada FDE da conta (FDD 042) carrega **em separado** do resto da tela, e é o que permite que
+  // ela tenha os próprios estados de carregamento e de erro: uma falha aqui não pode apagar o
+  // cadastro, os contatos e o histórico de interações da conta.
+  const [rungs, setRungs] = useState<AccountRung[]>([]);
+  const [rungPhases, setRungPhases] = useState<ProjectPhase[]>([]);
+  const [rungsCarregando, setRungsCarregando] = useState(true);
+  const [rungsErro, setRungsErro] = useState("");
   const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
@@ -76,6 +84,25 @@ export function ClientDetailPage({ id }: { id: number }) {
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
+  // A jornada de entrega vem do projeto que realiza o **degrau ativo** — referenciada, não
+  // redesenhada (FDD 011 fica intocada). Ela falha em silêncio de propósito: sem as fases, a
+  // escada continua legível; sem a escada, não há o que aninhar.
+  useEffect(() => {
+    let cancelado = false;
+    void (async () => {
+      try {
+        const carregados = await api<AccountRung[]>(`/account-rungs/?client=${id}`);
+        const ativo = carregados.find(rung => rung.status === "active" && !rung.no_access && rung.project);
+        const fases = ativo?.project ? await api<ProjectPhase[]>(`/project-phases/?project=${ativo.project}`).catch(() => []) : [];
+        if (!cancelado) { setRungs(carregados); setRungPhases(fases); setRungsErro(""); }
+      } catch {
+        if (!cancelado) setRungsErro("Não foi possível carregar a escada desta conta.");
+      } finally {
+        if (!cancelado) setRungsCarregando(false);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [id]);
   // A flag `ai` tira o botão de classificar da tela, como tira o de rascunhar na Cobrança
   // (ADR 0031). A Entrega não escreve interação nem alcança fatura, então nem pergunta.
   useEffect(() => {
@@ -190,6 +217,12 @@ export function ClientDetailPage({ id }: { id: number }) {
         </section>
       : <p className="empty-state">Sem projeto ativo — a saúde da relação aparece quando houver uma jornada em andamento.</p>
     )}
+
+    {/* A escada FDE da conta (FDD 042, ADR 0047, DAP GH-42 r1) — logo depois da saúde da relação,
+        porque é ela que responde "onde esta conta está" antes de qualquer detalhe. Não confundir
+        com a jornada de entrega da FDD 011: aquela é de **um projeto** e aparece aninhada aqui
+        dentro, sob o degrau ativo. */}
+    <FdeLadder rungs={rungs} phases={rungPhases} loading={rungsCarregando} error={rungsErro} />
 
     {/* A satisfação do cliente (FDD 037, ADR 0032) — logo depois da saúde da relação porque as
         duas respondem à mesma pergunta por ângulos diferentes: uma é o nosso trabalho, a outra é o

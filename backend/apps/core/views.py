@@ -51,6 +51,7 @@ from . import (
     journey,
     kickoff,
     knowledge,
+    ladder,
     payments,
     portal,
     qualification,
@@ -68,6 +69,7 @@ from .exceptions import (
     StateConflict,
 )
 from .models import (
+    AccountRung,
     Activity,
     AiInteraction,
     AppSetting,
@@ -84,6 +86,7 @@ from .models import (
     Document,
     EngineeringHandoff,
     Evidencia,
+    FdeRung,
     GithubProjection,
     Invitation,
     Invoice,
@@ -118,6 +121,8 @@ from .models import (
 from .permissions import RolePermission
 from .serializers import (
     AcceptInvitationSerializer,
+    AccountRungSerializer,
+    AccountRungTransitionSerializer,
     ActivitySerializer,
     ArtifactSerializer,
     BlueprintVariantSerializer,
@@ -1250,6 +1255,122 @@ class ProjectChecklistItemViewSet(ProjectScopedMixin, QueryParamFilterMixin, Arc
     def scoped_project(self, validated_data: dict) -> Project | None:
         phase = validated_data.get("project_phase")
         return phase.project if phase is not None else None
+
+
+def _rung_context(request: Request, rungs: list[AccountRung]) -> dict[str, Any]:
+    """O que o `AccountRungSerializer` precisa saber sobre escopo e jornada, resolvido uma vez.
+
+    Duas coisas, e as duas fora do serializer de propósito: um `visible_to` por degrau somaria seis
+    consultas por conta, e a jornada de entrega de cada projeto é a mesma para todos os degraus que
+    ele realiza. É o mesmo movimento do `build_overview_context` do grid de clientes.
+    """
+    project_ids = {rung.project_id for rung in rungs if rung.project_id}
+    visiveis = set(
+        Project.objects.visible_to(request.user)
+        .filter(pk__in=project_ids)
+        .values_list("pk", flat=True)
+    )
+    phases: dict[int, list[ProjectPhase]] = defaultdict(list)
+    for phase in (
+        ProjectPhase.objects.filter(project_id__in=visiveis, archived_at__isnull=True)
+        .select_related("phase")
+        .order_by("phase__position", "id")
+    ):
+        phases[phase.project_id].append(phase)
+    return {"visible_project_ids": visiveis, "phases_by_project": phases}
+
+
+class AccountRungViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
+    """A escada FDE da conta (FDD 042, ADR 0047) — o eixo que atravessa várias oportunidades.
+
+    **Fora do `ArchiveModelViewSet` de propósito:** degrau não se arquiva. O que a escada faz com um
+    degrau que deixou de valer é registrá-lo como replanejado, preservando as datas em que ele
+    esteve ativo — arquivar esconderia exatamente o histórico que a Issue #42 pede que sobreviva.
+
+    **Leitura em `ModelViewSet` nenhum:** os seis degraus são doutrina materializada, não coleção
+    que alguém cria ou apaga. A única escrita é a action `transition`, e é lá que moram carimbo,
+    autor e evento.
+    """
+
+    resource = "account_rung"
+    queryset = AccountRung.objects.select_related(
+        "client", "opportunity", "project", "skipped_by"
+    ).prefetch_related("events__by")
+    serializer_class = AccountRungSerializer
+    permission_classes = [RolePermission]
+    filter_fields = ("client",)
+    filter_exact_fields = ("status", "rung")
+
+    def _clients_in_scope(self):  # type: ignore[no-untyped-def]
+        """As contas que a pessoa alcança — a mesma pergunta do `ClientViewSet`."""
+        clients = Client.objects.filter(archived_at__isnull=True)
+        scope = project_scope_q(self.request.user, "projects")
+        return clients.filter(scope).distinct() if scope else clients
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset().filter(client__in=self._clients_in_scope().values("pk"))
+        # Materialização preguiçosa das contas antigas, no molde do `ProjectPhaseViewSet`. A conta
+        # vem do escopo e não de `Client.objects`: senão um `?client=` de conta alheia dispararia
+        # uma **escrita** fora do escopo.
+        client_id = self.request.query_params.get("client")
+        if client_id and client_id.isdigit():
+            client = self._clients_in_scope().filter(pk=client_id).first()
+            if client is not None and queryset.filter(client=client).count() < len(FdeRung.values):
+                ladder.materialize_ladder(client)
+                queryset = (
+                    super().get_queryset().filter(client__in=self._clients_in_scope().values("pk"))
+                )
+        return queryset
+
+    def get_serializer_context(self) -> dict[str, Any]:
+        context = super().get_serializer_context()
+        context.update(_rung_context(self.request, getattr(self, "_em_foco", [])))
+        return context
+
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        self._em_foco = list(self.filter_queryset(self.get_queryset()))
+        return Response(self.get_serializer(self._em_foco, many=True).data)
+
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        rung = self.get_object()
+        self._em_foco = [rung]
+        return Response(self.get_serializer(rung).data)
+
+    @extend_schema(request=AccountRungTransitionSerializer, responses={200: AccountRungSerializer})
+    @action(detail=True, methods=["post"])
+    def transition(self, request: Request, pk: str | None = None) -> Response:
+        """Move o degrau e grava o evento append-only (FDD 042).
+
+        A recusa mora em `ladder.transition`, não aqui: só o Feasibility se pula, pular exige o
+        motivo escrito, bloquear exige dizer o quê, e transição para o mesmo estado não registra o
+        que mudou. Uma guarda escrita nesta view valeria só para esta rota.
+        """
+        rung = self.get_object()
+        corpo = AccountRungTransitionSerializer(data=request.data)
+        corpo.is_valid(raise_exception=True)
+        dados = corpo.validated_data
+        opcionais: dict[str, Any] = {}
+        for campo in ("waiting_on", "blocker", "skip_reason", "opportunity", "project"):
+            if campo in dados:
+                opcionais[campo] = dados[campo]
+        # Amarrar o degrau a projeto/oportunidade de fora do escopo seria o mesmo furo que o
+        # `ProjectScopedMixin` fecha na escrita: a conta é a fronteira, e ela é uma só.
+        for campo in ("opportunity", "project"):
+            alvo = opcionais.get(campo)
+            if alvo is not None and alvo.client_id != rung.client_id:
+                raise PermissionDenied(
+                    "A oportunidade e o projeto de um degrau precisam ser da mesma conta."
+                )
+        ladder.transition(
+            rung,
+            to_status=dados["status"],
+            by=request.user,
+            note=dados.get("note", ""),
+            **opcionais,
+        )
+        rung.refresh_from_db()
+        self._em_foco = [rung]
+        return Response(self.get_serializer(rung).data)
 
 
 class ProjectMemberViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
@@ -3270,6 +3391,7 @@ class DashboardView(APIView):
                 "overdue_count": serializers.IntegerField(),
                 "pipeline": serializers.ListField(),
                 "upcoming_tasks": serializers.ListField(),
+                "account_ladder": serializers.ListField(),
             },
         )
     )
@@ -3305,6 +3427,11 @@ class DashboardView(APIView):
             "active_projects": projects.count(),
             "overdue_count": overdue_milestones.count() + overdue_tasks.count(),
             "upcoming_tasks": upcoming,
+            # A escada FDE por conta (FDD 042). Vai para **todos os papéis**, e não só para quem vê
+            # o funil: a linha não carrega valor nem oportunidade — diz em que degrau a conta está,
+            # de quem é a bola e há quanto tempo parou. O recorte da Entrega já vem de dentro,
+            # derivado de `visible_to`.
+            "account_ladder": ladder.account_ladder_rows(request.user),
         })
 
 

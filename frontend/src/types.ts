@@ -23,6 +23,50 @@ export type Analytics = {
   pipeline: { id: number; name: string; kind: string; position: number; opportunity_count: number; estimated_total: number | null }[];
   roi: { revenue: number; cost: number; roi: number | null; by_client: RoiRow[]; by_service: RoiRow[] };
 };
+// A escada FDE da conta (FDD 042, ADR 0047) — o **terceiro eixo**, e confundi-lo com os outros dois
+// é o defeito que a fatia existe para evitar: `PipelineStage` é de uma oportunidade,
+// `ProjectPhase` (FDD 011) é de um projeto, e a escada FDE é da **conta**, atravessando várias
+// oportunidades (`docs/metodologia-fde.md:50`). A jornada de entrega fica onde está e aparece
+// aninhada sob o degrau ativo — referenciada, nunca redesenhada.
+//
+// Os seis degraus são **doutrina, não template**: não há tela de configuração e não deve haver.
+export type FdeRung = "discover" | "prioritize" | "feasibility" | "prove" | "scale" | "optimize";
+// `cancelled` se apresenta como "Replanejado": nada é apagado, e as datas em que o degrau esteve
+// ativo permanecem. `skipped` e `not_sold` **não podem parecer a mesma coisa** — uma é decisão
+// registrada, a outra é ausência de decisão —, e o que as separa é estrutura, não tinta.
+export type AccountRungStatus = "not_sold" | "active" | "done" | "skipped" | "blocked" | "awaiting_gate" | "cancelled";
+// De quem é a bola. **Cinco valores, e `Party` não serve**: ela não distingue engenharia de
+// Biahflow, não tem lugar para dependência externa e não nomeia o Human Gate.
+export type AccountRungWaitingOn = "" | "biahflow" | "client" | "engineering" | "external" | "human_gate";
+// Uma transição. **Append-only**: não há rota de edição nem de exclusão, e não é esquecimento.
+export type AccountRungEvent = { id: number; rung: number; from_status: AccountRungStatus | ""; from_status_display: string; to_status: AccountRungStatus; to_status_display: string; at: string; by: number | null; by_name: string; note: string };
+// `days_stalled`, `is_stale`, `gate_outcome` e `next_gate` chegam **prontos do backend**. Nenhum é
+// recalculado aqui: duas definições de "parado" ou de "gate registrado" divergem em silêncio, e o
+// limiar é `ACCOUNT_RUNG_STALE_AFTER_DAYS`, decisão operacional que mora numa setting.
+// `no_access` é o recorte da Entrega: a **forma** da escada continua, o conteúdo comercial não.
+export type AccountRung = {
+  id: number; client: number; rung: FdeRung; rung_display: string;
+  status: AccountRungStatus; status_display: string;
+  opportunity: number | null; opportunity_title: string;
+  project: number | null; project_name: string;
+  started_at: string | null; completed_at: string | null;
+  waiting_on: AccountRungWaitingOn; waiting_on_display: string;
+  blocker: string; skip_reason: string; skipped_by: number | null; skipped_by_name: string; skipped_at: string | null;
+  days_stalled: number | null; is_stale: boolean;
+  gate_outcome: GateOutcome | ""; next_gate: { phase_name: string; target_date: string | null } | null;
+  no_access: boolean; events: AccountRungEvent[];
+};
+// A linha do bloco compacto da visão geral. Não carrega conteúdo comercial nenhum — nome da conta,
+// degrau, de quem é a bola e há quanto tempo parou.
+export type AccountLadderRow = {
+  client_id: number; client_name: string;
+  rung: FdeRung; rung_display: string;
+  status: AccountRungStatus; status_display: string;
+  waiting_on: AccountRungWaitingOn; waiting_on_display: string;
+  days_stalled: number | null; is_stale: boolean;
+  steps: { rung: FdeRung; rung_display: string; status: AccountRungStatus }[];
+};
+
 export type ClientStatus = "prospect" | "active";
 export type Client = { id: number; name: string; legal_name: string; tax_id: string; owner: number; status: ClientStatus; vertical: number | null; vertical_name: string };
 // `receives_billing` marca quem recebe cobrança (FDD 036). Sem ninguém marcado, o degrau **não**
@@ -82,7 +126,7 @@ export type DocumentEntry = { id: number; client: number | null; opportunity: nu
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";
 export type ArtifactStatus = "draft" | "review" | "sent" | "accepted" | "rejected";
 export type Artifact = { id: number; kind: ArtifactKind; kind_display: string; status: ArtifactStatus; status_display: string; title: string; content: string; opportunity: number | null; project: number | null; source_meeting: number | null; document: number | null; ai_interaction: number | null; created_by: number; sent_at: string | null; decided_at: string | null; created_at: string; updated_at: string };
-export type Dashboard = { pipeline: PipelineStage[]; active_projects: number; overdue_count: number; upcoming_tasks: { id: number; title: string; due_date: string; project_id: number }[] };
+export type Dashboard = { pipeline: PipelineStage[]; active_projects: number; overdue_count: number; upcoming_tasks: { id: number; title: string; due_date: string; project_id: number }[]; account_ladder: AccountLadderRow[] };
 // `is_admin` vem do backend (`User.is_admin_role`: papel admin **ou** superusuário) em vez de ser
 // derivado aqui. É o mesmo predicado que a API usa para autorizar, então a tela não pode divergir
 // dela — que era exatamente o defeito de `createsuperuser` (FDD 017).

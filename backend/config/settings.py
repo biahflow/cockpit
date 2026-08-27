@@ -259,6 +259,11 @@ SPECTACULAR_SETTINGS = {
         # o branco de "ainda não decidido") e o corpo da action `apply-gate` (onde as quatro
         # saídas são obrigatórias). Sem o override, os dois disputam o mesmo nome de enum.
         "GateOutcomeEnum": "apps.core.models.ProjectPhase.GateOutcome",
+        # Os sete estados do degrau da escada FDE aparecem em quatro campos — `status` do
+        # degrau, `from_status`/`to_status` do evento e o corpo da action `transition` —,
+        # e sem o override os quatro disputam nomes de enum entre si e com os `status`
+        # dos outros modelos.
+        "AccountRungStatusEnum": "apps.core.models.AccountRung.Status",
     },
 }
 SESSION_COOKIE_SECURE = not DEBUG
@@ -540,6 +545,11 @@ GITHUB_PROJECTION_STALE_AFTER_SECONDS = _env_int("GITHUB_PROJECTION_STALE_AFTER_
 SCHEDULER_GITHUB_RECONCILE_EVERY_MINUTES = _env_int(
     "SCHEDULER_GITHUB_RECONCILE_EVERY_MINUTES", 10
 )
+
+# A escada FDE da conta (FDD 042, ADR 0047). A partir de quantos dias sem transição um degrau é
+# apresentado como **parado**. Fica no backend e não no SPA de propósito: duas definições de
+# "parado" divergem em silêncio, e é esta que roteia a atenção de quem varre a carteira.
+ACCOUNT_RUNG_STALE_AFTER_DAYS = _env_int("ACCOUNT_RUNG_STALE_AFTER_DAYS", 14)
 
 # Captação de leads pelo site: token compartilhado e CORS restrito ao endpoint de intake.
 LEAD_INTAKE_TOKEN = os.getenv("LEAD_INTAKE_TOKEN", "")

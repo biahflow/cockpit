@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AcceptInvitationView,
+    AccountRungViewSet,
     ActivityViewSet,
     AgentView,
     AiFeedbackView,
@@ -72,6 +73,10 @@ from .views import (
 router = DefaultRouter()
 router.register("clients", ClientViewSet)
 router.register("contacts", ContactViewSet)
+# A escada FDE (FDD 042) é da **conta** e não do projeto, e por isso a rota fica ao lado de
+# `clients` em vez de pendurada em `/projects/`. `/project-phases/` continua sendo a jornada
+# de entrega da FDD 011, que é outro eixo e não se confunde com este.
+router.register("account-rungs", AccountRungViewSet)
 router.register("activities", ActivityViewSet)
 router.register("pipeline-stages", PipelineStageViewSet)
 router.register("opportunities", OpportunityViewSet)
