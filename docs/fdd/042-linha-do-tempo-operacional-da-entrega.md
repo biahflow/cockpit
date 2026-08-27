@@ -69,7 +69,7 @@ próximo gate e o histórico), e o widget "Jornada de entrega" no dashboard.
 
 ### Por que classificação, e não um segundo modelo de fase
 
-Ver ADR 0046. Um `CanonicalPhase` paralelo duplicaria materialização, permissão e histórico, e faria
+Ver ADR 0047. Um `CanonicalPhase` paralelo duplicaria materialização, permissão e histórico, e faria
 dois conceitos de "fase" divergirem em silêncio. A classificação sobre a fase que já existe mantém
 uma jornada só.
 

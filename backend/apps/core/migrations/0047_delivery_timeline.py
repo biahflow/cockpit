@@ -1,4 +1,4 @@
-"""Linha do tempo operacional da entrega (FDD 042, ADR 0046).
+"""Linha do tempo operacional da entrega (FDD 042, ADR 0047).
 
 Aditiva sobre a Jornada de Transformação que já existe (FDD 011/033): classifica a fase
 configurável sobre a jornada canônica FDE (`canonical_stage`), dá à fase ativa de quem/de quê

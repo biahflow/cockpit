@@ -1,4 +1,4 @@
-# ADR 0046 — A linha do tempo da entrega: canônica sobre a configurável e histórico append-only
+# ADR 0047 — A linha do tempo da entrega: canônica sobre a configurável e histórico append-only
 
 **Status:** aceita
 **Data:** 2026-08-27

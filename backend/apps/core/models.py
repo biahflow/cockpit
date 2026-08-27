@@ -1247,7 +1247,7 @@ class JourneyPhase(models.Model):
     requires_gate = models.BooleanField(default=False)
 
     class CanonicalStage(models.TextChoices):
-        """A jornada canônica de entrega — o vocabulário FDE (ADR 0030, ADR 0046, FDD 042).
+        """A jornada canônica de entrega — o vocabulário FDE (ADR 0030, ADR 0047, FDD 042).
 
         `Discover → Prioritize → [Feasibility] → Prove → Scale → Optimize`. É uma **classificação**
         opcional da fase configurável, não um segundo modelo de fase: mapeia o vocabulário que o
@@ -1480,7 +1480,7 @@ class ProjectChecklistItem(TimestampedModel):
 
 
 class PhaseEvent(models.Model):
-    """Histórico **append-only** da jornada de um projeto (FDD 042, ADR 0046).
+    """Histórico **append-only** da jornada de um projeto (FDD 042, ADR 0047).
 
     O `ProjectPhase` carrega o **estado corrente**; ele não guarda a *sequência* de como se chegou
     ali — e um REDESIGN chega a apagar `completed_at` e `gate_outcome` da fase que reabre (FDD
