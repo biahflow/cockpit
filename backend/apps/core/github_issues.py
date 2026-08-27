@@ -180,6 +180,23 @@ def _request(method: str, url: str, payload: dict[str, object] | None = None) ->
     return decoded
 
 
+def api_request(
+    method: str, url: str, payload: dict[str, object] | None = None
+) -> dict[str, object]:
+    """Fachada pública do transporte, reusada pela projeção de entrega (FDD 041).
+
+    A projeção lê Issue/PR/checks pela mesma pilha HTTP do provisionamento — mesmo header, mesmo
+    timeout, mesma redação de segredo. Duplicar o transporte seria duplicar a superfície de
+    vazamento de token.
+    """
+    return _request(method, url, payload)
+
+
+def http_status_from_error(exc: GitHubIssuesError) -> int | None:
+    """Status HTTP por trás de um `GitHubIssuesError`, quando a causa foi um 4xx/5xx."""
+    return _http_status_from_error(exc)
+
+
 def ping_repository() -> tuple[bool, str]:
     """Sonda de leitura: o token alcança o repositório configurado? Sem criar Issue."""
     repository = _require_token_and_repo(str(getattr(settings, "GITHUB_REPO", "") or ""))

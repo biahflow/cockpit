@@ -36,6 +36,7 @@ function stub() {
     if (path.startsWith("/decisoes")) return Promise.resolve([{ id: 1, project: 1, title: "Adotar fila gerenciada", rationale: "Custa menos que o Memorystore.", decided_on: "2026-08-06", decided_by: "Marina", status: "draft", source_meeting: 1, published_at: null }]);
     if (path.startsWith("/riscos")) return Promise.resolve([{ id: 1, project: 1, title: "ERP do cliente pode atrasar a carga", description: "", probability: "high", impact: "medium", mitigation: "Janela alternativa negociada com o TI.", status: "open", owner: 2, resolved_at: null }]);
     if (path.startsWith("/project-members")) return Promise.resolve([{ id: 7, project: 1, user: 3, user_name: "Ana Lima", user_username: "ana", user_role: "delivery", added_by: 1, created_at: "2026-08-05T10:00:00Z" }]);
+    if (path.startsWith("/github-projections")) return Promise.resolve([{ id: 3, project: 1, handoff: null, repository: "acme/repo", issue_number: 18, issue_url: "https://github.com/acme/repo/issues/18", projection_status: "current", state: "current", stale_after_seconds: 3600, issue_state: "open", pr_state: "open", pr_number: 42, pr_url: "https://github.com/acme/repo/pull/42", head_sha: "abc1234def", head_ref: "feature/x", review_state: "approved", ci_state: "success", observed_at: "2026-08-27T10:00:00Z", last_event_at: "2026-08-27T10:00:00Z", last_delivery_id: "d1", last_event_type: "issues", last_error_code: "", last_error_message: "", created_at: "2026-08-27T09:00:00Z", updated_at: "2026-08-27T10:00:00Z" }]);
     return Promise.resolve([]);
   });
 }
@@ -48,6 +49,15 @@ test("mostra projeto com marcos e tarefas", async () => {
   expect(await screen.findByText("Projeto X")).toBeInTheDocument();
   expect(screen.getAllByText("Marco 1").length).toBeGreaterThan(0);
   expect(screen.getByText("Tarefa 1")).toBeInTheDocument();
+});
+
+test("projeta o estado de entrega do GitHub (FDD 041)", async () => {
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Projeto X");
+  expect(await screen.findByText("acme/repo#18")).toBeInTheDocument();
+  // O estado visível é o confirmado, distinto de desatualizado/indisponível.
+  expect(screen.getByText("Atual")).toBeInTheDocument();
+  expect(screen.getByText("Verde")).toBeInTheDocument();
 });
 
 test("pergunta ao assistente de IA e mostra a resposta", async () => {

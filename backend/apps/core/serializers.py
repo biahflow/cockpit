@@ -32,6 +32,7 @@ from .models import (
     Document,
     EngineeringHandoff,
     Evidencia,
+    GithubDeliveryProjection,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -620,6 +621,84 @@ class EngineeringHandoffSerializer(serializers.ModelSerializer[EngineeringHandof
             status=str(valor("status", EngineeringHandoff.Status.PENDING) or ""),
             github_issue_number=cast(int | None, valor("github_issue_number", None)),
             github_issue_url=str(valor("github_issue_url") or ""),
+        )
+        try:
+            instancia.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(
+                exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+            ) from exc
+        return attrs
+
+
+class GithubDeliveryProjectionSerializer(
+    serializers.ModelSerializer[GithubDeliveryProjection]
+):
+    """Projeção de entrega GitHub (FDD 041). O corpo só escreve o **mapeamento**.
+
+    `project`, `handoff`, `repository` e `issue_number` são a referência canônica; todo o estado de
+    engenharia (`issue_state`, `pr_state`, `head_sha`, `ci_state`, ...) é **somente-leitura** — quem
+    o move é o webhook ou a reconciliação, nunca um PATCH do Pulse. É a fronteira da ADR 0046 escrita
+    no serializer: uma edição normal do Pulse não reescreve o estado do GitHub.
+
+    `repository`/`issue_number` não mudam depois de criados: re-ancorar uma projeção é reescrever
+    qual Issue ela espelha, e isso está fora deste recorte.
+    """
+
+    state = serializers.SerializerMethodField()
+    stale_after_seconds = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GithubDeliveryProjection
+        fields = [
+            "id", "project", "handoff", "repository", "issue_number", "issue_url",
+            "projection_status", "state", "stale_after_seconds",
+            "issue_state", "pr_state", "pr_number", "pr_url", "head_sha", "head_ref",
+            "review_state", "ci_state", "observed_at", "last_event_at",
+            "last_delivery_id", "last_event_type", "last_error_code", "last_error_message",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "issue_url", "projection_status", "issue_state", "pr_state", "pr_number",
+            "pr_url", "head_sha", "head_ref", "review_state", "ci_state", "observed_at",
+            "last_event_at", "last_delivery_id", "last_event_type", "last_error_code",
+            "last_error_message", "created_at", "updated_at",
+        ]
+
+    @extend_schema_field(serializers.CharField())
+    def get_state(self, obj: GithubDeliveryProjection) -> str:
+        from django.conf import settings
+
+        return obj.display_state(
+            int(getattr(settings, "GITHUB_PROJECTION_STALE_AFTER_SECONDS", 3600))
+        )
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_stale_after_seconds(self, obj: GithubDeliveryProjection) -> int:
+        from django.conf import settings
+
+        return int(getattr(settings, "GITHUB_PROJECTION_STALE_AFTER_SECONDS", 3600))
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if self.instance is not None:
+            for campo in ("repository", "issue_number"):
+                if campo in attrs and attrs[campo] != getattr(self.instance, campo):
+                    raise serializers.ValidationError(
+                        {campo: "A referência da Issue não muda depois de criada."}
+                    )
+
+        def valor(campo: str, default: object = "") -> object:
+            if campo in attrs:
+                return attrs[campo]
+            if self.instance is not None:
+                return getattr(self.instance, campo)
+            return default
+
+        instancia = GithubDeliveryProjection(
+            project=cast(Project | None, valor("project", None)),
+            handoff=cast(EngineeringHandoff | None, valor("handoff", None)),
+            repository=str(valor("repository") or ""),
+            issue_number=cast(int, valor("issue_number", 0) or 0),
         )
         try:
             instancia.clean()

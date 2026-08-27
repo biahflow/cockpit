@@ -139,6 +139,16 @@ FLAGS: dict[str, Flag] = {
         lambda: bool(settings.GITHUB_PROVISIONING_ENABLED),
         ("GITHUB_TOKEN", "GITHUB_REPO"),
     ),
+    # Projeção de entrega: lê Issue/PR/CI do GitHub para o Pulse (FDD 041, ADR 0046). Direção de
+    # leitura, complementar ao provisionamento acima. `requires` são os dois que o código
+    # dereferenceia: sem `GITHUB_WEBHOOK_SECRET` o webhook não autentica a entrada, sem
+    # `GITHUB_TOKEN` a reconciliação por poll nem chama. `GITHUB_REPO` **não** entra: o repositório
+    # é por-projeção, e exigi-lo recusaria uma instalação que projeta de vários repos.
+    "github_delivery": Flag(
+        "Projeção de entrega GitHub (Issue/PR/CI)",
+        lambda: bool(settings.GITHUB_DELIVERY_ENABLED),
+        ("GITHUB_TOKEN", "GITHUB_WEBHOOK_SECRET"),
+    ),
     # Portal do cliente: o default é "ligado se URL+secret estão presentes", mas o admin pode
     # desligar pela tela sem mexer no ambiente — parar de emitir num incidente do portal era, antes,
     # trabalho de deploy. Quem respeita o toggle é `portal.emit`.

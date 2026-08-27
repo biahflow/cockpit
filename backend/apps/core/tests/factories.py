@@ -10,6 +10,7 @@ from apps.core.models import (
     Client,
     EngineeringHandoff,
     Evidencia,
+    GithubDeliveryProjection,
     Invoice,
     Meeting,
     Opportunity,
@@ -124,6 +125,17 @@ class EngineeringHandoffFactory(factory.django.DjangoModelFactory):
     title = "Provision GitHub Issue from Pulse handoff"
     objective = "Create the engineering Task Contract as a GitHub Issue."
     acceptance_criteria = "The issue exists, is idempotent, and records correlation ids."
+
+
+class GithubDeliveryProjectionFactory(factory.django.DjangoModelFactory):
+    """Projeção de entrega recém-mapeada — antes de qualquer evento ou reconciliação (FDD 041)."""
+
+    class Meta:
+        model = GithubDeliveryProjection
+
+    project = factory.SubFactory(ProjectFactory)
+    repository = "acme/repo"
+    issue_number = factory.Sequence(lambda n: n + 1)
 
 
 class MeetingFactory(factory.django.DjangoModelFactory):

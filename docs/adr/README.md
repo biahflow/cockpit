@@ -51,3 +51,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0043 — A marca Pulse no shell, e as fundações r2 finalmente consumidas
 - 0044 — A infraestrutura do Pulse mora no repositório do outro produto
 - 0045 — A camada global vem vendorizada e pinada, e o Project Context sai de baixo dela
+- 0046 — A projeção de entrega GitHub lê, e não vira fonte da verdade

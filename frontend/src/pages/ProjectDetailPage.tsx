@@ -7,7 +7,7 @@ import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -32,6 +32,15 @@ const riscoStatusLabel: Record<RiscoStatus, string> = { open: "Aberto", mitigate
 const riscoStatusVariant: Record<RiscoStatus, string> = { open: "state--2", mitigated: "state--1", accepted: "state--off", materialized: "state--3" };
 const riscoNiveis: RiscoNivel[] = ["low", "medium", "high"];
 const riscoStatuses: RiscoStatus[] = ["open", "mitigated", "accepted", "materialized"];
+// Projeção de entrega GitHub (FDD 041). O estado *visível* vira selo com variante de `.state` — a
+// cor sai do mapa, nunca escrita à mão (ADR 0026). `pending` é **neutro** (`--off`): "ainda não
+// observamos" não é aviso; `stale`/`unavailable` avisam; sem permissão / referência ausente doem.
+const projectionStateLabel: Record<GithubProjectionState, string> = { pending: "Aguardando", current: "Atual", stale: "Desatualizado", unavailable: "Indisponível", permission_denied: "Sem permissão", reference_missing: "Referência ausente" };
+const projectionStateVariant: Record<GithubProjectionState, string> = { pending: "state--off", current: "state--1", stale: "state--2", unavailable: "state--2", permission_denied: "state--3", reference_missing: "state--3" };
+const issueStateLabel: Record<GithubIssueState, string> = { unknown: "—", open: "Aberta", closed: "Fechada" };
+const pullStateLabel: Record<GithubPullState, string> = { unknown: "—", none: "Sem PR", draft: "Rascunho", open: "Aberto", closed: "Fechado", merged: "Mesclado" };
+const reviewStateLabel: Record<GithubReviewState, string> = { unknown: "—", pending: "Em revisão", approved: "Aprovada", changes_requested: "Mudanças pedidas" };
+const ciStateLabel: Record<GithubCiState, string> = { unknown: "—", pending: "Em execução", success: "Verde", failure: "Vermelho" };
 const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", kpi_unit: "" as KpiUnit, kpi_direction: "up" as KpiDirection, kpi_baseline: "", kpi_current: "", hours_saved_month: "", roi_month: "" };
 const kpiUnits: { value: KpiUnit; label: string }[] = [
   { value: "", label: "Sem unidade" }, { value: "percent", label: "Percentual (%)" },
@@ -59,6 +68,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [riscos, setRiscos] = useState<Risco[]>([]);
   const [archivingRisco, setArchivingRisco] = useState<Risco | null>(null);
   const [phases, setPhases] = useState<ProjectPhase[]>([]);
+  const [projections, setProjections] = useState<GithubDeliveryProjection[]>([]);
   const [error, setError] = useState("");
   // O que a extração acabou de mapear. Fica na tela porque o **resultado mora em outro lugar**: o
   // processo é ancorado no cliente (FDD 039), não no projeto, então sem esta linha o sucesso seria
@@ -106,6 +116,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
     setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setDecisoes(loadedDecisoes); setRiscos(loadedRiscos); setPhases(loadedPhases); setHealth(loadedHealth); setMembers(loadedMembers);
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
+
+  // Projeção de entrega GitHub (FDD 041): leitura à parte da carga principal, para uma folga do
+  // GitHub não derrubar o resto do detalhe do projeto. A listagem não depende da flag — só o
+  // mapeamento e a reconciliação (503 fail-closed); vazio quando não há referência.
+  const loadProjections = useCallback(() => api<GithubDeliveryProjection[]>(`/github-projections/?project=${id}`).then(setProjections).catch(() => setProjections([])), [id]);
+  useEffect(() => { void loadProjections(); }, [loadProjections]);
 
   // O roster tem carga própria porque o alternador de arquivados muda só a lista dele: pendurá-lo
   // no `load` faria cada clique refazer as dez chamadas da página inteira.
@@ -530,6 +546,27 @@ export function ProjectDetailPage({ id }: { id: number }) {
       <ul className="mt-3 space-y-1.5 text-sm text-slate-600">{risk.signals.map((signal, index) => <li className="flex gap-2" key={index}><AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" /><span><strong className="text-ink">{signal.label}:</strong> {signal.detail}</span></li>)}</ul>
       {risk.forecast && <p className={`mt-3 text-sm font-medium ${risk.forecast.delay_days > 0 ? "text-danger" : "text-slate-600"}`}>Previsão de término: {formatDate(risk.forecast.predicted_finish_date)}{risk.forecast.delay_days > 0 ? ` — atraso previsto de ${risk.forecast.delay_days} dia(s)` : " — dentro do prazo"} <span className="text-slate-600">({risk.forecast.basis})</span></p>}
     </section>}
+
+    {/* Projeção de entrega GitHub (FDD 041, ADR 0046): leitura do estado de engenharia. Distingue
+        estado confirmado de desatualizado/indisponível — nunca inventa status. Somente-leitura: o
+        Pulse não é a fonte da verdade de Issue/PR/CI. */}
+    <section className="panel sm:p-6">
+      <div className="flex items-center gap-3"><span className="metric-icon"><Workflow className="size-4" /></span><div><h2 className="font-semibold text-ink">Entrega de engenharia (GitHub)</h2><p className="text-sm text-slate-600">Estado projetado de Issue, PR e CI. O Pulse lê do GitHub e não é a fonte da verdade.</p></div></div>
+      {projections.length ? <div className="mt-4 space-y-3">{projections.map(proj => <article className="rounded-xl border bg-slate-50/50 p-4" key={proj.id}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <a className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink hover:text-accent" href={proj.issue_url || `https://github.com/${proj.repository}/issues/${proj.issue_number}`} target="_blank" rel="noreferrer">{proj.repository}#{proj.issue_number}<ExternalLink className="size-3.5 text-accent" /></a>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${projectionStateVariant[proj.state]}`}>{projectionStateLabel[proj.state]}</span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+          <span><strong className="text-ink">Issue:</strong> {issueStateLabel[proj.issue_state]}</span>
+          <span><strong className="text-ink">PR:</strong> {pullStateLabel[proj.pr_state]}{proj.pr_number ? ` #${proj.pr_number}` : ""}</span>
+          <span><strong className="text-ink">Revisão:</strong> {reviewStateLabel[proj.review_state]}</span>
+          <span><strong className="text-ink">CI:</strong> {ciStateLabel[proj.ci_state]}</span>
+          {proj.head_sha && <span><strong className="text-ink">SHA:</strong> {proj.head_sha.slice(0, 7)}</span>}
+        </div>
+        <p className="mt-2 text-xs text-slate-600">{proj.observed_at ? `Confirmado em ${new Date(proj.observed_at).toLocaleString("pt-BR")}` : "Ainda não confirmado pelo GitHub."}{proj.last_error_message ? ` · ${proj.last_error_message}` : ""}</p>
+      </article>)}</div> : <p className="mt-4 empty-state">Nenhuma referência de engenharia mapeada.</p>}
+    </section>
 
     {aiEnabled && <section className="panel sm:p-6">
       <div className="flex flex-wrap items-center gap-3"><span className="metric-icon"><Sparkles className="size-4" /></span><div><h2 className="font-semibold text-ink">Assistente do projeto</h2><p className="text-sm text-slate-600">Pergunte sobre marcos, tarefas e prazos deste projeto.</p></div><button type="button" className="btn btn--secondary ml-auto" onClick={() => void suggestNextSteps()} disabled={aiLoading}>Sugerir próximos passos</button><button type="button" className="btn btn--secondary" onClick={() => void summarize()} disabled={aiLoading}>Resumir projeto</button></div>

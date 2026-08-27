@@ -45,6 +45,7 @@ from . import (
     enrichment,
     esign,
     flags,
+    github_delivery,
     health,
     invoices,
     journey,
@@ -83,6 +84,7 @@ from .models import (
     Document,
     EngineeringHandoff,
     Evidencia,
+    GithubDeliveryProjection,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -131,6 +133,7 @@ from .serializers import (
     DocumentSerializer,
     EngineeringHandoffSerializer,
     EvidenciaSerializer,
+    GithubDeliveryProjectionSerializer,
     InvitationSerializer,
     InvoiceSerializer,
     JourneyPhaseSerializer,
@@ -2255,6 +2258,47 @@ class EngineeringHandoffViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
         return Response(self.get_serializer(handoff).data)
 
 
+class GithubDeliveryProjectionViewSet(
+    ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet
+):
+    """Projeção de entrega GitHub (FDD 041): Issue/PR/CI espelhados no projeto Pulse.
+
+    Direção de leitura, complementar ao provisionamento (FDD 040). O corpo só grava o mapeamento
+    (projeto + repo + Issue); o estado de engenharia vem do webhook e da reconciliação, nunca de um
+    PATCH — a fronteira da ADR 0046. Escopo de projeto e nega-por-padrão como as irmãs.
+    """
+
+    resource = "github_projection"
+    queryset = GithubDeliveryProjection.objects.select_related("project", "handoff").all()
+    serializer_class = GithubDeliveryProjectionSerializer
+    filter_fields = ("project",)
+    filter_exact_fields = ("projection_status",)
+
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # Fail-closed como o provisionamento (#40, ADR 0018): sem a integração, mapear uma
+        # referência que ninguém vai observar só cria dado morto.
+        if not github_delivery.is_enabled():
+            return Response(
+                {"detail": "Projeção GitHub desativada."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return super().create(request, *args, **kwargs)
+
+    @extend_schema(request=None, responses={200: GithubDeliveryProjectionSerializer})
+    @action(detail=True, methods=["post"], url_path="reconcile")
+    def reconcile(self, request: Request, pk: str | None = None) -> Response:
+        """Reconciliação por poll: confirma a projeção e recupera eventos perdidos."""
+        if not github_delivery.is_enabled():
+            return Response(
+                {"detail": "Projeção GitHub desativada."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        projection = self.get_object()
+        github_delivery.reconcile(projection)
+        projection.refresh_from_db()
+        return Response(self.get_serializer(projection).data)
+
+
 class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
@@ -2737,6 +2781,46 @@ class PaymentsWebhookView(APIView):
         if invoice is None:
             return Response({"detail": "Evento ignorado."})
         return Response(InvoiceSerializer(invoice).data)
+
+
+class GithubDeliveryWebhookView(APIView):
+    """Entrada dos webhooks de entrega GitHub (FDD 041). Autentica pelo HMAC-SHA256 do corpo cru.
+
+    Idempotente: a reentrega com o mesmo `X-GitHub-Delivery` vira no-op no inbox. Evento de tipo
+    desconhecido ou sem projeção correspondente responde 200 "ignorado" — um erro faria o GitHub
+    reentregar para sempre, e o Pulse não inventa referência que não mapeou. Zero LLM.
+    """
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "github_webhook"
+
+    @extend_schema(request=None, responses={200: GithubDeliveryProjectionSerializer})
+    def post(self, request: Request) -> Response:
+        if not github_delivery.is_enabled():
+            return Response(
+                {"detail": "Projeção GitHub desativada."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        body = request.body  # o HMAC é sobre os bytes originais, então nada de request.data
+        if not github_delivery.verify_signature(body, request.headers):
+            logger.warning("webhook GitHub de entrega com assinatura inválida")
+            return Response({"detail": "Assinatura inválida."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            payload = json.loads(body or b"{}")
+        except ValueError:
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(payload, dict):
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        event_type = request.headers.get("X-GitHub-Event", "")
+        delivery_id = request.headers.get("X-GitHub-Delivery", "")
+        outcome, projection = github_delivery.ingest(event_type, delivery_id, payload)
+        if projection is None:
+            return Response({"outcome": outcome})
+        return Response(
+            {"outcome": outcome, "projection": GithubDeliveryProjectionSerializer(projection).data}
+        )
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
