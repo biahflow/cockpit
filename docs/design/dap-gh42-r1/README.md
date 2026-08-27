@@ -2,7 +2,7 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Awaiting approval**
+Status: **Approved**
 Data: 2026-08-27
 Produzido por: harness (Claude Code), sob `docs/engineering-os/workflows/design-approval.md`
 
@@ -28,14 +28,18 @@ later packages cite". É isso que esta revisão pede que seja decidido.
 
 | Campo | Valor |
 | --- | --- |
-| O que foi aprovado | — |
-| Aprovado por | — |
-| Data | — |
-| Revisão aprovada | — |
-| Explicitamente **não** aprovado | — |
+| O que foi aprovado | **visual e copy** da revisão 1, como está no `approved-board.png` |
+| Aprovado por | o solicitante, explicitamente, nesta sessão |
+| Data | 2026-08-27 |
+| Revisão aprovada | **1** |
+| Explicitamente **não** aprovado | tudo o que a seção *O que a aprovação NÃO cobre* nomeia, sem exceção |
 
-**Nenhum agente aprova design, inclusive um que não produziu** (`design-approval.md`, "Agent
-authority"). Os campos ficam em `—` até que uma pessoa decida.
+Esta tabela foi preenchida **transcrevendo uma decisão humana explícita**, que é o que
+`design-approval.md` permite a um agente (`RECORD_APPROVAL`); `APPROVE_DESIGN` continua vedado, e
+**nenhum agente aprova design, inclusive um que não produziu**.
+
+A aprovação veio sem ressalva, cobrindo visual e copy de uma vez. Se a intenção era mais estreita,
+esta linha é o lugar de corrigir, e a correção produz uma revisão nova.
 
 A aprovação precisa ser dada em **duas decisões separadas**, porque aprovar visual não aprova copy:
 
@@ -52,24 +56,23 @@ Aprovação da revisão 1 não é aprovação de uma revisão posterior.
 
 | Arquivo | O que é |
 | --- | --- |
-| `board.html` | Renderização auto-contida. Abre sem build, sem toolchain e sem rede. |
-| *(a produzir)* `approved-board.png` | Captura congelada do quadro. **É a isto que a aprovação vai se referir.** |
+| [`board.html`](board.html) | Renderização auto-contida. Abre sem build, sem toolchain e sem rede. 70 KB. |
+| [`approved-board.png`](approved-board.png) | Captura congelada do quadro. **É a isto que a aprovação se refere.** |
 
-**O pacote está incompleto até que a captura exista.** O item 2 do `design-approval.md` exige
-"fixed evidence of what was rendered … alongside the source", com a razão explícita: *"a rendering
-depends on fonts, browser, and platform; the frozen capture is what the approval actually refers
-to."*
-
-A captura e o SHA-256 dela **serão produzidos e anexados no ato da aprovação**, por quem tiver
-navegador. Este harness não tem um, e a alternativa — inventar um nome de arquivo e um hash —
-produziria exatamente a "approval without revision identity" que o mesmo documento lista como
-anti-padrão. **Nenhum hash foi inventado aqui.**
-
-Depois da aprovação, o preenchimento é:
+SHA-256 de `approved-board.png`:
 
 ```text
-SHA-256 de approved-board.png: <a calcular no ato>
+7a2bd3b1458690676ea1e3712d8556a72be90e9280743ade55c415ac0d88ab5a
 ```
+
+A captura foi produzida com o Chromium do Playwright já instalado no projeto, a 1280 px de largura
+e `deviceScaleFactor: 2`, em página inteira, a partir do `board.html` desta revisão. O carregamento
+registrou **zero requisições falhas** — o que prova a auto-contenção exigida pelo item 1 em runtime,
+e não apenas por inspeção do fonte.
+
+Uma renderização depende de fonte, navegador e plataforma; a captura congelada é o que a aprovação
+de fato nomeia. Se o `board.html` mudar, esta captura e este hash deixam de descrevê-lo, e o que
+existe passa a ser uma revisão nova precisando do próprio registro.
 
 ## Superfícies e estados no pacote
 
