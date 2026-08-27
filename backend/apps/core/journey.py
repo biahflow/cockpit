@@ -23,7 +23,42 @@ from django.utils import timezone
 from .exceptions import StateConflict
 
 if TYPE_CHECKING:
-    from .models import Project, ProjectPhase
+    from .models import Project, ProjectPhase, User
+
+
+def _log_event(
+    project: Project,
+    project_phase: ProjectPhase | None,
+    kind: str,
+    *,
+    actor: User | None = None,
+    from_status: str = "",
+    to_status: str = "",
+    gate_outcome: str = "",
+    waiting_party: str = "",
+    note: str = "",
+) -> None:
+    """Grava uma linha no histórico append-only da jornada (FDD 042).
+
+    A proveniência sai do próprio autor: com `actor`, `source=user`; sem, `system` — é a
+    materialização e o avanço em cascata que não têm pessoa por trás. `phase_name` é *snapshot*,
+    para a auditoria sobreviver a um rename da fase.
+    """
+    from .models import PhaseEvent
+
+    PhaseEvent.objects.create(
+        project=project,
+        project_phase=project_phase,
+        phase_name=project_phase.phase.name if project_phase is not None else "",
+        kind=kind,
+        from_status=from_status,
+        to_status=to_status,
+        gate_outcome=gate_outcome,
+        waiting_party=waiting_party,
+        note=note,
+        actor=actor,
+        source=PhaseEvent.Source.USER if actor is not None else PhaseEvent.Source.SYSTEM,
+    )
 
 
 def materialize_journey(project: Project) -> None:
@@ -34,6 +69,7 @@ def materialize_journey(project: Project) -> None:
     """
     from .models import (
         JourneyPhase,
+        PhaseEvent,
         ProjectChecklistItem,
         ProjectDeliverable,
         ProjectPhase,
@@ -65,6 +101,14 @@ def materialize_journey(project: Project) -> None:
         for item in phase.checklist_items.all():
             ProjectChecklistItem.objects.create(
                 project_phase=project_phase, text=item.text, position=item.position
+            )
+        # A primeira fase nasce ativa: registra a origem da linha do tempo (sistema, sem autor).
+        if index == 0:
+            _log_event(
+                project,
+                project_phase,
+                PhaseEvent.Kind.STARTED,
+                to_status=ProjectPhase.Status.ACTIVE,
             )
 
 
@@ -111,15 +155,18 @@ def _assert_gate_allows_advance(project_phase: ProjectPhase) -> None:
         )
 
 
-def advance_phase(project: Project) -> ProjectPhase | None:
+def advance_phase(project: Project, actor: User | None = None) -> ProjectPhase | None:
     """Conclui a fase ativa e ativa a próxima. Retorna a nova fase ativa (ou `None`).
 
     Não bloqueia por entregáveis pendentes — o avanço é uma decisão da equipe. Bloqueia, sim,
     pelos dois gates da FDD 033: o decision gate da fase marcada e o checklist de qualidade.
     Se não houver fase ativa (projeto no fim, ou estado incomum), tenta ativar a próxima
     bloqueada — e aí não há o que travar, porque não há fase se concluindo.
+
+    Cada transição vira uma linha no histórico append-only (`PhaseEvent`, FDD 042): a fase que
+    fecha, a que abre. `actor` é quem pediu o avanço — sem ele o evento fica como `system`.
     """
-    from .models import ProjectPhase
+    from .models import PhaseEvent, ProjectPhase
 
     materialize_journey(project)
     phases = list(
@@ -135,6 +182,14 @@ def advance_phase(project: Project) -> ProjectPhase | None:
         current.status = ProjectPhase.Status.DONE
         current.completed_at = now
         current.save(update_fields=["status", "completed_at", "updated_at"])
+        _log_event(
+            project,
+            current,
+            PhaseEvent.Kind.COMPLETED,
+            actor=actor,
+            from_status=ProjectPhase.Status.ACTIVE,
+            to_status=ProjectPhase.Status.DONE,
+        )
         remaining = phases[phases.index(current) + 1 :]
     else:
         remaining = phases
@@ -144,10 +199,20 @@ def advance_phase(project: Project) -> ProjectPhase | None:
         nxt.status = ProjectPhase.Status.ACTIVE
         nxt.started_at = now
         nxt.save(update_fields=["status", "started_at", "updated_at"])
+        _log_event(
+            project,
+            nxt,
+            PhaseEvent.Kind.STARTED,
+            actor=actor,
+            from_status=ProjectPhase.Status.LOCKED,
+            to_status=ProjectPhase.Status.ACTIVE,
+        )
     return nxt
 
 
-def apply_gate(project: Project, outcome: str, notes: str = "") -> ProjectPhase | None:
+def apply_gate(
+    project: Project, outcome: str, notes: str = "", actor: User | None = None
+) -> ProjectPhase | None:
     """Registra o decision gate da fase ativa e aplica o que ele decidiu (FDD 033).
 
     Devolve a fase que ficou ativa depois da decisão: a próxima no GO/CONDITIONAL GO, a
@@ -165,7 +230,7 @@ def apply_gate(project: Project, outcome: str, notes: str = "") -> ProjectPhase 
     Tudo é validado antes de qualquer escrita, e o que escreve roda em transação: um gate
     recusado no meio não pode deixar o outcome gravado sem o efeito dele.
     """
-    from .models import ProjectPhase
+    from .models import PhaseEvent, ProjectPhase
 
     materialize_journey(project)
     phases = list(
@@ -206,9 +271,19 @@ def apply_gate(project: Project, outcome: str, notes: str = "") -> ProjectPhase 
         current.gate_outcome = outcome
         current.gate_notes = notes
         current.save(update_fields=["gate_outcome", "gate_notes", "updated_at"])
+        # O gate é registrado no histórico *antes* da consequência — inclusive antes do REDESIGN
+        # apagar o outcome da fase que reabre. É a única cópia auditável da decisão (FDD 042).
+        _log_event(
+            project,
+            current,
+            PhaseEvent.Kind.GATE_RECORDED,
+            actor=actor,
+            gate_outcome=outcome,
+            note=notes,
+        )
 
         if outcome in {ProjectPhase.GateOutcome.GO, ProjectPhase.GateOutcome.CONDITIONAL_GO}:
-            return advance_phase(project)
+            return advance_phase(project, actor)
 
         if previous is not None:  # REDESIGN, com a fase anterior já resolvida acima
             # Reabrir limpa o carimbo e o gate da fase que volta — precedente do `resolved_at`
@@ -222,10 +297,72 @@ def apply_gate(project: Project, outcome: str, notes: str = "") -> ProjectPhase 
             previous.save(
                 update_fields=["status", "completed_at", "gate_outcome", "gate_notes", "updated_at"]
             )
+            _log_event(
+                project,
+                previous,
+                PhaseEvent.Kind.REOPENED,
+                actor=actor,
+                from_status=ProjectPhase.Status.DONE,
+                to_status=ProjectPhase.Status.ACTIVE,
+                note=notes,
+            )
             # A corrente tranca **mantendo** `started_at` e o outcome: é o registro de que se
             # passou por aqui e do porquê de ter voltado.
             current.status = ProjectPhase.Status.LOCKED
             current.save(update_fields=["status", "updated_at"])
+            _log_event(
+                project,
+                current,
+                PhaseEvent.Kind.LOCKED_BY_REDESIGN,
+                actor=actor,
+                from_status=ProjectPhase.Status.ACTIVE,
+                to_status=ProjectPhase.Status.LOCKED,
+                gate_outcome=outcome,
+            )
             return previous
 
         return current  # NO-GO: a fase fica ativa e a jornada para ali
+
+
+def set_phase_waiting(
+    project: Project,
+    waiting_party: str,
+    note: str = "",
+    actor: User | None = None,
+) -> ProjectPhase:
+    """Define (ou limpa) de quem/de quê a fase ativa está esperando (FDD 042).
+
+    `waiting_party` vazio limpa o bloqueio. A mudança vira um `PhaseEvent` — é o que a torna
+    auditável e o motivo de o campo ser read-only no serializer: um PATCH direto gravaria o estado
+    sem o registro de quem e por quê, o mesmo desenho do `gate_outcome` (FDD 033). Determinístico,
+    sem LLM (FinOps).
+    """
+    from .models import PhaseEvent, ProjectPhase
+
+    materialize_journey(project)
+    current = (
+        ProjectPhase.objects.filter(
+            project=project, status=ProjectPhase.Status.ACTIVE, archived_at__isnull=True
+        )
+        .select_related("phase")
+        .order_by("phase__position", "id")
+        .first()
+    )
+    if current is None:
+        raise StateConflict("Não há fase ativa nesta jornada para registrar uma espera.")
+    if waiting_party and waiting_party not in ProjectPhase.WaitingParty.values:
+        raise StateConflict("Parte aguardada inválida.")
+
+    with transaction.atomic():
+        current.waiting_party = waiting_party
+        current.blocker_note = note if waiting_party else ""
+        current.save(update_fields=["waiting_party", "blocker_note", "updated_at"])
+        _log_event(
+            project,
+            current,
+            PhaseEvent.Kind.WAITING_SET if waiting_party else PhaseEvent.Kind.WAITING_CLEARED,
+            actor=actor,
+            waiting_party=waiting_party,
+            note=note if waiting_party else "",
+        )
+    return current

@@ -1246,6 +1246,29 @@ class JourneyPhase(models.Model):
     # concluindo como sempre: o gate é opt-in do admin.
     requires_gate = models.BooleanField(default=False)
 
+    class CanonicalStage(models.TextChoices):
+        """A jornada canônica de entrega — o vocabulário FDE (ADR 0030, ADR 0046, FDD 042).
+
+        `Discover → Prioritize → [Feasibility] → Prove → Scale → Optimize`. É uma **classificação**
+        opcional da fase configurável, não um segundo modelo de fase: mapeia o vocabulário que o
+        admin edita (`Welcome`, `Launch Session`, …) sobre a escada canônica, para que a linha do
+        tempo interna do Pulse fale a mesma língua entre projetos com jornadas nomeadas diferentes.
+        `feasibility` é membro explícito e opcional: uma jornada que não a atravessa simplesmente
+        não tem fase mapeada nela — é assim que a optionalidade fica *modelada*, não convencionada.
+        Em branco é legítimo (a fase operacional Biahflow sem equivalente FDE, como `Activation`).
+        """
+
+        DISCOVER = "discover", "Discover"
+        PRIORITIZE = "prioritize", "Prioritize"
+        FEASIBILITY = "feasibility", "Feasibility"
+        PROVE = "prove", "Prove"
+        SCALE = "scale", "Scale"
+        OPTIMIZE = "optimize", "Optimize"
+
+    canonical_stage = models.CharField(
+        max_length=16, choices=CanonicalStage.choices, blank=True, default=""
+    )
+
     class Meta:
         ordering = ["position", "id"]
 
@@ -1315,6 +1338,22 @@ class ProjectPhase(TimestampedModel):
         REDESIGN = "redesign", "REDESIGN"
         NO_GO = "no_go", "NO-GO"
 
+    class WaitingParty(models.TextChoices):
+        """Quem/o quê a fase ativa está esperando, para a linha do tempo interna (FDD 042).
+
+        Torna o bloqueio legível sem abrir a nota crua: a equipe classifica de quem depende a
+        fase parada. `engineering` é *classificação de delivery* — "estamos esperando engenharia"
+        —, não o estado de execução de engenharia em si, que é do GitHub (ADR 0040, issue #41): a
+        fronteira fica limpa, e nada aqui equaciona `PR merged` a `DONE`. `human_gate` é o caso em
+        que o que falta é uma decisão humana (o decision gate da FDD 033). Em branco = fluindo.
+        """
+
+        BIAHFLOW = "biahflow", "Biahflow"
+        CLIENT = "client", "Cliente"
+        ENGINEERING = "engineering", "Engenharia"
+        EXTERNAL = "external", "Dependência externa"
+        HUMAN_GATE = "human_gate", "Human Gate"
+
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="phases")
     phase = models.ForeignKey(JourneyPhase, on_delete=models.PROTECT, related_name="project_phases")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.LOCKED)
@@ -1333,6 +1372,14 @@ class ProjectPhase(TimestampedModel):
     # Preenchido, este campo destrava a conclusão e fica como registro de quem decidiu pular o
     # quality gate e por quê.
     checklist_waiver = models.TextField(blank=True, default="")
+    # Quem a fase ativa espera, e a nota do bloqueio/decisão pendente (FDD 042). Read-only no
+    # serializer e escrito só pela action `set-waiting`, pelo mesmo motivo do `gate_outcome`: a
+    # mudança precisa deixar rastro (um `PhaseEvent` com autor), e um PATCH direto gravaria o
+    # estado sem o registro de quem e por quê.
+    waiting_party = models.CharField(
+        max_length=16, choices=WaitingParty.choices, blank=True, default=""
+    )
+    blocker_note = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["phase__position", "id"]
@@ -1342,6 +1389,31 @@ class ProjectPhase(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.project_id} · {self.phase.name}"
+
+    @property
+    def situation(self) -> str:
+        """Estado semântico derivado, determinístico (FDD 042; FinOps: sem LLM).
+
+        Colapsa `status` + `gate_outcome` + `waiting_party` no vocabulário que a linha do tempo
+        pinta: `completed`, `cancelled`, `replanned`, `waiting_decision`, `blocked`, `active`,
+        `pending`. É a fonte única da variante de selo — a tela mapeia *situação → variante*, nunca
+        recalcula a regra. Puro: não toca no banco.
+        """
+        if self.gate_outcome == self.GateOutcome.NO_GO:
+            return "cancelled"
+        if self.status == self.Status.DONE:
+            return "completed"
+        if self.status == self.Status.LOCKED:
+            # Trancada por um REDESIGN (guarda o outcome) é "replanejada"; trancada e ainda
+            # intocada é só "pendente" — uma fase futura da jornada, não um alerta.
+            return "replanned" if self.gate_outcome == self.GateOutcome.REDESIGN else "pending"
+        # A partir daqui a fase está ativa.
+        awaiting_gate = self.phase.requires_gate and not self.gate_outcome
+        if self.waiting_party == self.WaitingParty.HUMAN_GATE or awaiting_gate:
+            return "waiting_decision"
+        if self.waiting_party:
+            return "blocked"
+        return "active"
 
 
 class ProjectDeliverable(TimestampedModel):
@@ -1405,6 +1477,60 @@ class ProjectChecklistItem(TimestampedModel):
         if not self.checked:
             self.checked_at = None
         super().save(*args, **kwargs)
+
+
+class PhaseEvent(models.Model):
+    """Histórico **append-only** da jornada de um projeto (FDD 042, ADR 0046).
+
+    O `ProjectPhase` carrega o **estado corrente**; ele não guarda a *sequência* de como se chegou
+    ali — e um REDESIGN chega a apagar `completed_at` e `gate_outcome` da fase que reabre (FDD
+    033), de propósito, porque "concluída em" é estado corrente. O que se perdia com isso era a
+    auditoria: *por que* e *quando* a jornada voltou. Este modelo é o registro que sobrevive — uma
+    linha por transição/decisão/bloqueio, com carimbo, autor e proveniência, nunca editada nem
+    apagada. Não tem viewset de escrita: só `journey.py` cria evento, e a leitura sai pela linha
+    do tempo do projeto.
+
+    Determinístico, sem LLM (FinOps): ordenação, `from`/`to` e proveniência saem de campos
+    explícitos. `phase_name` é *snapshot* — a auditoria continua legível se a fase for renomeada.
+    """
+
+    class Kind(models.TextChoices):
+        STARTED = "started", "Fase iniciada"
+        COMPLETED = "completed", "Fase concluída"
+        REOPENED = "reopened", "Fase reaberta"
+        LOCKED_BY_REDESIGN = "locked_by_redesign", "Fase trancada por REDESIGN"
+        GATE_RECORDED = "gate_recorded", "Decision gate registrado"
+        WAITING_SET = "waiting_set", "Aguardando definido"
+        WAITING_CLEARED = "waiting_cleared", "Aguardando resolvido"
+
+    class Source(models.TextChoices):
+        USER = "user", "Ação de pessoa"
+        SYSTEM = "system", "Automático"
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="phase_events")
+    # `SET_NULL`: o evento sobrevive mesmo se a fase-instância for arquivada/removida — é
+    # histórico, e o `phase_name` abaixo guarda o rótulo de qualquer forma.
+    project_phase = models.ForeignKey(
+        ProjectPhase, on_delete=models.SET_NULL, null=True, blank=True, related_name="events"
+    )
+    phase_name = models.CharField(max_length=80, blank=True, default="")
+    kind = models.CharField(max_length=24, choices=Kind.choices)
+    from_status = models.CharField(max_length=16, blank=True, default="")
+    to_status = models.CharField(max_length=16, blank=True, default="")
+    gate_outcome = models.CharField(max_length=16, blank=True, default="")
+    waiting_party = models.CharField(max_length=16, blank=True, default="")
+    note = models.TextField(blank=True, default="")
+    actor = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    source = models.CharField(max_length=8, choices=Source.choices, default=Source.SYSTEM)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.project_id} · {self.phase_name} · {self.kind}"
 
 
 class KpiUnit(models.TextChoices):

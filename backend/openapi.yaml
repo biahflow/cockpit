@@ -7233,6 +7233,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/Project'
           description: ''
+  /api/v1/projects/{id}/set-waiting/:
+    post:
+      operationId: v1_projects_set_waiting_create
+      description: |-
+        Define de quem/de quê a fase ativa está esperando (delivery/admin, FDD 042).
+
+        `waiting_party` vazio limpa o bloqueio. Escreve um `PhaseEvent` — é o que dá rastro à
+        mudança, e o motivo de o campo não entrar por PATCH. Devolve a jornada inteira, no mesmo
+        formato do `advance-phase`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPhaseWaiting'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SetPhaseWaiting'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SetPhaseWaiting'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectPhase'
+          description: ''
   /api/v1/projects/{id}/summary/:
     post:
       operationId: v1_projects_summary_create
@@ -7266,6 +7307,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/Project'
           description: ''
+  /api/v1/projects/{id}/timeline/:
+    get:
+      operationId: v1_projects_timeline_retrieve
+      description: |-
+        A linha do tempo operacional do projeto (FDD 042).
+
+        Fase corrente + histórico append-only + próximo gate + o que está aguardando, tudo
+        derivado de campos explícitos (FinOps: sem LLM). Herda o recorte de projeto da
+        `ProjectViewSet` — `get_object` já aplica a permissão de objeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este project.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectTimeline'
+          description: ''
   /api/v1/projects/{id}/unarchive/:
     post:
       operationId: v1_projects_unarchive_create
@@ -7287,6 +7355,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/projects/timeline-overview/:
+    get:
+      operationId: v1_projects_timeline_overview_list
+      description: |-
+        Visão compacta da entrega para o dashboard: fase corrente e situação por projeto ativo.
+
+        Agregador que **estreita à mão** por `visible_to` (o mesmo contrato dos outros do
+        dashboard) e tem teste próprio: a Entrega não pode ver a jornada de projeto de que não
+        participa. Só projetos não-concluídos entram — o dashboard é sobre o que está em curso.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryTimelineOverview'
           description: ''
   /api/v1/recommendations/:
     get:
@@ -8731,6 +8821,22 @@ components:
       description: |-
         * `email` - E-mail ao cliente
         * `interno` - Aviso interno
+    CanonicalStageEnum:
+      enum:
+      - discover
+      - prioritize
+      - feasibility
+      - prove
+      - scale
+      - optimize
+      type: string
+      description: |-
+        * `discover` - Discover
+        * `prioritize` - Prioritize
+        * `feasibility` - Feasibility
+        * `prove` - Prove
+        * `scale` - Scale
+        * `optimize` - Optimize
     Case:
       type: object
       description: |-
@@ -9374,6 +9480,40 @@ components:
         * `firme` - Cobrança firme
         * `escalada` - Escalada interna
         * `renegociacao` - Renegociação
+    DeliveryTimelineOverview:
+      type: object
+      properties:
+        project_id:
+          type: integer
+        project_name:
+          type: string
+        client_name:
+          type: string
+        current_phase_name:
+          type: string
+          nullable: true
+        canonical_stage:
+          type: string
+        situation:
+          type: string
+          nullable: true
+        waiting_party:
+          type: string
+        blocker_note:
+          type: string
+        next_gate_name:
+          type: string
+          nullable: true
+      required:
+      - blocker_note
+      - canonical_stage
+      - client_name
+      - current_phase_name
+      - next_gate_name
+      - project_id
+      - project_name
+      - situation
+      - waiting_party
     DigitalEmployee:
       type: object
       properties:
@@ -10032,6 +10172,10 @@ components:
           type: boolean
         requires_gate:
           type: boolean
+        canonical_stage:
+          oneOf:
+          - $ref: '#/components/schemas/CanonicalStageEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         deliverables:
           type: array
           items:
@@ -11429,6 +11573,10 @@ components:
           type: boolean
         requires_gate:
           type: boolean
+        canonical_stage:
+          oneOf:
+          - $ref: '#/components/schemas/CanonicalStageEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         deliverables:
           type: array
           items:
@@ -12175,9 +12323,15 @@ components:
         requires_gate:
           type: boolean
           readOnly: true
+        canonical_stage:
+          type: string
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/ProjectPhaseStatusEnum'
+          readOnly: true
+        situation:
+          type: string
           readOnly: true
         started_at:
           type: string
@@ -12202,6 +12356,13 @@ components:
           readOnly: true
         checklist_waiver:
           type: string
+        waiting_party:
+          allOf:
+          - $ref: '#/components/schemas/WaitingPartyEnum'
+          readOnly: true
+        blocker_note:
+          type: string
+          readOnly: true
         deliverables:
           type: array
           items:
@@ -12496,6 +12657,100 @@ components:
       - id
       - name
       - phase
+    PhaseEvent:
+      type: object
+      description: Uma linha do histórico append-only da jornada (FDD 042). Só-leitura
+        — nunca se edita.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        project_phase:
+          type: integer
+          readOnly: true
+          nullable: true
+        phase_name:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PhaseEventKindEnum'
+          readOnly: true
+        from_status:
+          type: string
+          readOnly: true
+        to_status:
+          type: string
+          readOnly: true
+        gate_outcome:
+          type: string
+          readOnly: true
+        waiting_party:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        actor:
+          type: integer
+          readOnly: true
+          nullable: true
+        actor_name:
+          type: string
+          nullable: true
+          readOnly: true
+        source:
+          allOf:
+          - $ref: '#/components/schemas/PhaseEventSourceEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor
+      - actor_name
+      - created_at
+      - from_status
+      - gate_outcome
+      - id
+      - kind
+      - note
+      - phase_name
+      - project
+      - project_phase
+      - source
+      - to_status
+      - waiting_party
+    PhaseEventKindEnum:
+      enum:
+      - started
+      - completed
+      - reopened
+      - locked_by_redesign
+      - gate_recorded
+      - waiting_set
+      - waiting_cleared
+      type: string
+      description: |-
+        * `started` - Fase iniciada
+        * `completed` - Fase concluída
+        * `reopened` - Fase reaberta
+        * `locked_by_redesign` - Fase trancada por REDESIGN
+        * `gate_recorded` - Decision gate registrado
+        * `waiting_set` - Aguardando definido
+        * `waiting_cleared` - Aguardando resolvido
+    PhaseEventSourceEnum:
+      enum:
+      - user
+      - system
+      type: string
+      description: |-
+        * `user` - Ação de pessoa
+        * `system` - Automático
     PipelineStage:
       type: object
       properties:
@@ -12946,9 +13201,15 @@ components:
         requires_gate:
           type: boolean
           readOnly: true
+        canonical_stage:
+          type: string
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/ProjectPhaseStatusEnum'
+          readOnly: true
+        situation:
+          type: string
           readOnly: true
         started_at:
           type: string
@@ -12973,6 +13234,13 @@ components:
           readOnly: true
         checklist_waiver:
           type: string
+        waiting_party:
+          allOf:
+          - $ref: '#/components/schemas/WaitingPartyEnum'
+          readOnly: true
+        blocker_note:
+          type: string
+          readOnly: true
         deliverables:
           type: array
           items:
@@ -12984,6 +13252,8 @@ components:
             $ref: '#/components/schemas/ProjectChecklistItem'
           readOnly: true
       required:
+      - blocker_note
+      - canonical_stage
       - checklist_items
       - completed_at
       - deliverables
@@ -12996,8 +13266,10 @@ components:
       - phase_position
       - project
       - requires_gate
+      - situation
       - started_at
       - status
+      - waiting_party
     ProjectPhaseStatusEnum:
       enum:
       - locked
@@ -13020,6 +13292,43 @@ components:
         * `active` - Ativo
         * `on_hold` - Em espera
         * `completed` - Concluído
+    ProjectTimeline:
+      type: object
+      properties:
+        project:
+          type: integer
+        phases:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectPhase'
+        current_phase:
+          allOf:
+          - $ref: '#/components/schemas/ProjectPhase'
+          nullable: true
+        next_phase:
+          allOf:
+          - $ref: '#/components/schemas/TimelineNextPhase'
+          nullable: true
+        next_gate:
+          allOf:
+          - $ref: '#/components/schemas/TimelineNextGate'
+          nullable: true
+        blockers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelineBlocker'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhaseEvent'
+      required:
+      - blockers
+      - current_phase
+      - events
+      - next_gate
+      - next_phase
+      - phases
+      - project
     RecommendationsResponse:
       type: object
       properties:
@@ -13213,6 +13522,17 @@ components:
       - name
       - tier_display
       - updated_at
+    SetPhaseWaiting:
+      type: object
+      properties:
+        waiting_party:
+          oneOf:
+          - $ref: '#/components/schemas/WaitingPartyEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        note:
+          type: string
+      required:
+      - waiting_party
     SignatureRequest:
       type: object
       properties:
@@ -13359,6 +13679,39 @@ components:
         * `discovery_express` - Discovery Express
         * `discovery_assessment` - Discovery + Assessment
         * `implantacao` - Implantação
+    TimelineBlocker:
+      type: object
+      properties:
+        phase_name:
+          type: string
+        waiting_party:
+          type: string
+        blocker_note:
+          type: string
+      required:
+      - blocker_note
+      - phase_name
+      - waiting_party
+    TimelineNextGate:
+      type: object
+      properties:
+        phase_name:
+          type: string
+        canonical_stage:
+          type: string
+      required:
+      - canonical_stage
+      - phase_name
+    TimelineNextPhase:
+      type: object
+      properties:
+        phase_name:
+          type: string
+        canonical_stage:
+          type: string
+      required:
+      - canonical_stage
+      - phase_name
     Unarchived:
       type: object
       properties:
@@ -13426,6 +13779,20 @@ components:
       - id
       - name
       - slug
+    WaitingPartyEnum:
+      enum:
+      - biahflow
+      - client
+      - engineering
+      - external
+      - human_gate
+      type: string
+      description: |-
+        * `biahflow` - Biahflow
+        * `client` - Cliente
+        * `engineering` - Engenharia
+        * `external` - Dependência externa
+        * `human_gate` - Human Gate
     WorkItemStatusEnum:
       enum:
       - todo
