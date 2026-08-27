@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -444,6 +445,128 @@ class EngineeringHandoff(TimestampedModel):
             errors["source_task"] = "A tarefa de origem deve pertencer ao mesmo projeto."
         if errors:
             raise ValidationError(errors)
+
+
+class GithubProjection(models.Model):
+    """O estado de engenharia do GitHub **projetado** no Pulse (FDD 041, ADR 0046).
+
+    O GitHub continua sendo a fonte da verdade de Issue, PR e CI (ADR 0040): aqui só mora a
+    última observação, com **quando** e **por onde** ela foi feita. Nada nesta tabela escreve de
+    volta no GitHub, e nada aqui promove `merge` a `DONE`.
+
+    **Pendura no `EngineeringHandoff`, não no `Project`**, e é isso que faz o painel ser uma
+    lista: `Project.engineering_handoffs` é 0..N, e eleger "a" referência de um projeto seria
+    inventar uma escolha que o modelo de dados não tem.
+
+    **Não estende `TimestampedModel` de propósito.** Projeção não é registro de negócio
+    arquivável: ela não tem `archive()`, não entra no `ArchiveModelViewSet` e não aparece com
+    `?archived=1`. A base abstrata sem `archived_at` que a ADR 0021 considerou (`TimestampedOnly
+    Model`) continua não existindo, então os dois carimbos ficam declarados aqui.
+    """
+
+    class IssueState(models.TextChoices):
+        OPEN = "open", "Aberta"
+        CLOSED = "closed", "Fechada"
+
+    class PrState(models.TextChoices):
+        NONE = "none", "Sem PR"
+        OPEN = "open", "Aberto"
+        MERGED = "merged", "Merged"
+        CLOSED = "closed", "Fechado sem merge"
+
+    class CiState(models.TextChoices):
+        NONE = "none", "Sem check"
+        PENDING = "pending", "Rodando"
+        SUCCESS = "success", "Verde"
+        FAILURE = "failure", "Vermelho"
+
+    class ObservedVia(models.TextChoices):
+        WEBHOOK = "webhook", "Webhook"
+        RECONCILIATION = "reconciliation", "Reconciliação"
+
+    class ErrorKind(models.TextChoices):
+        UNAVAILABLE = "unavailable", "GitHub indisponível"
+        FORBIDDEN = "forbidden", "Permissão negada"
+        MISSING = "missing", "Referência ausente"
+
+    handoff = models.OneToOneField(
+        EngineeringHandoff, on_delete=models.CASCADE, related_name="projection"
+    )
+    issue_state = models.CharField(
+        max_length=16, choices=IssueState.choices, default=IssueState.OPEN
+    )
+    # O título é **do GitHub**, e por isso vive aqui e não em `EngineeringHandoff.title`: os dois
+    # podem divergir, e a linha do painel mostra o de lá ao lado da identidade (DAP GH-41 r1).
+    issue_title = models.CharField(max_length=255, blank=True, default="")
+    pr_number = models.PositiveIntegerField(null=True, blank=True)
+    pr_state = models.CharField(max_length=16, choices=PrState.choices, default=PrState.NONE)
+    head_sha = models.CharField(max_length=40, blank=True, default="")
+    ci_state = models.CharField(max_length=16, choices=CiState.choices, default=CiState.NONE)
+    # Sem default: quem grava a projeção sempre sabe quando observou, e um `timezone.now` de
+    # cortesia transformaria "esqueci de carimbar" em "observado agora" — a única mentira que
+    # esta tabela não pode contar.
+    observed_at = models.DateTimeField()
+    observed_via = models.CharField(
+        max_length=16, choices=ObservedVia.choices, default=ObservedVia.WEBHOOK
+    )
+    # Erro **nunca** apaga a projeção anterior: os campos acima continuam valendo como último
+    # estado conhecido, e estes dois é que dizem por que ele parou de ser confirmado.
+    last_error_kind = models.CharField(
+        max_length=16, choices=ErrorKind.choices, blank=True, default=""
+    )
+    last_error_at = models.DateTimeField(null=True, blank=True)
+    # O carimbo **do GitHub**, e não o nosso: é ele que decide ordem entre entregas (uma
+    # reentrega atrasada carrega um `updated_at` velho) e é ele que ordena a lista do painel.
+    source_updated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-source_updated_at", "-observed_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.reference
+
+    @property
+    def reference(self) -> str:
+        """`owner/repo#numero`, a identidade canônica da referência."""
+        repository = (self.handoff.repository or "").strip()
+        number = self.handoff.github_issue_number
+        if not repository or not number:
+            return repository or str(number or "")
+        return f"{repository}#{number}"
+
+    def age_seconds(self, now: datetime | None = None) -> int:
+        return max(0, int(((now or timezone.now()) - self.observed_at).total_seconds()))
+
+    def is_stale(self, now: datetime | None = None) -> bool:
+        """**O backend decide o que é obsoleto.**
+
+        Deixar o limiar para o frontend produziria duas definições de "velho" — a da tela e a da
+        reconciliação — divergindo em silêncio na primeira vez que alguém mexesse numa delas.
+        """
+        limiar = int(getattr(settings, "GITHUB_PROJECTION_STALE_AFTER_SECONDS", 0) or 0)
+        return limiar > 0 and self.age_seconds(now) > limiar
+
+
+class GithubDelivery(models.Model):
+    """A identidade de **entrega** já processada (`X-GitHub-Delivery`), e nada mais.
+
+    Não é outbox e não é fila (ADR 0037 fica como contexto de idempotência, não como fundação
+    construída aqui): é a chave que torna a reentrega um no-op de verdade. Os webhooks que já
+    existiam deduplicavam por *igualdade de estado*, o que basta para reentrega idêntica e não
+    basta para reentrega fora de ordem nem para replay de uma entrega capturada.
+    """
+
+    delivery_id = models.CharField(max_length=128, unique=True)
+    event = models.CharField(max_length=64)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.event}:{self.delivery_id}"
 
 
 class Document(TimestampedModel):

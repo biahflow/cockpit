@@ -27,6 +27,8 @@ from .views import (
     EngineeringHandoffViewSet,
     EsignWebhookView,
     EvidenciaViewSet,
+    GithubProjectionViewSet,
+    GithubWebhookView,
     HealthView,
     InvitationView,
     InvoiceViewSet,
@@ -92,6 +94,11 @@ router.register("decisoes", DecisaoViewSet)
 # forma de distinguir duas coisas diferentes.
 router.register("riscos", RiscoViewSet)
 router.register("engineering-handoffs", EngineeringHandoffViewSet)
+# A projeção do estado de engenharia (FDD 041) é **do handoff**, não do projeto, e é por
+# isso que a rota é uma coleção própria com `?project=`: um projeto tem 0..N referências, e
+# pendurá-la em `/projects/{id}/` obrigaria a eleger "a" referência — escolha que o modelo
+# de dados não tem (DAP GH-41 r1, decisão 4).
+router.register("github-projections", GithubProjectionViewSet)
 router.register("satisfacoes", SatisfacaoViewSet)
 # O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as três
 # rotas ficam fora de `/projects/`. Etapa e evidência pendem do processo, não do projeto.
@@ -125,6 +132,7 @@ urlpatterns = [
     path("tasks/sync/", TaskSyncIntakeView.as_view(), name="task-sync"),
     path("esign/webhook/", EsignWebhookView.as_view(), name="esign-webhook"),
     path("payments/webhook/", PaymentsWebhookView.as_view(), name="payments-webhook"),
+    path("github/webhook/", GithubWebhookView.as_view(), name="github-webhook"),
     path("", include(router.urls)),
     path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path("analytics/", AnalyticsView.as_view(), name="analytics"),

@@ -4,6 +4,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 import { api, listUsers } from "../api";
 import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
+import { EngineeringPanel } from "../components/EngineeringPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
@@ -468,6 +469,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
     {health && <div className="flex items-center gap-2 text-sm"><span className="font-medium text-slate-600">Saúde do projeto:</span><HealthBadge level={health.level} score={health.score} />{health.signals.length === 0 && <span className="text-slate-600">sem sinais de alerta</span>}</div>}
 
     {project?.ai_scored_at && <AiScorePanel project={project} canManage={canManageJourney} onTogglePublish={next => void toggleAiScorePublish(next)} />}
+
+    {/* Depois da Jornada e do AI Score, antes de "Equipe do projeto" (DAP GH-41 r1, decisão 8): a
+        faixa de "como a entrega está indo" vem antes do elenco e dos catálogos. O painel carrega
+        sozinho porque o recurso é fechado para Vendas — pendurá-lo no `load` da página faria o
+        403 dela derrubar as outras onze chamadas. */}
+    <EngineeringPanel project={Number(id)} />
 
     <section className="panel sm:p-6">
       <div className="flex items-center gap-3"><span className="metric-icon"><UsersRound className="size-4" /></span><div><h2 className="font-semibold text-ink">Equipe do projeto</h2><p className="text-sm text-slate-600">Quem participa é quem enxerga este projeto e tudo o que pende dele.</p></div></div>

@@ -51,6 +51,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 037 | Satisfação do cliente e camada 5 (satisfação) | Entregue | 1 | `docs/fdd/037-a-satisfacao-que-ninguem-registrava.md` |
 | FDD 038 | Camada 5 (entrega) e o leitor do sinal da IA | Entregue | 1 | `docs/fdd/038-os-dois-sinais-que-ninguem-lia.md` |
 | FDD 039 | Discovery estruturado (P-S-D-T-E-R, evidência e custo do estado atual) | Entregue (recorte) | 1 | `docs/fdd/039-o-achado-que-nao-sobrevivia-a-reuniao.md` |
+| FDD 041 | Estado de engenharia do GitHub projetado no Pulse | Entregue | 1 | `docs/fdd/041-estado-de-engenharia-do-github-projetado-no-pulse.md` |
 
 ## Base atual — entregue
 

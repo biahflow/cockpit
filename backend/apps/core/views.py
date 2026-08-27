@@ -45,6 +45,7 @@ from . import (
     enrichment,
     esign,
     flags,
+    github_projection,
     health,
     invoices,
     journey,
@@ -83,6 +84,7 @@ from .models import (
     Document,
     EngineeringHandoff,
     Evidencia,
+    GithubProjection,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -131,6 +133,7 @@ from .serializers import (
     DocumentSerializer,
     EngineeringHandoffSerializer,
     EvidenciaSerializer,
+    GithubProjectionSerializer,
     InvitationSerializer,
     InvoiceSerializer,
     JourneyPhaseSerializer,
@@ -2253,6 +2256,95 @@ class EngineeringHandoffViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
         engineering_provisioning.provision(handoff)
         handoff.refresh_from_db()
         return Response(self.get_serializer(handoff).data)
+
+
+class GithubProjectionViewSet(ProjectScopedMixin, viewsets.ReadOnlyModelViewSet):
+    """Estado de engenharia do GitHub projetado no Pulse (FDD 041, ADR 0046).
+
+    **Somente leitura por decisão, não por falta de tempo.** A Issue #41 diz que edição normal do
+    Pulse não reescreve estado de engenharia sem um contrato de comando separadamente autorizado;
+    reabrir Issue, re-disparar CI e reprovisionar estão desenhados no DAP GH-41 r1 e **não** foram
+    construídos. `ReadOnlyModelViewSet` e não `ModelViewSet` é onde essa decisão vira estrutura.
+
+    Fora do `ArchiveModelViewSet` de propósito: projeção não é registro de negócio arquivável.
+    Quem arquiva é o handoff, e a projeção do handoff arquivado some junto — daí o recorte da
+    queryset, e não um `archived_at` próprio.
+    """
+
+    resource = "github_projection"
+    project_path = "handoff__project"
+    queryset = GithubProjection.objects.select_related("handoff", "handoff__project").filter(
+        handoff__archived_at__isnull=True
+    )
+    serializer_class = GithubProjectionSerializer
+    permission_classes = [RolePermission]
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        # `?project=` e não `?handoff__project=`: o painel pergunta pelo projeto, e o caminho
+        # até ele é detalhe de modelagem que não pertence à URL. O `QueryParamFilterMixin` filtra
+        # pelo nome do próprio campo, que aqui seria justamente esse caminho.
+        queryset = super().get_queryset()
+        project = self.request.query_params.get("project")
+        if project and project.isdigit():
+            queryset = queryset.filter(handoff__project=project)
+        return queryset
+
+
+class GithubWebhookView(APIView):
+    """Entrada do GitHub (FDD 041). Autentica pelo HMAC do corpo cru; nada sai daqui para lá.
+
+    Três diferenças em relação às gêmeas de e-sign e pagamento, e nenhuma é estilo:
+
+    - **Falha fechada sem segredo.** Sem `GITHUB_WEBHOOK_SECRET`, o endpoint recusa em vez de
+      aceitar o que não consegue verificar (ADR 0018).
+    - **Idempotência por identidade de entrega.** As outras duas deduplicam por igualdade de
+      estado, o que resolve a reentrega idêntica e não resolve nem a reentrega atrasada nem o
+      replay de uma entrega capturada. Aqui a chave é `X-GitHub-Delivery` (ADR 0037).
+    - **Evento desconhecido é 200, sempre.** Vale para as três, e aqui a consequência é maior: o
+      GitHub desabilita o hook depois de uma sequência de respostas ruins.
+    """
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "github_webhook"
+
+    @extend_schema(
+        request=None,
+        responses={200: inline_serializer("GithubWebhookAck", {"detail": serializers.CharField()})},
+    )
+    def post(self, request: Request) -> Response:
+        body = request.body  # o HMAC é sobre os bytes originais, então nada de request.data
+        try:
+            valida = github_projection.verify_signature(body, request.headers)
+        except github_projection.NotConfigured:
+            logger.warning("webhook do GitHub recusado: segredo não configurado")
+            return Response(
+                {"detail": "Webhook do GitHub não configurado."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if not valida:
+            logger.warning("webhook do GitHub com assinatura inválida")
+            return Response({"detail": "Assinatura inválida."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        event = request.headers.get(github_projection.EVENT_HEADER, "").strip().lower()
+        delivery_id = request.headers.get(github_projection.DELIVERY_HEADER, "").strip()
+        if not delivery_id:
+            # 400 e não 200: a assinatura já provou quem é, então isto é um chamador autenticado
+            # mandando uma requisição malformada — e sem identidade de entrega não há como a
+            # dedupe existir. O GitHub sempre manda o header.
+            return Response(
+                {"detail": "Entrega sem identidade."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            payload = json.loads(body or b"{}")
+        except ValueError:
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(payload, dict):
+            return Response({"detail": "Corpo inválido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        resultado = github_projection.receive(event, delivery_id, payload)
+        return Response({"detail": resultado.detail})
 
 
 class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):

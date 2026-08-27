@@ -9,6 +9,7 @@ from typing import Any, cast
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.uploadedfile import UploadedFile
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -32,6 +33,7 @@ from .models import (
     Document,
     EngineeringHandoff,
     Evidencia,
+    GithubProjection,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -628,6 +630,53 @@ class EngineeringHandoffSerializer(serializers.ModelSerializer[EngineeringHandof
                 exc.message_dict if hasattr(exc, "message_dict") else exc.messages
             ) from exc
         return attrs
+
+
+class GithubProjectionSerializer(serializers.ModelSerializer[GithubProjection]):
+    """A projeção de engenharia como o painel a lê (FDD 041). Somente leitura, inteira.
+
+    **`is_stale` e as idades vêm daqui, e não da tela.** O limiar de obsolescência mora em
+    `settings.GITHUB_PROJECTION_STALE_AFTER_SECONDS`; deixar o cálculo para o frontend criaria uma
+    segunda definição de "velho" — a da tela e a da reconciliação — divergindo em silêncio na
+    primeira vez que alguém mexesse numa delas (DAP GH-41 r1, decisão 1).
+    """
+
+    project = serializers.IntegerField(source="handoff.project_id", read_only=True)
+    repository = serializers.CharField(source="handoff.repository", read_only=True)
+    issue_number = serializers.IntegerField(source="handoff.github_issue_number", read_only=True)
+    issue_url = serializers.CharField(source="handoff.github_issue_url", read_only=True)
+    reference = serializers.CharField(read_only=True)
+    is_stale = serializers.SerializerMethodField()
+    age_seconds = serializers.SerializerMethodField()
+    last_error_age_seconds = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GithubProjection
+        fields = [
+            "id", "handoff", "project", "repository", "issue_number", "issue_url", "reference",
+            "issue_state", "issue_title", "pr_number", "pr_state", "head_sha", "ci_state",
+            "observed_at", "observed_via", "age_seconds", "is_stale",
+            "last_error_kind", "last_error_at", "last_error_age_seconds",
+            "source_updated_at", "created_at", "updated_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_stale(self, obj: GithubProjection) -> bool:
+        return obj.is_stale()
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_age_seconds(self, obj: GithubProjection) -> int:
+        return obj.age_seconds()
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_last_error_age_seconds(self, obj: GithubProjection) -> int | None:
+        """A idade da **última tentativa de contato**, que é outra pergunta que a idade da
+        observação: no estado "GitHub indisponível" o painel diz as duas ("observado há 26 min ·
+        última tentativa há 1 min"), e é a segunda que informa se alguém precisa agir."""
+        if obj.last_error_at is None:
+            return None
+        return max(0, int((timezone.now() - obj.last_error_at).total_seconds()))
 
 
 class SignatureRequestSerializer(serializers.ModelSerializer[SignatureRequest]):

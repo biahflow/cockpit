@@ -47,6 +47,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Enriquecimento de lead (CNPJ) | `ENRICHMENT_ENABLED` (default `false`), `ENRICHMENT_PROVIDER` (default `brasilapi`), `ENRICHMENT_API_BASE`, `ENRICHMENT_TIMEOUT_SECONDS` | **nenhuma** — cadastro público | Pronto (desligado). Desligado não por custo (BrasilAPI é gratuita) e sim porque manda o CNPJ do formulário público a um terceiro. Alimenta o `ai_fit` e preenche a vertical na conversão; falha do fornecedor **nunca** bloqueia o lead |
 | Sincronia de tarefas (Linear/GitHub) | `TASKSYNC_ENABLED`, `TASKSYNC_TOKEN` + credenciais do fornecedor | conta Linear/GitHub | Pronto (desligado) |
 | Provisionamento GitHub de engenharia | `GITHUB_PROVISIONING_ENABLED` (default `false`), `GITHUB_TOKEN`, `GITHUB_REPO` | conta GitHub | Pronto (desligado) — distinto da sincronia FDD 004: cria a Issue-contrato do EngineeringOS, não vincula uma `Task` |
+| Estado de engenharia do GitHub projetado no Pulse | `GITHUB_WEBHOOK_SECRET`, `GITHUB_TOKEN`, `GITHUB_PROJECTION_STALE_AFTER_SECONDS` (1800), `SCHEDULER_GITHUB_RECONCILE_EVERY_MINUTES` (10) | conta GitHub + webhook cadastrado no repositório | Pronto (desligado) — **falha fechada**: sem `GITHUB_WEBHOOK_SECRET` o endpoint `POST /api/v1/github/webhook/` recusa a entrega em vez de aceitar o que não consegue verificar, e sem `GITHUB_TOKEN` a reconciliação não roda. Somente leitura: nada é escrito no GitHub (FDD 041, ADR 0046) |
 | Sondas `/healthz` e `/readyz`, request-id e log estruturado | — | — | **Sempre ligado** |
 | Rastreamento de erro (Sentry) | `SENTRY_DSN` (API) e `VITE_SENTRY_DSN` (SPA, build arg) | conta Sentry | Pronto (desligado) |
 | Backup do banco e dos documentos | — (sidecar do compose de produção) | — | **Sempre ligado** em produção ✅ — agendado por `BACKUP_CRON` |
@@ -251,6 +252,7 @@ protegem as portas específicas. Todos vêm do `.env` — mexa só se um limite 
 | `esign_webhook` | `ESIGN_WEBHOOK_RATE` | `120/hour` | webhook do fornecedor de assinatura |
 | `knowledge_freshness` (job) | `SCHEDULER_KNOWLEDGE_AT` | `08:00` | avisa o dono da área sobre o que venceu; **não** sai com erro, porque dívida editorial não é incidente |
 | `payments_webhook` | `PAYMENTS_WEBHOOK_RATE` | `600/hour` | webhook do gateway de pagamento — cinco vezes o teto do e-sign de propósito: o Stripe trata 429 como falha e faz backoff por dias, e cada pagamento chega em **dois** eventos |
+| `github_webhook` | `GITHUB_WEBHOOK_RATE` | `600/hour` | webhook do GitHub — mesmo teto do pagamento, por outro motivo: um PR ativo rende `issues`, `pull_request`, `check_suite`, `check_run` e `status` a cada push, e o GitHub **desabilita o hook** depois de uma sequência de respostas ruins |
 
 Dois avisos para produção, agora com trava:
 

@@ -111,6 +111,19 @@
   --color-info-50: #eff6ff;
 
   --font-sans: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  /* **A monoespaçada entra no contrato** (DAP GH-41 r1, aprovado 27/08/2026) — o único valor
+     visual novo daquele pacote. SHA e `owner/repo#numero` são identificadores que se comparam
+     caractere a caractere, e proporcional confunde `1`/`l` e `0`/`O`.
+
+     Ela já existia de fato e não de direito: o Tailwind v4 traz um `--font-mono` padrão, e
+     `ErrorBoundary.tsx` usava o utilitário `font-mono` para o código da ocorrência — funcionava
+     porque o framework tinha decidido, não porque o Pulse tivesse. Declarar aqui é a diferença
+     entre herdar um default e escolher um valor; e é o que dá **dois** consumidores ao token no
+     mesmo dia, sem tocar naquele arquivo: o `.type-code` deste contrato e o `font-mono` de lá.
+
+     Sem webfont e de propósito: a Inter já custa um download, e a mono aparece em sete
+     caracteres de SHA. A pilha do sistema resolve isso sem byte nenhum a mais. */
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --text-display: 2rem;
   --text-display--line-height: 2.375rem;
   --text-metric: 1.75rem;
@@ -231,6 +244,14 @@
   .type-body { font-size:var(--text-body); line-height:var(--text-body--line-height); font-weight:400; }
   .type-label { font-size:var(--text-label); line-height:var(--text-label--line-height); font-weight:600; }
   .type-meta { font-size:var(--text-meta); line-height:var(--text-meta--line-height); font-weight:500; }
+  /* O papel de **código**: identificador que se lê caractere a caractere (DAP GH-41 r1).
+     Declara a **família** e só ela, ao contrário dos quatro papéis acima — o corpo vem do papel
+     ao lado, porque o mesmo identificador aparece em dois tamanhos na mesma linha do painel de
+     Engenharia: a referência no corpo de texto e o SHA no de meta. Cravar um tamanho aqui
+     obrigaria a um segundo `.type-code--*` no dia seguinte.
+     Ligadura desligada: `!=` e `->` viram glifo único em várias monos, e num SHA isso muda o
+     número de caracteres que a pessoa vê. */
+  .type-code { font-family: var(--font-mono); font-variant-ligatures: none; }
 
   .metric-card {
     @apply grid gap-2 rounded-xl border border-line bg-surface p-4;

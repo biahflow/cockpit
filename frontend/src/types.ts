@@ -243,3 +243,26 @@ export type KnowledgeSummary = Record<KnowledgeStatus, number>;
 // A citação que o agente devolve (ADR 0023). `stale` marca fonte vencida — a citação sem esse aviso
 // legitimaria material velho, que é o modo de falha que a FDD 029 chama de pior que não ter KB.
 export type AgentSource = { ref: string; piece: number; title: string; section: string; path: string; stale: boolean };
+
+// Estado de engenharia do GitHub projetado no Pulse (FDD 041, ADR 0046). Somente leitura: a tela
+// não escreve nada de volta, e a Issue #41 reserva comando sobre o GitHub para um contrato próprio.
+//
+// `is_stale`, `age_seconds` e `last_error_age_seconds` **vêm calculados do backend** e a tela não
+// os recalcula. O limiar de obsolescência mora em `GITHUB_PROJECTION_STALE_AFTER_SECONDS`; uma
+// segunda definição de "velho" aqui divergiria da primeira em silêncio (DAP GH-41 r1).
+export type GithubIssueState = "open" | "closed";
+export type GithubPrState = "none" | "open" | "merged" | "closed";
+export type GithubCiState = "none" | "pending" | "success" | "failure";
+export type GithubObservedVia = "webhook" | "reconciliation";
+export type GithubErrorKind = "" | "unavailable" | "forbidden" | "missing";
+export type GithubProjection = {
+  id: number; handoff: number; project: number;
+  repository: string; issue_number: number | null; issue_url: string; reference: string;
+  issue_state: GithubIssueState; issue_title: string;
+  pr_number: number | null; pr_state: GithubPrState;
+  head_sha: string; ci_state: GithubCiState;
+  observed_at: string; observed_via: GithubObservedVia;
+  age_seconds: number; is_stale: boolean;
+  last_error_kind: GithubErrorKind; last_error_at: string | null; last_error_age_seconds: number | null;
+  source_updated_at: string | null; created_at: string; updated_at: string;
+};

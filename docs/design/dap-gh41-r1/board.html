@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>DAP GH-41 r1 — Estado de engenharia do GitHub no detalhe do projeto</title>
+<style>
+  :root{
+    --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+    --canvas:#fafaf9; --surface:#fff; --subtle:#f5f5f4;
+    --b50:#fdf1ec; --b100:#fadfd4; --b200:#dd8b62; --b500:#bd4a30; --b600:#a8412a; --b700:#9c3c26; --b900:#5c2317;
+    --danger:#b91c1c; --danger50:#fef2f2; --success:#047857; --success50:#ecfdf5;
+    --warning:#b45309; --warning50:#fffbeb; --info:#1d4ed8; --info50:#eff6ff;
+    --slate100:#f1f5f9; --slate600:#475569;
+    --shadow-card:0 1px 2px rgba(18,17,15,.06);
+    --shadow-raised:0 8px 24px -12px rgba(18,17,15,.22);
+  }
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--canvas);color:var(--ink);margin:0;padding:48px 32px 96px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:32px;line-height:38px;font-weight:650;letter-spacing:-.03em;margin:0 0 8px}
+  .sub{color:var(--muted);font-size:14px;line-height:22px;margin:0 0 40px}
+  h2{font-size:16px;line-height:24px;font-weight:650;margin:56px 0 6px;letter-spacing:-.02em}
+  h2:first-of-type{margin-top:40px}
+  .lead{color:var(--muted);font-size:14px;line-height:22px;margin:0 0 20px;max-width:74ch}
+  .eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--b500);margin:0 0 6px}
+  code{background:var(--subtle);padding:2px 5px;border-radius:4px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:0 0 8px}
+  td,th{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--subtle);font-weight:650}
+  .sw{display:inline-block;width:14px;height:14px;border:1px solid var(--line-strong);border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:start}
+  .cap{font-size:11px;line-height:16px;font-weight:500;color:var(--muted);margin:8px 0 0}
+  .cap strong{color:var(--ink)}
+  .tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:3px 7px;border-radius:999px}
+  .tag--new{background:var(--b50);color:var(--b700)}
+  .tag--res{background:var(--warning50);color:var(--warning)}
+  .tag--own{background:var(--subtle);color:var(--muted)}
+  .frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--canvas);box-shadow:var(--shadow-card)}
+  .frame-lab{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);background:var(--surface);padding:9px 14px;font-size:11px;line-height:16px;font-weight:700;text-transform:uppercase;letter-spacing:.11em;color:var(--muted)}
+  .frame-lab b{color:var(--ink);font-weight:800}
+  .frame-body{padding:20px}
+  ul.notes{font-size:13px;line-height:21px;color:var(--muted);padding-left:20px;max-width:80ch}
+  ul.notes li{margin-bottom:7px}
+  ul.notes strong{color:var(--ink)}
+
+  /* ---------- primitivas do produto, transcritas do `index.css` ---------- */
+  .pnl{border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-card)}
+  .pnl-pad{padding:20px 24px}
+  .pnl-head{display:flex;align-items:flex-start;gap:12px;padding:20px 24px}
+  .pnl-head h3{margin:0;font-size:16px;line-height:24px;font-weight:650;letter-spacing:-.02em}
+  .pnl-head p{margin:2px 0 0;font-size:14px;line-height:22px;color:var(--muted)}
+  .micon{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:8px;background:var(--b50);color:var(--b500)}
+  .rows{border-top:1px solid var(--line)}
+  .row{border-bottom:1px solid var(--line);padding:16px 24px}
+  .row:last-child{border-bottom:0}
+  .row-id{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px}
+  .reflink{font-size:14px;line-height:22px;font-weight:600;color:var(--b600);text-decoration:underline;text-underline-offset:2px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .reftitle{font-size:14px;line-height:22px;color:var(--ink);min-width:0}
+  .badges{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+  .state{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:11px;line-height:16px;font-weight:600}
+  .state--0{background:var(--info50);color:var(--info)}
+  .state--1{background:var(--success50);color:var(--success)}
+  .state--2{background:var(--warning50);color:var(--warning)}
+  .state--3{background:var(--danger50);color:var(--danger)}
+  .state--off{background:var(--slate100);color:var(--slate600)}
+  .sha{display:inline-flex;align-items:center;gap:6px;border-radius:4px;background:var(--subtle);padding:3px 7px;font-size:12px;line-height:16px;font-weight:500;color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .sha--off{color:var(--slate600)}
+  .prov{margin:10px 0 0;font-size:11px;line-height:16px;font-weight:500;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .provnote{margin:8px 0 0;font-size:11px;line-height:16px;font-weight:500;color:var(--muted);max-width:62ch}
+  .alert{border:1px solid var(--danger50);border-radius:12px;background:var(--danger50);color:var(--danger);padding:14px;font-size:14px;line-height:22px;margin:0 24px 16px}
+  .alert strong{font-weight:650}
+  .alert em{font-style:normal;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .empty{margin:0 24px 24px;border:1px dashed var(--line);border-radius:12px;background:color-mix(in srgb,var(--slate100) 60%,#fff);padding:24px 16px;text-align:center;font-size:14px;line-height:22px;color:var(--muted)}
+  .skel{border-radius:8px;background:var(--subtle)}
+
+  /* ---------- a faixa reservada, desenhada e não construída ---------- */
+  .reserved{position:relative;border:1px dashed var(--warning);border-radius:12px;padding:16px 18px;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warning50) 85%,#fff) 0 10px,#fff 10px 20px)}
+  .reserved .ghost{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;padding:8px 14px;font-size:14px;line-height:22px;font-weight:600;color:var(--line-strong);margin:0 8px 8px 0}
+</style>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package · GH-41 · revisão 1</p>
+<h1>Estado de engenharia do GitHub no detalhe do projeto</h1>
+<p class="sub">Renderização auto-contida — abre sem build, sem toolchain e sem rede. Congelado para revisão em 27/08/2026.<br>
+Este artefato é <strong>evidência para um gate humano</strong>. Não é implementação e não deve ser copiado para dentro do código de produção.
+Status: <strong>Awaiting approval</strong> — nada aqui está aprovado.</p>
+
+<h2>Direção</h2>
+<p class="lead"><strong>O Pulse projeta; o GitHub decide.</strong> A ADR 0040 dá ao GitHub a verdade de Issue, PR e CI, e ao Pulse a
+operação de negócio. A Issue #41 pede que esse estado apareça no projeto do Pulse <em>com proveniência</em> e que referência velha ou
+indisponível seja <em>visivelmente diferente</em> de estado confirmado. Este pacote desenha um painel novo — <strong>Engenharia</strong> —
+no detalhe do projeto (<code>/projetos/:id</code>), somente leitura, na mesma forma dos painéis que já vivem ali.</p>
+<p class="lead">A superfície é <strong>somente-leitura por decisão, não por falta de tempo</strong>: a própria Issue #41 diz que edição normal
+do Pulse não reescreve estado de engenharia sem um contrato de comando separadamente autorizado. Comando sobre o GitHub aparece neste quadro
+como <span class="tag tag--res">reservado</span> e não é construído.</p>
+
+<h2>A regra que este pacote existe para decidir</h2>
+<p class="lead"><strong>Estado obsoleto nunca se apresenta com a cor do estado observado.</strong> Quando a projeção envelhece, todo selo cai
+para o neutro e a linha de proveniência vira o dado principal — “observado há 3 h”, e não “CI verde”. Um selo verde que na verdade é de
+anteontem é pior do que nenhum selo: ele afirma com confiança algo que o Pulse não sabe mais. Os dois quadros abaixo são
+<strong>o mesmo projeto, com os mesmos dados</strong>, separados apenas pela idade da observação.</p>
+
+<h2>1 · Estado 1 e Estado 2, lado a lado — fresco e obsoleto</h2>
+<div class="grid2">
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 1</b> · Sincronizado</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head">
+            <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <div><h3>Engenharia</h3><p>Estado observado no GitHub. O Pulse projeta; o GitHub decide.</p></div>
+          </div>
+          <div class="rows">
+            <div class="row">
+              <div class="row-id"><span class="reflink">biahflow/pulse#41</span><span class="reftitle">Projetar estado de entrega do GitHub no Pulse</span></div>
+              <div class="badges">
+                <span class="state state--0">Issue aberta</span>
+                <span class="state state--0">PR aberto</span>
+                <span class="sha">a1b2c3d</span>
+                <span class="state state--1">CI verde</span>
+              </div>
+              <p class="prov">Observado há 2 min · webhook</p>
+            </div>
+            <div class="row">
+              <div class="row-id"><span class="reflink">biahflow/pulse#37</span><span class="reftitle">Régua de cobrança sem estragar a relação</span></div>
+              <div class="badges">
+                <span class="state state--1">Issue fechada</span>
+                <span class="state state--1">PR merged</span>
+                <span class="sha">9f0e7c2</span>
+                <span class="state state--1">CI verde</span>
+              </div>
+              <p class="prov">Observado há 14 min · webhook</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>Tudo fresco.</strong> Cada selo carrega a cor do estado real; a proveniência é meta discreta, porque não é ela
+      que está sendo dita. O SHA sai em <strong>tipografia monoespaçada</strong> — sete caracteres, que é como o GitHub o abrevia.</p>
+  </div>
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 2</b> · Obsoleto — o mesmo projeto</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head">
+            <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <div><h3>Engenharia</h3><p>Estado observado no GitHub. O Pulse projeta; o GitHub decide.</p></div>
+          </div>
+          <div class="rows">
+            <div class="row">
+              <div class="row-id"><span class="reflink">biahflow/pulse#41</span><span class="reftitle">Projetar estado de entrega do GitHub no Pulse</span></div>
+              <div class="badges">
+                <span class="state state--off">Issue aberta</span>
+                <span class="state state--off">PR aberto</span>
+                <span class="sha sha--off">a1b2c3d</span>
+                <span class="state state--off">CI verde</span>
+              </div>
+              <p class="prov"><span class="state state--2"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Observado há 3 h · reconciliação</span></p>
+              <p class="provnote">Este é o <strong>último estado conhecido</strong>, não o estado atual.</p>
+            </div>
+            <div class="row">
+              <div class="row-id"><span class="reflink">biahflow/pulse#37</span><span class="reftitle">Régua de cobrança sem estragar a relação</span></div>
+              <div class="badges">
+                <span class="state state--off">Issue fechada</span>
+                <span class="state state--off">PR merged</span>
+                <span class="sha sha--off">9f0e7c2</span>
+                <span class="state state--off">CI verde</span>
+              </div>
+              <p class="prov"><span class="state state--2"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Observado há 3 h · reconciliação</span></p>
+              <p class="provnote">Este é o <strong>último estado conhecido</strong>, não o estado atual.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>Mesmos dados, outra afirmação.</strong> Nada foi escondido e nada foi inventado: o texto dos selos é o mesmo,
+      e some só a <em>confiança</em> que a cor emprestava. O âmbar <strong>troca de lugar</strong> — sai dos selos e vai para a
+      proveniência, que passa a ser o dado principal. Nenhum matiz novo entra: <code>.state--off</code> e <code>.state--2</code> já existem.</p>
+  </div>
+</div>
+<p class="cap" style="margin-top:14px;max-width:80ch"><strong>O que fica em aberto e o humano decide:</strong> o limiar de obsolescência.
+  Este quadro desenha o comportamento, não o número de minutos. Ver “Questões em aberto”.</p>
+
+<h2>2 · Anatomia de uma referência</h2>
+<div class="frame">
+  <div class="frame-lab">Uma linha, quatro obrigações</div>
+  <div class="frame-body">
+    <div class="grid2" style="gap:28px">
+      <div class="pnl">
+        <div class="rows" style="border-top:0">
+          <div class="row">
+            <div class="row-id"><span class="reflink">biahflow/pulse#41</span><span class="reftitle">Projetar estado de entrega do GitHub no Pulse</span></div>
+            <div class="badges">
+              <span class="state state--0">Issue aberta</span>
+              <span class="state state--0">PR aberto</span>
+              <span class="sha">a1b2c3d</span>
+              <span class="state state--1">CI verde</span>
+            </div>
+            <p class="prov">Observado há 2 min · webhook</p>
+          </div>
+        </div>
+      </div>
+      <ul class="notes" style="margin:0">
+        <li><strong>Identidade.</strong> <code>owner/repo#numero</code> é o rótulo, e é ele que vira o link canônico para a Issue no
+          GitHub. Ao lado, o título da Issue — que é do GitHub e não do Pulse, e por isso pode divergir do nome do item de negócio.</li>
+        <li><strong>Estado.</strong> Issue, PR, SHA de <em>head</em> e CI, nesta ordem: o que o trabalho é, onde ele está, qual revisão
+          exatamente, e se aquela revisão passou.</li>
+        <li><strong>SHA em sete caracteres e em monoespaçada.</strong> <span class="tag tag--new">novo no contrato</span> — o Pulse
+          não tem hoje papel tipográfico de código. Ver a tabela de proveniência.</li>
+        <li><strong>Proveniência, sempre.</strong> Quando e por onde. <em>Nunca</em> se mostra estado sem dizer isso — a linha não é
+          opcional em nenhum dos oito estados, inclusive nos de erro.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h2>3 · Estados 3, 4 e 5 — os três erros, que não são o mesmo erro</h2>
+<p class="lead">Três frames, e não um só, porque <strong>a ação corretiva de cada um é diferente</strong>: esperar, ajustar o token, ou
+consertar o vínculo. Nos três, o último estado conhecido <strong>continua visível e neutralizado</strong> — a mesma regra do Estado 2.</p>
+<div class="grid3">
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 3</b> · GitHub indisponível</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head" style="padding-bottom:16px">
+            <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <div><h3>Engenharia</h3></div>
+          </div>
+          <div class="alert">Não foi possível falar com o GitHub. O estado abaixo é o último conhecido.</div>
+          <div class="rows">
+            <div class="row">
+              <div class="row-id"><span class="reflink">biahflow/pulse#41</span></div>
+              <div class="badges">
+                <span class="state state--off">Issue aberta</span>
+                <span class="state state--off">PR aberto</span>
+                <span class="sha sha--off">a1b2c3d</span>
+                <span class="state state--off">CI verde</span>
+              </div>
+              <p class="prov">Observado há 26 min · webhook · última tentativa de contato há 1 min</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>Passa sozinho.</strong> A casa tenta de novo; ninguém precisa fazer nada. Por isso a copy não pede ação.</p>
+  </div>
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 4</b> · Permissão negada</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head" style="padding-bottom:16px">
+            <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <div><h3>Engenharia</h3></div>
+          </div>
+          <div class="alert">A credencial do Pulse não alcança <em>biahflow/pulse</em>. Revise o token e o escopo da integração em Configurações.</div>
+          <div class="rows">
+            <div class="row">
+              <div class="row-id"><span class="reflink">biahflow/pulse#41</span></div>
+              <div class="badges">
+                <span class="state state--off">Issue aberta</span>
+                <span class="state state--off">PR aberto</span>
+                <span class="sha sha--off">a1b2c3d</span>
+                <span class="state state--off">CI verde</span>
+              </div>
+              <p class="prov">Observado há 4 h · webhook · sem acesso desde então</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>Não passa sozinho.</strong> Alguém tem de mexer no token. Distinto do 3 porque só este pede ação humana —
+      e o texto <strong>nunca</strong> ecoa o token (NFR-004).</p>
+  </div>
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 5</b> · Referência ausente</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head" style="padding-bottom:16px">
+            <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <div><h3>Engenharia</h3></div>
+          </div>
+          <div class="alert">A referência <em>biahflow/pulse#41</em> não existe mais no GitHub. O vínculo continua registrado no Pulse e aponta para o nada.</div>
+          <div class="rows">
+            <div class="row">
+              <div class="row-id"><span class="reflink">biahflow/pulse#41</span></div>
+              <div class="badges">
+                <span class="state state--3">Não encontrada (404)</span>
+                <span class="state state--off">Sem PR</span>
+                <span class="sha sha--off">—</span>
+                <span class="state state--off">Sem check</span>
+              </div>
+              <p class="prov">Observado há 8 min · reconciliação</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>O único erro que ganha selo vermelho</strong>, porque o defeito está na própria referência — apagada, movida
+      ou em repositório que o Pulse não vê mais. Os outros três selos caem ao neutro: não há o que saber sobre eles.</p>
+  </div>
+</div>
+
+<h2>4 · Estados 6, 7 e 8 — vazio, carregando e sem autorização</h2>
+<div class="grid3">
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 6</b> · Vazio</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head" style="padding-bottom:8px">
+            <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <div><h3>Engenharia</h3><p>Estado observado no GitHub. O Pulse projeta; o GitHub decide.</p></div>
+          </div>
+          <p class="empty">Nenhuma referência de GitHub neste projeto.</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>Vazio é ausência, não falha.</strong> <code>.empty-state</code>, sem selo e sem alerta. O painel continua
+      aparecendo: um projeto sem engenharia é uma informação, e escondê-lo faria a mesma tela ter duas formas por motivo invisível.</p>
+  </div>
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 7</b> · Carregando</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head" style="padding-bottom:8px">
+            <span class="micon" style="background:var(--subtle);color:var(--subtle)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg></span>
+            <div style="flex:1"><div class="skel" style="height:16px;width:38%"></div><div class="skel" style="height:12px;width:72%;margin-top:8px"></div></div>
+          </div>
+          <div class="rows">
+            <div class="row">
+              <div class="skel" style="height:14px;width:52%"></div>
+              <div class="badges">
+                <div class="skel" style="height:22px;width:92px;border-radius:999px"></div>
+                <div class="skel" style="height:22px;width:78px;border-radius:999px"></div>
+                <div class="skel" style="height:22px;width:66px;border-radius:4px"></div>
+              </div>
+              <div class="skel" style="height:11px;width:38%;margin-top:12px"></div>
+            </div>
+            <div class="row">
+              <div class="skel" style="height:14px;width:44%"></div>
+              <div class="badges">
+                <div class="skel" style="height:22px;width:84px;border-radius:999px"></div>
+                <div class="skel" style="height:22px;width:96px;border-radius:999px"></div>
+              </div>
+              <div class="skel" style="height:11px;width:32%;margin-top:12px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>Nenhum selo colorido enquanto carrega.</strong> Esqueleto em <code>surface-subtle</code>, com o raio de cada
+      forma igual ao da forma real — pastilha em <code>full</code>, SHA em 4 px. Um selo cinza aqui seria indistinguível do Estado 2.</p>
+  </div>
+  <div>
+    <div class="frame">
+      <div class="frame-lab"><b>Estado 8</b> · Sem autorização (Vendas)</div>
+      <div class="frame-body">
+        <div class="pnl">
+          <div class="pnl-head" style="padding-bottom:8px">
+            <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+            <div><h3>Engenharia</h3><p>Estado observado no GitHub. O Pulse projeta; o GitHub decide.</p></div>
+          </div>
+          <p class="empty">Estado de engenharia não faz parte do seu acesso.</p>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><strong>A copy é invariante</strong> — a mesma com ou sem referência —, e é por isso que ela <em>pode</em> ser
+      mostrada: não vaza a existência de trabalho de engenharia. <code>permissions.py:146</code> dá
+      <code>engineering_handoff</code> a Entrega e admin; Vendas cai no <code>return False</code>.</p>
+  </div>
+</div>
+
+<h2>5 · O mapa de estado → variante</h2>
+<p class="lead">Mapa devolve <strong>variante</strong>, nunca a cor (ADR 0026). Nenhuma linha desta tabela inventa matiz: as cinco variantes
+já existem em <code>index.css</code>. A coluna “Obsoleto” é a regra da seção anterior aplicada linha a linha.</p>
+<table>
+  <tr><th style="width:14%">Campo</th><th style="width:22%">Estado observado</th><th style="width:16%">Fresco</th><th style="width:16%">Obsoleto</th><th>Por quê</th></tr>
+  <tr><td rowspan="2"><strong>Issue</strong></td><td>Aberta</td><td><span class="state state--0">Issue aberta</span></td><td rowspan="2"><span class="state state--off">neutro</span></td><td>Em curso é informação, não sucesso nem aviso.</td></tr>
+  <tr><td>Fechada</td><td><span class="state state--1">Issue fechada</span></td><td>Terminal esperado.</td></tr>
+  <tr><td rowspan="4"><strong>PR</strong></td><td>Sem PR</td><td><span class="state state--off">Sem PR</span></td><td rowspan="4"><span class="state state--off">neutro</span></td><td>Ausência de estado — o mesmo papel de “Arquivado”.</td></tr>
+  <tr><td>Aberto</td><td><span class="state state--0">PR aberto</span></td><td>Em curso.</td></tr>
+  <tr><td>Merged</td><td><span class="state state--1">PR merged</span></td><td>Terminal esperado. <strong>E não é <code>DONE</code></strong> (ADR 0040).</td></tr>
+  <tr><td>Fechado sem merge</td><td><span class="state state--2">PR fechado sem merge</span></td><td>Terminal <em>inesperado</em>: seguiu, mas há dívida. Não é falha do sistema — é âmbar, não vermelho.</td></tr>
+  <tr><td rowspan="4"><strong>CI</strong></td><td>Verde</td><td><span class="state state--1">CI verde</span></td><td rowspan="4"><span class="state state--off">neutro</span></td><td>Sucesso.</td></tr>
+  <tr><td>Vermelho</td><td><span class="state state--3">CI vermelho</span></td><td>Falha, e a única do painel que é vermelha por resultado.</td></tr>
+  <tr><td>Rodando</td><td><span class="state state--0">CI rodando</span></td><td>Em curso.</td></tr>
+  <tr><td>Sem check configurado</td><td><span class="state state--off">Sem check</span></td><td>Ausência, não reprovação. Pintar de âmbar transformaria “não há política” em “há problema”.</td></tr>
+  <tr><td><strong>Head SHA</strong></td><td><code>a1b2c3d</code></td><td><span class="sha">a1b2c3d</span></td><td><span class="sha sha--off">a1b2c3d</span></td><td>Não é estado, é endereço: nunca ganha cor semântica.</td></tr>
+  <tr><td><strong>Referência</strong></td><td>404</td><td><span class="state state--3">Não encontrada (404)</span></td><td colspan="2">O defeito é do vínculo, e vermelho é a leitura certa.</td></tr>
+</table>
+
+<h2>6 · Proveniência de cada valor visual</h2>
+<table>
+  <tr><th style="width:34%">Valor</th><th style="width:40%">Origem</th><th>Novo?</th></tr>
+  <tr><td><code>.panel</code> (raio 12, borda <code>line</code>, <code>--shadow-card</code>) e o cabeçalho com <code>.metric-icon</code> + título + descrição</td><td><code>index.css</code> · <code>pulse-design-system.md</code> · composição já usada em <code>ProjectDetailPage.tsx:473</code> e <code>:804</code></td><td>não</td></tr>
+  <tr><td><code>.panel--flush</code> + <code>.panel-rows</code> + <code>.row</code> (lista dividida por dentro)</td><td><code>index.css</code> <code>@layer components</code></td><td>não</td></tr>
+  <tr><td><code>.state</code>, <code>.state--0/1/2/3</code>, <code>.state--off</code></td><td><code>index.css</code> · <code>pulse-design-system.md</code> (tabela de primitivas)</td><td>não</td></tr>
+  <tr><td><code>.empty-state</code>, <code>.alert--error</code></td><td><code>index.css</code> · <code>pulse-design-system.md</code></td><td>não</td></tr>
+  <tr><td><code>.metric-icon</code> (quadrado <code>brand-50</code>/<code>brand-500</code>)</td><td><code>index.css</code> · usado assim em cinco painéis desta mesma tela</td><td>não</td></tr>
+  <tr><td>Paleta inteira usada aqui — <code>ink</code>, <code>muted</code>, <code>line</code>, <code>canvas</code>, <code>surface</code>, <code>surface-subtle</code>, <code>brand-50/500/600/700</code>, <code>info*</code>, <code>success*</code>, <code>warning*</code>, <code>danger*</code></td><td><code>pulse-design-system.md</code> (tabela de tokens) · <code>index.css</code> <code>@theme</code></td><td><strong>não — nenhum matiz novo neste pacote</strong></td></tr>
+  <tr><td>Papéis tipográficos <em>título</em> 16/24 650, <em>corpo</em> 14/22 400, <em>label</em> 12/16 600, <em>meta</em> 11/16 500</td><td><code>dap-gh19-r2/README.md</code> (fundações normativas) · <code>.type-*</code> em <code>index.css</code></td><td>não</td></tr>
+  <tr><td>Raios 4 / 8 / 12 e <code>full</code> só para pastilha de estado</td><td><code>dap-gh19-r2/README.md</code></td><td>não</td></tr>
+  <tr><td><strong>Papel tipográfico monoespaçado</strong> para SHA e <code>owner/repo#numero</code></td><td>Não existe no contrato. <code>index.css</code> declara só <code>--font-sans</code>; o único precedente é o literal <code>font-mono</code> em <code>ErrorBoundary.tsx:40</code>, que nunca entrou no <code>pulse-design-system.md</code></td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Regra do obsoleto</strong>: todo selo cai a <code>.state--off</code> e a proveniência sobe a pastilha <code>.state--2</code></td><td>Compõe primitivas existentes; a <em>regra</em> é que não existe</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Mapa estado de engenharia → variante</strong> (seção 5 inteira)</td><td>—</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Posição do painel</strong> em <code>/projetos/:id</code>: depois da Jornada e do AI Score, antes de “Equipe do projeto”</td><td>—</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Tratamento do não autorizado</strong>: painel visível com <code>.empty-state</code>, em vez de painel oculto</td><td>—</td><td><strong>sim — decidido aqui</strong> (alternativa registrada: ocultar)</td></tr>
+  <tr><td><strong>Toda a copy</strong> deste quadro</td><td>—</td><td><strong>sim — decidido aqui, e separadamente do visual</strong></td></tr>
+  <tr><td>Ícone do painel (<em>git-branch</em>)</td><td><code>lucide-react</code>, a mesma biblioteca dos outros painéis desta tela</td><td>não — mas o <em>SVG deste quadro é mock</em> e não deve ser colado no produto</td></tr>
+</table>
+<p class="cap">Design system consultado: <code>docs/design/pulse-design-system.md</code> e <code>docs/design/dap-gh19-r2/README.md</code>,
+  lidos em 27/08/2026. <strong>Se este pacote e essa fonte divergirem, a fonte vence</strong> e este pacote está velho.</p>
+
+<h2>7 · Medições de contraste</h2>
+<table>
+  <tr><th style="width:34%">Par</th><th style="width:12%">Razão</th><th>Onde aparece</th></tr>
+  <tr><td><span class="sw" style="background:#475569"></span><code>slate-600</code> sobre <span class="sw" style="background:#f1f5f9"></span><code>slate-100</code></td><td><strong>6,92:1</strong></td><td><code>.state--off</code> — todo selo neutralizado do Estado 2. É o par que carrega o pacote inteiro.</td></tr>
+  <tr><td><span class="sw" style="background:#b45309"></span><code>warning</code> sobre <span class="sw" style="background:#fffbeb"></span><code>warning-50</code></td><td><strong>4,84:1</strong></td><td>A pastilha de proveniência quando obsoleto; “PR fechado sem merge”.</td></tr>
+  <tr><td><span class="sw" style="background:#1d4ed8"></span><code>info</code> sobre <span class="sw" style="background:#eff6ff"></span><code>info-50</code></td><td><strong>6,16:1</strong></td><td>Issue aberta, PR aberto, CI rodando.</td></tr>
+  <tr><td><span class="sw" style="background:#047857"></span><code>success</code> sobre <span class="sw" style="background:#ecfdf5"></span><code>success-50</code></td><td><strong>5,21:1</strong></td><td>Issue fechada, PR merged, CI verde.</td></tr>
+  <tr><td><span class="sw" style="background:#b91c1c"></span><code>danger</code> sobre <span class="sw" style="background:#fef2f2"></span><code>danger-50</code></td><td><strong>5,91:1</strong></td><td>CI vermelho, 404, e o <code>.alert--error</code> dos Estados 3, 4 e 5.</td></tr>
+  <tr><td><span class="sw" style="background:#12110f"></span><code>ink</code> sobre <span class="sw" style="background:#f5f5f4"></span><code>surface-subtle</code></td><td><strong>17,30:1</strong></td><td>O SHA monoespaçado dentro do <em>chip</em> de código.</td></tr>
+  <tr><td><span class="sw" style="background:#57534e"></span><code>muted</code> sobre <span class="sw" style="background:#ffffff"></span><code>surface</code></td><td><strong>7,63:1</strong></td><td>A linha de proveniência quando fresca, e a descrição do painel.</td></tr>
+  <tr><td><span class="sw" style="background:#a8412a"></span><code>brand-600</code> sobre <span class="sw" style="background:#ffffff"></span><code>surface</code></td><td><strong>6,08:1</strong></td><td>O link canônico da referência.</td></tr>
+</table>
+<p class="cap">Todos passam AA para texto normal. <strong>Nenhuma medição depende de cor nova</strong> — as oito são pares já aprovados na r2
+  ou já em uso no produto. O gate real continua sendo <code>e2e/a11y.spec.ts</code>: quando o axe e o tom discordam, cede o tom.</p>
+<p class="cap"><strong>Cor nunca é o único portador.</strong> Cada selo diz em texto o que a cor repete (“CI verde”, “CI vermelho”), e o
+  obsoleto se anuncia por escrito na proveniência, não só pela perda de cor — que é o que faz a regra sobreviver a daltonismo e a
+  impressão em preto e branco.</p>
+
+<h2>8 · Entregue vs. reservado</h2>
+<table>
+  <tr><th style="width:36%">Elemento</th><th style="width:16%">Esta entrega</th><th style="width:18%">Reservado para</th><th>Vira real quando</th></tr>
+  <tr><td>Painel <strong>Engenharia</strong> somente-leitura e os oito estados deste quadro</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Linha de proveniência em todos os estados</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Link canônico para a Issue no GitHub</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td><strong>Comando sobre o GitHub</strong> — reabrir Issue, re-disparar CI, reprovisionar</td><td><strong>não entrega</strong></td><td>Contrato de comando próprio</td><td>Existir contrato de comando separadamente autorizado (Issue #41: edição normal do Pulse não reescreve estado de engenharia)</td></tr>
+  <tr><td>Vincular/desvincular referência pela interface</td><td>não entrega</td><td>Mesma reserva acima</td><td>O mesmo contrato de comando</td></tr>
+  <tr><td>Superfície equivalente no One</td><td>não entrega</td><td>Issue própria</td><td>O One entrar em escopo (ADR 0040)</td></tr>
+  <tr><td>Tema escuro</td><td>não entrega</td><td>—</td><td>DAP próprio (<code>dap-gh19-r2/README.md</code>)</td></tr>
+</table>
+<div class="reserved" style="margin-top:16px">
+  <p class="eyebrow" style="color:var(--warning);margin-bottom:8px"><span class="tag tag--res">reservado</span> desenhado, não construído</p>
+  <span class="ghost"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Re-disparar CI</span>
+  <span class="ghost"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Reabrir Issue</span>
+  <span class="ghost"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></svg>Reprovisionar</span>
+  <p class="cap" style="margin-top:6px;max-width:74ch"><strong>Este bloco existe apenas neste quadro.</strong> Na entrega, nenhum destes
+    controles é renderizado — nem desabilitado, nem cinza, nem escondido atrás de menu. Controle inerte no produto é defeito, não
+    marcador de lugar; a hachura e o traço tracejado estão aqui para que a diferença entre “desenhado” e “construído” não dependa de
+    memória de quem aprova.</p>
+</div>
+
+<h2>9 · Decisões que este pacote carrega</h2>
+<ul class="notes">
+  <li><strong>Obsoleto nunca veste a cor do observado.</strong> É a decisão central. O custo é real e está assumido: ao cair para o
+    neutro, o painel deixa de responder “o CI passou?” num relance justamente quando alguém tem pressa. A troca é deliberada — o Pulse
+    prefere dizer “não sei mais” a arriscar afirmar algo que o GitHub já desmentiu.</li>
+  <li><strong>O âmbar troca de lugar em vez de aparecer.</strong> Obsolescência poderia ter pintado os selos de âmbar; em vez disso os
+    selos ficam neutros e o âmbar vai para a proveniência. Assim o âmbar continua querendo dizer uma coisa só na tela inteira —
+    “atenção neste dado aqui” — e não vira sinônimo de “velho”.</li>
+  <li><strong>Os três erros são três frames, não um.</strong> GitHub fora do ar passa sozinho; permissão negada exige alguém mexer no
+    token; referência ausente exige consertar o vínculo. Uma copy única (“não foi possível carregar”) esconderia essa diferença — e é
+    ela que decide quem age.</li>
+  <li><strong>O painel é uma lista, não um cartão único.</strong> <code>EngineeringHandoff.project</code> é FK com
+    <code>related_name="engineering_handoffs"</code> (FDD 040): um projeto tem <em>zero, uma ou várias</em> referências. Desenhar um
+    cartão único obrigaria a escolher “a” referência, e essa escolha não existe no modelo de dados.</li>
+  <li><strong>Tipografia monoespaçada entra no contrato.</strong> SHA e <code>owner/repo#numero</code> são identificadores que se
+    comparam caractere a caractere; proporcional confunde <code>1</code>/<code>l</code> e <code>0</code>/<code>O</code>. Hoje o
+    produto tem exatamente um consumidor disso, escrito à mão em <code>ErrorBoundary.tsx:40</code>, fora do contrato. Aprovar aqui é
+    promover aquele literal a papel nomeado — e é o único valor visual novo do pacote.</li>
+  <li><strong>Vendas vê o painel, e vê que não vê.</strong> A copy é a mesma haja ou não referência, então não vaza nada; e um painel
+    que some por papel faz a mesma tela ter duas formas sem explicação. <em>Alternativa registrada:</em> não renderizar o painel para
+    Vendas.</li>
+  <li><strong>Merge não é <code>DONE</code>.</strong> “PR merged” é verde de <em>terminal esperado</em> em engenharia, e o painel não
+    escreve nenhuma palavra de conclusão de negócio — o aceite é do One (ADR 0040).</li>
+</ul>
+
+<h2>10 · O que a aprovação NÃO cobre</h2>
+<ul class="notes">
+  <li><strong>Tema escuro.</strong> Continua exigindo DAP próprio.</li>
+  <li><strong>A superfície equivalente no One.</strong> Este pacote é o Pulse e só ele.</li>
+  <li><strong>O painel em qualquer tela que não <code>/projetos/:id</code></strong> — visão geral, lista de projetos, Configurações,
+    e-mail, documento gerado ou exportação.</li>
+  <li><strong>A copy dos mocks.</strong> Aprovar o visual não aprova a copy; são duas decisões, e o registro de aprovação as separa.</li>
+  <li><strong>O desenho do endpoint de webhook</strong>, o formato do payload, a chave de idempotência e o algoritmo de reconciliação.
+    É contrato de backend, não superfície, e não se decide num quadro.</li>
+  <li><strong>O limiar de obsolescência</strong> em minutos, e se ele é único ou por campo.</li>
+  <li><strong>Qualquer revisão posterior deste pacote.</strong> Aprovar a revisão 1 não aprova a revisão 2.</li>
+</ul>
+
+<h2>11 · Questões em aberto</h2>
+<p class="lead">Nada aqui é resolvido por agente durante a implementação. O que ficar em aberto continua em aberto depois da aprovação.</p>
+<ul class="notes">
+  <li><strong>Quantos minutos é “obsoleto”?</strong> O quadro usa 2 min como fresco e 3 h como velho para que a diferença seja legível,
+    e isso é ilustração. O limiar real é decisão de operação.</li>
+  <li><strong>“Revise o token e o escopo da integração em Configurações”</strong> pressupõe um lugar em Configurações onde isso se
+    revisa. Hoje a flag <code>github_provisioning</code> aparece lá (FDD 040), mas não há tela de credencial. Sem ela, a frase manda a
+    pessoa a um lugar que não resolve.</li>
+  <li><strong>Review/readiness</strong> aparece no escopo da Issue #41 “quando derivável”. Este quadro <em>não</em> desenha selo de
+    revisão, porque derivar “aprovado” de review do GitHub é decisão de contrato e não de forma.</li>
+  <li><strong>Ordem das referências</strong> na lista — mais recente primeiro, aberta primeiro, ou ordem de criação. O quadro mostra
+    duas linhas e não afirma a regra.</li>
+</ul>
+
+<h2>12 · Notas para quem implementa</h2>
+<ul class="notes">
+  <li><strong>Intencional e a preservar:</strong> a linha de proveniência em <em>todos</em> os oito estados; a queda ao neutro sem
+    esconder nem apagar dado; os três erros distintos; o texto de cada selo dizendo o que a cor repete; o SHA em sete caracteres; e o
+    painel na mesma forma <code>.panel</code> dos vizinhos, sem borda, sombra ou raio próprios.</li>
+  <li><strong>Ilustrativo e a não tratar como especificação:</strong> os números de Issue (41, 37), os SHAs
+    (<code>a1b2c3d</code>, <code>9f0e7c2</code>), os títulos, os intervalos de tempo, a largura das colunas e os SVGs desenhados à mão
+    neste quadro — no produto o ícone vem de <code>lucide-react</code>, como nos outros painéis da tela.</li>
+  <li><strong>Este HTML não é fonte.</strong> As classes <code>.pnl</code>, <code>.row</code>, <code>.state</code> deste arquivo são
+    transcrição de mock. No produto usam-se as primitivas reais de <code>index.css</code> — e o mapa devolve variante, nunca cor
+    (<code>src/test/primitivas.test.ts</code> reprova o literal que já tem primitiva).</li>
+  <li><strong>O que este quadro não consegue mostrar:</strong> ordem de foco, leitura por leitor de tela do selo neutralizado,
+    atualização ao vivo quando o webhook chega com a tela aberta, <em>reflow</em> entre 390 e 1280 px, truncamento de título longo, e
+    movimento. Tudo isso é <code>BROWSER_REQUIRED</code> e se valida em runtime, não aqui.</li>
+  <li><strong>Nada de segredo na tela.</strong> O Estado 4 fala de credencial e <em>não</em> ecoa token, escopo concedido nem resposta
+    da API — a mesma regra que a FDD 040 já impõe a log e a mensagem de erro (NFR-004).</li>
+</ul>
+
+</div>

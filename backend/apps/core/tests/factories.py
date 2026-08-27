@@ -10,6 +10,7 @@ from apps.core.models import (
     Client,
     EngineeringHandoff,
     Evidencia,
+    GithubProjection,
     Invoice,
     Meeting,
     Opportunity,
@@ -124,6 +125,28 @@ class EngineeringHandoffFactory(factory.django.DjangoModelFactory):
     title = "Provision GitHub Issue from Pulse handoff"
     objective = "Create the engineering Task Contract as a GitHub Issue."
     acceptance_criteria = "The issue exists, is idempotent, and records correlation ids."
+
+
+class ProvisionedHandoffFactory(EngineeringHandoffFactory):
+    """Handoff já provisionado — o único estado em que uma projeção pode pendurar (FDD 041)."""
+
+    repository = "acme/repo"
+    github_issue_number = factory.Sequence(lambda n: n + 1)
+    github_issue_url = factory.LazyAttribute(
+        lambda obj: f"https://github.com/{obj.repository}/issues/{obj.github_issue_number}"
+    )
+    status = EngineeringHandoff.Status.PROVISIONED
+
+
+class GithubProjectionFactory(factory.django.DjangoModelFactory):
+    """Projeção fresca, observada agora por webhook."""
+
+    class Meta:
+        model = GithubProjection
+
+    handoff = factory.SubFactory(ProvisionedHandoffFactory)
+    issue_title = "Projetar estado de entrega do GitHub no Pulse"
+    observed_at = factory.LazyFunction(timezone.now)
 
 
 class MeetingFactory(factory.django.DjangoModelFactory):

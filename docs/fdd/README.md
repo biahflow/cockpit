@@ -46,3 +46,4 @@ o prefixo `FDD NNN — `. Não anote, não encurte, não reescreva.
 - 038 — Os dois sinais que ninguém lia
 - 039 — O achado que não sobrevivia à reunião
 - 040 — Provisionamento de Issue GitHub a partir de um handoff Pulse
+- 041 — O estado de engenharia que o Pulse não sabia dizer

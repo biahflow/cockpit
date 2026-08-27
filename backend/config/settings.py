@@ -223,6 +223,11 @@ REST_FRAMEWORK = {
         # `invoice.payment_succeeded`). Um 429 aqui não é inofensivo como no e-sign — ele atrasa a
         # conciliação por dias, e é exatamente o atraso que faz a régua cobrar quem já pagou.
         "payments_webhook": os.getenv("PAYMENTS_WEBHOOK_RATE", "600/hour"),
+        # Cinco vezes o teto do e-sign, pela razão oposta à do pagamento: aqui o volume é alto e
+        # barato. Um único PR ativo rende `issues`, `pull_request`, `check_suite`, `check_run` e
+        # `status` a cada push, e o GitHub **desabilita o hook** depois de uma sequência de
+        # respostas ruins — um 429 não atrasa a projeção, desliga a integração (FDD 041).
+        "github_webhook": os.getenv("GITHUB_WEBHOOK_RATE", "600/hour"),
     },
     # Atrás de proxy, sem isso todo mundo compartilha o IP do container e o limite por IP
     # vira um limite global. Ver docs/operacao.md.
@@ -520,6 +525,21 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "")  # formato "owner/repo"
 # Provisionamento de GitHub Issue a partir de um handoff de engenharia (FDD 040, ADR 0040).
 # Distinto da sincronia de tarefas (FDD 004). Zero LLM; desligado por padrão.
 GITHUB_PROVISIONING_ENABLED = os.getenv("GITHUB_PROVISIONING_ENABLED", "false").lower() == "true"
+# Projeção do estado de engenharia do GitHub (FDD 041, ADR 0046). Segredo do
+# `X-Hub-Signature-256`, **vazio por padrão e falha fechada**: sem ele o webhook recusa em vez de
+# aceitar sem verificar (ADR 0018 — sem credencial não existe ligada).
+GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "")
+# O limiar de obsolescência, e ele mora **aqui e só aqui**: o backend calcula `is_stale` e o
+# frontend o consome. Duas definições de "velho" — uma na tela, outra na reconciliação —
+# divergiriam em silêncio na primeira vez que alguém mexesse numa delas. 30 min é folga sobre a
+# cadência de reconciliação abaixo, para que uma varredura atrasada não pinte a tela inteira de
+# obsoleta. Zero desliga a regra.
+GITHUB_PROJECTION_STALE_AFTER_SECONDS = _env_int("GITHUB_PROJECTION_STALE_AFTER_SECONDS", 1800)
+# A rede de baixo do webhook: entrega perdida, hook desligado por engano ou janela de
+# indisponibilidade do GitHub só se recuperam por releitura. 10 min é um terço do limiar acima.
+SCHEDULER_GITHUB_RECONCILE_EVERY_MINUTES = _env_int(
+    "SCHEDULER_GITHUB_RECONCILE_EVERY_MINUTES", 10
+)
 
 # Captação de leads pelo site: token compartilhado e CORS restrito ao endpoint de intake.
 LEAD_INTAKE_TOKEN = os.getenv("LEAD_INTAKE_TOKEN", "")

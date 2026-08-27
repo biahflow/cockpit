@@ -2909,6 +2909,91 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/github-projections/:
+    get:
+      operationId: v1_github_projections_list
+      description: |-
+        Estado de engenharia do GitHub projetado no Pulse (FDD 041, ADR 0046).
+
+        **Somente leitura por decisão, não por falta de tempo.** A Issue #41 diz que edição normal do
+        Pulse não reescreve estado de engenharia sem um contrato de comando separadamente autorizado;
+        reabrir Issue, re-disparar CI e reprovisionar estão desenhados no DAP GH-41 r1 e **não** foram
+        construídos. `ReadOnlyModelViewSet` e não `ModelViewSet` é onde essa decisão vira estrutura.
+
+        Fora do `ArchiveModelViewSet` de propósito: projeção não é registro de negócio arquivável.
+        Quem arquiva é o handoff, e a projeção do handoff arquivado some junto — daí o recorte da
+        queryset, e não um `archived_at` próprio.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GithubProjection'
+          description: ''
+  /api/v1/github-projections/{id}/:
+    get:
+      operationId: v1_github_projections_retrieve
+      description: |-
+        Estado de engenharia do GitHub projetado no Pulse (FDD 041, ADR 0046).
+
+        **Somente leitura por decisão, não por falta de tempo.** A Issue #41 diz que edição normal do
+        Pulse não reescreve estado de engenharia sem um contrato de comando separadamente autorizado;
+        reabrir Issue, re-disparar CI e reprovisionar estão desenhados no DAP GH-41 r1 e **não** foram
+        construídos. `ReadOnlyModelViewSet` e não `ModelViewSet` é onde essa decisão vira estrutura.
+
+        Fora do `ArchiveModelViewSet` de propósito: projeção não é registro de negócio arquivável.
+        Quem arquiva é o handoff, e a projeção do handoff arquivado some junto — daí o recorte da
+        queryset, e não um `archived_at` próprio.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este github projection.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubProjection'
+          description: ''
+  /api/v1/github/webhook/:
+    post:
+      operationId: v1_github_webhook_create
+      description: |-
+        Entrada do GitHub (FDD 041). Autentica pelo HMAC do corpo cru; nada sai daqui para lá.
+
+        Três diferenças em relação às gêmeas de e-sign e pagamento, e nenhuma é estilo:
+
+        - **Falha fechada sem segredo.** Sem `GITHUB_WEBHOOK_SECRET`, o endpoint recusa em vez de
+          aceitar o que não consegue verificar (ADR 0018).
+        - **Idempotência por identidade de entrega.** As outras duas deduplicam por igualdade de
+          estado, o que resolve a reentrega idêntica e não resolve nem a reentrega atrasada nem o
+          replay de uma entrega capturada. Aqui a chave é `X-GitHub-Delivery` (ADR 0037).
+        - **Evento desconhecido é 200, sempre.** Vale para as três, e aqui a consequência é maior: o
+          GitHub desabilita o hook depois de uma sequência de respostas ruins.
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubWebhookAck'
+          description: ''
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve
@@ -8839,6 +8924,18 @@ components:
         * `draft` - Rascunho
         * `review` - Em revisão
         * `published` - Publicado
+    CiStateEnum:
+      enum:
+      - none
+      - pending
+      - success
+      - failure
+      type: string
+      description: |-
+        * `none` - Sem check
+        * `pending` - Rodando
+        * `success` - Verde
+        * `failure` - Vermelho
     Client:
       type: object
       properties:
@@ -9777,6 +9874,130 @@ components:
         * `conditional_go` - CONDITIONAL GO
         * `redesign` - REDESIGN
         * `no_go` - NO-GO
+    GithubProjection:
+      type: object
+      description: |-
+        A projeção de engenharia como o painel a lê (FDD 041). Somente leitura, inteira.
+
+        **`is_stale` e as idades vêm daqui, e não da tela.** O limiar de obsolescência mora em
+        `settings.GITHUB_PROJECTION_STALE_AFTER_SECONDS`; deixar o cálculo para o frontend criaria uma
+        segunda definição de "velho" — a da tela e a da reconciliação — divergindo em silêncio na
+        primeira vez que alguém mexesse numa delas (DAP GH-41 r1, decisão 1).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        handoff:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+        repository:
+          type: string
+          readOnly: true
+        issue_number:
+          type: integer
+          readOnly: true
+        issue_url:
+          type: string
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        issue_state:
+          allOf:
+          - $ref: '#/components/schemas/IssueStateEnum'
+          readOnly: true
+        issue_title:
+          type: string
+          readOnly: true
+        pr_number:
+          type: integer
+          readOnly: true
+          nullable: true
+        pr_state:
+          allOf:
+          - $ref: '#/components/schemas/PrStateEnum'
+          readOnly: true
+        head_sha:
+          type: string
+          readOnly: true
+        ci_state:
+          allOf:
+          - $ref: '#/components/schemas/CiStateEnum'
+          readOnly: true
+        observed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        observed_via:
+          allOf:
+          - $ref: '#/components/schemas/ObservedViaEnum'
+          readOnly: true
+        age_seconds:
+          type: integer
+          readOnly: true
+        is_stale:
+          type: boolean
+          readOnly: true
+        last_error_kind:
+          allOf:
+          - $ref: '#/components/schemas/LastErrorKindEnum'
+          readOnly: true
+        last_error_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        last_error_age_seconds:
+          type: integer
+          nullable: true
+          readOnly: true
+        source_updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - age_seconds
+      - ci_state
+      - created_at
+      - handoff
+      - head_sha
+      - id
+      - is_stale
+      - issue_number
+      - issue_state
+      - issue_title
+      - issue_url
+      - last_error_age_seconds
+      - last_error_at
+      - last_error_kind
+      - observed_at
+      - observed_via
+      - pr_number
+      - pr_state
+      - project
+      - reference
+      - repository
+      - source_updated_at
+      - updated_at
+    GithubWebhookAck:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     HealthResponse:
       type: object
       properties:
@@ -10010,6 +10231,14 @@ components:
       - overdue_count
       - paid
       - paid_count
+    IssueStateEnum:
+      enum:
+      - open
+      - closed
+      type: string
+      description: |-
+        * `open` - Aberta
+        * `closed` - Fechada
     JourneyPhase:
       type: object
       description: Fase do template da Jornada de Transformação (config admin, vocabulário
@@ -10221,6 +10450,16 @@ components:
         * `minutes` - Minutos
         * `currency` - Moeda
         * `count` - Contagem
+    LastErrorKindEnum:
+      enum:
+      - unavailable
+      - forbidden
+      - missing
+      type: string
+      description: |-
+        * `unavailable` - GitHub indisponível
+        * `forbidden` - Permissão negada
+        * `missing` - Referência ausente
     Lead:
       type: object
       properties:
@@ -10547,6 +10786,14 @@ components:
       - message
       - read
       - url
+    ObservedViaEnum:
+      enum:
+      - webhook
+      - reconciliation
+      type: string
+      description: |-
+        * `webhook` - Webhook
+        * `reconciliation` - Reconciliação
     Opportunity:
       type: object
       properties:
@@ -12525,6 +12772,18 @@ components:
         * `open` - Aberta
         * `won` - Ganho
         * `lost` - Perdido
+    PrStateEnum:
+      enum:
+      - none
+      - open
+      - merged
+      - closed
+      type: string
+      description: |-
+        * `none` - Sem PR
+        * `open` - Aberto
+        * `merged` - Merged
+        * `closed` - Fechado sem merge
     ProbabilityEnum:
       enum:
       - low
