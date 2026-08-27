@@ -141,10 +141,32 @@ export type ProjectDeliverable = { id: number; project_phase: number; name: stri
 // default, porque um default seria uma decisão que ninguém tomou.
 export type GateOutcome = "go" | "conditional_go" | "redesign" | "no_go";
 export type ProjectChecklistItem = { id: number; project_phase: number; text: string; position: number; checked: boolean; checked_at: string | null };
-export type ProjectPhase = { id: number; project: number; phase: number; phase_name: string; phase_description: string; phase_position: number; requires_gate: boolean; status: JourneyPhaseStatus; started_at: string | null; completed_at: string | null; target_date: string | null; gate_outcome: GateOutcome | ""; gate_notes: string; checklist_waiver: string; deliverables: ProjectDeliverable[]; checklist_items: ProjectChecklistItem[] };
+// A jornada canônica de entrega — o vocabulário FDE (FDD 042). Classificação **opcional** da fase
+// configurável; `""` é a fase operacional Biahflow sem equivalente FDE. `feasibility` é membro
+// explícito e opcional: uma jornada que não a atravessa não tem fase mapeada nela.
+export type CanonicalStage = "" | "discover" | "prioritize" | "feasibility" | "prove" | "scale" | "optimize";
+// Quem/o quê a fase ativa espera (FDD 042). `""` = fluindo. `engineering` é classificação de
+// delivery ("esperando engenharia"), não o estado de execução do GitHub — a fronteira é limpa.
+export type WaitingParty = "" | "biahflow" | "client" | "engineering" | "external" | "human_gate";
+// O estado semântico derivado, determinístico no backend (FDD 042). A tela mapeia situação →
+// variante de selo, nunca recalcula a regra.
+export type PhaseSituation = "active" | "completed" | "blocked" | "waiting_decision" | "cancelled" | "replanned" | "pending";
+export type ProjectPhase = { id: number; project: number; phase: number; phase_name: string; phase_description: string; phase_position: number; requires_gate: boolean; canonical_stage: CanonicalStage; status: JourneyPhaseStatus; situation: PhaseSituation; started_at: string | null; completed_at: string | null; target_date: string | null; gate_outcome: GateOutcome | ""; gate_notes: string; checklist_waiver: string; waiting_party: WaitingParty; blocker_note: string; deliverables: ProjectDeliverable[]; checklist_items: ProjectChecklistItem[] };
+export type PhaseEventKind = "started" | "completed" | "reopened" | "locked_by_redesign" | "gate_recorded" | "waiting_set" | "waiting_cleared";
+export type PhaseEvent = { id: number; project: number; project_phase: number | null; phase_name: string; kind: PhaseEventKind; from_status: string; to_status: string; gate_outcome: GateOutcome | ""; waiting_party: WaitingParty; note: string; actor: number | null; actor_name: string | null; source: "user" | "system"; created_at: string };
+export type ProjectTimeline = {
+  project: number;
+  phases: ProjectPhase[];
+  current_phase: ProjectPhase | null;
+  next_phase: { phase_name: string; canonical_stage: CanonicalStage } | null;
+  next_gate: { phase_name: string; canonical_stage: CanonicalStage } | null;
+  blockers: { phase_name: string; waiting_party: WaitingParty; blocker_note: string }[];
+  events: PhaseEvent[];
+};
+export type DeliveryTimelineRow = { project_id: number; project_name: string; client_name: string; current_phase_name: string | null; canonical_stage: CanonicalStage; situation: PhaseSituation | null; waiting_party: WaitingParty; blocker_note: string; next_gate_name: string | null };
 export type PhaseDeliverableTemplate = { id: number; phase: number; name: string; position: number };
 export type PhaseChecklistItemTemplate = { id: number; phase: number; text: string; position: number };
-export type JourneyPhaseTemplate = { id: number; name: string; description: string; position: number; active: boolean; requires_gate: boolean; deliverables: PhaseDeliverableTemplate[]; checklist_items: PhaseChecklistItemTemplate[] };
+export type JourneyPhaseTemplate = { id: number; name: string; description: string; position: number; active: boolean; requires_gate: boolean; canonical_stage: CanonicalStage; deliverables: PhaseDeliverableTemplate[]; checklist_items: PhaseChecklistItemTemplate[] };
 export type LeadStatus = "new" | "contacted" | "qualified" | "discarded";
 export type LeadFit = "high" | "medium" | "low" | "";
 // O cadastro público que o enriquecimento trouxe (FDD 030). Todo campo é opcional porque o objeto

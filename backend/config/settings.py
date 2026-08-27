@@ -254,6 +254,13 @@ SPECTACULAR_SETTINGS = {
         # o branco de "ainda não decidido") e o corpo da action `apply-gate` (onde as quatro
         # saídas são obrigatórias). Sem o override, os dois disputam o mesmo nome de enum.
         "GateOutcomeEnum": "apps.core.models.ProjectPhase.GateOutcome",
+        # `PhaseEvent.source` (FDD 042) introduz um segundo conjunto `source` no esquema (o
+        # primeiro é o `linear/github` da sincronia de tarefas). Sem override, os dois disputam o
+        # nome `SourceEnum` e drf-spectacular resolve com um sufixo numérico instável
+        # (`Source933Enum`) que faz o `openapi.yaml` divergir a cada geração. Nomear os dois fixa
+        # os componentes — o de sincronia mantém o `SourceEnum` que já tinha.
+        "SourceEnum": "apps.core.tasksync.SOURCES",
+        "PhaseEventSourceEnum": "apps.core.models.PhaseEvent.Source",
     },
 }
 SESSION_COOKIE_SECURE = not DEBUG

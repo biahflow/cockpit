@@ -96,6 +96,7 @@ from .models import (
     Pendencia,
     PhaseChecklistItem,
     PhaseDeliverable,
+    PhaseEvent,
     PipelineStage,
     Processo,
     ProcessoEtapa,
@@ -147,6 +148,7 @@ from .serializers import (
     PendenciaSerializer,
     PhaseChecklistItemSerializer,
     PhaseDeliverableSerializer,
+    PhaseEventSerializer,
     PipelineStageSerializer,
     ProcessoEtapaSerializer,
     ProcessoSerializer,
@@ -1087,7 +1089,7 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
     def advance_phase(self, request: Request, pk: str | None = None) -> Response:
         """Conclui a fase ativa da jornada e ativa a próxima (delivery/admin)."""
         project = self.get_object()
-        journey.advance_phase(project)
+        journey.advance_phase(project, actor=request.user)
         return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
 
     @extend_schema(
@@ -1115,8 +1117,103 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
                 status=400,
             )
         notes = str(request.data.get("notes", "") or "")
-        journey.apply_gate(project, outcome, notes)
+        journey.apply_gate(project, outcome, notes, actor=request.user)
         return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
+
+    @extend_schema(
+        request=inline_serializer(
+            "SetPhaseWaiting",
+            {
+                "waiting_party": serializers.ChoiceField(
+                    choices=ProjectPhase.WaitingParty.choices, allow_blank=True
+                ),
+                "note": serializers.CharField(required=False, allow_blank=True),
+            },
+        ),
+        responses={200: ProjectPhaseSerializer(many=True)},
+    )
+    @action(detail=True, methods=["post"], url_path="set-waiting")
+    def set_waiting(self, request: Request, pk: str | None = None) -> Response:
+        """Define de quem/de quê a fase ativa está esperando (delivery/admin, FDD 042).
+
+        `waiting_party` vazio limpa o bloqueio. Escreve um `PhaseEvent` — é o que dá rastro à
+        mudança, e o motivo de o campo não entrar por PATCH. Devolve a jornada inteira, no mesmo
+        formato do `advance-phase`.
+        """
+        project = self.get_object()
+        waiting_party = str(request.data.get("waiting_party", "") or "").strip()
+        note = str(request.data.get("note", "") or "")
+        journey.set_phase_waiting(project, waiting_party, note, actor=request.user)
+        return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
+
+    @extend_schema(
+        request=None,
+        responses=inline_serializer(
+            "ProjectTimeline",
+            {
+                "project": serializers.IntegerField(),
+                "phases": ProjectPhaseSerializer(many=True),
+                "current_phase": ProjectPhaseSerializer(allow_null=True),
+                "next_phase": inline_serializer(
+                    "TimelineNextPhase",
+                    {"phase_name": serializers.CharField(),
+                     "canonical_stage": serializers.CharField(allow_blank=True)},
+                    allow_null=True,
+                ),
+                "next_gate": inline_serializer(
+                    "TimelineNextGate",
+                    {"phase_name": serializers.CharField(),
+                     "canonical_stage": serializers.CharField(allow_blank=True)},
+                    allow_null=True,
+                ),
+                "blockers": inline_serializer(
+                    "TimelineBlocker",
+                    {"phase_name": serializers.CharField(),
+                     "waiting_party": serializers.CharField(),
+                     "blocker_note": serializers.CharField(allow_blank=True)},
+                    many=True,
+                ),
+                "events": PhaseEventSerializer(many=True),
+            },
+        ),
+    )
+    @action(detail=True, methods=["get"])
+    def timeline(self, request: Request, pk: str | None = None) -> Response:
+        """A linha do tempo operacional do projeto (FDD 042).
+
+        Fase corrente + histórico append-only + próximo gate + o que está aguardando, tudo
+        derivado de campos explícitos (FinOps: sem LLM). Herda o recorte de projeto da
+        `ProjectViewSet` — `get_object` já aplica a permissão de objeto.
+        """
+        project = self.get_object()
+        return Response(_build_project_timeline(project))
+
+    @extend_schema(
+        responses=inline_serializer(
+            "DeliveryTimelineOverview",
+            {
+                "project_id": serializers.IntegerField(),
+                "project_name": serializers.CharField(),
+                "client_name": serializers.CharField(),
+                "current_phase_name": serializers.CharField(allow_null=True),
+                "canonical_stage": serializers.CharField(allow_blank=True),
+                "situation": serializers.CharField(allow_null=True),
+                "waiting_party": serializers.CharField(allow_blank=True),
+                "blocker_note": serializers.CharField(allow_blank=True),
+                "next_gate_name": serializers.CharField(allow_null=True),
+            },
+            many=True,
+        )
+    )
+    @action(detail=False, methods=["get"], url_path="timeline-overview")
+    def timeline_overview(self, request: Request) -> Response:
+        """Visão compacta da entrega para o dashboard: fase corrente e situação por projeto ativo.
+
+        Agregador que **estreita à mão** por `visible_to` (o mesmo contrato dos outros do
+        dashboard) e tem teste próprio: a Entrega não pode ver a jornada de projeto de que não
+        participa. Só projetos não-concluídos entram — o dashboard é sobre o que está em curso.
+        """
+        return Response(_build_timeline_overview(request.user))
 
     @action(detail=True, methods=["post"], url_path="next-steps")
     def next_steps(self, request: Request, pk: str | None = None) -> Response:
@@ -1135,6 +1232,94 @@ def _project_phases_qs(project: Project):  # type: ignore[no-untyped-def]
         .prefetch_related("deliverables", "checklist_items")
         .order_by("phase__position", "id")
     )
+
+
+def _next_gate_phase(phases: list[ProjectPhase]) -> ProjectPhase | None:
+    """A próxima fase (na ordem) que termina em gate e ainda não decidiu — o "próximo gate".
+
+    Determinístico (FinOps): a fase ativa conta se ainda não gravou outcome; senão, a primeira
+    trancada à frente que exige gate.
+    """
+    for phase in phases:
+        if phase.status == ProjectPhase.Status.DONE:
+            continue
+        if phase.phase.requires_gate and not phase.gate_outcome:
+            return phase
+    return None
+
+
+def _build_project_timeline(project: Project) -> dict[str, Any]:
+    """Monta a linha do tempo operacional de um projeto (FDD 042)."""
+    journey.materialize_journey(project)
+    phases = list(_project_phases_qs(project))
+    current = next((p for p in phases if p.status == ProjectPhase.Status.ACTIVE), None)
+    next_phase = None
+    if current is not None:
+        after = phases[phases.index(current) + 1 :]
+        nxt = next((p for p in after if p.status == ProjectPhase.Status.LOCKED), None)
+        if nxt is not None:
+            next_phase = {"phase_name": nxt.phase.name,
+                          "canonical_stage": nxt.phase.canonical_stage}
+    gate_phase = _next_gate_phase(phases)
+    blockers = [
+        {"phase_name": p.phase.name, "waiting_party": p.waiting_party,
+         "blocker_note": p.blocker_note}
+        for p in phases
+        if p.status == ProjectPhase.Status.ACTIVE and p.waiting_party
+    ]
+    events = PhaseEvent.objects.filter(project=project).select_related("actor", "project_phase")
+    return {
+        "project": project.pk,
+        "phases": ProjectPhaseSerializer(phases, many=True).data,
+        "current_phase": ProjectPhaseSerializer(current).data if current else None,
+        "next_phase": next_phase,
+        "next_gate": (
+            {"phase_name": gate_phase.phase.name,
+             "canonical_stage": gate_phase.phase.canonical_stage}
+            if gate_phase is not None
+            else None
+        ),
+        "blockers": blockers,
+        "events": PhaseEventSerializer(events, many=True).data,
+    }
+
+
+def _build_timeline_overview(user: User) -> list[dict[str, Any]]:
+    """Visão compacta da entrega para o dashboard — estreitada à mão por `visible_to` (FDD 042)."""
+    projects = list(
+        Project.objects.visible_to(user)
+        .filter(archived_at__isnull=True)
+        .exclude(status=Project.Status.COMPLETED)
+        .select_related("client")
+        .order_by("due_date", "id")
+    )
+    if not projects:
+        return []
+    ids = [p.pk for p in projects]
+    phases_by_project: dict[int, list[ProjectPhase]] = {}
+    for phase in (
+        ProjectPhase.objects.filter(project_id__in=ids, archived_at__isnull=True)
+        .select_related("phase")
+        .order_by("phase__position", "id")
+    ):
+        phases_by_project.setdefault(phase.project_id, []).append(phase)
+    rows: list[dict[str, Any]] = []
+    for project in projects:
+        phases = phases_by_project.get(project.pk, [])
+        current = next((p for p in phases if p.status == ProjectPhase.Status.ACTIVE), None)
+        gate_phase = _next_gate_phase(phases)
+        rows.append({
+            "project_id": project.pk,
+            "project_name": project.name,
+            "client_name": project.client.name,
+            "current_phase_name": current.phase.name if current else None,
+            "canonical_stage": current.phase.canonical_stage if current else "",
+            "situation": current.situation if current else None,
+            "waiting_party": current.waiting_party if current else "",
+            "blocker_note": current.blocker_note if current else "",
+            "next_gate_name": gate_phase.phase.name if gate_phase is not None else None,
+        })
+    return rows
 
 
 class JourneyPhaseViewSet(viewsets.ModelViewSet):
