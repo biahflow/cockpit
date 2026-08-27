@@ -46,6 +46,7 @@ from .models import (
     Pendencia,
     PhaseChecklistItem,
     PhaseDeliverable,
+    PhaseEvent,
     PipelineStage,
     Processo,
     ProcessoEtapa,
@@ -188,7 +189,7 @@ class JourneyPhaseSerializer(serializers.ModelSerializer[JourneyPhase]):
         model = JourneyPhase
         fields = [
             "id", "name", "description", "position", "active", "requires_gate",
-            "deliverables", "checklist_items",
+            "canonical_stage", "deliverables", "checklist_items",
         ]
         read_only_fields = ["id"]
 
@@ -234,6 +235,11 @@ class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
     phase_description = serializers.CharField(source="phase.description", read_only=True)
     phase_position = serializers.IntegerField(source="phase.position", read_only=True)
     requires_gate = serializers.BooleanField(source="phase.requires_gate", read_only=True)
+    canonical_stage = serializers.CharField(source="phase.canonical_stage", read_only=True)
+    # `situation` é o estado semântico derivado (FDD 042): a tela mapeia situação → variante de
+    # selo, sem recalcular a regra. `waiting_party`/`blocker_note` são read-only aqui e escritos
+    # só pela action `set-waiting`, para a mudança deixar rastro auditável (como `gate_outcome`).
+    situation = serializers.CharField(read_only=True)
     deliverables = ProjectDeliverableSerializer(many=True, read_only=True)
     checklist_items = ProjectChecklistItemSerializer(many=True, read_only=True)
 
@@ -241,14 +247,37 @@ class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
         model = ProjectPhase
         fields = [
             "id", "project", "phase", "phase_name", "phase_description", "phase_position",
-            "requires_gate", "status", "started_at", "completed_at", "target_date",
-            "gate_outcome", "gate_notes", "checklist_waiver", "deliverables", "checklist_items",
+            "requires_gate", "canonical_stage", "status", "situation", "started_at",
+            "completed_at", "target_date", "gate_outcome", "gate_notes", "checklist_waiver",
+            "waiting_party", "blocker_note", "deliverables", "checklist_items",
         ]
         read_only_fields = [
             "id", "project", "phase", "phase_name", "phase_description", "phase_position",
-            "requires_gate", "status", "started_at", "completed_at", "gate_outcome",
-            "gate_notes", "deliverables", "checklist_items",
+            "requires_gate", "canonical_stage", "status", "situation", "started_at",
+            "completed_at", "gate_outcome", "gate_notes", "waiting_party", "blocker_note",
+            "deliverables", "checklist_items",
         ]
+
+
+class PhaseEventSerializer(serializers.ModelSerializer[PhaseEvent]):
+    """Uma linha do histórico append-only da jornada (FDD 042). Só-leitura — nunca se edita."""
+
+    actor_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PhaseEvent
+        fields = [
+            "id", "project", "project_phase", "phase_name", "kind", "from_status", "to_status",
+            "gate_outcome", "waiting_party", "note", "actor", "actor_name", "source", "created_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_actor_name(self, obj: PhaseEvent) -> str | None:
+        actor = obj.actor
+        if actor is None:
+            return None
+        return actor.get_full_name() or actor.get_username()
 
 
 class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):

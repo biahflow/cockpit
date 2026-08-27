@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, Workflow, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, History, Hourglass, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, Workflow, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, listUsers } from "../api";
@@ -7,7 +7,8 @@ import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
+import { CANONICAL_STAGE_LABEL, PHASE_EVENT_LABEL, SITUATION_LABEL, situationVariant, WAITING_PARTY_LABEL, WAITING_PARTY_OPTIONS } from "../journey";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WaitingParty, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -69,6 +70,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [archivingRisco, setArchivingRisco] = useState<Risco | null>(null);
   const [phases, setPhases] = useState<ProjectPhase[]>([]);
   const [projections, setProjections] = useState<GithubDeliveryProjection[]>([]);
+  const [timeline, setTimeline] = useState<ProjectTimeline | null>(null);
   const [error, setError] = useState("");
   // O que a extração acabou de mapear. Fica na tela porque o **resultado mora em outro lugar**: o
   // processo é ancorado no cliente (FDD 039), não no projeto, então sem esta linha o sucesso seria
@@ -115,7 +117,12 @@ export function ProjectDetailPage({ id }: { id: number }) {
   ]).then(([loadedProject, loadedMilestones, loadedTasks, loadedServices, loadedRisk, loadedMeetings, loadedPendencias, loadedDecisoes, loadedRiscos, loadedPhases, loadedHealth, loadedMembers]) => {
     setProject(loadedProject); setMilestones(loadedMilestones); setTasks(loadedTasks); setServices(loadedServices); setRisk(loadedRisk); setMeetings(loadedMeetings); setPendencias(loadedPendencias); setDecisoes(loadedDecisoes); setRiscos(loadedRiscos); setPhases(loadedPhases); setHealth(loadedHealth); setMembers(loadedMembers);
   }).catch((cause: Error) => setError(cause.message)), [id]);
+  const loadTimeline = useCallback(
+    () => api<ProjectTimeline>(`/projects/${id}/timeline/`).then(setTimeline).catch(() => setTimeline(null)),
+    [id],
+  );
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadTimeline(); }, [loadTimeline]);
 
   // Projeção de entrega GitHub (FDD 041): leitura à parte da carga principal, para uma folga do
   // GitHub não derrubar o resto do detalhe do projeto. A listagem não depende da flag — só o
@@ -146,12 +153,20 @@ export function ProjectDetailPage({ id }: { id: number }) {
   // deixa de valer, em vez de acusar um bloqueio que já foi resolvido.
   async function advancePhase() {
     setError("");
-    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/advance-phase/`, { method: "POST" }); setPhases(updated); }
+    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/advance-phase/`, { method: "POST" }); setPhases(updated); await loadTimeline(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function applyGate(outcome: GateOutcome, notes: string) {
     setError("");
-    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/apply-gate/`, { method: "POST", body: JSON.stringify({ outcome, notes }) }); setPhases(updated); }
+    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/apply-gate/`, { method: "POST", body: JSON.stringify({ outcome, notes }) }); setPhases(updated); await loadTimeline(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  // A espera é ação de detalhe do projeto (POST), como avançar fase: a Entrega alcança no projeto
+  // de que participa, Vendas toma 403. O backend grava um `PhaseEvent` — por isso a lista de fases
+  // volta e o histórico é recarregado (FDD 042).
+  async function setWaiting(waitingParty: WaitingParty, note: string) {
+    setError("");
+    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/set-waiting/`, { method: "POST", body: JSON.stringify({ waiting_party: waitingParty, note }) }); setPhases(updated); await loadTimeline(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function toggleChecklistItem(itemId: number, checked: boolean) {
@@ -481,7 +496,9 @@ export function ProjectDetailPage({ id }: { id: number }) {
       onApplyGate={(outcome, notes) => void applyGate(outcome, notes)}
     />
 
-    {health && <div className="flex items-center gap-2 text-sm"><span className="font-medium text-slate-600">Saúde do projeto:</span><HealthBadge level={health.level} score={health.score} />{health.signals.length === 0 && <span className="text-slate-600">sem sinais de alerta</span>}</div>}
+    {timeline && Array.isArray(timeline.events) && <DeliveryTimelinePanel timeline={timeline} canManage={canManageJourney} onSetWaiting={(party, note) => void setWaiting(party, note)} />}
+
+    {health &&<div className="flex items-center gap-2 text-sm"><span className="font-medium text-slate-600">Saúde do projeto:</span><HealthBadge level={health.level} score={health.score} />{health.signals.length === 0 && <span className="text-slate-600">sem sinais de alerta</span>}</div>}
 
     {project?.ai_scored_at && <AiScorePanel project={project} canManage={canManageJourney} onTogglePublish={next => void toggleAiScorePublish(next)} />}
 
@@ -832,6 +849,63 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
       onCancel={() => setConfirming(null)}
       onConfirm={() => { onApplyGate(confirming, gateNotes); setConfirming(null); }}
     />}
+  </section>;
+}
+
+const eventTime = (iso: string) => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+
+type DeliveryTimelinePanelProps = {
+  timeline: ProjectTimeline;
+  canManage: boolean;
+  onSetWaiting: (party: WaitingParty, note: string) => void;
+};
+
+// A linha do tempo operacional da entrega (FDD 042): a situação corrente, quem/o quê está sendo
+// esperado, o próximo gate e o **histórico append-only**. Distinta da Jornada logo acima: aquela é
+// o tracker de fases e os gates; esta é a auditoria — *quando* e *por quê* a jornada se moveu,
+// inclusive o que o REDESIGN apaga do estado corrente mas o evento preserva.
+function DeliveryTimelinePanel({ timeline, canManage, onSetWaiting }: DeliveryTimelinePanelProps) {
+  const current = timeline.current_phase;
+  const [party, setParty] = useState<WaitingParty>("");
+  const [note, setNote] = useState("");
+
+  return <section className="panel space-y-5 sm:p-6">
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="metric-icon"><History className="size-4" /></span>
+      <div className="flex-1"><h2 className="font-semibold text-ink">Linha do tempo da entrega</h2><p className="text-sm text-slate-600">Situação, bloqueios e histórico auditável</p></div>
+      {current && <span className={`state ${situationVariant(current.situation)}`}>{SITUATION_LABEL[current.situation]}</span>}
+    </div>
+
+    <div className="grid gap-3 sm:grid-cols-3">
+      <div><p className="eyebrow">Fase corrente</p><p className="mt-1 text-sm font-semibold text-ink">{current ? current.phase_name : "Jornada concluída"}</p>{current?.canonical_stage && <p className="text-xs text-slate-600">{CANONICAL_STAGE_LABEL[current.canonical_stage]}</p>}</div>
+      <div><p className="eyebrow">Próximo gate</p><p className="mt-1 text-sm font-semibold text-ink">{timeline.next_gate ? timeline.next_gate.phase_name : "Nenhum previsto"}</p></div>
+      <div><p className="eyebrow">Próxima fase</p><p className="mt-1 text-sm font-semibold text-ink">{timeline.next_phase ? timeline.next_phase.phase_name : "—"}</p></div>
+    </div>
+
+    {/* Quem/o quê a fase corrente espera — legível sem abrir a nota crua (FDD 042). */}
+    {current && (current.waiting_party
+      ? <div className="rounded-2xl border bg-slate-50/60 p-4">
+          <div className="flex flex-wrap items-center gap-2"><Hourglass className="size-4 text-slate-600" /><span className="text-sm font-semibold text-ink">Aguardando {WAITING_PARTY_LABEL[current.waiting_party as Exclude<WaitingParty, "">]}</span></div>
+          {current.blocker_note && <p className="mt-1 text-sm text-slate-600">{current.blocker_note}</p>}
+          {canManage && <button type="button" className="btn btn--secondary mt-3" onClick={() => onSetWaiting("", "")}><CheckCircle2 className="size-4" />Resolver bloqueio</button>}
+        </div>
+      : canManage && <div className="rounded-2xl border border-dashed p-4">
+          <p className="eyebrow">Registrar espera</p>
+          <p className="mt-1 text-sm text-slate-600">De quem ou do quê esta fase depende agora? Fica no histórico.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,12rem)_1fr_auto] sm:items-end">
+            <label className="form-label">Aguardando<select className="field" value={party} onChange={event => setParty(event.target.value as WaitingParty)}><option value="">Selecione…</option>{WAITING_PARTY_OPTIONS.map(option => <option key={option} value={option}>{WAITING_PARTY_LABEL[option]}</option>)}</select></label>
+            <label className="form-label">Nota (opcional)<input className="field" value={note} onChange={event => setNote(event.target.value)} placeholder="O que trava a fase" /></label>
+            <button type="button" className="btn" disabled={!party} onClick={() => { onSetWaiting(party, note); setParty(""); setNote(""); }}><Save className="size-4" />Registrar</button>
+          </div>
+        </div>)}
+
+    <div>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Histórico · {timeline.events.length} evento(s)</p>
+      {timeline.events.length ? <ol className="divide-y">{timeline.events.map(event => <li className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5" key={event.id}>
+        <div className="min-w-0"><p className="text-sm font-medium text-ink">{PHASE_EVENT_LABEL[event.kind]}{event.phase_name ? ` · ${event.phase_name}` : ""}</p>{(event.note || event.gate_outcome || event.waiting_party) && <p className="mt-0.5 text-xs text-slate-600">{event.gate_outcome ? `${gateLabel[event.gate_outcome]}. ` : ""}{event.waiting_party ? `${WAITING_PARTY_LABEL[event.waiting_party as Exclude<WaitingParty, "">]}. ` : ""}{event.note}</p>}</div>
+        <time className="shrink-0 text-xs text-slate-600">{eventTime(event.created_at)}{event.actor_name ? ` · ${event.actor_name}` : " · sistema"}</time>
+      </li>)}</ol> : <p className="empty-state">Sem eventos ainda.</p>}
+    </div>
   </section>;
 }
 

@@ -7,7 +7,9 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0045_engineering_handoff'),
+        # Linearizado após a 0047 (linha do tempo, PR #52) para não deixar duas
+        # folhas na graph — as duas fatias saíram de branches paralelos sobre a 0045.
+        ('core', '0047_delivery_timeline'),
     ]
 
     operations = [

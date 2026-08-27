@@ -52,3 +52,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0044 — A infraestrutura do Pulse mora no repositório do outro produto
 - 0045 — A camada global vem vendorizada e pinada, e o Project Context sai de baixo dela
 - 0046 — A projeção de entrega GitHub lê, e não vira fonte da verdade
+- 0047 — A linha do tempo da entrega: canônica sobre a configurável e histórico append-only
