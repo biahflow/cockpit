@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import date, datetime
 
@@ -30,6 +31,19 @@ class TimestampedModel(models.Model):
         self.save(update_fields=["archived_at", "updated_at"])
 
 
+def avatar_upload_to(instance: User, filename: str) -> str:
+    """Nome **gerado**, e não o que veio no upload.
+
+    O `Document` preserva o nome original porque ele viaja para o Drive e para o fornecedor de
+    assinatura; o avatar não tem esse destino, então o nome enviado seria entrada do usuário
+    dentro de um caminho de storage sem nada em troca. O uuid também é o que faz "trocar a foto"
+    gravar um objeto novo em vez de disputar o nome do anterior — e é dele que sai o `ETag` da
+    rota de leitura, que serviria a foto velha se o caminho não mudasse.
+    """
+    extension = os.path.splitext(filename or "")[1].lower()
+    return f"avatars/{uuid.uuid4().hex}{extension}"
+
+
 class User(AbstractUser):
     class Role(models.TextChoices):
         ADMIN = "admin", "Administrador"
@@ -37,6 +51,16 @@ class User(AbstractUser):
         DELIVERY = "delivery", "Entrega"
 
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.DELIVERY)
+    # `FileField` e não `ImageField`: o segundo exige Pillow, que este backend não tem, e o que
+    # ele daria — "isto é mesmo uma imagem" — é feito explicitamente em `ProfileAvatarSerializer`,
+    # que confere tamanho, extensão **e** os bytes de assinatura, no estilo do
+    # `DocumentSerializer.validate`. O arquivo é privado como o documento: nenhum ambiente serve
+    # `MEDIA_ROOT` (ADR 0002), e a única porta é `GET /api/v1/users/<id>/avatar/`.
+    avatar = models.FileField(upload_to=avatar_upload_to, blank=True)
+    # `AbstractUser` não tem `updated_at`, e o `Last-Modified` da rota da foto precisa de uma
+    # data. É também o sinal de troca que o `<img>` do topbar usa para parar de exibir a foto
+    # anterior sem esperar o navegador decidir revalidar.
+    avatar_updated_at = models.DateTimeField(null=True, blank=True)
 
     @property
     def is_admin_role(self) -> bool:

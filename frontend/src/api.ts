@@ -121,6 +121,38 @@ export function listUsers(): Promise<SessionUser[]> {
   return api<SessionUser[]>("/users/");
 }
 
+// ---------- Meu perfil ----------
+// Todas as rotas de escrita ficam sob `/auth/me/` e operam sobre a sessão: **não existe id de
+// usuário para mandar**, e é isso que impede a tela de virar caminho para editar outra pessoa.
+
+export function updateProfile(payload: { first_name: string; last_name: string }): Promise<SessionUser> {
+  return api<SessionUser>("/auth/me/", { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export function uploadAvatar(file: File): Promise<SessionUser> {
+  const body = new FormData();
+  body.append("avatar", file);
+  return api<SessionUser>("/auth/me/avatar/", { method: "PUT", body });
+}
+
+export function removeAvatar(): Promise<SessionUser> {
+  return api<SessionUser>("/auth/me/avatar/", { method: "DELETE" });
+}
+
+export function changePassword(payload: { current_password: string; new_password: string; new_password_confirm: string }): Promise<void> {
+  return api<void>("/auth/me/password/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+/** A foto sai por rota autenticada, como o download de documento — nunca por `/media/`.
+ *
+ * O `?v=` não é cache-busting contra o servidor (o `ETag` da rota já resolve a revalidação): ele
+ * existe porque o navegador não refaz um `<img>` cuja `src` não mudou, e sem ele a foto trocada
+ * só apareceria depois de um recarregamento da página. */
+export function avatarUrl(user: SessionUser): string {
+  const versao = user.avatar_updated_at ? `?v=${encodeURIComponent(user.avatar_updated_at)}` : "";
+  return `${baseUrl}/users/${user.id}/avatar/${versao}`;
+}
+
 export function acceptInvitation(payload: { token: string; username: string; password: string; first_name?: string; last_name?: string }): Promise<SessionUser> {
   return api<SessionUser>("/invitations/accept/", { method: "POST", body: JSON.stringify(payload) });
 }

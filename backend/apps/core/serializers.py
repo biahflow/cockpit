@@ -74,14 +74,117 @@ class UserSerializer(serializers.ModelSerializer[User]):
     # expressão dela. Sem isto, `createsuperuser` — o primeiro comando de toda instalação — produz
     # alguém que a API trata como admin e a tela trata como Entrega (FDD 017, ADR 0010).
     is_admin = serializers.BooleanField(source="is_admin_role", read_only=True)
+    # O topbar precisa saber **se** existe foto para escolher entre a miniatura e as iniciais, e
+    # o byte da foto não cabe aqui: ele sai pela rota autenticada `users/<id>/avatar/`, como o
+    # download de documento (ADR 0002). `avatar_updated_at` acompanha porque é o que muda a `src`
+    # do `<img>` quando a pessoa troca a foto — sem ele o navegador seguiria mostrando a anterior.
+    has_avatar = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "email", "role", "is_admin"]
-        # `is_admin` explicitamente aqui também: hoje nenhum endpoint de escrita usa este
-        # serializer, mas os demais campos são graváveis, e o dia em que alguém o pendurar num
-        # viewset de escrita não pode ser o dia em que virou caminho de promoção.
-        read_only_fields = ["id", "is_admin"]
+        fields = ["id", "username", "first_name", "last_name", "email", "role", "is_admin",
+                  "has_avatar", "avatar_updated_at"]
+        # `is_admin` explicitamente aqui também: este serializer é o de **leitura** e nenhum
+        # endpoint de escrita o usa — a escrita de perfil próprio tem o seu, logo abaixo, com
+        # allowlist de dois campos. Os demais campos daqui são graváveis, e o dia em que alguém o
+        # pendurar num viewset de escrita não pode ser o dia em que virou caminho de promoção.
+        read_only_fields = ["id", "is_admin", "has_avatar", "avatar_updated_at"]
+
+    def get_has_avatar(self, obj: User) -> bool:
+        return bool(obj.avatar)
+
+
+# Comentário e não docstring: o drf-spectacular usa a docstring do serializer como `description`
+# do schema, e o raciocínio abaixo é interno — no `openapi.yaml` ele vira contrato público com
+# nome de teste dentro. Mesma regra que vale para a docstring de viewset.
+#
+# **Serializer separado, allowlist de dois campos.** Não é o `UserSerializer` acima com um
+# `read_only_fields` maior, e a diferença não é de estilo: aquele tem `role` gravável, então
+# reutilizá-lo aqui faria um `PATCH` com `{"role": "admin"}` promover quem o mandou. Uma allowlist
+# só se rompe por adição deliberada; uma denylist se rompe por esquecimento, no dia em que um campo
+# novo entrar no modelo.
+#
+# O `ModelSerializer` descarta chave que não esteja em `fields`, então `role`, `is_superuser`,
+# `is_staff`, `is_active`, `email`, `username` e `id` não chegam a `validated_data`. Coberto por
+# `test_entrega_mandando_role_admin_nao_vira_admin`.
+class ProfileSerializer(serializers.ModelSerializer[User]):
+    """Nome e sobrenome do próprio usuário."""
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name"]
+
+
+# Foto de perfil: 2 MB e três tipos, conferidos **no servidor** (a checagem do `<input accept>`
+# é conveniência de tela, não controle). O limite é menor que o do documento porque o consumidor
+# é uma miniatura de 72px, e o arquivo volta a ser servido pela nossa própria origem.
+AVATAR_MAX_BYTES = 2 * 1024 * 1024
+AVATAR_CONTENT_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+}
+
+
+def _avatar_magic_matches(extension: str, head: bytes) -> bool:
+    """Os bytes iniciais batem com a extensão declarada?
+
+    A extensão sozinha não basta: o arquivo volta a ser servido pela rota da foto **sob a origem
+    do portal**, e um `.png` que na verdade é HTML seria XSS armazenada. O `nosniff` da rota é a
+    segunda tranca; esta é a primeira, e recusa antes de gravar. O WebP precisa dos dois pedaços
+    — `RIFF` no começo e `WEBP` no byte 8 —, porque `RIFF` sozinho é também WAV e AVI.
+    """
+    if extension in {".jpg", ".jpeg"}:
+        return head.startswith(b"\xff\xd8\xff")
+    if extension == ".png":
+        return head.startswith(b"\x89PNG\r\n\x1a\n")
+    return head.startswith(b"RIFF") and head[8:12] == b"WEBP"
+
+
+# Mesmo desenho do `DocumentSerializer.validate`: tamanho e tipo, conferidos no servidor.
+class ProfileAvatarSerializer(serializers.Serializer):
+    """Foto de perfil: JPG, PNG ou WebP, até 2 MB."""
+
+    avatar = serializers.FileField()
+
+    def validate_avatar(self, value: UploadedFile) -> UploadedFile:
+        if (value.size or 0) > AVATAR_MAX_BYTES:
+            raise serializers.ValidationError("A imagem excede o limite de 2 MB.")
+        extension = os.path.splitext(value.name or "")[1].lower()
+        if extension not in AVATAR_CONTENT_TYPES:
+            raise serializers.ValidationError("Envie uma imagem JPG, PNG ou WebP.")
+        head = value.read(16)
+        value.seek(0)
+        if not _avatar_magic_matches(extension, head):
+            raise serializers.ValidationError("O arquivo não é uma imagem JPG, PNG ou WebP.")
+        return value
+
+
+# A regra de força é a **mesma** do aceite de convite (`AcceptInvitationSerializer`): os
+# validadores configurados do Django, com o `user` em mãos para que o
+# `UserAttributeSimilarityValidator` tenha o que comparar — sem ele esse validador desiste e a
+# regra vira metade dela. Comentário e não docstring: ver `ProfileSerializer` acima.
+class ChangePasswordSerializer(serializers.Serializer):
+    """Troca da própria senha, conferindo a senha atual."""
+
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+    new_password_confirm = serializers.CharField(write_only=True)
+
+    def validate_current_password(self, value: str) -> str:
+        user = cast(User, self.context["user"])
+        if not user.check_password(value):
+            raise serializers.ValidationError("A senha atual está incorreta.")
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError(
+                {"new_password_confirm": "A confirmação não confere com a nova senha."}
+            )
+        try:
+            validate_password(attrs["new_password"], user=cast(User, self.context["user"]))
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"new_password": list(exc.messages)}) from exc
+        return attrs
 
 
 class ClientSerializer(serializers.ModelSerializer[Client]):

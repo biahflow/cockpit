@@ -213,6 +213,10 @@ REST_FRAMEWORK = {
         "user": os.getenv("USER_RATE", "2000/hour"),
         "login": os.getenv("LOGIN_RATE", "10/min"),
         "invitation_accept": os.getenv("INVITATION_ACCEPT_RATE", "20/hour"),
+        # Trocar a própria senha exige acertar a atual, então é uma porta de adivinhação como o
+        # login — e o teto genérico de `user` (2000/hora) não segura ninguém. Quem tem a sessão
+        # mas não a senha é exatamente o cenário que este escopo existe para limitar.
+        "password_change": os.getenv("PASSWORD_CHANGE_RATE", "10/min"),
         "portal_read": os.getenv("PORTAL_READ_RATE", "120/hour"),
         "lead_intake": os.getenv("LEAD_INTAKE_RATE", "20/hour"),
         "task_sync": os.getenv("TASK_SYNC_RATE", "60/hour"),

@@ -35,6 +35,9 @@ export const ROUTES: readonly Screen[] = [
   { path: "/conhecimento", name: "Conhecimento", role: "admin" },
   { path: "/equipe", name: "Equipe", role: "admin" },
   { path: "/configuracoes", name: "Configurações", role: "admin" },
+  // Perfil próprio: entra pela Entrega de propósito, que é o papel para quem `/users/` está
+  // fechado — se a tela dependesse daquela rota, é aqui que quebraria.
+  { path: "/perfil", name: "Meu perfil", role: "delivery" },
   { path: "/design-system", name: "Design system", role: "admin" },
   // Entrega sem projeto: o estado vazio é uma tela de verdade e tem seu próprio texto.
   { path: "/projetos", name: "Projetos (Entrega, sem equipe)", role: "delivery" },

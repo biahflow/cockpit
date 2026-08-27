@@ -536,6 +536,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+    patch:
+      operationId: v1_auth_me_partial_update
+      summary: Edita o nome do usuário da sessão.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfile'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/me/avatar/:
+    put:
+      operationId: v1_auth_me_avatar_update
+      summary: Envia a foto do usuário da sessão. JPG, PNG ou WebP, até 2 MB.
+      tags:
+      - v1
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProfileAvatar'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProfileAvatar'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    delete:
+      operationId: v1_auth_me_avatar_destroy
+      summary: Remove a foto do usuário da sessão.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/me/password/:
+    post:
+      operationId: v1_auth_me_password_create
+      summary: Troca a senha do usuário da sessão, conferindo a senha atual.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/blueprint-variants/:
     get:
       operationId: v1_blueprint_variants_list
@@ -8524,6 +8606,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/v1/users/{id}/avatar/:
+    get:
+      operationId: v1_users_avatar_retrieve
+      summary: A foto de perfil, atrás de sessão. Cada um alcança a sua; o admin,
+        todas.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '304':
+          description: No response body
+        '404':
+          description: No response body
   /api/v1/verticals/:
     get:
       operationId: v1_verticals_list
@@ -9187,6 +9296,23 @@ components:
         * `draft` - Rascunho
         * `review` - Em revisão
         * `published` - Publicado
+    ChangePassword:
+      type: object
+      description: Troca da própria senha, conferindo a senha atual.
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+        new_password:
+          type: string
+          writeOnly: true
+        new_password_confirm:
+          type: string
+          writeOnly: true
+      required:
+      - current_password
+      - new_password
+      - new_password_confirm
     CiStateEnum:
       enum:
       - unknown
@@ -12633,6 +12759,18 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedProfile:
+      type: object
+      description: Nome e sobrenome do próprio usuário.
+      properties:
+        first_name:
+          type: string
+          title: Primeiro nome
+          maxLength: 150
+        last_name:
+          type: string
+          title: Último nome
+          maxLength: 150
     PatchedProject:
       type: object
       properties:
@@ -13480,6 +13618,15 @@ components:
           type: integer
       required:
       - id
+    ProfileAvatar:
+      type: object
+      description: 'Foto de perfil: JPG, PNG ou WebP, até 2 MB.'
+      properties:
+        avatar:
+          type: string
+          format: uri
+      required:
+      - avatar
     Project:
       type: object
       properties:
@@ -14306,7 +14453,17 @@ components:
         is_admin:
           type: boolean
           readOnly: true
+        has_avatar:
+          type: boolean
+          readOnly: true
+        avatar_updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
+      - avatar_updated_at
+      - has_avatar
       - id
       - is_admin
       - username

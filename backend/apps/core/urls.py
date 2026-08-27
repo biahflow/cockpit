@@ -39,7 +39,9 @@ from .views import (
     LeadViewSet,
     LoginView,
     LogoutView,
+    MeAvatarView,
     MeetingViewSet,
+    MePasswordView,
     MeView,
     MilestoneViewSet,
     NotificationViewSet,
@@ -64,6 +66,7 @@ from .views import (
     ServiceViewSet,
     TaskSyncIntakeView,
     TaskViewSet,
+    UserAvatarView,
     UserViewSet,
     VerticalViewSet,
     csrf,
@@ -145,10 +148,18 @@ urlpatterns = [
     ),
     path("config/", ConfigView.as_view(), name="config"),
     path("config/sync-calendar/", CalendarSyncView.as_view(), name="config-sync-calendar"),
+    # Antes do `include(router.urls)` não é necessário — o detalhe do router é ancorado e não
+    # casaria `users/1/avatar/` — mas fica junto das demais rotas explícitas, como `leads/intake/`.
+    path("users/<int:pk>/avatar/", UserAvatarView.as_view(), name="user-avatar"),
     path("auth/csrf/", csrf, name="csrf"),
     path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/me/", MeView.as_view(), name="me"),
+    # Tudo sob `auth/me/` opera sobre `request.user`, e é o que torna a escrita de perfil segura
+    # sem afrouxar `RolePermission`: não existe alvo vindo do cliente para apontar para outra
+    # pessoa. A leitura da foto é a única com id na URL, e ela é só leitura.
+    path("auth/me/avatar/", MeAvatarView.as_view(), name="me-avatar"),
+    path("auth/me/password/", MePasswordView.as_view(), name="me-password"),
     path("invitations/", InvitationView.as_view(), name="invitation"),
     path("invitations/accept/", AcceptInvitationView.as_view(), name="accept-invitation"),
 ]
