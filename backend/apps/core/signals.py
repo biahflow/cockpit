@@ -8,7 +8,7 @@ from django.db.models import ProtectedError
 from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
-from . import cases, journey, notifications, portal, tasksync
+from . import cases, journey, ladder, notifications, portal, tasksync
 from .models import (
     Artifact,
     Client,
@@ -62,6 +62,20 @@ def _materialize_project_journey(
     """Ao nascer um projeto, instancia sua Jornada de Transformação a partir do template."""
     if created:
         journey.materialize_journey(instance)
+
+
+@receiver(post_save, sender=Client)
+def _materialize_account_ladder(
+    sender: type[Client], instance: Client, created: bool, **kwargs: Any
+) -> None:
+    """Ao nascer uma conta, materializa os seis degraus `not_sold` da escada FDE (FDD 042).
+
+    Molde do `_materialize_project_journey` logo acima, um eixo acima: aquele é a jornada de
+    entrega de **um projeto**, este é a escada da **conta**. As contas anteriores a esta fatia são
+    materializadas de forma preguiçosa na primeira leitura de `/account-rungs/?client=`.
+    """
+    if created:
+        ladder.materialize_ladder(instance)
 
 
 @receiver(post_save, sender=Project)

@@ -156,6 +156,71 @@ const saude = serie(8, index => ({
   signals: [{ label: "Decisões pendentes", detail: "4 em aberto · 2 aguardando o cliente", weight: 25 }],
 }));
 
+/**
+ * A escada FDE da conta (FDD 042, DAP GH-42 r1). **Um degrau de cada pele**, e não um retrato
+ * coerente de uma conta real: é o mesmo critério das fixtures de fatura e de evidência acima — o
+ * axe mede o que renderiza, e uma escada inteira em "não vendido" aprovaria seis estados que nunca
+ * apareceram. Aqui estão todos: concluído com selo de gate, pulado com motivo, ativo com a jornada
+ * de entrega aninhada (o ponto mais frágil a 390px), aguardando gate com a **única pastilha
+ * sólida** do produto, a pele de engenharia e o não vendido.
+ */
+const degrausFde = [
+  { rung: "discover", rung_display: "Discover", status: "done", status_display: "Concluído",
+    opportunity: 1, opportunity_title: `Discovery Sprint — ${NOME_LONGO}`, project: 1, project_name: projetos[0].name,
+    started_at: `${HOJE}T09:00:00Z`, completed_at: `${HOJE}T18:00:00Z`, gate_outcome: "go",
+    waiting_on: "", waiting_on_display: "" },
+  { rung: "prioritize", rung_display: "Prioritize", status: "done", status_display: "Concluído",
+    opportunity: 1, opportunity_title: `Discovery Sprint — ${NOME_LONGO}`, project: 1, project_name: projetos[0].name,
+    started_at: `${HOJE}T09:00:00Z`, completed_at: `${HOJE}T18:00:00Z`, gate_outcome: "conditional_go",
+    waiting_on: "", waiting_on_display: "" },
+  { rung: "feasibility", rung_display: "[ Technical Feasibility ]", status: "skipped", status_display: "Pulada",
+    skip_reason: "Tecnologia sabida — o OCR já roda em outro cliente da mesma vertical",
+    skipped_by: 1, skipped_by_name: "Ana Souza", skipped_at: `${HOJE}T09:05:00Z`,
+    waiting_on: "", waiting_on_display: "" },
+  { rung: "prove", rung_display: "Prove", status: "active", status_display: "Ativo",
+    opportunity: 2, opportunity_title: `PROVE — triagem de notas de ${NOME_LONGO}`,
+    project: 1, project_name: projetos[0].name, started_at: `${HOJE}T09:00:00Z`,
+    waiting_on: "engineering", waiting_on_display: "Engenharia",
+    next_gate: { phase_name: "Fase 2 — implantação assistida", target_date: HOJE },
+    days_stalled: 4,
+    events: [
+      { id: 1, rung: 4, from_status: "not_sold", from_status_display: "Não vendido", to_status: "active", to_status_display: "Ativo", at: `${HOJE}T09:00:00Z`, by: 1, by_name: "Ana Souza", note: "Ao converter a oportunidade PROVE" },
+      { id: 2, rung: 4, from_status: "active", from_status_display: "Ativo", to_status: "blocked", to_status_display: "Bloqueado", at: `${HOJE}T10:00:00Z`, by: 1, by_name: "Ana Souza", note: "Acesso ao ERP pendente do time de TI do cliente" },
+      { id: 3, rung: 4, from_status: "blocked", from_status_display: "Bloqueado", to_status: "active", to_status_display: "Ativo", at: `${HOJE}T11:00:00Z`, by: 1, by_name: "Ana Souza", note: "Credencial liberada" },
+    ] },
+  { rung: "scale", rung_display: "Scale", status: "awaiting_gate", status_display: "Aguardando decisão de gate",
+    opportunity: 3, opportunity_title: `Scale — ${NOME_LONGO}`, project: 1, project_name: projetos[0].name,
+    started_at: `${HOJE}T09:00:00Z`, waiting_on: "human_gate", waiting_on_display: "Human Gate",
+    next_gate: { phase_name: "Fase 2 — implantação assistida", target_date: HOJE },
+    days_stalled: 31, is_stale: true },
+  { rung: "optimize", rung_display: "Optimize", status: "not_sold", status_display: "Não vendido",
+    waiting_on: "", waiting_on_display: "" },
+].map((degrau, indice) => ({
+  id: indice + 1, client: 1, opportunity: null, opportunity_title: "", project: null, project_name: "",
+  started_at: null, completed_at: null, blocker: "", skip_reason: "", skipped_by: null,
+  skipped_by_name: "", skipped_at: null, days_stalled: null, is_stale: false,
+  gate_outcome: "", next_gate: null, no_access: false, events: [], ...degrau,
+}));
+
+/** A superfície B, na visão geral. Uma linha por dono, para as cinco peles serem medidas. */
+const escadaPorConta = [
+  { client_id: 1, client_name: clientes[0].name, rung: "prove", rung_display: "Prove",
+    status: "blocked", status_display: "Bloqueado", waiting_on: "client", waiting_on_display: "Cliente",
+    days_stalled: 31, is_stale: true },
+  { client_id: 2, client_name: clientes[1].name, rung: "prove", rung_display: "Prove",
+    status: "active", status_display: "Ativo", waiting_on: "biahflow", waiting_on_display: "Biahflow",
+    days_stalled: 4, is_stale: false },
+  { client_id: 3, client_name: clientes[2].name, rung: "scale", rung_display: "Scale",
+    status: "awaiting_gate", status_display: "Aguardando decisão de gate",
+    waiting_on: "human_gate", waiting_on_display: "Human Gate", days_stalled: 9, is_stale: false },
+  { client_id: 4, client_name: clientes[3].name, rung: "prioritize", rung_display: "Prioritize",
+    status: "active", status_display: "Ativo", waiting_on: "engineering", waiting_on_display: "Engenharia",
+    days_stalled: 2, is_stale: false },
+].map(linha => ({
+  ...linha,
+  steps: degrausFde.map(degrau => ({ rung: degrau.rung, rung_display: degrau.rung_display, status: degrau.status })),
+}));
+
 /** Rotas exatas → resposta. O que não casar cai no default por método (lista vazia). */
 const FIXTURES: Record<string, unknown> = {
   "/api/v1/auth/csrf/": { csrfToken: "test" },
@@ -186,7 +251,9 @@ const FIXTURES: Record<string, unknown> = {
     upcoming_tasks: itensDeTrabalho.slice(0, 5).map(item => ({
       id: item.id, title: item.title, due_date: item.due_date, project_id: 1,
     })),
+    account_ladder: escadaPorConta,
   },
+  "/api/v1/account-rungs/": degrausFde,
   "/api/v1/clients/": clientes,
   "/api/v1/clients/1/": clientes[0],
   "/api/v1/clients/overview/": {

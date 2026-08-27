@@ -52,3 +52,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0044 — A infraestrutura do Pulse mora no repositório do outro produto
 - 0045 — A camada global vem vendorizada e pinada, e o Project Context sai de baixo dela
 - 0046 — A projeção de engenharia é somente leitura, e a idempotência é por identidade de entrega
+- 0047 — A escada FDE é eixo da conta, e a jornada de entrega fica onde está

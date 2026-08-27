@@ -13,12 +13,14 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, drive, knowledge, processos
+from . import blueprints, drive, knowledge, ladder, processos
 from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
     CASE_TRANSITIONS,
     INVOICE_TRANSITIONS,
+    AccountRung,
+    AccountRungEvent,
     Activity,
     Artifact,
     BlueprintVariant,
@@ -558,6 +560,209 @@ class TaskSerializer(WorkItemSerializer):
         if milestone and project and milestone.project_id != project.id:
             raise serializers.ValidationError({"milestone": "O marco deve pertencer ao mesmo projeto."})
         return attrs
+
+
+class AccountRungEventSerializer(serializers.ModelSerializer[AccountRungEvent]):
+    """Uma transição do histórico. **Só de leitura, e não por comodidade**: o registro é
+    append-only (FDD 042), e um serializer gravável aqui ofereceria a operação que o modelo existe
+    para negar.
+    """
+
+    from_status_display = serializers.SerializerMethodField()
+    to_status_display = serializers.SerializerMethodField()
+    by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AccountRungEvent
+        fields = [
+            "id", "rung", "from_status", "from_status_display", "to_status",
+            "to_status_display", "at", "by", "by_name", "note",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_from_status_display(self, obj: AccountRungEvent) -> str:
+        return AccountRung.Status(obj.from_status).label if obj.from_status else ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_to_status_display(self, obj: AccountRungEvent) -> str:
+        return AccountRung.Status(obj.to_status).label
+
+    @extend_schema_field(serializers.CharField())
+    def get_by_name(self, obj: AccountRungEvent) -> str:
+        return obj.by.get_full_name() or obj.by.username if obj.by else ""
+
+
+class AccountRungSerializer(serializers.ModelSerializer[AccountRung]):
+    """Um degrau da escada FDE da conta (FDD 042). **Inteiramente de leitura.**
+
+    A escrita entra por `POST /account-rungs/{id}/transition/`, que é onde moram as consequências
+    de cada estado — carimbo, autor, motivo do pulo e o evento append-only. Um `PATCH status=done`
+    gravaria a conclusão sem nada disso e o campo passaria a mentir sobre a escada; é o mesmo
+    motivo pelo qual `ProjectPhase.gate_outcome` é read-only e só a action `apply-gate` o move.
+
+    **O que a Entrega vê é a *forma* da escada, não o conteúdo comercial** (ADR 0047): oportunidade
+    e título de oportunidade vêm sempre nulos, e o degrau realizado por um projeto de que a pessoa
+    não participa vem marcado `no_access`, sem projeto, sem datas e sem histórico. O recorte de
+    quais projetos são visíveis vem de `Project.objects.visible_to` e **nunca é reescrito** (RFC
+    0003, ADR 0010) — o viewset o resolve uma vez e entrega no contexto.
+
+    `gate_outcome` e `next_gate` são **projeções da jornada de entrega da FDD 011**, derivadas do
+    projeto que realiza o degrau. Referenciadas, não redesenhadas: a decisão de gate continua sendo
+    tomada na tela do projeto, e aqui ela só aparece.
+    """
+
+    rung_display = serializers.CharField(source="get_rung_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    waiting_on_display = serializers.SerializerMethodField()
+    opportunity_title = serializers.SerializerMethodField()
+    project_name = serializers.SerializerMethodField()
+    skipped_by_name = serializers.SerializerMethodField()
+    days_stalled = serializers.SerializerMethodField()
+    is_stale = serializers.SerializerMethodField()
+    gate_outcome = serializers.SerializerMethodField()
+    next_gate = serializers.SerializerMethodField()
+    no_access = serializers.SerializerMethodField()
+    events = AccountRungEventSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = AccountRung
+        fields = [
+            "id", "client", "rung", "rung_display", "status", "status_display",
+            "opportunity", "opportunity_title", "project", "project_name",
+            "started_at", "completed_at", "waiting_on", "waiting_on_display", "blocker",
+            "skip_reason", "skipped_by", "skipped_by_name", "skipped_at",
+            "days_stalled", "is_stale", "gate_outcome", "next_gate", "no_access", "events",
+        ]
+        read_only_fields = fields
+
+    # ---- o recorte da Entrega -------------------------------------------------------------
+    def _redacted(self) -> bool:
+        """A pessoa é da Entrega? Só aí há conteúdo comercial a esconder."""
+        user = getattr(self.context.get("request"), "user", None)
+        return bool(user and not user.is_admin_role and user.role == User.Role.DELIVERY)
+
+    def _visible_projects(self) -> set[int]:
+        """Ids de projeto que a pessoa alcança, resolvidos uma vez pelo viewset."""
+        return self.context.get("visible_project_ids", set())
+
+    def _sem_acesso(self, obj: AccountRung) -> bool:
+        return bool(
+            self._redacted()
+            and obj.project_id
+            and obj.project_id not in self._visible_projects()
+        )
+
+    def to_representation(self, instance: AccountRung) -> dict[str, Any]:
+        dados = super().to_representation(instance)
+        if not self._redacted():
+            return dados
+        # A oportunidade é conteúdo **comercial** e some para a Entrega mesmo quando o projeto é
+        # visível: quem entrega precisa saber em que degrau a conta está, não por quanto ele foi
+        # vendido. Isso é decisão de contrato — ver a FDD 042.
+        dados["opportunity"] = None
+        dados["opportunity_title"] = ""
+        if dados["no_access"]:
+            # A *forma* da escada continua: nome do degrau e posição. O resto some, inclusive o
+            # histórico — a transição carrega a proveniência comercial junto.
+            dados.update(
+                project=None, project_name="", started_at=None, completed_at=None,
+                blocker="", skip_reason="", skipped_by=None, skipped_by_name="",
+                skipped_at=None, waiting_on="", waiting_on_display="",
+                gate_outcome="", next_gate=None, days_stalled=None, is_stale=False,
+                events=[],
+            )
+        return dados
+
+    # ---- campos derivados -----------------------------------------------------------------
+    @extend_schema_field(serializers.CharField())
+    def get_waiting_on_display(self, obj: AccountRung) -> str:
+        return AccountRung.WaitingOn(obj.waiting_on).label if obj.waiting_on else ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_opportunity_title(self, obj: AccountRung) -> str:
+        return obj.opportunity.title if obj.opportunity_id and obj.opportunity else ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_project_name(self, obj: AccountRung) -> str:
+        return obj.project.name if obj.project_id and obj.project else ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_skipped_by_name(self, obj: AccountRung) -> str:
+        if not obj.skipped_by_id or not obj.skipped_by:
+            return ""
+        return obj.skipped_by.get_full_name() or obj.skipped_by.username
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_days_stalled(self, obj: AccountRung) -> int | None:
+        return ladder.days_stalled(obj)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_stale(self, obj: AccountRung) -> bool:
+        return ladder.is_stale(ladder.days_stalled(obj))
+
+    @extend_schema_field(serializers.CharField())
+    def get_gate_outcome(self, obj: AccountRung) -> str:
+        """A última decisão de gate registrada na jornada do projeto que realiza o degrau.
+
+        Projeção, não campo próprio: o gate é decidido em `POST /projects/{id}/apply-gate/` e
+        gravado em `ProjectPhase.gate_outcome`. Guardar uma segunda cópia aqui criaria a divergência
+        silenciosa que a casa evita — e o SPA usa o **mesmo mapa** de rótulo/variante da tela do
+        projeto, nunca um segundo.
+        """
+        fase = self._gate_phase(obj)
+        return fase.gate_outcome if fase else ""
+
+    @extend_schema_field(
+        serializers.DictField(child=serializers.CharField(), allow_null=True)
+    )
+    def get_next_gate(self, obj: AccountRung) -> dict[str, Any] | None:
+        """A fase ativa da jornada que termina em decision gate — o "próximo gate" do degrau."""
+        fase = next(
+            (
+                fase
+                for fase in self._phases(obj)
+                if fase.status == ProjectPhase.Status.ACTIVE and fase.phase.requires_gate
+            ),
+            None,
+        )
+        if fase is None:
+            return None
+        return {
+            "phase_name": fase.phase.name,
+            "target_date": fase.target_date.isoformat() if fase.target_date else None,
+        }
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_no_access(self, obj: AccountRung) -> bool:
+        return self._sem_acesso(obj)
+
+    def _phases(self, obj: AccountRung) -> list[ProjectPhase]:
+        if not obj.project_id or self._sem_acesso(obj):
+            return []
+        return list(self.context.get("phases_by_project", {}).get(obj.project_id, []))
+
+    def _gate_phase(self, obj: AccountRung) -> ProjectPhase | None:
+        decididas = [fase for fase in self._phases(obj) if fase.gate_outcome]
+        return decididas[-1] if decididas else None
+
+
+class AccountRungTransitionSerializer(serializers.Serializer):
+    """O corpo de `POST /account-rungs/{id}/transition/`. As recusas moram em `ladder`, não aqui."""
+
+    status = serializers.ChoiceField(choices=AccountRung.Status.choices)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+    waiting_on = serializers.ChoiceField(
+        choices=AccountRung.WaitingOn.choices, required=False, allow_blank=True
+    )
+    blocker = serializers.CharField(required=False, allow_blank=True)
+    skip_reason = serializers.CharField(required=False, allow_blank=True)
+    opportunity = serializers.PrimaryKeyRelatedField(
+        queryset=Opportunity.objects.all(), required=False, allow_null=True
+    )
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects.all(), required=False, allow_null=True
+    )
 
 
 class EngineeringHandoffSerializer(serializers.ModelSerializer[EngineeringHandoff]):

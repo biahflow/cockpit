@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { EngineeringPanel } from "../components/EngineeringPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
-import { HealthBadge } from "../components/StatusDot";
+import { GATE_LABEL, HealthBadge, gateBadgeClass } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
 import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WorkItemStatus } from "../types";
 
@@ -17,11 +17,9 @@ const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_pr
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
 const blankMeeting = { title: "", date: "", meeting_url: "", recording_url: "", transcript: "" };
 const employeeStatusLabel: Record<DigitalEmployeeStatus, string> = { building: "Em construção", active: "Ativo", paused: "Pausado" };
-const gateLabel: Record<GateOutcome, string> = { go: "GO", conditional_go: "CONDITIONAL GO", redesign: "REDESIGN", no_go: "NO-GO" };
-// Variante, nunca a cor: uma segunda definição de "aprovado" diverge da primeira em silêncio
-// (ADR 0026). CONDITIONAL GO e REDESIGN dividem o âmbar porque os dois dizem a mesma coisa ao
-// olho — "seguiu, mas há dívida" —, e só o NO-GO é o vermelho de fato.
-const gateVariant: Record<GateOutcome, string> = { go: "state--1", conditional_go: "state--2", redesign: "state--2", no_go: "state--3" };
+// O mapa do gate subiu para `components/StatusDot.tsx` na FDD 042, ao lado dos de saúde,
+// satisfação e sustentação: a escada FDE da conta exibe o **mesmo** selo, e duas telas lendo o
+// mesmo valor é o que trouxe os outros três para lá. Aqui só se consome.
 // Risk Register (FDD 034). "Aceito" é **neutro**, não verde: conviver com o risco é uma decisão
 // consciente, e não um problema resolvido — a mesma leitura que faz "Arquivado" usar `state--off`.
 const riscoNivelLabel: Record<RiscoNivel, { probabilidade: string; impacto: string }> = {
@@ -729,7 +727,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "state--1" : isActive ? "bg-ink text-white" : "state--off"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>
         {/* O selo do gate acompanha a fase e não some quando ela fecha: é o registro de *como* a
             jornada passou por ali — inclusive na fase que o REDESIGN trancou. */}
-        {phase.gate_outcome && <span className={`state ${gateVariant[phase.gate_outcome]}`} title={phase.gate_notes || undefined}>{gateLabel[phase.gate_outcome]}</span>}
+        {phase.gate_outcome && <span className={`state ${gateBadgeClass(phase.gate_outcome)}`} title={phase.gate_notes || undefined}>{GATE_LABEL[phase.gate_outcome]}</span>}
       </span>;
     })}</div>
 

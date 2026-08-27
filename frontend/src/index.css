@@ -397,6 +397,122 @@
      do cliente, que na escala de lá já é o cinza. */
   .state--off { @apply bg-slate-100 text-slate-600; }
 
+  /* A pastilha sólida do Human Gate (DAP GH-42 r1). **A única do produto**, e o único uso do clay
+     chapado fora do anel de foco — o acento vale por ser raro, e o gate humano é o lugar mais caro
+     de perder de vista. Branco sobre `brand-500` dá 5,02:1: passa AA.
+     A alternativa registrada e **rejeitada** foi `ink` sólido: colidiria com o `bg-ink text-white`
+     que a `JourneySection` já usa para a fase ativa, e as duas coisas diriam a mesma forma com
+     sentidos diferentes. */
+  .state--gate { @apply bg-brand-500 text-white; }
+
+  /* **Estado de negócio ≠ estado de engenharia** (DAP GH-42 r1, FDD 042). Redondo e tinto é
+     negócio, do qual o Pulse é a fonte; quadrado, com borda e monoespaçado é projeção de
+     engenharia, da qual o Pulse é só espelho. A separação é **estrutural** e não de tom, para que
+     uma cópia acidental não produza a pele errada e para que nenhuma tinta nova seja necessária —
+     é por isso que `.eng-ref` fica deliberadamente **fora** da família `.state`.
+     `muted` sobre `surface-subtle` dá 6,99:1. */
+  .eng-ref {
+    @apply inline-flex items-center gap-1.5 rounded border border-line-strong bg-surface-subtle
+      px-2 py-0.5 font-mono text-[11px] leading-4 text-muted;
+  }
+  .eng-ref strong { @apply font-semibold text-ink; }
+
+  /* ---------- Linha do tempo (DAP GH-42 r1, FDD 042) ----------
+     A primitiva que faltava: não havia *timeline* nem *stepper* no design system, e a
+     `JourneySection` desenhava os degraus dela com literal escrito à mão. Ela nasce **já com
+     consumidor** (a escada FDE da conta); refatorar a jornada de entrega para consumi-la é
+     reserva declarada no DAP, não esta fatia.
+
+     **As variantes mudam forma e continuidade do trilho; a tinta continua vindo de `.state--*`.**
+     Trilho contínuo = a conta passou por aqui. Tracejado = a escada não chegou aqui. É o que
+     separa `skipped` de `not_sold` — as duas são neutras de propósito, porque nenhuma é aviso, e
+     distinguir por cor exigiria matiz novo.
+
+     O trilho é decoração e **não pode ser o único portador de significado**: a regra
+     `color-contrast` do axe mede texto, e um traço de 2px em `line-strong` (1,49:1) passaria pelo
+     portão e ainda assim seria ilegível para quem enxerga pouco. Por isso todo estado leva rótulo
+     por extenso, e o marcador é `aria-hidden` no consumidor. */
+  .timeline { @apply relative m-0 list-none p-0 pl-8; }
+  .timeline-step { @apply relative pb-5; }
+  .timeline-step:last-child { @apply pb-0; }
+  .timeline-step::before {
+    content: "";
+    @apply absolute -bottom-0.5 -left-[22px] top-[22px] border-l-2 border-line-strong;
+  }
+  .timeline-step:last-child::before { @apply hidden; }
+  .timeline-marker {
+    @apply absolute -left-[31px] top-[3px] grid size-5 place-items-center rounded-full border-2
+      border-line-strong bg-surface text-white;
+  }
+  .timeline-body {
+    @apply rounded-xl border border-line bg-surface px-3.5 py-3;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Concluído: nó cheio na tinta de sucesso (5,48:1 sobre branco — passa WCAG 1.4.11). */
+  .timeline-step--done .timeline-marker { @apply border-success bg-success; }
+  /* Ativo: **sem selo de estado**. Quem diz "ativo" é a expansão e o `.eyebrow` "Você está aqui";
+     um selo azul aqui competiria com o dono *Biahflow*, também azul. */
+  .timeline-step--active .timeline-marker { @apply border-[3px] border-brand-500 bg-surface; }
+  .timeline-step--active .timeline-marker > span { @apply block size-2 rounded-full bg-brand-500; }
+  .timeline-step--active .timeline-body { @apply border-line-strong; box-shadow: var(--shadow-raised); }
+  /* Não vendido: oco, tracejado, sem preenchimento — **futuro, não falha**. */
+  .timeline-step--future::before { @apply border-dashed; }
+  .timeline-step--future .timeline-marker { @apply border-dashed bg-surface; }
+  .timeline-step--future .timeline-body { @apply border-dashed bg-transparent shadow-none; }
+  /* Pulada: sólido, com o traço de desvio, e o trilho que sai dele segue **contínuo** — a conta
+     passou por aqui e alguém decidiu ali. É a diferença que este pacote existe para decidir. */
+  .timeline-step--skipped .timeline-marker { @apply border-line-strong bg-line-strong text-slate-600; }
+  .timeline-step--blocked .timeline-marker { @apply border-danger bg-danger; }
+  /* O gate é o **único marcador quadrado** da escada: consome o raio de detalhe (4px) das
+     fundações r2, que até aqui não tinha consumidor no shell. */
+  .timeline-step--gate .timeline-marker { @apply rounded border-brand-500 bg-brand-500; }
+  .timeline-step--cancelled .timeline-marker {
+    @apply border-line-strong bg-surface-subtle text-slate-600;
+  }
+  /* Replanejado: o nome fica riscado e as datas em que ele **esteve** ativo permanecem. */
+  .timeline-step--cancelled .timeline-body strong { @apply text-muted line-through; }
+
+  /* A trilha subordinada dentro do degrau ativo: a jornada de entrega da FDD 011, **referenciada
+     e não redesenhada**. Recuo, trilho de 1px, marcador de 13px e superfície `surface-subtle` —
+     tudo dizendo "isto está dentro daquilo". */
+  .timeline--nested {
+    @apply mt-3 rounded-xl bg-surface-subtle py-3.5 pl-[42px] pr-3.5;
+  }
+  .timeline--nested .timeline-step { @apply pb-2.5; }
+  .timeline--nested .timeline-step::before { @apply -left-[18px] top-[15px] border-l; }
+  .timeline--nested .timeline-marker { @apply -left-6 top-px size-[13px] border-2; }
+  .timeline--nested .timeline-step--active .timeline-marker > span { @apply size-[5px]; }
+  .timeline--nested .timeline-body { @apply border-0 bg-transparent p-0 shadow-none; }
+
+  /* A escada inteira numa linha, para varrer a carteira (superfície B). Repete **as mesmas
+     convenções** em miniatura: nó cheio verde = concluído, anel clay = ativo, nó cinza cheio =
+     pulado (houve decisão), nó oco tracejado = não vendido (não houve), quadrado clay = gate. O
+     elo entre nós é contínuo até onde a conta chegou e tracejado depois.
+     É decoração: o rótulo por extenso do degrau e do estado vai no texto da linha. */
+  .timeline--compact { @apply flex items-center p-0; }
+  .timeline--compact .timeline-step { @apply flex items-center pb-0; }
+  .timeline--compact .timeline-step::before {
+    @apply static mr-0 h-0 w-3.5 border-l-0 border-t-2 border-line-strong;
+  }
+  .timeline--compact .timeline-step:first-child::before { @apply hidden; }
+  .timeline--compact .timeline-step:last-child::before { @apply block; }
+  .timeline--compact .timeline-step--future::before { @apply border-dashed; }
+  .timeline--compact .timeline-marker {
+    @apply static size-[9px] border-0 bg-line-strong;
+  }
+  .timeline--compact .timeline-step--done .timeline-marker { @apply bg-success; }
+  .timeline--compact .timeline-step--active .timeline-marker {
+    @apply size-[11px] bg-brand-500 ring-[3px] ring-brand-50;
+  }
+  .timeline--compact .timeline-step--blocked .timeline-marker { @apply bg-danger; }
+  .timeline--compact .timeline-step--skipped .timeline-marker { @apply bg-line-strong; }
+  .timeline--compact .timeline-step--cancelled .timeline-marker { @apply bg-surface-subtle; }
+  .timeline--compact .timeline-step--gate .timeline-marker { @apply rounded-sm bg-brand-500; }
+  .timeline--compact .timeline-step--future .timeline-marker {
+    @apply border border-dashed border-line-strong bg-transparent;
+  }
+
   /* ---------- O shell (ADR 0025) ----------
      Portado do `.sidebar` / `.topbar` do portal do cliente, e o que muda é só a cor. A barra
      lateral deixou de ser preta: a forma passou a ser comum aos dois portais e quem identifica

@@ -3,6 +3,102 @@ info:
   title: Biahflow API
   version: 1.0.0
 paths:
+  /api/v1/account-rungs/:
+    get:
+      operationId: v1_account_rungs_list
+      description: |-
+        A escada FDE da conta (FDD 042, ADR 0047) — o eixo que atravessa várias oportunidades.
+
+        **Fora do `ArchiveModelViewSet` de propósito:** degrau não se arquiva. O que a escada faz com um
+        degrau que deixou de valer é registrá-lo como replanejado, preservando as datas em que ele
+        esteve ativo — arquivar esconderia exatamente o histórico que a Issue #42 pede que sobreviva.
+
+        **Leitura em `ModelViewSet` nenhum:** os seis degraus são doutrina materializada, não coleção
+        que alguém cria ou apaga. A única escrita é a action `transition`, e é lá que moram carimbo,
+        autor e evento.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountRung'
+          description: ''
+  /api/v1/account-rungs/{id}/:
+    get:
+      operationId: v1_account_rungs_retrieve
+      description: |-
+        A escada FDE da conta (FDD 042, ADR 0047) — o eixo que atravessa várias oportunidades.
+
+        **Fora do `ArchiveModelViewSet` de propósito:** degrau não se arquiva. O que a escada faz com um
+        degrau que deixou de valer é registrá-lo como replanejado, preservando as datas em que ele
+        esteve ativo — arquivar esconderia exatamente o histórico que a Issue #42 pede que sobreviva.
+
+        **Leitura em `ModelViewSet` nenhum:** os seis degraus são doutrina materializada, não coleção
+        que alguém cria ou apaga. A única escrita é a action `transition`, e é lá que moram carimbo,
+        autor e evento.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este account rung.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountRung'
+          description: ''
+  /api/v1/account-rungs/{id}/transition/:
+    post:
+      operationId: v1_account_rungs_transition_create
+      description: |-
+        Move o degrau e grava o evento append-only (FDD 042).
+
+        A recusa mora em `ladder.transition`, não aqui: só o Feasibility se pula, pular exige o
+        motivo escrito, bloquear exige dizer o quê, e transição para o mesmo estado não registra o
+        que mudou. Uma guarda escrita nesta view valeria só para esta rota.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este account rung.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRungTransition'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AccountRungTransition'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AccountRungTransition'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountRung'
+          description: ''
   /api/v1/activities/:
     get:
       operationId: v1_activities_list
@@ -8454,6 +8550,241 @@ components:
       - password
       - token
       - username
+    AccountRung:
+      type: object
+      description: |-
+        Um degrau da escada FDE da conta (FDD 042). **Inteiramente de leitura.**
+
+        A escrita entra por `POST /account-rungs/{id}/transition/`, que é onde moram as consequências
+        de cada estado — carimbo, autor, motivo do pulo e o evento append-only. Um `PATCH status=done`
+        gravaria a conclusão sem nada disso e o campo passaria a mentir sobre a escada; é o mesmo
+        motivo pelo qual `ProjectPhase.gate_outcome` é read-only e só a action `apply-gate` o move.
+
+        **O que a Entrega vê é a *forma* da escada, não o conteúdo comercial** (ADR 0047): oportunidade
+        e título de oportunidade vêm sempre nulos, e o degrau realizado por um projeto de que a pessoa
+        não participa vem marcado `no_access`, sem projeto, sem datas e sem histórico. O recorte de
+        quais projetos são visíveis vem de `Project.objects.visible_to` e **nunca é reescrito** (RFC
+        0003, ADR 0010) — o viewset o resolve uma vez e entrega no contexto.
+
+        `gate_outcome` e `next_gate` são **projeções da jornada de entrega da FDD 011**, derivadas do
+        projeto que realiza o degrau. Referenciadas, não redesenhadas: a decisão de gate continua sendo
+        tomada na tela do projeto, e aqui ela só aparece.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+          readOnly: true
+        rung:
+          allOf:
+          - $ref: '#/components/schemas/RungEnum'
+          readOnly: true
+        rung_display:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AccountRungStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        opportunity:
+          type: integer
+          readOnly: true
+          nullable: true
+        opportunity_title:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          readOnly: true
+          nullable: true
+        project_name:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        waiting_on:
+          allOf:
+          - $ref: '#/components/schemas/WaitingOnEnum'
+          readOnly: true
+        waiting_on_display:
+          type: string
+          readOnly: true
+        blocker:
+          type: string
+          readOnly: true
+        skip_reason:
+          type: string
+          readOnly: true
+        skipped_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        skipped_by_name:
+          type: string
+          readOnly: true
+        skipped_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        days_stalled:
+          type: integer
+          nullable: true
+          readOnly: true
+        is_stale:
+          type: boolean
+          readOnly: true
+        gate_outcome:
+          type: string
+          readOnly: true
+        next_gate:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          readOnly: true
+        no_access:
+          type: boolean
+          readOnly: true
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountRungEvent'
+          readOnly: true
+      required:
+      - blocker
+      - client
+      - completed_at
+      - days_stalled
+      - events
+      - gate_outcome
+      - id
+      - is_stale
+      - next_gate
+      - no_access
+      - opportunity
+      - opportunity_title
+      - project
+      - project_name
+      - rung
+      - rung_display
+      - skip_reason
+      - skipped_at
+      - skipped_by
+      - skipped_by_name
+      - started_at
+      - status
+      - status_display
+      - waiting_on
+      - waiting_on_display
+    AccountRungEvent:
+      type: object
+      description: |-
+        Uma transição do histórico. **Só de leitura, e não por comodidade**: o registro é
+        append-only (FDD 042), e um serializer gravável aqui ofereceria a operação que o modelo existe
+        para negar.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        rung:
+          type: integer
+          readOnly: true
+        from_status:
+          allOf:
+          - $ref: '#/components/schemas/AccountRungStatusEnum'
+          readOnly: true
+        from_status_display:
+          type: string
+          readOnly: true
+        to_status:
+          allOf:
+          - $ref: '#/components/schemas/AccountRungStatusEnum'
+          readOnly: true
+        to_status_display:
+          type: string
+          readOnly: true
+        at:
+          type: string
+          format: date-time
+          readOnly: true
+        by:
+          type: integer
+          readOnly: true
+          nullable: true
+        by_name:
+          type: string
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+      required:
+      - at
+      - by
+      - by_name
+      - from_status
+      - from_status_display
+      - id
+      - note
+      - rung
+      - to_status
+      - to_status_display
+    AccountRungStatusEnum:
+      enum:
+      - not_sold
+      - active
+      - done
+      - skipped
+      - blocked
+      - awaiting_gate
+      - cancelled
+      type: string
+      description: |-
+        * `not_sold` - Não vendido
+        * `active` - Ativo
+        * `done` - Concluído
+        * `skipped` - Pulada
+        * `blocked` - Bloqueado
+        * `awaiting_gate` - Aguardando decisão de gate
+        * `cancelled` - Replanejado
+    AccountRungTransition:
+      type: object
+      description: O corpo de `POST /account-rungs/{id}/transition/`. As recusas moram
+        em `ladder`, não aqui.
+      properties:
+        status:
+          $ref: '#/components/schemas/AccountRungStatusEnum'
+        note:
+          type: string
+          default: ''
+        waiting_on:
+          oneOf:
+          - $ref: '#/components/schemas/WaitingOnEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        blocker:
+          type: string
+        skip_reason:
+          type: string
+        opportunity:
+          type: integer
+          nullable: true
+        project:
+          type: integer
+          nullable: true
+      required:
+      - status
     Activity:
       type: object
       properties:
@@ -9399,7 +9730,11 @@ components:
         upcoming_tasks:
           type: array
           items: {}
+        account_ladder:
+          type: array
+          items: {}
       required:
+      - account_ladder
       - active_projects
       - overdue_count
       - pipeline
@@ -13373,6 +13708,22 @@ components:
         * `fato` - Fato
         * `hipotese` - Hipótese
         * `desconhecido` - Desconhecido
+    RungEnum:
+      enum:
+      - discover
+      - prioritize
+      - feasibility
+      - prove
+      - scale
+      - optimize
+      type: string
+      description: |-
+        * `discover` - Discover
+        * `prioritize` - Prioritize
+        * `feasibility` - [ Technical Feasibility ]
+        * `prove` - Prove
+        * `scale` - Scale
+        * `optimize` - Optimize
     Satisfacao:
       type: object
       description: |-
@@ -13685,6 +14036,20 @@ components:
       - id
       - name
       - slug
+    WaitingOnEnum:
+      enum:
+      - biahflow
+      - client
+      - engineering
+      - external
+      - human_gate
+      type: string
+      description: |-
+        * `biahflow` - Biahflow
+        * `client` - Cliente
+        * `engineering` - Engenharia
+        * `external` - Dependência externa
+        * `human_gate` - Human Gate
     WorkItemStatusEnum:
       enum:
       - todo

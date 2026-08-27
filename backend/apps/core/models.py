@@ -1530,6 +1530,175 @@ class ProjectChecklistItem(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class FdeRung(models.TextChoices):
+    """Os seis degraus da escada FDE, na ordem canônica de `docs/metodologia-fde.md:26`.
+
+    **Doutrina, não template configurável** — e é essa a diferença para `JourneyPhase`. A jornada
+    de entrega é vocabulário que o admin edita; a escada FDE é a metodologia da casa, e uma tabela
+    editável aqui seria a "camada especulativa" que os princípios de arquitetura recusam: ninguém
+    pediu para reordenar Discover e Prove, e conseguir fazê-lo só criaria uma segunda escada que
+    diverge do documento em silêncio.
+
+    Os rótulos são a **grafia do documento**, incluindo os colchetes de `[ Technical Feasibility ]`
+    — eles são a forma como a condicionalidade está escrita lá, e apagá-los apagaria a informação.
+
+    Mora no módulo e não dentro de `AccountRung` porque `Meta.ordering` precisa dela: corpo de
+    classe aninhada não enxerga o namespace da classe que a contém, e a ordem do degrau é uma
+    expressão sobre estes valores.
+    """
+
+    DISCOVER = "discover", "Discover"
+    PRIORITIZE = "prioritize", "Prioritize"
+    FEASIBILITY = "feasibility", "[ Technical Feasibility ]"
+    PROVE = "prove", "Prove"
+    SCALE = "scale", "Scale"
+    OPTIMIZE = "optimize", "Optimize"
+
+
+class AccountRung(TimestampedModel):
+    """Um degrau da escada FDE **numa conta** (FDD 042, ADR 0047).
+
+    O terceiro eixo do produto, e confundi-lo com os outros dois é o defeito que esta fatia existe
+    para evitar:
+
+    | Eixo | Granularidade |
+    | --- | --- |
+    | `PipelineStage` | uma `Opportunity` |
+    | `JourneyPhase`/`ProjectPhase` (FDD 011) | um `Project` |
+    | **escada FDE** | uma **conta** (`Client`), atravessando várias `Opportunity` |
+
+    A autoridade é `docs/metodologia-fde.md:50`: *"cada degrau é uma Opportunity separada na mesma
+    conta (Account ≠ Opportunity)"*. `Welcome` **não** é `Discover` — Welcome é o onboarding de um
+    projeto já vendido, Discover é diagnóstico anterior à existência do projeto e é uma venda
+    própria. A jornada de entrega da FDD 011 fica exatamente como está e aparece **aninhada** sob o
+    degrau ativo, referenciada e nunca redesenhada.
+
+    `opportunity` é anulável e **não é unique**, de propósito: o caso real mais comum é *Discover* e
+    *Prioritize* saírem da mesma venda ("Discovery Sprint"). Uma constraint 1:1 aqui recusaria a
+    operação que a casa de fato tem.
+
+    Não é recurso arquivável: fica fora do `ArchiveModelViewSet`. O `archived_at` que vem do
+    `TimestampedModel` não é usado por nada nesta escada — o que a escada faz com um degrau que
+    deixou de valer é registrá-lo como `cancelled`, preservando as datas em que ele esteve ativo.
+    """
+
+    class Status(models.TextChoices):
+        """Os sete estados do degrau. Os rótulos são a copy aprovada no DAP GH-42 r1.
+
+        `not_sold` e `skipped` **não podem parecer a mesma coisa**, e é a decisão central do
+        pacote: pulada é uma decisão registrada (alguém olhou e disse que a tecnologia era sabida),
+        não vendido é ausência de decisão. As duas ficam neutras — nenhuma é aviso —, e o que as
+        separa é estrutura, não tinta.
+
+        `cancelled` se apresenta como **"Replanejado"**: nada é apagado, e as datas em que o degrau
+        esteve ativo permanecem.
+        """
+
+        NOT_SOLD = "not_sold", "Não vendido"
+        ACTIVE = "active", "Ativo"
+        DONE = "done", "Concluído"
+        SKIPPED = "skipped", "Pulada"
+        BLOCKED = "blocked", "Bloqueado"
+        AWAITING_GATE = "awaiting_gate", "Aguardando decisão de gate"
+        CANCELLED = "cancelled", "Replanejado"
+
+    class WaitingOn(models.TextChoices):
+        """De quem é a bola. **Cinco valores, e `WorkItem.Party` não serve** (DAP GH-42 r1).
+
+        `Party` sabe dizer `provider` ou `client`: não distingue *engenharia* de *Biahflow*, não tem
+        lugar para *dependência externa* e não nomeia o **Human Gate** — o valor mais importante e o
+        único que não tinha nome em lugar nenhum do sistema. Estender `Party` levaria os cinco para
+        dentro do cronograma do portal do cliente, que responde outra pergunta.
+
+        Cada um tem pele própria na interface, e nenhum depende de `title` ou de hover: `biahflow`
+        é `.state--0`, `client` é `.state--2`, `engineering` é `.eng-ref` (deliberadamente fora da
+        família `.state`, porque estado de engenharia não é estado de negócio), `external` é
+        `.state--off` (ausência de agência, não falha) e `human_gate` é `.state--gate`.
+        """
+
+        BIAHFLOW = "biahflow", "Biahflow"
+        CLIENT = "client", "Cliente"
+        ENGINEERING = "engineering", "Engenharia"
+        EXTERNAL = "external", "Dependência externa"
+        HUMAN_GATE = "human_gate", "Human Gate"
+
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="rungs")
+    rung = models.CharField(max_length=16, choices=FdeRung.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_SOLD)
+    # Anulável e **não-unique**: dois degraus podem sair da mesma venda (ver o docstring da classe).
+    opportunity = models.ForeignKey(
+        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="account_rungs"
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="account_rungs"
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    waiting_on = models.CharField(
+        max_length=16, choices=WaitingOn.choices, blank=True, default=""
+    )
+    blocker = models.TextField(blank=True, default="")
+    # Motivo, autor e carimbo do "pulou". Os três são obrigatórios juntos: é o que **prova** que
+    # houve decisão, e é a única coisa que separa `skipped` de `not_sold` no conteúdo.
+    skip_reason = models.TextField(blank=True, default="")
+    skipped_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    skipped_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        # A ordem é o significado, e ela é a do documento — não a alfabética nem a de criação.
+        # Expressão em vez de coluna `position`: a posição não é dado da conta, é doutrina, e uma
+        # coluna que repete a doutrina é a segunda cópia dela.
+        ordering = [
+            models.Case(
+                *[
+                    models.When(rung=value, then=models.Value(index))
+                    for index, value in enumerate(FdeRung.values)
+                ],
+                output_field=models.PositiveSmallIntegerField(),
+            ),
+            "id",
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["client", "rung"], name="unique_account_rung")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.client_id} · {self.get_rung_display()}"
+
+
+class AccountRungEvent(models.Model):
+    """Uma transição de degrau — o histórico **append-only** da escada (FDD 042).
+
+    **Nunca editado, nunca apagado, nunca arquivado**, e por isso não estende `TimestampedModel`:
+    um `archived_at` aqui ofereceria justamente a operação que este modelo existe para negar. É o
+    que atende ao pedido da Issue #42 por *"phase history with timestamps/provenance rather than
+    only the latest label"*: cancelamento e replanejamento não apagam nada, viram evento.
+
+    `by` é `SET_NULL` porque a pessoa pode sair da casa e o fato não sai com ela — o mesmo
+    tratamento que `Decisao.published_at` dá ao registro histórico.
+    """
+
+    rung = models.ForeignKey(AccountRung, on_delete=models.CASCADE, related_name="events")
+    from_status = models.CharField(
+        max_length=16, choices=AccountRung.Status.choices, blank=True, default=""
+    )
+    to_status = models.CharField(max_length=16, choices=AccountRung.Status.choices)
+    # `default=timezone.now` e não `auto_now_add`: o carimbo é do fato, e a materialização
+    # preguiçosa de uma conta antiga precisa poder registrar o momento em que ela foi de fato
+    # levantada. Read-only na API — nenhum corpo de requisição o alcança.
+    at = models.DateTimeField(default=timezone.now)
+    by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    note = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.rung_id}: {self.from_status or '—'} → {self.to_status}"
+
+
 class KpiUnit(models.TextChoices):
     """A unidade em que um KPI é medido (FDD 027).
 

@@ -61,6 +61,25 @@ function processoMapeado(overrides: Record<string, unknown> = {}) {
 // não devem ganhar um selo a mais na tela para colidir com o texto dos vizinhos.
 let processos: unknown[] = [];
 
+/**
+ * Um degrau da escada FDE (FDD 042). Vazia por padrão: os testes que não são sobre a escada
+ * caem no estado vazio dela, que é o comportamento real de uma conta que ainda não vendeu nada.
+ */
+function degrauFde(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1, client: 1, rung: "prove", rung_display: "Prove",
+    status: "active", status_display: "Ativo",
+    opportunity: null, opportunity_title: "", project: 5, project_name: "PROVE Triagem de NF",
+    started_at: "2026-03-18T09:00:00Z", completed_at: null,
+    waiting_on: "biahflow", waiting_on_display: "Biahflow",
+    blocker: "", skip_reason: "", skipped_by: null, skipped_by_name: "", skipped_at: null,
+    days_stalled: 4, is_stale: false, gate_outcome: "", next_gate: null,
+    no_access: false, events: [],
+    ...overrides,
+  };
+}
+let degraus: unknown[] = [];
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active", vertical: null, vertical_name: "" });
@@ -71,6 +90,8 @@ function stub() {
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
     if (path.startsWith("/processos")) return Promise.resolve(processos);
+    if (path.startsWith("/account-rungs")) return Promise.resolve(degraus);
+    if (path.startsWith("/project-phases")) return Promise.resolve([{ id: 2, project: 5, phase: 2, phase_name: "Launch Session", phase_description: "", phase_position: 2, requires_gate: false, status: "active", started_at: null, completed_at: null, target_date: null, gate_outcome: "", gate_notes: "", checklist_waiver: "", deliverables: [], checklist_items: [] }]);
     return Promise.resolve([]);
   });
 }
@@ -82,6 +103,7 @@ beforeEach(() => {
   atividades = [atividade()];
   satisfacoes = [];
   processos = [];
+  degraus = [];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -372,4 +394,28 @@ test("cliente sem processo mapeado mostra o estado vazio, não um painel em bran
   await screen.findByRole("heading", { name: "Cliente A" });
 
   expect(await screen.findByText("Nenhum processo mapeado para este cliente.")).toBeInTheDocument();
+});
+
+/**
+ * A escada FDE é da **conta** (FDD 042). Este teste existe para o painel não sumir da tela: a
+ * jornada de entrega da FDD 011 continua sendo do projeto e aparece aninhada aqui dentro, sob o
+ * degrau ativo — nunca renomeada nem substituída.
+ */
+test("mostra a escada FDE da conta, com a jornada de entrega aninhada sob o degrau ativo", async () => {
+  degraus = [degrauFde()];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  expect(await screen.findByRole("heading", { name: "Escada FDE" })).toBeInTheDocument();
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/account-rungs/?client=1"));
+  // A jornada só é buscada porque há degrau ativo com projeto.
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/project-phases/?project=5"));
+  expect(await screen.findByText("Launch Session")).toBeInTheDocument();
+});
+
+test("conta sem degrau iniciado cai no estado vazio da escada", async () => {
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  expect(await screen.findByText(/Nenhum degrau iniciado/)).toBeInTheDocument();
 });
