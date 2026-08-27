@@ -44,3 +44,5 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 038 — Os dois sinais que ninguém lia
 - 039 — O achado que não sobrevivia à reunião
 - 040 — Provisionamento de Issue GitHub a partir de um handoff Pulse
+- 041 — Projeção de entrega GitHub (Issue/PR/CI) no Pulse
+- 042 — Linha do tempo operacional da entrega
