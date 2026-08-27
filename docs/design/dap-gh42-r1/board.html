@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>DAP GH-42 r1 — Escada FDE na conta</title>
+<style>
+  :root{
+    --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+    --canvas:#fafaf9; --surface:#fff; --subtle:#f5f5f4;
+    --b50:#fdf1ec; --b100:#fadfd4; --b200:#dd8b62; --b500:#bd4a30; --b600:#a8412a; --b700:#9c3c26; --b900:#5c2317;
+    --danger:#b91c1c; --danger50:#fef2f2; --success:#047857; --success50:#ecfdf5;
+    --warning:#b45309; --warning50:#fffbeb; --info:#1d4ed8; --info50:#eff6ff;
+    --off-bg:#f1f5f9; --off-fg:#475569;
+    --shadow-card:0 1px 2px rgba(18,17,15,.06);
+    --shadow-raised:0 8px 24px -12px rgba(18,17,15,.22);
+    --shadow-pop:0 16px 40px -16px rgba(18,17,15,.28);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--canvas);color:var(--ink);margin:0;padding:48px 32px 96px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:32px;line-height:38px;font-weight:650;letter-spacing:-.03em;margin:0 0 8px}
+  .sub{color:var(--muted);font-size:14px;line-height:22px;margin:0 0 40px}
+  h2{font-size:16px;line-height:24px;font-weight:650;margin:56px 0 6px;letter-spacing:-.02em}
+  h2:first-of-type{margin-top:40px}
+  .lead{color:var(--muted);font-size:14px;line-height:22px;margin:0 0 20px;max-width:74ch}
+  .eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--b500);margin:0 0 6px}
+  code{background:var(--subtle);padding:2px 5px;border-radius:4px;font-size:12px;font-family:var(--mono)}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:0 0 8px}
+  td,th{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--subtle);font-weight:650}
+  .sw{display:inline-block;width:14px;height:14px;border:1px solid var(--line-strong);border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;align-items:start}
+  .cap{font-size:11px;line-height:16px;font-weight:500;color:var(--muted);margin:8px 0 0}
+  .cap strong{color:var(--ink)}
+  .tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:3px 7px;border-radius:999px}
+  .tag--old{background:var(--subtle);color:var(--muted)}
+  .tag--new{background:var(--b50);color:var(--b700)}
+  .tag--res{background:var(--warning50);color:var(--warning)}
+  .frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow-card)}
+  ul.notes{font-size:13px;line-height:21px;color:var(--muted);padding-left:20px;max-width:80ch}
+  ul.notes li{margin-bottom:7px}
+  ul.notes strong{color:var(--ink)}
+
+  /* ---------- primitivas do produto, reproduzidas para o mock ---------- */
+  .panel{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:20px;box-shadow:var(--shadow-card)}
+  .panel-heading{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .panel-heading h3{margin:0;font-size:16px;line-height:24px;font-weight:650;letter-spacing:-.02em}
+  .panel-heading p{margin:2px 0 0;font-size:14px;line-height:22px;color:var(--muted)}
+  .micon{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:8px;background:var(--b50);color:var(--b500)}
+  .st{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 10px;font-size:11px;line-height:16px;font-weight:600}
+  .st--0{background:var(--info50);color:var(--info)}
+  .st--1{background:var(--success50);color:var(--success)}
+  .st--2{background:var(--warning50);color:var(--warning)}
+  .st--3{background:var(--danger50);color:var(--danger)}
+  .st--off{background:var(--off-bg);color:var(--off-fg)}
+  /* NOVO — a única pastilha sólida do produto. Ver seção 9. */
+  .st--gate{background:var(--b500);color:#fff}
+  .empty{border:1px dashed var(--line);border-radius:12px;background:rgba(248,250,252,.6);padding:24px 16px;text-align:center;font-size:14px;line-height:22px;color:var(--muted)}
+  .alert-error{border:1px solid var(--danger50);border-radius:12px;background:var(--danger50);padding:16px;font-size:14px;line-height:22px;color:var(--danger)}
+  .rows > div{border-top:1px solid var(--line)}
+  .rows > div:first-child{border-top:0}
+  .rowline{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 18px}
+  .rowmain{min-width:0;flex:1}
+  .rowmain strong{display:block;font-size:14px;line-height:20px;font-weight:600;color:var(--ink)}
+  .rowmain span{display:block;margin-top:2px;font-size:12px;line-height:16px;color:var(--muted)}
+  .type-meta{font-size:11px;line-height:16px;font-weight:500}
+  .type-label{font-size:12px;line-height:16px;font-weight:600}
+  .type-body{font-size:14px;line-height:22px}
+  .backlink{font-size:14px;font-weight:600;color:var(--b600);text-decoration:none}
+
+  /* ---------- NOVO: a primitiva de linha do tempo proposta ---------- */
+  .tl{position:relative;margin:0;padding:0 0 0 32px;list-style:none}
+  .tl-step{position:relative;padding-bottom:20px}
+  .tl-step:last-child{padding-bottom:0}
+  /* O trilho. Contínuo onde a conta JÁ passou (inclusive num degrau pulado);
+     tracejado a partir do primeiro degrau não vendido. */
+  .tl-step::before{content:"";position:absolute;left:-22px;top:22px;bottom:-2px;border-left:2px solid var(--line-strong)}
+  .tl-step:last-child::before{display:none}
+  .tl-step--future::before{border-left-style:dashed}
+  .tl-m{position:absolute;left:-31px;top:3px;width:20px;height:20px;border-radius:999px;border:2px solid var(--line-strong);background:#fff;display:grid;place-items:center;color:#fff}
+  .tl-step--done .tl-m{background:var(--success);border-color:var(--success)}
+  .tl-step--active .tl-m{border:3px solid var(--b500);background:#fff}
+  .tl-step--active .tl-m i{width:8px;height:8px;border-radius:999px;background:var(--b500);display:block}
+  .tl-step--future .tl-m{border-style:dashed;background:var(--surface)}
+  .tl-step--skipped .tl-m{background:var(--line-strong);border-color:var(--line-strong);color:var(--off-fg)}
+  .tl-step--blocked .tl-m{background:var(--danger);border-color:var(--danger)}
+  /* O gate é o ÚNICO marcador quadrado: raio de detalhe (4px) das fundações r2. */
+  .tl-step--gate .tl-m{border-radius:4px;background:var(--b500);border-color:var(--b500)}
+  .tl-step--cancelled .tl-m{background:var(--subtle);border-color:var(--line-strong);color:var(--off-fg)}
+  .tl-b{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px}
+  .tl-step--future .tl-b{border-style:dashed;background:transparent}
+  .tl-step--active .tl-b{box-shadow:var(--shadow-raised);border-color:var(--line-strong)}
+  .tl-step--cancelled .tl-h strong{text-decoration:line-through;color:var(--muted)}
+  .tl-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .tl-h strong{font-size:14px;line-height:22px;font-weight:650;color:var(--ink)}
+  .tl-meta{margin:6px 0 0;font-size:11px;line-height:17px;font-weight:500;color:var(--muted)}
+  .tl-meta b{color:var(--ink);font-weight:600}
+  .tl-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .tl-foot .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+  /* Aninhada e subordinada: recuo, trilho fino, corpo em superfície sutil. */
+  .tl-nest{margin-top:12px;border-radius:12px;background:var(--subtle);padding:14px 14px 14px 42px}
+  .tl-nest .tl{padding-left:0}
+  .tl-nest .tl-step{padding-bottom:9px}
+  .tl-nest .tl-step::before{left:-18px;top:15px;border-left-width:1px}
+  .tl-nest .tl-m{left:-24px;top:1px;width:13px;height:13px;border-width:2px}
+  .tl-nest .tl-step--active .tl-m{border-width:2px}
+  .tl-nest .tl-step--active .tl-m i{width:5px;height:5px}
+  .tl-nest .tl-b{border:0;background:transparent;padding:0}
+  .tl-nest .tl-h strong{font-size:12px;line-height:16px;font-weight:600}
+  /* Compacta: a escada inteira numa linha, para varrer a carteira. */
+  .tl-dots{display:flex;align-items:center;flex:none}
+  .tl-dot{width:9px;height:9px;border-radius:999px;background:var(--line-strong);flex:none}
+  .tl-dot--done{background:var(--success)}
+  .tl-dot--active{width:11px;height:11px;background:var(--b500);box-shadow:0 0 0 3px var(--b50)}
+  .tl-dot--skipped{background:var(--line-strong)}
+  .tl-dot--future{background:transparent;border:1px dashed var(--line-strong)}
+  .tl-dot--gate{border-radius:2px;background:var(--b500)}
+  .tl-link{width:13px;height:2px;background:var(--line-strong);flex:none}
+  .tl-link--future{height:0;border-top:2px dashed var(--line-strong);background:none}
+
+  /* ---------- NOVO: a pele de engenharia (projeção do GitHub) ---------- */
+  .eng{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);border-radius:4px;
+       background:var(--subtle);padding:3px 8px;font-family:var(--mono);font-size:11px;line-height:16px;color:var(--muted)}
+  .eng b{font-weight:600;color:var(--ink)}
+  .eng-dot{width:7px;height:7px;border-radius:999px;background:var(--muted);flex:none}
+
+  .zoom{border:1px solid var(--line);border-radius:12px;background:var(--canvas);padding:22px}
+  .swatchrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .skel{border-radius:999px;background:var(--subtle)}
+</style>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package · GH-42 · revisão 1</p>
+<h1>Escada FDE na conta — linha do tempo operacional</h1>
+<p class="sub">Renderização auto-contida — abre sem build, sem toolchain e sem rede. Congelado para revisão em 27/08/2026.<br>
+Este artefato é <strong>evidência para um gate humano</strong>. Não é implementação e não deve ser copiado para dentro do código de produção.</p>
+
+<h2>Direção</h2>
+<p class="lead"><strong>A escada FDE é um eixo novo, e ele vive na conta — não no projeto.</strong>
+<code>docs/metodologia-fde.md:50-53</code> é a autoridade: <em>“cada degrau é uma Opportunity separada na mesma conta
+(Account ≠ Opportunity)”</em>. O que o Pulse tem hoje são dois outros eixos, e nenhum deles é este. O defeito que este
+pacote existe para evitar é confundi-los — em especial renomear a jornada de entrega da FDD 011 e achar que a escada
+foi implementada.</p>
+
+<h2>0 · Três eixos, e o aninhamento entre eles</h2>
+<table>
+  <tr><th style="width:22%">Eixo</th><th style="width:44%">Vocabulário</th><th style="width:16%">Granularidade</th><th>Onde vive hoje</th></tr>
+  <tr><td><code>PipelineStage</code></td><td>Prospecção → Qualificação → Proposta → Negociação → Ganho/Perdido</td><td>uma <strong>Opportunity</strong></td><td>Comercial</td></tr>
+  <tr><td><code>JourneyPhase</code>/<code>ProjectPhase</code> (FDD 011)</td><td>Welcome → Launch Session → Prove → Activation → Assisted Evolution → Scale → Optimize</td><td>um <strong>Project</strong></td><td><code>ProjectDetailPage.tsx:698</code> (<code>JourneySection</code>)</td></tr>
+  <tr><td><strong>Escada FDE</strong> — esta issue</td><td>Discover → Prioritize → [ Technical Feasibility ] → Prove → Scale → Optimize</td><td>uma <strong>conta</strong> (<code>Client</code>), atravessando várias Opportunities</td><td><strong>não existe</strong></td></tr>
+</table>
+<p class="cap"><code>Welcome</code> <strong>não</strong> é <code>Discover</code>: Welcome é o onboarding de um projeto já vendido;
+Discover é diagnóstico anterior à existência do projeto, e é uma venda própria (“Discovery Sprint”). A jornada da FDD 011
+<strong>fica exatamente como está</strong> e não é renomeada.</p>
+<div class="frame" style="margin-top:16px;padding:20px;background:var(--canvas)">
+  <p class="type-label" style="margin:0 0 12px;color:var(--muted)">A escada da conta <strong style="color:var(--ink)">contém</strong> as jornadas de entrega dos projetos que a realizam. Não são concorrentes; são aninhadas.</p>
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;font-weight:600">
+    <span style="border:1px solid var(--line-strong);border-radius:12px;background:#fff;padding:8px 12px">Conta · Metalúrgica Vale</span>
+    <span style="color:var(--line-strong)">⊃</span>
+    <span style="border:1px solid var(--b200);border-radius:12px;background:var(--b50);color:var(--b700);padding:8px 12px">Degrau FDE · Prove</span>
+    <span style="color:var(--line-strong)">⊃</span>
+    <span style="border:1px solid var(--line);border-radius:12px;background:var(--subtle);color:var(--muted);padding:8px 12px">Projeto · PROVE Triagem de NF</span>
+    <span style="color:var(--line-strong)">⊃</span>
+    <span style="border:1px solid var(--line);border-radius:12px;background:var(--subtle);color:var(--muted);padding:8px 12px">Jornada de entrega (FDD 011) · Launch Session</span>
+  </div>
+</div>
+
+<h2>1 · Superfície A — a escada da conta em <code>/clientes/:id</code></h2>
+<p class="lead">Painel novo em <code>ClientDetailPage</code>, abaixo de “Saúde da relação”. Seis degraus na ordem canônica de
+<code>metodologia-fde.md:26</code>, com os nomes <strong>como o documento os grafa</strong> — inclusive os colchetes de
+<code>[ Technical Feasibility ]</code>, que são a forma como a condicionalidade está escrita lá.</p>
+<div class="frame" style="padding:20px;background:var(--canvas)">
+  <div class="panel">
+    <div class="panel-heading">
+      <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg></span>
+      <div style="flex:1"><h3>Escada FDE</h3><p>2 de 6 degraus concluídos · 1 pulado</p></div>
+      <span class="st st--gate"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Human Gate em 12 dias</span>
+    </div>
+
+    <ol class="tl">
+      <li class="tl-step tl-step--done">
+        <span class="tl-m"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="m5 13 4 4L19 7"/></svg></span>
+        <div class="tl-b">
+          <div class="tl-h"><strong>Discover</strong><span class="st st--1">Concluído</span></div>
+          <p class="tl-meta">Vendido em <b>Discovery Sprint · Vale</b> · realizado por <b>Discovery Vale</b> · <b>12/02/2026 → 06/03/2026</b></p>
+        </div>
+      </li>
+      <li class="tl-step tl-step--done">
+        <span class="tl-m"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="m5 13 4 4L19 7"/></svg></span>
+        <div class="tl-b">
+          <div class="tl-h"><strong>Prioritize</strong><span class="st st--1">Concluído</span></div>
+          <p class="tl-meta">Vendido em <b>Discovery Sprint · Vale</b> (mesma venda) · realizado por <b>Discovery Vale</b> · <b>06/03/2026 → 10/03/2026</b></p>
+        </div>
+      </li>
+      <li class="tl-step tl-step--skipped">
+        <span class="tl-m"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M6 18 18 6"/></svg></span>
+        <div class="tl-b">
+          <div class="tl-h"><strong>[ Technical Feasibility ]</strong><span class="st st--off">Pulada</span></div>
+          <p class="tl-meta">Motivo registrado: <b>tecnologia sabida</b> · decidido por <b>Daniel Campos</b> em <b>10/03/2026 09:05</b> · nenhuma venda, por decisão</p>
+        </div>
+      </li>
+      <li class="tl-step tl-step--active">
+        <span class="tl-m"><i></i></span>
+        <div class="tl-b">
+          <p class="eyebrow" style="margin-bottom:4px">Você está aqui</p>
+          <div class="tl-h"><strong>Prove</strong></div>
+          <p class="tl-meta">Vendido em <b>PROVE · Triagem de NF</b> · realizado por <b>PROVE Triagem de NF</b> · iniciado em <b>18/03/2026</b> · sem conclusão</p>
+
+          <div class="tl-nest">
+            <p class="type-meta" style="margin:0 0 10px;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);font-weight:700">Jornada de entrega do projeto · FDD 011 · 2 de 7 fases</p>
+            <ol class="tl">
+              <li class="tl-step tl-step--done"><span class="tl-m"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="m5 13 4 4L19 7"/></svg></span><div class="tl-b"><div class="tl-h"><strong>Welcome</strong><span class="st st--1" style="padding:2px 8px">Concluída</span></div></div></li>
+              <li class="tl-step tl-step--active"><span class="tl-m"><i></i></span><div class="tl-b"><div class="tl-h"><strong>Launch Session</strong><span class="st st--0" style="padding:2px 8px">Em andamento · entregáveis 3/5</span></div></div></li>
+              <li class="tl-step tl-step--future"><span class="tl-m"></span><div class="tl-b"><div class="tl-h"><strong>Prove</strong></div></div></li>
+              <li class="tl-step tl-step--future"><span class="tl-m"></span><div class="tl-b"><div class="tl-h"><strong>Activation</strong></div></div></li>
+              <li class="tl-step tl-step--future"><span class="tl-m"></span><div class="tl-b"><div class="tl-h"><strong>Assisted Evolution · Scale · Optimize</strong></div></div></li>
+            </ol>
+            <p class="type-meta" style="margin:10px 0 0;color:var(--muted)">Esta jornada é <strong style="color:var(--ink)">referenciada, não redesenhada</strong>. Quem a opera continua sendo a tela do projeto (<code>JourneySection</code>); aqui ela só mostra onde a entrega está dentro do degrau.</p>
+          </div>
+
+          <div class="tl-foot">
+            <span class="k">Próximo gate</span>
+            <span class="type-label">Decision gate ao fim de PROVE · previsto 12/09/2026</span>
+            <span style="flex:1"></span>
+            <span class="k">Esperando</span>
+            <span class="st st--0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 21v-5h4v5"/></svg>Biahflow</span>
+          </div>
+        </div>
+      </li>
+      <li class="tl-step tl-step--future">
+        <span class="tl-m"></span>
+        <div class="tl-b">
+          <div class="tl-h"><strong>Scale</strong><span class="st st--off">Não vendido</span></div>
+          <p class="tl-meta">Nenhuma decisão registrada · sem oportunidade · sem projeto · sem datas</p>
+        </div>
+      </li>
+      <li class="tl-step tl-step--future">
+        <span class="tl-m"></span>
+        <div class="tl-b">
+          <div class="tl-h"><strong>Optimize</strong><span class="st st--off">Não vendido</span></div>
+          <p class="tl-meta">Nenhuma decisão registrada · sem oportunidade · sem projeto · sem datas</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</div>
+<p class="cap"><strong>O trilho carrega informação.</strong> Ele é contínuo até onde a conta de fato chegou — inclusive
+<em>através</em> do degrau pulado, porque a conta passou por aquele ponto e alguém decidiu ali — e passa a
+<strong>tracejado</strong> a partir do primeiro degrau não vendido, que é onde a escada ainda não chegou.</p>
+
+<h2>2 · A regra que este pacote existe para decidir</h2>
+<p class="lead"><strong>“Pulada” e “não vendido” não podem parecer a mesma coisa.</strong> As duas deixam o degrau sem projeto,
+e a leitura ingênua desenha as duas em cinza. Mas <em>pulada</em> é uma decisão registrada — alguém olhou e disse que a
+tecnologia era sabida — e <em>não vendido</em> é ausência de decisão. Confundi-las apaga exatamente a informação que a
+opcionalidade do Feasibility existe para carregar.</p>
+<div class="grid2">
+  <div>
+    <div class="zoom">
+      <ol class="tl">
+        <li class="tl-step tl-step--skipped">
+          <span class="tl-m"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M6 18 18 6"/></svg></span>
+          <div class="tl-b">
+            <div class="tl-h"><strong>[ Technical Feasibility ]</strong><span class="st st--off">Pulada</span></div>
+            <p class="tl-meta">Motivo registrado: <b>tecnologia sabida</b> · decidido por <b>Daniel Campos</b> em <b>10/03/2026 09:05</b></p>
+          </div>
+        </li>
+        <li class="tl-step tl-step--skipped" style="padding-bottom:0"><span class="tl-m" style="opacity:0"></span><div style="height:0"></div></li>
+      </ol>
+    </div>
+    <p class="cap"><strong>Pulada.</strong> Marcador <strong>sólido</strong> com o traço de desvio. Trilho <strong>contínuo</strong>:
+      a conta passou por aqui. Corpo com borda <strong>cheia</strong>, e ele <strong>sempre</strong> carrega motivo, autor e carimbo —
+      é o que prova que houve decisão.</p>
+  </div>
+  <div>
+    <div class="zoom">
+      <ol class="tl">
+        <li class="tl-step tl-step--future">
+          <span class="tl-m"></span>
+          <div class="tl-b">
+            <div class="tl-h"><strong>Scale</strong><span class="st st--off">Não vendido</span></div>
+            <p class="tl-meta">Nenhuma decisão registrada · sem oportunidade · sem projeto · sem datas</p>
+          </div>
+        </li>
+        <li class="tl-step tl-step--future" style="padding-bottom:0"><span class="tl-m" style="opacity:0"></span><div style="height:0"></div></li>
+      </ol>
+    </div>
+    <p class="cap"><strong>Não vendido.</strong> Marcador <strong>oco e tracejado</strong>. Trilho <strong>tracejado</strong>: a escada
+      não chegou aqui. Corpo com borda <strong>tracejada</strong> e sem preenchimento, e a linha de meta afirma a ausência
+      em vez de ficar vazia. <strong>Futuro, não falha.</strong></p>
+  </div>
+</div>
+<table style="margin-top:20px">
+  <tr><th style="width:26%">Distinção</th><th style="width:37%">Pulada</th><th>Não vendido</th></tr>
+  <tr><td>Marcador</td><td>sólido, preenchido, com traço de desvio</td><td>oco, contorno tracejado, vazio</td></tr>
+  <tr><td>Trilho que sai dele</td><td><strong>contínuo</strong></td><td><strong>tracejado</strong></td></tr>
+  <tr><td>Corpo</td><td>borda cheia, superfície branca</td><td>borda tracejada, sem preenchimento</td></tr>
+  <tr><td>Conteúdo</td><td><strong>motivo + autor + carimbo</strong>, obrigatórios</td><td>“Nenhuma decisão registrada”</td></tr>
+  <tr><td>Selo</td><td><code>.state--off</code> “Pulada”</td><td><code>.state--off</code> “Não vendido”</td></tr>
+</table>
+<p class="cap"><strong>O matiz é o mesmo de propósito, e isso é a decisão.</strong> Nenhuma das duas é aviso nem falha, então
+pintar uma de âmbar mentiria sobre a gravidade. O que as separa é <em>estrutura</em> — forma do marcador, continuidade do
+trilho, presença do registro —, e não tinta. Distinguir por cor exigiria um matiz novo, e o
+<code>pulse-design-system.md:20</code> é explícito: <em>“Não inventar matiz.”</em></p>
+
+<h2>3 · Quem está esperando — os cinco valores</h2>
+<p class="lead">Hoje o produto só sabe dizer <code>provider</code> ou <code>client</code> (<code>WorkItem.Party</code>,
+<code>backend/apps/core/models.py:301-303</code>). Dois valores não sustentam esta superfície: eles não distinguem
+<em>engenharia</em> de <em>Biahflow</em>, não têm lugar para <em>dependência externa</em>, e não nomeiam o
+<strong>Human Gate</strong> — que é o mais importante e o único que hoje não tem nome em lugar nenhum do sistema.</p>
+<div class="frame" style="padding:22px;background:var(--canvas)">
+  <div class="swatchrow" style="gap:14px">
+    <span class="st st--0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 21v-5h4v5"/></svg>Biahflow</span>
+    <span class="st st--2"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Cliente</span>
+    <span class="eng"><span class="eng-dot"></span>Engenharia · <b>biahflow/pulse#118</b></span>
+    <span class="st st--off"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0z"/><path d="M12 17v5"/></svg>Dependência externa</span>
+    <span class="st st--gate"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Human Gate</span>
+  </div>
+</div>
+<table style="margin-top:16px">
+  <tr><th style="width:16%">Valor</th><th style="width:18%">Pele</th><th style="width:8%">Novo?</th><th>Por que esta pele</th></tr>
+  <tr><td><strong>Biahflow</strong></td><td><code>.state--0</code> · informativo</td><td>não</td><td>É a bola em casa. Normal, não é aviso — informar basta.</td></tr>
+  <tr><td><strong>cliente</strong></td><td><code>.state--2</code> · aviso</td><td>não</td><td>Parado esperando quem não trabalha para nós. É o âmbar que faz alguém cobrar.</td></tr>
+  <tr><td><strong>engenharia</strong></td><td><strong><code>.eng-ref</code></strong> · pele de engenharia</td><td><strong>sim</strong></td><td><strong>Deliberadamente fora da família <code>.state</code>.</strong> Quando a bola está com a engenharia, o dono é a projeção do GitHub — e a regra da seção 4 diz que essa fonte nunca usa a pele do negócio.</td></tr>
+  <tr><td><strong>dependência externa</strong></td><td><code>.state--off</code> · neutro</td><td>não</td><td>Não é aviso nem falha: é <em>ausência de agência</em> — nenhum dos dois lados pode destravar. <code>.state--off</code> já é o papel de “sem responsável” no produto. A gravidade quem diz é o estado do degrau (<strong>Bloqueado</strong>), não o dono.</td></tr>
+  <tr><td><strong>Human Gate</strong></td><td><strong><code>.state--gate</code></strong> · <span class="sw" style="background:#bd4a30"></span><code>brand-500</code> sólido, texto branco</td><td><strong>sim</strong></td><td>A <strong>única pastilha sólida do produto</strong>, e o único uso do clay chapado fora do anel de foco. O acento vale por ser raro; o gate humano é o lugar mais caro de perder de vista.</td></tr>
+</table>
+<p class="cap">Os cinco são <strong>legíveis sem abrir nota nenhuma</strong>: cada um tem rótulo escrito por extenso, ícone
+próprio e pele própria. Nenhum depende de <code>title</code> ou de hover — atributo <code>title</code> não chega ao
+teclado nem ao toque.</p>
+
+<h2>4 · Negócio ≠ engenharia — duas peles, e uma regra</h2>
+<p class="lead"><strong>Redondo e tinto = estado de negócio, do qual o Pulse é a fonte. Quadrado, com borda e monoespaçado =
+projeção do GitHub, da qual o Pulse é só espelho.</strong> A regra é estrutural, não de tom: nenhuma tinta nova é
+necessária para respeitá-la, e nenhuma cópia acidental produz a pele errada.</p>
+<div class="frame" style="padding:20px;background:var(--canvas)">
+  <div class="panel">
+    <ol class="tl">
+      <li class="tl-step tl-step--active" style="padding-bottom:0">
+        <span class="tl-m"><i></i></span>
+        <div class="tl-b">
+          <p class="eyebrow" style="margin-bottom:4px">Você está aqui</p>
+          <div class="tl-h"><strong>Prove</strong></div>
+          <p class="tl-meta">Realizado por <b>PROVE Triagem de NF</b> · iniciado em <b>18/03/2026</b></p>
+          <div class="tl-foot" style="gap:10px">
+            <span class="k">Engenharia</span>
+            <span class="eng"><span class="eng-dot" style="background:var(--success)"></span><b>biahflow/pulse#118</b> · PR #204 <b>merged</b></span>
+            <span class="eng"><span class="eng-dot" style="background:var(--success)"></span>CI <b>green</b> · <b>a91f0c3</b></span>
+            <span class="eng" style="border-style:dashed"><span class="eng-dot" style="background:var(--warning)"></span>observado há <b>3 h</b> — projeção possivelmente velha</span>
+          </div>
+        </div>
+      </li>
+    </ol>
+    <div style="margin-top:14px;border-left:3px solid var(--b500);background:var(--b50);border-radius:0 8px 8px 0;padding:12px 14px">
+      <p class="type-body" style="margin:0;color:var(--b700);font-weight:600">O PR está <em>merged</em> e o degrau continua <strong>Ativo</strong>.</p>
+      <p class="type-meta" style="margin:6px 0 0;color:var(--b700)">Nenhuma regra desta superfície equipara <code>PR merged</code> a <code>DONE</code> de entrega. Um degrau só fecha por decisão de gate registrada — <code>metodologia-fde.md:42-48</code> — e a Issue #42 exclui explicitamente “automatic phase transitions driven only by PR merge”.</p>
+    </div>
+  </div>
+</div>
+<p class="cap">A pele de engenharia carrega sempre a <strong>proveniência</strong> — repositório, número, referência e o momento
+em que foi observada — e diz <strong>“projeção possivelmente velha”</strong> em vez de inventar status. Isso é o contrato da
+Issue #41; aqui só se desenha o lugar onde ele aparece.</p>
+
+<h2>5 · Histórico — transição com carimbo e autor</h2>
+<p class="lead">A Issue #42 pede <em>“phase history with timestamps/provenance rather than only the latest label”</em>. A
+<strong>proposta</strong> é uma gaveta por degrau (<code>&lt;details&gt;</code> nativo, sem JavaScript novo), fechada por
+padrão, cujo conteúdo são <code>.panel-rows</code> + <code>.row</code> — primitivas que já existem. Desenhada aberta abaixo.</p>
+<div class="frame" style="padding:20px;background:var(--canvas)">
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:14px 18px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      <span class="type-label">Histórico do degrau <strong>Prove</strong></span>
+      <span class="st st--off" style="padding:2px 8px">4 transições</span>
+    </div>
+    <div class="rows">
+      <div class="rowline"><span class="type-meta" style="width:130px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums">18/03/2026 14:22</span><div class="rowmain"><strong>Degrau iniciado</strong><span>de <em>Não vendido</em> para <em>Ativo</em>, ao converter a oportunidade PROVE · Triagem de NF</span></div><span class="st st--off" style="padding:2px 8px">Daniel Campos</span></div>
+      <div class="rowline"><span class="type-meta" style="width:130px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums">02/04/2026 10:07</span><div class="rowmain"><strong>Bloqueado</strong><span>acesso ao ERP pendente do time de TI do cliente</span></div><span class="st st--2" style="padding:2px 8px">Ana Ribeiro</span></div>
+      <div class="rowline"><span class="type-meta" style="width:130px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums">21/04/2026 08:55</span><div class="rowmain"><strong>Desbloqueado</strong><span>credencial liberada</span></div><span class="st st--off" style="padding:2px 8px">Ana Ribeiro</span></div>
+      <div class="rowline"><span class="type-meta" style="width:130px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums">14/08/2026 16:30</span><div class="rowmain"><strong>Previsão de gate definida</strong><span>12/09/2026</span></div><span class="st st--off" style="padding:2px 8px">Daniel Campos</span></div>
+    </div>
+  </div>
+</div>
+<p class="cap"><strong>Proposta, e marcada como tal:</strong> a gaveta por degrau é escolha deste pacote. A alternativa
+considerada — um painel único “Histórico da escada” ao pé da tela — foi <strong>rejeitada</strong>: ela separa a transição do
+degrau a que se refere, e a pergunta que se faz olhando um degrau é sempre “o que aconteceu <em>aqui</em>”. O que <em>não</em>
+é proposta: que a transição carregue carimbo e autor — isso a Issue exige.</p>
+
+<h2>6 · Os onze estados, cada um rotulado</h2>
+<p class="lead">Os dez estados que a superfície declara, mais o <strong>erro de carregamento</strong>, que o
+<code>design-approval.md</code> exige de todo pacote (item 3) e que a tela pode alcançar.</p>
+<div class="grid3">
+  <div>
+    <div class="zoom" style="padding:16px"><ol class="tl"><li class="tl-step tl-step--done" style="padding-bottom:0"><span class="tl-m"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="m5 13 4 4L19 7"/></svg></span><div class="tl-b"><div class="tl-h"><strong>Discover</strong><span class="st st--1">Concluído</span><span class="st st--1">GO</span></div><p class="tl-meta">12/02/2026 → 06/03/2026 · gate registrado</p></div></li></ol></div>
+    <p class="cap"><strong>1 · Concluído.</strong> Vendido, entregue, gate <code>GO</code> registrado. O selo do gate reusa <code>gateLabel</code>/<code>gateVariant</code> de <code>ProjectDetailPage.tsx:19,23</code> — <strong>o mesmo mapa, não um segundo</strong>.</p>
+  </div>
+  <div>
+    <div class="zoom" style="padding:16px"><ol class="tl"><li class="tl-step tl-step--active" style="padding-bottom:0"><span class="tl-m"><i></i></span><div class="tl-b"><p class="eyebrow" style="margin-bottom:4px">Você está aqui</p><div class="tl-h"><strong>Prove</strong></div><p class="tl-meta">iniciado em 18/03/2026 · o único expandido</p></div></li></ol></div>
+    <p class="cap"><strong>2 · Ativo.</strong> Sem selo de estado: o que diz “ativo” é a <strong>expansão</strong> e o
+      <code>.eyebrow</code> “Você está aqui”, que já é a palavra do produto para a fase corrente
+      (<code>ClientDetailPage.tsx:179</code>, <code>ProjectDetailPage.tsx:731</code> — a copy é a de lá, mas aqui ela sai
+      pela <strong>primitiva</strong>, e não pelo literal que os dois escrevem hoje). Um selo azul aqui competiria com o
+      dono <em>Biahflow</em>, também azul.</p>
+  </div>
+  <div>
+    <div class="zoom" style="padding:16px"><ol class="tl"><li class="tl-step tl-step--future" style="padding-bottom:0"><span class="tl-m"></span><div class="tl-b"><div class="tl-h"><strong>Scale</strong><span class="st st--off">Não vendido</span></div><p class="tl-meta">Nenhuma decisão registrada</p></div></li></ol></div>
+    <p class="cap"><strong>3 · Não vendido.</strong> Ainda não virou Opportunity. <strong>Futuro, não falha</strong> — por isso neutro e nunca âmbar.</p>
+  </div>
+</div>
+<div class="grid3" style="margin-top:20px">
+  <div>
+    <div class="zoom" style="padding:16px"><ol class="tl"><li class="tl-step tl-step--skipped" style="padding-bottom:0"><span class="tl-m"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M6 18 18 6"/></svg></span><div class="tl-b"><div class="tl-h"><strong>[ Technical Feasibility ]</strong><span class="st st--off">Pulada</span></div><p class="tl-meta">Motivo: <b>tecnologia sabida</b> · Daniel Campos · 10/03/2026</p></div></li></ol></div>
+    <p class="cap"><strong>4 · Pulada.</strong> Só o Feasibility a alcança (<code>metodologia-fde.md:38-40</code>). Ver a seção 2.</p>
+  </div>
+  <div>
+    <div class="zoom" style="padding:16px"><ol class="tl"><li class="tl-step tl-step--blocked" style="padding-bottom:0"><span class="tl-m"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M12 7v6M12 17h.01"/></svg></span><div class="tl-b"><div class="tl-h"><strong>Prove</strong><span class="st st--3">Bloqueado</span></div><p class="tl-meta">Acesso ao ERP pendente · há <b>19 dias</b></p><div class="tl-foot"><span class="k">Esperando</span><span class="st st--2">Cliente</span></div></div></li></ol></div>
+    <p class="cap"><strong>5 · Bloqueado.</strong> Mostra <strong>o quê</strong> (o impedimento em texto) e <strong>quem</strong> (o chip de dono). Dois eixos: o estado diz a gravidade, o dono diz a bola.</p>
+  </div>
+  <div>
+    <div class="zoom" style="padding:16px"><ol class="tl"><li class="tl-step tl-step--gate" style="padding-bottom:0"><span class="tl-m"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><div class="tl-b"><div class="tl-h"><strong>Prove</strong><span class="st st--2">Aguardando decisão de gate</span></div><p class="tl-meta">Quatro saídas possíveis: <b>GO</b> · <b>CONDITIONAL GO</b> · <b>REDESIGN</b> · <b>NO-GO</b></p><div class="tl-foot"><span class="k">Esperando</span><span class="st st--gate">Human Gate</span><span style="flex:1"></span><a class="backlink type-label" href="#">Decidir no projeto →</a></div></div></li></ol></div>
+    <p class="cap"><strong>6 · Aguardando decisão de gate.</strong> Marcador <strong>quadrado</strong> — o único da escada.
+      As quatro saídas aparecem como <strong>texto</strong>, não como botões: o gate se decide na tela do projeto
+      (<code>JourneySection</code>), e desenhar aqui quatro controles inertes seria defeito, não placeholder.</p>
+  </div>
+</div>
+<div class="grid3" style="margin-top:20px">
+  <div>
+    <div class="zoom" style="padding:16px"><ol class="tl"><li class="tl-step tl-step--cancelled" style="padding-bottom:0"><span class="tl-m"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span><div class="tl-b"><div class="tl-h"><strong>Scale</strong><span class="st st--off">Replanejado</span></div><p class="tl-meta">Ativo de <b>02/05</b> a <b>14/06/2026</b> · replanejado por <b>Daniel Campos</b> · motivo: <b>escopo devolvido ao PROVE</b></p></div></li></ol></div>
+    <p class="cap"><strong>7 · Cancelado / replanejado.</strong> Foi ativo e deixou de ser. O nome fica <strong>riscado</strong> e
+      as datas em que ele <em>esteve</em> ativo <strong>permanecem</strong> — o histórico não é apagado.</p>
+  </div>
+  <div>
+    <div class="zoom" style="padding:16px"><div class="panel" style="padding:16px"><div class="panel-heading" style="margin-bottom:12px"><span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg></span><div><h3 style="font-size:14px">Escada FDE</h3></div></div><p class="empty" style="margin:0">Nenhum degrau iniciado. A escada começa quando a primeira oportunidade desta conta for ganha e convertida.</p></div></div>
+    <p class="cap"><strong>8 · Conta nova (vazio).</strong> <code>.empty-state</code>, e ele <strong>diz o que faz a escada começar</strong>
+      em vez de só constatar a ausência. Sem botão primário: a ação mora no Comercial.</p>
+  </div>
+  <div>
+    <div class="zoom" style="padding:16px"><div class="panel" style="padding:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><span class="skel" style="width:36px;height:36px;border-radius:8px"></span><span class="skel" style="width:120px;height:14px;border-radius:4px"></span></div>
+      <div style="padding-left:30px;position:relative">
+        <span style="position:absolute;left:0;top:4px;bottom:12px;border-left:2px solid var(--line)"></span>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span class="skel" style="width:20px;height:20px;position:absolute;left:-10px;border:2px solid var(--line);background:var(--surface)"></span><span class="skel" style="width:100%;height:34px;border-radius:12px"></span></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span class="skel" style="width:20px;height:20px;position:absolute;left:-10px;border:2px solid var(--line);background:var(--surface)"></span><span class="skel" style="width:100%;height:34px;border-radius:12px"></span></div>
+        <div style="display:flex;align-items:center;gap:12px"><span class="skel" style="width:20px;height:20px;position:absolute;left:-10px;border:2px solid var(--line);background:var(--surface)"></span><span class="skel" style="width:100%;height:34px;border-radius:12px"></span></div>
+      </div>
+    </div></div>
+    <p class="cap"><strong>9 · Carregando.</strong> Esqueleto em <code>surface-subtle</code> e <code>line</code>, com o
+      <strong>raio do cartão real</strong> (12&nbsp;px) — mesmo desenho de <code>DashboardPage.tsx:28</code>.
+      <strong>Nenhum selo colorido</strong>: um esqueleto com estado anuncia um estado que ainda não se sabe.</p>
+  </div>
+</div>
+<div class="grid2" style="margin-top:20px">
+  <div>
+    <div class="zoom" style="padding:16px"><div class="panel" style="padding:16px">
+      <div class="panel-heading" style="margin-bottom:12px"><span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg></span><div style="flex:1"><h3 style="font-size:14px">Escada FDE</h3><p style="font-size:12px">Escopo de entrega · você vê os degraus dos projetos de que participa</p></div></div>
+      <ol class="tl">
+        <li class="tl-step tl-step--future"><span class="tl-m"></span><div class="tl-b"><div class="tl-h"><strong>Discover</strong><span class="st st--off">Sem acesso</span></div></div></li>
+        <li class="tl-step tl-step--future"><span class="tl-m"></span><div class="tl-b"><div class="tl-h"><strong>Prioritize</strong><span class="st st--off">Sem acesso</span></div></div></li>
+        <li class="tl-step tl-step--future"><span class="tl-m"></span><div class="tl-b"><div class="tl-h"><strong>[ Technical Feasibility ]</strong><span class="st st--off">Sem acesso</span></div></div></li>
+        <li class="tl-step tl-step--active" style="padding-bottom:0"><span class="tl-m"><i></i></span><div class="tl-b"><p class="eyebrow" style="margin-bottom:4px">Você está aqui</p><div class="tl-h"><strong>Prove</strong></div><p class="tl-meta">Realizado por <b>PROVE Triagem de NF</b> · iniciado em <b>18/03/2026</b></p><div class="tl-foot"><span class="k">Esperando</span><span class="st st--0">Biahflow</span></div></div></li>
+      </ol>
+    </div></div>
+    <p class="cap"><strong>10 · Sem autorização (papel <code>delivery</code>).</strong> A regra é
+      <code>Project.objects.visible_to(user)</code> — <strong>a única fonte dela</strong>, nunca reescrita
+      (<code>CLAUDE.md</code>, RFC 0003, ADR 0010). O degrau realizado por projeto de que a pessoa não participa vira
+      <strong>“Sem acesso”</strong>: sem oportunidade, sem valor, sem datas, sem link. A <em>forma</em> da escada aparece;
+      o <em>conteúdo comercial</em> não. Sem nenhum degrau visível, a superfície inteira cai no
+      <code>.empty-state</code> do estado 8.</p>
+  </div>
+  <div>
+    <div class="zoom" style="padding:16px"><div class="alert-error" role="alert">Não foi possível carregar a escada desta conta.</div></div>
+    <p class="cap"><strong>11 · Erro ao carregar.</strong> <code>.alert--error</code> com <code>role="alert"</code>, no lugar do
+      painel. <strong>Não está entre os dez estados que a especificação lista</strong>, e entra porque o
+      <code>design-approval.md</code> exige o estado de erro em todo pacote. Um alerta, não um selo: ele interrompe a tela.</p>
+  </div>
+</div>
+
+<h2>7 · Superfície B — o bloco compacto na visão geral (<code>/</code>)</h2>
+<p class="lead">Uma linha por conta ativa. <strong>Serve para varrer a carteira, não para operar</strong> — a operação é na
+superfície A, e por isso a linha inteira é um link para <code>/clientes/:id</code> e não há nenhum controle aqui.</p>
+<div class="frame" style="padding:20px;background:var(--canvas)">
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:16px 18px">
+      <span class="micon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg></span>
+      <div style="flex:1"><h3 style="margin:0;font-size:16px;line-height:24px;font-weight:650">Escada FDE por conta</h3><p style="margin:2px 0 0;font-size:14px;line-height:22px;color:var(--muted)">Onde cada conta está e de quem é a bola</p></div>
+      <a class="backlink" href="#">Abrir clientes</a>
+    </div>
+    <div class="rows">
+      <div class="rowline">
+        <div class="tl-dots"><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--skipped"></span><span class="tl-link"></span><span class="tl-dot tl-dot--active"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span></div>
+        <div class="rowmain"><strong>Metalúrgica Vale</strong><span>Prove · ativo</span></div>
+        <span class="st st--0">Biahflow</span>
+        <span class="type-meta" style="width:96px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums">parado há 4 dias</span>
+      </div>
+      <div class="rowline">
+        <div class="tl-dots"><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--active"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span></div>
+        <div class="rowmain"><strong>Cooperativa Sul</strong><span>Prioritize · bloqueado</span></div>
+        <span class="st st--2">Cliente</span>
+        <span class="type-meta" style="width:96px;text-align:right;color:var(--warning);font-weight:700;font-variant-numeric:tabular-nums">parado há 31 dias</span>
+      </div>
+      <div class="rowline">
+        <div class="tl-dots"><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--gate"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span></div>
+        <div class="rowmain"><strong>Rede Aurora</strong><span>Prove · aguardando decisão de gate</span></div>
+        <span class="st st--gate">Human Gate</span>
+        <span class="type-meta" style="width:96px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums">parado há 9 dias</span>
+      </div>
+      <div class="rowline">
+        <div class="tl-dots"><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--skipped"></span><span class="tl-link"></span><span class="tl-dot tl-dot--done"></span><span class="tl-link"></span><span class="tl-dot tl-dot--active"></span><span class="tl-link tl-link--future"></span><span class="tl-dot tl-dot--future"></span></div>
+        <div class="rowmain"><strong>Transportes Iguaçu</strong><span>Scale · ativo</span></div>
+        <span class="eng"><span class="eng-dot" style="background:var(--info)"></span>Engenharia · <b>#221</b></span>
+        <span class="type-meta" style="width:96px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums">parado há 2 dias</span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="cap">A escada compacta repete <strong>as mesmas convenções</strong> da superfície A em miniatura: ponto cheio verde =
+concluído, anel clay = ativo, <strong>ponto cinza cheio</strong> = pulado (houve decisão), <strong>ponto oco tracejado</strong> = não
+vendido (não houve), quadrado clay = gate, e o <strong>elo</strong> entre pontos é contínuo até onde a conta chegou e tracejado depois.
+O “parado há N dias” é aritmética sobre o último evento de fase — determinístico, e a seção
+<strong>FinOps</strong> da Issue #42 proíbe gastar token de modelo nisso.</p>
+
+<h2>8 · A primitiva que falta — e é isto que este pacote propõe acrescentar</h2>
+<p class="lead"><strong>Não existe primitiva de linha do tempo ou de <em>stepper</em> em <code>frontend/src/index.css</code>.</strong>
+Confirmado por busca: <code>grep -rn "timeline\|stepper" frontend/src/index.css</code> não devolve nenhuma linha.
+Enquanto isso, a <code>JourneySection</code> desenha os degraus dela com literal Tailwind escrito à mão.</p>
+<table>
+  <tr><th style="width:30%">Onde</th><th style="width:38%">Literal escrito à mão hoje</th><th>O que isso significa</th></tr>
+  <tr><td><code>ProjectDetailPage.tsx:722</code></td><td><code>rounded-full px-3 py-1.5 text-xs font-semibold</code></td><td>Um <code>.state</code> reescrito à mão, com padding e corpo diferentes do original.</td></tr>
+  <tr><td><code>ProjectDetailPage.tsx:722</code> (a mesma linha)</td><td><code>bg-ink text-white</code> para a fase ativa</td><td>Um quinto tom de selo fora da família <code>.state--*</code>, que ninguém sabe que existe.</td></tr>
+  <tr><td><code>ProjectDetailPage.tsx:729</code></td><td><code>rounded-2xl border bg-slate-50/60 p-4</code></td><td>Um cartão <strong>quase</strong> igual ao <code>.panel</code> — 16&nbsp;px de raio contra 12, cinza frio contra <code>surface-subtle</code>.</td></tr>
+  <tr><td><code>ProjectDetailPage.tsx:764</code></td><td><code>rounded-2xl border border-dashed p-4</code></td><td>O tracejado do gate, também sem nome.</td></tr>
+  <tr><td><code>ProjectDetailPage.tsx:731</code> · <code>ClientDetailPage.tsx:179</code></td><td><code>text-xs font-semibold uppercase tracking-wide text-accent</code></td><td>O <code>.eyebrow</code> reescrito à mão, <strong>nos dois</strong> lugares que já dizem “Você está aqui” — e ainda no apelido <code>accent</code> em vez de <code>brand-*</code>.</td></tr>
+</table>
+<p class="cap">Isso colide com a ADR 0026 e com <code>frontend/src/test/primitivas.test.ts</code>, <strong>cuja allowlist nasce
+vazia</strong>. Construir a escada FDE com mais literal do mesmo tipo duplicaria a dívida em vez de pagá-la — e a segunda
+definição de “concluído” divergiria da primeira em silêncio, que é exatamente o defeito que a ADR 0026 existe para pegar.</p>
+<table style="margin-top:16px">
+  <tr><th style="width:24%">Classe proposta</th><th style="width:10%">Novo?</th><th>Papel</th></tr>
+  <tr><td><code>.timeline</code></td><td><span class="tag tag--new">novo</span></td><td>A trilha: recuo do trilho, espaçamento entre degraus, <code>list-style</code> zerado. É <code>&lt;ol&gt;</code>, porque a ordem é o significado.</td></tr>
+  <tr><td><code>.timeline-step</code></td><td><span class="tag tag--new">novo</span></td><td>Um degrau: posiciona marcador e corpo e desenha o segmento de trilho que sai dele.</td></tr>
+  <tr><td><code>.timeline-marker</code></td><td><span class="tag tag--new">novo</span></td><td>O nó sobre o trilho.</td></tr>
+  <tr><td><code>.timeline-body</code></td><td><span class="tag tag--new">novo</span></td><td>O cartão do degrau. Raio de cartão (12&nbsp;px) e <code>--shadow-card</code>, iguais aos do <code>.panel</code>.</td></tr>
+  <tr><td><code>--done</code> · <code>--active</code> · <code>--future</code> · <code>--skipped</code> · <code>--blocked</code> · <code>--gate</code> · <code>--cancelled</code></td><td><span class="tag tag--new">novo</span></td><td>As sete variantes de estado do degrau. <strong>Elas mudam forma e continuidade do trilho</strong>; a tinta continua vindo de <code>.state--*</code>.</td></tr>
+  <tr><td><code>.timeline--nested</code></td><td><span class="tag tag--new">novo</span></td><td>A trilha subordinada dentro do degrau ativo: recuo, trilho de 1&nbsp;px, marcador de 13&nbsp;px, superfície <code>surface-subtle</code>.</td></tr>
+  <tr><td><code>.timeline--compact</code></td><td><span class="tag tag--new">novo</span></td><td>A escada inteira numa linha, para a superfície B.</td></tr>
+</table>
+<p class="cap"><strong>É proposta deste pacote, e não linguagem já estabelecida do projeto.</strong> Ela é a primitiva que
+faltava, e a <code>JourneySection</code> passa a ser <strong>candidata</strong> a consumi-la — <span class="tag tag--res">reservado</span>,
+não escopo. Refatorar a jornada de entrega não é esta issue, e fazê-lo de carona misturaria duas fatias que falham por
+motivos diferentes.</p>
+
+<h2>9 · Proveniência de cada valor</h2>
+<table>
+  <tr><th style="width:34%">Valor</th><th style="width:38%">Origem</th><th>Novo?</th></tr>
+  <tr><td>Toda a paleta usada (<code>ink</code>, <code>muted</code>, <code>line</code>, <code>line-strong</code>, <code>canvas</code>, <code>surface</code>, <code>surface-subtle</code>, <code>brand-50/200/500/700</code>, <code>danger*</code>, <code>success*</code>, <code>warning*</code>, <code>info*</code>)</td><td><code>docs/design/pulse-design-system.md</code> · <code>index.css</code> <code>@theme</code></td><td>não — <strong>nenhum matiz novo</strong></td></tr>
+  <tr><td>Papéis tipográficos (<code>.type-title</code>, <code>-body</code>, <code>-label</code>, <code>-meta</code>), raio (4 detalhe · 8 controle · 12 cartão), elevação (<code>--shadow-card</code>, <code>--shadow-raised</code>)</td><td>DAP GH-19 r2 (fundações normativas) · ADR 0043</td><td>não</td></tr>
+  <tr><td><code>.panel</code>, <code>.panel--flush</code>, <code>.panel-heading</code>, <code>.panel-heading--icon</code>, <code>.panel-rows</code>, <code>.row</code>, <code>.row-main</code></td><td><code>index.css</code> <code>@layer components</code></td><td>não</td></tr>
+  <tr><td>A copy “Você está aqui” para a fase corrente</td><td><code>ClientDetailPage.tsx:179</code> · <code>ProjectDetailPage.tsx:731</code> — já é a palavra do produto</td><td>não</td></tr>
+  <tr><td><code>.eyebrow</code> como a classe que a desenha</td><td><code>index.css</code> — os dois sites acima escrevem hoje o <strong>literal</strong> (<code>text-xs … text-accent</code>) em vez da primitiva; aqui usa-se a primitiva</td><td>não</td></tr>
+  <tr><td><code>.state--0</code> · <code>--1</code> · <code>--2</code> · <code>--3</code> · <code>--off</code></td><td><code>index.css</code> · <code>pulse-design-system.md</code></td><td>não</td></tr>
+  <tr><td><code>.empty-state</code>, <code>.alert--error</code>, <code>.metric-icon</code>, <code>.back-link</code></td><td><code>index.css</code></td><td>não</td></tr>
+  <tr><td>Rótulos e variantes do gate (<code>GO</code>/<code>CONDITIONAL GO</code>/<code>REDESIGN</code>/<code>NO-GO</code> → <code>state--1</code>/<code>--2</code>/<code>--2</code>/<code>--3</code>)</td><td><code>ProjectDetailPage.tsx:19,23</code> — <strong>reusar o mapa, não recriá-lo</strong></td><td>não</td></tr>
+  <tr><td>Nomes dos seis degraus, com <code>[ Technical Feasibility ]</code> entre colchetes</td><td><code>docs/metodologia-fde.md:26</code></td><td>não</td></tr>
+  <tr><td>Esqueleto em <code>surface-subtle</code>/<code>line</code> com raio do cartão real</td><td><code>DashboardPage.tsx:28</code></td><td>não</td></tr>
+  <tr><td><strong><code>.timeline</code>, <code>.timeline-step</code> (+7 variantes), <code>.timeline-marker</code>, <code>.timeline-body</code>, <code>.timeline--nested</code>, <code>.timeline--compact</code></strong></td><td>— não existe primitiva de <em>timeline</em>/<em>stepper</em> no <code>index.css</code></td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Trilho contínuo vs. tracejado como portador de significado</strong> (passou por aqui vs. não chegou aqui)</td><td>—</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Marcador quadrado (raio de detalhe, 4&nbsp;px) reservado ao gate</strong></td><td>consome o degrau “4 · detalhe” do contrato r2, que hoje não tem consumidor no shell</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong><code>.state--gate</code></strong> — <span class="sw" style="background:#bd4a30"></span><code>brand-500</code> sólido com texto branco</td><td>tinta existente, <strong>composição nova</strong>: é a única pastilha sólida do produto</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong><code>.eng-ref</code></strong> — raio 4&nbsp;px, <code>surface-subtle</code>, borda <code>line-strong</code>, texto <code>muted</code> monoespaçado</td><td>tintas existentes, <strong>pele nova</strong>: separa projeção de engenharia de estado de negócio</td><td><strong>sim — decidido aqui</strong></td></tr>
+  <tr><td><strong>Os cinco rótulos de quem-espera</strong>: <code>Biahflow</code> · <code>Cliente</code> · <code>Engenharia</code> · <code>Dependência externa</code> · <code>Human Gate</code></td><td>—; hoje só existem <code>Fornecedor</code>/<code>Cliente</code> (<code>models.py:301-303</code>)</td><td><strong>sim — copy decidida aqui</strong></td></tr>
+  <tr><td><strong>Rótulos de estado do degrau</strong>: <code>Concluído</code> · <code>Não vendido</code> · <code>Pulada</code> · <code>Bloqueado</code> · <code>Aguardando decisão de gate</code> · <code>Replanejado</code> · <code>Sem acesso</code></td><td>—</td><td><strong>sim — copy decidida aqui</strong></td></tr>
+  <tr><td><strong>Gaveta de histórico por degrau</strong> (<code>&lt;details&gt;</code> + <code>.panel-rows</code>)</td><td>composição de primitivas existentes; a <strong>escolha</strong> por degrau em vez de painel único é proposta</td><td><strong>sim — composição decidida aqui</strong></td></tr>
+  <tr><td><code>.filter-chip</code> / <code>.metric-card</code></td><td><strong>considerados e não usados</strong>: filtro seria operar numa superfície de varredura, e a escada não é uma métrica</td><td>—</td></tr>
+</table>
+<p class="cap">Design system consultado: <code>docs/design/pulse-design-system.md</code>, <code>frontend/src/index.css</code> e
+<code>docs/design/dap-gh26-r1/README.md</code>, lidos em 27/08/2026. <strong>Se este pacote e essa fonte divergirem, a fonte
+vence e este pacote está velho.</strong></p>
+
+<h2>10 · Medições de contraste</h2>
+<table>
+  <tr><th style="width:36%">Par</th><th style="width:14%">Razão</th><th>Veredito</th></tr>
+  <tr><td><span class="sw" style="background:#fff"></span>branco sobre <span class="sw" style="background:#bd4a30"></span><code>brand-500</code> — o <code>.state--gate</code></td><td><strong>5,02:1</strong></td><td>Passa AA. É o valor já medido em <code>pulse-design-system.md:74</code>, no sentido inverso.</td></tr>
+  <tr><td><span class="sw" style="background:#57534e"></span><code>muted</code> sobre <span class="sw" style="background:#f5f5f4"></span><code>surface-subtle</code> — o <code>.eng-ref</code> e a trilha aninhada</td><td><strong>6,99:1</strong></td><td>Passa AA com folga.</td></tr>
+  <tr><td><span class="sw" style="background:#475569"></span><code>slate-600</code> sobre <span class="sw" style="background:#f1f5f9"></span><code>slate-100</code> — <code>.state--off</code>, que rotula <em>Pulada</em>, <em>Não vendido</em> e <em>Sem acesso</em></td><td><strong>6,92:1</strong></td><td>Inalterado. Passa AA.</td></tr>
+  <tr><td><span class="sw" style="background:#1d4ed8"></span><code>info</code> sobre <span class="sw" style="background:#eff6ff"></span><code>info-50</code> — dono <em>Biahflow</em></td><td><strong>6,16:1</strong></td><td>Inalterado (r2).</td></tr>
+  <tr><td><span class="sw" style="background:#b45309"></span><code>warning</code> sobre <span class="sw" style="background:#fffbeb"></span><code>warning-50</code> — dono <em>Cliente</em> e “parado há 31 dias”</td><td><strong>4,84:1</strong></td><td>Inalterado (r2). Margem fina, mas passa — <strong>não reduzir o corpo abaixo de 11&nbsp;px</strong>.</td></tr>
+  <tr><td><span class="sw" style="background:#b91c1c"></span><code>danger</code> sobre <span class="sw" style="background:#fef2f2"></span><code>danger-50</code> — <em>Bloqueado</em> e o alerta de erro</td><td><strong>5,91:1</strong></td><td>Inalterado (r2).</td></tr>
+  <tr><td><span class="sw" style="background:#047857"></span><code>success</code> sobre <span class="sw" style="background:#ecfdf5"></span><code>success-50</code> — <em>Concluído</em> e <code>GO</code></td><td><strong>5,21:1</strong></td><td>Inalterado (r2).</td></tr>
+  <tr><td><span class="sw" style="background:#d6d3d1"></span><code>line-strong</code> sobre <span class="sw" style="background:#fff"></span>branco — o trilho e o marcador oco</td><td><strong>1,49:1</strong></td><td><strong>Reprovaria como texto, e não é texto.</strong> Ver a nota abaixo.</td></tr>
+</table>
+<p class="cap"><strong>O trilho é decoração, e por isso ele não pode ser o único portador de significado.</strong> A regra
+<code>color-contrast</code> do axe mede texto; um traço de 2&nbsp;px em <code>line-strong</code> passaria despercebido pelo
+portão e ainda assim seria ilegível para quem enxerga pouco. Por isso <strong>todo</strong> estado tem rótulo escrito por
+extenso e ícone, e nenhuma informação desta superfície existe só na forma do marcador ou na continuidade do trilho —
+a distinção visual acelera a leitura, não a substitui. O critério de não-texto (WCAG 1.4.11, 3:1) se aplica ao
+<strong>marcador</strong> quando ele é o indicador de estado; o marcador ativo (<code>brand-500</code> sobre branco,
+<strong>5,02:1</strong>), o concluído (<code>success</code> sobre branco, <strong>5,48:1</strong>) e o bloqueado
+(<code>danger</code> sobre branco, <strong>6,47:1</strong>) passam.</p>
+
+<h2>11 · Entregue vs. reservado</h2>
+<table>
+  <tr><th style="width:36%">Elemento</th><th style="width:14%">Esta entrega</th><th style="width:22%">Reservado para</th><th>Vira real quando</th></tr>
+  <tr><td>Escada FDE da conta em <code>/clientes/:id</code>, seis degraus</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Os onze estados, cada um rotulado</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Histórico com carimbo e autor</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Os cinco valores de quem-espera, incluindo <strong>Human Gate</strong></td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Bloco compacto por conta na visão geral</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Primitiva <code>.timeline</code> e suas variantes</td><td>entrega</td><td>—</td><td>—</td></tr>
+  <tr><td>Chip de projeção de engenharia (<code>.eng-ref</code>)</td><td>entrega <strong>a pele</strong>; o dado vem da Issue #41</td><td>—</td><td>Sem a projeção, o chip <strong>não é desenhado</strong> — não existe versão inerte dele.</td></tr>
+  <tr><td><span class="tag tag--res">reservado</span> Projeção da escada para o cliente no <strong>One</strong></td><td>não entrega</td><td>One</td><td>Existir projeção aprovada voltada ao cliente. A Issue #42 diz que é do One, e que ele não pode virar a fonte operacional interna.</td></tr>
+  <tr><td><span class="tag tag--res">reservado</span> <code>JourneySection</code> consumindo <code>.timeline</code></td><td>não entrega</td><td>Issue própria</td><td>A primitiva existir e estar em uso na escada da conta. A jornada de entrega <strong>fica intocada</strong> nesta fatia.</td></tr>
+  <tr><td><span class="tag tag--res">reservado</span> Transição automática de degrau</td><td>não entrega</td><td>—</td><td><strong>Nunca por <code>PR merged</code>.</strong> A Issue #42 exclui “automatic phase transitions driven only by PR merge”, e o gate de quatro saídas é humano por definição.</td></tr>
+  <tr><td><span class="tag tag--res">reservado</span> Cobrança/faturamento por degrau</td><td>não entrega</td><td>Financeiro / Cobrança</td><td>Existir decisão de negócio própria. A Issue exclui “billing/accounting automation”.</td></tr>
+</table>
+<p class="cap"><strong>Nenhum elemento reservado é desenhado como controle inerte.</strong> O que não entra simplesmente não é
+renderizado — não há botão desligado, link morto nem placeholder ligado sem função. Os quatro rótulos do gate na
+superfície A são <strong>texto</strong> justamente por isso.</p>
+
+<h2>12 · Decisões que este pacote carrega</h2>
+<ul class="notes">
+  <li><strong>A escada FDE é da conta, não do projeto.</strong> A autoridade é <code>metodologia-fde.md:50-53</code>. A Issue
+    #42 escreve “each project”; a leitura desta revisão é que o degrau <em>é realizado por</em> um projeto e que cada projeto
+    continua expondo a fase canônica de entrega dele (FDD 011, já entregue) — o que muda é o <strong>nível</strong> em que a
+    escada existe. <code>JourneyPhase</code>/<code>ProjectPhase</code> não são renomeados, reordenados nem tocados.</li>
+  <li><strong>“Pulada” e “não vendido” separam-se por estrutura, não por tinta.</strong> É a decisão central do pacote.
+    Marcador, continuidade do trilho, borda do corpo e presença do registro fazem a distinção; a cor continua neutra nas
+    duas, porque nenhuma é aviso. Distinguir por cor exigiria matiz novo, e <code>pulse-design-system.md:20</code> proíbe.</li>
+  <li><strong>Redondo e tinto é negócio; quadrado, bordado e monoespaçado é engenharia.</strong> A separação é estrutural para
+    que uma cópia acidental não produza a pele errada. E <strong>nenhuma regra equipara <code>PR merged</code> a
+    <code>DONE</code></strong> — a seção 4 desenha o caso em que os dois discordam.</li>
+  <li><strong>O Human Gate ganha nome e a pastilha mais forte do produto.</strong> Hoje ele não tem nome em lugar nenhum do
+    sistema. Recebe o clay sólido, que é a única pastilha preenchida da interface. É a decisão mais discutível daqui:
+    <em>alternativa registrada</em> — usar <code>ink</code> sólido — foi <strong>rejeitada</strong> porque colidiria com o
+    <code>bg-ink text-white</code> que a <code>JourneySection</code> já usa para a fase ativa, e as duas coisas diriam a mesma
+    forma com sentidos diferentes.</li>
+  <li><strong>O degrau ativo não leva selo de estado.</strong> Quem diz “ativo” é a expansão e o <code>.eyebrow</code>
+    “Você está aqui”, que já é a palavra do produto. Um selo azul aqui competiria com o dono <em>Biahflow</em>.</li>
+  <li><strong>Aprovar o visual não aprova a copy.</strong> Os cinco rótulos de dono e os sete rótulos de estado estão escritos
+    por extenso no quadro exatamente para que sejam decididos como copy, em separado.</li>
+  <li><strong>A primitiva de linha do tempo é proposta deste pacote</strong>, e não linguagem já estabelecida. Aprovar esta
+    revisão aprova acrescentá-la ao <code>index.css</code> — e ela nasce <strong>já com consumidor</strong>, como a invariante
+    do repositório exige.</li>
+</ul>
+
+<h2>13 · Questões em aberto</h2>
+<p class="lead">Nada aqui é resolvido por agente durante a implementação. O que ficar em aberto continua em aberto depois da aprovação.</p>
+<ul class="notes">
+  <li><strong>O limiar de “parado há N dias” não é decidido aqui.</strong> O quadro desenha 31 dias em âmbar e 4 e 9 em neutro,
+    mas o corte é regra de negócio e não de design.</li>
+  <li><strong>Um degrau pode compartilhar Opportunity com o degrau anterior?</strong> O quadro desenha <em>Discover</em> e
+    <em>Prioritize</em> saindo da mesma venda (“Discovery Sprint · Vale”), que é o caso real mais comum. Se o modelo exigir
+    1:1 entre degrau e Opportunity, a linha “vendido em” muda de forma.</li>
+  <li><strong>O modelo de dados e a migration não estão neste pacote.</strong> Onde mora o degrau, como se liga a
+    <code>Client</code>/<code>Opportunity</code>/<code>Project</code>, e como o histórico é persistido, são contrato de backend
+    e não superfície.</li>
+  <li><strong>O que exatamente o papel <code>delivery</code> não pode ver</strong> na escada — se o nome do degrau realizado por
+    projeto alheio já é informação demais — fica em aberto. O quadro mostra a forma da escada e esconde o conteúdo comercial;
+    a regra de escopo em si é <code>Project.objects.visible_to</code> e não se reescreve.</li>
+  <li><strong>Ordenação e recorte do bloco da visão geral</strong>: quantas contas aparecem, e se a ordem é por tempo parado ou
+    por valor, não é decidido aqui.</li>
+  <li><strong>Notificação</strong> quando um Human Gate fica pendente além do limiar: fora deste pacote.</li>
+</ul>
+
+<h2>14 · Notas para quem implementa</h2>
+<ul class="notes">
+  <li><strong>Intencional e a preservar:</strong> a ordem dos seis degraus e a grafia
+    <code>[ Technical Feasibility ]</code> como está em <code>metodologia-fde.md:26</code>; a continuidade do trilho como
+    portadora de significado; o rótulo por extenso em <strong>todo</strong> estado, nunca só o marcador; o mapa de gate reusado
+    de <code>ProjectDetailPage.tsx:19,23</code>, nunca um segundo mapa; a jornada da FDD 011 <strong>referenciada e não
+    redesenhada</strong>; e <code>Project.objects.visible_to</code> como a única fonte do escopo de entrega.</li>
+  <li><strong>Ilustrativo e a não tratar como especificação:</strong> os nomes de conta (“Metalúrgica Vale”, “Cooperativa Sul”,
+    “Rede Aurora”, “Transportes Iguaçu”), as pessoas (“Daniel Campos”, “Ana Ribeiro”), todas as datas, os números de issue e
+    PR, os prazos, os ícones desenhados à mão neste quadro e o recorte exato dos espaçamentos.</li>
+  <li><strong>Use a primitiva; não reescreva o literal.</strong> O CSS deste quadro é <em>mock</em>: ele reproduz as primitivas
+    para que o arquivo abra sozinho. No produto, escreve-se <code>.panel</code>, <code>.state--*</code>,
+    <code>.empty-state</code> e a <code>.timeline</code> nova — a guarda é <code>src/test/primitivas.test.ts</code>, e a
+    allowlist dela nasce vazia.</li>
+  <li><strong>Mapa de estado devolve variante, nunca cor.</strong> <code>"state--1"</code>, jamais
+    <code>"bg-emerald-50 …"</code>. Vale igual para as variantes de <code>.timeline-step</code>.</li>
+  <li><strong>O que este quadro não consegue mostrar:</strong> ordem de foco, comportamento de teclado na gaveta de histórico,
+    leitor de tela, truncamento com nome de conta longo, <em>reflow</em> entre 390 e 1280&nbsp;px, e movimento. Tudo isso é
+    validado em runtime (<code>BROWSER_REQUIRED</code>), não aqui. A trilha aninhada é o ponto mais frágil em 390&nbsp;px:
+    dois recuos somados comem a largura útil, e a decisão de como ela colapsa é de runtime.</li>
+  <li><strong>Semântica antes de estilo.</strong> A escada é <code>&lt;ol&gt;</code> porque a ordem é o significado; o
+    marcador é decorativo (<code>aria-hidden</code>) e o estado vem do texto; o alerta de erro leva
+    <code>role="alert"</code>; e nenhuma informação depende de <code>title</code> ou de hover.</li>
+</ul>
+
+</div>
