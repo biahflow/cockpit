@@ -18,7 +18,7 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 012 — Calendário → tarefas (eventos viram tarefas)
 - 013 — Agendamento: qualificação por IA + booking automático
 - 014 — AI Score de maturidade/oportunidade de IA por cliente
-- 015 — Três níveis de produto
+- 015 — Degraus da escada FDE no catálogo
 - 016 — Artefatos da jornada
 - 017 — Endurecimento de segurança
 - 018 — Equipe do projeto

@@ -31,17 +31,17 @@ def admin_client_api():
 
 
 @pytest.mark.django_db
-def test_discovery_express_nao_semeia_fatura():
-    """O nível é gratuito: lista vazia, e não uma parcela de R$ 0,00."""
-    servico = Service.objects.get(tier="discovery_express")
+def test_qualification_call_nao_semeia_fatura():
+    """O degrau é gratuito: lista vazia, e não uma parcela de R$ 0,00."""
+    servico = Service.objects.get(tier="qualification_call")
     projeto = ProjectFactory(service=servico, actual_value=Decimal("0"))
     assert invoices.seed_invoices(projeto) == 0
     assert projeto.invoices.count() == 0
 
 
 @pytest.mark.django_db
-def test_implantacao_semeia_tres_parcelas_em_rascunho():
-    servico = Service.objects.get(tier="implantacao")
+def test_prove_semeia_tres_parcelas_em_rascunho():
+    servico = Service.objects.get(tier="prove")
     projeto = ProjectFactory(service=servico, actual_value=Decimal("100000.00"))
     assert invoices.seed_invoices(projeto) == 3
     faturas = list(projeto.invoices.order_by("due_date"))
@@ -54,7 +54,7 @@ def test_implantacao_semeia_tres_parcelas_em_rascunho():
 @pytest.mark.django_db
 def test_o_resto_dos_centavos_vai_na_ultima_parcela():
     """A soma das parcelas tem de bater **exatamente** com o contratado."""
-    servico = Service.objects.get(tier="implantacao")
+    servico = Service.objects.get(tier="prove")
     projeto = ProjectFactory(
         service=servico,
         actual_value=Decimal("10000.01"),
@@ -75,7 +75,7 @@ def test_servico_avulso_nao_semeia_nada():
 @pytest.mark.django_db
 def test_nivel_pago_vendido_a_zero_nao_semeia():
     """A gratuidade é do **valor**, não do nível: `list_price=0` na semente da migração 0020."""
-    servico = Service.objects.get(tier="implantacao")
+    servico = Service.objects.get(tier="prove")
     projeto = ProjectFactory(service=servico, actual_value=Decimal("0"), opportunity=None)
     assert invoices.seed_invoices(projeto) == 0
 
@@ -103,7 +103,7 @@ def test_valor_contratado_cai_para_a_oportunidade_e_depois_para_a_tabela():
 @pytest.mark.django_db
 def test_vencimento_nao_passa_do_fim_do_projeto():
     """O mesmo grampo de `kickoff.seed_work_items`."""
-    servico = Service.objects.get(tier="implantacao")
+    servico = Service.objects.get(tier="prove")
     projeto = ProjectFactory(
         service=servico,
         actual_value=Decimal("30000.00"),
@@ -116,13 +116,13 @@ def test_vencimento_nao_passa_do_fim_do_projeto():
 @pytest.mark.django_db
 def test_conversao_de_oportunidade_semeia_o_cronograma(admin_client_api):
     ganha = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
-    servico = Service.objects.get(tier="implantacao")
+    servico = Service.objects.get(tier="prove")
     oportunidade = OpportunityFactory(stage=ganha, service=servico)
     resposta = admin_client_api.post(
         f"/api/v1/opportunities/{oportunidade.id}/convert-to-project/",
         {
             "client": oportunidade.client_id,
-            "name": "Implantação",
+            "name": "PROVE",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=120)),
             "actual_value": "60000.00",

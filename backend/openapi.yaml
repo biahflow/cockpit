@@ -14374,14 +14374,22 @@ components:
       - source
     TierEnum:
       enum:
-      - discovery_express
+      - qualification_call
       - discovery_assessment
-      - implantacao
+      - discovery_sprint
+      - feasibility
+      - prove
+      - scale
+      - transformation
       type: string
       description: |-
-        * `discovery_express` - Discovery Express
-        * `discovery_assessment` - Discovery + Assessment
-        * `implantacao` - Implantação
+        * `qualification_call` - Qualification Call
+        * `discovery_assessment` - Discovery Express + Assessment
+        * `discovery_sprint` - Discovery Sprint
+        * `feasibility` - Technical Feasibility (T.O.E.)
+        * `prove` - PROVE (piloto)
+        * `scale` - Scale
+        * `transformation` - Transformation Partnership
     TimelineBlocker:
       type: object
       properties:

@@ -41,7 +41,7 @@ def cenario():
     projeto = ProjectFactory(
         client=cliente,
         owner=admin,
-        service=Service.objects.get(tier="implantacao"),
+        service=Service.objects.get(tier="prove"),
         actual_value=Decimal("120000.00"),
         cost=Decimal("80000.00"),
     )

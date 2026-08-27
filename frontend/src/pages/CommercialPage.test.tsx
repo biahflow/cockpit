@@ -15,10 +15,10 @@ const stages = [
   { id: 1, name: "Prospecção", kind: "open", position: 0 },
   { id: 2, name: "Ganho", kind: "won", position: 50 },
 ];
-const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31", service: 10, service_name: "Discovery Express", service_tier: "discovery_express", project: null as number | null, project_archived: false };
+const opp = { id: 1, client: 1, contact: null, title: "Oport X", scope: "escopo", estimated_value: "15000", stage: 2, stage_name: "Ganho", owner: 1, expected_close_date: "2026-08-31", service: 10, service_name: "Discovery Sprint", service_tier: "discovery_sprint", project: null as number | null, project_archived: false };
 const services = [
-  { id: 10, name: "Discovery Express", active: true, tier: "discovery_express", tier_display: "Discovery Express", list_price: "0.00", summary: "Diagnóstico gratuito." },
-  { id: 11, name: "Implantação", active: true, tier: "implantacao", tier_display: "Implantação", list_price: "90000.00", summary: "Funcionários digitais." },
+  { id: 10, name: "Discovery Sprint", active: true, tier: "discovery_sprint", tier_display: "Discovery Sprint", list_price: "18000.00", summary: "Discovery pago com Executive Readout." },
+  { id: 11, name: "PROVE (piloto)", active: true, tier: "prove", tier_display: "PROVE (piloto)", list_price: "90000.00", summary: "Produção controlada com decision gate." },
 ];
 
 const proposalArtifact = {
@@ -158,7 +158,7 @@ test("cria uma nova oportunidade pelo compositor", async () => {
 test("mostra o nível de produto no card do pipeline", async () => {
   render(<CommercialPage />);
   await screen.findByText("Oport X");
-  expect(screen.getByText("Discovery Express")).toBeInTheDocument();
+  expect(screen.getByText("Discovery Sprint")).toBeInTheDocument();
 });
 
 test("cria a oportunidade com o nível de produto escolhido", async () => {

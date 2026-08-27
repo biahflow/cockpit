@@ -53,3 +53,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0045 — A camada global vem vendorizada e pinada, e o Project Context sai de baixo dela
 - 0046 — A projeção de entrega GitHub lê, e não vira fonte da verdade
 - 0047 — A linha do tempo da entrega: canônica sobre a configurável e histórico append-only
+- 0048 — A escada FDE inteira vira degrau comercial, e duas chaves são renomeadas

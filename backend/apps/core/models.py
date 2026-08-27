@@ -1302,21 +1302,41 @@ class Evidencia(TimestampedModel):
 class Service(TimestampedModel):
     """Catálogo de serviços e, quando `tier` estiver preenchido, os níveis de produto.
 
-    Os três níveis da metodologia (Discovery Express grátis, Discovery + Assessment pago e
-    Implantação) são registros semeados com `tier`; serviços avulsos ficam com `tier` vazio.
+    Os degraus da escada FDE são registros semeados com `tier`; serviços avulsos ficam com
+    `tier` vazio.
 
-    Na leitura FDE (`docs/metodologia-fde.md`, ADR 0030), os níveis são os degraus comerciais
-    da escada: Discovery Express é a porta de entrada (L0), Discovery + Assessment é o
-    Discovery Sprint e Implantação é o PROVE — produção controlada com baseline, critérios de
-    sucesso e decision gate. A Technical Feasibility, condicional na escada, **não tem tier**:
-    criá-lo mexe na constraint de um ativo por nível e na semente, e é decisão de produto que
-    espera o primeiro caso real que a exija.
+    Na leitura FDE (`docs/metodologia-fde.md`, ADR 0030), os níveis **são** os degraus
+    comerciais da escada, um por fase vendável:
+
+    - `QUALIFICATION_CALL` — a porta gratuita, antes do Discover. Termina em avançar ou NO-GO.
+    - `DISCOVERY_ASSESSMENT` — Discovery Express + Assessment. Gratuito no programa de founding
+      client, pago para os demais; o subsídio mora no `estimated_value` da oportunidade, não no
+      preço de tabela, justamente para continuar visível.
+    - `DISCOVERY_SPRINT` — o Discovery pago, fechando em Executive Readout com o custo do
+      estado atual e o ranking por Opportunity Score.
+    - `FEASIBILITY` — a Technical Feasibility (T.O.E.), condicional na escada: só quando há
+      dúvida sobre a tecnologia dar conta. Termina em decision gate de quatro saídas.
+    - `PROVE` — produção controlada com baseline e critérios de sucesso definidos **antes** de
+      construir, e decision gate no fim.
+    - `SCALE` — a captura de valor depois do PROVE aprovado.
+    - `TRANSFORMATION` — a parceria contínua (OPTIMIZE). **É recorrente mensal, e o modelo
+      ainda não sabe disso**: `list_price` é valor único, então o pipeline soma um mês como se
+      fosse o contrato inteiro. Acrescentar recorrência é ADR própria; até lá, quem vende este
+      degrau confere o valor na mão.
+
+    PRIORITIZE não tem tier de propósito: não se fatura separado — é o entregável do Discovery
+    Sprint (o ranking por Opportunity Score), e um degrau que ninguém compra seria uma coluna
+    que nunca enche.
     """
 
     class Tier(models.TextChoices):
-        DISCOVERY_EXPRESS = "discovery_express", "Discovery Express"
-        DISCOVERY_ASSESSMENT = "discovery_assessment", "Discovery + Assessment"
-        IMPLEMENTATION = "implantacao", "Implantação"
+        QUALIFICATION_CALL = "qualification_call", "Qualification Call"
+        DISCOVERY_ASSESSMENT = "discovery_assessment", "Discovery Express + Assessment"
+        DISCOVERY_SPRINT = "discovery_sprint", "Discovery Sprint"
+        FEASIBILITY = "feasibility", "Technical Feasibility (T.O.E.)"
+        PROVE = "prove", "PROVE (piloto)"
+        SCALE = "scale", "Scale"
+        TRANSFORMATION = "transformation", "Transformation Partnership"
 
     name = models.CharField(max_length=120)
     active = models.BooleanField(default=True)

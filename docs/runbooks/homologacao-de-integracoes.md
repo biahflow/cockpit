@@ -179,7 +179,8 @@ docker compose exec api uv run python manage.py shell -c \
 ### Semear
 
 Um usuário `homologacao` dedicado (isola a cota diária e faz a limpeza ser um delete), cliente,
-contato, oportunidade no **nível gratuito** `discovery_express`, projeto com uma tarefa **vencida**
+contato, oportunidade no **degrau gratuito** (`discovery_express` na época; a chave virou
+`qualification_call` pela ADR 0048), projeto com uma tarefa **vencida**
 e um marco a vencer, e uma reunião com transcrição curta. A transcrição **omite de propósito o
 orçamento**, para checar a afirmação antivazamento do `ai.py`.
 

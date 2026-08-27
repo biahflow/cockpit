@@ -32,38 +32,92 @@ KICKOFF_TEMPLATE: list[dict] = [
      "tasks": ["Revisar entregáveis", "Coletar feedback do cliente"]},
 ]
 
-# Um cronograma por nível de produto: o Discovery Express dura uma semana e não merece os
-# 90 dias da implantação. Projetos sem nível (ou de serviço avulso) caem no template padrão.
-# Os textos carregam a leitura FDE dos níveis (ADR 0030, `docs/metodologia-fde.md`): o
-# Discovery + Assessment fecha com o gate recomendado, e a implantação é o PROVE — baseline e
-# critérios de sucesso antes de construir, evidência de produção controlada e decision gate
-# no fim. O template padrão continua genérico: serviço avulso não é PROVE.
+# Um cronograma por degrau da escada FDE: a Qualification Call dura dias e não merece os 90
+# do PROVE. Projetos sem nível (ou de serviço avulso) caem no template padrão.
+#
+# Os textos carregam a metodologia (ADR 0030, `docs/metodologia-fde.md`), e há três lugares em
+# que isso não é decoração:
+#
+# - o Discovery Sprint **termina em Executive Readout**, porque é lá que o custo do estado
+#   atual e o ranking por Opportunity Score chegam ao cliente. Sprint pago sem readout é
+#   trabalho feito que ninguém viu;
+# - a Feasibility define a **meta antes** de rodar a amostra, e o PROVE registra baseline e
+#   critérios **antes** de construir. Critério definido depois do resultado não é critério, é
+#   narrativa — e é a regra que dá credibilidade ao método inteiro;
+# - o gate de saída é tarefa explícita nos dois, com as quatro saídas nomeadas. Gate que não
+#   vira item de trabalho é gate que não acontece.
+#
+# O template padrão continua genérico: serviço avulso não é PROVE.
 KICKOFF_TEMPLATES: dict[str, list[dict]] = {
-    "discovery_express": [
-        {"title": "Discovery", "offset": 7,
-         "tasks": ["Agendar a sessão de discovery", "Registrar a transcrição da reunião",
-                   "Compartilhar o resumo com os próximos passos"]},
+    "qualification_call": [
+        {"title": "Qualification Call", "offset": 3,
+         "tasks": ["Realizar a call de qualificação (30–45 min)",
+                   "Registrar o fit e o próximo passo (avançar para Discovery ou NO-GO)"]},
     ],
     "discovery_assessment": [
         {"title": "Discovery", "offset": 7,
-         "tasks": ["Agendar a sessão de discovery", "Registrar a transcrição da reunião"]},
+         "tasks": ["Agendar a sessão de discovery", "Registrar a transcrição da reunião",
+                   "Mapear o processo com o P-S-D-T-E-R"]},
         {"title": "Assessment e recomendações", "offset": 21,
          "tasks": ["Gerar o assessment de maturidade", "Priorizar as recomendações",
                    "Apresentar o plano de ação",
                    "Registrar o próximo passo recomendado (gate: PROVE ou Feasibility)"]},
     ],
-    "implantacao": [
-        {"title": "Kickoff e alinhamento", "offset": 7,
-         "tasks": ["Agendar reunião de kickoff", "Compartilhar plano de trabalho",
-                   "Registrar o baseline e os critérios de sucesso antes de construir"]},
-        {"title": "Descoberta e planejamento", "offset": 21,
-         "tasks": ["Levantar requisitos", "Detalhar cronograma"]},
-        {"title": "Execução em produção controlada", "offset": 60,
-         "tasks": ["Iniciar entregas do escopo"]},
-        {"title": "Encerramento", "offset": 90,
-         "tasks": ["Revisar entregáveis contra os critérios de sucesso",
-                   "Registrar a evidência de produção controlada e o decision gate",
+    "discovery_sprint": [
+        {"title": "Discovery", "offset": 3,
+         "tasks": ["Agendar a sessão de discovery", "Mapear o processo com o P-S-D-T-E-R",
+                   "Registrar a transcrição da reunião"]},
+        {"title": "Baseline e priorização", "offset": 5,
+         "tasks": ["Apurar o custo do estado atual",
+                   "Rotular os achados (fato / hipótese / desconhecido)",
+                   "Calcular o Opportunity Score de cada processo"]},
+        {"title": "Executive Readout", "offset": 7,
+         "tasks": ["Apresentar o custo do estado atual e o ranking por Opportunity Score",
+                   "Registrar o próximo passo recomendado (Feasibility ou PROVE)"]},
+    ],
+    "feasibility": [
+        {"title": "Definição do teste", "offset": 5,
+         "tasks": ["Definir a meta **antes** de rodar a amostra",
+                   "Selecionar uma amostra real representativa"]},
+        {"title": "Execução e classificação", "offset": 15,
+         "tasks": ["Rodar a tecnologia contra a amostra",
+                   "Classificar cada falha em E1–E5",
+                   "Calcular o Ceiling de Input"]},
+        {"title": "Decision gate", "offset": 21,
+         "tasks": ["Avaliar o T.O.E. pelo elo mais fraco, não pela média",
+                   "Registrar o gate (GO / CONDITIONAL GO / REDESIGN / NO-GO)"]},
+    ],
+    "prove": [
+        {"title": "Charter e baseline", "offset": 7,
+         "tasks": ["Registrar o baseline e os critérios de sucesso antes de construir",
+                   "Definir a meta por KPI e o sentido (menor é melhor?)"]},
+        {"title": "Construção", "offset": 30,
+         "tasks": ["Construir o piloto", "Integrar com a operação"]},
+        {"title": "Produção controlada", "offset": 60,
+         "tasks": ["Rodar em produção controlada",
+                   "Registrar ao menos 10 casos reais (abaixo disso o scorecard não decide)"]},
+        {"title": "Decision gate", "offset": 90,
+         "tasks": ["Preencher o scorecard (baseline · meta · medido)",
+                   "Registrar a decisão SCALE / ITERATE / STOP",
                    "Coletar feedback do cliente"]},
+    ],
+    "scale": [
+        {"title": "Plano de escala", "offset": 14,
+         "tasks": ["Definir o escopo de expansão a partir do que o PROVE sustentou",
+                   "Dimensionar operação e suporte"]},
+        {"title": "Rollout", "offset": 60,
+         "tasks": ["Colocar em produção plena", "Treinar a operação"]},
+        {"title": "Captura de valor", "offset": 120,
+         "tasks": ["Atualizar o Value Ledger do cliente",
+                   "Registrar o caso na biblioteca (prova social para vender o próximo)"]},
+    ],
+    "transformation": [
+        {"title": "Onboarding da parceria", "offset": 14,
+         "tasks": ["Definir o ritmo da Monthly Transformation Review",
+                   "Abrir o Opportunity Backlog da conta"]},
+        {"title": "Primeira revisão mensal", "offset": 30,
+         "tasks": ["Revisar o Value Ledger com o cliente",
+                   "Priorizar a próxima oportunidade da conta"]},
     ],
 }
 

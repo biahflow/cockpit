@@ -2692,9 +2692,10 @@ class LeadViewSet(ArchiveModelViewSet):
         stage = PipelineStage.objects.filter(kind=PipelineStage.Kind.OPEN).order_by("position").first()
         if stage is None:
             return Response({"detail": "Nenhuma etapa aberta configurada."}, status=400)
-        # Todo lead entra pela porta de entrada gratuita; Vendas troca o nível depois se for o caso.
+        # Todo lead entra pelo primeiro degrau gratuito da escada — a Qualification Call; Vendas
+        # troca o nível depois se for o caso.
         entry_service = Service.objects.filter(
-            tier=Service.Tier.DISCOVERY_EXPRESS, active=True, archived_at__isnull=True
+            tier=Service.Tier.QUALIFICATION_CALL, active=True, archived_at__isnull=True
         ).first()
         # A vertical que o CNAE sugere, quando o enriquecimento a trouxe e o admin já cadastrou
         # aquela vertical (FDD 030, FDD 026). Derivada aqui e não gravada no lead: o CNAE é a
@@ -3223,7 +3224,7 @@ class AnalyticsView(APIView):
             for row in projects.values("service__name").annotate(rev=Sum("actual_value"), cost=Sum("cost")).order_by("-rev")
         ]
 
-        # Conversão por nível de produto: onde os três níveis param no pipeline.
+        # Conversão por degrau da escada FDE: onde cada nível para no pipeline.
         by_tier = []
         for tier, label in Service.Tier.choices:
             tier_opps = opps.filter(service__tier=tier)

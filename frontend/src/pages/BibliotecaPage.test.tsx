@@ -21,7 +21,7 @@ function stub(overrides: Record<string, unknown> = {}) {
     if ((options?.method ?? "GET") === "GET") {
       if (path === "/verticals/") return Promise.resolve(overrides.verticals ?? [vertical]);
       if (path === "/digital-employee-blueprints/") return Promise.resolve(overrides.blueprints ?? [blueprint]);
-      if (path === "/services/") return Promise.resolve([{ id: 1, name: "Discovery Express", active: true, tier: "discovery_express", tier_display: "Discovery Express", list_price: "0.00", summary: "" }]);
+      if (path === "/services/") return Promise.resolve([{ id: 1, name: "Discovery Sprint", active: true, tier: "discovery_sprint", tier_display: "Discovery Sprint", list_price: "18000.00", summary: "" }]);
     }
     return Promise.resolve({});
   };

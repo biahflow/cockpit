@@ -14,8 +14,8 @@ vi.mock("../api", () => ({
         leads: { total: 3, by_status: { new: 3 } }, opportunities: { open: 2, won: 1, lost: 1 },
         projects: { total: 1, by_status: { active: 1 } },
         by_tier: [
-          { tier: "discovery_express", label: "Discovery Express", total: 2, open: 1, won: 1, lost: 0, estimated_total: 0, win_rate: 1 },
-          { tier: "implantacao", label: "Implantação", total: 0, open: 0, won: 0, lost: 0, estimated_total: 0, win_rate: null },
+          { tier: "discovery_sprint", label: "Discovery Sprint", total: 2, open: 1, won: 1, lost: 0, estimated_total: 0, win_rate: 1 },
+          { tier: "prove", label: "PROVE (piloto)", total: 0, open: 0, won: 0, lost: 0, estimated_total: 0, win_rate: null },
         ],
         by_stage: [
           { kind: "assessment", label: "Assessment", total: 3, sent: 1, accepted: 2, rejected: 0, acceptance_rate: 1, reached: 2 },
@@ -50,7 +50,7 @@ test("mostra KPIs e ROI por cliente/serviço", async () => {
 test("mostra a conversão por nível de produto", async () => {
   render(<IndicadoresPage />);
   expect(await screen.findByText("Conversão por nível de produto")).toBeInTheDocument();
-  expect(screen.getByText("Discovery Express")).toBeInTheDocument();
+  expect(screen.getByText("Discovery Sprint")).toBeInTheDocument();
   expect(screen.getByText("Ganho 100%")).toBeInTheDocument();
   expect(screen.getByText("Ganho —")).toBeInTheDocument();
 });
