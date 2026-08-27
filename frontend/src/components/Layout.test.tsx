@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { Layout } from "./Layout";
@@ -13,13 +14,14 @@ vi.mock("../api", () => ({
   listNotifications: mocks.listNotifications,
   markNotificationRead: mocks.markNotificationRead,
   markAllNotificationsRead: mocks.markAllNotificationsRead,
+  avatarUrl: (user: { id: number }) => `/api/v1/users/${user.id}/avatar/`,
 }));
 vi.mock("../auth", () => ({ useAuth: mocks.useAuth }));
 
 // Na prática: "invisível para a Entrega". Leads, Indicadores e Financeiro são admin+Vendas.
 const ADMIN_ONLY = ["Leads", "Indicadores", "Financeiro", "Jornada", "Equipe", "Configurações"];
 
-function renderComo(user: { role: string; is_admin: boolean }) {
+function renderComo(user: { role: string; is_admin: boolean; has_avatar?: boolean; avatar_updated_at?: string }) {
   mocks.useAuth.mockReturnValue({ logout: vi.fn(), user: { id: 1, username: "u", first_name: "Bia", last_name: "", email: "b@x.test", ...user } });
   return render(<Layout><p>conteúdo</p></Layout>);
 }
@@ -104,4 +106,36 @@ test("o link da marca tem nome acessível", () => {
   const marca = screen.queryAllByRole("link", { name: /Pulse/ });
   expect(marca.length).toBeGreaterThan(0);
   for (const link of marca) expect(link.getAttribute("href")).toBe("/");
+});
+
+// ---------- Meu perfil (Issue #56, DAP perfil-e-contato r1) ----------
+// O perfil **não** entra no menu lateral: a porta é o popover do usuário, e é isso que as três
+// asserções abaixo prendem — junto do avatar, que passa a ter dois estados e um componente só.
+
+test("o menu do usuário leva a Meu perfil, acima de Sair", async () => {
+  const user = userEvent.setup();
+  renderComo({ role: "delivery", is_admin: false });
+
+  await user.click(screen.getByRole("button", { name: /Bia/ }));
+
+  const perfil = screen.getByRole("menuitem", { name: "Meu perfil" });
+  expect(perfil).toHaveAttribute("href", "/perfil");
+  // A ordem é parte do desenho: perfil acima de sair.
+  expect(screen.getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Meu perfil", "Sair"]);
+  // E fora da barra lateral, que é navegação de operação e não dado pessoal.
+  expect(temLink("Meu perfil")).toBe(false);
+});
+
+test("sem foto, o avatar do topo mostra as iniciais", () => {
+  renderComo({ role: "admin", is_admin: true });
+
+  expect(screen.getByText("BI")).toBeInTheDocument();
+  expect(screen.queryByRole("img", { name: "Bia" })).toBeNull();
+});
+
+test("com foto, o avatar do topo mostra a foto — o mesmo componente nos dois casos", () => {
+  renderComo({ role: "admin", is_admin: true, has_avatar: true, avatar_updated_at: "2026-08-27T12:00:00Z" });
+
+  expect(screen.getByRole("img", { name: "Bia" })).toHaveAttribute("src", "/api/v1/users/1/avatar/");
+  expect(screen.queryByText("BI")).toBeNull();
 });

@@ -20,6 +20,7 @@ import { JourneyConfigPage } from "./pages/JourneyConfigPage";
 import { LeadsPage } from "./pages/LeadsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PipelinePage } from "./pages/PipelinePage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { ProcessoDetailPage } from "./pages/ProcessoDetailPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -41,6 +42,9 @@ function resolvePage(path: string): ReactNode {
   if (path === "/servicos") return <ServicesPage />;
   if (path === "/documentos") return <DocumentsPage />;
   if (path === "/equipe") return <TeamPage />;
+  // Rota própria e **fora do menu lateral**: perfil é dado pessoal, não navegação de operação —
+  // a porta é o popover do usuário (DAP perfil-e-contato r1).
+  if (path === "/perfil") return <ProfilePage />;
   if (path === "/configuracoes") return <SettingsPage />;
   if (path === "/design-system") return <DesignSystemPage />;
   const projectDetail = path.match(/^\/projetos\/(\d+)$/);

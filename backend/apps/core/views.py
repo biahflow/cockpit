@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import logging
+import os
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -11,20 +13,25 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.core import signing
+from django.core.files.storage import Storage
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Max, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
-from django.http import FileResponse
+from django.http import FileResponse, Http404, HttpResponseNotModified
+from django.http.response import HttpResponseBase
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.http import http_date
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -118,12 +125,14 @@ from .models import (
 )
 from .permissions import RolePermission
 from .serializers import (
+    AVATAR_CONTENT_TYPES,
     AcceptInvitationSerializer,
     ActivitySerializer,
     ArtifactSerializer,
     BlueprintVariantSerializer,
     BookingCreateSerializer,
     CaseSerializer,
+    ChangePasswordSerializer,
     ClientSerializer,
     CobrancaContatoSerializer,
     CobrancaSuspensaoSerializer,
@@ -155,6 +164,8 @@ from .serializers import (
     PipelineStageSerializer,
     ProcessoEtapaSerializer,
     ProcessoSerializer,
+    ProfileAvatarSerializer,
+    ProfileSerializer,
     ProjectChecklistItemSerializer,
     ProjectDeliverableSerializer,
     ProjectMemberSerializer,
@@ -3594,6 +3605,16 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# Comentário e não docstring, pela mesma razão que vale para os mixins: o drf-spectacular usa a
+# docstring da classe como `description` de **todos** os métodos dela, e o raciocínio abaixo é
+# interno — vazá-lo para o `openapi.yaml` publica nome de teste no contrato público.
+#
+# A sessão corrente: lê e edita o **próprio** registro. `IsAuthenticated` e não `RolePermission`,
+# como já era no GET, e isso não é afrouxamento: o `resource = "user"` continua fora de toda
+# allowlist de `permissions.py`, então `/users/` segue fechado para Vendas e Entrega
+# (`test_usuarios_continua_fechado_para_vendas_e_entrega`). O que autoriza aqui não é o papel — é
+# o alvo ser sempre `request.user`, que não vem do cliente e por isso não tem como apontar para
+# outra pessoa.
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -3601,6 +3622,160 @@ class MeView(APIView):
 
     def get(self, request: Request) -> Response:
         return Response(UserSerializer(request.user).data)
+
+    @extend_schema(
+        summary="Edita o nome do usuário da sessão.",
+        request=ProfileSerializer,
+        responses=UserSerializer,
+    )
+    def patch(self, request: Request) -> Response:
+        # `ProfileSerializer` e **não** `UserSerializer`: aquele tem `role` gravável, e usá-lo
+        # aqui transformaria este PATCH em caminho de auto-promoção a admin. Ver o docstring do
+        # serializer e `test_entrega_mandando_role_admin_nao_vira_admin`.
+        serializer = ProfileSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(request.user).data)
+
+
+# Envio e remoção da **própria** foto. Não há rota para a foto de outra pessoa. Comentário e não
+# docstring: ver `MeView` acima.
+class MeAvatarView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Envia a foto do usuário da sessão. JPG, PNG ou WebP, até 2 MB.",
+        request=ProfileAvatarSerializer,
+        responses=UserSerializer,
+    )
+    def put(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        serializer = ProfileAvatarSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # Apagar **depois** de gravar, e não antes: se a escrita falhasse no meio, apagar primeiro
+        # deixaria a pessoa sem a foto antiga e com uma linha apontando para um arquivo que já não
+        # existe. Só se apaga o que nenhuma linha referencia mais.
+        anterior = _avatar_reference(user)
+        user.avatar = serializer.validated_data["avatar"]
+        user.avatar_updated_at = timezone.now()
+        user.save(update_fields=["avatar", "avatar_updated_at"])
+        _discard_avatar_file(anterior)
+        return Response(UserSerializer(user).data)
+
+    @extend_schema(
+        summary="Remove a foto do usuário da sessão.", request=None, responses=UserSerializer,
+    )
+    def delete(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        anterior = _avatar_reference(user)
+        user.avatar = ""
+        user.avatar_updated_at = None
+        user.save(update_fields=["avatar", "avatar_updated_at"])
+        _discard_avatar_file(anterior)
+        return Response(UserSerializer(user).data)
+
+
+def _avatar_reference(user: User) -> tuple[Storage, str] | None:
+    """O storage e o caminho da foto atual, capturados antes de o campo ser sobrescrito."""
+    return (user.avatar.storage, user.avatar.name) if user.avatar else None
+
+
+def _discard_avatar_file(anterior: tuple[Storage, str] | None) -> None:
+    """Apaga do storage a foto que nenhuma linha referencia mais.
+
+    Sem isto cada troca de foto deixa um objeto órfão no bucket, que ninguém referencia e
+    ninguém apaga. Best-effort de propósito: um storage indisponível não pode fazer a pessoa
+    falhar em trocar a própria foto — o órfão fica no log em vez de sumir calado.
+    """
+    if anterior is None:
+        return
+    storage, caminho = anterior
+    try:
+        storage.delete(caminho)
+    except Exception:  # noqa: BLE001 — limpeza best-effort; ver docstring
+        logger.warning("não foi possível apagar a foto anterior %s", caminho)
+
+
+# Troca da própria senha. Comentário e não docstring: ver `MeView` acima.
+class MePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    # Mesmo motivo do teto do login: aqui também se acerta ou erra uma senha, e o teto genérico
+    # de `user` (2000/hora) não é teto nenhum para adivinhação. Quem tem a sessão mas não a senha
+    # — cookie vazado, estação destravada — é exatamente quem esta porta precisa segurar.
+    throttle_scope = "password_change"
+
+    @extend_schema(
+        summary="Troca a senha do usuário da sessão, conferindo a senha atual.",
+        request=ChangePasswordSerializer,
+        responses={204: None},
+    )
+    def post(self, request: Request) -> Response:
+        user = cast(User, request.user)
+        serializer = ChangePasswordSerializer(data=request.data, context={"user": user})
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data["new_password"])
+        user.save(update_fields=["password"])
+        # O Django deriva o hash de sessão da senha: trocá-la **invalida todas as sessões,
+        # inclusive esta**, e sem esta linha a pessoa trocaria a própria senha e cairia no login.
+        # `update_session_auth_hash` recarimba só a sessão corrente. As **outras** caírem é o
+        # comportamento seguro e está aceito (DAP perfil-e-contato r1) — não é defeito, e "consertá-lo"
+        # removendo esta linha derruba quem acabou de trocar a senha.
+        update_session_auth_hash(request, user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# A única porta da foto, e ela passa por sessão e RBAC. Comentário e não docstring: ver `MeView`.
+#
+# É o mesmo desenho de `DocumentViewSet.download` e pela mesma razão: nenhum ambiente serve
+# `MEDIA_ROOT` (ADR 0002, FDD 017), então mídia privada sai por rota autenticada. Servir `/media/`
+# para o avatar abriria a exceção que aquela decisão existe para não ter.
+#
+# `IsAuthenticated` e não `RolePermission`: o recurso `user` está fechado para Vendas e Entrega, e
+# passar por ele faria a pessoa não conseguir ver a **própria** foto no topbar. O corte é o alvo,
+# não o papel — cada um alcança a sua, e o admin alcança as demais porque `/users/` já lhe entrega
+# a lista inteira. Fora disso é 404 e não 403: quem não alcança a foto também não precisa aprender
+# que o usuário existe.
+#
+# `ETag`/`Last-Modified` não são otimização: o topbar pede esta rota uma vez por tela, e sem
+# revalidação condicional cada navegação baixaria a imagem inteira de novo.
+class UserAvatarView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="A foto de perfil, atrás de sessão. Cada um alcança a sua; o admin, todas.",
+        responses={(200, "image/*"): OpenApiTypes.BINARY, 304: None, 404: None},
+    )
+    def get(self, request: Request, pk: int) -> HttpResponseBase:
+        if pk != request.user.pk and not request.user.is_admin_role:
+            raise Http404
+        user = get_object_or_404(User, pk=pk)
+        if not user.avatar:
+            raise Http404
+        etag = f'"{hashlib.sha256(user.avatar.name.encode()).hexdigest()[:32]}"'
+        if request.headers.get("If-None-Match") == etag:
+            return _avatar_headers(HttpResponseNotModified(), user, etag)
+        extension = os.path.splitext(user.avatar.name)[1].lower()
+        response = FileResponse(
+            user.avatar.open("rb"),
+            # O tipo sai do **nosso** mapa, nunca do `Content-Type` que o navegador declarou no
+            # upload — aquele é entrada do usuário como qualquer outra.
+            content_type=AVATAR_CONTENT_TYPES.get(extension, "application/octet-stream"),
+        )
+        return _avatar_headers(response, user, etag)
+
+
+def _avatar_headers(response: HttpResponseBase, user: User, etag: str) -> HttpResponseBase:
+    response["ETag"] = etag
+    if user.avatar_updated_at is not None:
+        response["Last-Modified"] = http_date(user.avatar_updated_at.timestamp())
+    # `private`: é foto de pessoa atrás de sessão, e um proxy compartilhado não pode guardá-la.
+    response["Cache-Control"] = "private, max-age=0, must-revalidate"
+    # A segunda tranca do upload: mesmo que um arquivo passasse pela conferência de assinatura,
+    # o navegador não pode reinterpretá-lo como HTML na origem do portal.
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):

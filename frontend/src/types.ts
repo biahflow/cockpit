@@ -97,7 +97,11 @@ export type Dashboard = { pipeline: PipelineStage[]; active_projects: number; ov
 // `is_admin` vem do backend (`User.is_admin_role`: papel admin **ou** superusuário) em vez de ser
 // derivado aqui. É o mesmo predicado que a API usa para autorizar, então a tela não pode divergir
 // dela — que era exatamente o defeito de `createsuperuser` (FDD 017).
-export type SessionUser = { id: number; username: string; first_name: string; last_name: string; email: string; role: "admin" | "sales" | "delivery"; is_admin: boolean };
+// `has_avatar` e não a URL da foto: o arquivo é privado como o documento e sai por rota
+// autenticada (`/users/<id>/avatar/`), então o que a sessão precisa saber é **se** existe uma —
+// entre a miniatura e as iniciais. `avatar_updated_at` é o que muda a `src` do `<img>` depois de
+// uma troca; sem ele o navegador seguiria mostrando a foto anterior até resolver revalidar.
+export type SessionUser = { id: number; username: string; first_name: string; last_name: string; email: string; role: "admin" | "sales" | "delivery"; is_admin: boolean; has_avatar: boolean; avatar_updated_at: string | null };
 export type Role = "admin" | "sales" | "delivery";
 export type Invitation = { id: number; email: string; role: Role; expires_at: string; accepted_at: string | null; created_at: string };
 // `missing` traz os nomes das variáveis de ambiente que faltam para a integração poder ligar. Sem
