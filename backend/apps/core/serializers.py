@@ -809,6 +809,13 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
         step = cast(
             ProcessoEtapa | None, attrs.get("step", getattr(self.instance, "step", None))
         )
+        discovery = cast(
+            Discovery | None, attrs.get("discovery", getattr(self.instance, "discovery", None))
+        )
+        session = cast(
+            DiscoverySession | None,
+            attrs.get("source_session", getattr(self.instance, "source_session", None)),
+        )
         raw = cast(str, attrs.get("raw_excerpt", getattr(self.instance, "raw_excerpt", "")) or "")
         reference = cast(
             str, attrs.get("reference", getattr(self.instance, "reference", "")) or ""
@@ -821,6 +828,14 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
             )
         if step and account and step.processo.client_id != account.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        if discovery and account and discovery.project.client_id != account.pk:
+            raise serializers.ValidationError(
+                {"discovery": "O Discovery deve pertencer à mesma conta."}
+            )
+        if session and discovery and session.discovery_id != discovery.pk:
+            raise serializers.ValidationError(
+                {"source_session": "A sessão deve pertencer ao mesmo Discovery."}
+            )
         if not raw.strip() and not reference.strip():
             raise serializers.ValidationError(
                 "Uma evidência precisa do trecho bruto ou de um localizador da fonte."

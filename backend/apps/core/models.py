@@ -1534,6 +1534,21 @@ class Evidence(TimestampedModel):
             raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
         if etapa is not None and etapa.processo.client_id != self.account_id:
             raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        # O terceiro campo opcional entra na **mesma** pergunta que os dois acima, e a simetria é
+        # o ponto: dois vínculos validados contra a conta e um terceiro fora faria quem lesse isto
+        # depois concluir que há uma razão para a exceção, e não há — é a mesma classe de vínculo
+        # cruzado, com um hop a menos que `step`.
+        discovery = self.discovery if self.discovery_id else None
+        if discovery is not None and discovery.project.client_id != self.account_id:
+            raise ValidationError({"discovery": "O Discovery deve pertencer à mesma conta."})
+        # E, tendo os dois, eles precisam concordar — a mesma regra que a `ProcessObservation`
+        # aplica sobre o par dela. Uma evidência apontando para a sessão de outro Discovery é uma
+        # proveniência que se contradiz sozinha.
+        sessao = self.source_session if self.source_session_id else None
+        if sessao is not None and self.discovery_id and sessao.discovery_id != self.discovery_id:
+            raise ValidationError(
+                {"source_session": "A sessão deve pertencer ao mesmo Discovery."}
+            )
         if not (self.raw_excerpt or "").strip() and not (self.reference or "").strip():
             raise ValidationError(
                 "Uma evidência precisa do trecho bruto ou de um localizador da fonte."

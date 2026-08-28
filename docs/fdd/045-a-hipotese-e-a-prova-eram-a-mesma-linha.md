@@ -50,6 +50,9 @@ caminho mais curto entre "alguém achou" e "a casa afirmou ao cliente" era um cl
   `reference` (o localizador — URL, arquivo, timestamp). **Um dos dois é obrigatório**: uma
   evidência sem conteúdo e sem localizador não é evidência, é uma linha dizendo que existe alguma
   coisa em algum lugar.
+  Os quatro vínculos opcionais dela (`process`, `step`, `discovery`, `source_session`) são
+  validados contra a conta e entre si — a fronteira por campo opcional é a pior forma de vazar,
+  porque ninguém preenche o campo pensando nisso.
 - **`Finding`** — a afirmação, com `epistemic_status` ∈ `fact` · `hypothesis` · `unknown`,
   `confidence` opcional, revisor, data de revisão e **M2M** para as evidências que a sustentam.
 
@@ -87,6 +90,8 @@ linha fundida de onde ele saiu. **A resposta da action não muda de forma** — 
   localizador da reunião.
 - Entrega que não participa de nenhum projeto do cliente não lê e não escreve `Evidence` nem
   `Finding`; e não pendura processo de outra conta num Discovery próprio.
+- Os quatro vínculos opcionais da `Evidence` respondem à mesma pergunta: `process`, `step` e
+  `discovery` são cobrados contra a conta, e `source_session`, quando há `discovery`, contra ele.
 - O mesmo processo aceita observação em dois Discoveries diferentes.
 - `content_hash` muda quando `raw_excerpt` muda, e é vazio quando não há trecho.
 - Depois do backfill, cada `Evidencia` — inclusive a arquivada — tem o par correspondente, com
@@ -178,6 +183,17 @@ porque uma aproximação silenciosa vira fato histórico na primeira consulta:
    do legado justamente no que já se decidira guardar, e desarquivar do lado antigo passaria a
    produzir um registro sem contraparte.
 
+### Por que os quatro vínculos são validados, e não só os dois caros
+
+`process` e `step` exigiram resolver caminho (`step.processo.client`); `discovery` é um hop mais
+curto que os dois, e `source_session` reusa a regra que a `ProcessObservation` já aplica. Validar
+dois e deixar o terceiro solto seria pior que não validar nenhum: quem lesse o `clean()` depois
+veria dois campos opcionais cobrados contra a conta e um fora, e concluiria que há uma razão. Não
+há — é a mesma classe de vínculo cruzado. Não é vazamento (a queryset recorta por `account`, e a
+evidência alheia não aparece de qualquer jeito); é dado inconsistente, e dado inconsistente é o
+que faz a fatia seguinte, a que ligar Discovery e Evidence numa tela, descobrir que o vínculo não
+vale.
+
 ### `content_hash` recalculado sempre, e vazio quando não há trecho
 
 Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e ainda erraria em
@@ -190,7 +206,7 @@ Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e a
   promoção, a recusa 409 do arquivamento com as suas três metades simétricas (penúltima evidência,
   hipótese, achado já arquivado), as transições, o par trecho/localizador, o hash, as datas do
   Discovery, a sessão de outro projeto, o mesmo processo em dois Discoveries, a fronteira de conta
-  nas duas metades e o comando de reconciliação.
+  nas quatro pontas (com controle positivo em cada uma) e o comando de reconciliação.
 - `tests/regression/test_a_conclusao_nao_vira_evidencia.py` — a fusão não volta pela extração: o
   achado vai para `Finding.statement`, a `Evidence` fica com o localizador, e o `Finding` nasce
   `hypothesis` ligado a ela.
@@ -214,7 +230,3 @@ Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e a
   Aqui o nome canônico aparece só como **nome de campo** (`account`, `process`, `step`) apontando
   para o modelo legado.
 - **`PainPoint`, `ImprovementOpportunity`, `PriorityAssessment`, `SolutionHypothesis`.** Fase 4.
-- **Coerência entre `Evidence.discovery` e `Evidence.account`.** O `clean()` cobra processo e etapa
-  contra a conta; o Discovery não. A leitura já é segura (a queryset recorta por `account`), então
-  o que sobra é um vínculo cruzado inconsistente, não um vazamento — fica nomeado aqui em vez de
-  corrigido fora de escopo.

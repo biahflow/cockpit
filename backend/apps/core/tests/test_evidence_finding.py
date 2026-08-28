@@ -378,6 +378,101 @@ def test_o_modelo_tambem_recusa_evidencia_sem_conteudo() -> None:
         Evidence(account=conta, kind=Evidence.Kind.INTERVIEW).full_clean()
 
 
+def test_o_discovery_da_evidencia_precisa_ser_da_mesma_conta(api: APIClient) -> None:
+    """A terceira ponta da mesma fronteira: dois vínculos cobrados e um solto seria assimetria."""
+    resposta = api.post(
+        reverse("evidence-list"),
+        {
+            "account": ClientFactory().pk,
+            "discovery": DiscoveryFactory(project=ProjectFactory(client=ClientFactory())).pk,
+            "kind": Evidence.Kind.INTERVIEW,
+            "raw_excerpt": "Disseram que leva dois dias.",
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 400, resposta.data
+    assert "discovery" in resposta.data
+
+
+def test_o_discovery_da_propria_conta_passa(api: APIClient) -> None:
+    """Controle positivo, sem o qual o teste acima passaria por recusar todo Discovery."""
+    conta = ClientFactory()
+
+    resposta = api.post(
+        reverse("evidence-list"),
+        {
+            "account": conta.pk,
+            "discovery": DiscoveryFactory(project=ProjectFactory(client=conta)).pk,
+            "kind": Evidence.Kind.INTERVIEW,
+            "raw_excerpt": "Disseram que leva dois dias.",
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201, resposta.data
+
+
+def test_a_sessao_da_evidencia_precisa_ser_do_mesmo_discovery(api: APIClient) -> None:
+    """Tendo os dois, eles precisam concordar — proveniência que se contradiz não é proveniência."""
+    conta = ClientFactory()
+    discovery = DiscoveryFactory(project=ProjectFactory(client=conta))
+
+    resposta = api.post(
+        reverse("evidence-list"),
+        {
+            "account": conta.pk,
+            "discovery": discovery.pk,
+            "source_session": DiscoverySessionFactory().pk,
+            "kind": Evidence.Kind.INTERVIEW,
+            "raw_excerpt": "Disseram que leva dois dias.",
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 400, resposta.data
+    assert "source_session" in resposta.data
+
+
+def test_a_sessao_do_proprio_discovery_passa(api: APIClient) -> None:
+    conta = ClientFactory()
+    discovery = DiscoveryFactory(project=ProjectFactory(client=conta))
+
+    resposta = api.post(
+        reverse("evidence-list"),
+        {
+            "account": conta.pk,
+            "discovery": discovery.pk,
+            "source_session": DiscoverySessionFactory(discovery=discovery).pk,
+            "kind": Evidence.Kind.INTERVIEW,
+            "raw_excerpt": "Disseram que leva dois dias.",
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201, resposta.data
+
+
+def test_o_modelo_tambem_recusa_discovery_e_sessao_incoerentes() -> None:
+    """As duas guardas do lado do modelo, para quem entra pelo admin ou pelo shell."""
+    conta = ClientFactory()
+    de_outra_conta = DiscoveryFactory(project=ProjectFactory(client=ClientFactory()))
+    evidencia = EvidenceFactory(account=conta)
+
+    evidencia.discovery = de_outra_conta
+    with pytest.raises(ValidationError) as conta_errada:
+        evidencia.full_clean()
+
+    proprio = DiscoveryFactory(project=ProjectFactory(client=conta))
+    evidencia.discovery = proprio
+    evidencia.source_session = DiscoverySessionFactory()
+    with pytest.raises(ValidationError) as sessao_errada:
+        evidencia.full_clean()
+
+    assert "discovery" in conta_errada.value.message_dict
+    assert "source_session" in sessao_errada.value.message_dict
+
+
 # --- Discovery e as suas datas ----------------------------------------------------------------
 
 
