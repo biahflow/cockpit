@@ -7,12 +7,18 @@ enquanto o `Project` existir na tabela — arquivado ou não, porque a relação
 O resultado era um beco sem saída completo, encontrado no primeiro uso real:
 
 - a oportunidade **não arquivava**, nem depois de arquivado o projeto;
-- **não reconvertia**, porque `Project.opportunity` é `OneToOneField` sem condição de arquivamento
-  e o slot continua ocupado;
+- **não reconvertia**, porque `Project.opportunity` era `OneToOneField` sem condição de
+  arquivamento e o slot continuava ocupado;
 - e a oportunidade viva **bloqueava o cliente**, que também não arquivava.
 
 Ou seja: a recusa mandava a pessoa fazer uma coisa que não desbloqueava nada. Recusa assim é pior
 que nenhuma recusa, porque manda trabalhar à toa.
+
+A FDD 025 fechou o primeiro e o terceiro furos. O segundo só fechou na ADR 0050, quando a origem
+comercial deixou de ser 1-1: sem slot, projeto arquivado não ocupa mais nada, e a instrução
+"arquive o projeto" passou a desbloquear **as duas** saídas — encerrar a oportunidade e
+reconverter. O que continua barrado é o que sempre importou, e é o outro teste desta suíte:
+projeto **vivo** recusa a segunda conversão, para o duplo clique não duplicar projeto.
 """
 
 from datetime import timedelta
@@ -22,7 +28,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Opportunity, PipelineStage, User
+from apps.core.models import Opportunity, PipelineStage, Project, User
 from apps.core.tests.factories import OpportunityFactory, UserFactory
 
 
@@ -105,13 +111,19 @@ def test_a_corrente_inteira_fecha(
 
 
 @pytest.mark.django_db
-def test_reconverter_com_projeto_arquivado_aponta_a_restauracao(
+def test_com_o_projeto_arquivado_a_oportunidade_reconverte(
     admin_client: APIClient, convertida: tuple[Opportunity, int]
 ) -> None:
-    """Reconverter continua sendo 409 (o `OneToOneField` segue ocupado), mas a mensagem muda.
+    """A última saída do beco, e ela **mudou de resposta** na ADR 0050.
 
-    "A oportunidade já foi convertida" é enganoso quando o projeto está arquivado e sumiu da tela:
-    quem lê procura um projeto que não encontra.
+    Antes: 409, com uma mensagem que mandava restaurar o projeto — a única saída que existia,
+    porque o `OneToOneField` mantinha o slot ocupado mesmo com o projeto fora da tela. Restaurar
+    era a saída errada para quem arquivou de propósito e quer recomeçar o trabalho.
+
+    Agora a origem é 1-N: projeto arquivado não ocupa lugar nenhum, e reconverter cria um projeto
+    novo. **A guarda que importa não afrouxou** — quem barra a segunda conversão é o projeto
+    *vivo*, e é o `test_com_projeto_ativo_a_recusa_continua` acima que fixa isso, junto de
+    `tests/regression/test_conversion_is_single_use.py`.
     """
     opportunity, projeto_id = convertida
     admin_client.delete(reverse("project-detail", args=[projeto_id]))
@@ -127,8 +139,33 @@ def test_reconverter_com_projeto_arquivado_aponta_a_restauracao(
         format="json",
     )
 
+    assert resposta.status_code == 201
+    assert resposta.data["id"] != projeto_id
+    # O card do pipeline volta a apontar para o projeto vivo, e deixa de se dizer arquivado.
+    card = admin_client.get(reverse("opportunity-detail", args=[opportunity.pk])).data
+    assert card["project"] == resposta.data["id"] and card["project_archived"] is False
+
+
+@pytest.mark.django_db
+def test_o_projeto_vivo_ainda_recusa_a_segunda_conversao(
+    admin_client: APIClient, convertida: tuple[Opportunity, int]
+) -> None:
+    """O par do teste acima: a 1-N não pode virar licença para o duplo clique duplicar projeto."""
+    opportunity, _ = convertida
+
+    resposta = admin_client.post(
+        reverse("opportunity-convert-to-project", args=[opportunity.pk]),
+        {
+            "client": opportunity.client_id,
+            "name": "Duplo clique",
+            "start_date": str(timezone.localdate()),
+            "due_date": str(timezone.localdate() + timedelta(days=10)),
+        },
+        format="json",
+    )
+
     assert resposta.status_code == 409
-    assert "arquivado" in resposta.data["detail"].lower()
+    assert Project.objects.filter(originating_commercial_opportunity=opportunity).count() == 1
 
 
 @pytest.mark.django_db

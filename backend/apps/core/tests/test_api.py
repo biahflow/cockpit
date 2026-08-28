@@ -61,7 +61,7 @@ def test_sales_can_convert_won_opportunity_once(api_client: APIClient):
     duplicate = api_client.post(url, payload, format="json")
 
     assert created.status_code == 201
-    assert Project.objects.get().opportunity_id == opportunity.id
+    assert Project.objects.get().originating_commercial_opportunity_id == opportunity.id
     assert duplicate.status_code == 409
 
 
@@ -787,7 +787,9 @@ def test_opportunity_exposes_the_project_it_became(api_client: APIClient, admin_
     rows = {row["id"]: row["project"] for row in api_client.get(reverse("opportunity-list")).data}
 
     # Sem este campo a tela do pipeline não sabe que já converteu e oferece "Criar projeto" de novo.
-    assert rows[converted.pk] == Project.objects.get(opportunity=converted).pk
+    assert rows[converted.pk] == Project.objects.get(
+        originating_commercial_opportunity=converted
+    ).pk
     assert rows[pending.pk] is None
 
 

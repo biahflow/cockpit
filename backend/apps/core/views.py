@@ -90,6 +90,7 @@ from .models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    Engagement,
     EngineeringHandoff,
     Evidencia,
     GithubDeliveryProjection,
@@ -143,6 +144,7 @@ from .serializers import (
     DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
     DocumentSerializer,
+    EngagementSerializer,
     EngineeringHandoffSerializer,
     EvidenciaSerializer,
     GithubDeliveryProjectionSerializer,
@@ -719,6 +721,11 @@ class ClientViewSet(ArchiveModelViewSet):
         nunca o do cliente, então projeto e oportunidade continuavam listados apontando para uma
         linha que sumiu da tela de Clientes. O contato não tem esse problema (ninguém o lista
         sozinho), então ele acompanha em vez de bloquear.
+
+        O **engajamento** (ADR 0050) é listado sozinho em `/engagements/?account=`, então cairia na
+        primeira regra e não na segunda — mas ele não **bloqueia**: chegar aqui já significa que
+        não sobrou projeto nem oportunidade viva na conta, e um mandato sem nenhum dos dois não é
+        trabalho em aberto, é o resíduo dele. Acompanha o contato, na mesma transação.
         """
         projetos = Project.objects.filter(client=instance, archived_at__isnull=True).count()
         oportunidades = Opportunity.objects.filter(client=instance, archived_at__isnull=True).count()
@@ -733,8 +740,12 @@ class ClientViewSet(ArchiveModelViewSet):
                 "Arquive esses registros antes de arquivar o cliente."
             )
         with transaction.atomic():
+            agora = timezone.now()
             instance.contacts.filter(archived_at__isnull=True).update(
-                archived_at=timezone.now(), updated_at=timezone.now()
+                archived_at=agora, updated_at=agora
+            )
+            instance.engagements.filter(archived_at__isnull=True).update(
+                archived_at=agora, updated_at=agora
             )
             instance.archive()
 
@@ -878,11 +889,15 @@ class PipelineStageViewSet(viewsets.ModelViewSet):
 
 class OpportunityViewSet(ArchiveModelViewSet):
     resource = "opportunity"
-    # `project` é o reverso 1-1 lido por `OpportunitySerializer.get_project`: sem ele aqui, a
-    # listagem do pipeline faz uma query por card (ADR 0014).
-    queryset = Opportunity.objects.select_related(
-        "client", "contact", "stage", "owner", "service", "project"
-    ).all()
+    # `projects` é o reverso lido por `OpportunitySerializer._projeto_do_card`. Era
+    # `select_related("project")` enquanto a relação era 1-1; virou `prefetch_related` porque
+    # 1-N não cabe num `JOIN` sem multiplicar a linha da oportunidade. O motivo de estar aqui é o
+    # mesmo de antes: sem ele, a listagem do pipeline faz uma query por card (ADR 0014).
+    queryset = (
+        Opportunity.objects.select_related("client", "contact", "stage", "owner", "service")
+        .prefetch_related("projects")
+        .all()
+    )
     serializer_class = OpportunitySerializer
 
     def perform_create(self, serializer: OpportunitySerializer) -> None:
@@ -891,20 +906,26 @@ class OpportunityViewSet(ArchiveModelViewSet):
     def perform_destroy(self, instance: Opportunity) -> None:
         """Recusa arquivar oportunidade cujo projeto ainda está **ativo**.
 
-        `Project.opportunity` é `OneToOneField` com `PROTECT`, e o projeto lê a oportunidade para
-        montar o próprio histórico comercial. Arquivá-la sob um projeto vivo deixaria o projeto
-        apontando para um registro que a interface esconde.
+        `Project.originating_commercial_opportunity` é `PROTECT`, e o projeto lê a oportunidade
+        para montar o próprio histórico comercial. Arquivá-la sob um projeto vivo deixaria o
+        projeto apontando para um registro que a interface esconde.
 
-        A condição é o estado do projeto, e não a existência da relação: `hasattr` continua
-        verdadeiro com o projeto arquivado, porque o reverso não some com o `archived_at`. Testando
-        só a existência, a recusa não tinha saída — a própria mensagem manda arquivar o projeto, e
-        isso não desbloqueava nada; a oportunidade também não reconverte (o `OneToOneField` segue
-        ocupado) e, viva, ainda bloqueava o cliente. Ver FDD 025.
+        A condição é o estado do projeto, e não a existência da relação: a origem continua
+        apontando para cá com o projeto arquivado, porque o reverso não some com o `archived_at`.
+        Testando só a existência, a recusa não tinha saída — a própria mensagem manda arquivar o
+        projeto, e isso não desbloqueava nada. Ver FDD 025.
         """
-        projeto = getattr(instance, "project", None)
-        if projeto is not None and projeto.archived_at is None:
+        vivos = instance.projects.filter(archived_at__isnull=True).order_by("id")
+        projeto = vivos.first()
+        if projeto is not None:
+            quantos = vivos.count()
+            alvo = (
+                f"os projetos \"{projeto.name}\" e mais {quantos - 1}"
+                if quantos > 1
+                else f"o projeto \"{projeto.name}\""
+            )
             raise StateConflict(
-                f"Esta oportunidade já virou o projeto \"{projeto.name}\". "
+                f"Esta oportunidade já virou {alvo}. "
                 "Arquive o projeto se quiser encerrar este trabalho."
             )
         instance.archive()
@@ -915,35 +936,46 @@ class OpportunityViewSet(ArchiveModelViewSet):
         # projeto, e deixá-la aberta reabriria pelo comercial o que o recorte fechou.
         if self.request.user.role == User.Role.DELIVERY and not self.request.user.is_admin_role:
             return queryset.filter(
-                project_scope_q(self.request.user, "project"),
+                project_scope_q(self.request.user, "projects"),
                 stage__kind=PipelineStage.Kind.WON,
             ).distinct()
         return queryset
 
     @action(detail=True, methods=["post"], url_path="convert-to-project")
     def convert_to_project(self, request: Request, pk: str | None = None) -> Response:
+        """Converte a oportunidade ganha num projeto — **uma vez**, e a garantia mudou de lugar.
+
+        Até a ADR 0050 quem garantia "converte uma vez só" era o banco: `Project.opportunity` era
+        `OneToOneField`, e a segunda conversão morria num `IntegrityError` que virava 409. Essa
+        cardinalidade caiu porque ela também impedia o que a casa passou a vender — uma
+        Transformation Partnership origina vários projetos ao longo do mandato.
+
+        A invariante que importa não era a da tabela, era a do **botão**: duplo clique não pode
+        criar dois projetos. Ela continua aqui, e agora explicitamente:
+
+        - o guard olha projeto **vivo** com esta origem (arquivado não ocupa mais o lugar; a saída
+          da FDD 025 deixa de depender de restaurar);
+        - `select_for_update` na oportunidade serializa duas requisições simultâneas, que é o que
+          o `IntegrityError` fazia de graça e deixou de fazer. Sem ele, dois cliques concorrentes
+          leem "não há projeto" ao mesmo tempo e ambos criam — e nada acusa.
+
+        Projeto adicional com a mesma origem é legítimo e nasce por `POST /projects/`, com
+        `engagement` e `originating_commercial_opportunity` explícitos.
+        """
         opportunity = self.get_object()
         if request.user.role not in {User.Role.ADMIN, User.Role.SALES} and not request.user.is_superuser:
             return Response({"detail": "Somente Vendas pode converter oportunidades."}, status=403)
         if not opportunity.is_won:
             return Response({"detail": "A oportunidade deve estar na etapa Ganho."}, status=400)
-        existente = getattr(opportunity, "project", None)
-        if existente is not None:
-            # A conversão roda uma vez só: `Project.opportunity` é `OneToOneField` sem condição de
-            # arquivamento, então o slot continua ocupado mesmo com o projeto arquivado. Dizer só
-            # "já foi convertida" nesse caso manda a pessoa procurar um projeto que a interface
-            # esconde — daí nomear o estado e o caminho de volta.
-            detalhe = (
-                f"Esta oportunidade já virou o projeto \"{existente.name}\", que está arquivado. "
-                "Restaure o projeto para retomar este trabalho."
-                if existente.archived_at is not None
-                else "A oportunidade já foi convertida."
-            )
-            return Response({"detail": detalhe}, status=409)
-        serializer = ProjectSerializer(data=request.data)
+        serializer = ProjectSerializer(data=request.data, engagement_optional=True)
         serializer.is_valid(raise_exception=True)
         if serializer.validated_data["client"].id != opportunity.client_id:
             return Response({"client": "O projeto deve usar o cliente da oportunidade."}, status=400)
+        engagement = serializer.validated_data.get("engagement")
+        if engagement is not None and engagement.account_id != opportunity.client_id:
+            return Response(
+                {"engagement": "O engajamento deve ser da mesma conta da oportunidade."}, status=400
+            )
         # O nível de produto vendido segue para a entrega; o payload pode sobrescrever.
         service = serializer.validated_data.get("service") or opportunity.service
         # Invariante 6 do mapa de linguagem (ADR 0049): oferta de **aquisição** não gera projeto.
@@ -958,8 +990,31 @@ class OpportunityViewSet(ArchiveModelViewSet):
             )
         try:
             with transaction.atomic():
+                # A trava é aqui, e é o que substitui a unicidade que o `OneToOneField` dava. A
+                # linha da oportunidade fica bloqueada até o fim da transação, então a segunda
+                # requisição só lê o estado depois que a primeira gravou o projeto — e cai no 409
+                # abaixo em vez de criar o segundo.
+                travada = Opportunity.objects.select_for_update().get(pk=opportunity.pk)
+                vivo = travada.projects.filter(archived_at__isnull=True).order_by("id").first()
+                if vivo is not None:
+                    return Response({"detail": "A oportunidade já foi convertida."}, status=409)
+                if engagement is None:
+                    # **D3 em código**: todo projeto pertence a um engajamento, e a venda avulsa
+                    # não vira caso especial — ela cria um mandato de escopo único. Manter o
+                    # projeto sem engajamento para "quando for avulso" custaria um segundo caminho
+                    # em cada agregador, e o caminho raro é o que ninguém testa (ADR 0050).
+                    engagement = Engagement.objects.create(
+                        account_id=opportunity.client_id,
+                        name=opportunity.title,
+                        mandate=opportunity.scope or "",
+                        owner=request.user,
+                        started_at=timezone.localdate(),
+                    )
                 project = serializer.save(
-                    opportunity=opportunity, owner=request.user, service=service
+                    engagement=engagement,
+                    originating_commercial_opportunity=travada,
+                    owner=request.user,
+                    service=service,
                 )
                 kickoff.seed_work_items(project)
                 # Dentro da transação, e não no `finalize` abaixo, porque é escrita no banco e não
@@ -968,6 +1023,9 @@ class OpportunityViewSet(ArchiveModelViewSet):
                 # emitir é ato deliberado de gente (FDD 028).
                 invoices.seed_invoices(project)
         except IntegrityError:
+            # Já não carrega unicidade nenhuma — o `select_for_update` acima faz esse trabalho.
+            # Fica porque continua sendo o que transforma uma falha de integridade residual em 409
+            # com a transação inteira desfeita, em vez de 500 com projeto pela metade.
             return Response({"detail": "A oportunidade já foi convertida."}, status=409)
         kickoff.finalize(project)
         return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
@@ -1013,10 +1071,57 @@ class OpportunityViewSet(ArchiveModelViewSet):
         )
 
 
+class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O mandato de transformação da conta (ADR 0050, FDD 046).
+
+    **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+    esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+    projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+    engajamento a partir dos projetos que a pessoa já podia ver.
+    """
+
+    resource = "engagement"
+    queryset = Engagement.objects.select_related("account", "owner", "sponsor").all()
+    serializer_class = EngagementSerializer
+    # `status` em `filter_exact_fields` e não em `filter_fields`: o primeiro conjunto só aplica
+    # valores numéricos (`value.isdigit()`), e `?status=active` seria silenciosamente ignorado —
+    # a lista voltaria completa e pareceria que o filtro não filtra nada.
+    filter_fields = ("account",)
+    filter_exact_fields = ("status",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_admin_role or user.role != User.Role.DELIVERY:
+            return queryset
+        # Entrega vê o mandato **de que participa**, derivado de `visible_to` — a única expressão
+        # da regra (ADR 0010), nunca reescrita à mão. O `.distinct()` não é enfeite: o `filter`
+        # atravessa o reverso `projects` e devolve uma linha por projeto casado, então sem ele o
+        # mesmo engajamento aparece tantas vezes quantos projetos a pessoa tiver nele.
+        return queryset.filter(projects__in=Project.objects.visible_to(user)).distinct()
+
+    def perform_destroy(self, instance: Engagement) -> None:
+        """Recusa arquivar mandato com projeto vivo — a regra de órfão da FDD 025.
+
+        `ProjectViewSet` filtra o próprio `archived_at` e nunca o do engajamento, então arquivar
+        aqui deixaria projetos listados apontando para um mandato que a interface esconde. É o
+        mesmo defeito que o cliente e a oportunidade já tratam, e o mesmo remédio.
+        """
+        vivos = instance.projects.filter(archived_at__isnull=True).count()
+        if vivos:
+            raise StateConflict(
+                f"Este engajamento ainda tem {vivos} projeto(s) em aberto. "
+                "Arquive esses projetos antes de arquivar o engajamento."
+            )
+        instance.archive()
+
+
 class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
     resource = "project"
     project_path = ""  # o recorte é sobre o próprio projeto
-    queryset = Project.objects.select_related("client", "opportunity", "owner").all()
+    queryset = Project.objects.select_related(
+        "client", "engagement", "originating_commercial_opportunity", "owner"
+    ).all()
     serializer_class = ProjectSerializer
 
     def perform_create(self, serializer: ProjectSerializer) -> None:
@@ -3389,10 +3494,16 @@ class AnalyticsView(APIView):
         projects = Project.objects.filter(active)
         projects_by_status = {row["status"]: row["n"] for row in projects.values("status").annotate(n=Count("id"))}
 
+        # Dias entre a venda e o projeto que saiu dela. Com a origem em 1-N (ADR 0050) a conta
+        # continua sendo por **projeto**, e não por oportunidade: cada projeto tem uma origem só,
+        # e é a distância dele até ela que descreve o ciclo. Somar por oportunidade faria o
+        # segundo projeto de um mandato recorrente entrar como um ciclo comercial que não houve.
         cycle_days = [
-            (project.created_at - project.opportunity.created_at).days
-            for project in projects.exclude(opportunity__isnull=True).select_related("opportunity")
-            if project.opportunity is not None
+            (project.created_at - project.originating_commercial_opportunity.created_at).days
+            for project in projects.exclude(
+                originating_commercial_opportunity__isnull=True
+            ).select_related("originating_commercial_opportunity")
+            if project.originating_commercial_opportunity is not None
         ]
         avg_cycle = sum(cycle_days) / len(cycle_days) if cycle_days else None
 
@@ -3473,7 +3584,9 @@ class AnalyticsView(APIView):
         closed_by_source = {
             row["origin"]: (row["n"], row["rev"] or Decimal("0"))
             for row in projects.annotate(
-                origin=Coalesce(_lead_source("opportunity_id"), Value(SEM_LEAD))
+                origin=Coalesce(
+                    _lead_source("originating_commercial_opportunity_id"), Value(SEM_LEAD)
+                )
             )
             .values("origin")
             .annotate(n=Count("id"), rev=Sum("actual_value"))

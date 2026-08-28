@@ -76,7 +76,9 @@ def test_servico_avulso_nao_semeia_nada():
 def test_nivel_pago_vendido_a_zero_nao_semeia():
     """A gratuidade é do **valor**, não do nível: `list_price=0` na semente da migração 0020."""
     servico = Service.objects.get(tier="prove")
-    projeto = ProjectFactory(service=servico, actual_value=Decimal("0"), opportunity=None)
+    projeto = ProjectFactory(
+        service=servico, actual_value=Decimal("0"), originating_commercial_opportunity=None
+    )
     assert invoices.seed_invoices(projeto) == 0
 
 
@@ -92,11 +94,15 @@ def test_semeadura_e_idempotente():
 @pytest.mark.django_db
 def test_valor_contratado_cai_para_a_oportunidade_e_depois_para_a_tabela():
     oportunidade = OpportunityFactory(estimated_value=Decimal("7777.00"))
-    projeto = ProjectFactory(actual_value=Decimal("0"), opportunity=oportunidade)
+    projeto = ProjectFactory(
+        actual_value=Decimal("0"), originating_commercial_opportunity=oportunidade
+    )
     assert invoices.contracted_value(projeto) == Decimal("7777.00")
 
     servico = ServiceFactory(list_price=Decimal("333.00"))
-    sozinho = ProjectFactory(actual_value=Decimal("0"), service=servico, opportunity=None)
+    sozinho = ProjectFactory(
+        actual_value=Decimal("0"), service=servico, originating_commercial_opportunity=None
+    )
     assert invoices.contracted_value(sozinho) == Decimal("333.00")
 
 

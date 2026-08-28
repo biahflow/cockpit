@@ -2600,6 +2600,211 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/engagements/:
+    get:
+      operationId: v1_engagements_list
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Engagement'
+          description: ''
+    post:
+      operationId: v1_engagements_create
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+  /api/v1/engagements/{id}/:
+    get:
+      operationId: v1_engagements_retrieve
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+    put:
+      operationId: v1_engagements_update
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+    patch:
+      operationId: v1_engagements_partial_update
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEngagement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEngagement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEngagement'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+    delete:
+      operationId: v1_engagements_destroy
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/engagements/{id}/unarchive/:
+    post:
+      operationId: v1_engagements_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/engineering-handoffs/:
     get:
       operationId: v1_engineering_handoffs_list
@@ -5346,6 +5551,25 @@ paths:
   /api/v1/opportunities/{id}/convert-to-project/:
     post:
       operationId: v1_opportunities_convert_to_project_create
+      description: |-
+        Converte a oportunidade ganha num projeto — **uma vez**, e a garantia mudou de lugar.
+
+        Até a ADR 0050 quem garantia "converte uma vez só" era o banco: `Project.opportunity` era
+        `OneToOneField`, e a segunda conversão morria num `IntegrityError` que virava 409. Essa
+        cardinalidade caiu porque ela também impedia o que a casa passou a vender — uma
+        Transformation Partnership origina vários projetos ao longo do mandato.
+
+        A invariante que importa não era a da tabela, era a do **botão**: duplo clique não pode
+        criar dois projetos. Ela continua aqui, e agora explicitamente:
+
+        - o guard olha projeto **vivo** com esta origem (arquivado não ocupa mais o lugar; a saída
+          da FDD 025 deixa de depender de restaurar);
+        - `select_for_update` na oportunidade serializa duas requisições simultâneas, que é o que
+          o `IntegrityError` fazia de graça e deixou de fazer. Sem ele, dois cliques concorrentes
+          leem "não há projeto" ao mesmo tempo e ambos criam — e nada acusa.
+
+        Projeto adicional com a mesma origem é legítimo e nasce por `POST /projects/`, com
+        `engagement` e `originating_commercial_opportunity` explícitos.
       parameters:
       - in: path
         name: id
@@ -10354,6 +10578,82 @@ components:
       - original_name
       - signature_requests
       - uploaded_by
+    Engagement:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        account_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        mandate:
+          type: string
+        sponsor:
+          type: integer
+          nullable: true
+        owner:
+          type: integer
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/EngagementStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        ended_at:
+          type: string
+          format: date
+          nullable: true
+        success_definition:
+          type: string
+        needs_review:
+          type: boolean
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - account_name
+      - archived_at
+      - created_at
+      - id
+      - name
+      - owner
+      - owner_name
+      - status_display
+      - updated_at
+    EngagementStatusEnum:
+      enum:
+      - active
+      - paused
+      - closed
+      type: string
+      description: |-
+        * `active` - Ativo
+        * `paused` - Pausado
+        * `closed` - Encerrado
     EngineeringHandoff:
       type: object
       description: |-
@@ -12203,6 +12503,61 @@ components:
           items:
             $ref: '#/components/schemas/SignatureRequest'
           readOnly: true
+    PatchedEngagement:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        account_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        mandate:
+          type: string
+        sponsor:
+          type: integer
+          nullable: true
+        owner:
+          type: integer
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/EngagementStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        ended_at:
+          type: string
+          format: date
+          nullable: true
+        success_definition:
+          type: string
+        needs_review:
+          type: boolean
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedEngineeringHandoff:
       type: object
       description: |-
@@ -13146,10 +13501,18 @@ components:
           readOnly: true
         client:
           type: integer
+        engagement:
+          type: integer
+        engagement_name:
+          type: string
+          readOnly: true
+          default: ''
+        originating_commercial_opportunity:
+          type: integer
+          nullable: true
         opportunity:
           type: integer
           readOnly: true
-          nullable: true
         name:
           type: string
           maxLength: 255
@@ -14089,10 +14452,18 @@ components:
           readOnly: true
         client:
           type: integer
+        engagement:
+          type: integer
+        engagement_name:
+          type: string
+          readOnly: true
+          default: ''
+        originating_commercial_opportunity:
+          type: integer
+          nullable: true
         opportunity:
           type: integer
           readOnly: true
-          nullable: true
         name:
           type: string
           maxLength: 255
@@ -14167,6 +14538,8 @@ components:
       - client_vertical_name
       - created_at
       - due_date
+      - engagement
+      - engagement_name
       - id
       - is_overdue
       - name

@@ -154,7 +154,7 @@ def test_receita_nao_dobra_quando_dois_leads_apontam_o_mesmo_negocio(
     )
     _fechar(api, opportunity, sales)
 
-    projeto = opportunity.project
+    projeto = opportunity.projects.get()
     projeto.actual_value = 50000
     projeto.save(update_fields=["actual_value"])
 

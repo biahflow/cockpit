@@ -35,7 +35,7 @@ class Command(BaseCommand):
         migradas = Qualification.objects.filter(legacy_opportunity__isnull=False).count()
 
         sem_lead = [o for o in candidatas if not o.leads.exists()]
-        com_projeto = [o for o in candidatas if hasattr(o, "project")]
+        com_projeto = [o for o in candidatas if o.projects.exists()]
 
         self.stdout.write(f"Oportunidades de qualification_call: {total}")
         self.stdout.write(f"Traduzidas em Qualification: {migradas}")
@@ -47,7 +47,8 @@ class Command(BaseCommand):
         self.stdout.write(f"Com projeto (avaliadas, não arquivadas): {len(com_projeto)}")
         for opportunity in com_projeto:
             self.stdout.write(
-                f"  · #{opportunity.pk} — {opportunity.title} → projeto #{opportunity.project.pk}"
+                f"  · #{opportunity.pk} — {opportunity.title} → "
+                + ", ".join(f"projeto #{p.pk}" for p in opportunity.projects.order_by("id"))
             )
         pendentes = total - migradas
         estilo = self.style.WARNING if pendentes else self.style.SUCCESS

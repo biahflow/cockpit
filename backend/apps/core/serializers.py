@@ -30,6 +30,7 @@ from .models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    Engagement,
     EngineeringHandoff,
     Evidencia,
     GithubDeliveryProjection,
@@ -410,27 +411,42 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         # `status` da fatura.
         read_only_fields = ["id", "owner", "origin_qualification", "created_at", "updated_at"]
 
+    def _projeto_do_card(self, obj: Opportunity) -> Project | None:
+        """O projeto que representa esta oportunidade no card do pipeline.
+
+        A relação virou 1-N na ADR 0050 e o contrato `/api/v1/` **não** mudou de forma: o card
+        continua exibindo um projeto, não uma lista. Qual deles: o **vivo mais antigo**, e só na
+        falta de qualquer vivo o arquivado mais antigo. O desempate é por `id` porque é a única
+        ordem estável que não depende de campo editável — ordenar por `start_date` faria o card
+        trocar de destino quando alguém corrigisse uma data.
+
+        Ordenação em Python e não em SQL: `OpportunityViewSet` já traz `projects` por
+        `prefetch_related`, e um `.order_by()` aqui descartaria o prefetch e devolveria a query
+        por card que a ADR 0014 existe para não pagar.
+        """
+        projetos = sorted(obj.projects.all(), key=lambda p: p.pk)
+        vivos = [p for p in projetos if p.archived_at is None]
+        return next(iter(vivos or projetos), None)
+
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_project(self, obj: Opportunity) -> int | None:
         """Id do projeto que saiu desta oportunidade, ou `None` se ela ainda não foi convertida.
 
         Sem isto a tela do pipeline não tem como saber que já converteu, e continua oferecendo
-        "Criar projeto" numa oportunidade que só pode responder 409. O `getattr` com default dá
-        conta do reverso 1-1 porque `RelatedObjectDoesNotExist` herda de `AttributeError`.
+        "Criar projeto" numa oportunidade que só pode responder 409.
         """
-        project = getattr(obj, "project", None)
+        project = self._projeto_do_card(obj)
         return project.pk if project else None
 
     @extend_schema_field(serializers.BooleanField())
     def get_project_archived(self, obj: Opportunity) -> bool:
-        """O projeto convertido está arquivado?
+        """Só sobrou projeto arquivado?
 
         `project` continua preenchido nesse caso, de propósito: anulá-lo faria a tela voltar a
-        oferecer "Criar projeto", e a conversão responderia 409 porque o `OneToOneField` segue
-        ocupado — trocaria um link morto por um botão morto. Com este campo a tela mostra o estado
-        em vez de oferecer uma ação que não existe (FDD 025).
+        oferecer "Criar projeto" sem dizer que já houve um, e quem clicasse criaria um segundo
+        projeto sem saber do primeiro. Com este campo a tela mostra o estado (FDD 025).
         """
-        project = getattr(obj, "project", None)
+        project = self._projeto_do_card(obj)
         return project is not None and project.archived_at is not None
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
@@ -438,6 +454,54 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         contact = cast(Contact | None, attrs.get("contact", getattr(self.instance, "contact", None)))
         if contact and client and contact.client_id != client.id:
             raise serializers.ValidationError({"contact": "O contato deve pertencer ao cliente selecionado."})
+        return attrs
+
+
+class EngagementSerializer(serializers.ModelSerializer[Engagement]):
+    account_name = serializers.CharField(source="account.name", read_only=True)
+    owner_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = Engagement
+        fields = [
+            "id", "account", "account_name", "name", "mandate", "sponsor", "owner", "owner_name",
+            "status", "status_display", "started_at", "ended_at", "success_definition",
+            "needs_review", "archived_at", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "archived_at", "created_at", "updated_at"]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_owner_name(self, obj: Engagement) -> str | None:
+        owner = obj.owner
+        return (owner.get_full_name() or owner.get_username()) if owner else None
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """As três regras do `clean()` do modelo, aqui, para virarem 400 em vez de 500.
+
+        Repetir a validação é o padrão da casa (`OpportunitySerializer.validate` faz o mesmo com
+        o contato): o `clean()` existe porque shell, admin e migração não passam por serializer;
+        este existe porque `ModelSerializer` não chama `full_clean`, e sem ele a violação sairia
+        como `IntegrityError` ou como um registro incoerente salvo em silêncio.
+        """
+        instance = self.instance
+        account = cast(Client | None, attrs.get("account", getattr(instance, "account", None)))
+        sponsor = cast(Contact | None, attrs.get("sponsor", getattr(instance, "sponsor", None)))
+        started = cast(date | None, attrs.get("started_at", getattr(instance, "started_at", None)))
+        ended = cast(date | None, attrs.get("ended_at", getattr(instance, "ended_at", None)))
+        status_value = attrs.get("status", getattr(instance, "status", Engagement.Status.ACTIVE))
+        if sponsor and account and sponsor.client_id != account.id:
+            raise serializers.ValidationError(
+                {"sponsor": "O patrocinador deve ser contato da mesma conta."}
+            )
+        if started and ended and ended < started:
+            raise serializers.ValidationError(
+                {"ended_at": "A data final não pode ser anterior à inicial."}
+            )
+        if status_value == Engagement.Status.CLOSED and ended is None:
+            raise serializers.ValidationError(
+                {"ended_at": "Um engajamento encerrado precisa de data final."}
+            )
         return attrs
 
 
@@ -449,26 +513,67 @@ class ProjectSerializer(serializers.ModelSerializer[Project]):
     client_vertical_name = serializers.CharField(
         source="client.vertical.name", read_only=True, default=""
     )
+    engagement_name = serializers.CharField(source="engagement.name", read_only=True, default="")
+    # **Alias de compatibilidade, e só isso** (`docs/ontology/language-map.md` §7): o campo do
+    # modelo virou `originating_commercial_opportunity` na ADR 0050, e o contrato `/api/v1/`
+    # continua expondo `opportunity` para não quebrar consumidor nenhum no meio do renome. Some
+    # na Fase 6, junto dos outros aliases. Só de leitura porque escrever pelos dois nomes ao
+    # mesmo tempo daria duas fontes para a mesma coluna.
+    opportunity = serializers.PrimaryKeyRelatedField(
+        source="originating_commercial_opportunity", read_only=True
+    )
 
     class Meta:
         model = Project
         fields = [
-            "id", "client", "opportunity", "name", "description", "owner", "start_date", "due_date",
+            "id", "client", "engagement", "engagement_name", "originating_commercial_opportunity",
+            "opportunity", "name", "description", "owner", "start_date", "due_date",
             "status", "service", "actual_value", "cost", "is_overdue", "created_at", "updated_at",
             "ai_maturity", "ai_opportunity", "ai_dimensions", "ai_score_summary", "ai_scored_at",
             "ai_score_reviewed", "client_vertical", "client_vertical_name",
         ]
         # ai_maturity/opportunity/dimensions/summary são editáveis: parte da revisão humana do
         # rascunho antes de publicar. ai_scored_at é carimbo da geração (só a IA escreve).
+        # `opportunity` **não** entra aqui: ele é declarado acima com `read_only=True`, e
+        # `read_only_fields` só alcança campo que o `ModelSerializer` gera sozinho. Repetido nos
+        # dois lugares, o daqui seria configuração morta — e a próxima pessoa a ler apagaria o
+        # errado.
         read_only_fields = [
-            "id", "opportunity", "owner", "is_overdue", "created_at", "updated_at", "ai_scored_at",
+            "id", "owner", "is_overdue", "created_at", "updated_at", "ai_scored_at",
         ]
+
+    def __init__(self, *args: Any, engagement_optional: bool = False, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # A origem comercial se escreve **na criação e nunca depois**. Editável num `PATCH`, ela
+        # reescreveria a proveniência de um projeto que já existe — e a origem é justamente o
+        # dado que a análise de funil e o ciclo médio leem como fato histórico. Read-only sempre
+        # seria o outro extremo: `POST /projects/` é o caminho pelo qual a venda recorrente cria
+        # o segundo projeto da mesma origem, e ele precisa dizer qual é.
+        if self.instance is not None:
+            self.fields["originating_commercial_opportunity"].read_only = True
+        # `engagement` é obrigatório em `POST /projects/` — é o que faz a invariante 7 do mapa de
+        # linguagem valer no caminho normal, e não só na coluna NOT NULL. A exceção é a
+        # `convert-to-project`, que passa este sinalizador: lá o mandato é **opcional no payload**
+        # porque é a própria conversão que o cria quando a venda é avulsa (D3, ADR 0050). Sem esta
+        # brecha, converter passaria a exigir da tela um engajamento que ainda não existe.
+        if engagement_optional:
+            self.fields["engagement"].required = False
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         start = cast(date | None, attrs.get("start_date", getattr(self.instance, "start_date", None)))
         due = cast(date | None, attrs.get("due_date", getattr(self.instance, "due_date", None)))
         if start and due and due < start:
             raise serializers.ValidationError({"due_date": "A data final não pode ser anterior à inicial."})
+        # A projeção `client` não pode divergir de `engagement.account` (ADR 0050). Mesma regra do
+        # `Project.clean()`, aqui para virar 400 de campo em vez de 500.
+        client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
+        engagement = cast(
+            Engagement | None, attrs.get("engagement", getattr(self.instance, "engagement", None))
+        )
+        if engagement and client and engagement.account_id != client.id:
+            raise serializers.ValidationError(
+                {"engagement": "O engajamento deve pertencer ao mesmo cliente do projeto."}
+            )
         return attrs
 
     def get_is_overdue(self, project: Project) -> bool:

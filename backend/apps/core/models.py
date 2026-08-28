@@ -146,6 +146,73 @@ class Contact(TimestampedModel):
         return f"{self.first_name} {self.last_name}".strip()
 
 
+class Engagement(TimestampedModel):
+    """O mandato de transformação que a conta contratou — a espinha dorsal `Account → Project`.
+
+    Até aqui o projeto pendurava direto na conta e nascia de uma venda, numa relação 1-1 com ela.
+    Isso descreve bem a venda avulsa e descreve mal o que a casa passou a vender: uma
+    Transformation Partnership é recorrente, origina vários projetos ao longo de meses e não tem
+    onde ser representada — nem a oportunidade comporta os projetos (o `OneToOneField` só admitia
+    um), nem existia camada onde várias vendas e vários projetos se reconhecessem como o **mesmo**
+    trabalho. Sem ela, "como vai a transformação daquela conta?" só tem resposta somando projetos
+    a olho, e a resposta muda conforme quem soma.
+
+    `Engagement` é essa camada, e ela é **obrigatória** para todo projeto (D3 do mapa de
+    linguagem). A venda avulsa cria um engajamento de escopo único, criado sozinho pela
+    `convert-to-project` — dois caminhos no código custariam mais que uma linha a mais na tabela,
+    e o caminho raro é justamente o que ninguém testa.
+
+    Ele é do **comercial**: quem entrega lê, não escreve (`permissions.RolePermission`). E não é
+    fronteira de acesso — o recorte da Entrega continua sendo `ProjectMember`, e enxergar um
+    engajamento não dá acesso a projeto nenhum dele (ADR 0050, FDD 046).
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Ativo"
+        PAUSED = "paused", "Pausado"
+        CLOSED = "closed", "Encerrado"
+
+    # `account` e não `client`: é o termo canônico do mapa de linguagem, e o campo nasce com o
+    # nome certo mesmo enquanto o modelo ainda se chama `Client` (o renome físico é a Fase 6).
+    account = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="engagements")
+    name = models.CharField(max_length=255)
+    # O mandato em si: o que a casa foi contratada para transformar. Texto livre e opcional
+    # porque o engajamento de escopo único nasce da conversão, onde o que existe é o escopo da
+    # oportunidade — exigir redação nesse ponto travaria a conversão por um campo de prosa.
+    mandate = models.TextField(blank=True, default="")
+    sponsor = models.ForeignKey(
+        Contact, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="sponsored_engagements",
+    )
+    owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="owned_engagements")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    started_at = models.DateField(null=True, blank=True)
+    ended_at = models.DateField(null=True, blank=True)
+    success_definition = models.TextField(blank=True, default="")
+    # Carimbo do backfill da 0056, não campo de operação: marca a conta cujos projetos **talvez**
+    # sejam jornadas distintas agrupadas num engajamento só. A migração não separa sozinha — ela
+    # não tem como saber —, ela sinaliza para revisão humana. Ver a docstring da 0056.
+    needs_review = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-started_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def clean(self) -> None:
+        if self.started_at and self.ended_at and self.ended_at < self.started_at:
+            raise ValidationError({"ended_at": "A data final não pode ser anterior à inicial."})
+        if self.status == self.Status.CLOSED and self.ended_at is None:
+            raise ValidationError({"ended_at": "Um engajamento encerrado precisa de data final."})
+        # O patrocinador é quem responde pelo mandato **dentro da conta**. Um contato de outra
+        # organização aqui seria o mesmo defeito que `Activity.clean()` já fecha na oportunidade:
+        # a tela mostraria um nome que não pertence àquele cliente, e ninguém acusaria.
+        sponsor = self.sponsor if self.sponsor_id else None
+        if sponsor is not None and sponsor.client_id != self.account_id:
+            raise ValidationError({"sponsor": "O patrocinador deve ser contato da mesma conta."})
+
+
 class PipelineStage(models.Model):
     class Kind(models.TextChoices):
         OPEN = "open", "Aberta"
@@ -194,6 +261,14 @@ class Opportunity(TimestampedModel):
     # que garante isso.
     origin_qualification = models.ForeignKey(
         "Qualification", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="commercial_opportunities",
+    )
+    # O mandato a que esta venda pertence (ADR 0050). **Opcional, e permanece opcional**: a
+    # oportunidade costuma nascer antes de haver mandato nenhum — é ela que o origina, quando é a
+    # primeira. Exigi-la aqui inverteria a ordem dos fatos. `SET_NULL` pelo mesmo motivo: apagar o
+    # engajamento não pode apagar a venda que já aconteceu.
+    engagement = models.ForeignKey(
+        "Engagement", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="commercial_opportunities",
     )
 
@@ -270,9 +345,24 @@ class Project(TimestampedModel):
         ON_HOLD = "on_hold", "Em espera"
         COMPLETED = "completed", "Concluído"
 
+    # **Projeção temporária.** A conta canônica do projeto é `engagement.account`; este campo
+    # sobrevive porque metade do produto (agregadores, permissões, portal) ainda pergunta pelo
+    # cliente direto, e removê-lo é a Fase 6. O que o mantém honesto é a validação em `clean()`
+    # abaixo — sem ela, a projeção divergiria da fonte em silêncio, que é exatamente o defeito
+    # que uma projeção introduz quando ninguém a amarra.
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="projects")
-    opportunity = models.OneToOneField(
-        Opportunity, on_delete=models.PROTECT, related_name="project", null=True, blank=True
+    # O mandato a que este projeto pertence — **obrigatório** (invariante 7 do mapa de linguagem).
+    # Nasceu nulo na 0055 e virou NOT NULL na 0057, com o backfill da 0056 no meio; ver a
+    # docstring da 0057 para por que os três passos são migrações separadas.
+    engagement = models.ForeignKey("Engagement", on_delete=models.PROTECT, related_name="projects")
+    # A venda que originou este projeto — **1-N e opcional**. Era `OneToOneField`, e a
+    # cardinalidade antiga é o que impedia uma venda recorrente de originar mais de um projeto.
+    # A garantia de "converte uma vez só" que o banco dava saiu daqui e virou ato explícito na
+    # `OpportunityViewSet.convert_to_project` (409 + `select_for_update`), porque o que se quer
+    # proteger é o **botão**, não a relação: um segundo projeto com a mesma origem é legítimo, e
+    # nasce por `POST /projects/`. Ver ADR 0050.
+    originating_commercial_opportunity = models.ForeignKey(
+        Opportunity, on_delete=models.PROTECT, related_name="projects", null=True, blank=True
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -314,6 +404,15 @@ class Project(TimestampedModel):
         if service is not None and service.category == Service.Category.ACQUISITION:
             raise ValidationError({
                 "service": "Oferta de aquisição não gera projeto — escolha um degrau da escada."
+            })
+        # O que mantém a projeção `client` honesta (ADR 0050). Dois caminhos chegam ao dono do
+        # projeto — `project.client` e `project.engagement.account` — e nada além desta linha
+        # impede que eles digam coisas diferentes. Divergindo, o projeto aparece na carteira de
+        # uma conta e no mandato de outra, e nenhuma tela acusa.
+        engagement = self.engagement if self.engagement_id else None
+        if engagement is not None and engagement.account_id != self.client_id:
+            raise ValidationError({
+                "engagement": "O engajamento deve pertencer ao mesmo cliente do projeto."
             })
 
     @property

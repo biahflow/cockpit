@@ -31,6 +31,21 @@ O que ela arquivou se reconhece por uma assinatura, não por uma janela de tempo
 igualdade. Arquivamento feito por gente, antes ou depois do deploy, tem outro instante e a reversa
 não o toca.
 
+## Sobre o reverso do projeto
+
+"Tem projeto?" se responde por `_tem_projeto` e não por um nome de atributo cravado. Quando esta
+migração foi escrita o reverso se chamava `opportunity.project`, porque `Project.opportunity` era
+`OneToOneField`; a ADR 0050 renomeou o campo para `originating_commercial_opportunity` e o tornou
+1-N, e o reverso virou `opportunity.projects`.
+
+Sob `migrate` isso seria indiferente — um `RunPython` recebe o estado histórico, onde o nome
+antigo continua valendo para sempre. O que não é indiferente é o **teste** de
+`tests/regression/test_qualification_backfill.py`, que executa esta função contra o registro vivo
+e um banco no HEAD, e é a única coisa que prova que ela faz o que diz. Com o nome cravado, ele
+passou a ler `False` para toda oportunidade e a afirmar um comportamento que a migração não tem —
+verde, e medindo o esquema errado. As duas linhas abaixo mantêm a resposta certa nos dois estados;
+o comportamento em produção é exatamente o de antes.
+
 **Oportunidade de `qualification_call` sem lead é pulada.** `Qualification.lead` é obrigatório
 porque uma avaliação sem lead não é avaliação de ninguém; inventar um lead sintético colocaria dado
 falso na base para satisfazer uma FK. O caso aparece quando alguém criou a oportunidade à mão pela
@@ -44,6 +59,14 @@ from datetime import timedelta
 from django.db import migrations
 
 NURTURE_DIAS = 180
+
+
+def _tem_projeto(opportunity):
+    """O reverso do projeto, sob qualquer um dos dois estados. Ver o cabeçalho."""
+    projetos = getattr(opportunity, "projects", None)  # depois da ADR 0050: FK 1-N
+    if projetos is not None:
+        return projetos.exists()
+    return hasattr(opportunity, "project")  # no estado histórico daqui: OneToOneField
 
 
 def backfill_qualification(apps, schema_editor):
@@ -62,7 +85,7 @@ def backfill_qualification(apps, schema_editor):
         lead = opportunity.leads.order_by("id").first()
         if lead is None:
             continue  # sem lead não há avaliação; o comando de reconciliação reporta
-        tem_projeto = hasattr(opportunity, "project")
+        tem_projeto = _tem_projeto(opportunity)
         kind = opportunity.stage.kind if opportunity.stage_id else "open"
         if kind == "won" or tem_projeto:
             outcome, nurture_until = "qualified", None
