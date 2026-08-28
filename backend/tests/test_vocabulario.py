@@ -195,7 +195,16 @@ REGRAS: tuple[Regra, ...] = (
     ),
     Regra(
         id="modelo-em-portugues",
-        padrao=re.compile(rf"^\s*class\s+(\w*(?:{_MARCADORES})\w*|\w*(?:{_SUFIXOS}))\(", re.I),
+        # **Sensível a caixa, e é a correção de um defeito medido.** Com `re.I` esta regra
+        # reprovava `ProcessObservation` — que é o nome **canônico** da tabela mestra (§2) —
+        # porque `Process` + `Observation` emenda um `o` minúsculo que o marcador `Processo` casa
+        # sem olhar a caixa. É o pior modo de falha possível aqui: a guarda reprova o nome certo,
+        # e a saída fácil é declarar um nome canônico na allowlist de dívida, registrando como
+        # débito exatamente o que pagou o débito.
+        # Os marcadores são substantivos próprios em CamelCase (`Processo`, `Evidencia`, …) e os
+        # sufixos são minúsculos, então a caixa exata basta: `ProcessO`bservation deixa de casar
+        # e `Contagem`, `Evidencia` e `RiscoSerializer` continuam casando.
+        padrao=re.compile(rf"^\s*class\s+(\w*(?:{_MARCADORES})\w*|\w*(?:{_SUFIXOS}))\("),
         arquivos=ESCOPO_NUCLEO,
         mensagem="nomeie o modelo em inglês — termo canônico em inglês nas quatro superfícies "
         "(language-map §1)",
@@ -416,6 +425,14 @@ LINHAS_LEGITIMAS: tuple[tuple[str, str, str], ...] = (
     ("client-como-organizacao", "models.py", "    api_client = models.CharField()"),
     # `Management` tem `agem` no meio e é inglês legítimo; o marcador é sufixo.
     ("modelo-em-portugues", "models.py", "class ManagementReport(models.Model):"),
+    # **A armadilha que custou um `re.I`.** `ProcessObservation` é nome canônico da tabela mestra
+    # (§2), e a emenda `Process` + `Observation` produz a sequência `Processo` — que o marcador
+    # casava enquanto a regra ignorava caixa. Sem estes três casos fixados, o `re.I` volta no
+    # primeiro refactor e a guarda torna a reprovar o nome que a ontologia manda usar.
+    ("modelo-em-portugues", "models.py", "class ProcessObservation(TimestampedModel):"),
+    ("modelo-em-portugues", "serializers.py", "class ProcessObservationSerializer(Base):"),
+    ("modelo-em-portugues", "views.py", "class ProcessObservationViewSet(viewsets.ModelViewSet):"),
+    ("legado-congelado", "models.py", "class ProcessObservation(TimestampedModel):"),
     ("modelo-em-portugues", "models.py", "class Engagement(TimestampedModel):"),
     ("modelo-em-portugues", "models.py", "class Measurement(TimestampedModel):"),
     # Fora do núcleo a heurística de português não roda — e `Evidence` é o nome canônico.

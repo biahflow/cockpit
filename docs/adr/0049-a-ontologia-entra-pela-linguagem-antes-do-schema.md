@@ -64,6 +64,20 @@ Os marcadores de português valem em qualquer posição (`Evidencia`, `Processo`
 inglês legítimo; `Contagem` termina em `agem` e não é. A regra também só roda em `models.py`,
 `serializers.py` e `views.py`, que é onde o backend batiza entidade.
 
+O terceiro estreitamento veio de medir a guarda contra a Fase 3 antes de ela existir, e é o mais
+instrutivo: a regra ignorava caixa e reprovava `ProcessObservation`, `ProcessObservationSerializer`
+e `ProcessObservationViewSet` — **o nome canônico da tabela mestra §2**. A emenda de `Process` com
+`Observation` produz a sequência `Processo`, e sem sensibilidade a caixa o marcador a casava.
+
+Este é o pior modo de falha que esta guarda tem, e por dois motivos. A guarda reprova o nome
+**certo**, o que sozinho já a desqualifica. E a saída fácil para quem esbarra nisso às onze da
+noite é declarar `ProcessObservation` na allowlist — registrando como dívida exatamente o nome que
+pagou a dívida, e fazendo a lista deixar de significar o que diz. A regra passou a ser sensível a
+caixa: os marcadores são substantivos próprios em CamelCase e os sufixos são minúsculos, então
+`ProcessO`bservation deixa de casar sem que nenhum achado real se perca. Os três nomes ficaram
+fixados como caso permanente em `LINHAS_LEGITIMAS`, porque sem eles o `re.I` volta no primeiro
+refactor.
+
 ### A allowlist nasce com o legado e só encolhe
 
 `docs/ontology/legacy-allowlist.txt` nasceu com **59 entradas**, exatamente as ocorrências que a
@@ -126,6 +140,12 @@ edição.
 - **Um bloco da allowlist não tem para onde ir ainda.** `Pendencia`, `Decisao`, `Risco`,
   `Satisfacao` e a família `Cobranca*` estão em português e a Ontology v1 não os cobre. Ficam
   declarados mesmo assim, porque sem a linha a ausência de decisão viraria ausência de dívida.
+- **A heurística de idioma é a mais frágil das cinco, e o modo de falha dela é reprovar o
+  canônico.** As outras quatro nomeiam termos concretos e erram para o lado de deixar passar; esta
+  reconhece um padrão de palavra e erra para o lado de barrar o nome certo, que é o erro caro.
+  Daí as três contenções acumuladas: escopo restrito a `models.py`/`serializers.py`/`views.py`,
+  sufixo distinto de substring, e sensibilidade a caixa. Uma quarta contenção, se for preciso, é
+  preferível a uma entrada de nome canônico na allowlist.
 - **A contagem cria churn de propósito.** Uma referência nova a `gate_outcome` em `journey.py`
   reprova, e o conserto é editar um número. É o comportamento certo: o D7 bane o termo sem
   exceção, e o custo de uma linha editada é o preço de a guarda não ter ponto cego no arquivo mais
