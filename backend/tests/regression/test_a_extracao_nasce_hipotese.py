@@ -1,8 +1,8 @@
 """Regressão: o que a IA extrai da transcrição nasce **hipótese**, e o modelo não opina (FDD 039).
 
 A metodologia exige que todo achado seja rotulado FATO / HIPÓTESE / DESCONHECIDO e que **nunca se
-apresente hipótese como fato** (`docs/metodologia-fde.md:86`). Um modelo lendo transcrição produz
-*o que foi dito* — entrevista, uma das cinco formas de evidência (`:81-84`) — e nunca observação,
+apresente hipótese como fato** (`docs/metodologia-fde.md:117`). Um modelo lendo transcrição produz
+*o que foi dito* — entrevista, uma das cinco formas de evidência (`:112-115`) — e nunca observação,
 artefato, sistema ou dado. Por isso a extração estruturada atribui `hipotese` e `entrevista` como
 constantes, e promover a fato continua sendo ato de gente, pela mesma razão que a ADR 0032 recusou
 à IA gravar satisfação e a ADR 0033 manteve o registro na mão.

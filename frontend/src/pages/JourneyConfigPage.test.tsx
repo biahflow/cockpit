@@ -96,6 +96,25 @@ test("marca a fase como decision gate e explica o que isso passa a exigir", asyn
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/journey-phases/1/", expect.objectContaining({ body: expect.stringContaining("\"requires_gate\":true") })));
 });
 
+test("o aviso do gate fala o vocabulário da fase classificada como PROVE", async () => {
+  // ADR 0053: a copy do template é derivada do `canonical_stage`, do mesmo mapa que o detalhe do
+  // projeto lê. Dizer "GO / CONDITIONAL GO" numa fase de PROVE mandaria a equipe procurar um botão
+  // que a tela não oferece — e que o servidor recusaria com 400.
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path === "/journey-phases/" && (options?.method ?? "GET") === "GET") {
+      return Promise.resolve([
+        { id: 2, name: "Piloto", description: "", position: 0, active: true, requires_gate: true, canonical_stage: "prove", deliverables: [], checklist_items: [] },
+      ]);
+    }
+    return Promise.resolve({});
+  });
+  render(<JourneyConfigPage />);
+  await screen.findByDisplayValue("Piloto");
+
+  expect(screen.getByText(/SCALE \/ ITERATE \/ STOP/)).toBeInTheDocument();
+  expect(screen.getByText(/ITERATE reabre a fase anterior; STOP para a jornada aqui/)).toBeInTheDocument();
+});
+
 test("mantém o checklist de qualidade do template", async () => {
   const user = userEvent.setup();
   render(<JourneyConfigPage />);

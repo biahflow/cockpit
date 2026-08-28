@@ -60,7 +60,7 @@ def _rotulos(parcelas: list[dict]) -> list[str]:
 
 @pytest.mark.django_db
 def test_o_nucleo_multiplica_os_quatro_fatores() -> None:
-    """`Volume × Tempo × Pessoas × Custo` (`docs/metodologia-fde.md:87-88`), em `Decimal`."""
+    """`Volume × Tempo × Pessoas × Custo` (`docs/metodologia-fde.md:118-119`), em `Decimal`."""
     processo = ProcessFactory(
         volume_mes=40, tempo_horas=Decimal("2.50"), pessoas=2, custo_hora=Decimal("60.00")
     )
@@ -143,7 +143,7 @@ def test_processo_sem_insumo_nenhum_nao_afirma_que_custa_zero() -> None:
 
 @pytest.mark.django_db
 def test_a_sustentacao_pede_fato_vivo_e_volta_a_hipotese_quando_ele_e_arquivado() -> None:
-    """O número vale conforme o que o sustenta (`docs/metodologia-fde.md:86`).
+    """O número vale conforme o que o sustenta (`docs/metodologia-fde.md:117`).
 
     Entrevista rotulada como hipótese não sustenta, e registro arquivado deixa de sustentar —
     desfazer o registro é desfazer o que ele afirmava.
@@ -397,7 +397,7 @@ def test_evidencia_sem_rotulo_ou_sem_forma_e_400_e_nao_default_silencioso(
 
     Um default faria a casa escolher por quem não escolheu, e o erro cairia sempre para o mesmo
     lado — apresentar como fato o que ninguém confirmou, que é o que
-    `docs/metodologia-fde.md:86` proíbe.
+    `docs/metodologia-fde.md:117` proíbe.
     """
     processo = ProcessFactory()
     client.force_authenticate(UserFactory(role=User.Role.ADMIN))
@@ -413,7 +413,7 @@ def test_evidencia_sem_rotulo_ou_sem_forma_e_400_e_nao_default_silencioso(
 
 @pytest.mark.django_db
 def test_desconhecido_e_valor_de_primeira_classe(client: APIClient) -> None:
-    """Nomear o que ainda não se sabe é fazer o trabalho (`docs/metodologia-fde.md:97-98`)."""
+    """Nomear o que ainda não se sabe é fazer o trabalho (`docs/metodologia-fde.md:128-129`)."""
     processo = ProcessFactory()
     client.force_authenticate(UserFactory(role=User.Role.ADMIN))
 

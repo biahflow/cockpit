@@ -4,7 +4,7 @@
 // de `.state`, nunca a cor: um `bg-emerald-50` escrito aqui seria uma segunda definição de
 // "concluída". A regra de qual situação vale sai do backend (`ProjectPhase.situation`); a tela só a
 // pinta.
-import type { CanonicalStage, PhaseEventKind, PhaseSituation, WaitingParty } from "./types";
+import type { CanonicalStage, GateDecision, PhaseEventKind, PhaseSituation, WaitingParty } from "./types";
 
 // `blocked`/`cancelled` são `state--3` (alerta real: algo travou ou a jornada parou);
 // `waiting_decision`/`replanned` são `state--2` (aviso, não falha); `pending` é `state--off`, o
@@ -68,3 +68,54 @@ export const WAITING_PARTY_OPTIONS: Exclude<WaitingParty, "">[] = [
   "external",
   "human_gate",
 ];
+
+// ---------------------------------------------------------------------------
+// Os dois vocabulários de gate (ADR 0053)
+// ---------------------------------------------------------------------------
+
+// Os rótulos são os da metodologia, em maiúsculas, e **não se traduzem**: são o vocabulário da
+// casa, não identificadores de UI.
+export const GATE_DECISION_LABEL: Record<GateDecision, string> = {
+  go: "GO",
+  conditional_go: "CONDITIONAL GO",
+  redesign: "REDESIGN",
+  no_go: "NO-GO",
+  scale: "SCALE",
+  iterate: "ITERATE",
+  stop: "STOP",
+};
+
+// O efeito de cada saída sobre a jornada. As duas famílias caem nos mesmos três, e é por isso que
+// o backend ramifica por efeito e não por valor (`models.CONCLUEM_E_AVANCAM` e irmãs). A tela usa
+// o mesmo mapa para decidir a pele do botão e o que pede confirmação — SCALE se parece com GO,
+// ITERATE com REDESIGN, STOP com NO-GO.
+export type GateEffect = "advance" | "reopen" | "halt";
+export const GATE_EFFECT: Record<GateDecision, GateEffect> = {
+  go: "advance",
+  conditional_go: "advance",
+  scale: "advance",
+  redesign: "reopen",
+  iterate: "reopen",
+  no_go: "halt",
+  stop: "halt",
+};
+
+const DECISOES_DA_FEASIBILITY: GateDecision[] = ["go", "conditional_go", "redesign", "no_go"];
+const DECISOES_DO_PROVE: GateDecision[] = ["scale", "iterate", "stop"];
+
+/**
+ * O vocabulário do gate desta fase — **um mapa só, e as duas telas o consomem**.
+ *
+ * Espelha `models.decisoes_do_gate` no backend, inclusive na regra do branco: fase de gate sem
+ * `canonical_stage` recebe as quatro da Feasibility, que são as saídas de propósito geral. Uma
+ * cópia por tela seria a segunda definição que diverge sem nada ficar vermelho (ADR 0026), e o
+ * servidor recusa com 400 o que a tela oferecer fora daqui.
+ */
+export function gateDecisions(stage: CanonicalStage): GateDecision[] {
+  return stage === "prove" ? DECISOES_DO_PROVE : DECISOES_DA_FEASIBILITY;
+}
+
+/** A saída que reabre a fase anterior, e a que para a jornada — para a copy de apoio. */
+export function gateDecisionByEffect(stage: CanonicalStage, effect: GateEffect): GateDecision {
+  return gateDecisions(stage).find(decision => GATE_EFFECT[decision] === effect)!;
+}

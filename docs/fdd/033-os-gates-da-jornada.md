@@ -5,8 +5,9 @@
 A metodologia FDE trazida pela ADR 0030 (`docs/metodologia-fde.md`) tem duas regras que travam a
 passagem de fase, e nenhuma das duas existia como comportamento aqui:
 
-> **Decision gate (obrigatório ao fim de Feasibility e de PROVE)** — exatamente uma de quatro
-> saídas, decidida por humano: GO, CONDITIONAL GO, REDESIGN, NO-GO.
+> **Decision gate (obrigatório ao fim de Feasibility e de PROVE)** — exatamente uma saída,
+> decidida por humano. *(Assim estava escrito quando esta FDD nasceu; a ADR 0053 separou os dois
+> vocabulários — ver a emenda de 28/08/2026 no fim.)*
 
 > **Quality gates (antes de entregar qualquer coisa ao cliente)** — Discovery: AS-IS validado?
 > Números sustentados por evidência? … Feasibility: baseline definido? amostra adequada? …
@@ -27,11 +28,12 @@ registro de *por que* se decidiu avançar.
 
 Os dois gates, materializados na jornada que já existe:
 
-- **Decision gate de quatro saídas.** O template `JourneyPhase` ganha `requires_gate`; a
-  instância `ProjectPhase` ganha `gate_decision` e `gate_notes`. A decisão entra por uma action
-  nova, `POST /api/v1/projects/{id}/apply-gate/`, e cada saída faz uma coisa diferente com a
-  jornada — GO/CONDITIONAL GO concluem e avançam, REDESIGN reabre a fase anterior e tranca a
-  corrente, NO-GO registra e para ali.
+- **Decision gate.** O template `JourneyPhase` ganha `requires_gate`; a instância
+  `ProjectPhase` ganha `gate_decision` e `gate_notes`. A decisão entra por uma action nova,
+  `POST /api/v1/projects/{id}/apply-gate/`, e cada saída faz uma coisa diferente com a jornada —
+  GO/CONDITIONAL GO concluem e avançam, REDESIGN reabre a fase anterior e tranca a corrente,
+  NO-GO registra e para ali. Desde a ADR 0053 a fase de PROVE fala SCALE / ITERATE / STOP, e as
+  três caem nos **mesmos três efeitos**.
 - **Quality gate (checklist).** `PhaseChecklistItem` no template e `ProjectChecklistItem` na
   instância, espelhos exatos de `PhaseDeliverable`/`ProjectDeliverable`. Concluir a fase ativa
   exige checklist completa **ou** `checklist_waiver` preenchida.
@@ -44,12 +46,12 @@ acompanhando a fase que já decidiu, e a configuração dos dois na tela de Jorn
 1. **Fase de gate não fecha sem decisão.** `advance_phase` recusa com 409 quando a fase ativa tem
    `requires_gate` e `gate_decision` vazio, e recusa de novo quando a decisão gravada é REDESIGN ou
    NO-GO — o gate decidiu não seguir, e "avançar mesmo assim" não é uma quinta saída.
-2. **As quatro saídas não são quatro nomes para avançar.** REDESIGN reabre a fase anterior e
-   tranca a corrente; NO-GO deixa a fase ativa e não avança nada. Mudar o status do projeto
-   continua sendo ato humano, fora deste recorte.
+2. **As saídas não são nomes diferentes para avançar.** REDESIGN/ITERATE reabrem a fase
+   anterior e trancam a corrente; NO-GO/STOP deixam a fase ativa e não avançam nada. Mudar o
+   status do projeto continua sendo ato humano, fora deste recorte.
 3. **REDESIGN limpa o que deixou de ser verdade, e só isso.** A fase reaberta perde
    `completed_at` e o próprio gate; a fase trancada **mantém** `started_at` e o
-   `gate_decision=redesign`, que é o registro de por que se voltou.
+   `gate_decision=redesign`, que é o registro de por que se voltou. Vale igual para o ITERATE.
 4. **A checklist trava a conclusão por qualquer caminho.** Vale no `advance-phase` e na conclusão
    embutida no `apply-gate` — a guarda mora em `journey.py`, não na view. Zero itens passa: as
    fases semeadas antes desta FDD não têm checklist, e travá-las quebraria a jornada de todo
@@ -126,15 +128,19 @@ Campos novos: `JourneyPhase.requires_gate`; `ProjectPhase.gate_decision`, `gate_
 `checklist_waiver` e o `requires_gate` derivado do template; `checklist_items` aninhado nos dois
 serializers de fase. Nada removido — a mudança é aditiva.
 
-`ENUM_NAME_OVERRIDES` ganha `GateDecisionEnum`: as quatro saídas aparecem no esquema em dois
-conjuntos diferentes (o campo do modelo, que aceita o branco de "ainda não decidido", e o corpo da
-action, onde a escolha é obrigatória), e sem o override os dois disputavam o mesmo nome.
+`ENUM_NAME_OVERRIDES` ganha `GateDecisionEnum`: as saídas aparecem no esquema em dois conjuntos
+diferentes (o campo do modelo, que aceita o branco de "ainda não decidido", e o corpo da action,
+onde a escolha é obrigatória), e sem o override os dois disputavam o mesmo nome. Desde a ADR 0053
+ele aponta para `ProjectPhase.DECISOES_DO_GATE`, as **sete**.
 
 ## Testes
 
 - `apps/core/tests/test_journey.py` — as quatro saídas, a recusa sem decisão, a recusa depois de
   REDESIGN/NO-GO, REDESIGN sem fase anterior, gate em fase que não é de gate (409) e decisão
-  inválida (400), o PATCH direto que não grava o gate, a herança do checklist na materialização, a
+  inválida (400), os dois vocabulários da ADR 0053 (SCALE aceito no PROVE e GO recusado com 400,
+  e vice-versa; a fase sem classificação com as quatro; a mensagem do avanço nomeando o
+  vocabulário certo; STOP cancelando e ITERATE replanejando),
+  o PATCH direto que não grava o gate, a herança do checklist na materialização, a
   fase que não fecha com item pendente, a justificativa que destrava, o item arquivado que não
   conta, o GO que esbarra no quality gate sem gravar a decisão, e o RBAC dos dois gates (Vendas
   lê e não marca; Entrega só alcança o projeto de que participa; template só de admin).
@@ -192,3 +198,68 @@ que a espera protegia é o da pk, e pk é exatamente o que um `RenameField` não
 
 **A UI não muda de idioma.** `gateLabel` continua devolvendo GO / CONDITIONAL GO / REDESIGN /
 NO-GO: são os rótulos da metodologia (`docs/metodologia-fde.md`), não identificadores.
+
+## Emenda (28/08/2026) — cada gate com seu vocabulário
+
+Esta FDD declarava as **quatro** saídas como universais, e o repositório se contradizia sozinho: a
+migração `0050` semeia o degrau PROVE dizendo *"fecha em decision gate SCALE / ITERATE / STOP"*, e
+`kickoff.KICKOFF_TEMPLATES["prove"]` já semeava a tarefa **"Registrar a decisão SCALE / ITERATE /
+STOP"** numa fase em que a rota só aceitava as quatro. A equipe lia uma tarefa e encontrava outros
+botões. A **FDD 015** era o único lugar do repositório que já estava certo: a tabela de degraus
+sempre separou "decision gate GO / CONDITIONAL GO / REDESIGN / NO-GO" (Feasibility) de "decision
+gate SCALE / ITERATE / STOP" (PROVE).
+
+A **ADR 0053** decide a favor do código:
+
+| Fase | Pergunta | Saídas |
+| --- | --- | --- |
+| Feasibility | *a tecnologia consegue fazer a tarefa?* | `GO` · `CONDITIONAL GO` · `REDESIGN` · `NO-GO` |
+| PROVE | *funcionou em produção controlada?* | `SCALE` · `ITERATE` · `STOP` |
+
+**Um campo, dois vocabulários.** `ProjectPhase.gate_decision` continua **um** campo e passa a ter
+as sete choices (`ProjectPhase.DECISOES_DO_GATE`). Duas colunas seriam duas definições do mesmo
+fato — "a decisão registrada no gate desta fase" —, e a segunda divergiria da primeira em
+silêncio. Migração `0064`, só `AlterField`: `choices` não toca no banco e nenhum valor sai, então
+não há dado a converter.
+
+**Quem decide qual vocabulário vale é `JourneyPhase.canonical_stage`**, pela função
+`models.decisoes_do_gate`. Não é campo novo: um `gate_vocabulary` no template seria a segunda
+expressão de um fato que `canonical_stage` já carrega — "qual fase FDE é esta". Fase de gate com
+`canonical_stage` **em branco** recebe as quatro da Feasibility: é o comportamento de todo gate
+anterior a esta ADR (a semente da jornada, migração `0015`, não classifica nada) e são as saídas
+de propósito geral — GO/NO-GO respondem a qualquer gate, SCALE/STOP só fazem sentido depois de um
+piloto rodando.
+
+**As três saídas novas não inventam efeito.** Cada uma cai num dos três que já existiam, e o
+código passa a ramificar por **efeito** e não por valor literal
+(`models.CONCLUEM_E_AVANCAM`/`REABREM_A_ANTERIOR`/`REGISTRAM_E_PARAM`):
+
+| Efeito | Feasibility | PROVE |
+| --- | --- | --- |
+| conclui e avança | `GO`, `CONDITIONAL GO` | `SCALE` |
+| reabre a fase anterior | `REDESIGN` | `ITERATE` |
+| registra e para | `NO-GO` | `STOP` |
+
+`ProjectPhase.situation` (FDD 042) segue a mesma tabela: `STOP` é `cancelled` como o `NO-GO`, e
+`ITERATE` deixa a fase trancada como `replanned`, como o `REDESIGN`.
+
+**A validação da decisão desceu da view para o domínio.** `views.apply_gate` conferia o valor
+contra as quatro **antes** de saber qual era a fase ativa — o que deixou de ser possível quando o
+vocabulário passou a depender da fase. A conferência mora agora em `journey.apply_gate`, que é
+quem resolve a fase ativa, pela mesma razão que `Opportunity.clean()`/`Project.clean()` vivem no
+modelo: shell, admin e migração não passam por rota. A rota continua devolvendo **400** com
+mensagem legível, e a mensagem diz **qual** vocabulário aquela fase aceita — via
+`exceptions.InvalidInput`, e não via `StateConflict`, que é 409 e diria à pessoa para procurar
+erro num estado que está bom.
+
+**O contrato é aditivo.** Nenhum valor sai da `/api/v1/`; o `ChoiceField` de `decision` (e o alias
+`outcome`) publica as sete, porque o esquema não sabe de qual fase se trata — **quem estreita é o
+servidor**, e o `help_text` diz isso.
+
+**A tela mostra o vocabulário da fase ativa.** `frontend/src/journey.ts` ganha
+`GATE_DECISION_LABEL`, `GATE_EFFECT` e `gateDecisions(canonical_stage)` — **um mapa só**, lido
+pelo detalhe do projeto e pela tela de Jornada, porque uma cópia por tela é a segunda definição
+que diverge sem nada ficar vermelho (ADR 0026). A variante do selo e a pele do botão saem do
+efeito: `SCALE` pinta como `GO`, `ITERATE` como `REDESIGN`, `STOP` como `NO-GO`, e as saídas que
+reabrem ou param continuam passando pela confirmação. Os rótulos **não se traduzem**: são o
+vocabulário da metodologia, em maiúsculas.

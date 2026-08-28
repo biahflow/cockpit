@@ -260,7 +260,13 @@ SPECTACULAR_SETTINGS = {
         # O gate aparece em dois lugares com conjuntos diferentes: o campo do modelo (que aceita
         # o branco de "ainda não decidido") e o corpo da action `apply-gate` (onde a decisão é
         # obrigatória). Sem o override, os dois disputam o mesmo nome de enum.
-        "GateDecisionEnum": "apps.core.models.ProjectPhase.GateDecision",
+        #
+        # Aponta para as **sete** saídas desde a ADR 0053 (`GateDecision` + `ProveDecision`), e
+        # não para uma das duas classes: o esquema não sabe de qual fase se trata, então publica o
+        # conjunto inteiro e o servidor estreita. `ProveDecision` não ganha override próprio
+        # porque o conjunto dela sozinho não aparece em lugar nenhum do esquema — override sem
+        # consumidor vira o aviso de "unable to load choice override" na próxima geração.
+        "GateDecisionEnum": "apps.core.models.ProjectPhase.DECISOES_DO_GATE",
         # `PhaseEvent.source` (FDD 042) introduz um segundo conjunto `source` no esquema (o
         # primeiro é o `linear/github` da sincronia de tarefas). Sem override, os dois disputam o
         # nome `SourceEnum` e drf-spectacular resolve com um sufixo numérico instável

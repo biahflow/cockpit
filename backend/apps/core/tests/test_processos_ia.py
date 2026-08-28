@@ -230,7 +230,7 @@ def test_todo_achado_nasce_hipotese_vinda_de_entrevista(
     """O teste central da fatia — e ele manda o modelo dizer o contrário.
 
     Um modelo lendo transcrição produz *o que foi dito*: entrevista, uma das cinco formas de
-    evidência (`docs/metodologia-fde.md:81-84`), e nunca prova. Promover a fato é ato de gente.
+    evidência (`docs/metodologia-fde.md:112-115`), e nunca prova. Promover a fato é ato de gente.
     """
     meeting = _reuniao_de_discovery(delivery)
     _responde(monkeypatch, json.dumps([{

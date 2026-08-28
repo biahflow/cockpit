@@ -5738,7 +5738,7 @@ paths:
         **A primeira é o que o modelo não decide.** Todo achado nasce rotulado como hipótese e com
         a origem "entrevista", sempre, atribuídos aqui como constantes — o `_PROMPT_PROCESSOS` não
         pergunta, e o `processos_do_texto` não lê. Um modelo lendo transcrição produz *o que foi
-        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:81-84`), não
+        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:112-115`), não
         prova; promover a fato é ato de gente, pela mesma razão que a ADR 0032 recusou à IA gravar
         satisfação.
 
@@ -8588,10 +8588,14 @@ paths:
     post:
       operationId: v1_projects_apply_gate_create
       description: |-
-        Registra o decision gate de quatro saídas na fase ativa (delivery/admin, FDD 033).
+        Registra o decision gate na fase ativa (delivery/admin, FDD 033, ADR 0053).
 
-        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as quatro saídas mexem em
-        até duas fases, e a tela precisa da lista atualizada, não do que mudou.
+        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as saídas mexem em até
+        duas fases, e a tela precisa da lista atualizada, não do que mudou.
+
+        **Não valida a decisão aqui.** Qual vocabulário vale depende da fase ativa, que só
+        `journey.apply_gate` resolve — e a invariante pertence ao domínio, não à rota (ADR 0053).
+        De lá vêm o 400 do valor fora do vocabulário e o 409 do estado que impede.
       parameters:
       - in: path
         name: id
@@ -10477,7 +10481,18 @@ components:
       type: object
       properties:
         decision:
-          $ref: '#/components/schemas/GateDecisionEnum'
+          allOf:
+          - $ref: '#/components/schemas/GateDecisionEnum'
+          description: |-
+            As sete saídas dos dois vocabulários (ADR 0053). O esquema aceita todas porque não sabe de qual fase se trata; **quem estreita é o servidor**, pelo `canonical_stage` da fase ativa — `prove` aceita SCALE / ITERATE / STOP, e qualquer outra fase de gate aceita GO / CONDITIONAL GO / REDESIGN / NO-GO. Fora do vocabulário da fase é 400.
+
+            * `go` - GO
+            * `conditional_go` - CONDITIONAL GO
+            * `redesign` - REDESIGN
+            * `no_go` - NO-GO
+            * `scale` - SCALE
+            * `iterate` - ITERATE
+            * `stop` - STOP
         outcome:
           allOf:
           - $ref: '#/components/schemas/GateDecisionEnum'
@@ -10488,6 +10503,9 @@ components:
             * `conditional_go` - CONDITIONAL GO
             * `redesign` - REDESIGN
             * `no_go` - NO-GO
+            * `scale` - SCALE
+            * `iterate` - ITERATE
+            * `stop` - STOP
         notes:
           type: string
       required:
@@ -12088,7 +12106,7 @@ components:
     Evidencia:
       type: object
       description: |-
-        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:81-86`).
+        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:112-117`).
 
         `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
         corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
@@ -12251,12 +12269,18 @@ components:
       - conditional_go
       - redesign
       - no_go
+      - scale
+      - iterate
+      - stop
       type: string
       description: |-
         * `go` - GO
         * `conditional_go` - CONDITIONAL GO
         * `redesign` - REDESIGN
         * `no_go` - NO-GO
+        * `scale` - SCALE
+        * `iterate` - ITERATE
+        * `stop` - STOP
     GithubDeliveryProjection:
       type: object
       description: |-
@@ -14239,7 +14263,7 @@ components:
     PatchedEvidencia:
       type: object
       description: |-
-        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:81-86`).
+        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:112-117`).
 
         `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
         corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
@@ -14966,7 +14990,7 @@ components:
       description: |-
         O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
-        `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
+        `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:118-119` aplicada
         aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
         mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
 
@@ -15099,7 +15123,7 @@ components:
     PatchedProcessStep:
       type: object
       description: |-
-        A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
+        A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:106-110`).
 
         Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
         reunião, e um formulário fora de ordem faz quem preenche pular a pergunta que faltou.
@@ -15949,7 +15973,7 @@ components:
       description: |-
         O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
-        `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
+        `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:118-119` aplicada
         aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
         mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
 
@@ -16100,7 +16124,7 @@ components:
     ProcessStep:
       type: object
       description: |-
-        A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
+        A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:106-110`).
 
         Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
         reunião, e um formulário fora de ordem faz quem preenche pular a pergunta que faltou.
@@ -17050,7 +17074,6 @@ components:
     TierEnum:
       enum:
       - qualification_call
-      - discovery_assessment
       - discovery_sprint
       - feasibility
       - prove
@@ -17059,7 +17082,6 @@ components:
       type: string
       description: |-
         * `qualification_call` - Qualification Call
-        * `discovery_assessment` - Discovery Express + Assessment
         * `discovery_sprint` - Discovery Sprint
         * `feasibility` - Technical Feasibility (T.O.E.)
         * `prove` - PROVE (piloto)

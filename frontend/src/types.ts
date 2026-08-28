@@ -16,7 +16,7 @@ export type Engagement = { id: number; account: number; account_name: string; na
 // `opportunity` é **alias de leitura** de `originating_commercial_opportunity`, mantido para não
 // quebrar consumidor no meio do renome; morre na `/api/v2/` (`docs/ontology/aliases.md` §2c).
 export type Project = { id: number; name: string; description: string; client: number; engagement: number; engagement_name: string; originating_commercial_opportunity: number | null; opportunity: number | null; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };
-export type ServiceTier = "qualification_call" | "discovery_assessment" | "discovery_sprint" | "feasibility" | "prove" | "scale" | "transformation" | "";
+export type ServiceTier = "qualification_call" | "discovery_sprint" | "feasibility" | "prove" | "scale" | "transformation" | "";
 // `acquisition` é a porta (a Qualification Call), `commercial` é degrau vendável — e é a
 // categoria, não o preço zero, que decide: o Discovery + Assessment do founding client também é
 // gratuito e é degrau (ADR 0049).
@@ -102,7 +102,7 @@ export type Process = { id: number; account: number; client: number; client_name
 // um total mostrado sem ele vira "custo zero" na leitura rápida. `sustentacao` responde a outra
 // metade da metodologia: só há **fato** por trás do número, ou ainda é hipótese da casa.
 export type CustoEstadoAtual = { parcelas: { label: string; valor: string }[]; total: string; nao_apurado: string[]; sustentacao: "sustentado" | "hipotese" };
-// A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`). Os seis campos são exatamente as
+// A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:106-110`). Os seis campos são exatamente as
 // seis letras, nessa ordem: é assim que a pergunta é feita na reunião, e um formulário fora de
 // ordem faz quem preenche pular a que faltou. Aqui `tempo`, `erro` e `retrabalho` são **descrição**
 // — os homônimos `_mes` do `Process` são dinheiro e quantidade, e não se confundem.
@@ -111,7 +111,7 @@ export type CustoEstadoAtual = { parcelas: { label: string; valor: string }[]; t
 // e sendo aceita na escrita até a `/api/v2/`. As telas leem e escrevem a canônica.
 export type ProcessStep = { id: number; process: number; processo: number; name: string; position: number; pessoas: string; sistema: string; dados: string; tempo: string; erro: string; retrabalho: string };
 export type EvidenciaForma = "entrevista" | "observacao" | "artefato" | "sistema" | "dado";
-// FATO / HIPÓTESE / DESCONHECIDO (`docs/metodologia-fde.md:86`). **`rotulo` não tem default no
+// FATO / HIPÓTESE / DESCONHECIDO (`docs/metodologia-fde.md:117`). **`rotulo` não tem default no
 // banco (ADR 0034)** e não pode ganhar um na tela: um select que já abre em "hipótese" faz a casa
 // escolher por quem não escolheu, e o erro cai sempre para o mesmo lado. `desconhecido` é valor de
 // primeira classe — nomear o que ainda não se sabe é fazer o trabalho, não deixar de fazê-lo.
@@ -217,7 +217,10 @@ export type ProjectDeliverableStatus = "pending" | "delivered";
 export type ProjectDeliverable = { id: number; project_phase: number; name: string; status: ProjectDeliverableStatus; document: number | null; position: number; delivered_at: string | null };
 // As quatro saídas do decision gate (FDD 033). `""` é "ainda não decidido" — o gate não tem
 // default, porque um default seria uma decisão que ninguém tomou.
-export type GateDecision = "go" | "conditional_go" | "redesign" | "no_go";
+// As sete saídas dos dois vocabulários de gate (ADR 0053): as quatro da Feasibility ("a
+// tecnologia consegue fazer a tarefa?") e as três do PROVE ("funcionou em produção controlada?").
+// Qual delas vale numa fase sai de `journey.ts`, a partir do `canonical_stage`.
+export type GateDecision = "go" | "conditional_go" | "redesign" | "no_go" | "scale" | "iterate" | "stop";
 export type ProjectChecklistItem = { id: number; project_phase: number; text: string; position: number; checked: boolean; checked_at: string | null };
 // A jornada canônica de entrega — o vocabulário FDE (FDD 042). Classificação **opcional** da fase
 // configurável; `""` é a fase operacional Biahflow sem equivalente FDE. `feasibility` é membro

@@ -3,6 +3,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
 import { ConfirmDialog } from "../components/Modal";
+import { GATE_DECISION_LABEL, gateDecisionByEffect, gateDecisions } from "../journey";
 import type { JourneyPhaseTemplate } from "../types";
 
 export function JourneyConfigPage() {
@@ -88,7 +89,10 @@ export function JourneyConfigPage() {
           <label className="flex items-center gap-2 text-sm text-muted"><input type="checkbox" className="size-4 rounded border-slate-300 text-brand-500" checked={phase.requires_gate} onChange={event => updateLocal(phase.id, { requires_gate: event.target.checked })} />Termina em decision gate</label>
         </div>
         {!phase.active && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-slate-700">Fase aposentada: não entra em projeto novo. Os projetos que já passaram por ela continuam com a delas.</p>}
-        {phase.requires_gate && <p className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">A equipe precisa registrar GO / CONDITIONAL GO / REDESIGN / NO-GO para fechar esta fase. REDESIGN reabre a fase anterior; NO-GO para a jornada aqui.</p>}
+        {/* O aviso nomeia o vocabulário **desta** fase (ADR 0053): a classificação canônica é
+            que diz se o gate é o da Feasibility (quatro saídas) ou o do PROVE (três). Dizer as
+            quatro numa fase de PROVE mandaria a equipe procurar um botão que a tela não oferece. */}
+        {phase.requires_gate && <p className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">A equipe precisa registrar {gateDecisions(phase.canonical_stage).map(decision => GATE_DECISION_LABEL[decision]).join(" / ")} para fechar esta fase. {GATE_DECISION_LABEL[gateDecisionByEffect(phase.canonical_stage, "reopen")]} reabre a fase anterior; {GATE_DECISION_LABEL[gateDecisionByEffect(phase.canonical_stage, "halt")]} para a jornada aqui.</p>}
         <input className="field mb-4" value={phase.description} placeholder="Descrição da fase (opcional)" onChange={event => updateLocal(phase.id, { description: event.target.value })} aria-label={`Descrição da fase ${phase.name}`} />
         <p className="eyebrow mb-2">Entregáveis</p>
         <div className="divide-y divide-line">{phase.deliverables.map(deliverable => <div className="flex items-center gap-3 py-2" key={deliverable.id}>

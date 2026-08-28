@@ -27,13 +27,13 @@ o bloco: ele o **parte em dois**.
 | As cinco formas de evidência | `:81-84` — enum fechado | **sim** |
 | FATO / HIPÓTESE / DESCONHECIDO | `:86` — enum fechado, com a regra de uso | **sim** |
 | Custo do estado atual | `:87-88` — fórmula literal | **sim** |
-| "Processes" como entidade | só `L1 — Process: fluxo ponta a ponta` (`:60`) | não |
+| "Processes" como entidade | só `L1 — Process: fluxo ponta a ponta` (`:91`) | não |
 | Pain Points | o termo **não aparece** no documento | não |
-| Business Cases | uma menção (`:63`), sem estrutura | não |
+| Business Cases | uma menção (`:94`), sem estrutura | não |
 | Value Ledger | **zero ocorrências** | não |
-| Opportunity Backlog | só como pauta mensal (`:123`) | não |
+| Opportunity Backlog | só como pauta mensal (`:154`) | não |
 | Next Best Opportunity, cockpit de reunião | existem **só** em `roadmap.md:531` | não |
-| Opportunity Score | o gate de Discovery **cobra** (`:109`); a fórmula não existe | não |
+| Opportunity Score | o gate de Discovery **cobra** (`:140`); a fórmula não existe | não |
 
 O contador de Discoveries reais continua onde a ADR 0030 o encontrou. O que mudou não foi a
 realidade da operação: foi termos aplicado o teste que aquela ADR escreveu e ainda não tinha
@@ -53,7 +53,7 @@ E, para o que entra, a regra que dá nome a esta ADR: **só o fato sustenta núm
   não escolheu, e o erro cai sempre para o mesmo lado, o de chamar de fato o que ninguém
   confirmou.
 - **`desconhecido` é valor de primeira classe, não ausência.** Um Discovery que nomeia o que ainda
-  não sabe está fazendo exatamente o que o método pede (`:97-98`: *"ainda não sei a melhor solução,
+  não sabe está fazendo exatamente o que o método pede (`:128-129`: *"ainda não sei a melhor solução,
   mas sei exatamente quais perguntas precisamos responder"*). Tratá-lo como campo em branco
   apagaria a única saída honesta entre afirmar e omitir.
 - **O custo do estado atual sai sempre, e carimbado.** `sustentado` quando existe evidência viva
@@ -82,13 +82,13 @@ E, para o que entra, a regra que dá nome a esta ADR: **só o fato sustenta núm
   rascunho, um estado visível; `Processo` não tem rascunho, e um duplo clique dobraria o mapa de
   processos do cliente em silêncio.
 - O mapa é do **cliente**, não do projeto — ele sobrevive à venda que o descobriu, porque a
-  metodologia separa conta de oportunidade (`:50-53`). O custo é ancorar a fronteira de acesso no
+  metodologia separa conta de oportunidade (`:64-67`). O custo é ancorar a fronteira de acesso no
   cliente à mão, como a `Satisfacao` já fazia, em vez de herdá-la do `ProjectScopedMixin`.
 - Nada disto atravessa para o portal do cliente. É mais forte aqui que na satisfação: uma hipótese
   cruzando a fronteira seria a casa afirmando ao cliente, com autoridade de painel, o que ela mesma
   rotulou como ainda não sabido.
 - **O Opportunity Score fica em aberto e incômodo.** O quality gate de Discovery já o cobra
-  (`:109`) e o material nunca o definiu — hoje só se responde "sim" no braço. Esta ADR não o
+  (`:140`) e o material nunca o definiu — hoje só se responde "sim" no braço. Esta ADR não o
   inventa; registra a pergunta.
 
 ## Alternativas consideradas
