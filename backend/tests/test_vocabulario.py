@@ -34,6 +34,8 @@ allowlist que ninguém revisa vira permissão permanente.
 from __future__ import annotations
 
 import re
+from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -223,8 +225,13 @@ class Achado:
 
     @property
     def chave(self) -> str:
-        """A entrada da allowlist. **Sem número de linha**, de propósito: uma dívida declarada
-        não pode ser reaberta por alguém ter inserido um import acima dela."""
+        """A entrada da allowlist, **sem número de linha**: uma dívida declarada não pode ser
+        reaberta porque alguém inseriu um import acima dela.
+
+        O preço de tirar a linha é que a chave sozinha não distingue a décima segunda ocorrência
+        da décima terceira — e `models.py` é onde todo modelo novo nasce. Por isso a entrada
+        carrega a **contagem** (`…::client::12`), e não só a chave.
+        """
         return f"{self.caminho}::{self.regra}::{self.identificador}"
 
     def __str__(self) -> str:
@@ -257,33 +264,91 @@ def varrer() -> list[Achado]:
     return achados
 
 
-def entradas_da_allowlist() -> list[str]:
-    """Uma entrada por linha, `#` comenta, linha vazia separa bloco."""
+FORMATO_DA_ENTRADA = re.compile(r"^(?P<chave>[^:]+::[^:]+::[^:]+)::(?P<contagem>\d+)$")
+
+
+def entradas_da_allowlist() -> dict[str, int]:
+    """`chave -> contagem declarada`. Uma entrada por linha, `#` comenta, linha vazia separa bloco.
+
+    A contagem é a segunda metade da decisão de tirar o número de linha da chave. Sem ela, uma
+    dívida já declarada vira franquia ilimitada naquele arquivo: `models.py::…::client` cobre as
+    doze ocorrências de hoje **e a décima terceira**, que é justamente a que a guarda existe para
+    pegar. Medido por sabotagem, no espírito da ADR 0027 — um `client = models.ForeignKey(...)`
+    acrescentado ao fim de `models.py` passava em silêncio.
+    """
     if not ALLOWLIST.exists():
-        return []
-    entradas = []
-    for linha in ALLOWLIST.read_text(encoding="utf-8").splitlines():
+        return {}
+    entradas: dict[str, int] = {}
+    for numero, linha in enumerate(ALLOWLIST.read_text(encoding="utf-8").splitlines(), start=1):
         conteudo = linha.strip()
-        if conteudo and not conteudo.startswith("#"):
-            entradas.append(conteudo)
+        if not conteudo or conteudo.startswith("#"):
+            continue
+        m = FORMATO_DA_ENTRADA.match(conteudo)
+        assert m is not None, (
+            f"{ALLOWLIST.name}:{numero}: entrada fora do formato "
+            f"`caminho::regra::identificador::contagem`: {conteudo!r}"
+        )
+        chave = m.group("chave")
+        assert chave not in entradas, (
+            f"{ALLOWLIST.name}:{numero}: entrada duplicada para {chave!r} — some as contagens "
+            "numa linha só, senão a segunda esconde a primeira"
+        )
+        entradas[chave] = int(m.group("contagem"))
     return entradas
 
 
-# O tamanho do estado inicial (`main` @ 80da2a5). **Este número só desce.** Baixá-lo é o trabalho
-# das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada entrada aqui é um nome que
-# o repositório ainda diz errado.
+def contar(achados: Iterable[Achado]) -> Counter[str]:
+    """Quantas ocorrências o repositório tem de cada dívida."""
+    return Counter(achado.chave for achado in achados)
+
+
+def excedentes(reais: Mapping[str, int], declarados: Mapping[str, int]) -> list[str]:
+    """Dívida acima do declarado — inclusive a que não está declarada de todo (declarado = 0)."""
+    return sorted(chave for chave, real in reais.items() if real > declarados.get(chave, 0))
+
+
+def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) -> list[str]:
+    """Dívida abaixo do declarado — foi paga em parte e ninguém abaixou o número.
+
+    Contagem zero é o caso particular: a entrada inteira ficou obsoleta e tem de sair.
+    """
+    return sorted(chave for chave, declarado in declarados.items() if reais.get(chave, 0) < declarado)
+
+
+# Quantas **dívidas distintas** a allowlist declara — linhas do arquivo, não ocorrências no
+# código. Os dois números não medem a mesma coisa: uma linha pode valer doze ocorrências, e pagar
+# onze delas abaixa a contagem daquela linha sem mexer neste teto. **Este número só desce.**
+# Baixá-lo é o trabalho das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada
+# linha aqui é um nome que o repositório ainda diz errado.
 TETO_DA_ALLOWLIST = 59
 
 
 def test_nenhum_termo_banido_novo() -> None:
-    """Nenhum identificador **novo** fora do vocabulário canônico."""
+    """Nenhum identificador **novo** fora do vocabulário canônico — nem em arquivo limpo, nem
+    escondido atrás de uma dívida já declarada no mesmo arquivo."""
     mensagens = {regra.id: regra.mensagem for regra in REGRAS}
-    isentos = set(entradas_da_allowlist())
-    achados = sorted(
-        (a for a in varrer() if a.chave not in isentos),
-        key=lambda a: (a.caminho, a.linha, a.regra),
-    )
-    relatorio = [f"{a} → {mensagens[a.regra]}" for a in achados]
+    declarados = entradas_da_allowlist()
+    achados = varrer()
+    ocorrencias: dict[str, list[Achado]] = {}
+    for achado in achados:
+        ocorrencias.setdefault(achado.chave, []).append(achado)
+
+    relatorio: list[str] = []
+    for chave in excedentes(contar(achados), declarados):
+        deste = sorted(ocorrencias[chave], key=lambda a: a.linha)
+        declarado = declarados.get(chave, 0)
+        mensagem = mensagens[deste[0].regra]
+        if declarado == 0:
+            relatorio.extend(f"{achado} → {mensagem}" for achado in deste)
+            continue
+        linhas = ", ".join(str(achado.linha) for achado in deste)
+        relatorio.append(
+            f"{deste[0].caminho} — {deste[0].identificador} [{deste[0].regra}]: a allowlist "
+            f"declara {declarado} ocorrência(s) e o repositório tem {len(deste)} "
+            f"(linhas {linhas}). Dívida nova não entra por carona numa linha já declarada → "
+            f"{mensagem}"
+        )
+
     assert relatorio == [], (
         "identificador fora do vocabulário canônico (ADR 0049; "
         "docs/ontology/language-map.md §5-6).\n"
@@ -293,22 +358,31 @@ def test_nenhum_termo_banido_novo() -> None:
 
 
 def test_a_allowlist_nao_guarda_linha_desnecessaria() -> None:
-    """A direção inversa: isenção sem dívida correspondente sai da lista.
+    """A direção inversa: isenção maior que a dívida sai da lista, ou tem o número abaixado.
 
     É isto que faz a allowlist **encolher sozinha** quando a fase que paga a dívida chega — sem
-    isto, a linha sobreviveria ao renome e isentaria em silêncio o próximo defeito no mesmo
-    arquivo.
+    isto, a linha sobreviveria ao renome e isentaria em silêncio a próxima ocorrência no mesmo
+    arquivo. Com contagem, ela encolhe também quando a dívida é paga **em parte**, que é o caso
+    comum: um renome raramente limpa um arquivo inteiro de uma vez.
     """
-    reais = {a.chave for a in varrer()}
-    obsoletas = [entrada for entrada in entradas_da_allowlist() if entrada not in reais]
-    assert obsoletas == [], (
-        "entrada da allowlist sem ocorrência correspondente — remova a linha:\n  "
-        + "\n  ".join(obsoletas)
+    declarados = entradas_da_allowlist()
+    reais = contar(varrer())
+    sobrando = [
+        f"{chave}: declara {declarados[chave]}, existem {reais.get(chave, 0)} — "
+        + (
+            "remova a linha"
+            if reais.get(chave, 0) == 0
+            else f"escreva `{chave}::{reais[chave]}`"
+        )
+        for chave in quitadas_sem_baixa(reais, declarados)
+    ]
+    assert sobrando == [], (
+        "entrada da allowlist maior que a dívida que ela isenta:\n  " + "\n  ".join(sobrando)
     )
 
 
 def test_a_allowlist_so_encolhe() -> None:
-    """O teto é monotônico: a dívida de linguagem não cresce."""
+    """O teto é monotônico: o número de dívidas distintas não cresce."""
     entradas = entradas_da_allowlist()
     assert len(entradas) <= TETO_DA_ALLOWLIST, (
         f"a allowlist tem {len(entradas)} entradas e o teto é {TETO_DA_ALLOWLIST}. "
@@ -383,3 +457,27 @@ def test_a_guarda_reprova_o_batismo_errado() -> None:
     for regra_id, arquivo, linha in LINHAS_REPROVADAS:
         achados = achados_na_linha(_regra(regra_id), arquivo, 1, linha)
         assert achados != [], f"{regra_id} deixou passar batismo errado: {linha!r}"
+
+
+# A sabotagem que a primeira versão desta guarda não via, reduzida ao que ela realmente testa:
+# a comparação de contagens. Como caso de linha isolada ela não caberia em `LINHAS_REPROVADAS` —
+# a linha `client = models.ForeignKey(...)` **é** um achado nas duas versões; o que mudou é que
+# agora ela é comparada contra um orçamento, e não contra a mera existência de uma entrada.
+CHAVE_SINTETICA = "backend/apps/core/models.py::client-como-organizacao::client"
+
+
+def test_ocorrencia_nova_em_chave_ja_declarada_reprova() -> None:
+    declarados = {CHAVE_SINTETICA: 12}
+    assert excedentes({CHAVE_SINTETICA: 12}, declarados) == []
+    assert excedentes({CHAVE_SINTETICA: 13}, declarados) == [CHAVE_SINTETICA]
+    # Chave não declarada: qualquer ocorrência é excedente, que é o comportamento de sempre.
+    assert excedentes({CHAVE_SINTETICA: 1}, {}) == [CHAVE_SINTETICA]
+
+
+def test_divida_paga_sem_baixa_no_numero_reprova() -> None:
+    declarados = {CHAVE_SINTETICA: 12}
+    assert quitadas_sem_baixa({CHAVE_SINTETICA: 12}, declarados) == []
+    # Paga em parte: o número tem de descer junto.
+    assert quitadas_sem_baixa({CHAVE_SINTETICA: 11}, declarados) == [CHAVE_SINTETICA]
+    # Paga inteira: a linha some. É o caso particular que a versão sem contagem já cobria.
+    assert quitadas_sem_baixa({}, declarados) == [CHAVE_SINTETICA]

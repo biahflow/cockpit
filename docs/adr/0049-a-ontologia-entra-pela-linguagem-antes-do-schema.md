@@ -71,13 +71,37 @@ guarda encontrava em `main` @ 80da2a5. Nem uma a mais: a lista é o inventário 
 entrada preventiva seria permissão para uma dívida que ninguém contraiu.
 
 Três testes a mantêm honesta. O primeiro reprova o que não está nela. O segundo — copiado de
-`frontend/src/test/primitivas.test.ts`, pela mesma razão que ele existe — reprova a entrada que não
-casa mais com nada, forçando a remoção quando a dívida é paga; sem ele a linha sobreviveria ao
-renome e isentaria em silêncio o próximo defeito no mesmo arquivo. O terceiro guarda um teto
-monotônico: o número só desce, e subi-lo exige justificativa escrita na PR.
+`frontend/src/test/primitivas.test.ts`, pela mesma razão que ele existe — reprova a entrada maior
+que a dívida que ela isenta, forçando a baixa quando a dívida é paga; sem ele a linha sobreviveria
+ao renome e isentaria em silêncio o próximo defeito no mesmo arquivo. O terceiro guarda um teto
+monotônico: o número de dívidas distintas só desce, e subi-lo exige justificativa escrita na PR.
+
+### A entrada é chave **e** contagem, e a segunda metade foi medida por sabotagem
 
 A entrada não carrega número de linha, de propósito: dívida declarada não pode ser reaberta porque
-alguém inseriu um import acima dela.
+alguém inseriu um import acima dela. A primeira versão desta guarda parou aí, e ficou cega
+exatamente onde mais importa. A chave `backend/apps/core/models.py::client-como-organizacao::client`
+cobre as onze ocorrências de hoje — e cobria também a décima segunda. Acrescentando ao fim de
+`models.py`:
+
+```python
+class OpportunityScore(models.Model):
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)
+    gate_outcome = models.CharField(max_length=8)
+```
+
+a guarda reprovava **só** `OpportunityScore`. O campo `client` novo (§6.2) e o `gate_outcome` novo
+(§6.3, D7 — o termo sem nenhum uso legítimo) passavam em silêncio, num arquivo que as Fases 2 e 6
+vão editar pesado e onde todo modelo novo nasce.
+
+A entrada passou a declarar a contagem — `…::client::11` — e a comparação vale nos dois sentidos:
+mais ocorrências que o declarado reprova como dívida nova entrando por carona; menos reprova
+pedindo a baixa do número, que é a catraca funcionando quando uma fase paga parte da dívida. O
+`TETO_DA_ALLOWLIST` continua contando **dívidas distintas** (linhas do arquivo), que não é a mesma
+grandeza — uma linha pode valer onze ocorrências.
+
+A verificação por sabotagem é a mesma prática da ADR 0027: uma guarda que ninguém tentou burlar é
+uma guarda cujo alcance ninguém conhece.
 
 ### Precedência: Notion → espelho → repositório
 
@@ -102,6 +126,10 @@ edição.
 - **Um bloco da allowlist não tem para onde ir ainda.** `Pendencia`, `Decisao`, `Risco`,
   `Satisfacao` e a família `Cobranca*` estão em português e a Ontology v1 não os cobre. Ficam
   declarados mesmo assim, porque sem a linha a ausência de decisão viraria ausência de dívida.
+- **A contagem cria churn de propósito.** Uma referência nova a `gate_outcome` em `journey.py`
+  reprova, e o conserto é editar um número. É o comportamento certo: o D7 bane o termo sem
+  exceção, e o custo de uma linha editada é o preço de a guarda não ter ponto cego no arquivo mais
+  movimentado do repositório.
 - **A guarda mora no backend e varre os dois lados.** Uma guarda só, em `backend/tests/`, rodando no
   `uv run pytest` — fora de `--cov=apps.core` e fora do `exclude` do mypy, então não mexe em
   cobertura nem em type-check. Duas metades, uma em pytest e outra em vitest, divergiriam.
