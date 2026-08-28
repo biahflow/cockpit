@@ -17,7 +17,15 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai
-from apps.core.models import Evidencia, Meeting, Processo, ProcessoEtapa, User
+from apps.core.models import (
+    Evidence,
+    Evidencia,
+    Finding,
+    Meeting,
+    Processo,
+    ProcessoEtapa,
+    User,
+)
 from apps.core.views import processos_do_texto
 
 from .factories import ProcessoFactory, ProjectFactory, ProjectMemberFactory, UserFactory
@@ -374,7 +382,9 @@ def test_falha_no_meio_nao_deixa_nada_para_tras(
     def explode(*args: object, **kwargs: object) -> None:
         raise RuntimeError("banco fora do ar no meio da gravação")
 
-    monkeypatch.setattr(Evidencia.objects, "bulk_create", explode)
+    # `create` e não `bulk_create`: desde o dual-write da FDD 045 a evidência legada é gravada
+    # linha a linha, porque o `Finding` novo precisa da chave dela em `legacy_evidencia`.
+    monkeypatch.setattr(Evidencia.objects, "create", explode)
 
     with pytest.raises(RuntimeError):
         api.post(reverse("meeting-estruturar", args=[meeting.pk]))
@@ -382,6 +392,10 @@ def test_falha_no_meio_nao_deixa_nada_para_tras(
     assert Processo.objects.count() == 0
     assert ProcessoEtapa.objects.count() == 0
     assert Evidencia.objects.count() == 0
+    # A transação cobre os dois lados da gravação dupla: um `Finding` sobrevivente descreveria um
+    # processo que não existe mais.
+    assert Evidence.objects.count() == 0
+    assert Finding.objects.count() == 0
 
 
 @pytest.mark.django_db

@@ -17,6 +17,7 @@ from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
     CASE_TRANSITIONS,
+    FINDING_TRANSITIONS,
     INVOICE_TRANSITIONS,
     Activity,
     Artifact,
@@ -29,9 +30,13 @@ from .models import (
     Decisao,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
+    Discovery,
+    DiscoverySession,
     Document,
     EngineeringHandoff,
+    Evidence,
     Evidencia,
+    Finding,
     GithubDeliveryProjection,
     Invitation,
     Invoice,
@@ -49,6 +54,7 @@ from .models import (
     PhaseEvent,
     PipelineStage,
     Processo,
+    ProcessObservation,
     ProcessoEtapa,
     Project,
     ProjectChecklistItem,
@@ -680,6 +686,246 @@ class EvidenciaSerializer(serializers.ModelSerializer[Evidencia]):
             raise serializers.ValidationError(
                 {"etapa": "A etapa deve pertencer ao mesmo processo."}
             )
+        return attrs
+
+
+class DiscoverySerializer(serializers.ModelSerializer[Discovery]):
+    """O Discovery como unidade de levantamento (FDD 045).
+
+    As duas regras de data repetem o `clean()` do modelo pelo motivo de sempre nesta base: o
+    `save()` do DRF não chama `full_clean`, e uma guarda que só vale pelo admin não é guarda.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    project_name = serializers.CharField(source="project.name", read_only=True)
+
+    class Meta:
+        model = Discovery
+        fields = ["id", "project", "project_name", "scope", "status", "status_display",
+                  "started_at", "completed_at", "owner", "created_at", "updated_at"]
+        read_only_fields = ["id", "project_name", "status_display", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        started = attrs.get("started_at", getattr(self.instance, "started_at", None))
+        completed = attrs.get("completed_at", getattr(self.instance, "completed_at", None))
+        estado = attrs.get("status", getattr(self.instance, "status", None))
+        if started and completed and cast(date, completed) < cast(date, started):
+            raise serializers.ValidationError(
+                {"completed_at": "O fim do Discovery não pode ser anterior ao início."}
+            )
+        if estado == Discovery.Status.COMPLETED and not completed:
+            raise serializers.ValidationError(
+                {"completed_at": "Um Discovery concluído precisa da data de conclusão."}
+            )
+        return attrs
+
+
+class DiscoverySessionSerializer(serializers.ModelSerializer[DiscoverySession]):
+    """A sessão do Discovery (FDD 045) — reunião, visita ou leitura de sistema."""
+
+    class Meta:
+        model = DiscoverySession
+        fields = ["id", "discovery", "meeting", "happened_at", "participants", "source_artifact",
+                  "transcript", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        discovery = cast(
+            Discovery | None, attrs.get("discovery", getattr(self.instance, "discovery", None))
+        )
+        meeting = cast(
+            Meeting | None, attrs.get("meeting", getattr(self.instance, "meeting", None))
+        )
+        if meeting and discovery and meeting.project_id != discovery.project_id:
+            raise serializers.ValidationError(
+                {"meeting": "A reunião deve pertencer ao mesmo projeto do Discovery."}
+            )
+        return attrs
+
+
+class ProcessObservationSerializer(serializers.ModelSerializer[ProcessObservation]):
+    """A observação de um processo dentro de um Discovery (FDD 045).
+
+    É esta linha que permite o mesmo processo aparecer em dois Discoveries sem duplicar o mapa —
+    e por isso ela **não** tem unicidade por (discovery, process): revisitar o mesmo processo duas
+    vezes no mesmo Discovery é o caso normal de uma validação depois da primeira leitura.
+    """
+
+    observation_type_display = serializers.CharField(
+        source="get_observation_type_display", read_only=True
+    )
+
+    class Meta:
+        model = ProcessObservation
+        fields = ["id", "discovery", "process", "observed_at", "observation_type",
+                  "observation_type_display", "source_session", "created_at", "updated_at"]
+        read_only_fields = ["id", "observation_type_display", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        discovery = cast(
+            Discovery | None, attrs.get("discovery", getattr(self.instance, "discovery", None))
+        )
+        session = cast(
+            DiscoverySession | None,
+            attrs.get("source_session", getattr(self.instance, "source_session", None)),
+        )
+        if session and discovery and session.discovery_id != discovery.pk:
+            raise serializers.ValidationError(
+                {"source_session": "A sessão deve pertencer ao mesmo Discovery."}
+            )
+        return attrs
+
+
+class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
+    """O dado bruto que sustenta um achado (FDD 045).
+
+    `content_hash` é só de leitura e sai do `save()` do modelo: um carimbo de integridade que o
+    corpo da requisição pudesse escrever não carimbaria nada. `legacy_evidencia` também, porque é
+    marca de backfill — quem cria pela API não veio do modelo fundido.
+
+    `captured_by` sai da sessão, como `registered_by` na `Evidencia`: quem observou tem nome, e o
+    nome é o de quem está autenticado.
+    """
+
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = Evidence
+        fields = ["id", "account", "discovery", "process", "step", "kind", "kind_display",
+                  "raw_excerpt", "reference", "source_session", "source_meeting", "captured_at",
+                  "captured_by", "content_hash", "legacy_evidencia", "created_at",
+                  "updated_at"]
+        read_only_fields = ["id", "kind_display", "captured_by", "content_hash",
+                            "legacy_evidencia", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """A mesma regra do `clean()` do modelo — o `save()` do DRF não chama `full_clean`."""
+        account = cast(
+            Client | None, attrs.get("account", getattr(self.instance, "account", None))
+        )
+        process = cast(
+            Processo | None, attrs.get("process", getattr(self.instance, "process", None))
+        )
+        step = cast(
+            ProcessoEtapa | None, attrs.get("step", getattr(self.instance, "step", None))
+        )
+        discovery = cast(
+            Discovery | None, attrs.get("discovery", getattr(self.instance, "discovery", None))
+        )
+        session = cast(
+            DiscoverySession | None,
+            attrs.get("source_session", getattr(self.instance, "source_session", None)),
+        )
+        raw = cast(str, attrs.get("raw_excerpt", getattr(self.instance, "raw_excerpt", "")) or "")
+        reference = cast(
+            str, attrs.get("reference", getattr(self.instance, "reference", "")) or ""
+        )
+        if step and process and step.processo_id != process.pk:
+            raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+        if process and account and process.client_id != account.pk:
+            raise serializers.ValidationError(
+                {"process": "O processo deve pertencer à mesma conta."}
+            )
+        if step and account and step.processo.client_id != account.pk:
+            raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        if discovery and account and discovery.project.client_id != account.pk:
+            raise serializers.ValidationError(
+                {"discovery": "O Discovery deve pertencer à mesma conta."}
+            )
+        if session and discovery and session.discovery_id != discovery.pk:
+            raise serializers.ValidationError(
+                {"source_session": "A sessão deve pertencer ao mesmo Discovery."}
+            )
+        if not raw.strip() and not reference.strip():
+            raise serializers.ValidationError(
+                "Uma evidência precisa do trecho bruto ou de um localizador da fonte."
+            )
+        return attrs
+
+
+class FindingSerializer(serializers.ModelSerializer[Finding]):
+    """O achado, com o estado epistemológico que a metodologia exige (FDD 045, ADR 0049).
+
+    Duas invariantes da ontologia moram aqui, e nenhuma delas cabe inteira no `clean()`:
+
+    - **§6.9 — `fact` exige revisor humano e `Evidence` viva.** A metade do revisor está no
+      modelo; a da evidência não pode estar, porque o M2M só existe depois do save e um `clean()`
+      que o consultasse recusaria toda criação. `reviewed_by` é campo **do corpo**, e não da
+      sessão como `registered_by`: quem promove nem sempre é quem confirmou — o consultor que
+      validou em campo pode não ser quem digita —, e o que a invariante exige é que a promoção
+      **tenha nome**, não que o nome seja o de quem está logado. Omitir é 400, nunca carimbo
+      silencioso.
+    - **A transição lê `FINDING_TRANSITIONS`**, no molde do `ARTIFACT_TRANSITIONS`: de `fact` só
+      se volta a `hypothesis`, porque ir direto a `unknown` apagaria a diferença entre "estávamos
+      errados" e "nunca soubemos".
+    """
+
+    epistemic_status_display = serializers.CharField(
+        source="get_epistemic_status_display", read_only=True
+    )
+
+    class Meta:
+        model = Finding
+        fields = ["id", "account", "process", "step", "statement", "epistemic_status",
+                  "epistemic_status_display", "confidence", "reviewed_by", "reviewed_at",
+                  "evidences", "legacy_evidencia", "created_at", "updated_at"]
+        read_only_fields = ["id", "epistemic_status_display", "reviewed_at", "legacy_evidencia",
+                            "created_at", "updated_at"]
+
+    def validate_epistemic_status(self, value: str) -> str:
+        if self.instance is None:
+            return value
+        atual = self.instance.epistemic_status
+        if value != atual and value not in FINDING_TRANSITIONS[atual]:
+            raise serializers.ValidationError(
+                f"Não é possível ir de {self.instance.get_epistemic_status_display()} para "
+                f"{Finding.EpistemicStatus(value).label}."
+            )
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        account = cast(
+            Client | None, attrs.get("account", getattr(self.instance, "account", None))
+        )
+        process = cast(
+            Processo | None, attrs.get("process", getattr(self.instance, "process", None))
+        )
+        step = cast(ProcessoEtapa | None, attrs.get("step", getattr(self.instance, "step", None)))
+        confidence = cast(
+            int | None, attrs.get("confidence", getattr(self.instance, "confidence", None))
+        )
+        if confidence is not None and not 0 <= confidence <= 100:
+            raise serializers.ValidationError({"confidence": "A confiança vai de 0 a 100."})
+        if process and account and process.client_id != account.pk:
+            raise serializers.ValidationError(
+                {"process": "O processo deve pertencer à mesma conta."}
+            )
+        if step and account and step.processo.client_id != account.pk:
+            raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        if step and process and step.processo_id != process.pk:
+            raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+
+        estado = attrs.get(
+            "epistemic_status",
+            getattr(self.instance, "epistemic_status", Finding.EpistemicStatus.HYPOTHESIS),
+        )
+        if estado == Finding.EpistemicStatus.FACT:
+            revisor = attrs.get("reviewed_by", getattr(self.instance, "reviewed_by", None))
+            if revisor is None:
+                raise serializers.ValidationError(
+                    {"reviewed_by": "Promover um achado a fato é ato humano: informe quem revisou."}
+                )
+            # No PATCH que não mexe no M2M, `evidences` não vem no corpo — a pergunta é sobre o
+            # que já está ligado. Na criação, sobre o que veio.
+            evidencias = attrs.get("evidences")
+            if evidencias is None:
+                evidencias = list(self.instance.evidences.all()) if self.instance else []
+            if not any(
+                evidence.archived_at is None for evidence in cast(list[Evidence], evidencias)
+            ):
+                raise serializers.ValidationError(
+                    {"evidences": "Um fato precisa de ao menos uma evidência viva que o sustente."}
+                )
         return attrs
 
 

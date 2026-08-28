@@ -2272,6 +2272,380 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/discoveries/:
+    get:
+      operationId: v1_discoveries_list
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
+        e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
+        pela mesma guarda, como em todo recurso de projeto.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Discovery'
+          description: ''
+    post:
+      operationId: v1_discoveries_create
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
+        e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
+        pela mesma guarda, como em todo recurso de projeto.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Discovery'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Discovery'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Discovery'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discovery'
+          description: ''
+  /api/v1/discoveries/{id}/:
+    get:
+      operationId: v1_discoveries_retrieve
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
+        e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
+        pela mesma guarda, como em todo recurso de projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discovery'
+          description: ''
+    put:
+      operationId: v1_discoveries_update
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
+        e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
+        pela mesma guarda, como em todo recurso de projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Discovery'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Discovery'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Discovery'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discovery'
+          description: ''
+    patch:
+      operationId: v1_discoveries_partial_update
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
+        e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
+        pela mesma guarda, como em todo recurso de projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscovery'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscovery'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscovery'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Discovery'
+          description: ''
+    delete:
+      operationId: v1_discoveries_destroy
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
+        e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
+        pela mesma guarda, como em todo recurso de projeto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/discoveries/{id}/unarchive/:
+    post:
+      operationId: v1_discoveries_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/discovery-sessions/:
+    get:
+      operationId: v1_discovery_sessions_list
+      description: As sessões de um Discovery (FDD 045).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DiscoverySession'
+          description: ''
+    post:
+      operationId: v1_discovery_sessions_create
+      description: As sessões de um Discovery (FDD 045).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySession'
+          description: ''
+  /api/v1/discovery-sessions/{id}/:
+    get:
+      operationId: v1_discovery_sessions_retrieve
+      description: As sessões de um Discovery (FDD 045).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery session.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySession'
+          description: ''
+    put:
+      operationId: v1_discovery_sessions_update
+      description: As sessões de um Discovery (FDD 045).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery session.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySession'
+          description: ''
+    patch:
+      operationId: v1_discovery_sessions_partial_update
+      description: As sessões de um Discovery (FDD 045).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery session.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscoverySession'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscoverySession'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDiscoverySession'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySession'
+          description: ''
+    delete:
+      operationId: v1_discovery_sessions_destroy
+      description: As sessões de um Discovery (FDD 045).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery session.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/discovery-sessions/{id}/unarchive/:
+    post:
+      operationId: v1_discovery_sessions_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery session.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/documents/:
     get:
       operationId: v1_documents_list
@@ -2816,6 +3190,211 @@ paths:
               schema:
                 $ref: '#/components/schemas/SignatureRequest'
           description: ''
+  /api/v1/evidence/:
+    get:
+      operationId: v1_evidence_list
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
+        evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
+        `account` em vez de pelo processo pai.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Evidence'
+          description: ''
+    post:
+      operationId: v1_evidence_create
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
+        evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
+        `account` em vez de pelo processo pai.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+          description: ''
+  /api/v1/evidence/{id}/:
+    get:
+      operationId: v1_evidence_retrieve
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
+        evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
+        `account` em vez de pelo processo pai.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidence.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+          description: ''
+    put:
+      operationId: v1_evidence_update
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
+        evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
+        `account` em vez de pelo processo pai.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidence.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Evidence'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+          description: ''
+    patch:
+      operationId: v1_evidence_partial_update
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
+        evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
+        `account` em vez de pelo processo pai.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidence.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEvidence'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEvidence'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEvidence'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+          description: ''
+    delete:
+      operationId: v1_evidence_destroy
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
+        evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
+        `account` em vez de pelo processo pai.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidence.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/evidence/{id}/unarchive/:
+    post:
+      operationId: v1_evidence_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidence.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/evidencias/:
     get:
       operationId: v1_evidencias_list
@@ -2979,6 +3558,199 @@ paths:
         schema:
           type: integer
         description: Um valor inteiro único que identifica este evidencia.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/findings/:
+    get:
+      operationId: v1_findings_list
+      description: |-
+        O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
+
+        Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
+        transição vivem no serializer, que é onde o M2M já existe.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Finding'
+          description: ''
+    post:
+      operationId: v1_findings_create
+      description: |-
+        O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
+
+        Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
+        transição vivem no serializer, que é onde o M2M já existe.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Finding'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Finding'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Finding'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+          description: ''
+  /api/v1/findings/{id}/:
+    get:
+      operationId: v1_findings_retrieve
+      description: |-
+        O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
+
+        Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
+        transição vivem no serializer, que é onde o M2M já existe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este finding.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+          description: ''
+    put:
+      operationId: v1_findings_update
+      description: |-
+        O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
+
+        Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
+        transição vivem no serializer, que é onde o M2M já existe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este finding.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Finding'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Finding'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Finding'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+          description: ''
+    patch:
+      operationId: v1_findings_partial_update
+      description: |-
+        O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
+
+        Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
+        transição vivem no serializer, que é onde o M2M já existe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este finding.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFinding'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFinding'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFinding'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+          description: ''
+    delete:
+      operationId: v1_findings_destroy
+      description: |-
+        O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
+
+        Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
+        transição vivem no serializer, que é onde o M2M já existe.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este finding.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/findings/{id}/unarchive/:
+    post:
+      operationId: v1_findings_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este finding.
         required: true
       tags:
       - v1
@@ -4759,6 +5531,13 @@ paths:
         estado de rascunho — a segunda extração dobraria o mapa da operação do cliente **em
         silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
         e como sair dele, que é para o que o `StateConflict` existe.
+
+        **Desde a FDD 045 a gravação é dupla, e a forma da resposta não muda.** Além de
+        `Processo`/`ProcessoEtapa`/`Evidencia`, a mesma transação escreve o par do split: uma
+        `Evidence` por processo, que diz de onde o achado veio, e um `Finding` por achado, que diz
+        o que ele afirma — sempre em `hypothesis`, pela mesma razão que a `Evidencia` nasce
+        `hipotese`. O legado continua porque o custo do estado atual e a tela ainda leem dele; a
+        resposta segue `{"processos": [...]}` e nenhuma tela precisou mudar.
       parameters:
       - in: path
         name: id
@@ -6106,6 +6885,211 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/process-observations/:
+    get:
+      operationId: v1_process_observations_list
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        Duas fronteiras, e não uma: o Discovery traz a do **projeto** (é o `ProjectScopedMixin`), e o
+        processo traz a da **conta**. Sem a segunda, uma requisição bastaria para pendurar o processo
+        de outro cliente num Discovery próprio — o mesmo caminho que `_exige_cliente_no_escopo` fecha
+        nos três recursos da FDD 039.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProcessObservation'
+          description: ''
+    post:
+      operationId: v1_process_observations_create
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        Duas fronteiras, e não uma: o Discovery traz a do **projeto** (é o `ProjectScopedMixin`), e o
+        processo traz a da **conta**. Sem a segunda, uma requisição bastaria para pendurar o processo
+        de outro cliente num Discovery próprio — o mesmo caminho que `_exige_cliente_no_escopo` fecha
+        nos três recursos da FDD 039.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessObservation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessObservation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessObservation'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessObservation'
+          description: ''
+  /api/v1/process-observations/{id}/:
+    get:
+      operationId: v1_process_observations_retrieve
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        Duas fronteiras, e não uma: o Discovery traz a do **projeto** (é o `ProjectScopedMixin`), e o
+        processo traz a da **conta**. Sem a segunda, uma requisição bastaria para pendurar o processo
+        de outro cliente num Discovery próprio — o mesmo caminho que `_exige_cliente_no_escopo` fecha
+        nos três recursos da FDD 039.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este process observation.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessObservation'
+          description: ''
+    put:
+      operationId: v1_process_observations_update
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        Duas fronteiras, e não uma: o Discovery traz a do **projeto** (é o `ProjectScopedMixin`), e o
+        processo traz a da **conta**. Sem a segunda, uma requisição bastaria para pendurar o processo
+        de outro cliente num Discovery próprio — o mesmo caminho que `_exige_cliente_no_escopo` fecha
+        nos três recursos da FDD 039.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este process observation.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessObservation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessObservation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessObservation'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessObservation'
+          description: ''
+    patch:
+      operationId: v1_process_observations_partial_update
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        Duas fronteiras, e não uma: o Discovery traz a do **projeto** (é o `ProjectScopedMixin`), e o
+        processo traz a da **conta**. Sem a segunda, uma requisição bastaria para pendurar o processo
+        de outro cliente num Discovery próprio — o mesmo caminho que `_exige_cliente_no_escopo` fecha
+        nos três recursos da FDD 039.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este process observation.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessObservation'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessObservation'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessObservation'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessObservation'
+          description: ''
+    delete:
+      operationId: v1_process_observations_destroy
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        Duas fronteiras, e não uma: o Discovery traz a do **projeto** (é o `ProjectScopedMixin`), e o
+        processo traz a da **conta**. Sem a segunda, uma requisição bastaria para pendurar o processo
+        de outro cliente num Discovery próprio — o mesmo caminho que `_exige_cliente_no_escopo` fecha
+        nos três recursos da FDD 039.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este process observation.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/process-observations/{id}/unarchive/:
+    post:
+      operationId: v1_process_observations_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este process observation.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/processo-etapas/:
     get:
       operationId: v1_processo_etapas_list
@@ -10064,6 +11048,104 @@ components:
         * `building` - Em construção
         * `active` - Ativo
         * `paused` - Pausado
+    Discovery:
+      type: object
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        As duas regras de data repetem o `clean()` do modelo pelo motivo de sempre nesta base: o
+        `save()` do DRF não chama `full_clean`, e uma guarda que só vale pelo admin não é guarda.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        project_name:
+          type: string
+          readOnly: true
+        scope:
+          type: string
+        status:
+          $ref: '#/components/schemas/DiscoveryStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        completed_at:
+          type: string
+          format: date
+          nullable: true
+        owner:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - project
+      - project_name
+      - status_display
+      - updated_at
+    DiscoverySession:
+      type: object
+      description: A sessão do Discovery (FDD 045) — reunião, visita ou leitura de
+        sistema.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        discovery:
+          type: integer
+        meeting:
+          type: integer
+          nullable: true
+        happened_at:
+          type: string
+          format: date-time
+        participants:
+          type: string
+        source_artifact:
+          type: integer
+          nullable: true
+        transcript:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - discovery
+      - happened_at
+      - id
+      - updated_at
+    DiscoveryStatusEnum:
+      enum:
+      - planned
+      - running
+      - completed
+      - cancelled
+      type: string
+      description: |-
+        * `planned` - Planejado
+        * `running` - Em andamento
+        * `completed` - Concluído
+        * `cancelled` - Cancelado
     Document:
       type: object
       properties:
@@ -10218,6 +11300,104 @@ components:
         * `pending` - Pendente
         * `provisioned` - Provisionado
         * `failed` - Falhou
+    EpistemicStatusEnum:
+      enum:
+      - fact
+      - hypothesis
+      - unknown
+      type: string
+      description: |-
+        * `fact` - Fato
+        * `hypothesis` - Hipótese
+        * `unknown` - Desconhecido
+    Evidence:
+      type: object
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        `content_hash` é só de leitura e sai do `save()` do modelo: um carimbo de integridade que o
+        corpo da requisição pudesse escrever não carimbaria nada. `legacy_evidencia` também, porque é
+        marca de backfill — quem cria pela API não veio do modelo fundido.
+
+        `captured_by` sai da sessão, como `registered_by` na `Evidencia`: quem observou tem nome, e o
+        nome é o de quem está autenticado.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        discovery:
+          type: integer
+          nullable: true
+        process:
+          type: integer
+          nullable: true
+        step:
+          type: integer
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/EvidenceKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        raw_excerpt:
+          type: string
+        reference:
+          type: string
+          maxLength: 500
+        source_session:
+          type: integer
+          nullable: true
+        source_meeting:
+          type: integer
+          nullable: true
+        captured_at:
+          type: string
+          format: date-time
+        captured_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        content_hash:
+          type: string
+          readOnly: true
+        legacy_evidencia:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - captured_by
+      - content_hash
+      - created_at
+      - id
+      - kind
+      - kind_display
+      - legacy_evidencia
+      - updated_at
+    EvidenceKindEnum:
+      enum:
+      - interview
+      - observation
+      - artifact
+      - system
+      - data
+      type: string
+      description: |-
+        * `interview` - Entrevista (o que dizem)
+        * `observation` - Observação (o que fazem)
+        * `artifact` - Artefato (planilha, PDF, croqui)
+        * `system` - Sistema (ERP, CRM, CAD, WhatsApp)
+        * `data` - Dado (volume, tempo, custo, erro)
     Evidencia:
       type: object
       description: |-
@@ -10272,6 +11452,81 @@ components:
       - registered_by
       - rotulo
       - rotulo_display
+      - updated_at
+    Finding:
+      type: object
+      description: |-
+        O achado, com o estado epistemológico que a metodologia exige (FDD 045, ADR 0049).
+
+        Duas invariantes da ontologia moram aqui, e nenhuma delas cabe inteira no `clean()`:
+
+        - **§6.9 — `fact` exige revisor humano e `Evidence` viva.** A metade do revisor está no
+          modelo; a da evidência não pode estar, porque o M2M só existe depois do save e um `clean()`
+          que o consultasse recusaria toda criação. `reviewed_by` é campo **do corpo**, e não da
+          sessão como `registered_by`: quem promove nem sempre é quem confirmou — o consultor que
+          validou em campo pode não ser quem digita —, e o que a invariante exige é que a promoção
+          **tenha nome**, não que o nome seja o de quem está logado. Omitir é 400, nunca carimbo
+          silencioso.
+        - **A transição lê `FINDING_TRANSITIONS`**, no molde do `ARTIFACT_TRANSITIONS`: de `fact` só
+          se volta a `hypothesis`, porque ir direto a `unknown` apagaria a diferença entre "estávamos
+          errados" e "nunca soubemos".
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        process:
+          type: integer
+          nullable: true
+        step:
+          type: integer
+          nullable: true
+        statement:
+          type: string
+        epistemic_status:
+          $ref: '#/components/schemas/EpistemicStatusEnum'
+        epistemic_status_display:
+          type: string
+          readOnly: true
+        confidence:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        reviewed_by:
+          type: integer
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        evidences:
+          type: array
+          items:
+            type: integer
+        legacy_evidencia:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - created_at
+      - epistemic_status_display
+      - id
+      - legacy_evidencia
+      - reviewed_at
+      - statement
       - updated_at
     FonteEnum:
       enum:
@@ -11219,6 +12474,16 @@ components:
       - message
       - read
       - url
+    ObservationTypeEnum:
+      enum:
+      - initial
+      - revisit
+      - validation
+      type: string
+      description: |-
+        * `initial` - Primeira observação
+        * `revisit` - Revisita
+        * `validation` - Validação
     Opportunity:
       type: object
       properties:
@@ -11810,6 +13075,79 @@ components:
         has_variant:
           type: boolean
           readOnly: true
+    PatchedDiscovery:
+      type: object
+      description: |-
+        O Discovery como unidade de levantamento (FDD 045).
+
+        As duas regras de data repetem o `clean()` do modelo pelo motivo de sempre nesta base: o
+        `save()` do DRF não chama `full_clean`, e uma guarda que só vale pelo admin não é guarda.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        project_name:
+          type: string
+          readOnly: true
+        scope:
+          type: string
+        status:
+          $ref: '#/components/schemas/DiscoveryStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        completed_at:
+          type: string
+          format: date
+          nullable: true
+        owner:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedDiscoverySession:
+      type: object
+      description: A sessão do Discovery (FDD 045) — reunião, visita ou leitura de
+        sistema.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        discovery:
+          type: integer
+        meeting:
+          type: integer
+          nullable: true
+        happened_at:
+          type: string
+          format: date-time
+        participants:
+          type: string
+        source_artifact:
+          type: integer
+          nullable: true
+        transcript:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedDocument:
       type: object
       properties:
@@ -11929,6 +13267,70 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedEvidence:
+      type: object
+      description: |-
+        O dado bruto que sustenta um achado (FDD 045).
+
+        `content_hash` é só de leitura e sai do `save()` do modelo: um carimbo de integridade que o
+        corpo da requisição pudesse escrever não carimbaria nada. `legacy_evidencia` também, porque é
+        marca de backfill — quem cria pela API não veio do modelo fundido.
+
+        `captured_by` sai da sessão, como `registered_by` na `Evidencia`: quem observou tem nome, e o
+        nome é o de quem está autenticado.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        discovery:
+          type: integer
+          nullable: true
+        process:
+          type: integer
+          nullable: true
+        step:
+          type: integer
+          nullable: true
+        kind:
+          $ref: '#/components/schemas/EvidenceKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        raw_excerpt:
+          type: string
+        reference:
+          type: string
+          maxLength: 500
+        source_session:
+          type: integer
+          nullable: true
+        source_meeting:
+          type: integer
+          nullable: true
+        captured_at:
+          type: string
+          format: date-time
+        captured_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        content_hash:
+          type: string
+          readOnly: true
+        legacy_evidencia:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedEvidencia:
       type: object
       description: |-
@@ -11962,6 +13364,72 @@ components:
           type: integer
           nullable: true
         registered_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedFinding:
+      type: object
+      description: |-
+        O achado, com o estado epistemológico que a metodologia exige (FDD 045, ADR 0049).
+
+        Duas invariantes da ontologia moram aqui, e nenhuma delas cabe inteira no `clean()`:
+
+        - **§6.9 — `fact` exige revisor humano e `Evidence` viva.** A metade do revisor está no
+          modelo; a da evidência não pode estar, porque o M2M só existe depois do save e um `clean()`
+          que o consultasse recusaria toda criação. `reviewed_by` é campo **do corpo**, e não da
+          sessão como `registered_by`: quem promove nem sempre é quem confirmou — o consultor que
+          validou em campo pode não ser quem digita —, e o que a invariante exige é que a promoção
+          **tenha nome**, não que o nome seja o de quem está logado. Omitir é 400, nunca carimbo
+          silencioso.
+        - **A transição lê `FINDING_TRANSITIONS`**, no molde do `ARTIFACT_TRANSITIONS`: de `fact` só
+          se volta a `hypothesis`, porque ir direto a `unknown` apagaria a diferença entre "estávamos
+          errados" e "nunca soubemos".
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        process:
+          type: integer
+          nullable: true
+        step:
+          type: integer
+          nullable: true
+        statement:
+          type: string
+        epistemic_status:
+          $ref: '#/components/schemas/EpistemicStatusEnum'
+        epistemic_status_display:
+          type: string
+          readOnly: true
+        confidence:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        reviewed_by:
+          type: integer
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        evidences:
+          type: array
+          items:
+            type: integer
+        legacy_evidencia:
           type: integer
           readOnly: true
           nullable: true
@@ -12621,6 +14089,41 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
+    PatchedProcessObservation:
+      type: object
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        É esta linha que permite o mesmo processo aparecer em dois Discoveries sem duplicar o mapa —
+        e por isso ela **não** tem unicidade por (discovery, process): revisitar o mesmo processo duas
+        vezes no mesmo Discovery é o caso normal de uma validação depois da primeira leitura.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        discovery:
+          type: integer
+        process:
+          type: integer
+        observed_at:
+          type: string
+          format: date
+        observation_type:
+          $ref: '#/components/schemas/ObservationTypeEnum'
+        observation_type_display:
+          type: string
+          readOnly: true
+        source_session:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedProcesso:
       type: object
       description: |-
@@ -13458,6 +14961,49 @@ components:
         * `low` - Baixa
         * `medium` - Média
         * `high` - Alta
+    ProcessObservation:
+      type: object
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        É esta linha que permite o mesmo processo aparecer em dois Discoveries sem duplicar o mapa —
+        e por isso ela **não** tem unicidade por (discovery, process): revisitar o mesmo processo duas
+        vezes no mesmo Discovery é o caso normal de uma validação depois da primeira leitura.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        discovery:
+          type: integer
+        process:
+          type: integer
+        observed_at:
+          type: string
+          format: date
+        observation_type:
+          $ref: '#/components/schemas/ObservationTypeEnum'
+        observation_type_display:
+          type: string
+          readOnly: true
+        source_session:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - discovery
+      - id
+      - observation_type_display
+      - observed_at
+      - process
+      - updated_at
     Processo:
       type: object
       description: |-

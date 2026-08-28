@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid
 from datetime import date, datetime
@@ -1297,6 +1298,363 @@ class Evidencia(TimestampedModel):
         # o campo pensando nisso.
         if self.etapa_id and self.etapa and self.etapa.processo_id != self.processo_id:
             raise ValidationError({"etapa": "A etapa deve pertencer ao mesmo processo."})
+
+
+class Discovery(TimestampedModel):
+    """O levantamento como **unidade**, e não como um punhado de reuniões soltas (FDD 045).
+
+    A FDD 039 ancorou o mapa da operação no cliente, e fez isso certo: o processo sobrevive à
+    venda que o descobriu. O que ficou faltando é o outro lado — **quando** aquele mapa foi
+    levantado, por quem, com que recorte. `Processo.source_project`/`source_meeting` respondem por
+    uma origem só, e o mesmo processo revisitado no Discovery seguinte não tem onde ser
+    registrado: a segunda passada ou sobrescreve a primeira em silêncio ou vira um processo
+    duplicado.
+
+    O Discovery é essa unidade. Pendura no `Project` porque é ele que dá o contrato e o prazo do
+    levantamento — o **mapa** continua sendo do cliente, e é `ProcessObservation` que os liga sem
+    prender um ao outro.
+
+    O campo `engagement` da ontologia (ADR 0049) **não** entra aqui: o modelo `Engagement` é a
+    Fase 2 e ainda não existe. Acrescentá-lo depois é aditivo.
+    """
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planejado"
+        RUNNING = "running", "Em andamento"
+        COMPLETED = "completed", "Concluído"
+        CANCELLED = "cancelled", "Cancelado"
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="discoveries")
+    scope = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PLANNED)
+    started_at = models.DateField(null=True, blank=True)
+    completed_at = models.DateField(null=True, blank=True)
+    owner = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="discoveries"
+    )
+
+    class Meta:
+        ordering = ["-started_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"Discovery #{self.pk} — {self.get_status_display()}"
+
+    def clean(self) -> None:
+        if self.started_at and self.completed_at and self.completed_at < self.started_at:
+            raise ValidationError(
+                {"completed_at": "O fim do Discovery não pode ser anterior ao início."}
+            )
+        # Concluído sem data de conclusão seria um levantamento que a casa diz ter terminado sem
+        # saber quando — e é a data que responde "o mapa é de quando?" na venda seguinte.
+        if self.status == self.Status.COMPLETED and not self.completed_at:
+            raise ValidationError(
+                {"completed_at": "Um Discovery concluído precisa da data de conclusão."}
+            )
+
+
+class DiscoverySession(TimestampedModel):
+    """Uma sessão do Discovery — a reunião, a visita, a leitura do sistema (FDD 045).
+
+    `meeting` é opcional porque nem toda sessão é uma reunião registrada no portal: o consultor
+    que passa a tarde no chão de fábrica levantou tanto quanto quem gravou uma call. Quando vier
+    preenchida, o `clean()` exige que seja reunião do **mesmo projeto** do Discovery — sem isso a
+    sessão alcançaria a transcrição de outro cliente por um campo opcional, que é a forma de
+    vazamento que a `Evidencia.clean()` já fecha do outro lado.
+    """
+
+    discovery = models.ForeignKey(Discovery, on_delete=models.CASCADE, related_name="sessions")
+    meeting = models.ForeignKey(
+        Meeting, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="discovery_sessions",
+    )
+    happened_at = models.DateTimeField()
+    participants = models.TextField(blank=True, default="")
+    # O artefato de narrativa (FDD 016) que saiu desta sessão, quando houve. `related_name="+"`
+    # como no `Artifact.source_meeting`: ninguém navega de volta a partir dele.
+    source_artifact = models.ForeignKey(
+        "Artifact", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    transcript = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-happened_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"Sessão de {self.happened_at:%d/%m/%Y}"
+
+    def clean(self) -> None:
+        reuniao = self.meeting if self.meeting_id else None
+        if reuniao is not None and self.discovery_id:
+            if reuniao.project_id != self.discovery.project_id:
+                raise ValidationError(
+                    {"meeting": "A reunião deve pertencer ao mesmo projeto do Discovery."}
+                )
+
+
+class ProcessObservation(TimestampedModel):
+    """A observação de um processo **dentro de um Discovery** (FDD 045).
+
+    Esta tabela é o que desfaz a proveniência única de `Processo.source_project`/`source_meeting`:
+    o mesmo processo observado em dois Discoveries são **duas linhas aqui**, e nenhuma sobrescreve
+    a outra. É o registro que permite dizer "o AS-IS de faturamento foi levantado no Discovery
+    Sprint e revisitado no PROVE" sem duplicar o processo nem perder a primeira leitura.
+    """
+
+    class Kind(models.TextChoices):
+        INITIAL = "initial", "Primeira observação"
+        REVISIT = "revisit", "Revisita"
+        VALIDATION = "validation", "Validação"
+
+    discovery = models.ForeignKey(
+        Discovery, on_delete=models.CASCADE, related_name="process_observations"
+    )
+    process = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="observations")
+    observed_at = models.DateField()
+    observation_type = models.CharField(max_length=16, choices=Kind.choices, default=Kind.INITIAL)
+    source_session = models.ForeignKey(
+        DiscoverySession, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="process_observations",
+    )
+
+    class Meta:
+        ordering = ["-observed_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_observation_type_display()} — {self.observed_at:%d/%m/%Y}"
+
+    def clean(self) -> None:
+        sessao = self.source_session if self.source_session_id else None
+        if sessao is not None and sessao.discovery_id != self.discovery_id:
+            raise ValidationError(
+                {"source_session": "A sessão deve pertencer ao mesmo Discovery."}
+            )
+
+
+def hash_do_trecho(texto: str) -> str:
+    """O carimbo de integridade do trecho de evidência (`Evidence.content_hash`).
+
+    Função de módulo, e não método, porque a migração de backfill (`0054`) precisa da **mesma**
+    conta e lá o modelo é a versão histórica de `apps.get_model`, que não tem o `save()`
+    customizado. Duas implementações do mesmo hash divergiriam na primeira mudança, e o sintoma
+    seria um `fact` parecendo adulterado sem que ninguém tivesse tocado nele.
+    """
+    texto = texto or ""
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest() if texto else ""
+
+
+class Evidence(TimestampedModel):
+    """O **dado bruto** que sustenta um achado — a metade "de onde veio" do split (FDD 045).
+
+    A `Evidencia` da FDD 039 guarda três coisas numa linha só: a forma da fonte, a afirmação já
+    interpretada e o rótulo epistemológico. Com isso, a hipótese e o trecho que a sustenta são o
+    mesmo registro — e a proveniência se perde no instante em que alguém edita o texto. O split da
+    ADR 0049 separa: aqui fica **o que foi dito ou observado**, sem conclusão; em `Finding` fica a
+    afirmação que a casa extraiu daí.
+
+    Uma evidência sem `raw_excerpt` e sem `reference` não é evidência — é uma linha dizendo que
+    existe alguma coisa em algum lugar. O `clean()` exige um dos dois.
+
+    Ancora na **conta** (`account`), e não no projeto, pelo mesmo argumento do `Processo`: o que
+    se observou sobre a operação de uma empresa sobrevive à venda que a descobriu.
+    """
+
+    class Kind(models.TextChoices):
+        """As cinco formas de evidência (`docs/metodologia-fde.md:81-84`), em inglês canônico.
+
+        Espelho um a um da `Evidencia.Forma`, e é essa correspondência que o backfill da migração
+        `0054` traduz. Sem default, como lá: escolher a forma é um ato, e recebê-la por omissão
+        não diz nada sobre de onde o dado veio.
+        """
+
+        INTERVIEW = "interview", "Entrevista (o que dizem)"
+        OBSERVATION = "observation", "Observação (o que fazem)"
+        ARTIFACT = "artifact", "Artefato (planilha, PDF, croqui)"
+        SYSTEM = "system", "Sistema (ERP, CRM, CAD, WhatsApp)"
+        DATA = "data", "Dado (volume, tempo, custo, erro)"
+
+    # `account`, `process` e `step` são os nomes canônicos da ADR 0049 apontando para os modelos
+    # legados (`Client`, `Processo`, `ProcessoEtapa`). O renome físico dos modelos é a Fase 6; até
+    # lá o nome canônico vive no **campo**, que é onde ele é lido e escrito todo dia.
+    account = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="evidence")
+    discovery = models.ForeignKey(
+        Discovery, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+    )
+    process = models.ForeignKey(
+        Processo, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+    )
+    step = models.ForeignKey(
+        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    # O trecho **como foi dito ou observado**, sem interpretação. Conclusão da casa vai para
+    # `Finding.statement`; misturar as duas aqui refaria a fusão que este modelo desfaz.
+    raw_excerpt = models.TextField(blank=True, default="")
+    # O localizador: URL da gravação, nome do arquivo, `00:14:32` da transcrição. É o que permite
+    # voltar à fonte quando o trecho sozinho não basta.
+    reference = models.CharField(max_length=500, blank=True, default="")
+    source_session = models.ForeignKey(
+        DiscoverySession, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+    )
+    source_meeting = models.ForeignKey(
+        Meeting, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="structured_evidence",
+    )
+    captured_at = models.DateTimeField(default=timezone.now)
+    captured_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="captured_evidence"
+    )
+    # **Metadado de integridade, e não enfeite.** Um `Finding` marcado como fato afirma que existe
+    # um trecho que o sustenta; sem carimbo do trecho, editar o `raw_excerpt` depois muda o que a
+    # casa alega ter observado sem deixar rastro nenhum. O hash é o que permite dizer, meses
+    # depois, se o que sustenta o fato continua sendo o mesmo texto — a mesma ideia do
+    # `Case` congelado (FDD 027), no tamanho de um campo.
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    # O ponteiro para a linha fundida de onde esta evidência veio no backfill (migração `0054`).
+    # Preenchido **só** no dado migrado, e é a marca de "veio do modelo fundido": ali o
+    # `raw_excerpt` pode carregar conclusão interpretada, porque era tudo o que existia.
+    # `legacy_` é o prefixo de escape previsto pela ADR 0049 para mapeamento de backfill.
+    legacy_evidencia = models.ForeignKey(
+        Evidencia, on_delete=models.SET_NULL, null=True, blank=True, related_name="split_evidence"
+    )
+
+    class Meta:
+        ordering = ["-captured_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} — {(self.raw_excerpt or self.reference)[:60]}"
+
+    def clean(self) -> None:
+        etapa = self.step if self.step_id else None
+        if etapa is not None and self.process_id and etapa.processo_id != self.process_id:
+            raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+        # A mesma fronteira de conta da `Evidencia.clean()`, agora nas duas pontas: sem ela uma
+        # evidência da conta A citaria o processo da conta B por um campo opcional.
+        processo = self.process if self.process_id else None
+        if processo is not None and processo.client_id != self.account_id:
+            raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
+        if etapa is not None and etapa.processo.client_id != self.account_id:
+            raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        # O terceiro campo opcional entra na **mesma** pergunta que os dois acima, e a simetria é
+        # o ponto: dois vínculos validados contra a conta e um terceiro fora faria quem lesse isto
+        # depois concluir que há uma razão para a exceção, e não há — é a mesma classe de vínculo
+        # cruzado, com um hop a menos que `step`.
+        discovery = self.discovery if self.discovery_id else None
+        if discovery is not None and discovery.project.client_id != self.account_id:
+            raise ValidationError({"discovery": "O Discovery deve pertencer à mesma conta."})
+        # E, tendo os dois, eles precisam concordar — a mesma regra que a `ProcessObservation`
+        # aplica sobre o par dela. Uma evidência apontando para a sessão de outro Discovery é uma
+        # proveniência que se contradiz sozinha.
+        sessao = self.source_session if self.source_session_id else None
+        if sessao is not None and self.discovery_id and sessao.discovery_id != self.discovery_id:
+            raise ValidationError(
+                {"source_session": "A sessão deve pertencer ao mesmo Discovery."}
+            )
+        if not (self.raw_excerpt or "").strip() and not (self.reference or "").strip():
+            raise ValidationError(
+                "Uma evidência precisa do trecho bruto ou de um localizador da fonte."
+            )
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        # Recalculado a cada gravação em vez de "quando mudou": comparar com o banco custaria uma
+        # leitura por save e ainda erraria no `bulk_create`, onde não há instância anterior. O
+        # trecho vazio fica com hash vazio de propósito — `sha256("")` é uma constante, e gravá-la
+        # faria "não há trecho" parecer um trecho carimbado.
+        self.content_hash = hash_do_trecho(self.raw_excerpt)
+        super().save(*args, **kwargs)
+
+
+# Transições válidas do estado epistemológico de um achado (ADR 0049, `language-map` §6.8-9).
+#
+# Mesma forma de `ARTIFACT_TRANSITIONS`, e a assimetria é a decisão: de `fact` só se volta para
+# `hypothesis`. Não porque rebaixar seja proibido — é assim que se corrige um erro, e um estado
+# do qual não se sai transforma engano em verdade permanente —, mas porque ir de `fact` direto a
+# `unknown` apagaria a diferença entre "estávamos errados" e "nunca soubemos". Quem se enganou
+# rebaixa a hipótese e, se for o caso, desce de lá.
+FINDING_TRANSITIONS: dict[str, set[str]] = {
+    "hypothesis": {"fact", "unknown"},
+    "unknown": {"hypothesis", "fact"},
+    "fact": {"hypothesis"},
+}
+
+
+class Finding(TimestampedModel):
+    """A afirmação que a casa extraiu da evidência — a metade "o que isso quer dizer" (FDD 045).
+
+    É aqui que mora o rótulo que a metodologia exige (`docs/metodologia-fde.md:86`), agora com o
+    nome canônico da ADR 0049: `epistemic_status` ∈ `fact` · `hypothesis` · `unknown`. E é aqui
+    que a regra ganha dente, porque o achado deixou de ser a mesma linha do dado que o sustenta:
+    **um `fact` aponta para a `Evidence` viva que o sustenta e para o humano que o promoveu.**
+
+    `epistemic_status` tem default, ao contrário do `Evidencia.rotulo`, e a diferença é
+    deliberada. Lá o default seria a casa escolhendo por quem não escolheu, num campo cujos três
+    valores afirmam coisas diferentes. Aqui o default é `hypothesis`, o valor **menos**
+    afirmativo: quem cria sem dizer nada não ganha um fato de graça, e subir daqui exige revisor e
+    evidência. O erro por omissão cai sempre para o lado seguro, que é o oposto do que acontecia
+    quando o rótulo tinha default de fato algum.
+    """
+
+    class EpistemicStatus(models.TextChoices):
+        FACT = "fact", "Fato"
+        HYPOTHESIS = "hypothesis", "Hipótese"
+        UNKNOWN = "unknown", "Desconhecido"
+
+    account = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="findings")
+    process = models.ForeignKey(
+        Processo, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
+    )
+    step = models.ForeignKey(
+        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
+    )
+    statement = models.TextField()
+    epistemic_status = models.CharField(
+        max_length=16, choices=EpistemicStatus.choices, default=EpistemicStatus.HYPOTHESIS
+    )
+    # 0–100 e opcional: confiança que ninguém mediu não vira zero, pelo motivo dos nove insumos do
+    # `Processo` — zero é uma afirmação, e "não estimamos" não é.
+    confidence = models.PositiveSmallIntegerField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_findings"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    # M2M porque um achado costuma se apoiar em mais de uma fonte — e é justamente o "nunca só
+    # entrevista" do material (`docs/metodologia-fde.md:81-84`) que só se consegue verificar
+    # quando as fontes são contáveis.
+    evidences = models.ManyToManyField(Evidence, blank=True, related_name="findings")
+    legacy_evidencia = models.ForeignKey(
+        Evidencia, on_delete=models.SET_NULL, null=True, blank=True, related_name="split_finding"
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_epistemic_status_display()} — {self.statement[:60]}"
+
+    def clean(self) -> None:
+        if self.confidence is not None and not 0 <= self.confidence <= 100:
+            raise ValidationError({"confidence": "A confiança vai de 0 a 100."})
+        etapa = self.step if self.step_id else None
+        processo = self.process if self.process_id else None
+        if processo is not None and processo.client_id != self.account_id:
+            raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
+        if etapa is not None and etapa.processo.client_id != self.account_id:
+            raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        if etapa is not None and self.process_id and etapa.processo_id != self.process_id:
+            raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+        # A metade da invariante §6.9 que dá para checar sem o M2M: **fato tem revisor**. A outra
+        # metade — ao menos uma `Evidence` viva — vive no serializer, porque o vínculo M2M só
+        # existe depois do save e um `clean()` que o consultasse recusaria toda criação.
+        if self.epistemic_status == self.EpistemicStatus.FACT and not self.reviewed_by_id:
+            raise ValidationError(
+                {"reviewed_by": "Promover um achado a fato é ato humano: informe quem revisou."}
+            )
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        # Mesmo movimento do `Artifact.save()`: o carimbo de quando o estado mudou sai do próprio
+        # estado, e não do corpo da requisição — quem promove não escolhe a data da promoção.
+        if self.epistemic_status == self.EpistemicStatus.FACT and self.reviewed_at is None:
+            self.reviewed_at = timezone.now()
+        super().save(*args, **kwargs)
 
 
 class Service(TimestampedModel):

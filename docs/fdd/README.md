@@ -47,3 +47,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 041 — Projeção de entrega GitHub (Issue/PR/CI) no Pulse
 - 042 — Linha do tempo operacional da entrega
 - 043 — Perfil do próprio usuário
+- 045 — A hipótese e a prova eram a mesma linha
