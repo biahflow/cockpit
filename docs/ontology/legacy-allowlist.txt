@@ -37,7 +37,7 @@
 # ---------------------------------------------------------------------------------------------
 backend/apps/core/models.py::opportunity-sem-qualificador::Opportunity::1
 backend/apps/core/models.py::opportunity-sem-qualificador::ai_opportunity::1
-backend/apps/core/models.py::opportunity-sem-qualificador::opportunity::6
+backend/apps/core/models.py::opportunity-sem-qualificador::opportunity::5
 backend/apps/core/serializers.py::opportunity-sem-qualificador::OpportunitySerializer::1
 backend/apps/core/urls.py::opportunity-sem-qualificador::opportunities::1
 backend/apps/core/views.py::opportunity-sem-qualificador::OpportunityViewSet::1
