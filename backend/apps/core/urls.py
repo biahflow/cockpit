@@ -24,6 +24,7 @@ from .views import (
     DigitalEmployeeBlueprintViewSet,
     DigitalEmployeeViewSet,
     DocumentViewSet,
+    EngagementViewSet,
     EngineeringHandoffViewSet,
     EsignWebhookView,
     EvidenciaViewSet,
@@ -79,6 +80,8 @@ router.register("contacts", ContactViewSet)
 router.register("activities", ActivityViewSet)
 router.register("pipeline-stages", PipelineStageViewSet)
 router.register("opportunities", OpportunityViewSet)
+# Entre a conta e o projeto (ADR 0050): o mandato que agrupa várias vendas e vários projetos.
+router.register("engagements", EngagementViewSet)
 router.register("projects", ProjectViewSet)
 router.register("journey-phases", JourneyPhaseViewSet)
 router.register("phase-deliverables", PhaseDeliverableViewSet)

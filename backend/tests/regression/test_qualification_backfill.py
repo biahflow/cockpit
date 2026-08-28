@@ -7,7 +7,7 @@ executa **a função da migração**, e não uma simulação dela, no molde de
 
 Os dois casos que ela trata com cuidado são os que este arquivo protege: oportunidade **sem lead**
 não vira avaliação (inventar um lead sintético é dado falso na base), e oportunidade **com
-projeto** vira avaliação mas **não** é arquivada (`Project.opportunity` é `PROTECT`, e a tela do
+projeto** vira avaliação mas **não** é arquivada (a origem do projeto é `PROTECT`, e a tela do
 projeto lê a oportunidade).
 """
 
@@ -33,7 +33,13 @@ MIGRACAO = "apps.core.migrations.0052_backfill_qualification"
 
 
 def _rodar_backfill() -> None:
-    """Importa a migração pelo nome de módulo (o número no início impede o `import` normal)."""
+    """Importa a migração pelo nome de módulo (o número no início impede o `import` normal).
+
+    `django_apps` — o registro **vivo** — e não o estado histórico da 0052, porque o banco de
+    teste está no HEAD: modelos históricos consultariam colunas que já foram renomeadas. É por
+    isso que a 0052 resolve o reverso do projeto por `_tem_projeto`, e não por um nome fixo; ver
+    a nota "Sobre o reverso do projeto" no cabeçalho dela.
+    """
     importlib.import_module(MIGRACAO).backfill_qualification(django_apps, None)
 
 
@@ -93,7 +99,7 @@ def test_oportunidade_com_projeto_vira_avaliacao_mas_nao_e_arquivada(porta: Serv
     opportunity, _ = _oportunidade_de_qualificacao(
         porta, stage=PipelineStage.objects.get(kind="won")
     )
-    ProjectFactory(client=opportunity.client, opportunity=opportunity)
+    ProjectFactory(client=opportunity.client, originating_commercial_opportunity=opportunity)
 
     _rodar_backfill()
 
@@ -168,7 +174,7 @@ def test_reversa_nao_desarquiva_quem_alguem_arquivou_depois(porta: Service) -> N
     opportunity, _ = _oportunidade_de_qualificacao(
         porta, stage=PipelineStage.objects.get(kind="won")
     )
-    ProjectFactory(client=opportunity.client, opportunity=opportunity)  # a ida não arquiva
+    ProjectFactory(client=opportunity.client, originating_commercial_opportunity=opportunity)  # a ida não arquiva
     _rodar_backfill()
     depois = timezone.now() + timedelta(days=1)
     Opportunity.objects.filter(pk=opportunity.pk).update(archived_at=depois)

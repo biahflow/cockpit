@@ -8,6 +8,7 @@ from apps.core.models import (
     Activity,
     Artifact,
     Client,
+    Engagement,
     EngineeringHandoff,
     Evidencia,
     GithubDeliveryProjection,
@@ -123,11 +124,32 @@ class ActivityFactory(factory.django.DjangoModelFactory):
     owner = factory.SubFactory(UserFactory)
 
 
+class EngagementFactory(factory.django.DjangoModelFactory):
+    """O mandato de transformação da conta (ADR 0050) — a camada entre `Client` e `Project`."""
+
+    class Meta:
+        model = Engagement
+
+    account = factory.SubFactory(ClientFactory)
+    name = factory.Sequence(lambda n: f"Engajamento {n}")
+    owner = factory.SubFactory(UserFactory)
+    started_at = factory.LazyFunction(timezone.localdate)
+
+
 class ProjectFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Project
 
     client = factory.SubFactory(ClientFactory)
+    # O engajamento nasce **na conta do próprio projeto**, e não numa conta nova: um
+    # `SubFactory(EngagementFactory)` cru criaria um segundo `Client` e todo projeto de fábrica
+    # violaria a invariante que `Project.clean()` protege (`engagement.account == client`) — o
+    # teste ficaria verde num estado que a API recusa.
+    engagement = factory.SubFactory(
+        EngagementFactory,
+        account=factory.SelfAttribute("..client"),
+        owner=factory.SelfAttribute("..owner"),
+    )
     name = "Projeto de aceleração"
     owner = factory.SubFactory(UserFactory)
     start_date = factory.LazyFunction(timezone.localdate)

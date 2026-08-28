@@ -1,7 +1,13 @@
 export type PipelineStage = { id: number; name: string; kind: "open" | "won" | "lost"; position: number; opportunity_count?: number; estimated_total?: string | null };
 export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier; project: number | null; project_archived: boolean; origin_qualification: number | null };
 export type AiScoreDimension = { label: string; score: number };
-export type Project = { id: number; name: string; description: string; client: number; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };
+// O mandato de transformação da conta, entre `Account` e `Project` (ADR 0050, FDD 046). Uma venda
+// avulsa também tem o seu — de escopo único, criado pela própria conversão.
+export type EngagementStatus = "active" | "paused" | "closed";
+export type Engagement = { id: number; account: number; account_name: string; name: string; mandate: string; sponsor: number | null; owner: number; owner_name: string | null; status: EngagementStatus; status_display: string; started_at: string | null; ended_at: string | null; success_definition: string; needs_review: boolean; archived_at: string | null; created_at: string; updated_at: string };
+// `opportunity` é **alias de leitura** de `originating_commercial_opportunity`, mantido para não
+// quebrar consumidor no meio do renome; sai na Fase 6 (`docs/ontology/language-map.md` §7).
+export type Project = { id: number; name: string; description: string; client: number; engagement: number; engagement_name: string; originating_commercial_opportunity: number | null; opportunity: number | null; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };
 export type ServiceTier = "qualification_call" | "discovery_assessment" | "discovery_sprint" | "feasibility" | "prove" | "scale" | "transformation" | "";
 // `acquisition` é a porta (a Qualification Call), `commercial` é degrau vendável — e é a
 // categoria, não o preço zero, que decide: o Discovery + Assessment do founding client também é
