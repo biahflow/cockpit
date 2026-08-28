@@ -9,6 +9,14 @@ Produzido por: harness (Claude Code), sob `workflows/design-approval.md`
 > Este artefato é evidência para um gate humano. Não é implementação e não deve ser copiado para
 > dentro do código de aplicação. Nenhuma linha de `frontend/src/` muda nesta entrega.
 
+> **Nota de 28/08/2026 — as referências de arquivo envelheceram, e o pacote não muda por isso.**
+> A fatia 2 da issue #67 renomeou `ClientDetailPage.tsx` para `AccountDetailPage.tsx` (ADR 0052) e
+> mexeu nas linhas em volta. Toda citação `ClientDetailPage.tsx:NN` abaixo descreve **o estado do
+> código quando este pacote foi aprovado**, e é assim que ela deve ser lida: o que foi aprovado
+> aqui é a superfície, não o número de linha. Um pacote aprovado é congelado — reescrevê-lo para
+> acompanhar o código transformaria evidência de gate em documentação viva, e aí ele deixaria de
+> provar o que foi aprovado e quando.
+
 ## Por que existe um gate
 
 `Engagement` (ADR 0050, FDD 046) é o mandato de transformação que a conta contratou: a camada

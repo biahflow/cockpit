@@ -22,17 +22,34 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 
 | Alias vivo hoje | Nome canônico | Onde vive | Morre em |
 | --- | --- | --- | --- |
-| classe `Client` | `Account` | `backend/apps/core/models.py` | **#67, fatia 2** |
 | tabela `core_client` | `core_account` | `Meta.db_table` | Fase 6 |
-| rota `/api/v1/clients/` e chave `client` | `/accounts/` e `account` | `urls.py`, `serializers.py` | `/api/v2/` |
-| classe `Opportunity` | `CommercialOpportunity` | `backend/apps/core/models.py` | **#67, fatia 3** |
+| rota `/api/v1/clients/` e chaves `client` / `status` | `/accounts/`, `account`, `lifecycle_status` | `urls.py`, `serializers.py` | `/api/v2/` |
+| campo `Project.client` | `engagement.account` (é projeção, não alias) | `backend/apps/core/models.py` | Fase 6 |
 | tabela `core_opportunity` | `core_commercialopportunity` | `Meta.db_table` | Fase 6 |
 | rota `/api/v1/opportunities/` e chave `opportunity` | `/commercial-opportunities/` e `commercial_opportunity` | `urls.py`, `serializers.py` | `/api/v2/` |
+| chave de payload `gate_outcome` | `gate_decision` | `serializers.py` | `/api/v2/` |
 | classes `Processo` / `ProcessoEtapa` | `Process` / `ProcessStep` | `backend/apps/core/models.py` | **#67, fatia 4** |
 | tabelas `core_processo` / `core_processoetapa` | `core_process` / `core_processstep` | `Meta.db_table` | Fase 6 |
 | rotas `/processos/` e `/processo-etapas/` | `/processes/` e `/process-steps/` | `urls.py` | `/api/v2/` |
-| `GateOutcome` / `gate_outcome` | `GateDecision` / `gate_decision` | `backend/apps/core/models.py` | **#67, fatia 1** |
 | classe `Evidencia` (o dual-write) | `Evidence` + `Finding` | `backend/apps/core/models.py` | Fase 6 |
+
+### Já pagos pela #67 — 28/08/2026
+
+Três renomes de classe saíram da tabela porque deixaram de ser alias: o nome antigo não existe mais
+em código. **Sair daqui não é o fim da dívida** — é o fim de *uma* das três, e as outras duas
+continuam listadas acima.
+
+| Foi | É | Fatia |
+| --- | --- | --- |
+| `GateOutcome` / `gate_outcome` | `GateDecision` / `gate_decision` | 1 |
+| classe `Opportunity` e 5 campos `opportunity` | `CommercialOpportunity` / `commercial_opportunity` | 3 |
+| classe `Client`, 10 campos `client`, `status` | `Account` / `account` / `lifecycle_status` | 2 |
+
+**`Project.client` sobreviveu à fatia 2 de propósito, e é a única exceção.** Ele não é alias: é a
+**projeção** temporária cuja fonte canônica é `engagement.account` (ADR 0050), mantida honesta por
+`Project.clean()`. Renomeá-lo para `account` criaria duas coisas com o nome canônico no mesmo
+objeto — `project.account` e `project.engagement.account` — que podem divergir, e aí o nome
+canônico deixaria de identificar a fonte. Quem o remove é a Fase 6.
 
 `Evidencia` é o único que não é só renome, e por isso é o único que **não** entra na #67: a Fase 3
 a **dividiu** em `Evidence` (o registro bruto) e `Finding` (a conclusão, com `epistemic_status`),
