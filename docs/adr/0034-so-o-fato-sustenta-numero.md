@@ -115,3 +115,15 @@ E, para o que entra, a regra que dá nome a esta ADR: **só o fato sustenta núm
   dado, e mudar o volume deixaria o número gravado dizendo o antigo. Diferente do `Case` (ADR
   0020), onde congelar é o ponto — lá o número descreve um instante encerrado; aqui descreve uma
   operação que ainda está de pé.
+
+## Emenda (issue #67, fatia 4 — 28/08/2026) — os nomes das duas classes
+
+Onde esta ADR diz `Processo` e `ProcessoEtapa`, os modelos hoje se chamam `Process` e `ProcessStep`
+(ADR 0052), e `processos.custo_do_estado_atual` mora em `apps/core/process.py`. **Nenhuma das
+decisões muda**: o custo continua derivado e não persistido, a segunda extração continua sendo 409,
+o rótulo continua sem default e promover a fato continua sendo ato humano.
+
+As tabelas seguem `core_processo` e `core_processoetapa`, e as rotas seguem `/processos/` e
+`/processo-etapas/` — o renome da tabela é a Fase 6 e o da rota é a `/api/v2/`. `Evidencia` **não**
+foi renomeada aqui: a Fase 3 já a dividiu em `Evidence` + `Finding` (FDD 045), e quem a remove é a
+Fase 6, junto com o dual-write.

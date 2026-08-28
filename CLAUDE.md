@@ -189,12 +189,13 @@ Key cross-cutting patterns to preserve:
   uma `Evidence` viva**: a metade do revisor está no `clean()`, a do M2M só cabe no serializer, e
   arquivar a última evidência viva de um fato é 409. `Discovery`/`DiscoverySession`/
   `ProcessObservation` dão tempo e autoria ao levantamento — é a `ProcessObservation` que desfaz a
-  proveniência única de `Processo.source_project`, permitindo o mesmo processo em dois Discoveries.
+  proveniência única de `Process.source_project`, permitindo o mesmo processo em dois Discoveries.
   **O dual-write é obrigatório enquanto durar esta fase**: `MeetingViewSet.estruturar` grava
-  `Evidencia` **e** o par novo, porque `processos.custo_do_estado_atual` e `ProcessoDetailPage`
-  ainda leem o legado — há regressão afirmando que promover um `Finding` não move o custo. Campos
-  com nome canônico (`account`, `process`, `step`) apontam para os modelos legados; o renome físico
-  é fase posterior, e `legacy_evidencia` é o escape de mapeamento do backfill (migração `0054`).
+  `Evidencia` **e** o par novo, porque `process.custo_do_estado_atual` e `ProcessDetailPage`
+  ainda leem o legado — há regressão afirmando que promover um `Finding` não move o custo. Os campos
+  com nome canônico (`account`, `process`, `step`) já apontam para as classes de nome certo desde a
+  #67; o que sobra do legado é a própria `Evidencia`, que a Fase 6 remove com o dual-write, e
+  `legacy_evidencia` é o escape de mapeamento do backfill (migração `0054`).
 - **O snapshot do portal fala canônico, e quem carimba a projeção é quem muda o estado.**
   `portal.build_snapshot` é projeção de leitura do One, e o One **nunca renomeia** (`language-map`
   §3): por isso ele leva `account` (de `engagement.account`, a fonte — não de `Project.client`, que
@@ -219,11 +220,15 @@ Key cross-cutting patterns to preserve:
   quando as duas vêm no mesmo corpo**. Todo alias de escrita precisa de regressão, porque a SPA
   escreve o nome canônico: sem ela a linha do serializer não tem chamador aqui dentro, e a próxima
   varredura atrás do nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem
-  nada ficar vermelho. Já pagos: `GateOutcome`→`GateDecision`, `Opportunity`→
-  `CommercialOpportunity` e `Client`→`Account` (fatia 2, migração `0062`, com os dez campos FK
-  virando `account` e `Client.status` virando `Account.lifecycle_status`). Falta `Processo`/
-  `ProcessoEtapa`. O que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt`
-  (teto 37), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo
+  nada ficar vermelho. **A #67 fechou**, com os quatro renomes pagos: `GateOutcome`→`GateDecision`,
+  `Opportunity`→`CommercialOpportunity`, `Client`→`Account` (fatia 2, migração `0062`, com os dez
+  campos FK virando `account` e `Client.status` virando `Account.lifecycle_status`) e
+  `Processo`/`ProcessoEtapa`→`Process`/`ProcessStep` (fatia 4, migração `0063`, com
+  `ProcessStep.processo` e `Evidencia.processo`/`etapa` virando `process`/`step`, e o módulo
+  `processos.py` virando `process.py`). `Evidencia` **não** foi renomeada: ela é a metade legada do
+  split e sai na Fase 6, com o dual-write. Sobram as **tabelas** (Fase 6) e as rotas e chaves de
+  payload (`/api/v2/`). O que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt`
+  (teto 29), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo
   vs. chave).
 - **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
   `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP

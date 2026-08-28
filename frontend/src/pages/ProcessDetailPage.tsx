@@ -6,7 +6,7 @@ import { ConfirmDialog } from "../components/Modal";
 import { SUSTENTACAO_LABEL, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Evidencia, EvidenciaForma, EvidenciaRotulo, Processo, ProcessoEtapa } from "../types";
+import type { Evidencia, EvidenciaForma, EvidenciaRotulo, Process, ProcessStep } from "../types";
 
 /**
  * As seis letras do P-S-D-T-E-R (`docs/metodologia-fde.md:75-79`), **rotuladas pela pergunta**.
@@ -28,7 +28,7 @@ const PSDTER = [
   ["retrabalho", "Retrabalho — o que acontece quando dá errado"],
 ] as const satisfies ReadonlyArray<readonly [keyof CamposPsdter, string]>;
 
-type CamposPsdter = Pick<ProcessoEtapa, "pessoas" | "sistema" | "dados" | "tempo" | "erro" | "retrabalho">;
+type CamposPsdter = Pick<ProcessStep, "pessoas" | "sistema" | "dados" | "tempo" | "erro" | "retrabalho">;
 
 /**
  * Os nove insumos da fórmula do custo, na ordem em que ela é escrita.
@@ -53,7 +53,7 @@ const INSUMOS = [
 ] as const satisfies ReadonlyArray<readonly [keyof CamposDeCusto, string, string]>;
 
 type CamposDeCusto = Pick<
-  Processo,
+  Process,
   "volume_mes" | "tempo_horas" | "pessoas" | "custo_hora"
   | "retrabalho_mes" | "erros_mes" | "perdas_mes" | "espera_mes" | "risco_mes"
 >;
@@ -73,9 +73,9 @@ const blankEtapa: { name: string } & CamposPsdter = {
  * nada sobre o achado.
  */
 const blankEvidencia: {
-  rotulo: EvidenciaRotulo | ""; forma: EvidenciaForma | ""; content: string; etapa: string;
+  rotulo: EvidenciaRotulo | ""; forma: EvidenciaForma | ""; content: string; step: string;
 } = {
-  rotulo: "", forma: "", content: "", etapa: "",
+  rotulo: "", forma: "", content: "", step: "",
 };
 
 const rotuloLabels: Record<EvidenciaRotulo, string> = {
@@ -99,9 +99,9 @@ const ROTULO_BADGE: Record<EvidenciaRotulo, string> = {
   fato: "state--1", hipotese: "state--2", desconhecido: "state--off",
 };
 
-export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: number }) {
-  const [processo, setProcesso] = useState<Processo>();
-  const [etapas, setEtapas] = useState<ProcessoEtapa[]>([]);
+export function ProcessDetailPage({ clientId, id }: { clientId: number; id: number }) {
+  const [processo, setProcesso] = useState<Process>();
+  const [etapas, setEtapas] = useState<ProcessStep[]>([]);
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
   const [etapaDraft, setEtapaDraft] = useState(blankEtapa);
   const [evidenciaDraft, setEvidenciaDraft] = useState(blankEvidencia);
@@ -116,9 +116,12 @@ export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: num
   const [salvandoInsumos, setSalvandoInsumos] = useState(false);
 
   const load = useCallback(() => Promise.all([
-    api<Processo>(`/processos/${id}/`),
-    api<ProcessoEtapa[]>(`/processo-etapas/?processo=${id}`),
-    api<Evidencia[]>(`/evidencias/?processo=${id}`),
+    // A **rota** continua sendo `/processos/` e `/processo-etapas/` — ela morre na `/api/v2/`
+    // (`docs/ontology/aliases.md`). O **query param** e as chaves de corpo aqui já são os
+    // canônicos: a chave antiga fica na v1 para quem integrou de fora, não para a SPA.
+    api<Process>(`/processos/${id}/`),
+    api<ProcessStep[]>(`/processo-etapas/?process=${id}`),
+    api<Evidencia[]>(`/evidencias/?process=${id}`),
   ]).then(([loadedProcesso, loadedEtapas, loadedEvidencias]) => {
     setProcesso(loadedProcesso); setEtapas(loadedEtapas); setEvidencias(loadedEvidencias);
     setInsumoDraft(Object.fromEntries(
@@ -129,15 +132,15 @@ export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: num
 
   async function createEtapa(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
-    try { await api("/processo-etapas/", { method: "POST", body: JSON.stringify({ processo: id, ...etapaDraft }) }); setEtapaDraft(blankEtapa); await load(); }
+    try { await api("/processo-etapas/", { method: "POST", body: JSON.stringify({ process: id, ...etapaDraft }) }); setEtapaDraft(blankEtapa); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   async function createEvidencia(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
-    // `etapa` vazia vira `null`, e não fica de fora do corpo: o vínculo é opcional por decisão da
+    // `step` vazio vira `null`, e não fica de fora do corpo: o vínculo é opcional por decisão da
     // FDD 039 — o modelo não sabe a qual etapa um achado pertence, e vínculo errado é pior que
     // vínculo nenhum. Quem sabe é quem estava na reunião, e é aqui que ele diz.
-    const corpo = { processo: id, ...evidenciaDraft, etapa: evidenciaDraft.etapa || null };
+    const corpo = { process: id, ...evidenciaDraft, step: evidenciaDraft.step || null };
     try { await api("/evidencias/", { method: "POST", body: JSON.stringify(corpo) }); setEvidenciaDraft(blankEvidencia); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
@@ -159,7 +162,7 @@ export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: num
    * Grava os insumos do custo — e a regra inteira está no `|| null`.
    *
    * **Campo em branco vira `null`, nunca `0`.** É a metade de tela da decisão que o
-   * `processos.py` toma no cálculo: "não medimos o retrabalho" e "não há retrabalho" são
+   * `process.py` toma no cálculo: "não medimos o retrabalho" e "não há retrabalho" são
    * conclusões opostas, e um formulário que mandasse zero por omissão apagaria a primeira,
    * transformando toda ausência em medição. O `nao_apurado` deixaria de existir, o total
    * pareceria fechado, e a tela inteira passaria a afirmar mais do que se sabe.
@@ -193,7 +196,7 @@ export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: num
     <a href={`/contas/${clientId}`} className="back-link"><ArrowLeft className="size-4" />Voltar para o cliente</a>
     {isArchiving && <ConfirmDialog
       title="Arquivar processo"
-      // A mensagem diz o que `Processo.archive()` faz de verdade: arquivar **leva junto** etapas e
+      // A mensagem diz o que `Process.archive()` faz de verdade: arquivar **leva junto** etapas e
       // evidências, no mesmo instante. Um mapa de processo se guarda inteiro — mas quem clica
       // precisa saber que não está guardando só o cabeçalho.
       message={<>O processo <strong className="text-ink">{processo.name}</strong> sai das listagens ativas <strong className="text-ink">levando junto as {etapas.length} etapa(s) e as {evidencias.length} evidência(s) dele</strong>. Nada é apagado: restaurar depois traz de volta exatamente o que este arquivamento levou.</>}
@@ -291,11 +294,11 @@ export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: num
         <label className="form-label">Rótulo<select className="field" value={evidenciaDraft.rotulo} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, rotulo: event.target.value as EvidenciaRotulo })} required><option value="" disabled>Selecione…</option>{Object.entries(rotuloLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="form-label">Forma<select className="field" value={evidenciaDraft.forma} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, forma: event.target.value as EvidenciaForma })} required><option value="" disabled>Selecione…</option>{Object.entries(formaLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {/* O vínculo com a etapa, que a extração deixa sempre vazio de propósito. Sem este campo
-            a `Evidencia.etapa` seria coluna sem caminho de preenchimento — a FDD 039 diz que ela
+            a `Evidencia.step` seria coluna sem caminho de preenchimento — a FDD 039 diz que ela
             existe "para ser preenchida por gente depois", e "depois" precisa de um lugar. */}
         <label className="form-label sm:col-span-2">
           Etapa (opcional)
-          <select className="field" value={evidenciaDraft.etapa} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, etapa: event.target.value })} disabled={!etapas.length}>
+          <select className="field" value={evidenciaDraft.step} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, step: event.target.value })} disabled={!etapas.length}>
             <option value="">{etapas.length ? "O achado é do processo inteiro" : "Nenhuma etapa mapeada ainda"}</option>
             {etapas.map(etapa => <option key={etapa.id} value={etapa.id}>{etapa.name}</option>)}
           </select>

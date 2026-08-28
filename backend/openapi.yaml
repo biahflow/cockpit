@@ -1235,7 +1235,8 @@ paths:
   /api/v1/clients/overview/:
     get:
       operationId: v1_clients_overview_retrieve
-      description: Lista agregada p/ o grid de clientes (honra `?status=`).
+      description: Lista agregada p/ o grid de contas (honra `?lifecycle_status=`
+        e o alias `?status=`).
       tags:
       - v1
       security:
@@ -2278,7 +2279,7 @@ paths:
       description: |-
         O Discovery como unidade de levantamento (FDD 045).
 
-        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessViewSet` logo acima, e a diferença é a
         âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
         e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
         pela mesma guarda, como em todo recurso de projeto.
@@ -2300,7 +2301,7 @@ paths:
       description: |-
         O Discovery como unidade de levantamento (FDD 045).
 
-        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessViewSet` logo acima, e a diferença é a
         âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
         e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
         pela mesma guarda, como em todo recurso de projeto.
@@ -2333,7 +2334,7 @@ paths:
       description: |-
         O Discovery como unidade de levantamento (FDD 045).
 
-        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessViewSet` logo acima, e a diferença é a
         âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
         e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
         pela mesma guarda, como em todo recurso de projeto.
@@ -2360,7 +2361,7 @@ paths:
       description: |-
         O Discovery como unidade de levantamento (FDD 045).
 
-        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessViewSet` logo acima, e a diferença é a
         âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
         e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
         pela mesma guarda, como em todo recurso de projeto.
@@ -2399,7 +2400,7 @@ paths:
       description: |-
         O Discovery como unidade de levantamento (FDD 045).
 
-        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessViewSet` logo acima, e a diferença é a
         âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
         e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
         pela mesma guarda, como em todo recurso de projeto.
@@ -2437,7 +2438,7 @@ paths:
       description: |-
         O Discovery como unidade de levantamento (FDD 045).
 
-        **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+        **Com `ProjectScopedMixin`**, ao contrário do `ProcessViewSet` logo acima, e a diferença é a
         âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
         e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
         pela mesma guarda, como em todo recurso de projeto.
@@ -3401,7 +3402,7 @@ paths:
       description: |-
         O dado bruto que sustenta um achado (FDD 045).
 
-        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
         dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
         evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
         `account` em vez de pelo processo pai.
@@ -3423,7 +3424,7 @@ paths:
       description: |-
         O dado bruto que sustenta um achado (FDD 045).
 
-        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
         dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
         evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
         `account` em vez de pelo processo pai.
@@ -3456,7 +3457,7 @@ paths:
       description: |-
         O dado bruto que sustenta um achado (FDD 045).
 
-        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
         dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
         evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
         `account` em vez de pelo processo pai.
@@ -3483,7 +3484,7 @@ paths:
       description: |-
         O dado bruto que sustenta um achado (FDD 045).
 
-        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
         dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
         evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
         `account` em vez de pelo processo pai.
@@ -3522,7 +3523,7 @@ paths:
       description: |-
         O dado bruto que sustenta um achado (FDD 045).
 
-        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
         dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
         evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
         `account` em vez de pelo processo pai.
@@ -3560,7 +3561,7 @@ paths:
       description: |-
         O dado bruto que sustenta um achado (FDD 045).
 
-        **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+        **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
         dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
         evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
         `account` em vez de pelo processo pai.
@@ -5743,13 +5744,13 @@ paths:
 
         **A segunda é a recusa de reexecução**, e ela é divergência deliberada do `extrair_decisoes`:
         lá cada execução cria `Decisao` em **rascunho**, um estado que a tela mostra como pendente
-        de revisão, e uma segunda rodada só dá mais rascunho para revisar. `Processo` não tem
+        de revisão, e uma segunda rodada só dá mais rascunho para revisar. `Process` não tem
         estado de rascunho — a segunda extração dobraria o mapa da operação do cliente **em
         silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
         e como sair dele, que é para o que o `StateConflict` existe.
 
         **Desde a FDD 045 a gravação é dupla, e a forma da resposta não muda.** Além de
-        `Processo`/`ProcessoEtapa`/`Evidencia`, a mesma transação escreve o par do split: uma
+        `Process`/`ProcessStep`/`Evidencia`, a mesma transação escreve o par do split: uma
         `Evidence` por processo, que diz de onde o achado veio, e um `Finding` por achado, que diz
         o que ele afirma — sempre em `hypothesis`, pela mesma razão que a `Evidencia` nasce
         `hipotese`. O legado continua porque o custo do estado atual e a tela ainda leem dele; a
@@ -7341,7 +7342,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProcessoEtapa'
+                  $ref: '#/components/schemas/ProcessStep'
           description: ''
     post:
       operationId: v1_processo_etapas_create
@@ -7352,13 +7353,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProcessoEtapa'
+              $ref: '#/components/schemas/ProcessStep'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ProcessoEtapa'
+              $ref: '#/components/schemas/ProcessStep'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ProcessoEtapa'
+              $ref: '#/components/schemas/ProcessStep'
         required: true
       security:
       - cookieAuth: []
@@ -7367,7 +7368,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessoEtapa'
+                $ref: '#/components/schemas/ProcessStep'
           description: ''
   /api/v1/processo-etapas/{id}/:
     get:
@@ -7378,7 +7379,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo etapa.
+        description: Um valor inteiro único que identifica este process step.
         required: true
       tags:
       - v1
@@ -7389,7 +7390,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessoEtapa'
+                $ref: '#/components/schemas/ProcessStep'
           description: ''
     put:
       operationId: v1_processo_etapas_update
@@ -7399,7 +7400,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo etapa.
+        description: Um valor inteiro único que identifica este process step.
         required: true
       tags:
       - v1
@@ -7407,13 +7408,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProcessoEtapa'
+              $ref: '#/components/schemas/ProcessStep'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/ProcessoEtapa'
+              $ref: '#/components/schemas/ProcessStep'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ProcessoEtapa'
+              $ref: '#/components/schemas/ProcessStep'
         required: true
       security:
       - cookieAuth: []
@@ -7422,7 +7423,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessoEtapa'
+                $ref: '#/components/schemas/ProcessStep'
           description: ''
     patch:
       operationId: v1_processo_etapas_partial_update
@@ -7432,7 +7433,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo etapa.
+        description: Um valor inteiro único que identifica este process step.
         required: true
       tags:
       - v1
@@ -7440,13 +7441,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedProcessoEtapa'
+              $ref: '#/components/schemas/PatchedProcessStep'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedProcessoEtapa'
+              $ref: '#/components/schemas/PatchedProcessStep'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedProcessoEtapa'
+              $ref: '#/components/schemas/PatchedProcessStep'
       security:
       - cookieAuth: []
       responses:
@@ -7454,7 +7455,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessoEtapa'
+                $ref: '#/components/schemas/ProcessStep'
           description: ''
     delete:
       operationId: v1_processo_etapas_destroy
@@ -7464,7 +7465,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo etapa.
+        description: Um valor inteiro único que identifica este process step.
         required: true
       tags:
       - v1
@@ -7482,7 +7483,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo etapa.
+        description: Um valor inteiro único que identifica este process step.
         required: true
       tags:
       - v1
@@ -7515,7 +7516,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Processo'
+                  $ref: '#/components/schemas/Process'
           description: ''
     post:
       operationId: v1_processos_create
@@ -7531,13 +7532,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Processo'
+              $ref: '#/components/schemas/Process'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Processo'
+              $ref: '#/components/schemas/Process'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Processo'
+              $ref: '#/components/schemas/Process'
         required: true
       security:
       - cookieAuth: []
@@ -7546,7 +7547,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Processo'
+                $ref: '#/components/schemas/Process'
           description: ''
   /api/v1/processos/{id}/:
     get:
@@ -7562,7 +7563,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo.
+        description: Um valor inteiro único que identifica este process.
         required: true
       tags:
       - v1
@@ -7573,7 +7574,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Processo'
+                $ref: '#/components/schemas/Process'
           description: ''
     put:
       operationId: v1_processos_update
@@ -7588,7 +7589,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo.
+        description: Um valor inteiro único que identifica este process.
         required: true
       tags:
       - v1
@@ -7596,13 +7597,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Processo'
+              $ref: '#/components/schemas/Process'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Processo'
+              $ref: '#/components/schemas/Process'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Processo'
+              $ref: '#/components/schemas/Process'
         required: true
       security:
       - cookieAuth: []
@@ -7611,7 +7612,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Processo'
+                $ref: '#/components/schemas/Process'
           description: ''
     patch:
       operationId: v1_processos_partial_update
@@ -7626,7 +7627,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo.
+        description: Um valor inteiro único que identifica este process.
         required: true
       tags:
       - v1
@@ -7634,13 +7635,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedProcesso'
+              $ref: '#/components/schemas/PatchedProcess'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedProcesso'
+              $ref: '#/components/schemas/PatchedProcess'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedProcesso'
+              $ref: '#/components/schemas/PatchedProcess'
       security:
       - cookieAuth: []
       responses:
@@ -7648,7 +7649,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Processo'
+                $ref: '#/components/schemas/Process'
           description: ''
     delete:
       operationId: v1_processos_destroy
@@ -7663,7 +7664,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo.
+        description: Um valor inteiro único que identifica este process.
         required: true
       tags:
       - v1
@@ -7688,7 +7689,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este processo.
+        description: Um valor inteiro único que identifica este process.
         required: true
       tags:
       - v1
@@ -7699,7 +7700,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessoUnarchived'
+                $ref: '#/components/schemas/ProcessUnarchived'
           description: ''
   /api/v1/project-checklist-items/:
     get:
@@ -12096,11 +12097,17 @@ components:
         id:
           type: integer
           readOnly: true
+        process:
+          type: integer
         processo:
           type: integer
-        etapa:
+          readOnly: true
+        step:
           type: integer
           nullable: true
+        etapa:
+          type: integer
+          readOnly: true
         forma:
           $ref: '#/components/schemas/FormaEnum'
         forma_display:
@@ -12131,9 +12138,11 @@ components:
       required:
       - content
       - created_at
+      - etapa
       - forma
       - forma_display
       - id
+      - process
       - processo
       - registered_by
       - rotulo
@@ -14239,11 +14248,17 @@ components:
         id:
           type: integer
           readOnly: true
+        process:
+          type: integer
         processo:
           type: integer
-        etapa:
+          readOnly: true
+        step:
           type: integer
           nullable: true
+        etapa:
+          type: integer
+          readOnly: true
         forma:
           $ref: '#/components/schemas/FormaEnum'
         forma_display:
@@ -14946,42 +14961,7 @@ components:
           maximum: 9223372036854775807
           minimum: 0
           format: int64
-    PatchedProcessObservation:
-      type: object
-      description: |-
-        A observação de um processo dentro de um Discovery (FDD 045).
-
-        É esta linha que permite o mesmo processo aparecer em dois Discoveries sem duplicar o mapa —
-        e por isso ela **não** tem unicidade por (discovery, process): revisitar o mesmo processo duas
-        vezes no mesmo Discovery é o caso normal de uma validação depois da primeira leitura.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        discovery:
-          type: integer
-        process:
-          type: integer
-        observed_at:
-          type: string
-          format: date
-        observation_type:
-          $ref: '#/components/schemas/ObservationTypeEnum'
-        observation_type_display:
-          type: string
-          readOnly: true
-        source_session:
-          type: integer
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-    PatchedProcesso:
+    PatchedProcess:
       type: object
       description: |-
         O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
@@ -15081,7 +15061,42 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedProcessoEtapa:
+    PatchedProcessObservation:
+      type: object
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        É esta linha que permite o mesmo processo aparecer em dois Discoveries sem duplicar o mapa —
+        e por isso ela **não** tem unicidade por (discovery, process): revisitar o mesmo processo duas
+        vezes no mesmo Discovery é o caso normal de uma validação depois da primeira leitura.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        discovery:
+          type: integer
+        process:
+          type: integer
+        observed_at:
+          type: string
+          format: date
+        observation_type:
+          $ref: '#/components/schemas/ObservationTypeEnum'
+        observation_type_display:
+          type: string
+          readOnly: true
+        source_session:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedProcessStep:
       type: object
       description: |-
         A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
@@ -15092,8 +15107,11 @@ components:
         id:
           type: integer
           readOnly: true
+        process:
+          type: integer
         processo:
           type: integer
+          readOnly: true
         name:
           type: string
           maxLength: 255
@@ -15926,50 +15944,7 @@ components:
         * `low` - Baixa
         * `medium` - Média
         * `high` - Alta
-    ProcessObservation:
-      type: object
-      description: |-
-        A observação de um processo dentro de um Discovery (FDD 045).
-
-        É esta linha que permite o mesmo processo aparecer em dois Discoveries sem duplicar o mapa —
-        e por isso ela **não** tem unicidade por (discovery, process): revisitar o mesmo processo duas
-        vezes no mesmo Discovery é o caso normal de uma validação depois da primeira leitura.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        discovery:
-          type: integer
-        process:
-          type: integer
-        observed_at:
-          type: string
-          format: date
-        observation_type:
-          $ref: '#/components/schemas/ObservationTypeEnum'
-        observation_type_display:
-          type: string
-          readOnly: true
-        source_session:
-          type: integer
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - created_at
-      - discovery
-      - id
-      - observation_type_display
-      - observed_at
-      - process
-      - updated_at
-    Processo:
+    Process:
       type: object
       description: |-
         O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
@@ -16079,7 +16054,50 @@ components:
       - name
       - registered_by
       - updated_at
-    ProcessoEtapa:
+    ProcessObservation:
+      type: object
+      description: |-
+        A observação de um processo dentro de um Discovery (FDD 045).
+
+        É esta linha que permite o mesmo processo aparecer em dois Discoveries sem duplicar o mapa —
+        e por isso ela **não** tem unicidade por (discovery, process): revisitar o mesmo processo duas
+        vezes no mesmo Discovery é o caso normal de uma validação depois da primeira leitura.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        discovery:
+          type: integer
+        process:
+          type: integer
+        observed_at:
+          type: string
+          format: date
+        observation_type:
+          $ref: '#/components/schemas/ObservationTypeEnum'
+        observation_type_display:
+          type: string
+          readOnly: true
+        source_session:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - discovery
+      - id
+      - observation_type_display
+      - observed_at
+      - process
+      - updated_at
+    ProcessStep:
       type: object
       description: |-
         A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
@@ -16090,8 +16108,11 @@ components:
         id:
           type: integer
           readOnly: true
+        process:
+          type: integer
         processo:
           type: integer
+          readOnly: true
         name:
           type: string
           maxLength: 255
@@ -16124,9 +16145,10 @@ components:
       - created_at
       - id
       - name
+      - process
       - processo
       - updated_at
-    ProcessoUnarchived:
+    ProcessUnarchived:
       type: object
       properties:
         id:

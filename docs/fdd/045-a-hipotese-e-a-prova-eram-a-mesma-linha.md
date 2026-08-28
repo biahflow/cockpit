@@ -22,7 +22,7 @@ justamente o contrário — *"nunca só entrevista"* (`docs/metodologia-fde.md:8
 quando as fontes são contáveis, e aqui elas não são; são um campo `CharField`.
 
 Há uma segunda perda, e ela aparece na segunda venda para a mesma empresa.
-`Processo.source_project` e `Processo.source_meeting` respondem por **uma** origem. O mesmo
+`Process.source_project` e `Process.source_meeting` respondem por **uma** origem. O mesmo
 processo revisitado noutro Discovery não tem onde ser registrado: ou a segunda leitura sobrescreve
 a primeira em silêncio, ou o processo é duplicado e o AS-IS da conta passa a ter duas versões sem
 que nada diga qual é a de quando. É a mesma classe de defeito que a FDD 039 corrigiu ao ancorar o
@@ -30,7 +30,7 @@ processo no cliente — só que um nível acima.
 
 E há uma terceira, que é a que o language map (D6) nomeia: **promover a fato não custava nada.**
 Um `PATCH {"rotulo": "fato"}` bastava. Nada exigia que existisse evidência viva por baixo, e nada
-registrava quem afirmou. `processos.custo_do_estado_atual` lê exatamente esse campo para decidir
+registrava quem afirmou. `process.custo_do_estado_atual` lê exatamente esse campo para decidir
 se o número mais persuasivo de um Discovery entra na proposta que o cliente lê — de modo que o
 caminho mais curto entre "alguém achou" e "a casa afirmou ao cliente" era um clique.
 
@@ -71,7 +71,7 @@ carimbo do trecho, editar o `raw_excerpt` depois muda o que a casa alega ter obs
 rastro. É a mesma ideia do case congelado (FDD 027), no tamanho de um campo.
 
 **A extração por IA passa a escrever nos dois modelos, na mesma transação.** Continua criando
-`Processo`/`ProcessoEtapa`/`Evidencia` **e** cria, ao lado, uma `Evidence` por processo (a reunião
+`Process`/`ProcessStep`/`Evidencia` **e** cria, ao lado, uma `Evidence` por processo (a reunião
 como fonte) e um `Finding` por achado, ligados entre si. `Finding.legacy_evidencia` aponta para a
 linha fundida de onde ele saiu. **A resposta da action não muda de forma** — segue
 `{"processos": [...]}`, e nenhuma tela precisou mudar.
@@ -96,7 +96,7 @@ linha fundida de onde ele saiu. **A resposta da action não muda de forma** — 
 - `content_hash` muda quando `raw_excerpt` muda, e é vazio quando não há trecho.
 - Depois do backfill, cada `Evidencia` — inclusive a arquivada — tem o par correspondente, com
   `legacy_evidencia` preenchido, e nenhuma `Evidencia` foi apagada ou alterada.
-- `processos.custo_do_estado_atual` continua idêntico: quem sustenta o número nesta fase ainda é a
+- `process.custo_do_estado_atual` continua idêntico: quem sustenta o número nesta fase ainda é a
   `Evidencia` legada.
 
 ## Contrato
@@ -125,8 +125,8 @@ acontece.
 
 ### Por que o dual-write, e não a troca
 
-`processos.custo_do_estado_atual` (FDD 039) pergunta por `Evidencia` viva com `rotulo=fato`, e
-`ProcessoDetailPage` lista `Evidencia`. Desligar a gravação legada nesta fatia derrubaria as duas
+`process.custo_do_estado_atual` (FDD 039) pergunta por `Evidencia` viva com `rotulo=fato`, e
+`ProcessDetailPage` lista `Evidencia`. Desligar a gravação legada nesta fatia derrubaria as duas
 no mesmo commit — e derrubaria em silêncio: o custo passaria a nunca ser sustentado, o que **é** um
 estado válido, e nenhum teste ficaria vermelho por isso. A troca da fonte é uma decisão própria,
 com o seu próprio teste; aqui ela fica travada de propósito, e há regressão afirmando que promover
@@ -218,16 +218,20 @@ Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e a
 
 ## Fora deste recorte
 
-- **Tela.** Nenhuma. O dual-write mantém `ProcessoDetailPage` e `AccountDetailPage` funcionando
+- **Tela.** Nenhuma. O dual-write mantém `ProcessDetailPage` e `AccountDetailPage` funcionando
   sobre o modelo legado; tela de Discovery e painel de achados são interface nova e exigem Design
   Approval Package, que não existe. Entraram só os tipos em `frontend/src/types.ts`, sem consumidor,
   para a próxima fatia não começar do zero.
 - **`Engagement`.** A issue original cita `discovery.engagement`, e o modelo **não existe ainda** —
   ele é a Fase 2 da ontologia. O campo é aditivo e entra lá.
 - **Descontinuar a `Evidencia`.** É a fatia seguinte, e ela começa por trocar a fonte de
-  `processos.custo_do_estado_atual`.
-- **Renomear `Processo`/`ProcessoEtapa`/`Evidencia`.** `Client`→`Account` saiu na fatia 2 da
-  issue #67 (ADR 0052); os três que sobram são a fatia 4, e as **tabelas** dos quatro são a Fase 6.
-  Aqui o nome canônico aparece só como **nome de campo** (`account`, `process`, `step`) apontando
-  para o modelo legado.
+  `process.custo_do_estado_atual`.
+- **Renomear `Processo`/`ProcessoEtapa`/`Evidencia`.** Era "fora deste recorte" quando esta FDD
+  foi escrita, e a issue #67 (ADR 0052) pagou os dois primeiros: `Processo`/`ProcessoEtapa` viraram
+  `Process`/`ProcessStep` na fatia 4, em 28/08/2026, junto de `Client`→`Account` na fatia 2. As
+  **tabelas** dos quatro continuam sendo a Fase 6. `Evidencia` **não** entrou, e é o único dos
+  quatro que não é só renome: ela é a metade legada deste split, e quem a remove é a Fase 6, com o
+  dual-write. Aqui o nome canônico aparecia só como **nome de campo** (`account`, `process`,
+  `step`) apontando para o modelo legado; depois da #67 esses campos apontam para a classe de nome
+  certo.
 - **`PainPoint`, `ImprovementOpportunity`, `PriorityAssessment`, `SolutionHypothesis`.** Fase 4.

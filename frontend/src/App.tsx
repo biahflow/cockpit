@@ -21,7 +21,7 @@ import { LeadsPage } from "./pages/LeadsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PipelinePage } from "./pages/PipelinePage";
 import { ProfilePage } from "./pages/ProfilePage";
-import { ProcessoDetailPage } from "./pages/ProcessoDetailPage";
+import { ProcessDetailPage } from "./pages/ProcessDetailPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ServicesPage } from "./pages/ServicesPage";
@@ -54,8 +54,12 @@ function resolvePage(path: string): ReactNode {
   // não decide nada — ela é o que impede que afrouxar o `$` do `accountDetail` amanhã torne esta
   // aqui inalcançável em silêncio. Nada muda no menu: o `isActive` do `Layout` casa por prefixo,
   // então "Contas" já acende e o rastro do topo já mostra o rótulo do pai.
+  // A fatia 4 da issue #67 renomeou o componente (`ProcessoDetailPage` → `ProcessDetailPage`)
+  // e **não** a rota: `/contas/:id/processos/:pid` é copy visível na barra de endereço, e
+  // trocá-la seria mudança de superfície sem DAP — além de matar link de favorito, que é o
+  // mesmo defeito que o redirecionamento `/clientes*` → `/contas*` existe para evitar.
   const processoDetail = path.match(/^\/contas\/(\d+)\/processos\/(\d+)$/);
-  if (processoDetail) return <ProcessoDetailPage clientId={Number(processoDetail[1])} id={Number(processoDetail[2])} />;
+  if (processoDetail) return <ProcessDetailPage clientId={Number(processoDetail[1])} id={Number(processoDetail[2])} />;
   const accountDetail = path.match(/^\/contas\/(\d+)$/);
   if (accountDetail) return <AccountDetailPage id={Number(accountDetail[1])} />;
   if (path === "/contas") return <AccountsPage />;

@@ -21,9 +21,9 @@ from apps.core.models import (
     Lead,
     Meeting,
     PipelineStage,
-    Processo,
+    Process,
     ProcessObservation,
-    ProcessoEtapa,
+    ProcessStep,
     Project,
     ProjectMember,
     Qualification,
@@ -240,7 +240,7 @@ class InvoiceFactory(factory.django.DjangoModelFactory):
     due_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=15))
 
 
-class ProcessoFactory(factory.django.DjangoModelFactory):
+class ProcessFactory(factory.django.DjangoModelFactory):
     """Processo mapeado, **sem nenhum insumo de custo** por padrão (FDD 039).
 
     Vazio de propósito: o caso interessante do cálculo é a lacuna, e uma fábrica que preenchesse
@@ -248,17 +248,17 @@ class ProcessoFactory(factory.django.DjangoModelFactory):
     """
 
     class Meta:
-        model = Processo
+        model = Process
 
     account = factory.SubFactory(AccountFactory)
     name = "Faturamento mensal"
 
 
-class ProcessoEtapaFactory(factory.django.DjangoModelFactory):
+class ProcessStepFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = ProcessoEtapa
+        model = ProcessStep
 
-    processo = factory.SubFactory(ProcessoFactory)
+    process = factory.SubFactory(ProcessFactory)
     name = "Conferir pedidos do mês"
     pessoas = "Analista financeiro"
     sistema = "ERP e planilha"
@@ -275,7 +275,7 @@ class EvidenciaFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Evidencia
 
-    processo = factory.SubFactory(ProcessoFactory)
+    process = factory.SubFactory(ProcessFactory)
     forma = Evidencia.Forma.ENTREVISTA
     rotulo = Evidencia.Rotulo.HIPOTESE
     content = "O time diz que o fechamento leva dois dias."
@@ -307,7 +307,7 @@ class ProcessObservationFactory(factory.django.DjangoModelFactory):
         model = ProcessObservation
 
     discovery = factory.SubFactory(DiscoveryFactory)
-    process = factory.SubFactory(ProcessoFactory)
+    process = factory.SubFactory(ProcessFactory)
     observed_at = factory.LazyFunction(timezone.localdate)
 
 

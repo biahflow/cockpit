@@ -131,7 +131,7 @@ const processos = serie(3, index => ({
 }));
 
 const processoEtapas = serie(3, index => ({
-  id: index, processo: 1, position: index,
+  id: index, process: 1, processo: 1, position: index,
   name: `Etapa ${index} — conferência manual da nota fiscal no ERP`,
   pessoas: "Analista de faturamento, duas pessoas em revezamento",
   sistema: "ERP Protheus e uma planilha de conferência no Drive",
@@ -154,7 +154,7 @@ const evidencias = [
   { rotulo: "desconhecido", rotulo_display: "Desconhecido", forma: "observacao", forma_display: "Observação (o que fazem)",
     content: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
 ].map((registro, indice) => ({
-  id: indice + 1, processo: 1, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
+  id: indice + 1, process: 1, processo: 1, step: null, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
 }));
 
 const saude = serie(8, index => ({

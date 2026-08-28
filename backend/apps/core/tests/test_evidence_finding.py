@@ -37,9 +37,9 @@ from .factories import (
     EvidenciaFactory,
     FindingFactory,
     MeetingFactory,
+    ProcessFactory,
     ProcessObservationFactory,
-    ProcessoEtapaFactory,
-    ProcessoFactory,
+    ProcessStepFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -335,8 +335,8 @@ def test_o_hash_muda_quando_o_trecho_muda(api: APIClient) -> None:
 
 def test_a_etapa_da_evidencia_precisa_ser_do_mesmo_processo(api: APIClient) -> None:
     conta = AccountFactory()
-    processo = ProcessoFactory(account=conta)
-    outra_etapa = ProcessoEtapaFactory(processo=ProcessoFactory(account=conta))
+    processo = ProcessFactory(account=conta)
+    outra_etapa = ProcessStepFactory(process=ProcessFactory(account=conta))
 
     resposta = api.post(
         reverse("evidence-list"),
@@ -360,7 +360,7 @@ def test_o_processo_da_evidencia_precisa_ser_da_mesma_conta(api: APIClient) -> N
         reverse("evidence-list"),
         {
             "account": AccountFactory().pk,
-            "process": ProcessoFactory(account=AccountFactory()).pk,
+            "process": ProcessFactory(account=AccountFactory()).pk,
             "kind": Evidence.Kind.OBSERVATION,
             "raw_excerpt": "Vi a conferência nota a nota.",
         },
@@ -554,9 +554,9 @@ def test_a_sessao_da_propria_reuniao_passa(api: APIClient) -> None:
 
 
 def test_o_mesmo_processo_cabe_em_dois_discoveries(api: APIClient) -> None:
-    """O defeito que esta tabela desfaz: `Processo.source_project` responde por **uma** origem."""
+    """O defeito que esta tabela desfaz: `Process.source_project` responde por **uma** origem."""
     conta = AccountFactory()
-    processo = ProcessoFactory(account=conta)
+    processo = ProcessFactory(account=conta)
     primeiro = DiscoveryFactory(project=ProjectFactory(client=conta))
     segundo = DiscoveryFactory(project=ProjectFactory(client=conta))
 
@@ -591,7 +591,7 @@ def test_a_sessao_da_observacao_precisa_ser_do_mesmo_discovery(api: APIClient) -
         reverse("processobservation-list"),
         {
             "discovery": discovery.pk,
-            "process": ProcessoFactory().pk,
+            "process": ProcessFactory().pk,
             "observed_at": timezone.localdate().isoformat(),
             "source_session": sessao_alheia.pk,
         },
@@ -684,7 +684,7 @@ def test_entrega_nao_pendura_processo_alheio_no_proprio_discovery() -> None:
         reverse("processobservation-list"),
         {
             "discovery": discovery.pk,
-            "process": ProcessoFactory(account=AccountFactory()).pk,
+            "process": ProcessFactory(account=AccountFactory()).pk,
             "observed_at": timezone.localdate().isoformat(),
         },
         format="json",
@@ -754,7 +754,7 @@ def test_a_reconciliacao_acusa_o_legado_sem_par() -> None:
 
 def test_a_reconciliacao_conta_o_par_completo_e_a_divida_herdada() -> None:
     conta = AccountFactory()
-    legada = EvidenciaFactory(processo=ProcessoFactory(account=conta))
+    legada = EvidenciaFactory(process=ProcessFactory(account=conta))
     Evidence.objects.create(
         account=conta, kind=Evidence.Kind.INTERVIEW, raw_excerpt=legada.content,
         legacy_evidencia=legada,

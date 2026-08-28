@@ -20,9 +20,9 @@ from .models import (
     Meeting,
     Milestone,
     Pendencia,
-    Processo,
+    Process,
     ProcessObservation,
-    ProcessoEtapa,
+    ProcessStep,
     Project,
     ProjectChecklistItem,
     ProjectDeliverable,
@@ -112,7 +112,7 @@ class RolePermission(BasePermission):
             # os dois vizinhos: `risco` é só de Entrega e `activity` é escrita por Vendas e só
             # lida por Entrega. Quem conversa com o cliente é de ambas as áreas, e um registro
             # que só metade da casa pode fazer é um registro que não acontece.
-            # `processo`, `processo_etapa` e `evidencia` (FDD 039) são escritos pelos **dois**
+            # `process`, `process_step` e `evidencia` (FDD 039) são escritos pelos **dois**
             # papéis, pelo argumento que a FDD 037 usou para `satisfacao` logo acima: quem conduz
             # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
             # continua levantando dentro do projeto —, e um registro que só metade da casa pode
@@ -129,7 +129,7 @@ class RolePermission(BasePermission):
             # continua na entrega, e um achado que só metade da casa registra não é registrado.
             return resource in {"account", "contact", "commercial_opportunity", "engagement",
                                 "document", "lead", "analytics", "artifact", "activity",
-                                "cobranca_suspensao", "satisfacao", "processo", "processo_etapa",
+                                "cobranca_suspensao", "satisfacao", "process", "process_step",
                                 "evidencia", "qualification",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding"}
@@ -175,7 +175,7 @@ class RolePermission(BasePermission):
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
                                 "digital_employee", "artifact", "satisfacao",
-                                "processo", "processo_etapa", "evidencia",
+                                "process", "process_step", "evidencia",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding",
                                 "engineering_handoff", "github_projection"}
@@ -210,7 +210,7 @@ class RolePermission(BasePermission):
                 # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
                 # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
                 return Project.objects.visible_to(request.user).filter(client=obj.account).exists()
-            if isinstance(obj, Processo | ProcessoEtapa | Evidencia | Evidence | Finding):
+            if isinstance(obj, Process | ProcessStep | Evidencia | Evidence | Finding):
                 # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui
                 # não por o projeto ser opcional, mas por não existir: o processo mapeado é do
                 # cliente e sobrevive à venda que o descobriu (FDD 039). A etapa e a evidência
@@ -223,10 +223,10 @@ class RolePermission(BasePermission):
                 # defeito que a `Satisfacao` já previu.
                 if isinstance(obj, Evidence | Finding):
                     account = obj.account
-                elif isinstance(obj, Processo):
+                elif isinstance(obj, Process):
                     account = obj.account
                 else:
-                    account = obj.processo.account
+                    account = obj.process.account
                 # `filter(client=…)` e não `account=`: `Project.client` é a projeção que a
                 # Fase 6 remove, e é o único campo que a fatia 2 da #67 não renomeou.
                 return Project.objects.visible_to(request.user).filter(client=account).exists()

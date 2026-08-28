@@ -265,7 +265,7 @@ def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
     2. **O mapa qualitativo sempre entra**: o nome do processo e os nomes das etapas. É descrição
        do que foi levantado, não afirmação de quantidade — não depende de sustentação nenhuma.
     3. **O número do custo só entra quando há evidência rotulada como fato por trás dele**
-       (`processos.custo_do_estado_atual` responde isso em `sustentacao`). Levar para uma proposta
+       (`process.custo_do_estado_atual` responde isso em `sustentacao`). Levar para uma proposta
        que o cliente lê um custo apoiado só em hipótese é literalmente o que
        `docs/metodologia-fde.md:86` proíbe: apresentar hipótese como fato. E o dano não é o número
        errado — é que ele volta na reunião seguinte como compromisso da casa.
@@ -277,7 +277,7 @@ def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
 
     O antivazamento fica intacto: isto lê os processos **deste** cliente, e nada de terceiros.
     """
-    from . import processos as processos_module
+    from . import process as process_module
 
     # A formatação de dinheiro vem de `cobranca` e não é reescrita aqui: duas definições de
     # "R$ 10.000,01" divergem no dia em que alguém corrigir uma só, e o sintoma seria a proposta e
@@ -285,14 +285,14 @@ def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
     # o segundo consumidor — sublinhado é o aviso de "não importe isto", e importá-lo assim mesmo
     # deixaria uma renomeação em `cobranca.py` quebrar a proposta sem nada apontar para cá.
     from .cobranca import moeda
-    from .models import Processo, ProcessoEtapa
+    from .models import Process, ProcessStep
 
     mapeados = list(
-        Processo.objects.filter(account=opportunity.account_id, archived_at__isnull=True)
+        Process.objects.filter(account=opportunity.account_id, archived_at__isnull=True)
         .prefetch_related(
             # A etapa arquivada por conta própria (o processo vivo, ela não) é uma etapa que
             # alguém removeu do mapa; ressuscitá-la no prompt desfaria a remoção.
-            Prefetch("etapas", queryset=ProcessoEtapa.objects.filter(archived_at__isnull=True))
+            Prefetch("steps", queryset=ProcessStep.objects.filter(archived_at__isnull=True))
         )[:OPPORTUNITY_PROCESSO_LIMIT]
     )
     if not mapeados:
@@ -300,11 +300,11 @@ def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
     lines = ["Processos da operação do cliente já mapeados no Discovery:"]
     for processo in mapeados:
         lines.append(f"- {processo.name}")
-        etapas = [etapa.name for etapa in processo.etapas.all()]
+        etapas = [etapa.name for etapa in processo.steps.all()]
         if etapas:
             lines.append(f"  Etapas: {' → '.join(etapas)}")
-        custo = processos_module.custo_do_estado_atual(processo)
-        if custo["sustentacao"] != processos_module.SUSTENTADO:
+        custo = process_module.custo_do_estado_atual(processo)
+        if custo["sustentacao"] != process_module.SUSTENTADO:
             lines.append(
                 "  Custo do estado atual: ainda NÃO sustentado por evidência — o que se sabe deste "
                 "processo é hipótese. NÃO afirme número de custo, economia ou retorno para ele."

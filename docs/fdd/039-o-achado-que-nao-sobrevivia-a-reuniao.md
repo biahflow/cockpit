@@ -38,17 +38,28 @@ do zero a cada degrau, que é exatamente o defeito que o `DigitalEmployee` tinha
 
 **Três entidades, ancoradas no cliente.**
 
-- **`Processo`** — um processo da operação, com nome, ordem, proveniência (de que projeto e de que
+- **`Process`** — um processo da operação, com nome, ordem, proveniência (de que projeto e de que
   reunião veio) e os nove insumos da fórmula do custo. Ele nasce com isso e **nada mais**: sem
   `status`, sem `dono`, sem `nivel`. A entidade existe porque o esquema do material é "para cada
   etapa de um processo" — o processo é exigido pelo próprio esquema, não inventado por este modelo.
-- **`ProcessoEtapa`** — a etapa, com os seis campos do **P-S-D-T-E-R** (`:75-79`), exatamente as
+- **`ProcessStep`** — a etapa, com os seis campos do **P-S-D-T-E-R** (`:75-79`), exatamente as
   seis letras, na ordem em que a pergunta é feita na reunião: pessoas, sistema, dados, tempo, erro,
   retrabalho.
 - **`Evidencia`** — o achado, com a **forma** de onde veio (uma das cinco de `:81-84`) e o
   **rótulo** (`:86`). Liga ao processo, e opcionalmente à etapa.
 
-**O custo do estado atual, com a conta à vista.** `processos.custo_do_estado_atual` é função pura
+> **Emenda de 28/08/2026 — os nomes das duas primeiras classes.** A fatia 4 da issue #67 (ADR 0052)
+> renomeou `Processo` para `Process` e `ProcessoEtapa` para `ProcessStep`, e com eles os campos
+> `Evidencia.processo`/`etapa`, que passaram a `process`/`step`. **As tabelas não se movem**
+> (`core_processo` e `core_processoetapa` seguem fixadas em `Meta.db_table` até a Fase 6) e as
+> **rotas também não**: `/processos/` e `/processo-etapas/` respondem como sempre, agora com
+> `basename` explícito, e as chaves `processo`/`etapa` continuam saindo no `GET` e sendo aceitas na
+> escrita até a `/api/v2/` (`docs/ontology/aliases.md` §2c). `Evidencia` **não** foi renomeada: ela
+> é a metade legada do split da FDD 045, e quem a remove é a Fase 6, junto com o dual-write. Os
+> nove insumos do custo e as seis letras do P-S-D-T-E-R ficam em português — o `language-map` §2
+> nomeia as classes e não diz nada sobre os campos delas.
+
+**O custo do estado atual, com a conta à vista.** `process.custo_do_estado_atual` é função pura
 no molde de `health.py`: devolve as **parcelas**, o total, o que ficou **não apurado** e o carimbo
 `sustentado`/`hipotese`. Um número sem a conta que o produziu não se discute — se aceita ou se
 rejeita —, e é isso que o método proíbe ao exigir o rótulo.
@@ -113,8 +124,8 @@ preenchimento é pior que campo vazio, porque ninguém volta para conferir.
 
 ### Por que `_mes` no nome dos insumos
 
-`ProcessoEtapa` tem `tempo`, `erro` e `retrabalho` que são **descrição** ("quanto demora", "o que
-acontece quando dá errado"); os campos homônimos do `Processo` são **dinheiro e quantidade**. Nomes
+`ProcessStep` tem `tempo`, `erro` e `retrabalho` que são **descrição** ("quanto demora", "o que
+acontece quando dá errado"); os campos homônimos do `Process` são **dinheiro e quantidade**. Nomes
 iguais para perguntas diferentes fariam a segunda vencer em silêncio. A separação é por nome, e não
 só por comentário, porque comentário não aparece no autocompletar.
 

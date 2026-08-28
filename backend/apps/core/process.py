@@ -23,7 +23,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import Processo
+    from .models import Process
 
 #: O rótulo do núcleo multiplicativo — as quatro perguntas que, juntas, dizem quanto custa
 #: simplesmente executar o processo como ele é hoje.
@@ -62,7 +62,7 @@ def _centavos(valor: Decimal) -> Decimal:
     return valor.quantize(CENTAVOS, rounding=ROUND_HALF_UP)
 
 
-def custo_do_estado_atual(processo: Processo) -> dict[str, Any]:
+def custo_do_estado_atual(processo: Process) -> dict[str, Any]:
     """Quanto o processo custa por mês como ele é hoje — com a conta à vista.
 
     Devolve `parcelas` (o que foi possível apurar, com rótulo e valor), `total` (a soma delas),

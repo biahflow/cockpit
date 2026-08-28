@@ -1409,7 +1409,7 @@ class Satisfacao(TimestampedModel):
             )
 
 
-class Processo(TimestampedModel):
+class Process(TimestampedModel):
     """Um processo da operação do cliente, mapeado no Discovery estruturado (FDD 039).
 
     **Por que a entidade existe se a metodologia não a define.** O material
@@ -1458,7 +1458,7 @@ class Processo(TimestampedModel):
     # executar o processo não custa nada. É a lacuna dita e não preenchida, como em `ai.py` no
     # KPI sem base registrada (FDD 027).
     #
-    # **O sufixo `_mes` não é decoração.** `ProcessoEtapa` tem `tempo`, `erro` e `retrabalho`, e
+    # **O sufixo `_mes` não é decoração.** `ProcessStep` tem `tempo`, `erro` e `retrabalho`, e
     # lá eles são **descrição** ("quanto demora", "o que pode dar errado"); aqui são dinheiro e
     # quantidade. Nomes iguais para perguntas diferentes fariam a segunda resposta vencer a
     # primeira em silêncio — quem lesse `retrabalho` não saberia se recebe um texto ou um valor.
@@ -1477,6 +1477,10 @@ class Processo(TimestampedModel):
     risco_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
+        # A tabela **não** se move (ADR 0052): `RenameModel` com o `db_table` já fixado no nome
+        # legado não emite SQL nenhum, e é a pk que a `docs/ontology/aliases.md` §2b protege. O
+        # renome da tabela é a Fase 6.
+        db_table = "core_processo"
         ordering = ["position", "id"]
 
     def __str__(self) -> str:
@@ -1487,8 +1491,8 @@ class Processo(TimestampedModel):
 
         A regra transversal da FDD 025 é que arquivar não cascateia — e que, quando os filhos
         são listáveis por conta própria, quem os tem precisa escolher: recusar com 409 ou arquivar
-        junto. Etapa e evidência são listáveis (`/processo-etapas/?processo=`,
-        `/evidencias/?processo=`), então sem escolha ficariam visíveis apontando para um pai
+        junto. Etapa e evidência são listáveis (`/processo-etapas/?process=`,
+        `/evidencias/?process=`), então sem escolha ficariam visíveis apontando para um pai
         oculto — e, pior aqui do que no caso geral, uma evidência órfã continua sendo uma
         afirmação sobre a operação de um cliente, sem o processo que lhe dava contexto.
 
@@ -1503,7 +1507,7 @@ class Processo(TimestampedModel):
         momento = timezone.now()
         self.archived_at = momento
         self.save(update_fields=["archived_at", "updated_at"])
-        self.etapas.filter(archived_at__isnull=True).update(archived_at=momento)
+        self.steps.filter(archived_at__isnull=True).update(archived_at=momento)
         self.evidencias.filter(archived_at__isnull=True).update(archived_at=momento)
 
     def unarchive(self) -> None:
@@ -1519,11 +1523,11 @@ class Processo(TimestampedModel):
         self.save(update_fields=["archived_at", "updated_at"])
         if momento is None:
             return
-        self.etapas.filter(archived_at=momento).update(archived_at=None)
+        self.steps.filter(archived_at=momento).update(archived_at=None)
         self.evidencias.filter(archived_at=momento).update(archived_at=None)
 
 
-class ProcessoEtapa(TimestampedModel):
+class ProcessStep(TimestampedModel):
     """Uma etapa do processo, descrita pelo P-S-D-T-E-R (`docs/metodologia-fde.md:75-79`).
 
     Os seis campos abaixo são **exatamente** as seis letras, nessa ordem. É a única parte do
@@ -1532,7 +1536,7 @@ class ProcessoEtapa(TimestampedModel):
     o formulário, e a conferência ("perguntei tudo?") deixaria de ser possível olhando a tela.
     """
 
-    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="etapas")
+    process = models.ForeignKey(Process, on_delete=models.CASCADE, related_name="steps")
     name = models.CharField(max_length=255)
     position = models.PositiveIntegerField(default=0)
     pessoas = models.TextField(blank=True, default="")  # P — quem faz
@@ -1543,6 +1547,8 @@ class ProcessoEtapa(TimestampedModel):
     retrabalho = models.TextField(blank=True, default="")  # R — o que acontece quando dá errado
 
     class Meta:
+        # Mesma razão do `Process` acima: a classe troca de nome, a tabela fica (ADR 0052).
+        db_table = "core_processoetapa"
         ordering = ["position", "id"]
 
     def __str__(self) -> str:
@@ -1581,11 +1587,11 @@ class Evidencia(TimestampedModel):
         HIPOTESE = "hipotese", "Hipótese"
         DESCONHECIDO = "desconhecido", "Desconhecido"
 
-    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="evidencias")
+    process = models.ForeignKey(Process, on_delete=models.CASCADE, related_name="evidencias")
     # A etapa é opcional: nem todo achado é de uma etapa — "o volume é de 400 pedidos/mês" é do
     # processo inteiro. Quando vier preenchida, o `clean()` abaixo exige que seja deste processo.
-    etapa = models.ForeignKey(
-        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
+    step = models.ForeignKey(
+        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
     )
     # **Sem default nos dois**, no precedente literal de `Satisfacao.fonte`: um default faria a
     # casa escolher por quem não escolheu, e o erro cairia sempre para o mesmo lado — chamar
@@ -1612,8 +1618,8 @@ class Evidencia(TimestampedModel):
         # uma evidência pode apontar para a etapa de um processo de **outro cliente** — vazamento
         # entre contas por um campo opcional, que é a pior forma de vazar porque ninguém preenche
         # o campo pensando nisso.
-        if self.etapa_id and self.etapa and self.etapa.processo_id != self.processo_id:
-            raise ValidationError({"etapa": "A etapa deve pertencer ao mesmo processo."})
+        if self.step_id and self.step and self.step.process_id != self.process_id:
+            raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
 
 
 class Discovery(TimestampedModel):
@@ -1621,7 +1627,7 @@ class Discovery(TimestampedModel):
 
     A FDD 039 ancorou o mapa da operação no cliente, e fez isso certo: o processo sobrevive à
     venda que o descobriu. O que ficou faltando é o outro lado — **quando** aquele mapa foi
-    levantado, por quem, com que recorte. `Processo.source_project`/`source_meeting` respondem por
+    levantado, por quem, com que recorte. `Process.source_project`/`source_meeting` respondem por
     uma origem só, e o mesmo processo revisitado no Discovery seguinte não tem onde ser
     registrado: a segunda passada ou sobrescreve a primeira em silêncio ou vira um processo
     duplicado.
@@ -1710,7 +1716,7 @@ class DiscoverySession(TimestampedModel):
 class ProcessObservation(TimestampedModel):
     """A observação de um processo **dentro de um Discovery** (FDD 045).
 
-    Esta tabela é o que desfaz a proveniência única de `Processo.source_project`/`source_meeting`:
+    Esta tabela é o que desfaz a proveniência única de `Process.source_project`/`source_meeting`:
     o mesmo processo observado em dois Discoveries são **duas linhas aqui**, e nenhuma sobrescreve
     a outra. É o registro que permite dizer "o AS-IS de faturamento foi levantado no Discovery
     Sprint e revisitado no PROVE" sem duplicar o processo nem perder a primeira leitura.
@@ -1724,7 +1730,7 @@ class ProcessObservation(TimestampedModel):
     discovery = models.ForeignKey(
         Discovery, on_delete=models.CASCADE, related_name="process_observations"
     )
-    process = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="observations")
+    process = models.ForeignKey(Process, on_delete=models.CASCADE, related_name="observations")
     observed_at = models.DateField()
     observation_type = models.CharField(max_length=16, choices=Kind.choices, default=Kind.INITIAL)
     source_session = models.ForeignKey(
@@ -1770,7 +1776,7 @@ class Evidence(TimestampedModel):
     Uma evidência sem `raw_excerpt` e sem `reference` não é evidência — é uma linha dizendo que
     existe alguma coisa em algum lugar. O `clean()` exige um dos dois.
 
-    Ancora na **conta** (`account`), e não no projeto, pelo mesmo argumento do `Processo`: o que
+    Ancora na **conta** (`account`), e não no projeto, pelo mesmo argumento do `Process`: o que
     se observou sobre a operação de uma empresa sobrevive à venda que a descobriu.
     """
 
@@ -1788,18 +1794,18 @@ class Evidence(TimestampedModel):
         SYSTEM = "system", "Sistema (ERP, CRM, CAD, WhatsApp)"
         DATA = "data", "Dado (volume, tempo, custo, erro)"
 
-    # `account`, `process` e `step` são os nomes canônicos da ADR 0049. `account` já aponta para
-    # a classe de nome certo desde a fatia 2 da issue #67; `process` e `step` continuam apontando
-    # para `Processo`/`ProcessoEtapa` até a fatia 4, e o renome da **tabela** dos três é a Fase 6.
+    # `account`, `process` e `step` são os nomes canônicos da ADR 0049, e desde a fatia 4 da issue
+    # #67 os três apontam para a classe de nome certo — `Account`, `Process` e `ProcessStep`. O
+    # renome da **tabela** dos três continua sendo a Fase 6.
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="evidence")
     discovery = models.ForeignKey(
         Discovery, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
     )
     process = models.ForeignKey(
-        Processo, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+        Process, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
     )
     step = models.ForeignKey(
-        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
     )
     kind = models.CharField(max_length=16, choices=Kind.choices)
     # O trecho **como foi dito ou observado**, sem interpretação. Conclusão da casa vai para
@@ -1841,14 +1847,14 @@ class Evidence(TimestampedModel):
 
     def clean(self) -> None:
         etapa = self.step if self.step_id else None
-        if etapa is not None and self.process_id and etapa.processo_id != self.process_id:
+        if etapa is not None and self.process_id and etapa.process_id != self.process_id:
             raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
         # A mesma fronteira de conta da `Evidencia.clean()`, agora nas duas pontas: sem ela uma
         # evidência da conta A citaria o processo da conta B por um campo opcional.
         processo = self.process if self.process_id else None
         if processo is not None and processo.account_id != self.account_id:
             raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
-        if etapa is not None and etapa.processo.account_id != self.account_id:
+        if etapa is not None and etapa.process.account_id != self.account_id:
             raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         # O terceiro campo opcional entra na **mesma** pergunta que os dois acima, e a simetria é
         # o ponto: dois vínculos validados contra a conta e um terceiro fora faria quem lesse isto
@@ -1916,17 +1922,17 @@ class Finding(TimestampedModel):
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="findings")
     process = models.ForeignKey(
-        Processo, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
+        Process, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
     )
     step = models.ForeignKey(
-        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
+        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
     )
     statement = models.TextField()
     epistemic_status = models.CharField(
         max_length=16, choices=EpistemicStatus.choices, default=EpistemicStatus.HYPOTHESIS
     )
     # 0–100 e opcional: confiança que ninguém mediu não vira zero, pelo motivo dos nove insumos do
-    # `Processo` — zero é uma afirmação, e "não estimamos" não é.
+    # `Process` — zero é uma afirmação, e "não estimamos" não é.
     confidence = models.PositiveSmallIntegerField(null=True, blank=True)
     reviewed_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_findings"
@@ -1953,9 +1959,9 @@ class Finding(TimestampedModel):
         processo = self.process if self.process_id else None
         if processo is not None and processo.account_id != self.account_id:
             raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
-        if etapa is not None and etapa.processo.account_id != self.account_id:
+        if etapa is not None and etapa.process.account_id != self.account_id:
             raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
-        if etapa is not None and self.process_id and etapa.processo_id != self.process_id:
+        if etapa is not None and self.process_id and etapa.process_id != self.process_id:
             raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
         # A metade da invariante §6.9 que dá para checar sem o M2M: **fato tem revisor**. A outra
         # metade — ao menos uma `Evidence` viva — vive no serializer, porque o vínculo M2M só

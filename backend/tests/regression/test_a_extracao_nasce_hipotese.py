@@ -11,7 +11,7 @@ O arquivo tem duas camadas porque a decisão pode ser desfeita de duas maneiras 
 
 1. **Comportamental** — alguém passa a ler `rotulo`/`forma` do JSON do modelo. O sintoma é uma
    evidência dizendo `fato` sobre algo que ninguém observou, e a partir daí
-   `processos.custo_do_estado_atual` devolve `sustentacao="sustentado"` e o número entra na
+   `process.custo_do_estado_atual` devolve `sustentacao="sustentado"` e o número entra na
    proposta que o cliente lê. Nada fica vermelho: o custo continua somando, a tela continua
    desenhando, e o que muda é só o significado.
 2. **Estrutural** — alguém "melhora" o prompt pedindo ao modelo que rotule, e o coletor sobrescreve
@@ -33,7 +33,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai, views
-from apps.core.models import Evidencia, Meeting, Processo, User
+from apps.core.models import Evidencia, Meeting, Process, User
 from apps.core.tests.factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 #: O modelo dizendo o contrário do que a casa impõe: rotulando como fato e alegando ter lido dado.
@@ -116,12 +116,12 @@ def test_o_custo_extraido_nao_nasce_sustentado(api: APIClient, reuniao: Meeting)
     e é `sustentacao` que decide se o custo do estado atual entra na proposta que o cliente lê
     (`ai._processo_lines`).
     """
-    from apps.core import processos
+    from apps.core import process
 
     api.post(reverse("meeting-estruturar", args=[reuniao.pk]))
 
-    processo = Processo.objects.get()
-    assert processos.custo_do_estado_atual(processo)["sustentacao"] == processos.HIPOTESE
+    processo = Process.objects.get()
+    assert process.custo_do_estado_atual(processo)["sustentacao"] == process.HIPOTESE
 
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")

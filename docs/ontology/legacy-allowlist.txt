@@ -12,7 +12,7 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 37), que conta **dívidas
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 29), que conta **dívidas
 #     distintas** — linhas deste arquivo, não ocorrências no código. Os dois números não medem a
 #     mesma coisa.
 #
@@ -103,15 +103,28 @@ backend/apps/core/urls.py::client-como-organizacao::clients::1
 backend/apps/core/serializers.py::outcome-como-decisao-de-gate::gate_outcome::5
 
 # ---------------------------------------------------------------------------------------------
-# Nome de modelo em português.
-# Dois grupos com prazos diferentes:
-#   * `Processo`, `ProcessoEtapa` e `Evidencia` têm nome canônico definido (`Process`,
-#     `ProcessStep`, `Evidence`/`Finding`, tabela mestra §2). A Fase 3 divide `Evidencia` em
-#     Evidence + Finding; o renome físico dos três é a Fase 6.
+# Nome de modelo em português — o que sobrou depois da fatia 4 da issue #67.
+# O bloco tinha dezenove linhas e ficou com treze. A fatia 4 (ADR 0052) renomeou `Processo` para
+# `Process` e `ProcessoEtapa` para `ProcessStep`, e com eles os serializers, os viewsets, os dois
+# `resource` e os três campos que apontavam para os dois: modelo, migração `0063`, permissões,
+# tipos TS e a tela já dizem o nome certo. As tabelas continuam `core_processo` e
+# `core_processoetapa` (`Meta.db_table`), porque é a linha e a pk que a `aliases.md` §2b protege.
+#
+# Restam dois grupos, com prazos diferentes:
+#   * `Evidencia` tem nome canônico definido (`Evidence` + `Finding`, tabela mestra §2) e é o
+#     único dos quatro que **não** é só renome: a Fase 3 a dividiu, e trocar o nome sem dividir
+#     preservaria o defeito de linguagem que a divisão existe para corrigir. A classe legada segue
+#     de pé porque tem leitor vivo (`process.custo_do_estado_atual` e a tela do processo), e quem
+#     a remove é a Fase 6, junto com o dual-write. Os **campos** dela já dizem `process` e `step`.
 #   * `Pendencia`, `Decisao`, `Risco`, `Satisfacao` e a família `Cobranca*` **ainda não têm nome
 #     canônico** — a Ontology v1 não os cobre. Registrá-los aqui é o que impede que a ausência de
 #     decisão vire ausência de dívida. O nome entra primeiro no language-map (§8), depois no
 #     Pulse; até lá a linha fica.
+#
+# As **chaves de payload** (`processo` e `etapa` no corpo e na resposta de etapa e evidência) não
+# aparecem aqui porque a regra casa declaração de campo de modelo (`… = models.…`), e o alias é um
+# `serializers.PrimaryKeyRelatedField`. Quem impede removê-lo antes da `/api/v2/` é a regressão
+# `backend/tests/regression/test_o_alias_de_processo_sobrevive_na_v1.py`.
 # ---------------------------------------------------------------------------------------------
 backend/apps/core/models.py::modelo-em-portugues::CobrancaContato::1
 backend/apps/core/models.py::modelo-em-portugues::CobrancaSinal::1
@@ -119,8 +132,6 @@ backend/apps/core/models.py::modelo-em-portugues::CobrancaSuspensao::1
 backend/apps/core/models.py::modelo-em-portugues::Decisao::1
 backend/apps/core/models.py::modelo-em-portugues::Evidencia::1
 backend/apps/core/models.py::modelo-em-portugues::Pendencia::1
-backend/apps/core/models.py::modelo-em-portugues::Processo::1
-backend/apps/core/models.py::modelo-em-portugues::ProcessoEtapa::1
 backend/apps/core/models.py::modelo-em-portugues::Risco::1
 backend/apps/core/models.py::modelo-em-portugues::Satisfacao::1
 backend/apps/core/serializers.py::modelo-em-portugues::CobrancaContatoSerializer::1
@@ -128,8 +139,6 @@ backend/apps/core/serializers.py::modelo-em-portugues::CobrancaSuspensaoSerializ
 backend/apps/core/serializers.py::modelo-em-portugues::DecisaoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::EvidenciaSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::PendenciaSerializer::1
-backend/apps/core/serializers.py::modelo-em-portugues::ProcessoEtapaSerializer::1
-backend/apps/core/serializers.py::modelo-em-portugues::ProcessoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::RiscoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::SatisfacaoSerializer::1
 backend/apps/core/views.py::modelo-em-portugues::CobrancaSuspensaoViewSet::1
@@ -137,18 +146,15 @@ backend/apps/core/views.py::modelo-em-portugues::CobrancaViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::DecisaoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::EvidenciaViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::PendenciaViewSet::1
-backend/apps/core/views.py::modelo-em-portugues::ProcessoEtapaViewSet::1
-backend/apps/core/views.py::modelo-em-portugues::ProcessoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::RiscoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::SatisfacaoViewSet::1
 
 # ---------------------------------------------------------------------------------------------
-# Legado congelado: as classes que a §5 nomeia como banidas e que ainda existem hoje.
+# Legado congelado: a classe que a §5 nomeia como banida e que ainda existe hoje.
 # Redundante com o bloco acima de propósito — `modelo-em-portugues` é heurística e pode ser
-# estreitada; esta regra é lista fechada e não pode. Fase 3 (split) + Fase 6 (renome). Eram
-# quatro: `GateOutcome` saiu na issue #67 (ADR 0052), e o nome **continua** no regex da regra —
-# lista fechada existe para barrar batismo novo, e o nome segue banido depois de pago.
+# estreitada; esta regra é lista fechada e não pode. Eram quatro e sobrou uma: `GateOutcome` saiu
+# na fatia 1 da issue #67 e `Processo`/`ProcessoEtapa` na fatia 4 (ADR 0052). Os três nomes
+# **continuam** no regex da regra — lista fechada existe para barrar batismo novo, e o nome segue
+# banido depois de pago. `Evidencia` fica: quem a remove é a Fase 6, com o dual-write.
 # ---------------------------------------------------------------------------------------------
 backend/apps/core/models.py::legado-congelado::Evidencia::1
-backend/apps/core/models.py::legado-congelado::Processo::1
-backend/apps/core/models.py::legado-congelado::ProcessoEtapa::1
