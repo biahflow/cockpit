@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Document, Task, User
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
@@ -104,7 +104,7 @@ def test_sales_keeps_full_access_to_documents() -> None:
     sales = UserFactory(role=User.Role.SALES)
     commercial = _document(commercial_opportunity=CommercialOpportunityFactory())
     operational = _document(project=ProjectFactory())
-    institutional = _document(client=ClientFactory())
+    institutional = _document(account=AccountFactory())
 
     api = APIClient()
     api.force_authenticate(sales)

@@ -57,7 +57,7 @@ Activities do CRM (FDD 035).
   (`KB_SOURCES`), consultável com citação — o antídoto declarado ao "texto demais".
 - FDD 033, 034 e 035 nascem desta decisão e entram no roadmap como próximos work items.
 - A migração dos dados do Notion (as databases Accounts/Contacts/Opportunities/Activities)
-  fica **nomeada e não feita**: os equivalentes diretos existem (`Client`, `Contact`,
+  fica **nomeada e não feita**: os equivalentes diretos existem (`Account`, `Contact`,
   `Opportunity` e a `Activity` da FDD 035), mas importar é trabalho separado, com decisão
   própria de dedupe e corte.
 - O risco assumido: sem a disciplina do "portal só depois de estabilizar", cada bloco novo da

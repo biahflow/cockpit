@@ -190,3 +190,12 @@ existe para registrar — está no mesmo lugar, com o mesmo comportamento.
 
 `Project.originating_commercial_opportunity` já tinha o nome canônico desde esta ADR; o que a
 fatia 3 fez foi trocar o alvo da FK.
+
+## Emenda (issue #67, fatia 2 — 28/08/2026) — a organização se chama `Account`
+
+Onde esta ADR diz `Client`, o modelo hoje se chama `Account`, e o `status` dele se chama
+`lifecycle_status` (ADR 0052). **`Project.client` é a exceção**: ele é a projeção temporária que esta ADR criou, e renomeá-lo
+faria `project.account` e `project.engagement.account` disputarem o nome canônico. Ele fica como
+está até a Fase 6 removê-lo. A **tabela** continua `core_client` e a **rota** continua
+`/api/v1/clients/`: o que a `docs/ontology/aliases.md` §2b protege é a linha e a pk, e nenhuma das
+duas se move.

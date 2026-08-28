@@ -89,10 +89,36 @@ class Vertical(models.Model):
         return self.name
 
 
-class Client(TimestampedModel):
-    class Status(models.TextChoices):
+class Account(TimestampedModel):
+    """A organização com quem a casa se relaciona — desde antes de ela comprar.
+
+    O nome canônico é `Account` (`docs/ontology/language-map.md` §2), e "cliente" deixa de ser o
+    nome da entidade para virar o **rótulo** de um dos estados dela. A ADR 0052 é o que autoriza
+    renomear a classe agora, na issue #67, em vez de esperar a Fase 6: a **tabela** continua
+    `core_client` (ver `Meta` abaixo), e é a tabela — a linha e a pk — que a `aliases.md` §2b
+    protege, porque o One deriva `organization.slug = biahflow-client-{id}` e a persiste.
+    """
+
+    class LifecycleStatus(models.TextChoices):
+        """Onde a conta está na relação com a casa — três estados, e o do meio é que se chama
+        "Cliente".
+
+        `prospect` é a organização que ainda não fechou nada; `active` é cliente de fato, com
+        venda ganha; `inactive` é quem **já foi** cliente e hoje não tem trabalho em andamento.
+        Sem o terceiro, a conta que terminou o mandato só tinha dois destinos igualmente errados:
+        continuar dizendo "Cliente" — e inflar toda contagem de carteira — ou ser arquivada, que
+        é sumir do histórico. É o `language-map` §4.
+
+        **Entrar em `inactive` não tem automação, e é decisão.** A promoção `prospect → active`
+        é do signal `_promote_account_on_won`, porque "houve venda ganha" é fato observável no
+        banco. "Não tem trabalho em andamento" não é: projeto pausado, mandato em renovação e
+        cliente que sumiu produzem o mesmo estado no schema e significados diferentes. Quem
+        edita a conta afirma.
+        """
+
         PROSPECT = "prospect", "Prospect"
         ACTIVE = "active", "Ativo"
+        INACTIVE = "inactive", "Inativo"
 
     name = models.CharField(max_length=255)
     legal_name = models.CharField(max_length=255, blank=True)
@@ -110,21 +136,28 @@ class Client(TimestampedModel):
     # novo por fatura quebraria a deduplicação e os relatórios do próprio fornecedor. Precedente da
     # casa: `drive_folder_id` acima já é id de fornecedor morando num modelo do domínio.
     payment_customer_ref = models.CharField(max_length=128, blank=True, default="")
-    # Quem cadastra afirma o status (a SPA oferece a escolha); o default é o mais conservador,
-    # porque um POST que omite o campo não deve alegar uma venda que não houve. O cliente vindo de
+    # Quem cadastra afirma o estado (a SPA oferece a escolha); o default é o mais conservador,
+    # porque um POST que omite o campo não deve alegar uma venda que não houve. A conta vinda de
     # conversão de lead também nasce "prospect", e vira "active" pelo signal quando a oportunidade
-    # é ganha — promoção que um PATCH não desfaz (ver `ClientSerializer.validate_status`).
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PROSPECT)
+    # é ganha — promoção que um PATCH não desfaz (ver `AccountSerializer.validate_lifecycle_status`).
+    lifecycle_status = models.CharField(
+        max_length=16, choices=LifecycleStatus.choices, default=LifecycleStatus.PROSPECT
+    )
 
     class Meta:
         ordering = ["name"]
+        # **A tabela não se move** (ADR 0052). Fixá-la aqui é o que torna o `RenameModel` da
+        # migração `0062` um no-op no banco: `alter_db_table` abre com
+        # `if old_db_table == new_db_table: return`. O nome da tabela é a Fase 6; o que sai agora
+        # é só o nome da classe.
+        db_table = "core_client"
 
     def __str__(self) -> str:
         return self.name
 
 
 class Contact(TimestampedModel):
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="contacts")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="contacts")
     first_name = models.CharField(max_length=128)
     # Sobrenome é opcional (issue #55, FDD 001): nem todo contato cadastrado tem um, e exigi-lo
     # obrigaria quem cadastra a inventar um valor só para satisfazer o formulário.
@@ -178,9 +211,10 @@ class Engagement(TimestampedModel):
         DESIGN_PARTNER = "design_partner", "Design partner"
         PAID = "paid", "Pago"
 
-    # `account` e não `client`: é o termo canônico do mapa de linguagem, e o campo nasce com o
-    # nome certo mesmo enquanto o modelo ainda se chama `Client` (o renome físico é a Fase 6).
-    account = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="engagements")
+    # `account` é o termo canônico do mapa de linguagem. O campo nasceu com o nome certo quando
+    # a classe ainda se chamava `Client`; desde a fatia 2 da issue #67 (ADR 0052) os dois nomes
+    # coincidem, e o que resta de legado é a tabela, que a Fase 6 renomeia.
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="engagements")
     name = models.CharField(max_length=255)
     # O mandato em si: o que a casa foi contratada para transformar. Texto livre e opcional
     # porque o engajamento de escopo único nasce da conversão, onde o que existe é o escopo da
@@ -230,7 +264,7 @@ class Engagement(TimestampedModel):
         # organização aqui seria o mesmo defeito que `Activity.clean()` já fecha na oportunidade:
         # a tela mostraria um nome que não pertence àquele cliente, e ninguém acusaria.
         sponsor = self.sponsor if self.sponsor_id else None
-        if sponsor is not None and sponsor.client_id != self.account_id:
+        if sponsor is not None and sponsor.account_id != self.account_id:
             raise ValidationError({"sponsor": "O patrocinador deve ser contato da mesma conta."})
 
 
@@ -260,7 +294,7 @@ class PipelineStage(models.Model):
 
 
 class CommercialOpportunity(TimestampedModel):
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="opportunities")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="opportunities")
     contact = models.ForeignKey(Contact, on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=255)
     scope = models.TextField(blank=True)
@@ -376,7 +410,13 @@ class Project(TimestampedModel):
     # cliente direto, e removê-lo é a Fase 6. O que o mantém honesto é a validação em `clean()`
     # abaixo — sem ela, a projeção divergiria da fonte em silêncio, que é exatamente o defeito
     # que uma projeção introduz quando ninguém a amarra.
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="projects")
+    #
+    # **É o único campo que a fatia 2 da issue #67 não renomeou, e isso é decisão.** Chamá-lo de
+    # `account` criaria duas coisas com o nome canônico no mesmo objeto — `project.account` e
+    # `project.engagement.account` — que podem divergir; o nome canônico deixaria de identificar
+    # a fonte, que é a única coisa que ele existe para fazer. Ele fica com o nome antigo até a
+    # Fase 6 removê-lo. Ver ADR 0052.
+    client = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="projects")
     # O mandato a que este projeto pertence — **obrigatório** (invariante 7 do mapa de linguagem).
     # Nasceu nulo na 0055 e virou NOT NULL na 0057, com o backfill da 0056 no meio; ver a
     # docstring da 0057 para por que os três passos são migrações separadas.
@@ -815,7 +855,7 @@ class GithubWebhookDelivery(models.Model):
 
 
 class Document(TimestampedModel):
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, null=True, blank=True)
     commercial_opportunity = models.ForeignKey(
         CommercialOpportunity, on_delete=models.CASCADE, null=True, blank=True
     )
@@ -827,13 +867,13 @@ class Document(TimestampedModel):
     uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="uploaded_documents")
 
     def clean(self) -> None:
-        links = [self.client_id, self.commercial_opportunity_id, self.project_id]
+        links = [self.account_id, self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError("O documento deve estar vinculado a exatamente um recurso.")
 
     @property
-    def linked_resource(self) -> Client | CommercialOpportunity | Project | None:
-        return self.client or self.commercial_opportunity or self.project
+    def linked_resource(self) -> Account | CommercialOpportunity | Project | None:
+        return self.account or self.commercial_opportunity or self.project
 
 
 class Meeting(TimestampedModel):
@@ -1060,7 +1100,7 @@ class Lead(TimestampedModel):
     ai_summary = models.TextField(blank=True, default="")
     ai_recommended_action = models.TextField(blank=True, default="")
     qualified_at = models.DateTimeField(null=True, blank=True)
-    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
+    account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
     commercial_opportunity = models.ForeignKey(
         CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="leads",
@@ -1076,7 +1116,7 @@ class Lead(TimestampedModel):
 class Qualification(TimestampedModel):
     """A avaliação que decide se um `Lead` vira venda — e que até aqui não existia (ADR 0049).
 
-    O `POST /leads/{id}/convert/` criava, num ato só, um `Client` **e** uma
+    O `POST /leads/{id}/convert/` criava, num ato só, um `Account` **e** uma
     `CommercialOpportunity` no degrau gratuito da escada. Isso gravava uma conversa de qualificação como venda registrada: ela entrava
     no funil, somava no pipeline e podia virar `Project`. A sequência normativa do Language Map é
     `Lead → Qualification → (qualified) → CommercialOpportunity`, e o degrau do meio precisava de
@@ -1106,7 +1146,7 @@ class Qualification(TimestampedModel):
     # avaliação registrada é ato deliberado, não efeito colateral. Nula enquanto a conversão ainda
     # não resolveu a organização (avaliação de lead desqualificado não precisa criar conta).
     account = models.ForeignKey(
-        Client, on_delete=models.PROTECT, null=True, blank=True, related_name="qualifications"
+        Account, on_delete=models.PROTECT, null=True, blank=True, related_name="qualifications"
     )
     happened_at = models.DateTimeField(default=timezone.now)
     assessor = models.ForeignKey(
@@ -1159,8 +1199,8 @@ class Qualification(TimestampedModel):
             )
         # Fronteira de conta: sem isto, uma avaliação pode ficar pendurada na organização de
         # **outro** lead — o mesmo vazamento por campo opcional que `Activity.clean()` fecha.
-        if self.account_id and self.lead_id and self.lead.client_id:
-            if self.lead.client_id != self.account_id:
+        if self.account_id and self.lead_id and self.lead.account_id:
+            if self.lead.account_id != self.account_id:
                 raise ValidationError(
                     {"account": "A conta deve ser a mesma já vinculada ao lead."}
                 )
@@ -1224,7 +1264,7 @@ class Activity(TimestampedModel):
         NAO_PODE = "nao_pode", "Não pôde pagar"
         INSATISFEITO = "insatisfeito", "Insatisfeito"
 
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="activities")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="activities")
     commercial_opportunity = models.ForeignKey(
         CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="activities",
@@ -1256,7 +1296,7 @@ class Activity(TimestampedModel):
         if (
             self.commercial_opportunity_id
             and self.commercial_opportunity
-            and self.commercial_opportunity.client_id != self.client_id
+            and self.commercial_opportunity.account_id != self.account_id
         ):
             raise ValidationError(
                 {"commercial_opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
@@ -1264,7 +1304,7 @@ class Activity(TimestampedModel):
         # Mesma checagem para a fatura, e pela mesma razão que a da oportunidade: sem ela, uma
         # resposta de cobrança pode ficar pendurada na fatura de **outro** cliente — e é essa
         # linha que a tela de cobrança lê para decidir o próximo passo.
-        if self.invoice_id and self.invoice and self.invoice.client_id != self.client_id:
+        if self.invoice_id and self.invoice and self.invoice.account_id != self.account_id:
             raise ValidationError({"invoice": "A fatura deve pertencer ao mesmo cliente."})
 
 
@@ -1305,7 +1345,7 @@ class Satisfacao(TimestampedModel):
         DECLARADA = "declarada", "Declarada pelo cliente"
         PERCEBIDA = "percebida", "Percebida por quem entrega"
 
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="satisfacoes")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="satisfacoes")
     project = models.ForeignKey(
         Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
     )
@@ -1342,10 +1382,10 @@ class Satisfacao(TimestampedModel):
         ordering = ["-happened_on", "-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.get_nivel_display()} — {self.client.name} ({self.happened_on})"
+        return f"{self.get_nivel_display()} — {self.account.name} ({self.happened_on})"
 
     def clean(self) -> None:
-        if self.project_id and self.project and self.project.client_id != self.client_id:
+        if self.project_id and self.project and self.project.client_id != self.account_id:
             raise ValidationError({"project": "O projeto deve pertencer ao mesmo cliente."})
         # Mesma checagem para a atividade de origem, e pela mesma razão: sem ela, a resposta de
         # **outro** cliente viraria a satisfação declarada deste — e essa é a linha que troca a
@@ -1353,7 +1393,7 @@ class Satisfacao(TimestampedModel):
         if (
             self.source_activity_id
             and self.source_activity
-            and self.source_activity.client_id != self.client_id
+            and self.source_activity.account_id != self.account_id
         ):
             raise ValidationError(
                 {"source_activity": "A interação deve pertencer ao mesmo cliente."}
@@ -1388,13 +1428,12 @@ class Processo(TimestampedModel):
 
     **Liga ao cliente e não ao projeto**, pelo argumento da `Satisfacao` acima: o processo mapeado
     é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de
-    CommercialOpportunity,
-    `docs/metodologia-fde.md:50-53`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
+    CommercialOpportunity, `docs/metodologia-fde.md:50-53`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
     novo Discovery da mesma empresa — que é exatamente o defeito que o `DigitalEmployee` tinha
     antes da FDD 026, quando o que valia morava só na instância e não no catálogo.
     """
 
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="processos")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="processos")
     name = models.CharField(max_length=255)
     position = models.PositiveIntegerField(default=0)
     # Procedência, e não vínculo: apagar o projeto ou a reunião não desfaz o mapa levantado neles.
@@ -1749,10 +1788,10 @@ class Evidence(TimestampedModel):
         SYSTEM = "system", "Sistema (ERP, CRM, CAD, WhatsApp)"
         DATA = "data", "Dado (volume, tempo, custo, erro)"
 
-    # `account`, `process` e `step` são os nomes canônicos da ADR 0049 apontando para os modelos
-    # legados (`Client`, `Processo`, `ProcessoEtapa`). O renome físico dos modelos é a Fase 6; até
-    # lá o nome canônico vive no **campo**, que é onde ele é lido e escrito todo dia.
-    account = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="evidence")
+    # `account`, `process` e `step` são os nomes canônicos da ADR 0049. `account` já aponta para
+    # a classe de nome certo desde a fatia 2 da issue #67; `process` e `step` continuam apontando
+    # para `Processo`/`ProcessoEtapa` até a fatia 4, e o renome da **tabela** dos três é a Fase 6.
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="evidence")
     discovery = models.ForeignKey(
         Discovery, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
     )
@@ -1807,9 +1846,9 @@ class Evidence(TimestampedModel):
         # A mesma fronteira de conta da `Evidencia.clean()`, agora nas duas pontas: sem ela uma
         # evidência da conta A citaria o processo da conta B por um campo opcional.
         processo = self.process if self.process_id else None
-        if processo is not None and processo.client_id != self.account_id:
+        if processo is not None and processo.account_id != self.account_id:
             raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
-        if etapa is not None and etapa.processo.client_id != self.account_id:
+        if etapa is not None and etapa.processo.account_id != self.account_id:
             raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         # O terceiro campo opcional entra na **mesma** pergunta que os dois acima, e a simetria é
         # o ponto: dois vínculos validados contra a conta e um terceiro fora faria quem lesse isto
@@ -1875,7 +1914,7 @@ class Finding(TimestampedModel):
         HYPOTHESIS = "hypothesis", "Hipótese"
         UNKNOWN = "unknown", "Desconhecido"
 
-    account = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="findings")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="findings")
     process = models.ForeignKey(
         Processo, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
     )
@@ -1912,9 +1951,9 @@ class Finding(TimestampedModel):
             raise ValidationError({"confidence": "A confiança vai de 0 a 100."})
         etapa = self.step if self.step_id else None
         processo = self.process if self.process_id else None
-        if processo is not None and processo.client_id != self.account_id:
+        if processo is not None and processo.account_id != self.account_id:
             raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
-        if etapa is not None and etapa.processo.client_id != self.account_id:
+        if etapa is not None and etapa.processo.account_id != self.account_id:
             raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         if etapa is not None and self.process_id and etapa.processo_id != self.process_id:
             raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
@@ -2788,7 +2827,7 @@ class Invoice(TimestampedModel):
         TRANSFER = "transfer", "Transferência"
         OTHER = "other", "Outro"
 
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="invoices")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="invoices")
     # `SET_NULL` e não `PROTECT`: a fatura sobrevive ao arquivamento do projeto que a originou —
     # o dinheiro continuou devido. É a mesma escolha de `Artifact.project`.
     project = models.ForeignKey(
@@ -2857,7 +2896,7 @@ class Invoice(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.number or 'rascunho'} — {self.client.name}"
+        return f"{self.number or 'rascunho'} — {self.account.name}"
 
     @property
     def is_overdue(self) -> bool:
@@ -2883,7 +2922,7 @@ class CobrancaContato(TimestampedModel):
     pergunta "nós importunamos este cliente?" deixaria de ter resposta exatamente no caso em que
     alguém quer escondê-la.
 
-    **`client` é desnormalizado de propósito.** O teto de frequência é por cliente somando *todas*
+    **`account` é desnormalizado de propósito.** O teto de frequência é por cliente somando *todas*
     as faturas dele; sem esta coluna a consulta viraria um `JOIN` por avaliação de degrau, dentro
     de um laço sobre faturas.
 
@@ -2904,7 +2943,7 @@ class CobrancaContato(TimestampedModel):
         INTERNO = "interno", "Aviso interno"
 
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="cobrancas")
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="cobrancas")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="cobrancas")
     degrau = models.CharField(max_length=16, choices=Degrau.choices)
     canal = models.CharField(max_length=8, choices=Canal.choices)
     # **Data e não carimbo de relógio**, ao contrário de `Invoice.paid_at`. Toda regra da régua é
@@ -2933,7 +2972,7 @@ class CobrancaContato(TimestampedModel):
 
     class Meta:
         ordering = ["-sent_on", "-id"]
-        indexes = [models.Index(fields=["client", "sent_on"])]
+        indexes = [models.Index(fields=["account", "sent_on"])]
         constraints = [
             # **A idempotência do degrau mora aqui, e não numa guarda em Python.** Duas execuções
             # no mesmo dia, ou o job e uma pessoa ao mesmo tempo, param no banco em vez de
@@ -2947,7 +2986,7 @@ class CobrancaContato(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.get_degrau_display()} — {self.client.name} ({self.sent_on})"
+        return f"{self.get_degrau_display()} — {self.account.name} ({self.sent_on})"
 
 
 class CobrancaSuspensao(TimestampedModel):
@@ -2967,8 +3006,8 @@ class CobrancaSuspensao(TimestampedModel):
     invoice = models.ForeignKey(
         Invoice, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
     )
-    client = models.ForeignKey(
-        Client, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
     )
     # `PROTECT` e obrigatório: suspensão sem dono é a suspensão que apodrece. Apagar a conta de
     # quem suspendeu não pode deixar a decisão órfã.
@@ -2995,11 +3034,11 @@ class CobrancaSuspensao(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        alvo = self.invoice or self.client
+        alvo = self.invoice or self.account
         return f"Suspensão até {self.until} — {alvo}"
 
     def clean(self) -> None:
-        links = [self.invoice_id, self.client_id]
+        links = [self.invoice_id, self.account_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError(
                 "A suspensão vale para exatamente uma fatura ou para um cliente."
@@ -3107,7 +3146,7 @@ class KnowledgeChunk(models.Model):
     viewset, sem rota e fora do `admin.py`**. A única saída do texto daqui é o `AgentView`, e isso
     é o anti-vazamento sendo estrutural em vez de vigiado.
 
-    **Não tem FK para `Project`, `Client` nem `Document`, e é a invariante em forma de esquema:**
+    **Não tem FK para `Project`, `Account` nem `Document`, e é a invariante em forma de esquema:**
     este corpus é a metodologia da casa, e conteúdo de cliente não entra por caminho nenhum. O
     `ai.build_project_context` continua passando documento como *nome*, como sempre passou.
     """

@@ -17,7 +17,7 @@ from django.test import override_settings
 
 from apps.core import ai, knowledge, portal
 from apps.core.models import (
-    Client,
+    Account,
     Document,
     KnowledgeArea,
     KnowledgeChunk,
@@ -106,7 +106,7 @@ def test_portal_e_ai_nao_alcancam_o_corpus():
 
 def test_o_trecho_nao_tem_vinculo_com_dado_de_cliente():
     """Anti-vazamento em forma de esquema: não há FK por onde conteúdo de cliente entrar."""
-    proibidos = {Project, Client, Document}
+    proibidos = {Project, Account, Document}
     relacionados = {
         campo.related_model
         for campo in KnowledgeChunk._meta.get_fields()

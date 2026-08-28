@@ -25,7 +25,7 @@ from apps.core import processos as processos_module
 from apps.core.models import Evidencia, Processo, ProcessoEtapa, User
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
     EvidenciaFactory,
     ProcessoEtapaFactory,
     ProcessoFactory,
@@ -247,7 +247,7 @@ def test_os_tres_papeis_criam_leem_editam_e_arquivam_nas_tres_rotas(
 
     criado = client.post(
         reverse("processo-list"),
-        {"client": projeto.client_id, "name": "Fechamento de mês", "volume_mes": 20},
+        {"account": projeto.client_id, "name": "Fechamento de mês", "volume_mes": 20},
         format="json",
     )
     assert criado.status_code == 201
@@ -310,7 +310,7 @@ def test_quem_nao_foi_liberado_nao_alcanca_nenhuma_das_tres_rotas(client: APICli
 def test_entrega_sem_projeto_no_cliente_nao_le_as_tres_entidades(client: APIClient) -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     ProjectMemberFactory(project=ProjectFactory(), user=delivery)
-    alheio = ProcessoFactory(client=ClientFactory(name="Cliente alheio"))
+    alheio = ProcessoFactory(account=AccountFactory(name="Cliente alheio"))
     etapa_alheia = ProcessoEtapaFactory(processo=alheio)
     evidencia_alheia = EvidenciaFactory(processo=alheio, etapa=etapa_alheia)
     client.force_authenticate(delivery)
@@ -331,11 +331,11 @@ def test_entrega_sem_projeto_no_cliente_nao_escreve_as_tres_entidades(client: AP
     **só pelo processo pai**, que é onde a guarda é fácil de esquecer."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     ProjectMemberFactory(project=ProjectFactory(), user=delivery)
-    alheio = ProcessoFactory(client=ClientFactory(name="Cliente alheio"))
+    alheio = ProcessoFactory(account=AccountFactory(name="Cliente alheio"))
     client.force_authenticate(delivery)
 
     criacao = client.post(
-        reverse("processo-list"), {"client": alheio.client_id, "name": "x"}, format="json"
+        reverse("processo-list"), {"account": alheio.account_id, "name": "x"}, format="json"
     )
     etapa = client.post(
         reverse("processoetapa-list"), {"processo": alheio.id, "name": "x"}, format="json"
@@ -345,7 +345,7 @@ def test_entrega_sem_projeto_no_cliente_nao_escreve_as_tres_entidades(client: AP
     assert criacao.status_code in {403, 404}
     assert etapa.status_code in {403, 404}
     assert evidencia.status_code in {403, 404}
-    assert Processo.objects.filter(client=alheio.client).count() == 1
+    assert Processo.objects.filter(account=alheio.account).count() == 1
     assert not ProcessoEtapa.objects.exists()
     assert not Evidencia.objects.exists()
 
@@ -356,15 +356,15 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     delivery = UserFactory(role=User.Role.DELIVERY)
     meu = ProjectFactory()
     ProjectMemberFactory(project=meu, user=delivery)
-    processo = ProcessoFactory(client=meu.client)
+    processo = ProcessoFactory(account=meu.client)
     evidencia = EvidenciaFactory(processo=processo)
     etapa = ProcessoEtapaFactory(processo=processo)
-    alheio = ProcessoFactory(client=ClientFactory())
+    alheio = ProcessoFactory(account=AccountFactory())
     client.force_authenticate(delivery)
 
     mudou_cliente = client.patch(
         reverse("processo-detail", args=[processo.id]),
-        {"client": alheio.client_id},
+        {"account": alheio.account_id},
         format="json",
     )
     mudou_pai_da_evidencia = client.patch(
@@ -380,7 +380,7 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     processo.refresh_from_db()
     evidencia.refresh_from_db()
     etapa.refresh_from_db()
-    assert processo.client_id == meu.client_id
+    assert processo.account_id == meu.client_id
     assert evidencia.processo_id == processo.id
     assert etapa.processo_id == processo.id
 
@@ -496,12 +496,12 @@ def test_o_processo_devolve_a_conta_do_custo_no_corpo(client: APIClient) -> None
 def test_o_autor_nao_entra_pelo_corpo(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     outro = UserFactory(role=User.Role.DELIVERY)
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     client.force_authenticate(admin)
 
     criado = client.post(
         reverse("processo-list"),
-        {"client": cliente.id, "name": "Compras", "registered_by": outro.id},
+        {"account": cliente.id, "name": "Compras", "registered_by": outro.id},
         format="json",
     )
 

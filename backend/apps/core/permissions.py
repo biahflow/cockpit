@@ -127,7 +127,7 @@ class RolePermission(BasePermission):
             # Os cinco recursos do split (FDD 045) entram pelo mesmo argumento dos três da
             # FDD 039 logo acima, e é o mesmo levantamento: o Discovery começa na venda e
             # continua na entrega, e um achado que só metade da casa registra não é registrado.
-            return resource in {"client", "contact", "commercial_opportunity", "engagement",
+            return resource in {"account", "contact", "commercial_opportunity", "engagement",
                                 "document", "lead", "analytics", "artifact", "activity",
                                 "cobranca_suspensao", "satisfacao", "processo", "processo_etapa",
                                 "evidencia", "qualification",
@@ -137,7 +137,7 @@ class RolePermission(BasePermission):
             # `engagement` entra aqui **só de leitura**, e a assimetria com Vendas é a decisão: o
             # engajamento é o mandato comercial, e quem entrega precisa saber a que mandato o
             # projeto pertence sem poder redefinir o que foi contratado (ADR 0050).
-            if resource in {"client", "contact", "commercial_opportunity", "engagement",
+            if resource in {"account", "contact", "commercial_opportunity", "engagement",
                             "project_member", "risk", "health", "case", "activity"}:
                 return request.method in SAFE_METHODS
             # Conhecimento: **todo mundo lê**, e o dono da área verifica. O dono pode ser de
@@ -195,7 +195,7 @@ class RolePermission(BasePermission):
             # detalhe passa a ser caminho de verdade, porque é dela que sai a instanciação.
             if getattr(view, "resource", "") in CATALOG:
                 return request.method in SAFE_METHODS
-            if getattr(view, "resource", "") in {"client", "contact", "activity"}:
+            if getattr(view, "resource", "") in {"account", "contact", "activity"}:
                 return request.method in SAFE_METHODS
             # Conhecimento não é objeto de projeto e cairia no `return False` do fim — a Entrega
             # leria a lista e tomaria 403 no detalhe e no `verify`. É exatamente o defeito que a
@@ -209,7 +209,7 @@ class RolePermission(BasePermission):
                 # registro de cliente sem projeto — a Entrega tomaria 403 no detalhe de um
                 # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
                 # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
-                return Project.objects.visible_to(request.user).filter(client=obj.client).exists()
+                return Project.objects.visible_to(request.user).filter(client=obj.account).exists()
             if isinstance(obj, Processo | ProcessoEtapa | Evidencia | Evidence | Finding):
                 # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui
                 # não por o projeto ser opcional, mas por não existir: o processo mapeado é do
@@ -222,12 +222,14 @@ class RolePermission(BasePermission):
                 # achado solto — 403 no detalhe de um registro que a listagem mostra, que é o
                 # defeito que a `Satisfacao` já previu.
                 if isinstance(obj, Evidence | Finding):
-                    client = obj.account
+                    account = obj.account
                 elif isinstance(obj, Processo):
-                    client = obj.client
+                    account = obj.account
                 else:
-                    client = obj.processo.client
-                return Project.objects.visible_to(request.user).filter(client=client).exists()
+                    account = obj.processo.account
+                # `filter(client=…)` e não `account=`: `Project.client` é a projeção que a
+                # Fase 6 remove, e é o único campo que a fatia 2 da #67 não renomeou.
+                return Project.objects.visible_to(request.user).filter(client=account).exists()
             if isinstance(obj, Engagement):
                 # **Fora de `PROJECT_OF`**, e não por esquecimento: o engajamento não pende de um
                 # projeto — são os projetos que pendem dele. A pergunta certa é a inversa, e ela

@@ -8,14 +8,14 @@ memória de quem participou ou, na melhor das hipóteses, numa linha solta do
 `CommercialOpportunity.scope`. Quem chega numa oportunidade parada não tem como responder "quando foi o último contato, e o que
 foi dito" sem procurar a pessoa que fez a ligação.
 
-O CRM deste portal já tem `Client`, `Contact` e `CommercialOpportunity` — os equivalentes diretos de
+O CRM deste portal já tem `Account`, `Contact` e `CommercialOpportunity` — os equivalentes diretos de
 Accounts/Contacts/Opportunities do Notion (ADR 0030). Faltava só a quarta entidade: a que registra
 o histórico de contato como dado consultável, não como texto solto.
 
 ## O que esta fatia entrega
 
 Um modelo `Activity`: interação comercial (ligação, reunião, e-mail, nota) ligada sempre a um
-`Client` e, opcionalmente, a uma `CommercialOpportunity` — desde que a oportunidade seja do
+`Account` e, opcionalmente, a uma `CommercialOpportunity` — desde que a oportunidade seja do
 mesmo cliente. CRUD em `/api/v1/activities/`, com o mesmo regime de arquivamento reversível da casa (FDD 025).
 No frontend, um painel "Interações" no detalhe do cliente (lista em ordem cronológica inversa +
 formulário de criação + arquivar) e, no detalhe da oportunidade (modal do `CommercialPage`), o
@@ -32,7 +32,7 @@ mesmo painel filtrado pela oportunidade aberta.
    e replicado no `validate()` do serializer (é o mesmo par que `Task`/`Document` já usam para
    validação cruzada).
 3. **Filtro por cliente e por oportunidade.** `?client=<id>` alimenta o painel do
-   `ClientDetailPage`; `?commercial_opportunity=<id>` alimenta o painel do detalhe da
+   `AccountDetailPage`; `?commercial_opportunity=<id>` alimenta o painel do detalhe da
    oportunidade — e `?opportunity=<id>` continua valendo como alias da `/api/v1/`.
 4. **A Entrega só vê interação de cliente com projeto seu.** Mesma fronteira do `Contact`
    (`project_scope_q` sobre `client__projects`) — sem ela, a Entrega enxergaria o histórico
@@ -45,7 +45,7 @@ mesmo painel filtrado pela oportunidade aberta.
 O spec de handoff sugeria `create_kwargs()` (padrão `PendenciaViewSet`) para gravar `owner` na
 criação. Esse hook pertence a `ProjectScopedMixin`, e `Activity` não é um recurso de projeto — é
 um recurso de cliente, como `Contact`. `ActivityViewSet` usa o mesmo mecanismo que
-`ClientViewSet` já usa para o próprio `owner`: `perform_create` sobrescrito diretamente. O
+`AccountViewSet` já usa para o próprio `owner`: `perform_create` sobrescrito diretamente. O
 resultado observável (owner = quem criou) é o mesmo; muda só o hook usado, e cada um está
 disponível pela cadeia de mixins correta.
 
@@ -59,7 +59,7 @@ em `api.ts`).
   não vê interação de cliente fora do seu projeto, admin gerencia qualquer cliente, oportunidade
   de outro cliente recusada (400) tanto pela API quanto pelo `clean()` do modelo direto, filtro
   por cliente e por oportunidade, arquivar e restaurar.
-- `ClientDetailPage.test.tsx` — lista e registra interação, arquiva interação, Entrega não vê
+- `AccountDetailPage.test.tsx` — lista e registra interação, arquiva interação, Entrega não vê
   formulário nem botão de arquivar.
 - `CommercialPage.test.tsx` — mesmo trio de casos, no painel do detalhe da oportunidade.
 

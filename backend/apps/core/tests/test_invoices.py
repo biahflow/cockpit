@@ -11,7 +11,7 @@ from apps.core import invoices
 from apps.core.models import Invoice, PipelineStage, Service
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     InvoiceFactory,
     ProjectFactory,
@@ -127,7 +127,7 @@ def test_conversao_de_oportunidade_semeia_o_cronograma(admin_client_api):
     resposta = admin_client_api.post(
         f"/api/v1/opportunities/{oportunidade.id}/convert-to-project/",
         {
-            "client": oportunidade.client_id,
+            "client": oportunidade.account_id,
             "name": "PROVE",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=120)),
@@ -333,14 +333,14 @@ def test_estado_que_tem_acao_por_tras_nao_se_digita(admin_client_api):
 
 @pytest.mark.django_db
 def test_summary_soma_por_faixa(admin_client_api):
-    cliente = ClientFactory()
-    InvoiceFactory(client=cliente, status=Invoice.Status.ISSUED, number="2026-1001",
+    cliente = AccountFactory()
+    InvoiceFactory(account=cliente, status=Invoice.Status.ISSUED, number="2026-1001",
                    amount=Decimal("100.00"))
-    InvoiceFactory(client=cliente, status=Invoice.Status.OVERDUE, number="2026-1002",
+    InvoiceFactory(account=cliente, status=Invoice.Status.OVERDUE, number="2026-1002",
                    amount=Decimal("200.00"))
-    InvoiceFactory(client=cliente, status=Invoice.Status.PAID, number="2026-1003",
+    InvoiceFactory(account=cliente, status=Invoice.Status.PAID, number="2026-1003",
                    amount=Decimal("300.00"))
-    InvoiceFactory(client=cliente, amount=Decimal("999.00"))  # rascunho não entra em faixa nenhuma
+    InvoiceFactory(account=cliente, amount=Decimal("999.00"))  # rascunho não entra em faixa nenhuma
 
     dados = admin_client_api.get("/api/v1/invoices/summary/").data
     assert Decimal(dados["open"]) == Decimal("100.00")

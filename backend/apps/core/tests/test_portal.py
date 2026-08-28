@@ -27,8 +27,8 @@ from apps.core.models import (
 )
 
 from .factories import (
+    AccountFactory,
     ArtifactFactory,
-    ClientFactory,
     CommercialOpportunityFactory,
     EngagementFactory,
     ProjectFactory,
@@ -72,7 +72,7 @@ def test_build_snapshot_projects_status_completion_and_children() -> None:
     snapshot = portal.build_snapshot(project)
 
     assert snapshot["project"]["id"] == project.pk
-    assert snapshot["project"]["client"]["name"] == project.client.name
+    assert snapshot["project"]["account"]["name"] == project.client.name
     assert snapshot["completion"] == 50  # 1 de 2 marcos ativos concluído
     assert len(snapshot["milestones"]) == 2  # marco arquivado é excluído
     assert snapshot["milestones"][0]["party"] == "provider"
@@ -148,7 +148,7 @@ def test_snapshot_does_not_carry_the_internal_catalog() -> None:
     cujo snapshot é por projeto. Isso pede RFC, não uma emenda no `build_snapshot`.
     """
     vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
-    project = ProjectFactory(client=ClientFactory(vertical=vertical))
+    project = ProjectFactory(client=AccountFactory(vertical=vertical))
     blueprint = DigitalEmployeeBlueprint.objects.create(name="SDR", description="Interno.")
     blueprints.instantiate(project, blueprint, vertical)
 
@@ -332,7 +332,7 @@ def test_snapshot_carries_the_date_of_the_first_accepted_artifact() -> None:
     depois = timezone.now() - timedelta(days=3)
     ArtifactFactory(
         kind=Artifact.Kind.CONTRACT,
-        commercial_opportunity=CommercialOpportunityFactory(client=project.client),
+        commercial_opportunity=CommercialOpportunityFactory(account=project.client),
         status=Artifact.Status.ACCEPTED,
         decided_at=primeiro,
     )
@@ -359,7 +359,7 @@ def test_an_artifact_still_awaiting_a_decision_is_not_a_rung() -> None:
     """
     project = ProjectFactory()
     ArtifactFactory(
-        commercial_opportunity=CommercialOpportunityFactory(client=project.client),
+        commercial_opportunity=CommercialOpportunityFactory(account=project.client),
         status=Artifact.Status.SENT,
     )
     ArtifactFactory(project=project, commercial_opportunity=None, status=Artifact.Status.REJECTED)
@@ -409,17 +409,17 @@ def test_an_artifact_on_an_opportunity_names_the_clients_oldest_live_project(
 
     Um projeto só, nunca fan-out — o argumento é o mesmo do `post_delete` de `Project`.
     """
-    client = ClientFactory()
-    mais_velho = ProjectFactory(client=client)
-    arquivado = ProjectFactory(client=client)
+    account = AccountFactory()
+    mais_velho = ProjectFactory(client=account)
+    arquivado = ProjectFactory(client=account)
     arquivado.archive()
-    ProjectFactory(client=client)  # vivo, porém mais novo
+    ProjectFactory(client=account)  # vivo, porém mais novo
     calls: list[tuple] = []
     monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
 
     ArtifactFactory(
         kind=Artifact.Kind.CONTRACT,
-        commercial_opportunity=CommercialOpportunityFactory(client=client),
+        commercial_opportunity=CommercialOpportunityFactory(account=account),
         status=Artifact.Status.ACCEPTED,
     )
 
@@ -441,7 +441,7 @@ def test_accepting_before_any_project_exists_is_a_declared_limit(
 
     ArtifactFactory(
         kind=Artifact.Kind.CONTRACT,
-        commercial_opportunity=CommercialOpportunityFactory(client=ClientFactory()),
+        commercial_opportunity=CommercialOpportunityFactory(account=AccountFactory()),
         status=Artifact.Status.ACCEPTED,
     )
 
@@ -741,10 +741,10 @@ def test_saving_publishing_and_archiving_a_decision_all_emit(
 
 @pytest.mark.django_db
 def test_snapshot_leva_a_conta_e_o_engajamento_canonicos() -> None:
-    """`account` e `engagement` entram; `client` fica, inalterado, até a `/api/v2/`.
+    """`account` e `engagement` entram; `account` fica, inalterado, até a `/api/v2/`.
 
     A conta sai do **engajamento** e não de `Project.client`: os dois são iguais por construção
-    (`Project.clean()` amarra `engagement.account_id == client_id`), e ler pela fonte é o que
+    (`Project.clean()` amarra `engagement.account_id == account_id`), e ler pela fonte é o que
     faz o consumidor não precisar mudar quando a Fase 6 remover a projeção temporária.
     """
     project = ProjectFactory()
@@ -761,7 +761,7 @@ def test_snapshot_leva_a_conta_e_o_engajamento_canonicos() -> None:
         "status": "active",
     }
     # O alias com data continua saindo exatamente como saía.
-    assert bloco["client"] == {"id": project.client_id, "name": project.client.name}
+    assert bloco["account"] == {"id": project.client_id, "name": project.client.name}
 
 
 @pytest.mark.django_db
@@ -772,8 +772,8 @@ def test_a_conta_do_engajamento_e_a_do_projeto_nao_divergem() -> None:
     e o slug que o One deriva do `id` passa a apontar para a organização errada.
     """
     snapshot = portal.build_snapshot(ProjectFactory())
-    assert snapshot["project"]["account"]["id"] == snapshot["project"]["client"]["id"]
-    assert snapshot["project"]["account"]["name"] == snapshot["project"]["client"]["name"]
+    assert snapshot["project"]["account"]["id"] == snapshot["project"]["account"]["id"]
+    assert snapshot["project"]["account"]["name"] == snapshot["project"]["account"]["name"]
 
 
 @pytest.mark.django_db

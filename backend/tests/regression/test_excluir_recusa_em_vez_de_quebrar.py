@@ -24,7 +24,7 @@ from rest_framework.test import APIClient
 from apps.core.exceptions import api_exception_handler
 from apps.core.models import JourneyPhase, PipelineStage, ProjectPhase, User, Vertical
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     PipelineStageFactory,
     ProjectFactory,
@@ -159,13 +159,13 @@ def test_vertical_em_uso_nao_apaga_calada_o_setor_dos_clientes(admin_client: API
     """A rede global **não** cobre este caso, e é por isso que ele está aqui (FDD 026).
 
     Todo dependente deste arquivo até agora era `PROTECT`: o banco recusava e o único defeito era o
-    status. `Client.vertical` é `SET_NULL` — o banco aceita de bom grado e zera o setor de **todos**
+    status. `Account.vertical` é `SET_NULL` — o banco aceita de bom grado e zera o setor de **todos**
     os clientes que a tinham, com 204 na tela e nada dizendo o que se perdeu. Aqui a guarda
     explícita do viewset não é a mensagem boa sobre uma recusa que existiria de qualquer jeito: ela
     é a recusa.
     """
     vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
-    cliente = ClientFactory(vertical=vertical)
+    cliente = AccountFactory(vertical=vertical)
 
     resposta = admin_client.delete(reverse("vertical-detail", args=[vertical.pk]))
 

@@ -39,7 +39,7 @@
 
 "Tenho um formulário no site que salva no CRM" descreve bem menos do que existe. O `Lead`
 já carrega **qualificação por IA completa** — `ai_fit` (alto, médio, baixo), `ai_score`,
-`ai_summary`, `ai_recommended_action`, `qualified_at` — e converte para `Client` e
+`ai_summary`, `ai_recommended_action`, `qualified_at` — e converte para `Account` e
 `CommercialOpportunity` sem duplicar contexto. E o **agendamento automático já está construído**:
 `booking.py` gera os horários livres a partir da grade de horário comercial **menos o
 free/busy real do Google menos as reservas existentes**, e materializa a reserva criando o

@@ -120,7 +120,7 @@ acontece.
 ### Por que liga ao cliente, e não ao projeto
 
 Os três registros vizinhos (`Pendencia`, `Decisao`, `Risco`) ligam a `Project`, e este liga a
-`Client` com `project` opcional — o molde da `Activity`. A razão é que os dois consumidores
+`Account` com `project` opcional — o molde da `Activity`. A razão é que os dois consumidores
 perguntam coisas diferentes: o Health Score pergunta por projeto, a régua de cobrança pergunta por
 cliente, e cliente sem projeto ativo ainda pode ter fatura vencida. Ligar só ao projeto deixaria a
 camada 5 sem alcance justamente em quem não está mais em entrega — que é onde a cobrança dói.

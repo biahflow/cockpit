@@ -655,12 +655,12 @@ def test_download_do_drive_fora_do_ar_vira_502(monkeypatch: pytest.MonkeyPatch) 
 
     from apps.core import drive
     from apps.core.models import Document, User
-    from apps.core.tests.factories import ClientFactory, UserFactory
+    from apps.core.tests.factories import AccountFactory, UserFactory
 
     monkeypatch.setattr(drive, "download_document", _recusa_do_drive)
     admin = UserFactory(role=User.Role.ADMIN)
     documento = Document.objects.create(
-        client=ClientFactory(owner=admin), original_name="proposta.pdf",
+        account=AccountFactory(owner=admin), original_name="proposta.pdf",
         drive_file_id="arquivo-123", uploaded_by=admin,
     )
     client = APIClient()
@@ -760,7 +760,7 @@ def test_fornecedor_fora_do_ar_nao_deixa_solicitacao_orfa(monkeypatch: pytest.Mo
 
     from apps.core import esign
     from apps.core.models import Document, SignatureRequest, User
-    from apps.core.tests.factories import ClientFactory, UserFactory
+    from apps.core.tests.factories import AccountFactory, UserFactory
 
     # É o que `_http_raw` devolve quando a rede, o 401 ou o timeout acontecem.
     monkeypatch.setattr(esign.AutentiqueProvider, "_post", lambda self, body, ct: None)
@@ -768,7 +768,7 @@ def test_fornecedor_fora_do_ar_nao_deixa_solicitacao_orfa(monkeypatch: pytest.Mo
 
     admin = UserFactory(role=User.Role.ADMIN)
     documento = Document.objects.create(
-        client=ClientFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
+        account=AccountFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
     )
     client = APIClient()
     client.force_authenticate(admin)
@@ -795,11 +795,11 @@ def test_sem_provedor_a_solicitacao_local_continua_valendo() -> None:
     from rest_framework.test import APIClient
 
     from apps.core.models import Document, SignatureRequest, User
-    from apps.core.tests.factories import ClientFactory, UserFactory
+    from apps.core.tests.factories import AccountFactory, UserFactory
 
     admin = UserFactory(role=User.Role.ADMIN)
     documento = Document.objects.create(
-        client=ClientFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
+        account=AccountFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
     )
     client = APIClient()
     client.force_authenticate(admin)
@@ -823,12 +823,12 @@ def test_documento_vazio_nao_vira_solicitacao_fantasma(monkeypatch: pytest.Monke
 
     from apps.core import esign
     from apps.core.models import Document, SignatureRequest, User
-    from apps.core.tests.factories import ClientFactory, UserFactory
+    from apps.core.tests.factories import AccountFactory, UserFactory
 
     monkeypatch.setattr(esign, "_document_bytes", lambda doc: b"")
     admin = UserFactory(role=User.Role.ADMIN)
     documento = Document.objects.create(
-        client=ClientFactory(owner=admin), original_name="vazio.pdf", uploaded_by=admin,
+        account=AccountFactory(owner=admin), original_name="vazio.pdf", uploaded_by=admin,
     )
     client = APIClient()
     client.force_authenticate(admin)

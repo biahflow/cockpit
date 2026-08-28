@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AcceptInvitationView,
+    AccountViewSet,
     ActivityViewSet,
     AgentView,
     AiFeedbackView,
@@ -14,7 +15,6 @@ from .views import (
     BookingSlotsView,
     CalendarSyncView,
     CaseViewSet,
-    ClientViewSet,
     CobrancaSuspensaoViewSet,
     CobrancaViewSet,
     CommercialOpportunityViewSet,
@@ -80,7 +80,10 @@ from .views import (
 )
 
 router = DefaultRouter()
-router.register("clients", ClientViewSet)
+# A rota e o `basename` **não** mudam com o renome da classe (ADR 0052): a rota canônica
+# `/accounts/` nasce na `/api/v2/`. O `basename` passa a ser explícito porque o derivado do
+# queryset viraria `account` e quebraria todo `reverse("client-…")` do repositório.
+router.register("clients", AccountViewSet, basename="client")
 router.register("contacts", ContactViewSet)
 router.register("activities", ActivityViewSet)
 router.register("pipeline-stages", PipelineStageViewSet)

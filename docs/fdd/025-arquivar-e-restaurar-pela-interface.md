@@ -32,7 +32,7 @@ respondia 204, em silêncio.
 - **Toda ação destrutiva pede confirmação.** `ConfirmDialog` (`components/Modal.tsx`) sobre o mesmo
   `Modal` que já resolve foco preso e `Escape` (FDD 022). O texto diz o que acontece e se dá para
   desfazer — não "tem certeza?".
-- **Arquivar não pode deixar órfão visível.** `ClientViewSet.perform_destroy` recusa com **409**
+- **Arquivar não pode deixar órfão visível.** `AccountViewSet.perform_destroy` recusa com **409**
   enquanto houver projeto ou oportunidade ativos, e a mensagem diz quantos: quem tentou precisa
   saber o que fazer antes. `CommercialOpportunityViewSet.perform_destroy` recusa enquanto o projeto convertido
   estiver **ativo** — ele é o outro lado dela, e a conversão não roda duas vezes.
@@ -146,14 +146,14 @@ O expurgo continua sendo a única operação que destrói de propósito, e conti
 ## Onde está
 
 - Backend: `ArchiveModelViewSet` (`?archived=1`, `unarchive`), `StateConflict`,
-  `ClientViewSet.perform_destroy`, `CommercialOpportunityViewSet.perform_destroy`,
+  `AccountViewSet.perform_destroy`, `CommercialOpportunityViewSet.perform_destroy`,
   `PipelineStageViewSet.perform_destroy`, `JourneyPhaseViewSet.perform_destroy` e
   `PortalProjectSnapshotView` — todos em `backend/apps/core/views.py`; o campo `archived_at` do
   snapshot em `backend/apps/core/portal.py`; a rede do `ProtectedError` em
   `backend/apps/core/exceptions.py` (`api_exception_handler`), ligada em `config/settings.py`.
 - Frontend: `components/Modal.tsx` (`Modal` extraído da `CommercialPage` + `ConfirmDialog`); botões
-  em `ClientDetailPage`, `ProjectDetailPage` e no detalhe da `CommercialPage`; abas Arquivados em
-  `ClientsPage` e `ProjectsPage`; alternador "Herdada por projetos novos" em `JourneyConfigPage`;
+  em `AccountDetailPage`, `ProjectDetailPage` e no detalhe da `CommercialPage`; abas Arquivados em
+  `AccountsPage` e `ProjectsPage`; alternador "Herdada por projetos novos" em `JourneyConfigPage`;
   Editar/Arquivar/Mostrar arquivados no roster de Funcionários Digitais (`ProjectDetailPage`).
 - Testes: `backend/tests/regression/test_archive_nao_deixa_orfao.py`,
   `backend/tests/regression/test_arquivar_tem_saida.py`,

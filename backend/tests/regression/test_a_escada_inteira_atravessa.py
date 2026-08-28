@@ -72,7 +72,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
     convertida = api.post(
         reverse("opportunity-convert-to-project", args=[opportunity.pk]),
         {
-            "client": opportunity.client_id, "name": "Discovery Sprint ACME",
+            "client": opportunity.account_id, "name": "Discovery Sprint ACME",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=30)), "status": "planning",
         },
@@ -82,7 +82,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
     projeto = Project.objects.get(pk=convertida.data["id"])
     # Fase 2: a venda avulsa não vira caso especial — ela cria o mandato de escopo único (D3).
     assert projeto.engagement_id is not None
-    assert projeto.engagement.account_id == opportunity.client_id
+    assert projeto.engagement.account_id == opportunity.account_id
     assert projeto.originating_commercial_opportunity_id == opportunity.pk
 
     criado = api.post(

@@ -20,11 +20,11 @@ from .models import (
     CASE_TRANSITIONS,
     FINDING_TRANSITIONS,
     INVOICE_TRANSITIONS,
+    Account,
     Activity,
     Artifact,
     BlueprintVariant,
     Case,
-    Client,
     CobrancaContato,
     CobrancaSuspensao,
     CommercialOpportunity,
@@ -259,34 +259,55 @@ class ChangePasswordSerializer(serializers.Serializer):
         return attrs
 
 
-class ClientSerializer(serializers.ModelSerializer[Client]):
+class AccountSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Account]):
+    ALIASES_DE_ENTRADA = {"status": "lifecycle_status"}
+
     vertical_name = serializers.CharField(source="vertical.name", read_only=True, default="")
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): o campo virou
+    # `lifecycle_status` e a chave `status` continua saindo com o mesmo valor, até a `/api/v2/`.
+    # A escrita pela chave antiga vem do mixin acima.
+    status = serializers.CharField(source="lifecycle_status", read_only=True)
 
     class Meta:
-        model = Client
-        fields = ["id", "name", "legal_name", "tax_id", "owner", "status", "vertical",
-                  "vertical_name", "created_at", "updated_at"]
+        model = Account
+        fields = ["id", "name", "legal_name", "tax_id", "owner", "lifecycle_status", "status",
+                  "vertical", "vertical_name", "created_at", "updated_at"]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
 
-    def validate_status(self, value: str) -> str:
-        """`status` é afirmado por quem cadastra, mas o que o sistema observou não se desdiz.
+    def validate_lifecycle_status(self, value: str) -> str:
+        """O estado é afirmado por quem cadastra, mas o que o sistema observou não se desdiz.
 
-        Prospect vira ativo pelo signal `_promote_client_on_won`. Deixar um PATCH devolver o
-        cliente para prospect apagaria esse fato — e o signal só promove na transição, então ele
+        `prospect → active` é do signal `_promote_account_on_won`. Deixar um PATCH devolver a
+        conta para prospect apagaria esse fato — e o signal só promove na transição, então ele
         não corrigiria de volta. O critério de "ganha" é o mesmo de `CommercialOpportunity.is_won`.
+
+        **`active → inactive` é permitido**, e é o caminho que o estado existe para ter: a conta
+        que terminou o mandato sai da carteira sem sair do histórico. `inactive → prospect` é
+        recusado pela mesma razão de `active → prospect` — quem já foi cliente não volta a ser
+        alguém que nunca comprou.
         """
-        if value != Client.Status.PROSPECT or self.instance is None:
+        if value != Account.LifecycleStatus.PROSPECT or self.instance is None:
             return value
+        if self.instance.lifecycle_status == Account.LifecycleStatus.INACTIVE:
+            raise serializers.ValidationError(
+                "A conta já foi cliente e não volta a ser prospect."
+            )
         if CommercialOpportunity.objects.filter(
-            client=self.instance, stage__kind=PipelineStage.Kind.WON, archived_at__isnull=True
+            account=self.instance, stage__kind=PipelineStage.Kind.WON, archived_at__isnull=True
         ).exists():
             raise serializers.ValidationError(
-                "O cliente tem oportunidade ganha e não volta a ser prospect."
+                "A conta tem oportunidade ganha e não volta a ser prospect."
             )
         return value
 
 
-class ContactSerializer(serializers.ModelSerializer[Contact]):
+class ContactSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Contact]):
+    ALIASES_DE_ENTRADA = {"client": "account"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
+
     # Nome composto e só-leitura (issue #55, FDD 001): quem escreve manda `first_name`/
     # `last_name`, nunca este campo — mudança de contrato de escrita deliberada, registrada no
     # CHANGELOG. Lê de `Contact.full_name`, a única definição de "nome composto" (CLAUDE.md).
@@ -294,13 +315,17 @@ class ContactSerializer(serializers.ModelSerializer[Contact]):
 
     class Meta:
         model = Contact
-        fields = ["id", "client", "first_name", "last_name", "name", "email", "phone",
+        fields = ["id", "account", "client", "first_name", "last_name", "name", "email", "phone",
                   "job_title", "receives_billing", "created_at", "updated_at"]
         read_only_fields = ["id", "name", "created_at", "updated_at"]
 
 
 class ActivitySerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Activity]):
-    ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity"}
+    ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity", "client": "account"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
     # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do mixin acima.
@@ -314,7 +339,7 @@ class ActivitySerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Activi
 
     class Meta:
         model = Activity
-        fields = ["id", "client", "commercial_opportunity", "opportunity", "invoice",
+        fields = ["id", "account", "client", "commercial_opportunity", "opportunity", "invoice",
                   "kind", "kind_display", "happened_on",
                   "summary", "notes", "cobranca_sinal", "cobranca_sinal_display", "owner",
                   "created_at", "updated_at"]
@@ -326,7 +351,7 @@ class ActivitySerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Activi
                             "owner", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
-        client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
+        account = cast(Account | None, attrs.get("account", getattr(self.instance, "account", None)))
         # O mixin já normalizou a chave legada, então aqui só existe a canônica.
         venda = cast(
             CommercialOpportunity | None,
@@ -335,12 +360,12 @@ class ActivitySerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Activi
                 getattr(self.instance, "commercial_opportunity", None),
             ),
         )
-        if venda and client and venda.client_id != client.id:
+        if venda and account and venda.account_id != account.id:
             raise serializers.ValidationError(
                 {"commercial_opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
             )
         invoice = cast(Invoice | None, attrs.get("invoice", getattr(self.instance, "invoice", None)))
-        if invoice and client and invoice.client_id != client.id:
+        if invoice and account and invoice.account_id != account.id:
             raise serializers.ValidationError(
                 {"invoice": "A fatura deve pertencer ao mesmo cliente."}
             )
@@ -482,7 +507,15 @@ class PhaseEventSerializer(serializers.ModelSerializer[PhaseEvent]):
         return actor.get_full_name() or actor.get_username()
 
 
-class CommercialOpportunitySerializer(serializers.ModelSerializer[CommercialOpportunity]):
+class CommercialOpportunitySerializer(
+    AliasDeEntradaMixin, serializers.ModelSerializer[CommercialOpportunity]
+):
+    ALIASES_DE_ENTRADA = {"client": "account"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
+
     stage_name = serializers.CharField(source="stage.name", read_only=True)
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_tier = serializers.CharField(source="service.tier", read_only=True)
@@ -492,7 +525,8 @@ class CommercialOpportunitySerializer(serializers.ModelSerializer[CommercialOppo
     class Meta:
         model = CommercialOpportunity
         fields = [
-            "id", "client", "contact", "title", "scope", "estimated_value", "stage", "stage_name",
+            "id", "account", "client", "contact", "title", "scope", "estimated_value", "stage",
+            "stage_name",
             "owner", "expected_close_date", "service", "service_name", "service_tier", "project",
             "project_archived", "origin_qualification", "created_at", "updated_at",
         ]
@@ -542,9 +576,9 @@ class CommercialOpportunitySerializer(serializers.ModelSerializer[CommercialOppo
         return project is not None and project.archived_at is not None
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
-        client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
+        account = cast(Account | None, attrs.get("account", getattr(self.instance, "account", None)))
         contact = cast(Contact | None, attrs.get("contact", getattr(self.instance, "contact", None)))
-        if contact and client and contact.client_id != client.id:
+        if contact and account and contact.account_id != account.id:
             raise serializers.ValidationError({"contact": "O contato deve pertencer ao cliente selecionado."})
         return attrs
 
@@ -619,12 +653,12 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         como `IntegrityError` ou como um registro incoerente salvo em silêncio.
         """
         instance = self.instance
-        account = cast(Client | None, attrs.get("account", getattr(instance, "account", None)))
+        account = cast(Account | None, attrs.get("account", getattr(instance, "account", None)))
         sponsor = cast(Contact | None, attrs.get("sponsor", getattr(instance, "sponsor", None)))
         started = cast(date | None, attrs.get("started_at", getattr(instance, "started_at", None)))
         ended = cast(date | None, attrs.get("ended_at", getattr(instance, "ended_at", None)))
         status_value = attrs.get("status", getattr(instance, "status", Engagement.Status.ACTIVE))
-        if sponsor and account and sponsor.client_id != account.id:
+        if sponsor and account and sponsor.account_id != account.id:
             raise serializers.ValidationError(
                 {"sponsor": "O patrocinador deve ser contato da mesma conta."}
             )
@@ -700,7 +734,7 @@ class ProjectSerializer(serializers.ModelSerializer[Project]):
             raise serializers.ValidationError({"due_date": "A data final não pode ser anterior à inicial."})
         # A projeção `client` não pode divergir de `engagement.account` (ADR 0050). Mesma regra do
         # `Project.clean()`, aqui para virar 400 de campo em vez de 500.
-        client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
+        client = cast(Account | None, attrs.get("client", getattr(self.instance, "client", None)))
         engagement = cast(
             Engagement | None, attrs.get("engagement", getattr(self.instance, "engagement", None))
         )
@@ -771,7 +805,7 @@ class RiscoSerializer(serializers.ModelSerializer[Risco]):
         read_only_fields = ["id", "owner", "resolved_at", "created_at", "updated_at"]
 
 
-class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
+class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Satisfacao]):
     """O registro de satisfação (FDD 037).
 
     `registered_by` é só de leitura pelo motivo do `owner` do `Risco` acima: quem registrou sai da
@@ -779,12 +813,18 @@ class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
     cobrança, e "quem ouviu isso do cliente" é metade do que torna o sinal avaliável depois.
     """
 
+    ALIASES_DE_ENTRADA = {"client": "account"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     nivel_display = serializers.CharField(source="get_nivel_display", read_only=True)
     fonte_display = serializers.CharField(source="get_fonte_display", read_only=True)
 
     class Meta:
         model = Satisfacao
-        fields = ["id", "client", "project", "source_meeting", "source_activity", "nivel",
+        fields = ["id", "account", "client", "project", "source_meeting", "source_activity",
+                  "nivel",
                   "nivel_display", "fonte", "fonte_display", "happened_on", "note",
                   "registered_by", "created_at", "updated_at"]
         read_only_fields = ["id", "nivel_display", "fonte_display", "registered_by", "created_at",
@@ -796,11 +836,11 @@ class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
         É o que o `ActivitySerializer` já faz: sem elas a API devolveria 500 no `full_clean` do
         `save()` em vez de um 400 com o campo errado apontado, e a tela não teria o que mostrar.
         """
-        client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
+        account = cast(Account | None, attrs.get("account", getattr(self.instance, "account", None)))
         project = cast(
             Project | None, attrs.get("project", getattr(self.instance, "project", None))
         )
-        if project and client and project.client_id != client.id:
+        if project and account and project.client_id != account.id:
             raise serializers.ValidationError(
                 {"project": "O projeto deve pertencer ao mesmo cliente."}
             )
@@ -811,7 +851,7 @@ class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
             Activity | None,
             attrs.get("source_activity", getattr(self.instance, "source_activity", None)),
         )
-        if source_activity and client and source_activity.client_id != client.id:
+        if source_activity and account and source_activity.account_id != account.id:
             raise serializers.ValidationError(
                 {"source_activity": "A interação deve pertencer ao mesmo cliente."}
             )
@@ -824,7 +864,7 @@ class SatisfacaoSerializer(serializers.ModelSerializer[Satisfacao]):
         return attrs
 
 
-class ProcessoSerializer(serializers.ModelSerializer[Processo]):
+class ProcessoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Processo]):
     """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
     `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
@@ -835,12 +875,17 @@ class ProcessoSerializer(serializers.ModelSerializer[Processo]):
     sai da sessão, não do corpo.
     """
 
-    client_name = serializers.CharField(source="client.name", read_only=True)
+    ALIASES_DE_ENTRADA = {"client": "account"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
+    client_name = serializers.CharField(source="account.name", read_only=True)
     custo = serializers.SerializerMethodField()
 
     class Meta:
         model = Processo
-        fields = ["id", "client", "client_name", "name", "position", "source_project",
+        fields = ["id", "account", "client", "client_name", "name", "position", "source_project",
                   "source_meeting", "registered_by", "volume_mes", "tempo_horas", "pessoas",
                   "custo_hora", "retrabalho_mes", "erros_mes", "perdas_mes", "espera_mes",
                   "risco_mes", "custo", "created_at", "updated_at"]
@@ -1040,7 +1085,7 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """A mesma regra do `clean()` do modelo — o `save()` do DRF não chama `full_clean`."""
         account = cast(
-            Client | None, attrs.get("account", getattr(self.instance, "account", None))
+            Account | None, attrs.get("account", getattr(self.instance, "account", None))
         )
         process = cast(
             Processo | None, attrs.get("process", getattr(self.instance, "process", None))
@@ -1061,11 +1106,11 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
         )
         if step and process and step.processo_id != process.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
-        if process and account and process.client_id != account.pk:
+        if process and account and process.account_id != account.pk:
             raise serializers.ValidationError(
                 {"process": "O processo deve pertencer à mesma conta."}
             )
-        if step and account and step.processo.client_id != account.pk:
+        if step and account and step.processo.account_id != account.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         if discovery and account and discovery.project.client_id != account.pk:
             raise serializers.ValidationError(
@@ -1124,7 +1169,7 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         account = cast(
-            Client | None, attrs.get("account", getattr(self.instance, "account", None))
+            Account | None, attrs.get("account", getattr(self.instance, "account", None))
         )
         process = cast(
             Processo | None, attrs.get("process", getattr(self.instance, "process", None))
@@ -1135,11 +1180,11 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
         )
         if confidence is not None and not 0 <= confidence <= 100:
             raise serializers.ValidationError({"confidence": "A confiança vai de 0 a 100."})
-        if process and account and process.client_id != account.pk:
+        if process and account and process.account_id != account.pk:
             raise serializers.ValidationError(
                 {"process": "O processo deve pertencer à mesma conta."}
             )
-        if step and account and step.processo.client_id != account.pk:
+        if step and account and step.processo.account_id != account.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         if step and process and step.processo_id != process.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
@@ -1363,19 +1408,20 @@ def _safe_original_name(name: str | None) -> str:
 
 
 class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Document]):
-    ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity"}
+    ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity", "client": "account"}
 
-    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do mixin acima.
+    # Aliases de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): as chaves antigas saem
+    # com o mesmo valor das canônicas e morrem na `/api/v2/`. A escrita vem do mixin acima.
     opportunity = serializers.PrimaryKeyRelatedField(
         source="commercial_opportunity", read_only=True
     )
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     signature_requests = SignatureRequestSerializer(many=True, read_only=True)
 
     class Meta:
         model = Document
         fields = [
-            "id", "client", "commercial_opportunity", "opportunity", "project", "file",
+            "id", "account", "client", "commercial_opportunity", "opportunity", "project", "file",
             "drive_link", "original_name",
             "uploaded_by", "created_at", "signature_requests",
         ]
@@ -1383,7 +1429,7 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         links = [
-            attrs.get("client"), attrs.get("commercial_opportunity"), attrs.get("project")
+            attrs.get("account"), attrs.get("commercial_opportunity"), attrs.get("project")
         ]
         if sum(value is not None for value in links) != 1:
             raise serializers.ValidationError("Vincule o documento a exatamente um cliente, oportunidade ou projeto.")
@@ -1689,11 +1735,11 @@ _INVOICE_ACTION_FOR: dict[str, str] = {
 # O que a fatura emitida não admite mais. **Não** são `read_only_fields`: em rascunho eles são o
 # próprio trabalho de quem monta a cobrança.
 _FROZEN_ONCE_ISSUED = (
-    "client", "project", "service", "amount", "due_date", "description",
+    "account", "project", "service", "amount", "due_date", "description",
 )
 
 
-class InvoiceSerializer(serializers.ModelSerializer[Invoice]):
+class InvoiceSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Invoice]):
     """A fatura (FDD 028).
 
     Duas travas que valem ser lidas juntas, porque a diferença entre elas é deliberada.
@@ -1709,9 +1755,14 @@ class InvoiceSerializer(serializers.ModelSerializer[Invoice]):
     pior modo de falha disponível.
     """
 
+    ALIASES_DE_ENTRADA = {"client": "account"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     method_display = serializers.CharField(source="get_method_display", read_only=True)
-    client_name = serializers.CharField(source="client.name", read_only=True)
+    client_name = serializers.CharField(source="account.name", read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True, default="")
     service_name = serializers.CharField(source="service.name", read_only=True, default="")
     is_overdue = serializers.BooleanField(read_only=True)
@@ -1719,7 +1770,8 @@ class InvoiceSerializer(serializers.ModelSerializer[Invoice]):
     class Meta:
         model = Invoice
         fields = [
-            "id", "client", "client_name", "project", "project_name", "service", "service_name",
+            "id", "account", "client", "client_name", "project", "project_name", "service",
+            "service_name",
             "number", "amount", "description", "due_date", "method", "method_display",
             "status", "status_display", "is_overdue", "issued_at", "issued_by", "paid_at",
             "settled_by", "cancelled_at", "cancelled_by", "cancel_reason",
@@ -1769,20 +1821,25 @@ class CobrancaContatoSerializer(serializers.ModelSerializer[CobrancaContato]):
     — os dois mandam o e-mail **antes** de gravar.
     """
 
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     degrau_display = serializers.CharField(source="get_degrau_display", read_only=True)
     canal_display = serializers.CharField(source="get_canal_display", read_only=True)
-    client_name = serializers.CharField(source="client.name", read_only=True)
+    client_name = serializers.CharField(source="account.name", read_only=True)
     invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
 
     class Meta:
         model = CobrancaContato
-        fields = ["id", "invoice", "invoice_number", "client", "client_name", "degrau",
+        fields = ["id", "invoice", "invoice_number", "account", "client", "client_name", "degrau",
                   "degrau_display", "canal", "canal_display", "sent_on", "subject", "to_email",
                   "body", "sent_by", "ai_interaction", "created_at"]
         read_only_fields = fields
 
 
-class CobrancaSuspensaoSerializer(serializers.ModelSerializer[CobrancaSuspensao]):
+class CobrancaSuspensaoSerializer(
+    AliasDeEntradaMixin, serializers.ModelSerializer[CobrancaSuspensao]
+):
     """Suspender a cobrança — com dono, prazo e motivo, os três obrigatórios (RFC 0004).
 
     A validação de "exatamente uma fatura ou um cliente" mora no `clean()` do modelo, como a do
@@ -1790,13 +1847,19 @@ class CobrancaSuspensaoSerializer(serializers.ModelSerializer[CobrancaSuspensao]
     leituras de "levantar", e a errada devolve a cobrança a quem ainda não devia ouvi-la.
     """
 
-    client_name = serializers.CharField(source="client.name", read_only=True, default="")
+    ALIASES_DE_ENTRADA = {"client": "account"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
+    client_name = serializers.CharField(source="account.name", read_only=True, default="")
     invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
     is_active = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = CobrancaSuspensao
-        fields = ["id", "invoice", "invoice_number", "client", "client_name", "owner", "until",
+        fields = ["id", "invoice", "invoice_number", "account", "client", "client_name", "owner",
+                  "until",
                   "reason", "created_by", "lifted_at", "lifted_by", "is_active",
                   "created_at", "updated_at"]
         read_only_fields = ["id", "invoice_number", "client_name", "created_by", "lifted_at",
@@ -1811,7 +1874,7 @@ class CobrancaSuspensaoSerializer(serializers.ModelSerializer[CobrancaSuspensao]
             return attrs.get(campo, getattr(self.instance, campo, None))
 
         instancia = CobrancaSuspensao(
-            **{campo: valor(campo) for campo in ("invoice", "client", "owner", "until")},
+            **{campo: valor(campo) for campo in ("invoice", "account", "owner", "until")},
             reason=str(valor("reason") or ""),
         )
         try:
@@ -1911,7 +1974,7 @@ class QualificationSerializer(serializers.ModelSerializer[Qualification]):
             ),
             lead=cast(Lead | None, attrs.get("lead", getattr(self.instance, "lead", None))),
             account=cast(
-                Client | None, attrs.get("account", getattr(self.instance, "account", None))
+                Account | None, attrs.get("account", getattr(self.instance, "account", None))
             ),
         )
         try:
@@ -1957,7 +2020,7 @@ class LeadConvertSerializer(serializers.Serializer):
     # A conta existente que a avaliação deve usar, em vez de criar outra. A queryset já exclui a
     # arquivada: reabrir uma conta que alguém tirou da lista não é efeito de converter um lead.
     account_id = serializers.PrimaryKeyRelatedField(
-        queryset=Client.objects.filter(archived_at__isnull=True),
+        queryset=Account.objects.filter(archived_at__isnull=True),
         source="account", required=False, allow_null=True, default=None,
     )
 
@@ -1987,12 +2050,14 @@ class OpenCommercialOpportunitySerializer(serializers.Serializer):
 
 
 class LeadSerializer(serializers.ModelSerializer[Lead]):
-    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c); morre na `/api/v2/`. Sem
-    # `AliasDeEntradaMixin` porque aqui não há escrita: o vínculo é lavrado por
-    # `POST /qualifications/{id}/open-opportunity/`, e as duas chaves são só de leitura.
+    # Aliases de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c); morrem na `/api/v2/`.
+    # Sem `AliasDeEntradaMixin` porque aqui não há escrita: os dois vínculos são lavrados por
+    # `POST /leads/{id}/convert/` e `POST /qualifications/{id}/open-opportunity/`, e as quatro
+    # chaves são só de leitura.
     opportunity = serializers.PrimaryKeyRelatedField(
         source="commercial_opportunity", read_only=True
     )
+    client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     # A avaliação mais recente do lead, para a tela saber que ele já passou pela qualificação sem
     # ter de pedir `/qualifications/?lead=`. Não substitui a coleção: o lead tem várias, e o que a
     # lista precisa é do estado atual.
@@ -2004,7 +2069,8 @@ class LeadSerializer(serializers.ModelSerializer[Lead]):
         fields = [
             "id", "name", "email", "company", "phone", "cnpj", "message", "source", "status",
             "ai_fit", "ai_score", "ai_summary", "ai_recommended_action", "qualified_at",
-            "enrichment", "client", "commercial_opportunity", "opportunity", "qualification",
+            "enrichment", "account", "client", "commercial_opportunity", "opportunity",
+            "qualification",
             "qualification_outcome",
             "created_at", "updated_at",
         ]
@@ -2013,7 +2079,8 @@ class LeadSerializer(serializers.ModelSerializer[Lead]):
             # `enrichment` é retrato do fornecedor, não campo de trabalho: editável pela tela, ele
             # deixaria de responder "o que a Receita diz" e passaria a responder "o que alguém
             # digitou", que é a diferença entre dado enriquecido e dado inventado.
-            "qualified_at", "enrichment", "client", "commercial_opportunity", "qualification",
+            "qualified_at", "enrichment", "account", "client", "commercial_opportunity",
+            "qualification",
             "qualification_outcome", "created_at", "updated_at",
         ]
 

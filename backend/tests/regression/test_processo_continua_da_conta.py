@@ -15,16 +15,16 @@ de uma intenção. O que ele fixa é estrutural, e por isso não envelhece com a
 import pytest
 
 from apps.core.models import Evidencia, Processo, ProcessoEtapa, Project
-from apps.core.tests.factories import ClientFactory, ProcessoFactory, ProjectFactory
+from apps.core.tests.factories import AccountFactory, ProcessoFactory, ProjectFactory
 
 pytestmark = pytest.mark.django_db
 
 
 def test_a_ancora_do_processo_e_a_conta_e_e_obrigatoria() -> None:
-    ancora = Processo._meta.get_field("client")
+    ancora = Processo._meta.get_field("account")
 
     assert ancora.null is False
-    assert ancora.related_model.__name__ == "Client"
+    assert ancora.related_model.__name__ == "Account"
 
 
 def test_o_projeto_no_processo_e_proveniencia_opcional() -> None:
@@ -61,13 +61,13 @@ def test_etapa_e_evidencia_chegam_a_conta_pelo_processo_e_nao_pelo_projeto() -> 
 
 def test_o_processo_sobrevive_ao_projeto_que_o_descobriu() -> None:
     """A regra estrutural exercitada: arquivar o projeto de origem não leva o mapa junto."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     projeto = ProjectFactory(client=conta)
-    processo = ProcessoFactory(client=conta, source_project=projeto)
+    processo = ProcessoFactory(account=conta, source_project=projeto)
 
     projeto.archive()
 
     processo.refresh_from_db()
-    assert processo.client_id == conta.pk
+    assert processo.account_id == conta.pk
     assert processo.source_project_id == projeto.pk
     assert Project.objects.get(pk=projeto.pk).archived_at is not None

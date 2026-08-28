@@ -10,10 +10,12 @@ primeira semana, e aí não protege nada.
 
 "Renome físico" era um termo que significava duas coisas, e a **ADR 0052** o desfez em três, com
 prazos distintos: o nome da **classe** é a issue #67 (uma fatia por PR), o nome da **tabela** é a
-Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. Duas fatias já passaram —
-`GateOutcome` virou `GateDecision` com o campo `gate_decision`, e `Opportunity` virou
-`CommercialOpportunity` com os cinco campos `commercial_opportunity` —, restando na allowlist a
-rota, a chave de payload que a v1 promete e o `ai_opportunity`, que nunca foi venda.
+Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. Três fatias já passaram —
+`GateOutcome` virou `GateDecision` com o campo `gate_decision`, `Opportunity` virou
+`CommercialOpportunity` com os cinco campos `commercial_opportunity`, e `Client` virou `Account`
+com os dez campos `account` e o `lifecycle_status` —, restando na allowlist as rotas, as chaves de
+payload que a v1 promete, o `ai_opportunity` (que nunca foi venda), o `client_consent` e o
+`Project.client`, que é a projeção que a Fase 6 remove.
 
 O que a invariante §6 proíbe é **batizar** coisa nova com o nome errado. Batizar tem forma
 sintática: `class X`, `campo = models.…`, `router.register(...)`, `path(...)`, `type X`,
@@ -26,9 +28,8 @@ Três exceções são deliberadas e as fases seguintes dependem delas (ver `docs
   para o registro antigo, e esconder esse mapeamento atrás de um nome bonito é o defeito, não a
   correção;
 * `commercial_` / `improvement_` — são exatamente os qualificadores que a §5 pede;
-* um campo chamado `account` apontando para o modelo `Client` — é o nome canônico apontando para o
-  modelo legado, que é o passo 1 de toda migração de nome. A regra `client-como-organizacao` casa
-  `client`, nunca `account`.
+* um campo chamado `account` — é o nome canônico, e desde a fatia 2 da #67 ele aponta para a
+  classe de nome certo. A regra `client-como-organizacao` casa `client`, nunca `account`.
 
 `GateOutcome`/`gate_outcome` é a única regra em que a **referência** é o problema: ali o
 identificador inteiro está errado, não o contexto — não existe uso legítimo do nome antigo dentro
@@ -339,7 +340,7 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # onze delas abaixa a contagem daquela linha sem mexer neste teto. **Este número só desce.**
 # Baixá-lo é o trabalho das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada
 # linha aqui é um nome que o repositório ainda diz errado.
-TETO_DA_ALLOWLIST = 43
+TETO_DA_ALLOWLIST = 37
 
 
 def test_nenhum_termo_banido_novo() -> None:
@@ -427,7 +428,7 @@ LINHAS_LEGITIMAS: tuple[tuple[str, str, str], ...] = (
     ("opportunity-sem-qualificador", "views.py", "        return self.opportunity.client_id"),
     ("opportunity-sem-qualificador", "views.py", "from .models import Opportunity"),
     # O alias canônico da Fase 1: campo `account` apontando para o modelo legado `Client`.
-    ("client-como-organizacao", "models.py", '    account = models.ForeignKey("core.Client")'),
+    ("client-como-organizacao", "models.py", '    account = models.ForeignKey("core.Account")'),
     ("client-como-organizacao", "models.py", "    legacy_client = models.ForeignKey(Client)"),
     # Cliente de protocolo: sufixo, não prefixo.
     ("client-como-organizacao", "github_issues.py", "class GitHubIssuesClient:"),

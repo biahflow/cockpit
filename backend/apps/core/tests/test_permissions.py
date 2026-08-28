@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from apps.core.models import PipelineStage, Project, User
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
@@ -58,7 +58,7 @@ def test_delivery_only_sees_won_opportunities_and_cannot_edit_crm(client: APICli
     """Ganha **e** convertida num projeto da equipe (RFC 0003) — antes bastava estar ganha."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     won = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
-    project = ProjectFactory(originating_commercial_opportunity=won, client=won.client)
+    project = ProjectFactory(originating_commercial_opportunity=won, client=won.account)
     ProjectMemberFactory(project=project, user=delivery)
     CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
     CommercialOpportunityFactory()
@@ -108,7 +108,7 @@ def test_only_administrators_manage_pipeline_and_invitations(client: APIClient) 
 @pytest.mark.django_db
 def test_delete_archives_client_without_losing_record(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
-    record = ClientFactory(owner=admin)
+    record = AccountFactory(owner=admin)
     client.force_authenticate(admin)
 
     deleted = client.delete(reverse("client-detail", args=[record.id]))

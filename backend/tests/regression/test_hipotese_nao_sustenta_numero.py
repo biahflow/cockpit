@@ -26,7 +26,7 @@ import pytest
 from apps.core import ai
 from apps.core.models import Evidencia
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     EvidenciaFactory,
     ProcessoEtapaFactory,
@@ -46,11 +46,11 @@ NUMERO = "R$ 20.000,00"
 
 
 def _oportunidade_com_processo(**campos: object):  # type: ignore[no-untyped-def]
-    client = ClientFactory()
-    processo = ProcessoFactory(client=client, name="Faturamento mensal", **NUCLEO, **campos)
+    account = AccountFactory()
+    processo = ProcessoFactory(account=account, name="Faturamento mensal", **NUCLEO, **campos)
     ProcessoEtapaFactory(processo=processo, name="Conferir notas", position=1)
     ProcessoEtapaFactory(processo=processo, name="Emitir boletos", position=2)
-    return CommercialOpportunityFactory(client=client), processo
+    return CommercialOpportunityFactory(account=account), processo
 
 
 def test_sem_fato_o_numero_nao_entra_e_a_lacuna_e_declarada() -> None:

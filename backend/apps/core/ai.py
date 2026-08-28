@@ -119,7 +119,7 @@ def build_meeting_context(meeting: Meeting) -> str:
 def build_opportunity_context(opportunity: CommercialOpportunity) -> str:
     lines = [
         f"Oportunidade: {opportunity.title}",
-        f"Cliente: {opportunity.client.name}",
+        f"Cliente: {opportunity.account.name}",
         f"Valor estimado: {opportunity.estimated_value}",
         f"Etapa: {opportunity.stage.name}",
         f"Previsão de fechamento: {opportunity.expected_close_date}",
@@ -163,7 +163,7 @@ def _blueprint_lines(opportunity: CommercialOpportunity) -> list[str]:
     )
     if not aplicaveis:
         return []
-    vertical = opportunity.client.vertical
+    vertical = opportunity.account.vertical
     lines = ["Funcionários Digitais do catálogo aplicáveis a esta venda:"]
     for blueprint in aplicaveis:
         valores = blueprints.resolve(blueprint, vertical)
@@ -212,7 +212,7 @@ def _case_lines(opportunity: CommercialOpportunity) -> list[str]:
     """
     from .models import Case
 
-    vertical = opportunity.client.vertical
+    vertical = opportunity.account.vertical
     if vertical is None:
         # Sem vertical não há "mesmo setor", e citar case de qualquer setor seria prova fraca
         # vendida como forte. Ao contrário do catálogo, que resolve para o genérico, aqui o
@@ -288,7 +288,7 @@ def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
     from .models import Processo, ProcessoEtapa
 
     mapeados = list(
-        Processo.objects.filter(client=opportunity.client_id, archived_at__isnull=True)
+        Processo.objects.filter(account=opportunity.account_id, archived_at__isnull=True)
         .prefetch_related(
             # A etapa arquivada por conta própria (o processo vivo, ela não) é uma etapa que
             # alguém removeu do mapa; ressuscitá-la no prompt desfaria a remoção.
@@ -478,11 +478,11 @@ def build_cobranca_context(invoice: Invoice, degrau: str = "", hoje: date | None
     from .models import Milestone, Task
 
     dia = hoje or timezone.localdate()
-    client = invoice.client
+    account = invoice.account
     dias = (dia - invoice.due_date).days
     lines = [
         f"Hoje é {dia}.",
-        f"Cliente: {client.name}",
+        f"Cliente: {account.name}",
         f"Fatura: {invoice.number or 'sem número'}",
         f"Valor: {invoice.amount}",
         f"Vencimento: {invoice.due_date}",
@@ -496,13 +496,13 @@ def build_cobranca_context(invoice: Invoice, degrau: str = "", hoje: date | None
         lines.append(f"Referente a: {invoice.description}")
     if degrau:
         lines.append(f"Degrau da régua: {degrau}")
-    anos = cobranca.tempo_de_casa_dias(client, dia) // 365
+    anos = cobranca.tempo_de_casa_dias(account, dia) // 365
     lines.append(
         f"Tempo de casa: {anos} ano(s) completo(s)" if anos else "Tempo de casa: menos de um ano"
     )
     lines.append(
         "Histórico: já atrasou antes."
-        if cobranca.reincidente(client, dia, ignorando=invoice)
+        if cobranca.reincidente(account, dia, ignorando=invoice)
         else "Histórico: nunca atrasou antes."
     )
     project = invoice.project
@@ -534,7 +534,7 @@ def build_resposta_de_cobranca_context(activity: Activity) -> str:
     tudo o que sobrasse aqui seria contexto de cliente entrando num prompt sem razão declarada.
     """
     lines = [
-        f"Cliente: {activity.client.name}",
+        f"Cliente: {activity.account.name}",
         f"Tipo de interação: {activity.get_kind_display()}",
         f"Data: {activity.happened_on}",
         f"Resumo: {activity.summary}",

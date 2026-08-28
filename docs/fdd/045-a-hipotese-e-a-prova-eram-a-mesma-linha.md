@@ -218,7 +218,7 @@ Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e a
 
 ## Fora deste recorte
 
-- **Tela.** Nenhuma. O dual-write mantém `ProcessoDetailPage` e `ClientDetailPage` funcionando
+- **Tela.** Nenhuma. O dual-write mantém `ProcessoDetailPage` e `AccountDetailPage` funcionando
   sobre o modelo legado; tela de Discovery e painel de achados são interface nova e exigem Design
   Approval Package, que não existe. Entraram só os tipos em `frontend/src/types.ts`, sem consumidor,
   para a próxima fatia não começar do zero.
@@ -226,7 +226,8 @@ Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e a
   ele é a Fase 2 da ontologia. O campo é aditivo e entra lá.
 - **Descontinuar a `Evidencia`.** É a fatia seguinte, e ela começa por trocar a fonte de
   `processos.custo_do_estado_atual`.
-- **Renomear `Processo`/`ProcessoEtapa`/`Evidencia`/`Client`.** Os renomes físicos são a Fase 6.
+- **Renomear `Processo`/`ProcessoEtapa`/`Evidencia`.** `Client`→`Account` saiu na fatia 2 da
+  issue #67 (ADR 0052); os três que sobram são a fatia 4, e as **tabelas** dos quatro são a Fase 6.
   Aqui o nome canônico aparece só como **nome de campo** (`account`, `process`, `step`) apontando
   para o modelo legado.
 - **`PainPoint`, `ImprovementOpportunity`, `PriorityAssessment`, `SolutionHypothesis`.** Fase 4.

@@ -567,7 +567,7 @@ forma de saber que a exigência dinâmica está funcionando.
 | Superfície | Gatilho | O que confirmar |
 | --- | --- | --- |
 | Emissão | `POST /api/v1/invoices/{id}/issue/` | volta 200 com `number`, `external_reference` (`in_…`) e `payment_url`; a fatura aparece no painel do Stripe como **finalizada** |
-| Cliente reusado | emitir **duas** faturas do mesmo cliente | o segundo `issue` **não** cria outro `Customer`; `Client.payment_customer_ref` é o mesmo |
+| Cliente reusado | emitir **duas** faturas do mesmo cliente | o segundo `issue` **não** cria outro `Customer`; `Account.payment_customer_ref` é o mesmo |
 | Centavos | fatura de `R$ 18,99` | o Stripe mostra **1899**, não 1898 |
 | Fatura já vencida | `due_date` no passado | o `days_until_due` vai como `0` e o Stripe aceita (negativo daria 400) |
 | Baixa por webhook | pagar pela `hosted_invoice_url` com o cartão de teste `4242 4242 4242 4242` | a fatura vira `paga` sozinha, **com a data do provedor** |

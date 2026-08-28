@@ -31,7 +31,7 @@ def cenario():
     projeto = ProjectFactory()
     entrega = UserFactory(role="delivery")
     ProjectMemberFactory(project=projeto, user=entrega)
-    fatura = InvoiceFactory(client=projeto.client, project=projeto)
+    fatura = InvoiceFactory(account=projeto.client, project=projeto)
     api = APIClient()
     api.force_authenticate(entrega)
     return api, fatura, projeto
@@ -50,7 +50,7 @@ def test_entrega_toma_403_para_escrever(cenario):
     api, fatura, projeto = cenario
     assert api.post(
         "/api/v1/invoices/",
-        {"client": projeto.client_id, "amount": "10.00", "due_date": "2026-12-01"},
+        {"account": projeto.client_id, "amount": "10.00", "due_date": "2026-12-01"},
         format="json",
     ).status_code == 403
     assert api.patch(

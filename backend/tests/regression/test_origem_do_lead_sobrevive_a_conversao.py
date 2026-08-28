@@ -57,7 +57,7 @@ def _fechar(api: APIClient, opportunity: CommercialOpportunity, owner: User) -> 
     response = api.post(
         reverse("opportunity-convert-to-project", args=[opportunity.id]),
         {
-            "client": opportunity.client_id,
+            "client": opportunity.account_id,
             "name": f"Projeto {opportunity.id}",
             "owner": owner.id,
             "start_date": str(timezone.localdate()),

@@ -32,7 +32,7 @@ from apps.core.tests.factories import CommercialOpportunityFactory, UserFactory
 
 def _corpo(opportunity: CommercialOpportunity, sales: User, nome: str = "Projeto") -> dict:
     return {
-        "client": opportunity.client_id, "name": nome, "owner": sales.id,
+        "client": opportunity.account_id, "name": nome, "owner": sales.id,
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=10)),
         "status": "planning",
@@ -68,7 +68,7 @@ def test_a_segunda_conversao_nao_cria_um_segundo_mandato():
     client.post(endpoint, _corpo(opportunity, sales), format="json")
     client.post(endpoint, _corpo(opportunity, sales, "De novo"), format="json")
 
-    assert opportunity.client.engagements.count() == 1
+    assert opportunity.account.engagements.count() == 1
 
 
 @pytest.mark.django_db

@@ -158,7 +158,7 @@ def seed_invoices(project: Project) -> int:
         return 0
     for parcela, valor in zip(parcelas, _split(base, parcelas), strict=True):
         Invoice.objects.create(
-            client=project.client,
+            account=project.client,
             project=project,
             service=project.service,
             amount=valor,

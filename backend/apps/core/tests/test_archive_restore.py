@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Lead, User
 
-from .factories import ClientFactory, ProjectFactory, ServiceFactory, UserFactory
+from .factories import AccountFactory, ProjectFactory, ServiceFactory, UserFactory
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ def test_unarchive_encontra_o_arquivado_apesar_do_filtro_padrao(admin_client: AP
     Resolver pelo queryset filtrado devolveria 404 em todo pedido de restauração — a ação sempre
     procura o que já saiu da lista ativa.
     """
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     admin_client.delete(reverse("client-detail", args=[cliente.pk]))
 
     assert admin_client.get(reverse("client-detail", args=[cliente.pk])).status_code == 404

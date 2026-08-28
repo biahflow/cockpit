@@ -155,7 +155,7 @@ a aplicação porque a coluna nunca foi fechada.
 
 ### O backfill agrupa por conta, e sinaliza o que não sabe
 
-Um engajamento por `Client` que tenha ao menos um projeto, com `name = "Engajamento — <conta>"`
+Um engajamento por `Account` que tenha ao menos um projeto, com `name = "Engajamento — <conta>"`
 (nome derivado e reconhecível como automático, para ser trocado em vez de aceito por inércia),
 `owner = client.owner`, `status = active` e `started_at` = o menor `start_date` entre os projetos.
 Conta sem projeto **não** ganha engajamento: o mandato nasce quando a primeira venda vira projeto.
@@ -179,7 +179,7 @@ Separar os mandatos carimbados é trabalho humano. Não há automação prevista
 
 ## Fora de escopo
 
-Tela de Engagement, navegação por engajamento, redesenho de `ClientDetailPage` ou `ProjectsPage`,
+Tela de Engagement, navegação por engajamento, redesenho de `AccountDetailPage` ou `ProjectsPage`,
 e exposição do engajamento nos agregadores (`/clients/overview/`, `/risk/`, `/health/`,
 `/dashboard/`). Interface nova exige Design Approval Package, e não há um aprovado para esta
 superfície. O frontend recebeu apenas os tipos.
@@ -241,7 +241,7 @@ Package, e não há um aprovado para esta superfície"*. **Agora há**:
 as decisões **A1** e **B1**. O pacote é a especificação da superfície, e é ele que governa forma e
 copy — não esta FDD.
 
-O que entrou: uma `<section className="panel">` em `ClientDetailPage`, **entre "Saúde da relação" e
+O que entrou: uma `<section className="panel">` em `AccountDetailPage`, **entre "Saúde da relação" e
 "Satisfação"**, que lista os mandatos da conta com status, modelo comercial, patrocínio, período e
 contagem de projetos, e permite criar, editar e arquivar. É a primeira superfície do produto onde a
 espinha `Account → Engagement → Project` fica visível. O que **continua** fora: tela de lista no

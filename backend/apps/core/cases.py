@@ -84,11 +84,11 @@ def freeze(project: Project) -> Case:
     employees = DigitalEmployee.objects.filter(
         project=project, archived_at__isnull=True
     ).order_by("name", "id")
-    client = project.client
+    account = project.client
     return Case.objects.create(
         project=project,
-        title=f"{client.name} — {project.name}",
-        vertical=client.vertical,
+        title=f"{account.name} — {project.name}",
+        vertical=account.vertical,
         metrics=[_metric(employee) for employee in employees],
         health_snapshot=assess_project_health(project),
         roi_snapshot=_roi_snapshot(project),

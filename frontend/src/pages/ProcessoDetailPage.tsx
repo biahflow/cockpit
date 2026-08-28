@@ -177,7 +177,7 @@ export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: num
     setBusy(true);
     try {
       await api(`/processos/${id}/`, { method: "DELETE" });
-      window.location.assign(`/clientes/${clientId}`);
+      window.location.assign(`/contas/${clientId}`);
     } catch (cause) {
       setArchiving(false); setError(mensagemDeFalha(cause)); setBusy(false);
     }
@@ -190,7 +190,7 @@ export function ProcessoDetailPage({ clientId, id }: { clientId: number; id: num
   const naoApurado = custo.nao_apurado;
 
   return <section className="space-y-7">
-    <a href={`/clientes/${clientId}`} className="back-link"><ArrowLeft className="size-4" />Voltar para o cliente</a>
+    <a href={`/contas/${clientId}`} className="back-link"><ArrowLeft className="size-4" />Voltar para o cliente</a>
     {isArchiving && <ConfirmDialog
       title="Arquivar processo"
       // A mensagem diz o que `Processo.archive()` faz de verdade: arquivar **leva junto** etapas e

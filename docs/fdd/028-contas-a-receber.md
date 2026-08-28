@@ -21,7 +21,7 @@ atenção humana. Esta FDD assume que a medição justificou seguir.
 
 ## Regras
 
-- **`Invoice`.** FK `Client` (`PROTECT`, como as demais âncoras comerciais), FK opcionais
+- **`Invoice`.** FK `Account` (`PROTECT`, como as demais âncoras comerciais), FK opcionais
   `Project` e `Service` (`SET_NULL`), `number`, `amount`, `issued_at`, `due_date`,
   `method`, `external_reference` (o id no gateway) e `status`. Estende `TimestampedModel`
   pelo carimbo de tempo, **mas não pelo arquivamento** — ver a invariante abaixo.

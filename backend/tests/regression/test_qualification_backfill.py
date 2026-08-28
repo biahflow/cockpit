@@ -27,7 +27,7 @@ from apps.core.models import (
     Service,
 )
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     LeadFactory,
     ProjectFactory,
@@ -51,12 +51,30 @@ MIGRACAO = "apps.core.migrations.0052_backfill_qualification"
 # São três pontos de contato e nada mais: o nome do modelo e as duas chamadas em que a 0052
 # nomeia o campo da `Activity`. O comportamento sob teste — quais linhas nascem, quais são
 # arquivadas — não passa por aqui.
-_MODELOS = {"Opportunity": "CommercialOpportunity"}
-_CAMPOS = {"opportunity": "commercial_opportunity", "opportunity_id__in": "commercial_opportunity_id__in"}
+_MODELOS = {"Opportunity": "CommercialOpportunity", "Client": "Account"}
+_CAMPOS = {
+    "opportunity": "commercial_opportunity",
+    "opportunity_id__in": "commercial_opportunity_id__in",
+    "client_id": "account_id",
+}
 
 
 def _traduzir(kwargs: dict) -> dict:
     return {_CAMPOS.get(chave, chave): valor for chave, valor in kwargs.items()}
+
+
+@pytest.fixture(autouse=True)
+def _nome_historico_da_conta(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A quarta ponte: `opportunity.client_id`, que a fatia 2 da issue #67 renomeou.
+
+    A 0052 lê o id da conta pelo nome que a coluna tinha quando ela foi escrita, e continua
+    correta sob `migrate` — lá ela recebe o estado histórico. Aqui, que roda contra o registro
+    vivo, o id é reposto como propriedade de leitura; o `monkeypatch` a desfaz por teste, então
+    o nome banido não sobrevive ao arquivo.
+    """
+    monkeypatch.setattr(
+        CommercialOpportunity, "client_id", property(lambda self: self.account_id), raising=False
+    )
 
 
 class _ManagerDaEpoca:
@@ -108,9 +126,9 @@ def porta() -> Service:
 
 
 def _oportunidade_de_qualificacao(porta: Service, **kwargs) -> tuple[CommercialOpportunity, Lead]:
-    conta = kwargs.pop("client", None) or ClientFactory()
-    opportunity = CommercialOpportunityFactory(client=conta, service=porta, scope="Conversa inicial", **kwargs)
-    lead = LeadFactory(client=conta, commercial_opportunity=opportunity)
+    conta = kwargs.pop("account", None) or AccountFactory()
+    opportunity = CommercialOpportunityFactory(account=conta, service=porta, scope="Conversa inicial", **kwargs)
+    lead = LeadFactory(account=conta, commercial_opportunity=opportunity)
     return opportunity, lead
 
 
@@ -121,7 +139,7 @@ def test_backfill_cria_qualificacao_e_auditoria_e_arquiva(porta: Service) -> Non
 
     qualification = Qualification.objects.get()
     assert qualification.lead_id == lead.pk
-    assert qualification.account_id == opportunity.client_id
+    assert qualification.account_id == opportunity.account_id
     assert qualification.legacy_opportunity_id == opportunity.pk
     assert qualification.assessor_id == opportunity.owner_id
     assert qualification.happened_at == opportunity.created_at
@@ -129,7 +147,7 @@ def test_backfill_cria_qualificacao_e_auditoria_e_arquiva(porta: Service) -> Non
     # A auditoria de que a linha existiu — sem ela, a oportunidade some da tela sem explicação.
     nota = Activity.objects.get(commercial_opportunity=opportunity)
     assert nota.summary == f"Qualificação migrada da oportunidade #{opportunity.pk}"
-    assert nota.client_id == opportunity.client_id
+    assert nota.account_id == opportunity.account_id
     opportunity.refresh_from_db()
     assert opportunity.archived_at is not None
     assert CommercialOpportunity.objects.filter(pk=opportunity.pk).exists()  # nada é apagado
@@ -154,7 +172,7 @@ def test_oportunidade_com_projeto_vira_avaliacao_mas_nao_e_arquivada(porta: Serv
     opportunity, _ = _oportunidade_de_qualificacao(
         porta, stage=PipelineStage.objects.get(kind="won")
     )
-    ProjectFactory(client=opportunity.client, originating_commercial_opportunity=opportunity)
+    ProjectFactory(client=opportunity.account, originating_commercial_opportunity=opportunity)
 
     _rodar_backfill()
 
@@ -229,7 +247,7 @@ def test_reversa_nao_desarquiva_quem_alguem_arquivou_depois(porta: Service) -> N
     opportunity, _ = _oportunidade_de_qualificacao(
         porta, stage=PipelineStage.objects.get(kind="won")
     )
-    ProjectFactory(client=opportunity.client, originating_commercial_opportunity=opportunity)  # a ida não arquiva
+    ProjectFactory(client=opportunity.account, originating_commercial_opportunity=opportunity)  # a ida não arquiva
     _rodar_backfill()
     depois = timezone.now() + timedelta(days=1)
     CommercialOpportunity.objects.filter(pk=opportunity.pk).update(archived_at=depois)

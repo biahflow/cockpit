@@ -16,7 +16,7 @@ from django.utils import timezone
 from apps.core import drive, retention
 from apps.core.models import Document, Lead
 
-from .factories import ClientFactory, UserFactory
+from .factories import AccountFactory, UserFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -64,7 +64,7 @@ def test_familia_desligada_nao_e_afetada_pela_ligada() -> None:
 
     admin = UserFactory()
     doc = Document.objects.create(
-        client=ClientFactory(owner=admin), original_name="fica.pdf", uploaded_by=admin,
+        account=AccountFactory(owner=admin), original_name="fica.pdf", uploaded_by=admin,
     )
     doc.file.save("fica.pdf", ContentFile(b"x"), save=True)
     Document.objects.filter(pk=doc.pk).update(archived_at=timezone.now() - timedelta(days=3650))
@@ -118,7 +118,7 @@ def test_o_arquivo_sai_junto_com_a_linha() -> None:
 
     admin = UserFactory()
     doc = Document.objects.create(
-        client=ClientFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
+        account=AccountFactory(owner=admin), original_name="contrato.pdf", uploaded_by=admin,
     )
     doc.file.save("contrato.pdf", ContentFile(b"conteudo"), save=True)
     # `storage.exists(nome)` e não `os.path.exists(file.path)`: `.path` só existe em storage
@@ -137,7 +137,7 @@ def _documento_no_drive(nome: str, *, arquivado_ha: int) -> Document:
     """Documento da era Drive: sem arquivo local, com `drive_file_id` — é o `if` do `_apagar_arquivo`."""
     admin = UserFactory()
     doc = Document.objects.create(
-        client=ClientFactory(owner=admin), original_name=nome, uploaded_by=admin,
+        account=AccountFactory(owner=admin), original_name=nome, uploaded_by=admin,
         drive_file_id=f"drive-{nome}",
     )
     Document.objects.filter(pk=doc.pk).update(

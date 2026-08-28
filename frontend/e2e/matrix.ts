@@ -17,9 +17,9 @@ export type Screen = { path: string; name: string; role: Role | null };
 export const ROUTES: readonly Screen[] = [
   { path: "/", name: "Visão geral", role: "admin" },
   { path: "/comercial", name: "Comercial", role: "admin" },
-  { path: "/clientes", name: "Clientes", role: "admin" },
-  { path: "/clientes/1", name: "Detalhe do cliente", role: "admin" },
-  { path: "/clientes/1/processos/1", name: "Processo mapeado", role: "admin" },
+  { path: "/contas", name: "Contas", role: "admin" },
+  { path: "/contas/1", name: "Detalhe da conta", role: "admin" },
+  { path: "/contas/1/processos/1", name: "Processo mapeado", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
@@ -65,7 +65,10 @@ const serie = <T,>(quantos: number, molde: (indice: number) => T): T[] =>
 
 const clientes = serie(8, index => ({
   id: index, name: `${NOME_LONGO} — unidade ${index}`, legal_name: NOME_LONGO,
-  tax_id: "12.345.678/0001-90", owner: 1, status: index % 2 ? "active" : "prospect",
+  tax_id: "12.345.678/0001-90", owner: 1,
+  // Os três estados vivos entram na amostra: a pílula "Inativo" também precisa passar pelo axe.
+  lifecycle_status: index % 3 === 0 ? "inactive" : index % 2 ? "active" : "prospect",
+  status: index % 3 === 0 ? "inactive" : index % 2 ? "active" : "prospect",
 }));
 
 const projetos = serie(8, index => ({
@@ -194,7 +197,8 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/clients/1/": clientes[0],
   "/api/v1/clients/overview/": {
     clients: clientes.map(cliente => ({
-      client_id: cliente.id, name: cliente.name, status: cliente.status,
+      client_id: cliente.id, name: cliente.name,
+      lifecycle_status: cliente.lifecycle_status, status: cliente.status,
       roi: { revenue: 180000, cost: 90000, roi: 1 },
       health: { score: 42, level: "crítico", project_id: cliente.id },
       risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
@@ -204,7 +208,7 @@ const FIXTURES: Record<string, unknown> = {
     })),
   },
   "/api/v1/clients/1/overview/": {
-    client_id: 1, name: clientes[0].name, status: "active",
+    client_id: 1, name: clientes[0].name, lifecycle_status: "active", status: "active",
     roi: { revenue: 180000, cost: 90000, roi: 1 },
     health: { score: 42, level: "crítico", project_id: 1 },
     risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
@@ -224,7 +228,7 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/recommendations/": {
     items: serie(5, index => ({
       kind: "followup", label: `Retomar contato com ${NOME_LONGO}`,
-      detail: "Sem interação registrada há 21 dias.", url: `/clientes/${index}`,
+      detail: "Sem interação registrada há 21 dias.", url: `/contas/${index}`,
     })),
   },
   "/api/v1/services/": serie(4, index => ({

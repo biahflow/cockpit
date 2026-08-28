@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Client, Lead, User
+from apps.core.models import Account, Lead, User
 from apps.core.tests.factories import UserFactory
 
 
@@ -36,7 +36,7 @@ def test_convert_archives_lead_and_creates_prospect_client(api: APIClient) -> No
 
     lead.refresh_from_db()
     assert lead.is_archived  # sai da lista ativa
-    assert Client.objects.get(pk=lead.client_id).status == Client.Status.PROSPECT
+    assert Account.objects.get(pk=lead.account_id).lifecycle_status == Account.LifecycleStatus.PROSPECT
 
     # a lista ativa de leads não traz mais o convertido
     assert lead.pk not in _ids_da_lista_ativa(api)
@@ -56,5 +56,5 @@ def test_convert_com_nurture_mantem_o_lead_na_lista_ativa(api: APIClient) -> Non
     lead.refresh_from_db()
     assert not lead.is_archived
     assert lead.status == Lead.Status.CONTACTED
-    assert Client.objects.get(pk=lead.client_id).status == Client.Status.PROSPECT
+    assert Account.objects.get(pk=lead.account_id).lifecycle_status == Account.LifecycleStatus.PROSPECT
     assert lead.pk in _ids_da_lista_ativa(api)

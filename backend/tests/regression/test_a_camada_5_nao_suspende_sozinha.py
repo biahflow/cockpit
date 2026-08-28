@@ -28,7 +28,7 @@ from django.utils import timezone
 
 from apps.core import cobranca, health
 from apps.core.models import (
-    Client,
+    Account,
     CobrancaSuspensao,
     Contact,
     Invoice,
@@ -38,21 +38,21 @@ from apps.core.models import (
     Project,
     WorkItem,
 )
-from apps.core.tests.factories import ClientFactory, InvoiceFactory, ProjectFactory
+from apps.core.tests.factories import AccountFactory, InvoiceFactory, ProjectFactory
 
 HOJE = date(2026, 9, 2)  # quarta-feira, como no resto da suíte de cobrança
 
 pytestmark = pytest.mark.django_db
 
 
-def _entrega_em_frangalhos(client: Client) -> Project:
+def _entrega_em_frangalhos(account: Account) -> Project:
     """Projeto ativo com saúde **crítica**, pelos sinais que o `health.py` já mede.
 
     A asserção do fim é parte do cenário: se os pesos mudarem, este arquivo precisa falhar
     apontando o cenário, e não passar silenciosamente medindo um projeto saudável.
     """
     ontem = timezone.localdate() - timedelta(days=1)
-    project = ProjectFactory(client=client, due_date=ontem)
+    project = ProjectFactory(client=account, due_date=ontem)
     for indice in range(4):
         Milestone.objects.create(
             project=project, title=f"Marco {indice}", due_date=ontem, owner=project.owner
@@ -70,9 +70,9 @@ def _entrega_em_frangalhos(client: Client) -> Project:
     return project
 
 
-def _vencida(client: Client, dias: int, numero: str) -> Invoice:
+def _vencida(account: Account, dias: int, numero: str) -> Invoice:
     return InvoiceFactory(
-        client=client, status=Invoice.Status.OVERDUE, number=numero,
+        account=account, status=Invoice.Status.OVERDUE, number=numero,
         due_date=HOJE - timedelta(days=dias),
     )
 
@@ -83,13 +83,13 @@ def _vencida(client: Client, dias: int, numero: str) -> Invoice:
 @override_settings(DUNNING_ENABLED=True)
 def test_a_passada_da_regua_nao_cria_suspensao() -> None:
     """O job roda sobre a carteira com a entrega em frangalhos e não recua por conta própria."""
-    client = ClientFactory()
+    account = AccountFactory()
     Contact.objects.create(
-        client=client, first_name="Financeiro", email="financeiro@cliente.test",
+        account=account, first_name="Financeiro", email="financeiro@cliente.test",
         receives_billing=True,
     )
-    _entrega_em_frangalhos(client)
-    _vencida(client, 12, "2026-0001")
+    _entrega_em_frangalhos(account)
+    _vencida(account, 12, "2026-0001")
 
     cobranca.executar(HOJE)
 
@@ -102,13 +102,13 @@ def test_nenhum_caminho_de_dominio_cria_suspensao() -> None:
     Quem cria `CobrancaSuspensao` é a viewset, via requisição, com dono e prazo no corpo — e é isso
     que faz o recuo ser declarado em vez de silencioso.
     """
-    client = ClientFactory()
-    _entrega_em_frangalhos(client)
-    invoice = _vencida(client, 12, "2026-0002")
+    account = AccountFactory()
+    _entrega_em_frangalhos(account)
+    invoice = _vencida(account, 12, "2026-0002")
 
-    cobranca.regua_para(client, HOJE, ignorando=invoice)
-    cobranca.entrega_critica(client, HOJE)
-    cobranca.causa_da_tensao(client, HOJE)
+    cobranca.regua_para(account, HOJE, ignorando=invoice)
+    cobranca.entrega_critica(account, HOJE)
+    cobranca.causa_da_tensao(account, HOJE)
     cobranca.avaliar(invoice, HOJE)
     cobranca.painel(HOJE)
 
@@ -120,13 +120,13 @@ def test_nenhum_caminho_de_dominio_cria_suspensao() -> None:
 
 def test_a_entrega_critica_nao_cala_a_regua() -> None:
     """Ela troca a escada e escala. Parar de falar seria o "pular silencioso" com outro nome."""
-    client = ClientFactory()
-    _entrega_em_frangalhos(client)
-    invoice = _vencida(client, 12, "2026-0003")
+    account = AccountFactory()
+    _entrega_em_frangalhos(account)
+    invoice = _vencida(account, 12, "2026-0003")
 
     avaliacao = cobranca.avaliar(invoice, HOJE)
 
-    assert cobranca.regua_para(client, HOJE, ignorando=invoice) is cobranca.RELACAO_TENSA
+    assert cobranca.regua_para(account, HOJE, ignorando=invoice) is cobranca.RELACAO_TENSA
     assert avaliacao.degrau is not None
     assert avaliacao.degrau.destino == cobranca.INTERNO  # escalada: acorda gente
     assert avaliacao.motivo == ""
@@ -136,13 +136,13 @@ def test_a_entrega_critica_nao_cala_a_regua() -> None:
 def test_a_escada_da_entrega_responde_em_toda_a_janela(dias: int) -> None:
     """Em nenhum ponto da régua a entrega crítica produz silêncio novo: o que muda é qual degrau
     cabe, e o único buraco continua sendo a carência, que já existia."""
-    client = ClientFactory()
-    _entrega_em_frangalhos(client)
-    invoice = _vencida(client, dias, f"2026-01{dias:02d}")
+    account = AccountFactory()
+    _entrega_em_frangalhos(account)
+    invoice = _vencida(account, dias, f"2026-01{dias:02d}")
 
     com_frangalhos = cobranca.avaliar(invoice, HOJE)
     sem_frangalhos = cobranca.avaliar(
-        _vencida(ClientFactory(), dias, f"2026-02{dias:02d}"), HOJE
+        _vencida(AccountFactory(), dias, f"2026-02{dias:02d}"), HOJE
     )
 
     assert com_frangalhos.degrau is not None

@@ -91,12 +91,12 @@ def _artifact_accepted_at(project: Project) -> str | None:
 
     Escopado pelo **cliente** e não pelo projeto, porque o funil de lá é por organização e
     um cliente pode ter vários projetos: os dois lados do vínculo do artefato (`project` e
-    `commercial_opportunity`) chegam ao mesmo `Client`, e a aceitação do contrato quase sempre
+    `commercial_opportunity`) chegam à mesma `Account`, e a aceitação do contrato quase sempre
     está no lado da oportunidade, antes de existir projeto algum.
     """
     first = Artifact.objects.filter(
         Q(project__client=project.client_id)
-        | Q(commercial_opportunity__client=project.client_id),
+        | Q(commercial_opportunity__account=project.client_id),
         status=Artifact.Status.ACCEPTED,
         archived_at__isnull=True,
         decided_at__isnull=False,

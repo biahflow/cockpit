@@ -12,7 +12,7 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 43), que conta **dívidas
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 37), que conta **dívidas
 #     distintas** — linhas deste arquivo, não ocorrências no código. Os dois números não medem a
 #     mesma coisa.
 #
@@ -55,21 +55,35 @@ backend/apps/core/models.py::opportunity-sem-qualificador::ai_opportunity::1
 backend/apps/core/urls.py::opportunity-sem-qualificador::opportunities::1
 
 # ---------------------------------------------------------------------------------------------
-# `Client` como organização — Fase 6 (renome físico para `Account`).
-# A Fase 1 já escreve `Qualification.account` apontando para o modelo legado: campo novo usa o
-# nome canônico, e é por isso que a regra casa `client` e nunca `account`.
-# A rota `/api/v1/clients/` só morre na `/api/v2/`.
-# `client_consent` é consentimento da organização; vira `account_consent` no mesmo renome.
+# `Client` como organização — o que sobrou depois da fatia 2 da issue #67.
+# O bloco tinha nove linhas e ficou com três. A fatia 2 (ADR 0052) renomeou a classe para
+# `Account`, os dez campos que apontavam para ela para `account` e o `status` da conta para
+# `lifecycle_status`: modelo, migração `0062`, serializers, viewset, `resource`, permissões,
+# signal, tipos TS e as duas telas já dizem o nome certo. A tabela continua `core_client`
+# (`Meta.db_table`), porque é a linha e a pk que a `aliases.md` §2b protege.
+#
+# O que ficou, e por quê:
+#
+#   * `client` em `models.py`, **uma ocorrência**: `Project.client`. Ele é a projeção temporária
+#     cuja fonte canônica é `engagement.account` (ADR 0050) e cuja remoção é a Fase 6. Renomeá-lo
+#     criaria **duas** coisas com o nome canônico no mesmo objeto — `project.account` e
+#     `project.engagement.account` — que podem divergir, e o nome canônico deixaria de identificar
+#     a fonte. Quem o mantém honesto é `Project.clean()`.
+#   * `clients` em `urls.py` — a **rota**, que morre na `/api/v2/`. `/api/v1/clients/` e o
+#     `basename` `client` respondem como sempre responderam, agora com o `basename` explícito
+#     porque o derivado da classe viraria `account`.
+#   * `client_consent` — consentimento da organização, no `Case`. Vira `account_consent` quando a
+#     Fase 6 fizer o renome físico; não entra agora porque é chave de payload da `/api/v1/`.
+#
+# As **chaves de payload** (`client` no corpo e na resposta de contato, interação, venda,
+# documento, fatura, satisfação, processo, cobrança e lead; `status` na conta) não aparecem aqui
+# porque a regra casa declaração de campo de modelo (`… = models.…`), e o alias é um
+# `serializers.PrimaryKeyRelatedField`/`CharField`. Quem impede removê-lo antes da `/api/v2/` é a
+# regressão `backend/tests/regression/test_o_alias_de_conta_sobrevive_na_v1.py`.
 # ---------------------------------------------------------------------------------------------
-backend/apps/core/models.py::client-como-organizacao::Client::1
-backend/apps/core/models.py::client-como-organizacao::client::11
+backend/apps/core/models.py::client-como-organizacao::client::1
 backend/apps/core/models.py::client-como-organizacao::client_consent::1
-backend/apps/core/serializers.py::client-como-organizacao::ClientSerializer::1
 backend/apps/core/urls.py::client-como-organizacao::clients::1
-backend/apps/core/views.py::client-como-organizacao::ClientViewSet::1
-frontend/src/types.ts::client-como-organizacao::Client::1
-frontend/src/types.ts::client-como-organizacao::ClientOverview::1
-frontend/src/types.ts::client-como-organizacao::ClientStatus::1
 
 # ---------------------------------------------------------------------------------------------
 # `gate_outcome` — a chave de payload, e só ela. Morre na `/api/v2/`.

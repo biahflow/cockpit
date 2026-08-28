@@ -76,13 +76,13 @@ from .exceptions import (
     StateConflict,
 )
 from .models import (
+    Account,
     Activity,
     AiInteraction,
     AppSetting,
     Artifact,
     BlueprintVariant,
     Case,
-    Client,
     CobrancaContato,
     CobrancaSuspensao,
     CommercialOpportunity,
@@ -135,13 +135,13 @@ from .permissions import RolePermission
 from .serializers import (
     AVATAR_CONTENT_TYPES,
     AcceptInvitationSerializer,
+    AccountSerializer,
     ActivitySerializer,
     ArtifactSerializer,
     BlueprintVariantSerializer,
     BookingCreateSerializer,
     CaseSerializer,
     ChangePasswordSerializer,
-    ClientSerializer,
     CobrancaContatoSerializer,
     CobrancaSuspensaoSerializer,
     CommercialOpportunitySerializer,
@@ -294,7 +294,8 @@ class QueryParamFilterMixin:
     filter_exact_fields: tuple[str, ...] = ()
     # Campo canônico → nome antigo do query param. A issue #67 renomeou o campo e a
     # `docs/ontology/aliases.md` §2c mantém o nome antigo na `/api/v1/`: `?opportunity=`
-    # continua filtrando igual a `?commercial_opportunity=`. Sem isto o param antigo não
+    # continua filtrando igual a `?commercial_opportunity=`, e `?client=` igual a `?account=`.
+    # Sem isto o param antigo não
     # ficaria "sem efeito" — ele estouraria `FieldError`, porque o nome do param **é** o
     # caminho do ORM aqui. A canônica vence quando as duas vêm, como no corpo.
     filter_field_aliases: dict[str, str] = {}
@@ -607,7 +608,7 @@ def _ai_run(  # type: ignore[no-untyped-def]
 
 @dataclass(frozen=True)
 class OverviewContext:
-    """Tudo o que `build_client_overview` precisa do banco, carregado em lote.
+    """Tudo o que `build_account_overview` precisa do banco, carregado em lote.
 
     Existe porque a visão multi-cliente é um laço sobre clientes e cada cliente é um laço
     sobre projetos: consultar lá dentro custava ~14 queries por cliente, e o endpoint ficava
@@ -652,8 +653,8 @@ def build_overview_context(projects: Iterable[Project]) -> OverviewContext:
     )
 
 
-def build_client_overview(
-    client: Client,
+def build_account_overview(
+    account: Account,
     projects: Iterable[Project] | None = None,
     context: OverviewContext | None = None,
 ) -> dict[str, object]:
@@ -671,7 +672,7 @@ def build_client_overview(
     cliente — o caminho do detalhe.
     """
     if projects is None:
-        projects = client.projects.filter(archived_at__isnull=True)
+        projects = account.projects.filter(archived_at__isnull=True)
     projects = list(projects)
     if context is None:
         context = build_overview_context(projects)
@@ -679,9 +680,13 @@ def build_client_overview(
     revenue = sum((project.actual_value for project in projects), Decimal("0"))
     cost = sum((project.cost for project in projects), Decimal("0"))
     overview: dict[str, object] = {
-        "client_id": client.pk,
-        "name": client.name,
-        "status": client.status,
+        # `client_id` e `status` são **chaves de payload** e não mudam com o renome do campo
+        # (`docs/ontology/aliases.md` §2c); `lifecycle_status` é a canônica, com o mesmo valor.
+        # As duas morrem na `/api/v2/`.
+        "client_id": account.pk,
+        "name": account.name,
+        "status": account.lifecycle_status,
+        "lifecycle_status": account.lifecycle_status,
         "roi": {"revenue": revenue, "cost": cost, "roi": _roi(revenue, cost)},
         "health": None,
         "risk_level": None,
@@ -717,24 +722,30 @@ def build_client_overview(
     return overview
 
 
-class ClientViewSet(ArchiveModelViewSet):
-    resource = "client"
-    queryset = Client.objects.all()
-    serializer_class = ClientSerializer
+class AccountViewSet(ArchiveModelViewSet):
+    resource = "account"
+    queryset = Account.objects.all()
+    serializer_class = AccountSerializer
 
-    def perform_create(self, serializer: ClientSerializer) -> None:
+    def perform_create(self, serializer: AccountSerializer) -> None:
         serializer.save(owner=self.request.user)
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        status_param = self.request.query_params.get("status")
-        if status_param in {Client.Status.PROSPECT, Client.Status.ACTIVE}:
-            queryset = queryset.filter(status=status_param)
+        # `?lifecycle_status=` é o canônico e `?status=` é o alias que a `/api/v1/` promete
+        # (`docs/ontology/aliases.md` §2c) — a canônica vence quando as duas vêm, como no corpo.
+        # A validação é contra os **três** valores: `inactive` é conta viva e não filtro de
+        # arquivo, então ela precisa ser selecionável como as outras duas.
+        status_param = self.request.query_params.get(
+            "lifecycle_status"
+        ) or self.request.query_params.get("status")
+        if status_param in set(Account.LifecycleStatus.values):
+            queryset = queryset.filter(lifecycle_status=status_param)
         # Entrega só conhece o cliente para quem trabalha (RFC 0003).
         scope = project_scope_q(self.request.user, "projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
-    def perform_destroy(self, instance: Client) -> None:
+    def perform_destroy(self, instance: Account) -> None:
         """Arquiva o cliente e, junto, os contatos dele — recusando se ainda houver trabalho aberto.
 
         Soft delete não cascateia sozinho, e sem estas duas regras arquivar um cliente produzia
@@ -750,7 +761,7 @@ class ClientViewSet(ArchiveModelViewSet):
         """
         projetos = Project.objects.filter(client=instance, archived_at__isnull=True).count()
         oportunidades = CommercialOpportunity.objects.filter(
-            client=instance, archived_at__isnull=True
+            account=instance, archived_at__isnull=True
         ).count()
         if projetos or oportunidades:
             partes = []
@@ -772,49 +783,50 @@ class ClientViewSet(ArchiveModelViewSet):
             )
             instance.archive()
 
-    def _visible_projects(self, client: Client):  # type: ignore[no-untyped-def]
+    def _visible_projects(self, account: Account):  # type: ignore[no-untyped-def]
         return Project.objects.visible_to(self.request.user).filter(
-            client=client, archived_at__isnull=True
+            client=account, archived_at__isnull=True
         )
 
-    @extend_schema(responses=inline_serializer("ClientOverviewList", {"clients": serializers.ListField()}))
+    @extend_schema(responses=inline_serializer("AccountOverviewList", {"clients": serializers.ListField()}))
     @action(detail=False, methods=["get"])
     def overview(self, request: Request) -> Response:
-        """Lista agregada p/ o grid de clientes (honra `?status=`)."""
-        clients = list(self.get_queryset())
+        """Lista agregada p/ o grid de contas (honra `?lifecycle_status=` e o alias `?status=`)."""
+        accounts = list(self.get_queryset())
         # Um `_visible_projects` por cliente somava ~14 queries por linha do grid. Aqui os
         # projetos visíveis de todos os clientes vêm juntos e o contexto é montado uma vez —
         # o custo do endpoint deixa de crescer com o tamanho da carteira (FDD 022).
         by_client: dict[int, list[Project]] = defaultdict(list)
         for project in Project.objects.visible_to(request.user).filter(
-            client__in=clients, archived_at__isnull=True
+            client__in=accounts, archived_at__isnull=True
         ):
             by_client[project.client_id].append(project)
         context = build_overview_context(
             [project for projects in by_client.values() for project in projects]
         )
         return Response({"clients": [
-            build_client_overview(client, projects=by_client[client.pk], context=context)
-            for client in clients
+            build_account_overview(account, projects=by_client[account.pk], context=context)
+            for account in accounts
         ]})
 
-    @extend_schema(responses=inline_serializer("ClientOverviewDetail", {}))
+    @extend_schema(responses=inline_serializer("AccountOverviewDetail", {}))
     @action(detail=True, methods=["get"], url_path="overview")
     def overview_detail(self, request: Request, pk: str | None = None) -> Response:
-        client = self.get_object()
-        return Response(build_client_overview(client, projects=self._visible_projects(client)))
+        account = self.get_object()
+        return Response(build_account_overview(account, projects=self._visible_projects(account)))
 
 
 class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "contact"
-    queryset = Contact.objects.select_related("client").all()
+    queryset = Contact.objects.select_related("account").all()
     serializer_class = ContactSerializer
-    filter_fields = ("client",)
+    filter_fields = ("account",)
+    filter_field_aliases = {"account": "client"}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Sem isto, as pessoas dos clientes que acabaram de sumir continuariam listadas.
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "client__projects")
+        scope = project_scope_q(self.request.user, "account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
 
@@ -823,16 +835,16 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "activity"
     queryset = Activity.objects.select_related(
-        "client", "commercial_opportunity", "owner"
+        "account", "commercial_opportunity", "owner"
     ).all()
     serializer_class = ActivitySerializer
-    filter_fields = ("client", "commercial_opportunity")
-    filter_field_aliases = {"commercial_opportunity": "opportunity"}
+    filter_fields = ("account", "commercial_opportunity")
+    filter_field_aliases = {"commercial_opportunity": "opportunity", "account": "client"}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Mesma fronteira do Contact: a Entrega só enxerga interações de clientes com projeto seu.
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "client__projects")
+        scope = project_scope_q(self.request.user, "account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: ActivitySerializer) -> None:
@@ -921,7 +933,7 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
     # mesmo de antes: sem ele, a listagem do pipeline faz uma query por card (ADR 0014).
     queryset = (
         CommercialOpportunity.objects
-        .select_related("client", "contact", "stage", "owner", "service")
+        .select_related("account", "contact", "stage", "owner", "service")
         .prefetch_related("projects")
         .all()
     )
@@ -997,15 +1009,15 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
             return Response({"detail": "A oportunidade deve estar na etapa Ganho."}, status=400)
         serializer = ProjectSerializer(data=request.data, engagement_optional=True)
         serializer.is_valid(raise_exception=True)
-        if serializer.validated_data["client"].id != opportunity.client_id:
+        if serializer.validated_data["client"].id != opportunity.account_id:
             return Response({"client": "O projeto deve usar o cliente da oportunidade."}, status=400)
         engagement = serializer.validated_data.get("engagement")
         # Ramo **inalcançável**, mantido como cinto de segurança em vez de removido: quem chega
         # aqui já passou por `ProjectSerializer.validate` (que recusa `engagement.account !=
-        # client`) e pela comparação de cliente logo acima, e as duas juntas já garantem esta
+        # client`) e pela comparação de conta logo acima, e as duas juntas já garantem esta
         # terceira igualdade. `test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer`
         # fixa quem de fato responde ali; remover a guarda é decisão de outra varredura.
-        if engagement is not None and engagement.account_id != opportunity.client_id:
+        if engagement is not None and engagement.account_id != opportunity.account_id:
             return Response(
                 {"engagement": "O engagement deve ser da mesma conta da oportunidade."}, status=400
             )
@@ -1037,7 +1049,7 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
                     # projeto sem engajamento para "quando for avulso" custaria um segundo caminho
                     # em cada agregador, e o caminho raro é o que ninguém testa (ADR 0050).
                     engagement = Engagement.objects.create(
-                        account_id=opportunity.client_id,
+                        account_id=opportunity.account_id,
                         name=opportunity.title,
                         mandate=opportunity.scope or "",
                         owner=request.user,
@@ -1802,10 +1814,11 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     """
 
     resource = "invoice"
-    queryset = Invoice.objects.select_related("client", "project", "service").all()
+    queryset = Invoice.objects.select_related("account", "project", "service").all()
     serializer_class = InvoiceSerializer
     permission_classes = [RolePermission]
-    filter_fields = ("client", "project")
+    filter_fields = ("account", "project")
+    filter_field_aliases = {"account": "client"}
     filter_exact_fields = ("status",)
 
     def perform_destroy(self, instance: Invoice) -> None:
@@ -2024,7 +2037,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
             # Sem contato de cobrança **e** sem ninguém a quem escalar. O degrau não é gasto, e a
             # mensagem nomeia a saída em vez de devolver 500 numa condição que gente conserta.
             raise StateConflict(
-                f"{invoice.client.name} não tem contato marcado como 'recebe cobrança' e não há "
+                f"{invoice.account.name} não tem contato marcado como 'recebe cobrança' e não há "
                 "administrador ativo a quem escalar. Cadastre o contato antes de enviar."
             ) from exc
         except OSError as exc:
@@ -2081,10 +2094,11 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
     """
 
     resource = "cobranca"
-    queryset = CobrancaContato.objects.select_related("invoice", "client", "sent_by").all()
+    queryset = CobrancaContato.objects.select_related("invoice", "account", "sent_by").all()
     serializer_class = CobrancaContatoSerializer
     permission_classes = [RolePermission]
-    filter_fields = ("client", "invoice")
+    filter_fields = ("account", "invoice")
+    filter_field_aliases = {"account": "client"}
     filter_exact_fields = ("degrau", "canal")
 
     @extend_schema(
@@ -2165,11 +2179,12 @@ class CobrancaSuspensaoViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
 
     resource = "cobranca_suspensao"
     queryset = CobrancaSuspensao.objects.select_related(
-        "invoice", "client", "owner", "created_by"
+        "invoice", "account", "owner", "created_by"
     ).all()
     serializer_class = CobrancaSuspensaoSerializer
     permission_classes = [RolePermission]
-    filter_fields = ("client", "invoice", "owner")
+    filter_fields = ("account", "invoice", "owner")
+    filter_field_aliases = {"account": "client"}
 
     def perform_create(self, serializer: CobrancaSuspensaoSerializer) -> None:
         serializer.save(created_by=self.request.user)
@@ -2273,7 +2288,7 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
 
     resource = "artifact"
     queryset = Artifact.objects.select_related(
-        "commercial_opportunity__client", "project__client", "document"
+        "commercial_opportunity__account", "project__client", "document"
     ).all()
     serializer_class = ArtifactSerializer
     filter_fields = ("commercial_opportunity", "project")
@@ -2306,11 +2321,11 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
 
     resource = "document"
     queryset = Document.objects.select_related(
-        "client", "commercial_opportunity", "project", "uploaded_by"
+        "account", "commercial_opportunity", "project", "uploaded_by"
     ).prefetch_related("signature_requests").all()
     serializer_class = DocumentSerializer
-    filter_fields = ("client", "commercial_opportunity", "project")
-    filter_field_aliases = {"commercial_opportunity": "opportunity"}
+    filter_fields = ("account", "commercial_opportunity", "project")
+    filter_field_aliases = {"commercial_opportunity": "opportunity", "account": "client"}
 
     @action(detail=True, methods=["get"])
     def download(self, request: Request, pk: str | None = None) -> FileResponse:
@@ -2510,18 +2525,18 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                 # Mesma distinção do `extrair_decisoes`: sem lista não houve extração, e isso não
                 # é o mesmo que "a reunião não descreveu processo nenhum".
                 raise _ExtracaoSemResultado()
-            client = meeting.project.client
+            account = meeting.project.client
             # A extração entra **depois** do que já foi mapeado à mão: `position` é a ordem em que
             # a operação acontece, e intercalar processos vindos de um modelo no meio de uma
             # sequência que alguém montou reescreveria essa ordem sem pedir licença.
-            ultima = Processo.objects.filter(client=client, archived_at__isnull=True).aggregate(
+            ultima = Processo.objects.filter(account=account, archived_at__isnull=True).aggregate(
                 maior=Max("position")
             )["maior"]
             proxima = (ultima or 0) + 1
             criados: list[Processo] = []
             for indice, bruto in enumerate(extraidos):
                 processo = Processo.objects.create(
-                    client=client, name=bruto["name"], source_project=meeting.project,
+                    account=account, name=bruto["name"], source_project=meeting.project,
                     source_meeting=meeting, registered_by=request.user,
                     position=proxima + indice,
                 )
@@ -2536,7 +2551,7 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                     # a fusão que o split desfaz (FDD 045). A linha por achado é o `Finding` logo
                     # abaixo; a `Evidence` diz só de onde ele veio.
                     evidence = Evidence.objects.create(
-                        account=client, process=processo, kind=Evidence.Kind.INTERVIEW,
+                        account=account, process=processo, kind=Evidence.Kind.INTERVIEW,
                         reference=(
                             meeting.recording_url
                             or f"Reunião #{meeting.pk} — {meeting.title}"
@@ -2564,7 +2579,7 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                             content=achado, source_meeting=meeting, registered_by=request.user,
                         )
                         achado_novo = Finding.objects.create(
-                            account=client, process=processo, statement=achado,
+                            account=account, process=processo, statement=achado,
                             epistemic_status=Finding.EpistemicStatus.HYPOTHESIS,
                             legacy_evidencia=legado,
                         )
@@ -2752,10 +2767,11 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "satisfacao"
     queryset = Satisfacao.objects.select_related(
-        "client", "project", "source_meeting", "source_activity", "registered_by"
+        "account", "project", "source_meeting", "source_activity", "registered_by"
     ).all()
     serializer_class = SatisfacaoSerializer
-    filter_fields = ("client", "project")
+    filter_fields = ("account", "project")
+    filter_field_aliases = {"account": "client"}
     # `nivel` e `fonte` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
     # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?fonte=declarada`
     # cairia no chão sem erro nenhum — a lista voltaria inteira, com a percebida junto.
@@ -2764,10 +2780,10 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Mesma fronteira da `Activity`: a Entrega só enxerga clientes com projeto seu.
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "client__projects")
+        scope = project_scope_q(self.request.user, "account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
-    def _assert_cliente_no_escopo(self, client: Client | None) -> None:
+    def _assert_cliente_no_escopo(self, account: Account | None) -> None:
         """A metade de escrita da mesma fronteira.
 
         O `ActivityViewSet`, de quem este recorte é copiado, tem só a metade de leitura — e podia:
@@ -2781,22 +2797,22 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         user = self.request.user
         if user.is_admin_role or user.role != User.Role.DELIVERY:
             return
-        if client is None or not Project.objects.visible_to(user).filter(client=client).exists():
+        if account is None or not Project.objects.visible_to(user).filter(client=account).exists():
             raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
     def perform_create(self, serializer: SatisfacaoSerializer) -> None:
-        self._assert_cliente_no_escopo(serializer.validated_data.get("client"))
+        self._assert_cliente_no_escopo(serializer.validated_data.get("account"))
         serializer.save(registered_by=self.request.user)
 
     def perform_update(self, serializer: SatisfacaoSerializer) -> None:
         # Só quando o corpo tenta *mudar* o cliente — o caminho inverso, que o
         # `ProjectScopedMixin` também fecha: mover um registro próprio para um cliente alheio.
-        if "client" in serializer.validated_data:
-            self._assert_cliente_no_escopo(serializer.validated_data.get("client"))
+        if "account" in serializer.validated_data:
+            self._assert_cliente_no_escopo(serializer.validated_data.get("account"))
         super().perform_update(serializer)
 
 
-def _exige_cliente_no_escopo(user: User, client: Client | None) -> None:
+def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
     """A metade de **escrita** da fronteira do Discovery estruturado (FDD 039).
 
     Função e não método porque os três recursos abaixo fazem a mesma pergunta a partir de âncoras
@@ -2810,7 +2826,7 @@ def _exige_cliente_no_escopo(user: User, client: Client | None) -> None:
     """
     if user.is_admin_role or user.role != User.Role.DELIVERY:
         return
-    if client is None or not Project.objects.visible_to(user).filter(client=client).exists():
+    if account is None or not Project.objects.visible_to(user).filter(client=account).exists():
         raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
 
@@ -2824,25 +2840,26 @@ class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "processo"
     queryset = Processo.objects.select_related(
-        "client", "source_project", "source_meeting", "registered_by"
+        "account", "source_project", "source_meeting", "registered_by"
     ).all()
     serializer_class = ProcessoSerializer
-    filter_fields = ("client",)
+    filter_fields = ("account",)
+    filter_field_aliases = {"account": "client"}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "client__projects")
+        scope = project_scope_q(self.request.user, "account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: ProcessoSerializer) -> None:
-        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("client"))
+        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
         serializer.save(registered_by=self.request.user)
 
     def perform_update(self, serializer: ProcessoSerializer) -> None:
         # Só quando o corpo tenta *mudar* o cliente — o caminho inverso: mover um processo próprio
         # para um cliente alheio seria o atalho para escrever lá dentro.
-        if "client" in serializer.validated_data:
-            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("client"))
+        if "account" in serializer.validated_data:
+            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
         super().perform_update(serializer)
 
     @extend_schema(
@@ -2869,26 +2886,26 @@ class ProcessoEtapaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039)."""
 
     resource = "processo_etapa"
-    queryset = ProcessoEtapa.objects.select_related("processo", "processo__client").all()
+    queryset = ProcessoEtapa.objects.select_related("processo", "processo__account").all()
     serializer_class = ProcessoEtapaSerializer
     filter_fields = ("processo",)
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "processo__client__projects")
+        scope = project_scope_q(self.request.user, "processo__account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: ProcessoEtapaSerializer) -> None:
         # O cliente é resolvido **pelo processo pai**: é dele que a etapa herda a fronteira, e é
         # por ele que ela vazaria se ninguém perguntasse.
         processo = serializer.validated_data.get("processo")
-        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         serializer.save()
 
     def perform_update(self, serializer: ProcessoEtapaSerializer) -> None:
         if "processo" in serializer.validated_data:
             processo = serializer.validated_data.get("processo")
-            _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+            _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         super().perform_update(serializer)
 
 
@@ -2897,7 +2914,7 @@ class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "evidencia"
     queryset = Evidencia.objects.select_related(
-        "processo", "processo__client", "etapa", "source_meeting", "registered_by"
+        "processo", "processo__account", "etapa", "source_meeting", "registered_by"
     ).all()
     serializer_class = EvidenciaSerializer
     filter_fields = ("processo", "etapa")
@@ -2909,18 +2926,18 @@ class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "processo__client__projects")
+        scope = project_scope_q(self.request.user, "processo__account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: EvidenciaSerializer) -> None:
         processo = serializer.validated_data.get("processo")
-        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         serializer.save(registered_by=self.request.user)
 
     def perform_update(self, serializer: EvidenciaSerializer) -> None:
         if "processo" in serializer.validated_data:
             processo = serializer.validated_data.get("processo")
-            _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+            _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         super().perform_update(serializer)
 
 
@@ -2977,7 +2994,7 @@ class ProcessObservationViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
 
     resource = "process_observation"
     queryset = ProcessObservation.objects.select_related(
-        "discovery", "discovery__project", "process", "process__client", "source_session"
+        "discovery", "discovery__project", "process", "process__account", "source_session"
     ).all()
     serializer_class = ProcessObservationSerializer
     project_path = "discovery__project"
@@ -3002,7 +3019,7 @@ class ProcessObservationViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
 
     def _exige_processo_no_escopo(self, validated_data: dict) -> None:
         processo = validated_data.get("process")
-        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+        _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
 
 
 class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
@@ -3105,7 +3122,7 @@ class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 class LeadViewSet(ArchiveModelViewSet):
     resource = "lead"
     queryset = (
-        Lead.objects.select_related("client", "commercial_opportunity")
+        Lead.objects.select_related("account", "commercial_opportunity")
         .prefetch_related("qualifications")
         .all()
     )
@@ -3121,7 +3138,7 @@ class LeadViewSet(ArchiveModelViewSet):
     def convert(self, request: Request, pk: str | None = None) -> Response:
         """Registra a **qualificação** do lead e resolve a conta — e não cria mais venda (ADR 0049).
 
-        Até aqui esta ação criava, num ato só, um `Client` **e** uma `CommercialOpportunity` no
+        Até aqui esta ação criava, num ato só, um `Account` **e** uma `CommercialOpportunity` no
         degrau gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
         somava no pipeline e podia virar `Project`. A sequência normativa é
         `Lead → Qualification → (qualified) → CommercialOpportunity`, e o passo comercial passou a
@@ -3149,7 +3166,7 @@ class LeadViewSet(ArchiveModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        if dados["account"] and lead.client_id and dados["account"].pk != lead.client_id:
+        if dados["account"] and lead.account_id and dados["account"].pk != lead.account_id:
             # Mover o lead para outra conta deixaria a avaliação anterior apontando para a antiga,
             # e `Qualification.clean()` passaria a recusar qualquer edição naquela linha. Corrigir
             # a conta de um lead é ato próprio, na tela do lead — não efeito de qualificá-lo.
@@ -3158,10 +3175,10 @@ class LeadViewSet(ArchiveModelViewSet):
             )
 
         with transaction.atomic():
-            account = dados["account"] or lead.client or self._nova_conta(lead, request.user)
-            lead.client = account
+            account = dados["account"] or lead.account or self._nova_conta(lead, request.user)
+            lead.account = account
             lead.status = STATUS_POR_OUTCOME[dados["outcome"]]
-            lead.save(update_fields=["client", "status", "updated_at"])
+            lead.save(update_fields=["account", "status", "updated_at"])
             qualification = Qualification(
                 lead=lead,
                 account=account,
@@ -3201,17 +3218,20 @@ class LeadViewSet(ArchiveModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    def _nova_conta(self, lead: Lead, owner: User) -> Client:
+    def _nova_conta(self, lead: Lead, owner: User) -> Account:
         # A vertical que o CNAE sugere, quando o enriquecimento a trouxe e o admin já cadastrou
         # aquela vertical (FDD 030, FDD 026). Derivada aqui e não gravada no lead: o CNAE é a
         # fonte, e um segundo campo com a mesma verdade diverge no dia em que alguém corrigir só
         # um. Sem CNAE, sem mapa ou sem a vertical cadastrada, o cliente nasce sem setor — que é o
         # estado que a FDD 026 já trata, e não uma lacuna nova.
         vertical = enrichment.infer_vertical(lead.enrichment.get("cnae_code", ""))
-        return Client.objects.create(
+        return Account.objects.create(
             name=lead.company or lead.name,
             owner=owner,
-            status=Client.Status.PROSPECT,  # vira "ativo" quando a oportunidade é ganha
+            # vira "Cliente" (`active`) quando a oportunidade é ganha, pelo signal
+            # `_promote_account_on_won`. Entrar em `inactive` não tem automação: é escolha de
+            # quem edita a conta.
+            lifecycle_status=Account.LifecycleStatus.PROSPECT,
             vertical=vertical,
         )
 
@@ -3271,7 +3291,7 @@ class QualificationViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
                 status=400,
             )
         contato = dados["contact"]
-        if contato and contato.client_id != qualification.account_id:
+        if contato and contato.account_id != qualification.account_id:
             return Response(
                 {"contact": "O contato deve pertencer ao cliente selecionado."}, status=400
             )
@@ -3283,7 +3303,7 @@ class QualificationViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
         with transaction.atomic():
             opportunity = CommercialOpportunity.objects.create(
-                client_id=qualification.account_id,
+                account_id=qualification.account_id,
                 contact=contato,
                 title=dados["title"] or qualification.lead.name,
                 scope=dados["scope"] or qualification.rationale,
@@ -3642,7 +3662,7 @@ class VerticalViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance: Vertical) -> None:
         """Recusa excluir vertical em uso — e aponta a desativação como saída (FDD 026, FDD 025).
 
-        `Client.vertical` é `SET_NULL`: sem esta guarda, apagar uma vertical **zeraria em silêncio**
+        `Account.vertical` é `SET_NULL`: sem esta guarda, apagar uma vertical **zeraria em silêncio**
         o setor de todos os clientes que a tinham, sem nada na tela dizendo que aconteceu. As
         variantes já estariam protegidas pelo `PROTECT` do banco, mas de lá vem um 409 genérico,
         sem contagem e sem caminho de saída.
@@ -3842,9 +3862,9 @@ class AnalyticsView(APIView):
             rejected = rows.filter(status=Artifact.Status.REJECTED).count()
             reached = (
                 rows.annotate(
-                    client=Coalesce("commercial_opportunity__client_id", "project__client_id")
+                    account=Coalesce("commercial_opportunity__account_id", "project__client_id")
                 )
-                .values("client").distinct().count()
+                .values("account").distinct().count()
             )
             by_stage.append({
                 "kind": kind,

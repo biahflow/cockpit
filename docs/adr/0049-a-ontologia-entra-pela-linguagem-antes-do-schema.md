@@ -179,3 +179,16 @@ edição.
 - **Duas guardas, uma por stack.** Cada uma na linguagem que ela varre, com a regra escrita duas
   vezes. Regra duplicada diverge, e a divergência entre elas não deixaria nada vermelho — que é
   exatamente o modo de falha que a ADR 0026 descreve para as primitivas de UI.
+
+## Emenda (issue #67, fatia 2 — 28/08/2026) — `Client` virou `Account`
+
+O exemplo desta ADR usa `client = models.ForeignKey(Client, …)` para descrever a dívida que a
+guarda tolera. Essa dívida foi paga: a fatia 2 da #67 renomeou a classe para `Account`, os dez
+campos que apontavam para ela para `account` e o `status` da conta para `lifecycle_status`
+(ADR 0052). O bloco `client-como-organizacao` da allowlist caiu de nove linhas para três —
+`Project.client` (a projeção da ADR 0050, que a Fase 6 remove), `client_consent` e a rota — e o
+`TETO_DA_ALLOWLIST` desceu de 43 para 37.
+
+O que a guarda continua deixando passar não muda de forma: um campo chamado `account` é o nome
+canônico, e agora ele aponta para a classe de nome certo. A regra segue casando `client`, nunca
+`account`, e o contexto HTTP/SDK (`GitHubIssuesClient`, `api_client`) segue isento.

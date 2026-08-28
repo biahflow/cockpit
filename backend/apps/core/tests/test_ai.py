@@ -13,7 +13,7 @@ from apps.core.models import (
 )
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     MeetingFactory,
     ProjectFactory,
@@ -43,7 +43,7 @@ def test_build_meeting_context_has_title_and_transcript():
 def test_build_opportunity_context_has_client_and_value():
     opportunity = CommercialOpportunityFactory()
     context = ai.build_opportunity_context(opportunity)
-    assert opportunity.client.name in context
+    assert opportunity.account.name in context
     assert opportunity.title in context
     assert "Nível de produto" not in context  # oportunidade sem nível não inventa um
     assert "catálogo" not in context  # nem um bloco de catálogo, sem catálogo nenhum
@@ -92,7 +92,7 @@ def test_build_opportunity_context_cites_the_catalog_resolved_by_vertical():
     )
 
     context = ai.build_opportunity_context(
-        CommercialOpportunityFactory(client=ClientFactory(vertical=vertical))
+        CommercialOpportunityFactory(account=AccountFactory(vertical=vertical))
     )
 
     assert "SDR (Comercial)" in context
@@ -120,8 +120,8 @@ def test_build_opportunity_context_only_offers_blocks_that_fit_the_tier():
 @pytest.mark.django_db
 def test_build_opportunity_context_ignores_retired_blocks_and_other_clients():
     """Antivazamento: o contexto lê esta oportunidade e o catálogo da casa, e nada mais."""
-    outro = ClientFactory(name="Cliente de outra conta")
-    CommercialOpportunityFactory(client=outro, title="Oportunidade alheia")
+    outro = AccountFactory(name="Cliente de outra conta")
+    CommercialOpportunityFactory(account=outro, title="Oportunidade alheia")
     DigitalEmployeeBlueprint.objects.create(name="Aposentado", active=False)
     DigitalEmployeeBlueprint.objects.create(name="Em catálogo")
 

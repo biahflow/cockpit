@@ -1066,7 +1066,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Client'
+                  $ref: '#/components/schemas/Account'
           description: ''
     post:
       operationId: v1_clients_create
@@ -1076,13 +1076,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Client'
+              $ref: '#/components/schemas/Account'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Client'
+              $ref: '#/components/schemas/Account'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Client'
+              $ref: '#/components/schemas/Account'
         required: true
       security:
       - cookieAuth: []
@@ -1091,7 +1091,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Client'
+                $ref: '#/components/schemas/Account'
           description: ''
   /api/v1/clients/{id}/:
     get:
@@ -1101,7 +1101,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este client.
+        description: Um valor inteiro único que identifica este account.
         required: true
       tags:
       - v1
@@ -1112,7 +1112,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Client'
+                $ref: '#/components/schemas/Account'
           description: ''
     put:
       operationId: v1_clients_update
@@ -1121,7 +1121,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este client.
+        description: Um valor inteiro único que identifica este account.
         required: true
       tags:
       - v1
@@ -1129,13 +1129,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Client'
+              $ref: '#/components/schemas/Account'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Client'
+              $ref: '#/components/schemas/Account'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Client'
+              $ref: '#/components/schemas/Account'
         required: true
       security:
       - cookieAuth: []
@@ -1144,7 +1144,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Client'
+                $ref: '#/components/schemas/Account'
           description: ''
     patch:
       operationId: v1_clients_partial_update
@@ -1153,7 +1153,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este client.
+        description: Um valor inteiro único que identifica este account.
         required: true
       tags:
       - v1
@@ -1161,13 +1161,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedClient'
+              $ref: '#/components/schemas/PatchedAccount'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedClient'
+              $ref: '#/components/schemas/PatchedAccount'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedClient'
+              $ref: '#/components/schemas/PatchedAccount'
       security:
       - cookieAuth: []
       responses:
@@ -1175,7 +1175,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Client'
+                $ref: '#/components/schemas/Account'
           description: ''
     delete:
       operationId: v1_clients_destroy
@@ -1184,7 +1184,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este client.
+        description: Um valor inteiro único que identifica este account.
         required: true
       tags:
       - v1
@@ -1201,7 +1201,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este client.
+        description: Um valor inteiro único que identifica este account.
         required: true
       tags:
       - v1
@@ -1219,7 +1219,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este client.
+        description: Um valor inteiro único que identifica este account.
         required: true
       tags:
       - v1
@@ -1245,7 +1245,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClientOverviewList'
+                $ref: '#/components/schemas/AccountOverviewList'
           description: ''
   /api/v1/cobranca/:
     get:
@@ -5389,7 +5389,7 @@ paths:
       description: |-
         Registra a **qualificação** do lead e resolve a conta — e não cria mais venda (ADR 0049).
 
-        Até aqui esta ação criava, num ato só, um `Client` **e** uma `CommercialOpportunity` no
+        Até aqui esta ação criava, num ato só, um `Account` **e** uma `CommercialOpportunity` no
         degrau gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
         somava no pipeline e podia virar `Project`. A sequência normativa é
         `Lead → Qualification → (qualified) → CommercialOpportunity`, e o passo comercial passou a
@@ -10267,14 +10267,71 @@ components:
       - password
       - token
       - username
+    Account:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        tax_id:
+          type: string
+          maxLength: 32
+        owner:
+          type: integer
+          readOnly: true
+        lifecycle_status:
+          $ref: '#/components/schemas/LifecycleStatusEnum'
+        status:
+          type: string
+          readOnly: true
+        vertical:
+          type: integer
+          nullable: true
+        vertical_name:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - owner
+      - status
+      - updated_at
+      - vertical_name
+    AccountOverviewList:
+      type: object
+      properties:
+        clients:
+          type: array
+          items: {}
+      required:
+      - clients
     Activity:
       type: object
       properties:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         commercial_opportunity:
           type: integer
           nullable: true
@@ -10317,6 +10374,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - client
       - cobranca_sinal
       - cobranca_sinal_display
@@ -10798,64 +10856,6 @@ components:
         * `pending` - Em execução
         * `success` - Verde
         * `failure` - Vermelho
-    Client:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        name:
-          type: string
-          maxLength: 255
-        legal_name:
-          type: string
-          maxLength: 255
-        tax_id:
-          type: string
-          maxLength: 32
-        owner:
-          type: integer
-          readOnly: true
-        status:
-          $ref: '#/components/schemas/ClientStatusEnum'
-        vertical:
-          type: integer
-          nullable: true
-        vertical_name:
-          type: string
-          readOnly: true
-          default: ''
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - created_at
-      - id
-      - name
-      - owner
-      - updated_at
-      - vertical_name
-    ClientOverviewList:
-      type: object
-      properties:
-        clients:
-          type: array
-          items: {}
-      required:
-      - clients
-    ClientStatusEnum:
-      enum:
-      - prospect
-      - active
-      type: string
-      description: |-
-        * `prospect` - Prospect
-        * `active` - Ativo
     CobrancaContato:
       type: object
       description: |-
@@ -10875,6 +10875,9 @@ components:
           type: string
           readOnly: true
           default: ''
+        account:
+          type: integer
+          readOnly: true
         client:
           type: integer
           readOnly: true
@@ -10921,6 +10924,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - ai_interaction
       - body
       - canal
@@ -11110,9 +11114,12 @@ components:
           type: string
           readOnly: true
           default: ''
-        client:
+        account:
           type: integer
           nullable: true
+        client:
+          type: integer
+          readOnly: true
         client_name:
           type: string
           readOnly: true
@@ -11149,6 +11156,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - client
       - client_name
       - created_at
       - created_by
@@ -11175,8 +11183,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         contact:
           type: integer
           nullable: true
@@ -11229,6 +11240,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - client
       - created_at
       - estimated_value
@@ -11293,8 +11305,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         first_name:
           type: string
           maxLength: 128
@@ -11328,6 +11343,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - client
       - created_at
       - first_name
@@ -11724,9 +11740,12 @@ components:
         id:
           type: integer
           readOnly: true
-        client:
+        account:
           type: integer
           nullable: true
+        client:
+          type: integer
+          readOnly: true
         commercial_opportunity:
           type: integer
           nullable: true
@@ -11759,6 +11778,7 @@ components:
             $ref: '#/components/schemas/SignatureRequest'
           readOnly: true
       required:
+      - client
       - created_at
       - drive_link
       - id
@@ -12426,8 +12446,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         client_name:
           type: string
           readOnly: true
@@ -12522,6 +12545,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - amount
       - cancel_reason
       - cancelled_at
@@ -12864,10 +12888,13 @@ components:
           nullable: true
         enrichment:
           readOnly: true
-        client:
+        account:
           type: integer
           readOnly: true
           nullable: true
+        client:
+          type: integer
+          readOnly: true
         commercial_opportunity:
           type: integer
           readOnly: true
@@ -12891,6 +12918,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - ai_fit
       - ai_recommended_action
       - ai_score
@@ -13031,6 +13059,16 @@ components:
         * `contacted` - Contatado
         * `qualified` - Qualificado
         * `discarded` - Descartado
+    LifecycleStatusEnum:
+      enum:
+      - prospect
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `prospect` - Prospect
+        * `active` - Ativo
+        * `inactive` - Inativo
     LinkExternal:
       type: object
       description: Vincula uma Task a uma issue existente no fornecedor.
@@ -13267,14 +13305,55 @@ components:
       description: |-
         * `provider` - Fornecedor
         * `client` - Cliente
+    PatchedAccount:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        legal_name:
+          type: string
+          maxLength: 255
+        tax_id:
+          type: string
+          maxLength: 32
+        owner:
+          type: integer
+          readOnly: true
+        lifecycle_status:
+          $ref: '#/components/schemas/LifecycleStatusEnum'
+        status:
+          type: string
+          readOnly: true
+        vertical:
+          type: integer
+          nullable: true
+        vertical_name:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedActivity:
       type: object
       properties:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         commercial_opportunity:
           type: integer
           nullable: true
@@ -13488,41 +13567,6 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedClient:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        name:
-          type: string
-          maxLength: 255
-        legal_name:
-          type: string
-          maxLength: 255
-        tax_id:
-          type: string
-          maxLength: 32
-        owner:
-          type: integer
-          readOnly: true
-        status:
-          $ref: '#/components/schemas/ClientStatusEnum'
-        vertical:
-          type: integer
-          nullable: true
-        vertical_name:
-          type: string
-          readOnly: true
-          default: ''
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
     PatchedCobrancaSuspensao:
       type: object
       description: |-
@@ -13542,9 +13586,12 @@ components:
           type: string
           readOnly: true
           default: ''
-        client:
+        account:
           type: integer
           nullable: true
+        client:
+          type: integer
+          readOnly: true
         client_name:
           type: string
           readOnly: true
@@ -13586,8 +13633,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         contact:
           type: integer
           nullable: true
@@ -13652,8 +13702,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         first_name:
           type: string
           maxLength: 128
@@ -13924,9 +13977,12 @@ components:
         id:
           type: integer
           readOnly: true
-        client:
+        account:
           type: integer
           nullable: true
+        client:
+          type: integer
+          readOnly: true
         commercial_opportunity:
           type: integer
           nullable: true
@@ -14404,8 +14460,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         client_name:
           type: string
           readOnly: true
@@ -14692,10 +14751,13 @@ components:
           nullable: true
         enrichment:
           readOnly: true
-        client:
+        account:
           type: integer
           readOnly: true
           nullable: true
+        client:
+          type: integer
+          readOnly: true
         commercial_opportunity:
           type: integer
           readOnly: true
@@ -14934,8 +14996,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         client_name:
           type: string
           readOnly: true
@@ -15466,8 +15531,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         project:
           type: integer
           nullable: true
@@ -15916,8 +15984,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         client_name:
           type: string
           readOnly: true
@@ -15999,6 +16070,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - client
       - client_name
       - created_at
@@ -16709,8 +16781,11 @@ components:
         id:
           type: integer
           readOnly: true
+        account:
+          type: integer
         client:
           type: integer
+          readOnly: true
         project:
           type: integer
           nullable: true
@@ -16748,6 +16823,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - client
       - created_at
       - fonte

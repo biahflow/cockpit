@@ -43,7 +43,7 @@ def _converter(admin_client: APIClient, opportunity: CommercialOpportunity) -> i
     resposta = admin_client.post(
         reverse("opportunity-convert-to-project", args=[opportunity.pk]),
         {
-            "client": opportunity.client_id,
+            "client": opportunity.account_id,
             "name": "Projeto convertido",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=10)),
@@ -98,7 +98,7 @@ def test_a_corrente_inteira_fecha(
     para sempre.
     """
     opportunity, projeto_id = convertida
-    cliente_id = opportunity.client_id
+    cliente_id = opportunity.account_id
 
     # Antes de limpar a oportunidade, o cliente é recusado — e a mensagem diz o que falta.
     bloqueado = admin_client.delete(reverse("client-detail", args=[cliente_id]))
@@ -131,7 +131,7 @@ def test_com_o_projeto_arquivado_a_oportunidade_reconverte(
     resposta = admin_client.post(
         reverse("opportunity-convert-to-project", args=[opportunity.pk]),
         {
-            "client": opportunity.client_id,
+            "client": opportunity.account_id,
             "name": "Outra tentativa",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=10)),
@@ -156,7 +156,7 @@ def test_o_projeto_vivo_ainda_recusa_a_segunda_conversao(
     resposta = admin_client.post(
         reverse("opportunity-convert-to-project", args=[opportunity.pk]),
         {
-            "client": opportunity.client_id,
+            "client": opportunity.account_id,
             "name": "Duplo clique",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=10)),

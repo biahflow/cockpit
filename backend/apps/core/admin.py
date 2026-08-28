@@ -2,8 +2,8 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 from .models import (
+    Account,
     AppSetting,
-    Client,
     CommercialOpportunity,
     Contact,
     Decisao,
@@ -23,7 +23,7 @@ from .models import (
 
 admin.site.register(User, UserAdmin)
 admin.site.register(
-    [Client, Contact, PipelineStage, CommercialOpportunity, Project, Milestone, Task, Document,
+    [Account, Contact, PipelineStage, CommercialOpportunity, Project, Milestone, Task, Document,
      Invitation, AppSetting, Meeting, Pendencia, Decisao, EngineeringHandoff]
 )
 

@@ -15,7 +15,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.models import (
-    Client,
+    Account,
     CommercialOpportunity,
     Contact,
     Lead,
@@ -27,7 +27,7 @@ from apps.core.models import (
 )
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
     CommercialOpportunityFactory,
     LeadFactory,
     QualificationFactory,
@@ -64,12 +64,12 @@ def test_convert_cria_conta_e_qualificacao_sem_oportunidade(api: APIClient) -> N
     assert corpo["qualification"]["outcome"] == Qualification.Outcome.QUALIFIED
     assert corpo["lead"]["status"] == Lead.Status.QUALIFIED
     lead.refresh_from_db()
-    assert lead.client is not None
-    assert lead.client.name == "ACME"
-    assert lead.client.status == Client.Status.PROSPECT
+    assert lead.account is not None
+    assert lead.account.name == "ACME"
+    assert lead.account.lifecycle_status == Account.LifecycleStatus.PROSPECT
     assert lead.commercial_opportunity_id is None
     assert CommercialOpportunity.objects.count() == 0
-    assert lead.qualifications.get().account_id == lead.client_id
+    assert lead.qualifications.get().account_id == lead.account_id
 
 
 def test_convert_funciona_sem_pipeline_nem_servico_de_entrada(api: APIClient) -> None:
@@ -130,7 +130,7 @@ def test_convert_disqualified_descarta_e_arquiva(api: APIClient) -> None:
 
 
 def test_convert_reusa_a_conta_informada(api: APIClient) -> None:
-    conta = ClientFactory(name="Conta que já existe")
+    conta = AccountFactory(name="Conta que já existe")
     lead = LeadFactory()
 
     response = api.post(
@@ -139,12 +139,12 @@ def test_convert_reusa_a_conta_informada(api: APIClient) -> None:
 
     assert response.status_code == 201
     lead.refresh_from_db()
-    assert lead.client_id == conta.pk
-    assert Client.objects.count() == 1  # não criou uma segunda para a mesma empresa
+    assert lead.account_id == conta.pk
+    assert Account.objects.count() == 1  # não criou uma segunda para a mesma empresa
 
 
 def test_convert_recusa_conta_arquivada(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     conta.archive()
     lead = LeadFactory()
 
@@ -167,7 +167,7 @@ def test_convert_recusa_mudar_a_conta_de_um_lead_ja_vinculado(api: APIClient) ->
 
     response = api.post(
         reverse("lead-convert", args=[lead.pk]),
-        {"account_id": ClientFactory().pk},
+        {"account_id": AccountFactory().pk},
         format="json",
     )
 
@@ -200,12 +200,12 @@ def test_lead_nutrido_pode_ser_reavaliado_reusando_a_conta(api: APIClient) -> No
         {"outcome": "nurture", "nurture_until": str(timezone.localdate() + timedelta(days=30))},
         format="json",
     )
-    conta = Client.objects.get()
+    conta = Account.objects.get()
 
     segunda = api.post(reverse("lead-convert", args=[lead.pk]), format="json")
 
     assert segunda.status_code == 201
-    assert Client.objects.count() == 1
+    assert Account.objects.count() == 1
     assert lead.qualifications.count() == 2
     assert lead.qualifications.filter(account=conta).count() == 2
 
@@ -231,9 +231,9 @@ def test_data_de_retorno_sem_nurture_recusa() -> None:
 
 def test_conta_precisa_ser_a_do_lead() -> None:
     """Fronteira de conta: sem isto a avaliação pende da organização de outro lead."""
-    lead = LeadFactory(client=ClientFactory())
+    lead = LeadFactory(account=AccountFactory())
     qualification = QualificationFactory.build(
-        lead=lead, account=ClientFactory(), outcome=Qualification.Outcome.QUALIFIED
+        lead=lead, account=AccountFactory(), outcome=Qualification.Outcome.QUALIFIED
     )
     with pytest.raises(ValidationError) as exc:
         qualification.clean()
@@ -275,7 +275,7 @@ def test_open_opportunity_cria_a_venda_com_a_origem(api: APIClient, vendas: User
     corpo = response.json()
     assert corpo["origin_qualification"] == qualification.pk
     opportunity = CommercialOpportunity.objects.get()
-    assert opportunity.client_id == qualification.account_id
+    assert opportunity.account_id == qualification.account_id
     assert opportunity.owner_id == vendas.pk
     assert opportunity.stage_id == stage.pk
     assert opportunity.scope == "Faturamento manual, 3 pessoas."
@@ -304,7 +304,7 @@ def test_open_opportunity_sem_conta_recusa(api: APIClient) -> None:
 def test_open_opportunity_recusa_contato_de_outro_cliente(api: APIClient) -> None:
     """Fronteira de conta: um campo opcional é a pior forma de vazar entre clientes."""
     qualification = QualificationFactory()
-    alheio = Contact.objects.create(client=ClientFactory(), first_name="Alguém", email="a@x.com")
+    alheio = Contact.objects.create(account=AccountFactory(), first_name="Alguém", email="a@x.com")
 
     response = _abrir(api, qualification, contact=alheio.pk)
 
@@ -340,7 +340,7 @@ def test_convert_to_project_recusa_oferta_de_aquisicao(api: APIClient, vendas: U
     )
 
     response = api.post(reverse("opportunity-convert-to-project", args=[opportunity.pk]), {
-        "client": opportunity.client_id,
+        "client": opportunity.account_id,
         "name": "Projeto que não deveria existir",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=30)),
@@ -353,7 +353,7 @@ def test_convert_to_project_recusa_oferta_de_aquisicao(api: APIClient, vendas: U
 def test_project_clean_recusa_oferta_de_aquisicao() -> None:
     porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
     project = Project(
-        client=ClientFactory(), name="Projeto", owner=UserFactory(), service=porta,
+        client=AccountFactory(), name="Projeto", owner=UserFactory(), service=porta,
         start_date=timezone.localdate(), due_date=timezone.localdate() + timedelta(days=10),
     )
     with pytest.raises(ValidationError) as exc:
@@ -368,7 +368,7 @@ def test_opportunity_clean_recusa_origem_nao_qualificada() -> None:
         nurture_until=timezone.localdate() + timedelta(days=30),
     )
     opportunity = CommercialOpportunityFactory.build(
-        client=qualification.account,
+        account=qualification.account,
         stage=PipelineStage.objects.filter(kind="open").first(),
         owner=UserFactory(),
         origin_qualification=qualification,

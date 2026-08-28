@@ -239,7 +239,7 @@ test("a suspensão pode alcançar o cliente inteiro, e aí manda client — nunc
     "/cobranca/suspensoes/",
     expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ client: 1, owner: 7, until: "2026-09-30", reason: "Insatisfeito com a entrega." }),
+      body: JSON.stringify({ account: 1, owner: 7, until: "2026-09-30", reason: "Insatisfeito com a entrega." }),
     }),
   ));
   const corpo = mocks.api.mock.calls.find(([rota]) => rota === "/cobranca/suspensoes/")?.[1]?.body as string;
@@ -272,7 +272,7 @@ test("com suspensão ativa a linha oferece levantar, não suspender de novo", as
 test("o histórico do que já saiu é buscado por fatura, sob demanda", async () => {
   mocks.api.mockImplementation(stub([linha()], {
     historico: [{
-      id: 1, invoice: 5, invoice_number: "2026-0007", client: 1, client_name: "Imobiliária Aurora",
+      id: 1, invoice: 5, invoice_number: "2026-0007", account: 1, client: 1, client_name: "Imobiliária Aurora",
       degrau: "lembrete", degrau_display: "Lembrete", canal: "email", canal_display: "E-mail ao cliente",
       sent_on: "2026-08-08", subject: "Fatura em aberto", to_email: "financeiro@aurora.test",
       body: "…", sent_by: null, ai_interaction: null, created_at: "2026-08-08T09:00:00Z",
@@ -413,7 +413,7 @@ test("o atalho registra a satisfação declarada, com a data do que aconteceu e 
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
-        client: 1, source_activity: 31, nivel: "insatisfeito", fonte: "declarada",
+        account: 1, source_activity: 31, nivel: "insatisfeito", fonte: "declarada",
         happened_on: "2026-08-14", note: "Disse que o marco 2 atrasou duas vezes.",
       }),
     }),

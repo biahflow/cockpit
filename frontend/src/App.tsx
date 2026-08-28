@@ -6,8 +6,8 @@ import { Layout } from "./components/Layout";
 import { AcceptInvitePage } from "./pages/AcceptInvitePage";
 import { BibliotecaPage } from "./pages/BibliotecaPage";
 import { CasesPage } from "./pages/CasesPage";
-import { ClientDetailPage } from "./pages/ClientDetailPage";
-import { ClientsPage } from "./pages/ClientsPage";
+import { AccountDetailPage } from "./pages/AccountDetailPage";
+import { AccountsPage } from "./pages/AccountsPage";
 import { CobrancaPage } from "./pages/CobrancaPage";
 import { CommercialPage } from "./pages/CommercialPage";
 import { ConhecimentoPage } from "./pages/ConhecimentoPage";
@@ -50,21 +50,34 @@ function resolvePage(path: string): ReactNode {
   const projectDetail = path.match(/^\/projetos\/(\d+)$/);
   if (projectDetail) return <ProjectDetailPage id={Number(projectDetail[1])} />;
   if (path === "/projetos") return <ProjectsPage />;
-  // A rota mais específica vem **antes** da do cliente. As duas são ancoradas, então hoje a ordem
-  // não decide nada — ela é o que impede que afrouxar o `$` do `clientDetail` amanhã torne esta
+  // A rota mais específica vem **antes** da da conta. As duas são ancoradas, então hoje a ordem
+  // não decide nada — ela é o que impede que afrouxar o `$` do `accountDetail` amanhã torne esta
   // aqui inalcançável em silêncio. Nada muda no menu: o `isActive` do `Layout` casa por prefixo,
-  // então "Clientes" já acende e o rastro do topo já mostra o rótulo do pai.
-  const processoDetail = path.match(/^\/clientes\/(\d+)\/processos\/(\d+)$/);
+  // então "Contas" já acende e o rastro do topo já mostra o rótulo do pai.
+  const processoDetail = path.match(/^\/contas\/(\d+)\/processos\/(\d+)$/);
   if (processoDetail) return <ProcessoDetailPage clientId={Number(processoDetail[1])} id={Number(processoDetail[2])} />;
-  const clientDetail = path.match(/^\/clientes\/(\d+)$/);
-  if (clientDetail) return <ClientDetailPage id={Number(clientDetail[1])} />;
-  if (path === "/clientes") return <ClientsPage />;
+  const accountDetail = path.match(/^\/contas\/(\d+)$/);
+  if (accountDetail) return <AccountDetailPage id={Number(accountDetail[1])} />;
+  if (path === "/contas") return <AccountsPage />;
   return <DashboardPage />;
+}
+
+// `/clientes*` → `/contas*`. **Alias com data**, no espírito da `docs/ontology/aliases.md`: o link
+// antigo está no favorito de quem usa o produto, e link que morre é o mesmo defeito que a
+// `aliases.md` descreve para rota de API. Some na `/api/v2/`, junto da rota `/clients/`.
+function rotaLegada(path: string): string | null {
+  if (path !== "/clientes" && !path.startsWith("/clientes/")) return null;
+  return `/contas${path.slice("/clientes".length)}`;
 }
 
 export function App() {
   const { isLoading, user } = useAuth();
   if (window.location.pathname === "/aceitar-convite") return <AcceptInvitePage />;
+  const destino = rotaLegada(window.location.pathname);
+  if (destino) {
+    window.location.replace(`${destino}${window.location.search}${window.location.hash}`);
+    return null;
+  }
   if (isLoading) return <div className="grid min-h-screen place-items-center bg-canvas"><LoaderCircle className="size-7 animate-spin text-accent" aria-label="Carregando sessão" /></div>;
   if (!user) return <LoginPage />;
   return <Layout>{resolvePage(window.location.pathname)}</Layout>;

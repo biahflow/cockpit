@@ -107,7 +107,7 @@ def test_a_atividade_carrega_o_mesmo_par(sales_client: APIClient) -> None:
     criada = sales_client.post(
         reverse("activity-list"),
         {
-            "client": venda.client_id,
+            "account": venda.account_id,
             "opportunity": venda.pk,
             "kind": Activity.Kind.MEETING,
             "happened_on": "2026-08-28",
@@ -126,8 +126,8 @@ def test_a_atividade_carrega_o_mesmo_par(sales_client: APIClient) -> None:
 def test_o_query_param_antigo_continua_filtrando(sales_client: APIClient) -> None:
     """`?opportunity=` filtra igual a `?commercial_opportunity=` — e não estoura `FieldError`."""
     venda = CommercialOpportunityFactory()
-    da_venda = ActivityFactory(client=venda.client, commercial_opportunity=venda)
-    ActivityFactory(client=venda.client)
+    da_venda = ActivityFactory(account=venda.account, commercial_opportunity=venda)
+    ActivityFactory(account=venda.account)
 
     legado = sales_client.get(reverse("activity-list"), {"opportunity": venda.pk})
     canonico = sales_client.get(reverse("activity-list"), {"commercial_opportunity": venda.pk})

@@ -4,12 +4,12 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { api, documentDownloadUrl } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
-import type { Client, CommercialOpportunity, DocumentEntry, Project } from "../types";
+import type { Account, CommercialOpportunity, DocumentEntry, Project } from "../types";
 
 // A chave **é** o nome do campo no corpo do `POST /documents/`, então ela é a canônica: a SPA
 // não escreve o alias que a `/api/v1/` mantém para quem integrou antes do renome (#67).
-type LinkType = "client" | "commercial_opportunity" | "project";
-const linkLabel: Record<LinkType, string> = { client: "Cliente", commercial_opportunity: "Oportunidade", project: "Projeto" };
+type LinkType = "account" | "commercial_opportunity" | "project";
+const linkLabel: Record<LinkType, string> = { account: "Cliente", commercial_opportunity: "Oportunidade", project: "Projeto" };
 
 export function DocumentsPage() {
   const { esignEnabled, user } = useAuth();
@@ -20,10 +20,10 @@ export function DocumentsPage() {
   // como id cru ("Oportunidade: 17").
   const isDelivery = user?.role === "delivery" && !user.is_admin;
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [opportunities, setOpportunities] = useState<CommercialOpportunity[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [linkType, setLinkType] = useState<LinkType>(isDelivery ? "project" : "client");
+  const [linkType, setLinkType] = useState<LinkType>(isDelivery ? "project" : "account");
   const [target, setTarget] = useState("");
   const [error, setError] = useState("");
   const [isUploading, setUploading] = useState(false);
@@ -35,22 +35,22 @@ export function DocumentsPage() {
 
   const load = useCallback(() => Promise.all([
     api<DocumentEntry[]>(`/documents/${showArchived ? "?archived=1" : ""}`),
-    api<Client[]>("/clients/"),
+    api<Account[]>("/clients/"),
     isDelivery ? Promise.resolve<CommercialOpportunity[]>([]) : api<CommercialOpportunity[]>("/opportunities/"),
     api<Project[]>("/projects/"),
-  ]).then(([loadedDocuments, loadedClients, loadedOpportunities, loadedProjects]) => {
-    setDocuments(loadedDocuments); setClients(loadedClients); setOpportunities(loadedOpportunities); setProjects(loadedProjects);
+  ]).then(([loadedDocuments, loadedAccounts, loadedOpportunities, loadedProjects]) => {
+    setDocuments(loadedDocuments); setAccounts(loadedAccounts); setOpportunities(loadedOpportunities); setProjects(loadedProjects);
   }).catch((cause: Error) => setError(cause.message)), [isDelivery, showArchived]);
   useEffect(() => { void load(); }, [load]);
 
-  const targets: { id: number; label: string }[] = linkType === "client"
-    ? clients.map(item => ({ id: item.id, label: item.name }))
+  const targets: { id: number; label: string }[] = linkType === "account"
+    ? accounts.map(item => ({ id: item.id, label: item.name }))
     : linkType === "commercial_opportunity"
       ? opportunities.map(item => ({ id: item.id, label: item.title }))
       : projects.map(item => ({ id: item.id, label: item.name }));
 
   function labelFor(document: DocumentEntry): string {
-    if (document.client) return `${linkLabel.client}: ${clients.find(item => item.id === document.client)?.name ?? document.client}`;
+    if (document.account) return `${linkLabel.account}: ${accounts.find(item => item.id === document.account)?.name ?? document.account}`;
     if (document.commercial_opportunity) return `${linkLabel.commercial_opportunity}: ${opportunities.find(item => item.id === document.commercial_opportunity)?.title ?? document.commercial_opportunity}`;
     if (document.project) return `${linkLabel.project}: ${projects.find(item => item.id === document.project)?.name ?? document.project}`;
     return "Sem vínculo";
@@ -111,7 +111,7 @@ export function DocumentsPage() {
     <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
       <form className="panel space-y-4 sm:p-6" onSubmit={event => void upload(event)}>
         <div className="flex items-center gap-3"><span className="metric-icon size-10"><UploadCloud className="size-5" /></span><div><h2 className="font-semibold text-ink">Enviar documento</h2><p className="text-sm text-slate-600">Vincule a exatamente um recurso.</p></div></div>
-        <label className="form-label">Vincular a<select className="field" value={linkType} onChange={event => { setLinkType(event.target.value as LinkType); setTarget(""); }}>{!isDelivery && <option value="client">Cliente</option>}{!isDelivery && <option value="commercial_opportunity">Oportunidade</option>}<option value="project">Projeto</option></select></label>
+        <label className="form-label">Vincular a<select className="field" value={linkType} onChange={event => { setLinkType(event.target.value as LinkType); setTarget(""); }}>{!isDelivery && <option value="account">Cliente</option>}{!isDelivery && <option value="commercial_opportunity">Oportunidade</option>}<option value="project">Projeto</option></select></label>
         <label className="form-label">{linkLabel[linkType]}<select className="field" value={target} onChange={event => setTarget(event.target.value)} required><option value="">Selecione</option>{targets.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
         <label className="form-label">Arquivo<input className="field file:mr-3 file:rounded-lg file:border-0 file:bg-accent-50 file:px-3 file:py-1 file:text-accent" type="file" ref={fileInput} /></label>
         <button className="btn w-full" type="submit" disabled={isUploading}><UploadCloud className="size-4" />{isUploading ? "Enviando…" : "Enviar documento"}</button>

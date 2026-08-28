@@ -268,7 +268,7 @@ def test_conversao_preenche_a_vertical_do_cliente_pelo_cnae():
     assert api.post(reverse("lead-convert", args=[lead.id]), {}, format="json").status_code == 201
 
     lead.refresh_from_db()
-    assert lead.client is not None and lead.client.vertical == tecnologia
+    assert lead.account is not None and lead.account.vertical == tecnologia
 
 
 @pytest.mark.django_db
@@ -290,7 +290,7 @@ def test_conversao_sem_cadastro_deixa_o_cliente_sem_vertical():
     assert api.post(reverse("lead-convert", args=[lead.id]), {}, format="json").status_code == 201
 
     lead.refresh_from_db()
-    assert lead.client is not None and lead.client.vertical is None
+    assert lead.account is not None and lead.account.vertical is None
 
 
 # --- flag e sonda ---------------------------------------------------------------------------

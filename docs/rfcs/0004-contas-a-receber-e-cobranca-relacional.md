@@ -53,7 +53,7 @@ cliente**. No instante em que existir fatura, passam a existir duas verdades sob
 "recebido", ou `actual_value` passa a ser derivado das faturas. Sem decisão, o ROI deriva em
 silêncio — e é um número que o cliente já vê.
 
-**Camada 0 — a fatura.** Modelo ligado a `Client`, opcionalmente a `Project` e `Service`,
+**Camada 0 — a fatura.** Modelo ligado a `Account`, opcionalmente a `Project` e `Service`,
 com valor, emissão, vencimento, meio de pagamento, referência externa do pagamento e estado
 com mapa de transições no molde de `ARTIFACT_TRANSITIONS`: `rascunho → emitida → paga /
 vencida / renegociada / cancelada`. A conversão de oportunidade em projeto pode **semear** o

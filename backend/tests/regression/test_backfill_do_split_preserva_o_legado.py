@@ -23,9 +23,9 @@ import pytest
 from django.apps import apps as django_apps
 from django.utils import timezone
 
-from apps.core.models import Evidence, Evidencia, Finding, hash_do_trecho
+from apps.core.models import Evidence, Evidencia, Finding, Processo, hash_do_trecho
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
     EvidenciaFactory,
     ProcessoEtapaFactory,
     ProcessoFactory,
@@ -37,12 +37,31 @@ pytestmark = pytest.mark.django_db
 MIGRACAO = importlib.import_module("apps.core.migrations.0054_backfill_evidence_finding")
 
 
+@pytest.fixture(autouse=True)
+def _nome_historico_da_conta(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reapresenta `Processo.client_id`, o nome que a coluna tinha quando a 0054 foi escrita.
+
+    A migração lê `processo.client_id` e **não muda**: num `migrate` de verdade ela recebe o
+    estado histórico, onde o campo ainda se chama `client` — a fatia 2 da issue #67 só o renomeou
+    na 0062 (ADR 0052). O que envelheceu foi o atalho deste teste, que sempre passou o registro
+    **vivo** em vez de reencenar o esquema (ver a docstring de `test_engagement_backfill.py` para
+    o caso em que reencenar é obrigatório).
+
+    Repor um id de leitura é mais barato e mais legível que rolar o esquema inteiro para trás só
+    para ler uma chave estrangeira, e o `monkeypatch` desfaz por teste — a propriedade não
+    sobrevive ao arquivo nem ressuscita o nome banido em código de produção.
+    """
+    monkeypatch.setattr(
+        Processo, "client_id", property(lambda self: self.account_id), raising=False
+    )
+
+
 def _backfill() -> None:
     MIGRACAO.split_evidencias(django_apps, None)
 
 
 def test_cada_evidencia_vira_um_par_ligado() -> None:
-    processo = ProcessoFactory(client=ClientFactory())
+    processo = ProcessoFactory(account=AccountFactory())
     etapa = ProcessoEtapaFactory(processo=processo)
     legada = EvidenciaFactory(
         processo=processo, etapa=etapa, content="Disseram que leva dois dias.",
@@ -53,7 +72,7 @@ def test_cada_evidencia_vira_um_par_ligado() -> None:
 
     evidencia = Evidence.objects.get(legacy_evidencia=legada)
     achado = Finding.objects.get(legacy_evidencia=legada)
-    assert evidencia.account_id == processo.client_id
+    assert evidencia.account_id == processo.account_id
     assert evidencia.process_id == processo.pk
     assert evidencia.step_id == etapa.pk
     assert evidencia.raw_excerpt == legada.content
@@ -158,10 +177,10 @@ def test_a_reversa_apaga_so_o_que_veio_do_backfill() -> None:
     legada = EvidenciaFactory()
     _backfill()
     nascido_depois = Finding.objects.create(
-        account=legada.processo.client, statement="Achado registrado na tela."
+        account=legada.processo.account, statement="Achado registrado na tela."
     )
     evidencia_nova = Evidence.objects.create(
-        account=legada.processo.client, kind=Evidence.Kind.DATA,
+        account=legada.processo.account, kind=Evidence.Kind.DATA,
         raw_excerpt="400 notas no relatório de outubro.", captured_at=timezone.now(),
     )
 

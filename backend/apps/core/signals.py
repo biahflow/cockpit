@@ -10,8 +10,8 @@ from django.dispatch import receiver
 
 from . import cases, journey, notifications, portal, tasksync
 from .models import (
+    Account,
     Artifact,
-    Client,
     CommercialOpportunity,
     Decisao,
     DigitalEmployee,
@@ -231,7 +231,7 @@ def _emit_artifact(sender: type[Artifact], instance: Artifact, **kwargs: Any) ->
         return
     project_id = instance.project_id
     if project_id is None and instance.commercial_opportunity_id is not None:
-        # Pela oportunidade e não pelo `instance.commercial_opportunity.client_id`: aquele
+        # Pela oportunidade e não pelo `instance.commercial_opportunity.account_id`: aquele
         # caminho custa uma busca a mais só para descobrir o cliente que este `filter` já
         # alcança pela travessia.
         project_id = (
@@ -282,14 +282,19 @@ def _push_task_external(sender: type[Task], instance: Task, **kwargs: Any) -> No
 
 
 @receiver(post_save, sender=CommercialOpportunity)
-def _promote_client_on_won(
+def _promote_account_on_won(
     sender: type[CommercialOpportunity], instance: CommercialOpportunity, **kwargs: Any
 ) -> None:
-    """Promove o cliente de prospect para ativo quando a oportunidade é ganha (ADR/plano D)."""
+    """Promove a conta de prospect para "Cliente" quando a oportunidade é ganha (ADR/plano D).
+
+    Só esta transição é automática. `active → inactive` não tem signal e não vai ter: "não tem
+    trabalho em andamento" não é fato observável no banco (projeto pausado, mandato em renovação e
+    conta que sumiu produzem o mesmo estado), então quem edita a conta é quem afirma.
+    """
     if instance.is_won:
-        Client.objects.filter(pk=instance.client_id, status=Client.Status.PROSPECT).update(
-            status=Client.Status.ACTIVE
-        )
+        Account.objects.filter(
+            pk=instance.account_id, lifecycle_status=Account.LifecycleStatus.PROSPECT
+        ).update(lifecycle_status=Account.LifecycleStatus.ACTIVE)
 
 
 @receiver(pre_delete, sender=Invoice)

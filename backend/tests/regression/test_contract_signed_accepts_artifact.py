@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Artifact, Document, SignatureRequest
 from apps.core.portal import sign
-from apps.core.tests.factories import ClientFactory, CommercialOpportunityFactory, UserFactory
+from apps.core.tests.factories import AccountFactory, CommercialOpportunityFactory, UserFactory
 
 SECRET = "webhook-secret"
 
@@ -42,7 +42,7 @@ def _event(name: str) -> bytes:
 
 def _contract(user):  # type: ignore[no-untyped-def]
     document = Document.objects.create(
-        client=ClientFactory(owner=user), original_name="contrato.pdf", uploaded_by=user
+        account=AccountFactory(owner=user), original_name="contrato.pdf", uploaded_by=user
     )
     SignatureRequest.objects.create(
         document=document, signer_email="quem@x.test", provider_ref="req-1", document_ref="doc-1"

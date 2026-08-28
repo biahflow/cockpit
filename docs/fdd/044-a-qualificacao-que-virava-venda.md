@@ -8,7 +8,7 @@
 ## Jornada
 
 Alguém preenche o formulário do site. O lead cai na lista, o comercial olha, gosta do que vê e
-clica em **Converter em oportunidade**. Nesse clique o Pulse criava três coisas: um `Client` em
+clica em **Converter em oportunidade**. Nesse clique o Pulse criava três coisas: uma `Account` em
 estado prospect, uma `CommercialOpportunity` no degrau gratuito da escada (`service.tier =
 qualification_call`) e um lead arquivado apontando para as duas.
 
@@ -42,7 +42,7 @@ enquanto não houver), guarda `happened_at`, `assessor`, os cinco eixos do rotei
 **Um lead tem várias avaliações**, e não há constraint de unicidade: o `nurture` de hoje vira
 `qualified` daqui a seis meses, e as duas são fatos distintos. Sobrescrever a primeira apagaria
 justamente o histórico que a entidade existe para guardar. A reavaliação **reusa a conta** que a
-primeira criou — criar uma segunda `Client` para a mesma empresa é o defeito que o campo
+primeira criou — criar uma segunda `Account` para a mesma empresa é o defeito que o campo
 `account_id` do corpo existe para evitar quando a escolha é explícita, e que o reuso de
 `lead.client` evita quando ela não é.
 
@@ -153,7 +153,8 @@ divergir sem ninguém ter mudado nada.
   os aceita e a interface ainda não os oferece. Interface nova exige Design Approval Package, e não
   há um aprovado para esta superfície. A tela de Leads passou a falar em qualificação e a mostrar o
   resultado, e nada além disso.
-- **Os renomes físicos.** `Client`→`Account` é fatia própria. `Qualification.account` já usa o nome
+- **Os renomes físicos.** `Client`→`Account` foi a fatia 2 da issue #67 (ADR 0052); a tabela
+  `core_client` é a Fase 6. `Qualification.account` já usa o nome
   canônico apontando para o modelo legado — é o alias previsto, não um descuido.
   **Emenda de 28/08/2026:** `Opportunity`→`CommercialOpportunity` deixou de ser fatia futura — a
   fatia 3 da issue #67 (ADR 0052) a executou, com a tabela `core_opportunity` e a rota

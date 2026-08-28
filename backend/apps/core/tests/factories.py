@@ -5,9 +5,9 @@ import factory
 from django.utils import timezone
 
 from apps.core.models import (
+    Account,
     Activity,
     Artifact,
-    Client,
     CommercialOpportunity,
     Discovery,
     DiscoverySession,
@@ -48,9 +48,9 @@ class UserFactory(factory.django.DjangoModelFactory):
             obj.save()
 
 
-class ClientFactory(factory.django.DjangoModelFactory):
+class AccountFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = Client
+        model = Account
 
     name = factory.Sequence(lambda n: f"Cliente {n}")
     owner = factory.SubFactory(UserFactory)
@@ -80,7 +80,7 @@ class CommercialOpportunityFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = CommercialOpportunity
 
-    client = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     title = "Diagnóstico comercial"
     scope = "Escopo inicial"
     estimated_value = Decimal("10000.00")
@@ -113,7 +113,7 @@ class QualificationFactory(factory.django.DjangoModelFactory):
         model = Qualification
 
     lead = factory.SubFactory(LeadFactory)
-    account = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     outcome = Qualification.Outcome.QUALIFIED
     assessor = factory.SubFactory(UserFactory)
 
@@ -122,7 +122,7 @@ class ActivityFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Activity
 
-    client = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     kind = Activity.Kind.CALL
     happened_on = factory.LazyFunction(timezone.localdate)
     summary = "Contato comercial"
@@ -130,12 +130,12 @@ class ActivityFactory(factory.django.DjangoModelFactory):
 
 
 class EngagementFactory(factory.django.DjangoModelFactory):
-    """O mandato de transformação da conta (ADR 0050) — a camada entre `Client` e `Project`."""
+    """O mandato de transformação da conta (ADR 0050) — a camada entre `Account` e `Project`."""
 
     class Meta:
         model = Engagement
 
-    account = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     name = factory.Sequence(lambda n: f"Engajamento {n}")
     owner = factory.SubFactory(UserFactory)
     started_at = factory.LazyFunction(timezone.localdate)
@@ -145,9 +145,11 @@ class ProjectFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Project
 
-    client = factory.SubFactory(ClientFactory)
+    # `client` e não `account`: `Project.client` é a projeção que a fatia 2 da issue #67 **não**
+    # renomeou, e a Fase 6 é quem a remove (ADR 0052).
+    client = factory.SubFactory(AccountFactory)
     # O engajamento nasce **na conta do próprio projeto**, e não numa conta nova: um
-    # `SubFactory(EngagementFactory)` cru criaria um segundo `Client` e todo projeto de fábrica
+    # `SubFactory(EngagementFactory)` cru criaria uma segunda `Account` e todo projeto de fábrica
     # violaria a invariante que `Project.clean()` protege (`engagement.account == client`) — o
     # teste ficaria verde num estado que a API recusa.
     engagement = factory.SubFactory(
@@ -232,7 +234,7 @@ class InvoiceFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Invoice
 
-    client = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     amount = Decimal("1000.00")
     description = "Parcela única"
     due_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=15))
@@ -248,7 +250,7 @@ class ProcessoFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Processo
 
-    client = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     name = "Faturamento mensal"
 
 
@@ -319,7 +321,7 @@ class EvidenceFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Evidence
 
-    account = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     kind = Evidence.Kind.INTERVIEW
     raw_excerpt = "A gente confere nota por nota, e no fim do mês são umas quatrocentas."
 
@@ -335,6 +337,6 @@ class FindingFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Finding
 
-    account = factory.SubFactory(ClientFactory)
+    account = factory.SubFactory(AccountFactory)
     statement = "O fechamento do faturamento leva dois dias."
     epistemic_status = Finding.EpistemicStatus.HYPOTHESIS

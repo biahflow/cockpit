@@ -9,7 +9,7 @@ Três decisões moram aqui, e todas são conservadoras de propósito:
 - **Nasce inerte.** Retenção `0` significa *nunca expurgar*, e é o default de todas as famílias.
   Ninguém perde dado por ter atualizado o portal; o expurgo começa quando alguém decidir o prazo.
 - **Só duas famílias**, e não os dezesseis modelos com `archived_at`. `Lead` e `Document` são as
-  que guardam dado pessoal e são autocontidas. Apagar `Client` ou `Project` cascatearia sobre
+  que guardam dado pessoal e são autocontidas. Apagar `Account` ou `Project` cascatearia sobre
   histórico comercial inteiro — é decisão de negócio maior, e fica registrada na ADR como não
   automatizada de propósito.
 - **O arquivo vai junto com a linha.** Apagar o registro do documento e deixar o PDF no Drive ou no

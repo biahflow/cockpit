@@ -7,10 +7,10 @@ import { AgentPanel } from "../components/AgentPanel";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { ehGratuito, precoADefinir } from "../tiers";
-import type { Activity, ActivityKind, Client, Contact, DocumentEntry, CommercialOpportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
+import type { Account, Activity, ActivityKind, Contact, DocumentEntry, CommercialOpportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-const blankDraft = { title: "", client: "", estimated_value: "", stage: "", expected_close_date: "", service: "" };
+const blankDraft = { title: "", account: "", estimated_value: "", stage: "", expected_close_date: "", service: "" };
 const blankActivity = { kind: "call" as ActivityKind, happened_on: new Date().toISOString().slice(0, 10), summary: "", notes: "" };
 const activityKindLabels: Record<ActivityKind, string> = { call: "Ligação", meeting: "Reunião", email: "E-mail", note: "Nota" };
 
@@ -21,7 +21,7 @@ export function CommercialPage() {
   const [artifactsToken, setArtifactsToken] = useState(0);
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [opportunities, setOpportunities] = useState<CommercialOpportunity[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -44,11 +44,11 @@ export function CommercialPage() {
   const [archived, setArchived] = useState<CommercialOpportunity[]>([]);
   const [restoring, setRestoring] = useState<number | null>(null);
   const detailFile = useRef<HTMLInputElement>(null);
-  const load = useCallback(() => Promise.all([api<PipelineStage[]>("/pipeline-stages/"), api<CommercialOpportunity[]>("/opportunities/"), api<Client[]>("/clients/"), api<Service[]>("/services/")]).then(([loadedStages, loadedOpportunities, loadedClients, loadedServices]) => { setStages(loadedStages); setOpportunities(loadedOpportunities); setClients(loadedClients); setServices(loadedServices); if (loadedStages[0]) setDraft(current => current.stage ? current : { ...current, stage: String(loadedStages[0].id) }); }).catch((cause: Error) => setError(cause.message)), []);
+  const load = useCallback(() => Promise.all([api<PipelineStage[]>("/pipeline-stages/"), api<CommercialOpportunity[]>("/opportunities/"), api<Account[]>("/clients/"), api<Service[]>("/services/")]).then(([loadedStages, loadedOpportunities, loadedAccounts, loadedServices]) => { setStages(loadedStages); setOpportunities(loadedOpportunities); setAccounts(loadedAccounts); setServices(loadedServices); if (loadedStages[0]) setDraft(current => current.stage ? current : { ...current, stage: String(loadedStages[0].id) }); }).catch((cause: Error) => setError(cause.message)), []);
   useEffect(() => { void load(); }, [load]);
   async function move(event: DragEvent<HTMLElement>, stage: PipelineStage) { event.preventDefault(); const id = Number(event.dataTransfer.getData("opportunity")); if (!id) return; try { await api(`/opportunities/${id}/`, { method: "PATCH", body: JSON.stringify({ stage: stage.id }) }); await load(); } catch (cause) { setError((cause as Error).message); } }
-  async function createOpportunity(event: FormEvent<HTMLFormElement>) { event.preventDefault(); try { await api("/opportunities/", { method: "POST", body: JSON.stringify({ ...draft, client: Number(draft.client), stage: Number(draft.stage), service: draft.service ? Number(draft.service) : null }) }); setDraft(current => ({ ...blankDraft, stage: current.stage })); setComposerOpen(false); await load(); } catch (cause) { setError((cause as Error).message); } }
-  async function convert(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!converting) return; try { const created = await api<Project>(`/opportunities/${converting.id}/convert-to-project/`, { method: "POST", body: JSON.stringify({ client: converting.client, name: converting.title, ...dates, status: "planning" }) }); setConverting(null); setDates({ start_date: "", due_date: "" }); setCreated(created); await load(); } catch (cause) { setError((cause as Error).message); } }
+  async function createOpportunity(event: FormEvent<HTMLFormElement>) { event.preventDefault(); try { await api("/opportunities/", { method: "POST", body: JSON.stringify({ ...draft, account: Number(draft.account), stage: Number(draft.stage), service: draft.service ? Number(draft.service) : null }) }); setDraft(current => ({ ...blankDraft, stage: current.stage })); setComposerOpen(false); await load(); } catch (cause) { setError((cause as Error).message); } }
+  async function convert(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!converting) return; try { const created = await api<Project>(`/opportunities/${converting.id}/convert-to-project/`, { method: "POST", body: JSON.stringify({ client: converting.account, name: converting.title, ...dates, status: "planning" }) }); setConverting(null); setDates({ start_date: "", due_date: "" }); setCreated(created); await load(); } catch (cause) { setError((cause as Error).message); } }
 
   async function openDetail(item: CommercialOpportunity) {
     setDetail(item);
@@ -56,7 +56,7 @@ export function CommercialPage() {
     setDetailDraft({ title: item.title, scope: item.scope, estimated_value: item.estimated_value, expected_close_date: item.expected_close_date, contact: item.contact ? String(item.contact) : "", stage: String(item.stage), service: item.service ? String(item.service) : "" });
     setDetailContacts([]); setDetailDocs([]); setDetailActivities([]); setActivityDraft(blankActivity); setAiText("");
     try {
-      const [contacts, docs, activities] = await Promise.all([api<Contact[]>(`/contacts/?client=${item.client}`), api<DocumentEntry[]>(`/documents/?commercial_opportunity=${item.id}`), api<Activity[]>(`/activities/?commercial_opportunity=${item.id}`)]);
+      const [contacts, docs, activities] = await Promise.all([api<Contact[]>(`/contacts/?account=${item.account}`), api<DocumentEntry[]>(`/documents/?commercial_opportunity=${item.id}`), api<Activity[]>(`/activities/?commercial_opportunity=${item.id}`)]);
       setDetailContacts(contacts); setDetailDocs(docs); setDetailActivities(activities);
     } catch (cause) { setDetailError((cause as Error).message); }
   }
@@ -64,7 +64,7 @@ export function CommercialPage() {
     event.preventDefault(); if (!detail) return;
     setDetailError(""); setDetailNotice("");
     try {
-      await api("/activities/", { method: "POST", body: JSON.stringify({ client: detail.client, commercial_opportunity: detail.id, ...activityDraft }) });
+      await api("/activities/", { method: "POST", body: JSON.stringify({ account: detail.account, commercial_opportunity: detail.id, ...activityDraft }) });
       setActivityDraft(blankActivity);
       setDetailActivities(await api<Activity[]>(`/activities/?commercial_opportunity=${detail.id}`));
     } catch (cause) { setDetailError((cause as Error).message); }
@@ -168,7 +168,7 @@ export function CommercialPage() {
                 : item.project
                 ? <a className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-ink" href={`/projetos/${item.project}`} onClick={event => event.stopPropagation()}>Ver projeto <ArrowRight className="size-3.5" /></a>
                 : <button className="back-link mt-4 text-xs" onClick={event => { event.stopPropagation(); setConverting(item); }}>Criar projeto <ArrowRight className="size-3.5" /></button>)}</article>)}{!items.length && <div className="empty-state grid min-h-24 place-items-center">Arraste uma oportunidade para esta etapa</div>}</div></section>; })}</div>}
-    {isComposerOpen && <Modal title="Nova oportunidade" onClose={() => setComposerOpen(false)}><form className="grid gap-4" onSubmit={event => void createOpportunity(event)}><Field label="Título"><input className="field" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} required /></Field><Field label="Cliente"><select className="field" value={draft.client} onChange={event => setDraft({ ...draft, client: event.target.value })} required><option value="">Selecione</option>{clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}</select></Field><Field label="Nível de produto"><select className="field" value={draft.service} onChange={event => setDraft({ ...draft, service: event.target.value })}><option value="">Sem nível definido</option>{sellableServices.map(service => <option key={service.id} value={service.id}>{serviceLabel(service)}</option>)}</select></Field><div className="form-grid"><Field label="Valor estimado"><input className="field" type="number" min="0" step="0.01" value={draft.estimated_value} onChange={event => setDraft({ ...draft, estimated_value: event.target.value })} required /></Field><Field label="Previsão de fechamento"><input className="field" type="date" value={draft.expected_close_date} onChange={event => setDraft({ ...draft, expected_close_date: event.target.value })} required /></Field></div><button className="btn" type="submit">Adicionar ao pipeline</button></form></Modal>}
+    {isComposerOpen && <Modal title="Nova oportunidade" onClose={() => setComposerOpen(false)}><form className="grid gap-4" onSubmit={event => void createOpportunity(event)}><Field label="Título"><input className="field" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} required /></Field><Field label="Cliente"><select className="field" value={draft.account} onChange={event => setDraft({ ...draft, account: event.target.value })} required><option value="">Selecione</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></Field><Field label="Nível de produto"><select className="field" value={draft.service} onChange={event => setDraft({ ...draft, service: event.target.value })}><option value="">Sem nível definido</option>{sellableServices.map(service => <option key={service.id} value={service.id}>{serviceLabel(service)}</option>)}</select></Field><div className="form-grid"><Field label="Valor estimado"><input className="field" type="number" min="0" step="0.01" value={draft.estimated_value} onChange={event => setDraft({ ...draft, estimated_value: event.target.value })} required /></Field><Field label="Previsão de fechamento"><input className="field" type="date" value={draft.expected_close_date} onChange={event => setDraft({ ...draft, expected_close_date: event.target.value })} required /></Field></div><button className="btn" type="submit">Adicionar ao pipeline</button></form></Modal>}
     {converting && <Modal title="Criar projeto" onClose={() => setConverting(null)}><p className="mb-5 text-sm text-slate-600">Você está convertendo <strong className="text-ink">{converting.title}</strong>. Defina a janela inicial de entrega.</p><form className="grid gap-4" onSubmit={event => void convert(event)}><div className="form-grid"><Field label="Início"><input className="field" type="date" value={dates.start_date} onChange={event => setDates({ ...dates, start_date: event.target.value })} required /></Field><Field label="Prazo final"><input className="field" type="date" value={dates.due_date} onChange={event => setDates({ ...dates, due_date: event.target.value })} required /></Field></div><button className="btn" type="submit">Criar projeto</button></form></Modal>}
     {archiving && <ConfirmDialog
       title="Arquivar oportunidade"

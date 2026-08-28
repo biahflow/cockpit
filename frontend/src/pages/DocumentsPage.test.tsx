@@ -11,7 +11,7 @@ vi.mock("../auth", () => ({ useAuth: () => authState }));
 
 function stub(signatureRequests: object[] = []) {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/documents/") return Promise.resolve([{ id: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "contrato.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: signatureRequests }]);
+    if (path === "/documents/") return Promise.resolve([{ id: 1, account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "contrato.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: signatureRequests }]);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     return Promise.resolve([]);
   });
@@ -50,7 +50,7 @@ test("envia um documento vinculado a um cliente", async () => {
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/documents/", expect.objectContaining({ method: "POST" })));
   const [, options] = mocks.api.mock.calls.find(([path, opts]) => path === "/documents/" && opts?.method === "POST")!;
   expect(options.body).toBeInstanceOf(FormData);
-  expect((options.body as FormData).get("client")).toBe("1");
+  expect((options.body as FormData).get("account")).toBe("1");
 });
 
 test("arquiva um documento", async () => {
@@ -91,7 +91,7 @@ test("mostra o link de assinatura do fornecedor quando há", async () => {
 test("lista e restaura documentos arquivados", async () => {
   const user = userEvent.setup();
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/documents/?archived=1") return Promise.resolve([{ id: 2, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "antigo.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: [] }]);
+    if (path === "/documents/?archived=1") return Promise.resolve([{ id: 2, account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "antigo.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: [] }]);
     if (path === "/documents/") return Promise.resolve([]);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     return Promise.resolve([]);

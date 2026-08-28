@@ -30,7 +30,7 @@ from rest_framework.test import APIClient
 from apps.core.models import Discovery, Evidence, Finding, ProcessObservation, User, hash_do_trecho
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
     DiscoveryFactory,
     DiscoverySessionFactory,
     EvidenceFactory,
@@ -69,7 +69,7 @@ def _payload_finding(account_id: int, **overrides: object) -> dict:
 
 
 def test_fato_sem_revisor_e_recusado(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     evidencia = EvidenceFactory(account=conta)
 
     resposta = api.post(
@@ -88,7 +88,7 @@ def test_fato_sem_revisor_e_recusado(api: APIClient) -> None:
 
 def test_fato_com_revisor_e_sem_evidencia_viva_e_recusado(api: APIClient) -> None:
     """A metade que o `clean()` não alcança: o M2M só existe depois do save."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     revisor = UserFactory()
     arquivada = EvidenceFactory(account=conta)
     arquivada.archive()
@@ -117,7 +117,7 @@ def test_fato_com_revisor_e_sem_evidencia_viva_e_recusado(api: APIClient) -> Non
 
 
 def test_fato_com_revisor_e_evidencia_viva_passa_e_carimba_a_data(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     revisor = UserFactory()
     evidencia = EvidenceFactory(account=conta)
 
@@ -140,7 +140,7 @@ def test_fato_com_revisor_e_evidencia_viva_passa_e_carimba_a_data(api: APIClient
 
 
 def test_promover_pelo_patch_cobra_as_duas_metades(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     achado = FindingFactory(account=conta)
     evidencia = EvidenceFactory(account=conta)
     achado.evidences.add(evidencia)
@@ -179,7 +179,7 @@ def test_o_modelo_tambem_recusa_fato_sem_revisor() -> None:
 
 def test_arquivar_a_ultima_evidencia_de_um_fato_e_recusado(api: APIClient) -> None:
     """409, e não um rebaixamento silencioso: desfazer promoção de gente é ato de gente."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     evidencia = EvidenceFactory(account=conta)
     achado = FindingFactory(
         account=conta,
@@ -198,7 +198,7 @@ def test_arquivar_a_ultima_evidencia_de_um_fato_e_recusado(api: APIClient) -> No
 
 
 def test_arquivar_a_penultima_evidencia_de_um_fato_passa(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     primeira = EvidenceFactory(account=conta)
     segunda = EvidenceFactory(account=conta, kind=Evidence.Kind.DATA)
     achado = FindingFactory(
@@ -217,7 +217,7 @@ def test_arquivar_a_penultima_evidencia_de_um_fato_passa(api: APIClient) -> None
 
 def test_arquivar_a_unica_evidencia_de_uma_hipotese_passa(api: APIClient) -> None:
     """A recusa é sobre o **fato**: hipótese sem evidência continua sendo uma hipótese honesta."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     evidencia = EvidenceFactory(account=conta)
     FindingFactory(account=conta).evidences.add(evidencia)
 
@@ -228,7 +228,7 @@ def test_arquivar_a_unica_evidencia_de_uma_hipotese_passa(api: APIClient) -> Non
 
 def test_arquivar_evidencia_de_fato_ja_arquivado_passa(api: APIClient) -> None:
     """Achado arquivado não afirma mais nada — segurar a evidência dele seria segurar por nada."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     evidencia = EvidenceFactory(account=conta)
     achado = FindingFactory(
         account=conta,
@@ -248,7 +248,7 @@ def test_arquivar_evidencia_de_fato_ja_arquivado_passa(api: APIClient) -> None:
 
 def test_de_fato_nao_se_vai_direto_a_desconhecido(api: APIClient) -> None:
     """`FINDING_TRANSITIONS`: rebaixar para hipótese, sim; apagar o erro, não."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     achado = FindingFactory(
         account=conta,
         epistemic_status=Finding.EpistemicStatus.FACT,
@@ -287,7 +287,7 @@ def test_de_desconhecido_se_vai_aos_dois_lados(api: APIClient) -> None:
 
 
 def test_evidencia_sem_trecho_e_sem_localizador_e_recusada(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(
         reverse("evidence-list"),
@@ -300,7 +300,7 @@ def test_evidencia_sem_trecho_e_sem_localizador_e_recusada(api: APIClient) -> No
 
 def test_so_o_localizador_basta(api: APIClient) -> None:
     """A gravação de duas horas é evidência mesmo antes de alguém transcrever o trecho."""
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(
         reverse("evidence-list"),
@@ -334,9 +334,9 @@ def test_o_hash_muda_quando_o_trecho_muda(api: APIClient) -> None:
 
 
 def test_a_etapa_da_evidencia_precisa_ser_do_mesmo_processo(api: APIClient) -> None:
-    conta = ClientFactory()
-    processo = ProcessoFactory(client=conta)
-    outra_etapa = ProcessoEtapaFactory(processo=ProcessoFactory(client=conta))
+    conta = AccountFactory()
+    processo = ProcessoFactory(account=conta)
+    outra_etapa = ProcessoEtapaFactory(processo=ProcessoFactory(account=conta))
 
     resposta = api.post(
         reverse("evidence-list"),
@@ -359,8 +359,8 @@ def test_o_processo_da_evidencia_precisa_ser_da_mesma_conta(api: APIClient) -> N
     resposta = api.post(
         reverse("evidence-list"),
         {
-            "account": ClientFactory().pk,
-            "process": ProcessoFactory(client=ClientFactory()).pk,
+            "account": AccountFactory().pk,
+            "process": ProcessoFactory(account=AccountFactory()).pk,
             "kind": Evidence.Kind.OBSERVATION,
             "raw_excerpt": "Vi a conferência nota a nota.",
         },
@@ -372,7 +372,7 @@ def test_o_processo_da_evidencia_precisa_ser_da_mesma_conta(api: APIClient) -> N
 
 
 def test_o_modelo_tambem_recusa_evidencia_sem_conteudo() -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     with pytest.raises(ValidationError):
         Evidence(account=conta, kind=Evidence.Kind.INTERVIEW).full_clean()
@@ -383,8 +383,8 @@ def test_o_discovery_da_evidencia_precisa_ser_da_mesma_conta(api: APIClient) -> 
     resposta = api.post(
         reverse("evidence-list"),
         {
-            "account": ClientFactory().pk,
-            "discovery": DiscoveryFactory(project=ProjectFactory(client=ClientFactory())).pk,
+            "account": AccountFactory().pk,
+            "discovery": DiscoveryFactory(project=ProjectFactory(client=AccountFactory())).pk,
             "kind": Evidence.Kind.INTERVIEW,
             "raw_excerpt": "Disseram que leva dois dias.",
         },
@@ -397,7 +397,7 @@ def test_o_discovery_da_evidencia_precisa_ser_da_mesma_conta(api: APIClient) -> 
 
 def test_o_discovery_da_propria_conta_passa(api: APIClient) -> None:
     """Controle positivo, sem o qual o teste acima passaria por recusar todo Discovery."""
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(
         reverse("evidence-list"),
@@ -415,7 +415,7 @@ def test_o_discovery_da_propria_conta_passa(api: APIClient) -> None:
 
 def test_a_sessao_da_evidencia_precisa_ser_do_mesmo_discovery(api: APIClient) -> None:
     """Tendo os dois, eles precisam concordar — proveniência que se contradiz não é proveniência."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     discovery = DiscoveryFactory(project=ProjectFactory(client=conta))
 
     resposta = api.post(
@@ -435,7 +435,7 @@ def test_a_sessao_da_evidencia_precisa_ser_do_mesmo_discovery(api: APIClient) ->
 
 
 def test_a_sessao_do_proprio_discovery_passa(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     discovery = DiscoveryFactory(project=ProjectFactory(client=conta))
 
     resposta = api.post(
@@ -455,8 +455,8 @@ def test_a_sessao_do_proprio_discovery_passa(api: APIClient) -> None:
 
 def test_o_modelo_tambem_recusa_discovery_e_sessao_incoerentes() -> None:
     """As duas guardas do lado do modelo, para quem entra pelo admin ou pelo shell."""
-    conta = ClientFactory()
-    de_outra_conta = DiscoveryFactory(project=ProjectFactory(client=ClientFactory()))
+    conta = AccountFactory()
+    de_outra_conta = DiscoveryFactory(project=ProjectFactory(client=AccountFactory()))
     evidencia = EvidenceFactory(account=conta)
 
     evidencia.discovery = de_outra_conta
@@ -555,8 +555,8 @@ def test_a_sessao_da_propria_reuniao_passa(api: APIClient) -> None:
 
 def test_o_mesmo_processo_cabe_em_dois_discoveries(api: APIClient) -> None:
     """O defeito que esta tabela desfaz: `Processo.source_project` responde por **uma** origem."""
-    conta = ClientFactory()
-    processo = ProcessoFactory(client=conta)
+    conta = AccountFactory()
+    processo = ProcessoFactory(account=conta)
     primeiro = DiscoveryFactory(project=ProjectFactory(client=conta))
     segundo = DiscoveryFactory(project=ProjectFactory(client=conta))
 
@@ -615,8 +615,8 @@ def test_o_modelo_tambem_recusa_sessao_de_outro_discovery() -> None:
 
 def test_entrega_nao_ve_discovery_evidence_nem_finding_de_outra_conta() -> None:
     """Espelha `test_processo_nao_volta_ao_cliente.py`: a listagem recorta pela participação."""
-    minha = ClientFactory()
-    alheia = ClientFactory()
+    minha = AccountFactory()
+    alheia = AccountFactory()
     entrega = UserFactory(role=User.Role.DELIVERY)
     meu_projeto = ProjectFactory(client=minha)
     ProjectMemberFactory(project=meu_projeto, user=entrega)
@@ -639,7 +639,7 @@ def test_entrega_nao_ve_discovery_evidence_nem_finding_de_outra_conta() -> None:
 
 def test_entrega_nao_escreve_evidencia_em_conta_alheia() -> None:
     """Sem a guarda de escrita, uma requisição bastaria para escrever dentro do cliente oculto."""
-    alheia = ClientFactory()
+    alheia = AccountFactory()
     entrega = UserFactory(role=User.Role.DELIVERY)
     ProjectMemberFactory(project=ProjectFactory(), user=entrega)
     api = APIClient()
@@ -660,7 +660,7 @@ def test_entrega_nao_escreve_evidencia_em_conta_alheia() -> None:
 
 
 def test_entrega_nao_escreve_achado_em_conta_alheia() -> None:
-    alheia = ClientFactory()
+    alheia = AccountFactory()
     entrega = UserFactory(role=User.Role.DELIVERY)
     ProjectMemberFactory(project=ProjectFactory(), user=entrega)
     api = APIClient()
@@ -684,7 +684,7 @@ def test_entrega_nao_pendura_processo_alheio_no_proprio_discovery() -> None:
         reverse("processobservation-list"),
         {
             "discovery": discovery.pk,
-            "process": ProcessoFactory(client=ClientFactory()).pk,
+            "process": ProcessoFactory(account=AccountFactory()).pk,
             "observed_at": timezone.localdate().isoformat(),
         },
         format="json",
@@ -721,10 +721,10 @@ def test_o_achado_arquivado_sai_da_lista_e_volta_pelo_unarchive(api: APIClient) 
 
 
 def test_a_lista_de_evidencias_filtra_por_conta_e_por_forma(api: APIClient) -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     EvidenceFactory(account=conta, kind=Evidence.Kind.INTERVIEW)
     EvidenceFactory(account=conta, kind=Evidence.Kind.DATA)
-    EvidenceFactory(account=ClientFactory())
+    EvidenceFactory(account=AccountFactory())
 
     por_conta = api.get(f"{reverse('evidence-list')}?account={conta.pk}")
     por_forma = api.get(f"{reverse('evidence-list')}?account={conta.pk}&kind=data")
@@ -753,8 +753,8 @@ def test_a_reconciliacao_acusa_o_legado_sem_par() -> None:
 
 
 def test_a_reconciliacao_conta_o_par_completo_e_a_divida_herdada() -> None:
-    conta = ClientFactory()
-    legada = EvidenciaFactory(processo=ProcessoFactory(client=conta))
+    conta = AccountFactory()
+    legada = EvidenciaFactory(processo=ProcessoFactory(account=conta))
     Evidence.objects.create(
         account=conta, kind=Evidence.Kind.INTERVIEW, raw_excerpt=legada.content,
         legacy_evidencia=legada,

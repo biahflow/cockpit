@@ -61,7 +61,7 @@ def projeto_com_discovery():  # type: ignore[no-untyped-def]
     """Cenário em que os três registros existem, e o mais constrangedor possível se vazasse."""
     project = ProjectFactory()
     processo = Processo.objects.create(
-        client=project.client,
+        account=project.client,
         source_project=project,
         name="Faturamento manual",
         volume_mes=400,

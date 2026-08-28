@@ -30,7 +30,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         candidatas = CommercialOpportunity.objects.filter(
             service__tier=Service.Tier.QUALIFICATION_CALL
-        ).select_related("client")
+        ).select_related("account")
         total = candidatas.count()
         migradas = Qualification.objects.filter(legacy_opportunity__isnull=False).count()
 
@@ -42,7 +42,7 @@ class Command(BaseCommand):
         self.stdout.write(f"Sem lead (puladas pelo backfill): {len(sem_lead)}")
         for opportunity in sem_lead:
             self.stdout.write(
-                f"  · #{opportunity.pk} — {opportunity.title} ({opportunity.client.name})"
+                f"  · #{opportunity.pk} — {opportunity.title} ({opportunity.account.name})"
             )
         self.stdout.write(f"Com projeto (avaliadas, não arquivadas): {len(com_projeto)}")
         for opportunity in com_projeto:

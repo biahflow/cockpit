@@ -12,31 +12,31 @@ from django.utils import timezone
 
 
 def build_recommendations() -> list[dict[str, Any]]:
-    from .models import Client, CommercialOpportunity, PipelineStage, Project
+    from .models import Account, CommercialOpportunity, PipelineStage, Project
 
     today = timezone.localdate()
     recs: list[dict[str, Any]] = []
 
     # Clientes com projetos mas sem oportunidade aberta → oportunidade de novo negócio.
     open_kind = PipelineStage.Kind.OPEN
-    for client in Client.objects.filter(archived_at__isnull=True):
-        has_project = Project.objects.filter(client=client, archived_at__isnull=True).exists()
+    for account in Account.objects.filter(archived_at__isnull=True):
+        has_project = Project.objects.filter(client=account, archived_at__isnull=True).exists()
         has_open = CommercialOpportunity.objects.filter(
-            client=client, archived_at__isnull=True, stage__kind=open_kind
+            account=account, archived_at__isnull=True, stage__kind=open_kind
         ).exists()
         if has_project and not has_open:
             recs.append({
                 "kind": "upsell",
-                "label": f"Novo negócio com {client.name}",
+                "label": f"Novo negócio com {account.name}",
                 "detail": "Cliente ativo sem oportunidade aberta — vale um contato.",
-                "url": f"/clientes/{client.pk}",
+                "url": f"/contas/{account.pk}",
             })
 
     # Oportunidades abertas paradas há mais de 30 dias → follow-up.
     stale_before = timezone.now() - timedelta(days=30)
     for opportunity in CommercialOpportunity.objects.filter(
         archived_at__isnull=True, stage__kind=open_kind, created_at__lt=stale_before
-    ).select_related("client"):
+    ).select_related("account"):
         recs.append({
             "kind": "followup",
             "label": f"Follow-up: {opportunity.title}",

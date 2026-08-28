@@ -18,7 +18,7 @@ chamada só e devolve `url` de imediato, o que a torna a escolha óbvia — e el
 24 h**. Um link para uma fatura que vence em quinze dias estaria morto antes de o cliente abrir. A
 Invoice do Stripe *é* um recebível: tem vencimento, número, página hospedada que não expira e os
 eventos que interessam. O preço é precisar de um `Customer`, guardado em
-`Client.payment_customer_ref` e reusado — um cliente novo por fatura quebraria a deduplicação e os
+`Account.payment_customer_ref` e reusado — um cliente novo por fatura quebraria a deduplicação e os
 relatórios do próprio fornecedor.
 
 As chamadas HTTP reais ficam fora da cobertura (`# pragma: no cover`), como em `esign.py`.
@@ -167,23 +167,23 @@ class StripeProvider:
 
     def _customer(self, invoice: Invoice) -> str:  # pragma: no cover - I/O com o fornecedor
         """O `Customer` do cliente no Stripe, criado na primeira emissão e reusado depois."""
-        client = invoice.client
-        if client.payment_customer_ref:
-            return client.payment_customer_ref
-        contato = client.contacts.exclude(email="").first()
+        account = invoice.account
+        if account.payment_customer_ref:
+            return account.payment_customer_ref
+        contato = account.contacts.exclude(email="").first()
         created = self._post(
             "/v1/customers",
             {
-                "name": client.name,
+                "name": account.name,
                 "email": contato.email if contato else "",
-                "metadata[client_id]": str(client.pk),
+                "metadata[client_id]": str(account.pk),
             },
-            idempotency_key=f"client-{client.pk}-customer",
+            idempotency_key=f"client-{account.pk}-customer",
         )
         ref = str((created or {}).get("id", ""))
         if ref:
-            client.payment_customer_ref = ref
-            client.save(update_fields=["payment_customer_ref", "updated_at"])
+            account.payment_customer_ref = ref
+            account.save(update_fields=["payment_customer_ref", "updated_at"])
         return ref
 
     def charge(self, invoice: Invoice) -> ChargeRef:  # pragma: no cover - I/O com o fornecedor

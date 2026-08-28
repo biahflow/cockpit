@@ -110,7 +110,7 @@ def test_o_contrato_da_oportunidade_mantem_a_forma() -> None:
     api.force_authenticate(admin)
     engagement = EngagementFactory()
     origem = CommercialOpportunityFactory(
-        client=engagement.account, stage=PipelineStage.objects.get(kind="won"), owner=admin
+        account=engagement.account, stage=PipelineStage.objects.get(kind="won"), owner=admin
     )
     primeiro = ProjectFactory(
         client=engagement.account, engagement=engagement,

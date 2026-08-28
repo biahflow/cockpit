@@ -65,7 +65,7 @@ source of truth for the complete CI suite is [`.github/workflows/quality.yml`](.
 views (viewsets), permissions, and URLs all live there. There is no service layer —
 business rules live in model `clean()`/`save()` methods and in viewset actions.
 
-Core domain flow (`apps/core/models.py`): `Client` → `Contact`, `Lead` → `Qualification` →
+Core domain flow (`apps/core/models.py`): `Account` → `Contact`, `Lead` → `Qualification` →
 `CommercialOpportunity` (on a configurable `PipelineStage`) → converts into a `Project` →
 `Milestone`/`Task` (both subclass the abstract `WorkItem`) plus `Document`. `User` extends
 `AbstractUser` with a `role` (admin/sales/delivery). `Invitation` drives email-based
@@ -85,7 +85,7 @@ Key cross-cutting patterns to preserve:
   two resources that really hard-delete (pipeline stage, journey phase). See FDD 025.
 - **Authorization is two-layered.** `RolePermission` (`permissions.py`) enforces a
   coarse role policy keyed off each viewset's `resource` string attribute
-  (e.g. `resource = "client"`), plus per-object `has_object_permission`, which
+  (e.g. `resource = "account"`), plus per-object `has_object_permission`, which
   **denies by default** so a new resource starts closed. When adding a viewset, set
   `resource` and update `RolePermission`.
 - **Project scope is the delivery boundary.** Delivery users see only the projects they
@@ -111,6 +111,20 @@ Key cross-cutting patterns to preserve:
   The mandate also records `commercial_model` (`paid`/`design_partner`, default `paid`): a
   design partner receives Discovery free of charge in exchange for serving as case and proving
   ground, and it does **not** go through a sale — nothing in the schema ever required one.
+- **A organização é `Account`, e "Cliente" é o rótulo de um dos estados dela.** O nome canônico
+  vale desde antes de a conta comprar (`language-map` §4), e `Account.lifecycle_status` tem três
+  valores: `prospect` (não fechou), `active` (é cliente) e `inactive` (**já foi** cliente e hoje
+  não tem trabalho em andamento). Só `prospect → active` é automático — o signal
+  `_promote_account_on_won`; entrar em `inactive` é escolha de quem edita a conta, porque "não tem
+  trabalho em andamento" não é fato observável no banco. **`inactive` não é arquivamento**: a
+  conta continua na listagem e no agregado, e só o `archived_at` a esconde
+  (`test_inativo_nao_e_arquivado.py`). Na `/api/v1/` a chave `status` continua saindo e sendo
+  aceita, com o mesmo valor de `lifecycle_status`. A superfície (menu "Contas", as cinco pastilhas
+  de filtro, as três pílulas, os textos de vazio) é governada pelo DAP
+  `docs/design/dap-lifecycle-status-r1/`, decisões **A1 · B1 · C1**, e os mapas de rótulo e de
+  variante moram em `frontend/src/components/AccountLifecycle.tsx` — um lugar só, no molde de
+  `StatusDot` (ADR 0026). A rota da SPA é `/contas`; `/clientes*` redireciona e morre na
+  `/api/v2/`.
 - **Opportunity → Project conversion** is the central business action: the
   `convert-to-project` `@action` on `CommercialOpportunityViewSet`. It requires the sale be in the
   "won" stage, enforces sales/admin role, and carries `CommercialOpportunity.service` over to
@@ -142,7 +156,7 @@ Key cross-cutting patterns to preserve:
   is free; zero anywhere else means "price to be decided" — the Transformation Partnership is
   monthly recurring and the catalog still cannot represent recurrence.
 - **A qualificação vem antes da venda, e é entidade.** `POST /leads/{id}/convert/` criava, no mesmo
-  clique, um `Client` **e** uma `CommercialOpportunity` no degrau gratuito — uma conversa de trinta minutos
+  clique, uma `Account` **e** uma `CommercialOpportunity` no degrau gratuito — uma conversa de trinta minutos
   entrava no funil como venda registrada e podia virar `Project`. Desde a ADR 0049 ele registra uma
   `Qualification` (autor, data, cinco eixos, `outcome` ∈ `qualified`·`nurture`·`disqualified`) e
   **não cria oportunidade**; a venda nasce num ato explícito,
@@ -159,7 +173,7 @@ Key cross-cutting patterns to preserve:
   do founding client também é gratuito e é degrau. Restam seis degraus vendáveis na escada da FDD
   015.
 - **Documents are single-linked.** A `Document` must reference exactly one of
-  client/`commercial_opportunity`/project (enforced in `Document.clean()`); access is gated —
+  `account`/`commercial_opportunity`/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.
 - **Journey artifacts have state.** `Artifact` (one model, `kind` =
   discovery/assessment/proposal/contract) holds the AI-generated text plus a state machine
@@ -205,11 +219,14 @@ Key cross-cutting patterns to preserve:
   quando as duas vêm no mesmo corpo**. Todo alias de escrita precisa de regressão, porque a SPA
   escreve o nome canônico: sem ela a linha do serializer não tem chamador aqui dentro, e a próxima
   varredura atrás do nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem
-  nada ficar vermelho. Já pagos: `GateOutcome`→`GateDecision` e `Opportunity`→
-  `CommercialOpportunity`. O que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt`,
-  e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo vs. chave).
-- **O `Engagement` tem superfície, e ela mora no detalhe do cliente.** A seção "Engagements" de
-  `ClientDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
+  nada ficar vermelho. Já pagos: `GateOutcome`→`GateDecision`, `Opportunity`→
+  `CommercialOpportunity` e `Client`→`Account` (fatia 2, migração `0062`, com os dez campos FK
+  virando `account` e `Client.status` virando `Account.lifecycle_status`). Falta `Processo`/
+  `ProcessoEtapa`. O que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt`
+  (teto 37), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo
+  vs. chave).
+- **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
+  `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
   `docs/design/dap-engagement-r1/`, r1, decisões **A1** (título em inglês, copy em volta em pt-BR)
   e **B1** (as duas pílulas de `commercial_model` sempre visíveis) — mudar a superfície exige
   revisão nova do pacote, não julgamento na hora. `projects_count` é **recortado por
@@ -227,7 +244,7 @@ fetches a CSRF token from `/api/v1/auth/csrf/` before any mutating request, send
 unset; email goes through SMTP (Mailpit in dev).
 
 **Frontend structure:** thin SPA — `src/api.ts` is the single API client, `src/pages/*`
-are the screens (Login, Dashboard, Clients, Commercial, Projects), `src/components/Layout.tsx`
+are the screens (Login, Dashboard, Accounts, Commercial, Projects), `src/components/Layout.tsx`
 is the shell, `src/types.ts` holds shared types.
 
 **O design system é compartilhado com o portal do cliente, e a skill que o descreve é
