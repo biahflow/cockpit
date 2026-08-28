@@ -61,7 +61,7 @@ def test_build_opportunity_context_describes_the_product_tier():
 
 @pytest.mark.django_db
 def test_build_opportunity_context_prices_a_paid_tier():
-    paid = Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT)
+    paid = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
     paid.list_price = Decimal("18000.00")
     paid.save(update_fields=["list_price"])
 

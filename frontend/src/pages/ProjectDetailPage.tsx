@@ -7,7 +7,7 @@ import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
-import { CANONICAL_STAGE_LABEL, PHASE_EVENT_LABEL, SITUATION_LABEL, situationVariant, WAITING_PARTY_LABEL, WAITING_PARTY_OPTIONS } from "../journey";
+import { CANONICAL_STAGE_LABEL, GATE_DECISION_LABEL, GATE_EFFECT, gateDecisionByEffect, gateDecisions, PHASE_EVENT_LABEL, SITUATION_LABEL, situationVariant, WAITING_PARTY_LABEL, WAITING_PARTY_OPTIONS } from "../journey";
 import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateDecision, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WaitingParty, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -17,11 +17,15 @@ const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_pr
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
 const blankMeeting = { title: "", date: "", meeting_url: "", recording_url: "", transcript: "" };
 const employeeStatusLabel: Record<DigitalEmployeeStatus, string> = { building: "Em construção", active: "Ativo", paused: "Pausado" };
-const gateLabel: Record<GateDecision, string> = { go: "GO", conditional_go: "CONDITIONAL GO", redesign: "REDESIGN", no_go: "NO-GO" };
+// "A, B e C". A copy do gate nomeia as saídas da fase ativa, e são três ou duas conforme o
+// vocabulário (ADR 0053) — juntar com vírgula seca deixaria "CONDITIONAL GO, REDESIGN, NO-GO".
+const listar = (itens: string[]) => itens.length > 1 ? `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}` : itens.join("");
 // Variante, nunca a cor: uma segunda definição de "aprovado" diverge da primeira em silêncio
 // (ADR 0026). CONDITIONAL GO e REDESIGN dividem o âmbar porque os dois dizem a mesma coisa ao
-// olho — "seguiu, mas há dívida" —, e só o NO-GO é o vermelho de fato.
-const gateVariant: Record<GateDecision, string> = { go: "state--1", conditional_go: "state--2", redesign: "state--2", no_go: "state--3" };
+// olho — "seguiu, mas há dívida" —, e só o NO-GO é o vermelho de fato. As três saídas do PROVE
+// herdam a variante do efeito (ADR 0053): SCALE pinta como GO, ITERATE como REDESIGN e STOP como
+// NO-GO — a mesma leitura, porque é a mesma consequência.
+const gateVariant: Record<GateDecision, string> = { go: "state--1", conditional_go: "state--2", redesign: "state--2", no_go: "state--3", scale: "state--1", iterate: "state--2", stop: "state--3" };
 // Risk Register (FDD 034). "Aceito" é **neutro**, não verde: conviver com o risco é uma decisão
 // consciente, e não um problema resolvido — a mesma leitura que faz "Arquivado" usar `state--off`.
 const riscoNivelLabel: Record<RiscoNivel, { probabilidade: string; impacto: string }> = {
@@ -760,6 +764,11 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
   const pct = Math.round((done / phases.length) * 100);
   const checklist = active?.checklist_items ?? [];
   const pending = checklist.filter(item => !item.checked).length;
+  // O vocabulário do gate sai da fase ativa (ADR 0053), de um mapa só em `journey.ts`.
+  const stage = active?.canonical_stage ?? "";
+  const decisoes = gateDecisions(stage);
+  const reabre = gateDecisionByEffect(stage, "reopen");
+  const para = gateDecisionByEffect(stage, "halt");
 
   return <section className="panel space-y-5 sm:p-6">
     <div className="flex flex-wrap items-center gap-3">
@@ -776,7 +785,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "state--1" : isActive ? "bg-ink text-white" : "state--off"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>
         {/* O selo do gate acompanha a fase e não some quando ela fecha: é o registro de *como* a
             jornada passou por ali — inclusive na fase que o REDESIGN trancou. */}
-        {phase.gate_decision && <span className={`state ${gateVariant[phase.gate_decision]}`} title={phase.gate_notes || undefined}>{gateLabel[phase.gate_decision]}</span>}
+        {phase.gate_decision && <span className={`state ${gateVariant[phase.gate_decision]}`} title={phase.gate_notes || undefined}>{GATE_DECISION_LABEL[phase.gate_decision]}</span>}
       </span>;
     })}</div>
 
@@ -816,20 +825,26 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
       </div>}
 
       {active.requires_gate && canManage && <div className="mt-4 rounded-2xl border border-dashed p-4">
-        {/* O decision gate de quatro saídas (ADR 0030, FDD 033). As quatro ficam lado a lado
-            porque a metodologia pede uma escolha entre elas, não um "avançar" com ressalva
-            escondida atrás de um menu. */}
+        {/* O decision gate (ADR 0030, FDD 033) — e o vocabulário é o da fase (ADR 0053): quatro
+            saídas na Feasibility, três no PROVE. Ficam lado a lado porque a metodologia pede uma
+            escolha entre elas, não um "avançar" com ressalva escondida atrás de um menu. Quem
+            decide o conjunto é `gateDecisions`, o mesmo mapa que a tela de Jornada lê. */}
         <p className="eyebrow">Decision gate</p>
-        <p className="mt-1 text-sm text-slate-600">Esta fase termina em decisão. REDESIGN reabre a fase anterior; NO-GO para a jornada aqui.</p>
+        <p className="mt-1 text-sm text-slate-600">Esta fase termina em decisão. {GATE_DECISION_LABEL[reabre]} reabre a fase anterior; {GATE_DECISION_LABEL[para]} para a jornada aqui.</p>
         <label className="form-label mt-3">Ressalvas, motivo ou condições
-          <textarea className="field min-h-16" placeholder="O que pesou na decisão — obrigatório na prática para CONDITIONAL GO, REDESIGN e NO-GO" value={gateNotes} onChange={event => setGateNotes(event.target.value)} />
+          <textarea className="field min-h-16" placeholder={`O que pesou na decisão — obrigatório na prática para ${listar(decisoes.slice(1).map(decision => GATE_DECISION_LABEL[decision]))}`} value={gateNotes} onChange={event => setGateNotes(event.target.value)} />
         </label>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="btn" onClick={() => onApplyGate("go", gateNotes)}><CheckCircle2 className="size-4" />GO</button>
-          <button type="button" className="btn btn--secondary" onClick={() => onApplyGate("conditional_go", gateNotes)}>CONDITIONAL GO</button>
-          <button type="button" className="btn btn--secondary" onClick={() => setConfirming("redesign")}>REDESIGN</button>
-          <button type="button" className="btn btn--secondary btn--secondary-danger" onClick={() => setConfirming("no_go")}>NO-GO</button>
-        </div>
+        <div className="mt-3 flex flex-wrap gap-2">{decisoes.map((decision, index) => {
+          // A pele sai do efeito, não do valor: a primeira saída de continuidade é a primária
+          // (GO, SCALE), a que para pede o vermelho de hover, e as duas irreversíveis passam pela
+          // confirmação — clique de descuido em REDESIGN/ITERATE/NO-GO/STOP não pode valer o
+          // mesmo que um clique em GO.
+          const efeito = GATE_EFFECT[decision];
+          const primaria = efeito === "advance" && index === 0;
+          const classe = primaria ? "btn" : efeito === "halt" ? "btn btn--secondary btn--secondary-danger" : "btn btn--secondary";
+          const confirma = efeito !== "advance";
+          return <button key={decision} type="button" className={classe} onClick={() => confirma ? setConfirming(decision) : onApplyGate(decision, gateNotes)}>{primaria && <CheckCircle2 className="size-4" />}{GATE_DECISION_LABEL[decision]}</button>;
+        })}</div>
       </div>}
 
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
@@ -841,11 +856,11 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
     </div> : <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-medium text-emerald-700"><Trophy className="size-5 shrink-0" />Jornada de transformação concluída — todas as fases entregues.</div>}
 
     {confirming && <ConfirmDialog
-      title={confirming === "redesign" ? "Registrar REDESIGN" : "Registrar NO-GO"}
-      message={confirming === "redesign"
+      title={`Registrar ${GATE_DECISION_LABEL[confirming]}`}
+      message={GATE_EFFECT[confirming] === "reopen"
         ? <>A fase <strong className="text-ink">{active?.phase_name}</strong> volta para <strong className="text-ink">a fase anterior</strong>, que é reaberta para ser testada de novo. A decisão e o motivo ficam registrados nesta fase.</>
         : <>A jornada <strong className="text-ink">para nesta fase</strong>. Nada é apagado e a fase continua em andamento — o que muda é o registro de que a hipótese não se sustentou.</>}
-      confirmLabel={confirming === "redesign" ? "Registrar REDESIGN" : "Registrar NO-GO"}
+      confirmLabel={`Registrar ${GATE_DECISION_LABEL[confirming]}`}
       onCancel={() => setConfirming(null)}
       onConfirm={() => { onApplyGate(confirming, gateNotes); setConfirming(null); }}
     />}
@@ -902,7 +917,7 @@ function DeliveryTimelinePanel({ timeline, canManage, onSetWaiting }: DeliveryTi
     <div>
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Histórico · {timeline.events.length} evento(s)</p>
       {timeline.events.length ? <ol className="divide-y">{timeline.events.map(event => <li className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5" key={event.id}>
-        <div className="min-w-0"><p className="text-sm font-medium text-ink">{PHASE_EVENT_LABEL[event.kind]}{event.phase_name ? ` · ${event.phase_name}` : ""}</p>{(event.note || event.gate_decision || event.waiting_party) && <p className="mt-0.5 text-xs text-slate-600">{event.gate_decision ? `${gateLabel[event.gate_decision]}. ` : ""}{event.waiting_party ? `${WAITING_PARTY_LABEL[event.waiting_party as Exclude<WaitingParty, "">]}. ` : ""}{event.note}</p>}</div>
+        <div className="min-w-0"><p className="text-sm font-medium text-ink">{PHASE_EVENT_LABEL[event.kind]}{event.phase_name ? ` · ${event.phase_name}` : ""}</p>{(event.note || event.gate_decision || event.waiting_party) && <p className="mt-0.5 text-xs text-slate-600">{event.gate_decision ? `${GATE_DECISION_LABEL[event.gate_decision]}. ` : ""}{event.waiting_party ? `${WAITING_PARTY_LABEL[event.waiting_party as Exclude<WaitingParty, "">]}. ` : ""}{event.note}</p>}</div>
         <time className="shrink-0 text-xs text-slate-600">{eventTime(event.created_at)}{event.actor_name ? ` · ${event.actor_name}` : " · sistema"}</time>
       </li>)}</ol> : <p className="empty-state">Sem eventos ainda.</p>}
     </div>

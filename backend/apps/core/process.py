@@ -1,6 +1,6 @@
 """O custo do estado atual de um processo mapeado (FDD 039).
 
-A fórmula é do material, literal (`docs/metodologia-fde.md:87-88`):
+A fórmula é do material, literal (`docs/metodologia-fde.md:118-119`):
 `Volume × Tempo × Pessoas × Custo + Retrabalho + Erros + Perdas + Espera + Risco`.
 
 Função pura e explicável, no molde de `health.assess_project_health`: devolve **as parcelas**
@@ -74,7 +74,7 @@ def custo_do_estado_atual(processo: Process) -> dict[str, Any]:
     "custo zero" seria a casa afirmando ao cliente o oposto do que ela sabe.
 
     `sustentacao` responde à outra metade da metodologia: o número vale mais ou menos conforme
-    exista evidência rotulada como **fato** por trás dele (`docs/metodologia-fde.md:86`). É
+    exista evidência rotulada como **fato** por trás dele (`docs/metodologia-fde.md:117`). É
     `"sustentado"` quando há pelo menos uma evidência viva com `rotulo=fato` no processo, e
     `"hipotese"` caso contrário — inclusive quando o único fato registrado foi arquivado, porque
     registro desfeito não sustenta número.

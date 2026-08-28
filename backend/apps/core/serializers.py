@@ -868,7 +868,7 @@ class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Sati
 class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process]):
     """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
-    `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
+    `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:118-119` aplicada
     aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
     mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
 
@@ -923,7 +923,7 @@ class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process
 
 
 class ProcessStepSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[ProcessStep]):
-    """A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
+    """A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:106-110`).
 
     Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
     reunião, e um formulário fora de ordem faz quem preenche pular a pergunta que faltou.
@@ -943,7 +943,7 @@ class ProcessStepSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Pro
 
 
 class EvidenciaSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Evidencia]):
-    """O achado com a forma de onde veio e o rótulo que a metodologia exige (`:81-86`).
+    """O achado com a forma de onde veio e o rótulo que a metodologia exige (`:112-117`).
 
     `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
     corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher

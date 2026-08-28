@@ -227,13 +227,12 @@ export function CommercialPage() {
   </section>;
 }
 
-// Os sete degraus avançam da call gratuita à parceria contínua, e a cor acompanha a escada: os
-// dois primeiros são a porta (claros), os dois do meio provam (intermediários), os três últimos
+// Os seis degraus avançam da call gratuita à parceria contínua, e a cor acompanha a escada: os
+// dois primeiros são a porta (claros), os dois do meio provam (intermediários), os dois últimos
 // são compromisso de produção (escuros). Ler a coluna do pipeline deve dizer, sem legenda, o quão
-// fundo cada negociação está.
+// fundo cada negociação está. Eram sete até a ADR 0053 tirar o `discovery_assessment`.
 const tierBadges: Record<ServiceTier, string> = {
   qualification_call: "state--off",
-  discovery_assessment: "state--0",
   discovery_sprint: "state--0",
   feasibility: "state--1",
   prove: "state--1",

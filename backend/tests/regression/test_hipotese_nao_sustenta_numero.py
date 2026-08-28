@@ -1,6 +1,6 @@
 """Regressão: o custo do estado atual só vira número na proposta quando há **fato** atrás (FDD 039).
 
-`docs/metodologia-fde.md:86` é explícito: todo achado é rotulado e **nunca se apresenta hipótese
+`docs/metodologia-fde.md:117` é explícito: todo achado é rotulado e **nunca se apresenta hipótese
 como fato**. O custo do estado atual é a conta mais persuasiva que sai de um Discovery — e é
 exatamente por isso que ele é o pior lugar para uma suposição: escrito numa proposta que o cliente
 lê, o número volta na reunião seguinte como compromisso da casa, e ninguém consegue mais dizer que

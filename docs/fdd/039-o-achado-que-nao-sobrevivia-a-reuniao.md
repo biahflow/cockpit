@@ -17,19 +17,19 @@ dores, objetivos, stakeholders, restrições" e recebe parágrafos. Aquele texto
 narrativa que se entrega — mas ele não filtra, não agrega, não vira entidade e, principalmente,
 **não distingue o que foi observado do que foi suposto**.
 
-Essa última perda é a que o método trata como grave. `docs/metodologia-fde.md:86` é literal: *"Todo
+Essa última perda é a que o método trata como grave. `docs/metodologia-fde.md:117` é literal: *"Todo
 achado é rotulado FATO / HIPÓTESE / DESCONHECIDO — nunca se apresenta hipótese como fato."* E o
-quality gate de Discovery (`:109`) já pergunta *"Hipóteses identificadas e rotuladas?"* — uma
+quality gate de Discovery (`:140`) já pergunta *"Hipóteses identificadas e rotuladas?"* — uma
 pergunta que, hoje, só se responde "sim" no braço, porque não existe onde rotular.
 
 Há um segundo lugar onde a perda aparece, e ele custa dinheiro. O material traz a fórmula do custo
-do estado atual (`:87-88`) e a proposta por IA já cita nível de produto, blueprint e case com
+do estado atual (`:118-119`) e a proposta por IA já cita nível de produto, blueprint e case com
 número real (FDD 026, FDD 027) — mas nunca **o custo da operação do cliente**, que é o argumento
 mais forte que um Discovery produz. Ele não é citado porque não existe em lugar nenhum: mora na
 cabeça de quem levantou, e na planilha que ninguém abre de novo.
 
 E há uma terceira, que só aparece na segunda venda para a mesma empresa. O mapa AS-IS de um cliente
-não pertence à venda que o descobriu. A metodologia diz isso na regra comercial (`:50-53`,
+não pertence à venda que o descobriu. A metodologia diz isso na regra comercial (`:64-67`,
 Account ≠ Opportunity): a empresa é uma conta, e cada degrau — Discovery Sprint, Feasibility,
 PROVE, Scale — é uma oportunidade própria. Um mapa preso ao projeto obrigaria a redesenhar o AS-IS
 do zero a cada degrau, que é exatamente o defeito que o `DigitalEmployee` tinha antes da FDD 026.
@@ -42,11 +42,11 @@ do zero a cada degrau, que é exatamente o defeito que o `DigitalEmployee` tinha
   reunião veio) e os nove insumos da fórmula do custo. Ele nasce com isso e **nada mais**: sem
   `status`, sem `dono`, sem `nivel`. A entidade existe porque o esquema do material é "para cada
   etapa de um processo" — o processo é exigido pelo próprio esquema, não inventado por este modelo.
-- **`ProcessStep`** — a etapa, com os seis campos do **P-S-D-T-E-R** (`:75-79`), exatamente as
+- **`ProcessStep`** — a etapa, com os seis campos do **P-S-D-T-E-R** (`:106-110`), exatamente as
   seis letras, na ordem em que a pergunta é feita na reunião: pessoas, sistema, dados, tempo, erro,
   retrabalho.
 - **`Evidencia`** — o achado, com a **forma** de onde veio (uma das cinco de `:81-84`) e o
-  **rótulo** (`:86`). Liga ao processo, e opcionalmente à etapa.
+  **rótulo** (`:117`). Liga ao processo, e opcionalmente à etapa.
 
 > **Emenda de 28/08/2026 — os nomes das duas primeiras classes.** A fatia 4 da issue #67 (ADR 0052)
 > renomeou `Processo` para `Process` e `ProcessoEtapa` para `ProcessStep`, e com eles os campos

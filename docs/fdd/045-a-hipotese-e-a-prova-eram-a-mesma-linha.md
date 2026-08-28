@@ -18,7 +18,7 @@ linha só**:
 Enquanto o Discovery cabe numa reunião, isso passa. Depois da segunda, não: a hipótese e o trecho
 que a sustenta são o **mesmo registro**, e quem edita o texto para melhorar a redação do achado
 está editando, sem saber, a prova. Pior: um achado só pode ter uma fonte, quando o material pede
-justamente o contrário — *"nunca só entrevista"* (`docs/metodologia-fde.md:81-84`) só se verifica
+justamente o contrário — *"nunca só entrevista"* (`docs/metodologia-fde.md:112-115`) só se verifica
 quando as fontes são contáveis, e aqui elas não são; são um campo `CharField`.
 
 Há uma segunda perda, e ela aparece na segunda venda para a mesma empresa.

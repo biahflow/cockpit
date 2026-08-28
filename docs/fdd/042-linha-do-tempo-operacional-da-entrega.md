@@ -13,9 +13,10 @@ O que ela não tinha era três coisas que a issue #42 pede, e cada uma é a raz�
 
 - a **jornada canônica** — o vocabulário configurável (`Welcome`, `Launch Session`, …) não é a
   escada FDE;
-- o **histórico** — `ProjectPhase` guarda o estado corrente, não a sequência; e o REDESIGN chega a
-  **apagar** `completed_at`/`gate_decision` da fase que reabre (FDD 033), então a auditoria de por
-  que se voltou não sobrevivia;
+- o **histórico** — `ProjectPhase` guarda o estado corrente, não a sequência; e a saída que
+  reabre (REDESIGN na Feasibility, ITERATE no PROVE desde a ADR 0053) chega a **apagar**
+  `completed_at`/`gate_decision` da fase que volta (FDD 033), então a auditoria de por que se
+  voltou não sobrevivia;
 - **quem está esperando** — não dava para ler, sem abrir a nota crua, que a fase parou aguardando o
   cliente, a engenharia ou uma decisão humana.
 
@@ -31,7 +32,7 @@ situação, próximo gate e classificação de bloqueio saem de campos explícit
 - **Histórico append-only.** `PhaseEvent` — uma linha por transição/decisão/bloqueio, com carimbo,
   autor e proveniência (`user`/`system`), **nunca editada nem apagada**. Emitida só por `journey.py`
   (materialização, avanço, gate, espera). É a cópia que sobrevive ao que o estado corrente descarta:
-  o gate é registrado *antes* de o REDESIGN apagá-lo.
+  o gate é registrado *antes* de o REDESIGN/ITERATE apagá-lo.
 
 - **Parte aguardada e situação.** `ProjectPhase.waiting_party` (`biahflow`/`client`/`engineering`/
   `external`/`human_gate`) + `blocker_note`, escritos só pela action `set-waiting` (como o
@@ -50,8 +51,8 @@ próximo gate e o histórico), e o widget "Jornada de entrega" no dashboard.
 
 1. **Todo projeto ativo expõe sua fase canônica corrente.** O `timeline`/`timeline-overview`
    devolve `canonical_stage` da fase ativa — e degrada com o nome da fase quando o admin não mapeou.
-2. **A mudança de fase é auditável.** Toda transição vira `PhaseEvent`; o histórico do REDESIGN
-   sobrevive mesmo com o `gate_decision` apagado do estado corrente.
+2. **A mudança de fase é auditável.** Toda transição vira `PhaseEvent`; o histórico da saída que
+   reabre sobrevive mesmo com o `gate_decision` apagado do estado corrente.
 3. **Feasibility é opcional e explícita.** É membro do enum canônico; a jornada que não a percorre
    não tem fase nela, sem que isso quebre nada.
 4. **O próximo gate/marco é visível.** `next_gate` é a próxima fase (na ordem) que exige gate e ainda
@@ -141,3 +142,11 @@ válidas, e `RenameField` renomeia a coluna sem mover linha nem pk.
 `PhaseEventSerializer` passa a expor as **duas** chaves com o mesmo valor — `gate_decision`, a
 canônica, e `gate_outcome`, alias de leitura que só morre na `/api/v2/`. A linha do tempo da tela
 lê a canônica. Ver a emenda de mesma data na FDD 033.
+
+## Emenda (28/08/2026) — a `situation` colapsa por efeito, não por valor
+
+A **ADR 0053** deu ao gate de PROVE seu próprio vocabulário (`SCALE` · `ITERATE` · `STOP`), e as
+sete situações desta FDD **não mudam**: `ProjectPhase.situation` passa a mapear por *efeito*, que é
+o que ela sempre descreveu. `STOP` devolve `cancelled`, como o `NO-GO`; `ITERATE` deixa a fase
+trancada como `replanned`, como o `REDESIGN`. Onde este texto diz "REDESIGN" ao explicar a
+reabertura, leia "a saída que reabre" — são duas, e fazem a mesma coisa.

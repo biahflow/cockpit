@@ -73,14 +73,14 @@ def test_feasibility_sets_the_target_before_running_the_sample():
 
 
 @pytest.mark.django_db
-def test_discovery_assessment_gets_two_milestones():
-    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT))
+def test_discovery_sprint_fecha_em_executive_readout():
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT))
 
     milestones, _ = kickoff.seed_work_items(project)
 
-    assert milestones == 2
+    assert milestones == 3
     titles = list(Milestone.objects.filter(project=project).values_list("title", flat=True))
-    assert "Assessment e recomendações" in titles
+    assert "Executive Readout" in titles
 
 
 @pytest.mark.django_db

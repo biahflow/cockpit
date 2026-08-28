@@ -150,6 +150,23 @@ class StateConflict(APIException):
     status_code = status.HTTP_409_CONFLICT
 
 
+class InvalidInput(APIException):
+    """Recusado porque o **pedido** está malfeito, não porque o estado impede.
+
+    400, e é a contrapartida exata do `StateConflict` logo acima: lá o corpo está certo e o
+    estado é que muda para o pedido passar; aqui é o corpo que muda. Devolver 409 para um valor
+    inválido mandaria quem lê procurar num estado que está perfeitamente bom.
+
+    Nasceu com a ADR 0053, quando a validação do decision gate desceu da view para `journey.py`:
+    o vocabulário aceito depende da **fase ativa**, que só `journey.apply_gate` conhece, e a
+    invariante pertence ao domínio pelo mesmo motivo que `Opportunity.clean()`/`Project.clean()`
+    — shell, admin e migração não passam por rota. Mora aqui, e não em `journey.py`, pela razão
+    do módulo: este é o único que não importa nada do domínio.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+
+
 def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
     """Handler do DRF com `ProtectedError` traduzido para **409** (FDD 025).
 

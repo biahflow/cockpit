@@ -75,10 +75,10 @@ test("cria um serviço já no nível escolhido", async () => {
   render(<ServicesPage />);
   await screen.findByDisplayValue("Consultoria");
   await user.type(screen.getByLabelText("Novo serviço"), "Assessment");
-  await user.selectOptions(screen.getByLabelText("Degrau"), "discovery_assessment");
+  await user.selectOptions(screen.getByLabelText("Degrau"), "discovery_sprint");
   await user.click(screen.getByRole("button", { name: "Adicionar serviço" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/services/", expect.objectContaining({
-    method: "POST", body: expect.stringContaining('"tier":"discovery_assessment"'),
+    method: "POST", body: expect.stringContaining('"tier":"discovery_sprint"'),
   })));
 });

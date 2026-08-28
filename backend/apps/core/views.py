@@ -403,7 +403,7 @@ def decisoes_do_texto(text: str) -> list[dict]:
 
 
 #: Os seis campos da etapa, na ordem das seis letras do P-S-D-T-E-R
-#: (`docs/metodologia-fde.md:75-79`). Tupla e não literal repetido no parser e no prompt: a ordem
+#: (`docs/metodologia-fde.md:106-110`). Tupla e não literal repetido no parser e no prompt: a ordem
 #: **é** a pergunta feita na reunião, e uma sétima chave inventada aqui deixaria de casar com o
 #: formulário da tela.
 _ETAPA_PSDTER: tuple[str, ...] = ("pessoas", "sistema", "dados", "tempo", "erro", "retrabalho")
@@ -417,7 +417,7 @@ _ETAPA_PSDTER: tuple[str, ...] = ("pessoas", "sistema", "dados", "tempo", "erro"
 #: "o prompt pede" de "o código impõe", que é exatamente a distinção que ela existe para manter.
 #:
 #: Um modelo lendo transcrição produz **o que foi dito**, que é uma das cinco formas de evidência
-#: (`docs/metodologia-fde.md:81-84`) e não prova. Por isso as duas chaves são atribuídas como
+#: (`docs/metodologia-fde.md:112-115`) e não prova. Por isso as duas chaves são atribuídas como
 #: constantes em quem grava, e não pedidas aqui: pedir e sobrescrever depois transformaria a
 #: imposição em sugestão, e quem lesse este texto acharia que o modelo decide.
 _PROMPT_PROCESSOS = (
@@ -1318,9 +1318,18 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         request=inline_serializer(
             "ApplyGate",
             {
-                "decision": serializers.ChoiceField(choices=ProjectPhase.GateDecision.choices),
+                "decision": serializers.ChoiceField(
+                    choices=ProjectPhase.DECISOES_DO_GATE,
+                    help_text=(
+                        "As sete saídas dos dois vocabulários (ADR 0053). O esquema aceita todas "
+                        "porque não sabe de qual fase se trata; **quem estreita é o servidor**, "
+                        "pelo `canonical_stage` da fase ativa — `prove` aceita SCALE / ITERATE / "
+                        "STOP, e qualquer outra fase de gate aceita GO / CONDITIONAL GO / "
+                        "REDESIGN / NO-GO. Fora do vocabulário da fase é 400."
+                    ),
+                ),
                 "outcome": serializers.ChoiceField(
-                    choices=ProjectPhase.GateDecision.choices,
+                    choices=ProjectPhase.DECISOES_DO_GATE,
                     required=False,
                     help_text=(
                         "Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na "
@@ -1334,10 +1343,14 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
     )
     @action(detail=True, methods=["post"], url_path="apply-gate")
     def apply_gate(self, request: Request, pk: str | None = None) -> Response:
-        """Registra o decision gate de quatro saídas na fase ativa (delivery/admin, FDD 033).
+        """Registra o decision gate na fase ativa (delivery/admin, FDD 033, ADR 0053).
 
-        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as quatro saídas mexem em
-        até duas fases, e a tela precisa da lista atualizada, não do que mudou.
+        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as saídas mexem em até
+        duas fases, e a tela precisa da lista atualizada, não do que mudou.
+
+        **Não valida a decisão aqui.** Qual vocabulário vale depende da fase ativa, que só
+        `journey.apply_gate` resolve — e a invariante pertence ao domínio, não à rota (ADR 0053).
+        De lá vêm o 400 do valor fora do vocabulário e o 409 do estado que impede.
         """
         project = self.get_object()
         # `decision` é a chave canônica (D7, ADR 0052); `outcome` continua aceita como alias da
@@ -1345,11 +1358,6 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         # confusão do chamador, e resolver pela nova é o que não trava quem já migrou.
         bruto = request.data.get("decision") or request.data.get("outcome", "")
         decision = str(bruto).strip()
-        if decision not in ProjectPhase.GateDecision.values:
-            return Response(
-                {"detail": "Informe uma das quatro saídas: go, conditional_go, redesign, no_go."},
-                status=400,
-            )
         notes = str(request.data.get("notes", "") or "")
         journey.apply_gate(project, decision, notes, actor=request.user)
         return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
@@ -2487,7 +2495,7 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
         **A primeira é o que o modelo não decide.** Todo achado nasce rotulado como hipótese e com
         a origem "entrevista", sempre, atribuídos aqui como constantes — o `_PROMPT_PROCESSOS` não
         pergunta, e o `processos_do_texto` não lê. Um modelo lendo transcrição produz *o que foi
-        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:81-84`), não
+        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:112-115`), não
         prova; promover a fato é ato de gente, pela mesma razão que a ADR 0032 recusou à IA gravar
         satisfação.
 

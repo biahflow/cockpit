@@ -9,7 +9,7 @@ import { mensagemDeFalha } from "../erros";
 import type { Evidencia, EvidenciaForma, EvidenciaRotulo, Process, ProcessStep } from "../types";
 
 /**
- * As seis letras do P-S-D-T-E-R (`docs/metodologia-fde.md:75-79`), **rotuladas pela pergunta**.
+ * As seis letras do P-S-D-T-E-R (`docs/metodologia-fde.md:106-110`), **rotuladas pela pergunta**.
  *
  * O rótulo é a pergunta e não o nome do campo porque é assim que ela é feita na reunião: "quem
  * faz?", "onde faz?". Um formulário que dissesse só "Sistema" faria quem preenche escrever o nome
@@ -69,7 +69,7 @@ const blankEtapa: { name: string } & CamposPsdter = {
  * que já abre em "Hipótese" reintroduz na tela exatamente o default que a ADR recusou no modelo: a
  * casa escolhendo por quem não escolheu, sempre para o mesmo lado. E o lado errado é caro — é o que
  * faz suposição virar fato, que é a única coisa que a metodologia proíbe nominalmente
- * (`docs/metodologia-fde.md:86`). Escolher "desconhecido" é um ato; recebê-lo por omissão não diz
+ * (`docs/metodologia-fde.md:117`). Escolher "desconhecido" é um ato; recebê-lo por omissão não diz
  * nada sobre o achado.
  */
 const blankEvidencia: {
@@ -81,7 +81,7 @@ const blankEvidencia: {
 const rotuloLabels: Record<EvidenciaRotulo, string> = {
   fato: "Fato", hipotese: "Hipótese", desconhecido: "Desconhecido",
 };
-// As cinco formas, com o exemplo junto (`docs/metodologia-fde.md:81-84`). O parêntese não é
+// As cinco formas, com o exemplo junto (`docs/metodologia-fde.md:112-115`). O parêntese não é
 // decoração: "nunca só entrevista" é a regra, e ela só se cumpre se quem registra enxergar as
 // outras quatro como opções concretas em vez de sinônimos abstratos de "fonte".
 const formaLabels: Record<EvidenciaForma, string> = {

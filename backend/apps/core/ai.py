@@ -267,7 +267,7 @@ def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
     3. **O número do custo só entra quando há evidência rotulada como fato por trás dele**
        (`process.custo_do_estado_atual` responde isso em `sustentacao`). Levar para uma proposta
        que o cliente lê um custo apoiado só em hipótese é literalmente o que
-       `docs/metodologia-fde.md:86` proíbe: apresentar hipótese como fato. E o dano não é o número
+       `docs/metodologia-fde.md:117` proíbe: apresentar hipótese como fato. E o dano não é o número
        errado — é que ele volta na reunião seguinte como compromisso da casa.
     4. **A lacuna é dita, não silenciada.** Omitir o processo não sustentado deixaria o modelo
        diante de um buraco, e diante de um buraco o modelo preenche — foi o defeito que a rodada 5

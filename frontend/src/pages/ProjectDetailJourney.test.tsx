@@ -119,6 +119,39 @@ test("REDESIGN e NO-GO pedem confirmação antes de registrar", async () => {
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/apply-gate/", expect.objectContaining({ body: expect.stringContaining("no_go") })));
 });
 
+test("o gate do PROVE oferece três saídas, e não as quatro da Feasibility", async () => {
+  // ADR 0053: o vocabulário sai do `canonical_stage` da fase ativa. Sem isto, a equipe lê no
+  // cronograma do kickoff "Registrar a decisão SCALE / ITERATE / STOP" e encontra outros botões.
+  const user = userEvent.setup();
+  const NO_PROVE = [GATED[0], { ...GATED[1], canonical_stage: "prove" }, GATED[2]];
+  mocks.api.mockImplementation((path: string) => {
+    if (path.includes("/risk/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 0, level: "baixo", signals: [] });
+    if (path.includes("/health/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 90, level: "saudável", signals: [] });
+    if (path.includes("/apply-gate/") || path.includes("/advance-phase/")) return Promise.resolve(NO_PROVE);
+    if (path.startsWith("/project-phases")) return Promise.resolve(NO_PROVE);
+    if (path.startsWith("/projects/")) return Promise.resolve({ id: 1, name: "Projeto X", description: "", client: 1, owner: 1, start_date: "2026-08-01", due_date: "2026-09-01", status: "active", service: null, actual_value: "0", cost: "0", is_overdue: false });
+    return Promise.resolve([]);
+  });
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Decision gate");
+
+  expect(screen.getByRole("button", { name: "SCALE" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "ITERATE" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "STOP" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "GO" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "CONDITIONAL GO" })).not.toBeInTheDocument();
+  // A copy de apoio acompanha o vocabulário, e não fala de REDESIGN numa fase que não o aceita.
+  expect(screen.getByText(/ITERATE reabre a fase anterior; STOP para a jornada aqui/)).toBeInTheDocument();
+
+  // SCALE avança como o GO: sem confirmação. ITERATE e STOP mexem no que já estava fechado.
+  await user.click(screen.getByRole("button", { name: "SCALE" }));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/apply-gate/", expect.objectContaining({ body: expect.stringContaining("\"decision\":\"scale\"") })));
+
+  await user.click(screen.getByRole("button", { name: "ITERATE" }));
+  await user.click(screen.getByRole("button", { name: "Registrar ITERATE" }));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/apply-gate/", expect.objectContaining({ body: expect.stringContaining("iterate") })));
+});
+
 test("mostra o selo do gate na fase que já decidiu, e a recusa 409 do avanço", async () => {
   const user = userEvent.setup();
   mockGated(path => path.includes("/advance-phase/")
