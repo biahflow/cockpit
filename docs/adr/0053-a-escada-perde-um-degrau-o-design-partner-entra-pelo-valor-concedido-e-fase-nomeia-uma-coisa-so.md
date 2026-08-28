@@ -46,10 +46,24 @@ founding client; com o Design Partner cobrindo a entrada (abaixo), não sobrou t
 fazer, e um degrau que ninguém vende é coluna de funil que nunca enche — o mesmo argumento com que
 a ADR 0048 recusou o PRIORITIZE.
 
-A migração é **guardada**: se existir qualquer `Service`, `CommercialOpportunity` ou `Project`
-apontando para a chave, ela falha alto em vez de apagar vínculo. Remover valor de enum é mudança
-de contrato em `/api/v1/`, a segunda em duas semanas depois da 0048 — deliberada, e registrada
-aqui.
+A migração é **guardada**, e a guarda distingue duas coisas que a primeira redação desta ADR
+confundia. A `0020` semeia `discovery_assessment` em **todo** `migrate`, então "abortar diante de
+qualquer linha" abortaria em 100% das instalações — inclusive num clone novo e na CI — e a
+migração nunca rodaria. O critério é:
+
+- **Vínculo** — existe `CommercialOpportunity` ou `Project` apontando para o serviço: **aborta**,
+  com a contagem na mensagem. Vínculo é história, e história não se apaga por migração.
+- **Edição de gente** — o `Service` existe mas nome, preço ou resumo já não são os semeados pela
+  `0050`: **aborta**. Quem editou o catálogo pela tela decidiu alguma coisa, e migração que
+  sobrescreve decisão de gente é migração em que ninguém confia — é o mesmo cuidado da `0020` e da
+  `0050`.
+- **Linha semeada e intocada, sem vínculo**: some.
+
+Remover valor de enum é mudança de contrato em `/api/v1/`, a segunda em duas semanas depois da
+0048 — deliberada, e registrada aqui. E a chave tem **consumidores vivos** que saem junto:
+`kickoff.KICKOFF_TEMPLATES`, `invoices.INVOICE_SCHEDULES`, `backend/apps/core/tests/test_invoices.py`
+(que faz `Service.objects.get(tier=...)` e quebra quando a linha some), `frontend/src/pages/ServicesPage.tsx`,
+`frontend/src/pages/CommercialPage.tsx` e `frontend/e2e/matrix.ts`.
 
 A escada passa a ter seis chaves: `qualification_call`, `discovery_sprint`, `feasibility`, `prove`,
 `scale`, `transformation`.
@@ -96,6 +110,14 @@ Decide-se a favor do código:
 São perguntas diferentes e merecem saídas diferentes. `docs/metodologia-fde.md` é corrigido nesta
 ADR.
 
+**Isto é mudança de enum, não alinhamento ao que o código já faz.** A primeira redação desta ADR
+dizia "decide-se a favor do código", e o código não desempata: o *seed* da `0050` anuncia
+SCALE/ITERATE/STOP no resumo do degrau, mas `ProjectPhase.GateOutcome` tem exatamente as quatro
+saídas de Feasibility e é o único vocabulário que existe no modelo — `JourneyPhase.requires_gate`
+é booleano e não diz de qual gate se trata. O comportamento hoje oferece GO/CONDITIONAL GO/REDESIGN/
+NO-GO também no gate do PROVE. Implementar esta decisão exige distinguir os dois gates no modelo,
+com migração; corrigir docstring e semente não basta.
+
 ### "Implementation Project" deixa de existir
 
 Era o mesmo objeto que Scale com outro nome, e mantê-lo como atalho significaria vender construção
@@ -117,10 +139,14 @@ entrada onde ainda não há case. O acordo fixa **escopo, não calendário**:
   comprometidas do time do cliente, e case + depoimento + referência por escrito. Descumprimento
   encerra o acordo.
 
-**No funil, o gratuito aparece como oportunidade real.** Cada degrau concedido vira
-`CommercialOpportunity` normal, com `estimated_value` no preço de tabela e o subsídio registrado
-como desconto — a mesma regra que a ADR 0048 já escolheu para o founding client. Valor concedido é
-número que se olha; oportunidade com valor zero é número que some.
+**O mandato é marcado no Engagement; o valor concedido, na oportunidade.** `Engagement.commercial_model`
+já existe com `paid`/`design_partner` (ADR 0050, FDD 046, migração `0059`) — a primeira redação
+desta ADR dizia que o campo talvez precisasse ser proposto, e ele já estava em `main`. As duas
+coisas são complementares e nenhuma substitui a outra: **`commercial_model = design_partner` diz
+que aquele mandato é de parceria**, e cada degrau concedido vira `CommercialOpportunity` normal,
+com `estimated_value` no preço de tabela e o subsídio registrado como desconto — a mesma regra que
+a ADR 0048 já escolheu para o founding client —, e é isso que torna visível **quanto** foi
+concedido. Valor concedido é número que se olha; oportunidade com valor zero é número que some.
 
 ### O conjunto mínimo por vertical
 
@@ -151,6 +177,13 @@ fonte da verdade do método.
   externo conhecido, e o portal do cliente não lê `tier`.
 - **`docs/metodologia-fde.md` muda** na seção de decision gate e ganha o gatilho objetivo da
   Feasibility, o Design Partner e a distinção fase/passo.
+- **O preço semeado do Discovery Sprint está em `0,00`, não em R$ 3.000.** A `0020` semeou
+  `discovery_express` em zero e a `0050` renomeou a chave sem tocar no preço; `feasibility` já
+  está em `5.000,00`, como esta ADR afirma. Corrigir o seed do `discovery_sprint` com o mesmo
+  cuidado de não sobrescrever edição feita pela tela.
+- **`docs/ontology/language-map.md` continua listando A1 e A2 como pendências abertas.** O arquivo
+  é espelho fiel da página do Notion e não se edita aqui: a resolução de A1, A3, A4 e A5 foi
+  escrita na página, e chega ao repositório como re-sincronização do espelho, não como edição.
 - **O Design Partner custa caro e isso está declarado, não mitigado.** Discovery (31h) +
   Feasibility (32h) + PROVE (65h) ≈ 128h por parceiro. Três por vertical, com as três verticais
   correndo em paralelo e sem teto por fase, é da ordem de mil horas concedidas antes da primeira
@@ -175,3 +208,23 @@ fonte da verdade do método.
   prendê-la ao go-live do PROVE.
 - **Notion como fonte do método, repositório como fonte do código.** Mais confortável para quem lê
   método fora do git, e é exatamente a divergência que produziu as quatro contradições acima.
+
+## Emenda de 28/08 — o que a revisão contra o código corrigiu
+
+Esta ADR foi escrita a partir da leitura dos documentos e revisada, no mesmo dia, contra o código.
+A revisão encontrou cinco afirmações erradas, corrigidas acima e registradas aqui para que a
+correção não se perca:
+
+1. **A guarda da migração, como estava especificada, nunca rodaria** — a `0020` semeia a chave em
+   toda instalação. O critério passou a distinguir linha semeada intocada de linha com vínculo ou
+   editada.
+2. **`Engagement.commercial_model` já existe** desde a ADR 0050. A ADR dizia que talvez precisasse
+   ser proposto.
+3. **O vocabulário do gate do PROVE não é expressável no modelo hoje** — `ProjectPhase.GateOutcome`
+   só tem as quatro saídas de Feasibility. A decisão é mudança de enum, não alinhamento.
+4. **`discovery_assessment` tem seis consumidores vivos** que a ADR não listava.
+5. **O preço semeado do `discovery_sprint` é `0,00`**, não R$ 3.000.
+
+O que isso mostra sobre o método: uma ADR escrita a partir de documentos descreve o que a casa
+*acredita* que faz. Só a leitura do código diz o que ela faz. As duas leituras precisam acontecer
+antes da implementação — foi a segunda que impediu uma migração que abortaria em todos os bancos.
