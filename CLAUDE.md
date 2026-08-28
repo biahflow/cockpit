@@ -216,6 +216,16 @@ do cliente reprovou 19 telas de uma vez ao chegar aqui.
 - Read `PRD.md`, the relevant FDD (`docs/fdd/`), and ADRs (`docs/adr/`) before changing
   behavior. Relevant features update their FDD; a durable technical decision needs an
   ADR; a cross-cutting or breaking change needs an RFC (`docs/rfcs/`).
+- **Read [`docs/ontology/language-map.md`](docs/ontology/language-map.md) before naming anything
+  new** — model, field, route, component, prop. It is normative: one concept, one name, four
+  surfaces. §5 lists the banned terms and §6 the invariants; the aliases still alive and the phase
+  each one dies in are in [`docs/ontology/aliases.md`](docs/ontology/aliases.md). The rule is
+  enforced, not just written: `backend/tests/test_vocabulario.py` (ADR 0049) fails on a **new**
+  declaration outside the canonical vocabulary, and the legacy debt it tolerates is listed line by
+  line in `docs/ontology/legacy-allowlist.txt` — a file that only shrinks. Precedence: the Notion
+  page wins on **meaning**, this mirror wins on the **label inside the repo**, and `CLAUDE.md` /
+  `AGENTS.md` may point at it but never weaken it. The mirror is a faithful copy and is not edited
+  here.
 - **Preserve the `/api/v1/` contract.** Any breaking change must be deliberate and
   documented. `backend/openapi.yaml` and drf-spectacular (`/api/docs/`) describe it.
 - Fix defects test-first: add a regression test in `backend/tests/regression/` (or the
