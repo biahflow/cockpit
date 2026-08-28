@@ -14,7 +14,7 @@ vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 function atividade(overrides: Record<string, unknown> = {}) {
   return {
-    id: 9, client: 1, opportunity: null, invoice: null, cobranca_sinal: "", cobranca_sinal_display: "",
+    id: 9, client: 1, commercial_opportunity: null, opportunity: null, invoice: null, cobranca_sinal: "", cobranca_sinal_display: "",
     kind: "call", kind_display: "Ligação", happened_on: "2026-08-10", summary: "Alinhamento de escopo",
     notes: "Cliente confirmou prazo.", owner: 1,
     created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",

@@ -2,17 +2,18 @@
 
 **Ela casa declaração, e não referência — essa é a decisão inteira.** A tentação, ao ler "nenhum
 identificador novo contém `opportunity` sem qualificador", é escrever um `grep opportunity` e
-reprovar a linha. Isso reprovaria 460 ocorrências de código legítimo: um `self.opportunity`, um
-`opportunity_id` de filtro, um `from .models import Opportunity` são *usos* do modelo que existe
-hoje, e o modelo ainda existe sob o nome antigo enquanto a fatia da issue #67 que o renomeia não
+reprovar a linha. Isso reprovaria centenas de ocorrências de código legítimo: um `self.client`,
+um `client_id` de filtro, um `from .models import Client` são *usos* do modelo que existe hoje,
+e o modelo ainda existe sob o nome antigo enquanto a fatia da issue #67 que o renomeia não
 chegou. Uma guarda que reprova o que o repositório precisa fazer para funcionar é desligada na
 primeira semana, e aí não protege nada.
 
 "Renome físico" era um termo que significava duas coisas, e a **ADR 0052** o desfez em três, com
 prazos distintos: o nome da **classe** é a issue #67 (uma fatia por PR), o nome da **tabela** é a
-Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. A primeira fatia já passou —
-`GateOutcome` virou `GateDecision` e o campo virou `gate_decision`, restando na allowlist só a
-chave de payload que a v1 promete.
+Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. Duas fatias já passaram —
+`GateOutcome` virou `GateDecision` com o campo `gate_decision`, e `Opportunity` virou
+`CommercialOpportunity` com os cinco campos `commercial_opportunity` —, restando na allowlist a
+rota, a chave de payload que a v1 promete e o `ai_opportunity`, que nunca foi venda.
 
 O que a invariante §6 proíbe é **batizar** coisa nova com o nome errado. Batizar tem forma
 sintática: `class X`, `campo = models.…`, `router.register(...)`, `path(...)`, `type X`,
@@ -338,7 +339,7 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # onze delas abaixa a contagem daquela linha sem mexer neste teto. **Este número só desce.**
 # Baixá-lo é o trabalho das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada
 # linha aqui é um nome que o repositório ainda diz errado.
-TETO_DA_ALLOWLIST = 48
+TETO_DA_ALLOWLIST = 43
 
 
 def test_nenhum_termo_banido_novo() -> None:

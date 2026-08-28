@@ -5389,14 +5389,14 @@ paths:
       description: |-
         Registra a **qualificação** do lead e resolve a conta — e não cria mais venda (ADR 0049).
 
-        Até aqui esta ação criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
-        gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
+        Até aqui esta ação criava, num ato só, um `Client` **e** uma `CommercialOpportunity` no
+        degrau gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
         somava no pipeline e podia virar `Project`. A sequência normativa é
         `Lead → Qualification → (qualified) → CommercialOpportunity`, e o passo comercial passou a
         ter porta própria: `POST /qualifications/{id}/open-opportunity/`.
 
-        Some daqui, junto com a `Opportunity`, a busca por `PipelineStage` aberto e pelo `Service`
-        de entrada — e os dois 400 que elas produziam. Qualificar um lead não depende mais de o
+        Some daqui, junto com a `CommercialOpportunity`, a busca por `PipelineStage` aberto e
+        pelo `Service` de entrada — e os dois 400 que elas produziam. Qualificar um lead não depende mais de o
         pipeline estar configurado.
       parameters:
       - in: path
@@ -6167,7 +6167,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Opportunity'
+                  $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
     post:
       operationId: v1_opportunities_create
@@ -6177,13 +6177,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
         required: true
       security:
       - cookieAuth: []
@@ -6192,7 +6192,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
   /api/v1/opportunities/{id}/:
     get:
@@ -6202,7 +6202,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6213,7 +6213,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
     put:
       operationId: v1_opportunities_update
@@ -6222,7 +6222,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6230,13 +6230,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
         required: true
       security:
       - cookieAuth: []
@@ -6245,7 +6245,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
     patch:
       operationId: v1_opportunities_partial_update
@@ -6254,7 +6254,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6262,13 +6262,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedOpportunity'
+              $ref: '#/components/schemas/PatchedCommercialOpportunity'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedOpportunity'
+              $ref: '#/components/schemas/PatchedCommercialOpportunity'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedOpportunity'
+              $ref: '#/components/schemas/PatchedCommercialOpportunity'
       security:
       - cookieAuth: []
       responses:
@@ -6276,7 +6276,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
     delete:
       operationId: v1_opportunities_destroy
@@ -6285,7 +6285,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6302,7 +6302,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6310,13 +6310,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
         required: true
       security:
       - cookieAuth: []
@@ -6325,7 +6325,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
   /api/v1/opportunities/{id}/convert-to-project/:
     post:
@@ -6333,8 +6333,9 @@ paths:
       description: |-
         Converte a oportunidade ganha num projeto — **uma vez**, e a garantia mudou de lugar.
 
-        Até a ADR 0050 quem garantia "converte uma vez só" era o banco: `Project.opportunity` era
-        `OneToOneField`, e a segunda conversão morria num `IntegrityError` que virava 409. Essa
+        Até a ADR 0050 quem garantia "converte uma vez só" era o banco: o campo hoje chamado
+        `Project.originating_commercial_opportunity` era `OneToOneField`, e a segunda conversão
+        morria num `IntegrityError` que virava 409. Essa
         cardinalidade caiu porque ela também impedia o que a casa passou a vender — uma
         Transformation Partnership origina vários projetos ao longo do mandato.
 
@@ -6354,7 +6355,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6362,13 +6363,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
         required: true
       security:
       - cookieAuth: []
@@ -6377,7 +6378,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
   /api/v1/opportunities/{id}/proposal/:
     post:
@@ -6387,7 +6388,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6395,13 +6396,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
         required: true
       security:
       - cookieAuth: []
@@ -6410,7 +6411,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
   /api/v1/opportunities/{id}/summary/:
     post:
@@ -6420,7 +6421,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -6428,13 +6429,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Opportunity'
+              $ref: '#/components/schemas/CommercialOpportunity'
         required: true
       security:
       - cookieAuth: []
@@ -6443,7 +6444,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
   /api/v1/opportunities/{id}/unarchive/:
     post:
@@ -6454,7 +6455,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este opportunity.
+        description: Um valor inteiro único que identifica este commercial opportunity.
         required: true
       tags:
       - v1
@@ -9134,7 +9135,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Opportunity'
+                $ref: '#/components/schemas/CommercialOpportunity'
           description: ''
   /api/v1/qualifications/{id}/unarchive/:
     post:
@@ -10274,9 +10275,12 @@ components:
           readOnly: true
         client:
           type: integer
-        opportunity:
+        commercial_opportunity:
           type: integer
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         invoice:
           type: integer
           nullable: true
@@ -10321,6 +10325,7 @@ components:
       - id
       - kind
       - kind_display
+      - opportunity
       - owner
       - summary
       - updated_at
@@ -10463,9 +10468,12 @@ components:
           maxLength: 255
         content:
           type: string
-        opportunity:
+        commercial_opportunity:
           type: integer
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         project:
           type: integer
           nullable: true
@@ -10509,6 +10517,7 @@ components:
       - id
       - kind
       - kind_display
+      - opportunity
       - sent_at
       - source_meeting
       - status_display
@@ -11160,6 +11169,81 @@ components:
       description: |-
         * `design_partner` - Design partner
         * `paid` - Pago
+    CommercialOpportunity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        contact:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 255
+        scope:
+          type: string
+        estimated_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        stage:
+          type: integer
+        stage_name:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+        expected_close_date:
+          type: string
+          format: date
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+        service_tier:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          nullable: true
+          readOnly: true
+        project_archived:
+          type: boolean
+          readOnly: true
+        origin_qualification:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - client
+      - created_at
+      - estimated_value
+      - expected_close_date
+      - id
+      - origin_qualification
+      - owner
+      - project
+      - project_archived
+      - service_name
+      - service_tier
+      - stage
+      - stage_name
+      - title
+      - updated_at
     ConfigFlag:
       type: object
       properties:
@@ -11643,9 +11727,12 @@ components:
         client:
           type: integer
           nullable: true
-        opportunity:
+        commercial_opportunity:
           type: integer
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         project:
           type: integer
           nullable: true
@@ -11675,6 +11762,7 @@ components:
       - created_at
       - drive_link
       - id
+      - opportunity
       - original_name
       - signature_requests
       - uploaded_by
@@ -12780,10 +12868,13 @@ components:
           type: integer
           readOnly: true
           nullable: true
-        opportunity:
+        commercial_opportunity:
           type: integer
           readOnly: true
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         qualification:
           type: integer
           nullable: true
@@ -12805,6 +12896,7 @@ components:
       - ai_score
       - ai_summary
       - client
+      - commercial_opportunity
       - created_at
       - email
       - enrichment
@@ -13167,81 +13259,6 @@ components:
         contact:
           type: integer
           nullable: true
-    Opportunity:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        client:
-          type: integer
-        contact:
-          type: integer
-          nullable: true
-        title:
-          type: string
-          maxLength: 255
-        scope:
-          type: string
-        estimated_value:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
-        stage:
-          type: integer
-        stage_name:
-          type: string
-          readOnly: true
-        owner:
-          type: integer
-          readOnly: true
-        expected_close_date:
-          type: string
-          format: date
-        service:
-          type: integer
-          nullable: true
-        service_name:
-          type: string
-          readOnly: true
-        service_tier:
-          type: string
-          readOnly: true
-        project:
-          type: integer
-          nullable: true
-          readOnly: true
-        project_archived:
-          type: boolean
-          readOnly: true
-        origin_qualification:
-          type: integer
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - client
-      - created_at
-      - estimated_value
-      - expected_close_date
-      - id
-      - origin_qualification
-      - owner
-      - project
-      - project_archived
-      - service_name
-      - service_tier
-      - stage
-      - stage_name
-      - title
-      - updated_at
     PartyEnum:
       enum:
       - provider
@@ -13258,9 +13275,12 @@ components:
           readOnly: true
         client:
           type: integer
-        opportunity:
+        commercial_opportunity:
           type: integer
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         invoice:
           type: integer
           nullable: true
@@ -13317,9 +13337,12 @@ components:
           maxLength: 255
         content:
           type: string
-        opportunity:
+        commercial_opportunity:
           type: integer
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         project:
           type: integer
           nullable: true
@@ -13549,6 +13572,65 @@ components:
         is_active:
           type: boolean
           readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedCommercialOpportunity:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        client:
+          type: integer
+        contact:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 255
+        scope:
+          type: string
+        estimated_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        stage:
+          type: integer
+        stage_name:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+        expected_close_date:
+          type: string
+          format: date
+        service:
+          type: integer
+          nullable: true
+        service_name:
+          type: string
+          readOnly: true
+        service_tier:
+          type: string
+          readOnly: true
+        project:
+          type: integer
+          nullable: true
+          readOnly: true
+        project_archived:
+          type: boolean
+          readOnly: true
+        origin_qualification:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -13845,9 +13927,12 @@ components:
         client:
           type: integer
           nullable: true
-        opportunity:
+        commercial_opportunity:
           type: integer
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         project:
           type: integer
           nullable: true
@@ -14611,10 +14696,13 @@ components:
           type: integer
           readOnly: true
           nullable: true
-        opportunity:
+        commercial_opportunity:
           type: integer
           readOnly: true
           nullable: true
+        opportunity:
+          type: integer
+          readOnly: true
         qualification:
           type: integer
           nullable: true
@@ -14703,65 +14791,6 @@ components:
           type: string
           readOnly: true
           default: ''
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-    PatchedOpportunity:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        client:
-          type: integer
-        contact:
-          type: integer
-          nullable: true
-        title:
-          type: string
-          maxLength: 255
-        scope:
-          type: string
-        estimated_value:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
-        stage:
-          type: integer
-        stage_name:
-          type: string
-          readOnly: true
-        owner:
-          type: integer
-          readOnly: true
-        expected_close_date:
-          type: string
-          format: date
-        service:
-          type: integer
-          nullable: true
-        service_name:
-          type: string
-          readOnly: true
-        service_tier:
-          type: string
-          readOnly: true
-        project:
-          type: integer
-          nullable: true
-          readOnly: true
-        project_archived:
-          type: boolean
-          readOnly: true
-        origin_qualification:
-          type: integer
-          readOnly: true
-          nullable: true
         created_at:
           type: string
           format: date-time

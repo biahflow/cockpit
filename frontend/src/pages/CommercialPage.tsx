@@ -7,7 +7,7 @@ import { AgentPanel } from "../components/AgentPanel";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { ehGratuito, precoADefinir } from "../tiers";
-import type { Activity, ActivityKind, Client, Contact, DocumentEntry, Opportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
+import type { Activity, ActivityKind, Client, Contact, DocumentEntry, CommercialOpportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const blankDraft = { title: "", client: "", estimated_value: "", stage: "", expected_close_date: "", service: "" };
@@ -20,17 +20,17 @@ export function CommercialPage() {
   const [aiBusy, setAiBusy] = useState(false);
   const [artifactsToken, setArtifactsToken] = useState(0);
   const [stages, setStages] = useState<PipelineStage[]>([]);
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [opportunities, setOpportunities] = useState<CommercialOpportunity[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState(blankDraft);
   const [isComposerOpen, setComposerOpen] = useState(false);
-  const [converting, setConverting] = useState<Opportunity | null>(null);
+  const [converting, setConverting] = useState<CommercialOpportunity | null>(null);
   const [created, setCreated] = useState<Project | null>(null);
   const [dates, setDates] = useState({ start_date: "", due_date: "" });
-  const [detail, setDetail] = useState<Opportunity | null>(null);
+  const [detail, setDetail] = useState<CommercialOpportunity | null>(null);
   const [detailError, setDetailError] = useState("");
   const [detailNotice, setDetailNotice] = useState("");
   const [detailDraft, setDetailDraft] = useState({ title: "", scope: "", estimated_value: "", expected_close_date: "", contact: "", stage: "", service: "" });
@@ -38,25 +38,25 @@ export function CommercialPage() {
   const [detailDocs, setDetailDocs] = useState<DocumentEntry[]>([]);
   const [detailActivities, setDetailActivities] = useState<Activity[]>([]);
   const [activityDraft, setActivityDraft] = useState(blankActivity);
-  const [archiving, setArchiving] = useState<Opportunity | null>(null);
+  const [archiving, setArchiving] = useState<CommercialOpportunity | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [archived, setArchived] = useState<Opportunity[]>([]);
+  const [archived, setArchived] = useState<CommercialOpportunity[]>([]);
   const [restoring, setRestoring] = useState<number | null>(null);
   const detailFile = useRef<HTMLInputElement>(null);
-  const load = useCallback(() => Promise.all([api<PipelineStage[]>("/pipeline-stages/"), api<Opportunity[]>("/opportunities/"), api<Client[]>("/clients/"), api<Service[]>("/services/")]).then(([loadedStages, loadedOpportunities, loadedClients, loadedServices]) => { setStages(loadedStages); setOpportunities(loadedOpportunities); setClients(loadedClients); setServices(loadedServices); if (loadedStages[0]) setDraft(current => current.stage ? current : { ...current, stage: String(loadedStages[0].id) }); }).catch((cause: Error) => setError(cause.message)), []);
+  const load = useCallback(() => Promise.all([api<PipelineStage[]>("/pipeline-stages/"), api<CommercialOpportunity[]>("/opportunities/"), api<Client[]>("/clients/"), api<Service[]>("/services/")]).then(([loadedStages, loadedOpportunities, loadedClients, loadedServices]) => { setStages(loadedStages); setOpportunities(loadedOpportunities); setClients(loadedClients); setServices(loadedServices); if (loadedStages[0]) setDraft(current => current.stage ? current : { ...current, stage: String(loadedStages[0].id) }); }).catch((cause: Error) => setError(cause.message)), []);
   useEffect(() => { void load(); }, [load]);
   async function move(event: DragEvent<HTMLElement>, stage: PipelineStage) { event.preventDefault(); const id = Number(event.dataTransfer.getData("opportunity")); if (!id) return; try { await api(`/opportunities/${id}/`, { method: "PATCH", body: JSON.stringify({ stage: stage.id }) }); await load(); } catch (cause) { setError((cause as Error).message); } }
   async function createOpportunity(event: FormEvent<HTMLFormElement>) { event.preventDefault(); try { await api("/opportunities/", { method: "POST", body: JSON.stringify({ ...draft, client: Number(draft.client), stage: Number(draft.stage), service: draft.service ? Number(draft.service) : null }) }); setDraft(current => ({ ...blankDraft, stage: current.stage })); setComposerOpen(false); await load(); } catch (cause) { setError((cause as Error).message); } }
   async function convert(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!converting) return; try { const created = await api<Project>(`/opportunities/${converting.id}/convert-to-project/`, { method: "POST", body: JSON.stringify({ client: converting.client, name: converting.title, ...dates, status: "planning" }) }); setConverting(null); setDates({ start_date: "", due_date: "" }); setCreated(created); await load(); } catch (cause) { setError((cause as Error).message); } }
 
-  async function openDetail(item: Opportunity) {
+  async function openDetail(item: CommercialOpportunity) {
     setDetail(item);
     setDetailError(""); setDetailNotice(""); setNotice("");
     setDetailDraft({ title: item.title, scope: item.scope, estimated_value: item.estimated_value, expected_close_date: item.expected_close_date, contact: item.contact ? String(item.contact) : "", stage: String(item.stage), service: item.service ? String(item.service) : "" });
     setDetailContacts([]); setDetailDocs([]); setDetailActivities([]); setActivityDraft(blankActivity); setAiText("");
     try {
-      const [contacts, docs, activities] = await Promise.all([api<Contact[]>(`/contacts/?client=${item.client}`), api<DocumentEntry[]>(`/documents/?opportunity=${item.id}`), api<Activity[]>(`/activities/?opportunity=${item.id}`)]);
+      const [contacts, docs, activities] = await Promise.all([api<Contact[]>(`/contacts/?client=${item.client}`), api<DocumentEntry[]>(`/documents/?commercial_opportunity=${item.id}`), api<Activity[]>(`/activities/?commercial_opportunity=${item.id}`)]);
       setDetailContacts(contacts); setDetailDocs(docs); setDetailActivities(activities);
     } catch (cause) { setDetailError((cause as Error).message); }
   }
@@ -64,22 +64,22 @@ export function CommercialPage() {
     event.preventDefault(); if (!detail) return;
     setDetailError(""); setDetailNotice("");
     try {
-      await api("/activities/", { method: "POST", body: JSON.stringify({ client: detail.client, opportunity: detail.id, ...activityDraft }) });
+      await api("/activities/", { method: "POST", body: JSON.stringify({ client: detail.client, commercial_opportunity: detail.id, ...activityDraft }) });
       setActivityDraft(blankActivity);
-      setDetailActivities(await api<Activity[]>(`/activities/?opportunity=${detail.id}`));
+      setDetailActivities(await api<Activity[]>(`/activities/?commercial_opportunity=${detail.id}`));
     } catch (cause) { setDetailError((cause as Error).message); }
   }
   async function archiveDetailActivity(activity: Activity) {
     if (!detail) return;
     setDetailError(""); setDetailNotice("");
-    try { await api(`/activities/${activity.id}/`, { method: "DELETE" }); setDetailActivities(await api<Activity[]>(`/activities/?opportunity=${detail.id}`)); }
+    try { await api(`/activities/${activity.id}/`, { method: "DELETE" }); setDetailActivities(await api<Activity[]>(`/activities/?commercial_opportunity=${detail.id}`)); }
     catch (cause) { setDetailError((cause as Error).message); }
   }
   async function saveDetail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!detail) return;
     setDetailError(""); setDetailNotice(""); setNotice("");
     try {
-      await api<Opportunity>(`/opportunities/${detail.id}/`, { method: "PATCH", body: JSON.stringify({ title: detailDraft.title, scope: detailDraft.scope, estimated_value: detailDraft.estimated_value, expected_close_date: detailDraft.expected_close_date, contact: detailDraft.contact ? Number(detailDraft.contact) : null, stage: Number(detailDraft.stage), service: detailDraft.service ? Number(detailDraft.service) : null }) });
+      await api<CommercialOpportunity>(`/opportunities/${detail.id}/`, { method: "PATCH", body: JSON.stringify({ title: detailDraft.title, scope: detailDraft.scope, estimated_value: detailDraft.estimated_value, expected_close_date: detailDraft.expected_close_date, contact: detailDraft.contact ? Number(detailDraft.contact) : null, stage: Number(detailDraft.stage), service: detailDraft.service ? Number(detailDraft.service) : null }) });
       await load();
       setDetail(null);
       setNotice("Oportunidade salva.");
@@ -91,14 +91,14 @@ export function CommercialPage() {
     const file = detailFile.current?.files?.[0];
     if (!file) { setDetailError("Escolha um arquivo para enviar."); return; }
     try {
-      const body = new FormData(); body.append("opportunity", String(detail.id)); body.append("file", file);
+      const body = new FormData(); body.append("commercial_opportunity", String(detail.id)); body.append("file", file);
       await api("/documents/", { method: "POST", body });
       if (detailFile.current) detailFile.current.value = "";
-      setDetailDocs(await api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`));
+      setDetailDocs(await api<DocumentEntry[]>(`/documents/?commercial_opportunity=${detail.id}`));
       setDetailNotice("Documento enviado.");
     } catch (cause) { setDetailError((cause as Error).message); }
   }
-  function startConversion(item: Opportunity) { setDetail(null); setConverting(item); }
+  function startConversion(item: CommercialOpportunity) { setDetail(null); setConverting(item); }
   async function runAi(kind: "summary" | "proposal" | "contract") {
     if (!detail) return; setDetailError(""); setDetailNotice(""); setAiBusy(true); setAiText("");
     try {
@@ -113,17 +113,17 @@ export function CommercialPage() {
     setDetailError(""); setDetailNotice("");
     try {
       const body = new FormData();
-      body.append("opportunity", String(detail.id));
+      body.append("commercial_opportunity", String(detail.id));
       body.append("file", new File([aiText], `resumo-${detail.title}.txt`, { type: "text/plain" }));
       await api("/documents/", { method: "POST", body });
-      setDetailDocs(await api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`));
+      setDetailDocs(await api<DocumentEntry[]>(`/documents/?commercial_opportunity=${detail.id}`));
       setAiText("");
       setDetailNotice("Resumo salvo como documento.");
     } catch (cause) { setDetailError((cause as Error).message); }
   }
   // O kanban não comporta uma coluna de arquivados — o quadro dá lugar a uma lista simples.
   const loadArchived = useCallback(
-    () => api<Opportunity[]>("/opportunities/?archived=1").then(setArchived).catch((cause: Error) => setError(cause.message)),
+    () => api<CommercialOpportunity[]>("/opportunities/?archived=1").then(setArchived).catch((cause: Error) => setError(cause.message)),
     [],
   );
   useEffect(() => { if (showArchived) void loadArchived(); }, [showArchived, loadArchived]);
@@ -145,7 +145,7 @@ export function CommercialPage() {
   }
   const reloadDetailDocs = useCallback(() => {
     if (!detail) return;
-    void api<DocumentEntry[]>(`/documents/?opportunity=${detail.id}`).then(setDetailDocs).catch(() => undefined);
+    void api<DocumentEntry[]>(`/documents/?commercial_opportunity=${detail.id}`).then(setDetailDocs).catch(() => undefined);
   }, [detail]);
 
   const sellableServices = services.filter(service => service.active);

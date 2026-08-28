@@ -96,7 +96,7 @@ dele" — seria ampliação silenciosa de privilégio, porque o mandato agrupa a
 sintoma seria uma lista um pouco maior, não um erro. Há regressão dedicada a isso
 (`tests/regression/test_engagement_nao_amplia_escopo.py`).
 
-**O contrato `/api/v1/` do pipeline.** `OpportunitySerializer.project` e `project_archived`
+**O contrato `/api/v1/` do pipeline.** `CommercialOpportunitySerializer.project` e `project_archived`
 mantêm nome e forma — um id ou nulo, nunca uma lista. Passam a devolver o projeto vivo mais
 antigo, e só na falta de qualquer vivo o arquivado mais antigo. `CommercialPage.tsx` não mudou.
 
@@ -201,7 +201,7 @@ que recebe Discovery sem cobrança em troca de servir de caso e de campo de prov
 dois eram a mesma linha.
 
 **O schema nunca exigiu o caminho Won, então nada foi derrubado.** Não existe FK nem constraint de
-`Engagement` para `CommercialOpportunity` — a direção é a inversa (`Opportunity.engagement`,
+`Engagement` para `CommercialOpportunity` — a direção é a inversa (`CommercialOpportunity.engagement`,
 opcional, `SET_NULL`) —, e o `EngagementSerializer` sempre exigiu só `account`, `name` e `owner`.
 Um mandato de design partner já podia ser criado por `POST /engagements/` sem nenhuma oportunidade
 antes desta emenda, e continua podendo: a emenda acrescenta um rótulo a uma origem que já era

@@ -9,6 +9,7 @@ from typing import Any, cast
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.uploadedfile import UploadedFile
+from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -26,6 +27,7 @@ from .models import (
     Client,
     CobrancaContato,
     CobrancaSuspensao,
+    CommercialOpportunity,
     Contact,
     Decisao,
     DigitalEmployee,
@@ -48,7 +50,6 @@ from .models import (
     Meeting,
     Milestone,
     Notification,
-    Opportunity,
     Pendencia,
     PhaseChecklistItem,
     PhaseDeliverable,
@@ -73,6 +74,69 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _corpo_mutavel(data: Any) -> Any:
+    """Cópia **rasa** do corpo, mutável, preservando a natureza dele.
+
+    `QueryDict.copy()` é `deepcopy` por contrato, e o corpo do `POST /documents/` carrega o
+    arquivo enviado: copiá-lo em profundidade duplicaria 10 MB — e o `deepcopy` de um
+    `TemporaryUploadedFile` nem chega a terminar. Aqui as listas de valores são recriadas e os
+    valores, inclusive o arquivo, são referenciados.
+
+    Continua sendo `QueryDict` quando o corpo é `QueryDict`: o `getlist` é o que faz a DRF tratar
+    a entrada como HTML (`html.is_html_input`), e devolver um `dict` mudaria a leitura de campo
+    vazio e de lista no formulário.
+    """
+    if not hasattr(data, "getlist"):
+        return dict(data)
+    copia = QueryDict(mutable=True)
+    encoding = getattr(data, "encoding", None)
+    if encoding:
+        copia.encoding = encoding
+    for chave in data:
+        copia.setlist(chave, data.getlist(chave))
+    return copia
+
+
+# Aceita a chave legada da `/api/v1/` no corpo e a normaliza para a canônica.
+#
+# A issue #67 renomeia o campo do modelo e a `docs/ontology/aliases.md` §2c mantém a chave de
+# payload: quem integrou com a v1 não tem como saber que o nome mudou. A **leitura** é resolvida
+# por um campo declarado com `source=`; a **escrita** precisa acontecer antes da validação, e é o
+# que este mixin faz.
+#
+# Quando as duas chaves vêm no mesmo corpo, **a canônica vence** — um corpo com as duas é confusão
+# do chamador, e resolver pela nova é o que não trava quem já migrou. Mesma regra de `apply-gate`
+# desde a fatia 1.
+#
+# Um mecanismo só, e não um `if` por serializer: o décimo oitavo esquece, e o defeito não deixa
+# nada vermelho aqui dentro — é o modo de falha que a ADR 0026 descreve para as primitivas de UI.
+#
+# **Comentário e não docstring, e a razão é medida.** A regra do `CLAUDE.md` fala de mixin de
+# viewset, mas o drf-spectacular usa a docstring do **serializer** como `description` do
+# componente do mesmo jeito: com a docstring aqui, este raciocínio interno aparecia nos schemas
+# `Document`, `Activity`, `Artifact` e nos `Patched*` deles — seis blocos de texto sobre a issue
+# #67 virando contrato público em `openapi.yaml`.
+class AliasDeEntradaMixin:
+
+    ALIASES_DE_ENTRADA: dict[str, str] = {}
+
+    def to_internal_value(self, data: Any) -> Any:
+        if self.ALIASES_DE_ENTRADA and hasattr(data, "keys"):
+            traduzir = {
+                canonica: antiga
+                for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
+                if antiga in data and canonica not in data
+            }
+            if traduzir:
+                data = _corpo_mutavel(data)
+                for canonica, antiga in traduzir.items():
+                    # Cópia e não `pop`: a chave legada continua declarada como campo
+                    # `read_only`, então o serializer a ignora — e `QueryDict.pop` devolveria a
+                    # **lista** de valores, não o valor.
+                    data[canonica] = data[antiga]
+        return super().to_internal_value(data)  # type: ignore[misc]
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
@@ -209,11 +273,11 @@ class ClientSerializer(serializers.ModelSerializer[Client]):
 
         Prospect vira ativo pelo signal `_promote_client_on_won`. Deixar um PATCH devolver o
         cliente para prospect apagaria esse fato — e o signal só promove na transição, então ele
-        não corrigiria de volta. O critério de "ganha" é o mesmo de `Opportunity.is_won`.
+        não corrigiria de volta. O critério de "ganha" é o mesmo de `CommercialOpportunity.is_won`.
         """
         if value != Client.Status.PROSPECT or self.instance is None:
             return value
-        if Opportunity.objects.filter(
+        if CommercialOpportunity.objects.filter(
             client=self.instance, stage__kind=PipelineStage.Kind.WON, archived_at__isnull=True
         ).exists():
             raise serializers.ValidationError(
@@ -235,7 +299,14 @@ class ContactSerializer(serializers.ModelSerializer[Contact]):
         read_only_fields = ["id", "name", "created_at", "updated_at"]
 
 
-class ActivitySerializer(serializers.ModelSerializer[Activity]):
+class ActivitySerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Activity]):
+    ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do mixin acima.
+    opportunity = serializers.PrimaryKeyRelatedField(
+        source="commercial_opportunity", read_only=True
+    )
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     cobranca_sinal_display = serializers.CharField(
         source="get_cobranca_sinal_display", read_only=True
@@ -243,7 +314,8 @@ class ActivitySerializer(serializers.ModelSerializer[Activity]):
 
     class Meta:
         model = Activity
-        fields = ["id", "client", "opportunity", "invoice", "kind", "kind_display", "happened_on",
+        fields = ["id", "client", "commercial_opportunity", "opportunity", "invoice",
+                  "kind", "kind_display", "happened_on",
                   "summary", "notes", "cobranca_sinal", "cobranca_sinal_display", "owner",
                   "created_at", "updated_at"]
         # `cobranca_sinal` é só de leitura: ele é lavrado por `POST /activities/{id}/classificar/`,
@@ -255,12 +327,17 @@ class ActivitySerializer(serializers.ModelSerializer[Activity]):
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         client = cast(Client | None, attrs.get("client", getattr(self.instance, "client", None)))
-        opportunity = cast(
-            Opportunity | None, attrs.get("opportunity", getattr(self.instance, "opportunity", None))
+        # O mixin já normalizou a chave legada, então aqui só existe a canônica.
+        venda = cast(
+            CommercialOpportunity | None,
+            attrs.get(
+                "commercial_opportunity",
+                getattr(self.instance, "commercial_opportunity", None),
+            ),
         )
-        if opportunity and client and opportunity.client_id != client.id:
+        if venda and client and venda.client_id != client.id:
             raise serializers.ValidationError(
-                {"opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
+                {"commercial_opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
             )
         invoice = cast(Invoice | None, attrs.get("invoice", getattr(self.instance, "invoice", None)))
         if invoice and client and invoice.client_id != client.id:
@@ -405,7 +482,7 @@ class PhaseEventSerializer(serializers.ModelSerializer[PhaseEvent]):
         return actor.get_full_name() or actor.get_username()
 
 
-class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
+class CommercialOpportunitySerializer(serializers.ModelSerializer[CommercialOpportunity]):
     stage_name = serializers.CharField(source="stage.name", read_only=True)
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_tier = serializers.CharField(source="service.tier", read_only=True)
@@ -413,7 +490,7 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
     project_archived = serializers.SerializerMethodField()
 
     class Meta:
-        model = Opportunity
+        model = CommercialOpportunity
         fields = [
             "id", "client", "contact", "title", "scope", "estimated_value", "stage", "stage_name",
             "owner", "expected_close_date", "service", "service_name", "service_tier", "project",
@@ -422,11 +499,11 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         # `origin_qualification` é **só de leitura**, e a assimetria é a guarda: o único caminho
         # que a preenche é `POST /qualifications/{id}/open-opportunity/`, que confere o resultado
         # da avaliação antes. Editável aqui, um `PATCH` cru gravaria a mesma coluna sem passar por
-        # `Opportunity.clean()` — a distinção entre "campo" e "ato" que a FDD 028 já fez no
-        # `status` da fatura.
+        # `CommercialOpportunity.clean()` — a distinção entre "campo" e "ato" que a FDD 028 já
+        # fez no `status` da fatura.
         read_only_fields = ["id", "owner", "origin_qualification", "created_at", "updated_at"]
 
-    def _projeto_do_card(self, obj: Opportunity) -> Project | None:
+    def _projeto_do_card(self, obj: CommercialOpportunity) -> Project | None:
         """O projeto que representa esta oportunidade no card do pipeline.
 
         A relação virou 1-N na ADR 0050 e o contrato `/api/v1/` **não** mudou de forma: o card
@@ -435,7 +512,7 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         ordem estável que não depende de campo editável — ordenar por `start_date` faria o card
         trocar de destino quando alguém corrigisse uma data.
 
-        Ordenação em Python e não em SQL: `OpportunityViewSet` já traz `projects` por
+        Ordenação em Python e não em SQL: `CommercialOpportunityViewSet` já traz `projects` por
         `prefetch_related`, e um `.order_by()` aqui descartaria o prefetch e devolveria a query
         por card que a ADR 0014 existe para não pagar.
         """
@@ -444,7 +521,7 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         return next(iter(vivos or projetos), None)
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
-    def get_project(self, obj: Opportunity) -> int | None:
+    def get_project(self, obj: CommercialOpportunity) -> int | None:
         """Id do projeto que saiu desta oportunidade, ou `None` se ela ainda não foi convertida.
 
         Sem isto a tela do pipeline não tem como saber que já converteu, e continua oferecendo
@@ -454,7 +531,7 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         return project.pk if project else None
 
     @extend_schema_field(serializers.BooleanField())
-    def get_project_archived(self, obj: Opportunity) -> bool:
+    def get_project_archived(self, obj: CommercialOpportunity) -> bool:
         """Só sobrou projeto arquivado?
 
         `project` continua preenchido nesse caso, de propósito: anulá-lo faria a tela voltar a
@@ -535,8 +612,9 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """As três regras do `clean()` do modelo, aqui, para virarem 400 em vez de 500.
 
-        Repetir a validação é o padrão da casa (`OpportunitySerializer.validate` faz o mesmo com
-        o contato): o `clean()` existe porque shell, admin e migração não passam por serializer;
+        Repetir a validação é o padrão da casa (`CommercialOpportunitySerializer.validate` faz o
+        mesmo com o contato): o `clean()` existe porque shell, admin e migração não passam por
+        serializer;
         este existe porque `ModelSerializer` não chama `full_clean`, e sem ele a violação sairia
         como `IntegrityError` ou como um registro incoerente salvo em silêncio.
         """
@@ -1284,19 +1362,29 @@ def _safe_original_name(name: str | None) -> str:
     return cleaned[:255] or "documento"
 
 
-class DocumentSerializer(serializers.ModelSerializer[Document]):
+class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Document]):
+    ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do mixin acima.
+    opportunity = serializers.PrimaryKeyRelatedField(
+        source="commercial_opportunity", read_only=True
+    )
     signature_requests = SignatureRequestSerializer(many=True, read_only=True)
 
     class Meta:
         model = Document
         fields = [
-            "id", "client", "opportunity", "project", "file", "drive_link", "original_name",
+            "id", "client", "commercial_opportunity", "opportunity", "project", "file",
+            "drive_link", "original_name",
             "uploaded_by", "created_at", "signature_requests",
         ]
         read_only_fields = ["id", "drive_link", "original_name", "uploaded_by", "created_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
-        links = [attrs.get("client"), attrs.get("opportunity"), attrs.get("project")]
+        links = [
+            attrs.get("client"), attrs.get("commercial_opportunity"), attrs.get("project")
+        ]
         if sum(value is not None for value in links) != 1:
             raise serializers.ValidationError("Vincule o documento a exatamente um cliente, oportunidade ou projeto.")
         uploaded_file = cast(UploadedFile | None, attrs.get("file"))
@@ -1457,14 +1545,22 @@ class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
         read_only_fields = ["id", "blueprint", "created_at", "updated_at"]
 
 
-class ArtifactSerializer(serializers.ModelSerializer[Artifact]):
+class ArtifactSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Artifact]):
+    ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do mixin acima.
+    opportunity = serializers.PrimaryKeyRelatedField(
+        source="commercial_opportunity", read_only=True
+    )
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = Artifact
         fields = ["id", "kind", "kind_display", "status", "status_display", "title", "content",
-                  "opportunity", "project", "source_meeting", "document", "ai_interaction",
+                  "commercial_opportunity", "opportunity", "project", "source_meeting",
+                  "document", "ai_interaction",
                   "created_by", "sent_at", "decided_at", "created_at", "updated_at"]
         read_only_fields = ["id", "kind_display", "status_display", "source_meeting",
                             "ai_interaction", "created_by", "sent_at", "decided_at",
@@ -1472,9 +1568,12 @@ class ArtifactSerializer(serializers.ModelSerializer[Artifact]):
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         # Na edição parcial só temos o que veio no corpo; o resto vem da instância.
-        opportunity = attrs.get("opportunity", getattr(self.instance, "opportunity", None))
+        venda = attrs.get(
+            "commercial_opportunity",
+            getattr(self.instance, "commercial_opportunity", None),
+        )
         project = attrs.get("project", getattr(self.instance, "project", None))
-        if sum(value is not None for value in [opportunity, project]) != 1:
+        if sum(value is not None for value in [venda, project]) != 1:
             raise serializers.ValidationError(
                 "Vincule o artefato a exatamente uma oportunidade ou projeto."
             )
@@ -1888,6 +1987,12 @@ class OpenCommercialOpportunitySerializer(serializers.Serializer):
 
 
 class LeadSerializer(serializers.ModelSerializer[Lead]):
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c); morre na `/api/v2/`. Sem
+    # `AliasDeEntradaMixin` porque aqui não há escrita: o vínculo é lavrado por
+    # `POST /qualifications/{id}/open-opportunity/`, e as duas chaves são só de leitura.
+    opportunity = serializers.PrimaryKeyRelatedField(
+        source="commercial_opportunity", read_only=True
+    )
     # A avaliação mais recente do lead, para a tela saber que ele já passou pela qualificação sem
     # ter de pedir `/qualifications/?lead=`. Não substitui a coleção: o lead tem várias, e o que a
     # lista precisa é do estado atual.
@@ -1899,7 +2004,8 @@ class LeadSerializer(serializers.ModelSerializer[Lead]):
         fields = [
             "id", "name", "email", "company", "phone", "cnpj", "message", "source", "status",
             "ai_fit", "ai_score", "ai_summary", "ai_recommended_action", "qualified_at",
-            "enrichment", "client", "opportunity", "qualification", "qualification_outcome",
+            "enrichment", "client", "commercial_opportunity", "opportunity", "qualification",
+            "qualification_outcome",
             "created_at", "updated_at",
         ]
         read_only_fields = [
@@ -1907,7 +2013,7 @@ class LeadSerializer(serializers.ModelSerializer[Lead]):
             # `enrichment` é retrato do fornecedor, não campo de trabalho: editável pela tela, ele
             # deixaria de responder "o que a Receita diz" e passaria a responder "o que alguém
             # digitou", que é a diferença entre dado enriquecido e dado inventado.
-            "qualified_at", "enrichment", "client", "opportunity", "qualification",
+            "qualified_at", "enrichment", "client", "commercial_opportunity", "qualification",
             "qualification_outcome", "created_at", "updated_at",
         ]
 

@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Artifact, Document, SignatureRequest
 from apps.core.portal import sign
-from apps.core.tests.factories import ClientFactory, OpportunityFactory, UserFactory
+from apps.core.tests.factories import ClientFactory, CommercialOpportunityFactory, UserFactory
 
 SECRET = "webhook-secret"
 
@@ -50,7 +50,7 @@ def _contract(user):  # type: ignore[no-untyped-def]
     return Artifact.objects.create(
         kind=Artifact.Kind.CONTRACT,
         title="Contrato — Acme",
-        opportunity=OpportunityFactory(),
+        commercial_opportunity=CommercialOpportunityFactory(),
         document=document,
         status=Artifact.Status.SENT,
         created_by=user,

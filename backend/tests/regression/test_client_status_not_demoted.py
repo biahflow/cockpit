@@ -10,14 +10,14 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.core.models import Client, PipelineStage, User
-from apps.core.tests.factories import ClientFactory, OpportunityFactory, UserFactory
+from apps.core.tests.factories import ClientFactory, CommercialOpportunityFactory, UserFactory
 
 
 @pytest.mark.django_db
 def test_client_with_won_opportunity_cannot_return_to_prospect() -> None:
     client = ClientFactory(status=Client.Status.PROSPECT)
     won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
-    OpportunityFactory(client=client, stage=won)
+    CommercialOpportunityFactory(client=client, stage=won)
     api = APIClient()
     api.force_authenticate(UserFactory(role=User.Role.ADMIN))
 
@@ -33,7 +33,7 @@ def test_client_with_won_opportunity_cannot_return_to_prospect() -> None:
 @pytest.mark.django_db
 def test_client_without_won_opportunity_can_be_corrected() -> None:
     client = ClientFactory(status=Client.Status.ACTIVE)
-    OpportunityFactory(client=client)  # etapa aberta
+    CommercialOpportunityFactory(client=client)  # etapa aberta
     api = APIClient()
     api.force_authenticate(UserFactory(role=User.Role.ADMIN))
 

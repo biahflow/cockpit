@@ -5,6 +5,7 @@ from rest_framework.permissions import BasePermission
 from .models import (
     Artifact,
     Case,
+    CommercialOpportunity,
     Decisao,
     DigitalEmployee,
     Discovery,
@@ -18,7 +19,6 @@ from .models import (
     GithubDeliveryProjection,
     Meeting,
     Milestone,
-    Opportunity,
     Pendencia,
     Processo,
     ProcessObservation,
@@ -121,13 +121,14 @@ class RolePermission(BasePermission):
             # nenhum conjunto da Entrega logo abaixo: a avaliação é ato comercial e não
             # atravessa para o portal do cliente (mapa de linguagem §3). O 403 dela vem do
             # `return False` do fim, sem regra nova — recurso novo nasce fechado.
-            # `engagement` (ADR 0050) é escrita de Vendas, ao lado de `opportunity`: o mandato é o
-            # que a casa vendeu, e quem o negocia é quem o descreve.
+            # `engagement` (ADR 0050) é escrita de Vendas, ao lado de
+            # `commercial_opportunity`: o mandato é o que a casa vendeu, e quem o negocia é
+            # quem o descreve.
             # Os cinco recursos do split (FDD 045) entram pelo mesmo argumento dos três da
             # FDD 039 logo acima, e é o mesmo levantamento: o Discovery começa na venda e
             # continua na entrega, e um achado que só metade da casa registra não é registrado.
-            return resource in {"client", "contact", "opportunity", "engagement", "document",
-                                "lead", "analytics", "artifact", "activity",
+            return resource in {"client", "contact", "commercial_opportunity", "engagement",
+                                "document", "lead", "analytics", "artifact", "activity",
                                 "cobranca_suspensao", "satisfacao", "processo", "processo_etapa",
                                 "evidencia", "qualification",
                                 "discovery", "discovery_session", "process_observation",
@@ -136,8 +137,8 @@ class RolePermission(BasePermission):
             # `engagement` entra aqui **só de leitura**, e a assimetria com Vendas é a decisão: o
             # engajamento é o mandato comercial, e quem entrega precisa saber a que mandato o
             # projeto pertence sem poder redefinir o que foi contratado (ADR 0050).
-            if resource in {"client", "contact", "opportunity", "engagement", "project_member",
-                            "risk", "health", "case", "activity"}:
+            if resource in {"client", "contact", "commercial_opportunity", "engagement",
+                            "project_member", "risk", "health", "case", "activity"}:
                 return request.method in SAFE_METHODS
             # Conhecimento: **todo mundo lê**, e o dono da área verifica. O dono pode ser de
             # qualquer papel, e avisá-lo sobre uma peça que ele não consegue abrir — ou não pode
@@ -236,7 +237,7 @@ class RolePermission(BasePermission):
                 return request.method in SAFE_METHODS and (
                     Project.objects.visible_to(request.user).filter(engagement=obj).exists()
                 )
-            if isinstance(obj, Opportunity):
+            if isinstance(obj, CommercialOpportunity):
                 return obj.is_won and request.method in SAFE_METHODS
             if isinstance(obj, ProjectMember):
                 # Ler a equipe do próprio projeto, sim; montá-la é do admin.

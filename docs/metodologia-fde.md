@@ -47,8 +47,8 @@ saídas, decidida por humano:
 - **REDESIGN** — muda a abordagem técnica e testa de novo (volta à fase anterior).
 - **NO-GO** — a tecnologia/hipótese não sustenta a tarefa como está; não segue.
 
-Comercialmente, cada degrau é uma **Opportunity separada na mesma conta** (Account ≠
-Opportunity): a empresa é uma conta; cada venda — Discovery Sprint, Feasibility, PROVE,
+Comercialmente, cada degrau é uma **CommercialOpportunity separada na mesma conta** (Account ≠
+CommercialOpportunity): a empresa é uma conta; cada venda — Discovery Sprint, Feasibility, PROVE,
 Scale, partnership — é uma oportunidade própria no pipeline, o que torna a expansão de
 receita visível.
 

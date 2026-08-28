@@ -59,7 +59,7 @@ acompanhar o status — que o próprio fornecedor devolve por **webhook** (ADR 0
   para `signed` com `signed_at` quando não há provedor configurado (ou a assinatura correu
   fora do fluxo). Assinaturas concluídas deixam de receber lembrete. Assinatura inexistente
   → 404.
-- O acesso segue o RBAC do recurso `document`/`opportunity`; documentos seguem privados
+- O acesso segue o RBAC do recurso `document`/`commercial_opportunity`; documentos seguem privados
   (ADR 0002) e nada comercial vaza para o portal do cliente (ADR 0003).
 
 ## Aceite

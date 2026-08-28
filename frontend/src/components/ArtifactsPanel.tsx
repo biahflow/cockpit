@@ -35,7 +35,7 @@ export function ArtifactsPanel({ opportunity, project, reloadToken, onChange }: 
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
-  const query = opportunity ? `opportunity=${opportunity}` : `project=${project}`;
+  const query = opportunity ? `commercial_opportunity=${opportunity}` : `project=${project}`;
 
   const load = useCallback(
     () => api<Artifact[]>(`/artifacts/?${query}`).then(setArtifacts).catch((cause: Error) => setError(cause.message)),
@@ -57,7 +57,7 @@ export function ArtifactsPanel({ opportunity, project, reloadToken, onChange }: 
     if (!content.trim()) return;
     try {
       const body = new FormData();
-      body.append(opportunity ? "opportunity" : "project", String(opportunity ?? project));
+      body.append(opportunity ? "commercial_opportunity" : "project", String(opportunity ?? project));
       body.append("file", new File([content], `${artifact.kind}-${artifact.title}.txt`, { type: "text/plain" }));
       const document = await api<{ id: number }>("/documents/", { method: "POST", body });
       await patch(artifact, { document: document.id });

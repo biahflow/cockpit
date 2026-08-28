@@ -18,12 +18,19 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Contact, Engagement, Opportunity, PipelineStage, Project, User
+from apps.core.models import (
+    CommercialOpportunity,
+    Contact,
+    Engagement,
+    PipelineStage,
+    Project,
+    User,
+)
 
 from .factories import (
     ClientFactory,
+    CommercialOpportunityFactory,
     EngagementFactory,
-    OpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -164,7 +171,7 @@ def test_commercial_model_fora_do_enum_e_recusado() -> None:
 
 
 def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() -> None:
-    """A invariante que motivou a emenda: hoje não existe FK de `Engagement` para `Opportunity`
+    """A invariante que motivou a emenda: hoje não existe FK de `Engagement` para `CommercialOpportunity`
     (a direção é a inversa), então um mandato de design partner já pode nascer — e um projeto
     pendurar nele — sem nenhuma oportunidade no banco."""
     api, vendedora = _api(User.Role.SALES)
@@ -184,7 +191,7 @@ def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() ->
 
     assert projeto.engagement_id is not None
     assert projeto.engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER
-    assert not Opportunity.objects.exists()
+    assert not CommercialOpportunity.objects.exists()
 
 
 # ------------------------------------------------------------------- POST /projects/
@@ -244,7 +251,7 @@ def test_segundo_projeto_da_mesma_origem_nasce_por_post_projects() -> None:
     api, _ = _api()
     conta = ClientFactory()
     engagement = EngagementFactory(account=conta)
-    origem = OpportunityFactory(client=conta, stage=PipelineStage.objects.get(kind="won"))
+    origem = CommercialOpportunityFactory(client=conta, stage=PipelineStage.objects.get(kind="won"))
     corpo = _payload_de_projeto(conta, engagement) | {
         "originating_commercial_opportunity": origem.pk
     }
@@ -262,7 +269,7 @@ def test_a_origem_comercial_nao_se_reescreve_por_patch() -> None:
     """A proveniência é fato histórico: o funil e o ciclo médio a leem como tal."""
     api, _ = _api()
     projeto = ProjectFactory()
-    outra = OpportunityFactory(client=projeto.client)
+    outra = CommercialOpportunityFactory(client=projeto.client)
 
     resposta = api.patch(
         reverse("project-detail", args=[projeto.pk]),
@@ -293,7 +300,7 @@ def _converter(api: APIClient, opportunity, **extra) -> object:
 def test_conversao_sem_engajamento_cria_um_de_escopo_unico() -> None:
     """D3 em código: a venda avulsa não vira caso especial, ela cria o próprio mandato."""
     api, user = _api()
-    opportunity = OpportunityFactory(
+    opportunity = CommercialOpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), title="Discovery da Acme", scope="Escopo X"
     )
 
@@ -313,7 +320,7 @@ def test_conversao_sem_engajamento_cria_um_de_escopo_unico() -> None:
 
 def test_conversao_com_engajamento_no_payload_usa_o_informado() -> None:
     api, _ = _api()
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
     engagement = EngagementFactory(account=opportunity.client)
 
     resposta = _converter(api, opportunity, engagement=engagement.pk)
@@ -326,7 +333,7 @@ def test_conversao_com_engajamento_no_payload_usa_o_informado() -> None:
 
 def test_conversao_recusa_engajamento_de_outra_conta() -> None:
     api, _ = _api()
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
 
     resposta = _converter(api, opportunity, engagement=EngagementFactory().pk)
 
@@ -602,7 +609,7 @@ def test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer() -> None
     `dap-engagement-r1` aprovou. Trocá-la é varredura própria, fora deste escopo.
     """
     api, _ = _api()
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
 
     resposta = _converter(api, opportunity, engagement=EngagementFactory().pk)
 

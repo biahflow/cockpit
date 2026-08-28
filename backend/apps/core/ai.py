@@ -21,7 +21,7 @@ from django.utils import timezone
 from . import flags
 
 if TYPE_CHECKING:
-    from .models import Activity, Invoice, Lead, Meeting, Opportunity, Project, User
+    from .models import Activity, CommercialOpportunity, Invoice, Lead, Meeting, Project, User
 
 # Limite de caracteres da transcrição enviada ao modelo (controle de tokens/custo).
 MEETING_TRANSCRIPT_LIMIT = 12000
@@ -116,7 +116,7 @@ def build_meeting_context(meeting: Meeting) -> str:
     return "\n".join(lines)
 
 
-def build_opportunity_context(opportunity: Opportunity) -> str:
+def build_opportunity_context(opportunity: CommercialOpportunity) -> str:
     lines = [
         f"Oportunidade: {opportunity.title}",
         f"Cliente: {opportunity.client.name}",
@@ -141,7 +141,7 @@ def build_opportunity_context(opportunity: Opportunity) -> str:
     return "\n".join(lines)
 
 
-def _blueprint_lines(opportunity: Opportunity) -> list[str]:
+def _blueprint_lines(opportunity: CommercialOpportunity) -> list[str]:
     """Os blocos do catálogo aplicáveis a esta oportunidade (FDD 026).
 
     É o que faz a proposta citar o Funcionário Digital concreto — "um SDR que qualifica lead fora
@@ -193,7 +193,7 @@ def _numero_kpi(valor: str | None, unidade: str) -> str:
     return f"R$ {valor}" if unidade == "currency" else f"{valor}{sufixo}"
 
 
-def _case_lines(opportunity: Opportunity) -> list[str]:
+def _case_lines(opportunity: CommercialOpportunity) -> list[str]:
     """Os cases publicados da mesma vertical — a prova, ao lado da promessa (FDD 027).
 
     Três guardas fazem esta função, e nenhuma é decorativa:
@@ -254,7 +254,7 @@ def _case_lines(opportunity: Opportunity) -> list[str]:
     return lines
 
 
-def _processo_lines(opportunity: Opportunity) -> list[str]:
+def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
     """O que o Discovery levantou da operação do cliente — e **só o número que tem fato atrás**
     (FDD 039).
 

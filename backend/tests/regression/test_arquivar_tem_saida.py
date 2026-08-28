@@ -28,8 +28,8 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Opportunity, PipelineStage, Project, User
-from apps.core.tests.factories import OpportunityFactory, UserFactory
+from apps.core.models import CommercialOpportunity, PipelineStage, Project, User
+from apps.core.tests.factories import CommercialOpportunityFactory, UserFactory
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def admin_client() -> APIClient:
     return client
 
 
-def _converter(admin_client: APIClient, opportunity: Opportunity) -> int:
+def _converter(admin_client: APIClient, opportunity: CommercialOpportunity) -> int:
     resposta = admin_client.post(
         reverse("opportunity-convert-to-project", args=[opportunity.pk]),
         {
@@ -55,14 +55,14 @@ def _converter(admin_client: APIClient, opportunity: Opportunity) -> int:
 
 
 @pytest.fixture
-def convertida(admin_client: APIClient) -> tuple[Opportunity, int]:
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+def convertida(admin_client: APIClient) -> tuple[CommercialOpportunity, int]:
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
     return opportunity, _converter(admin_client, opportunity)
 
 
 @pytest.mark.django_db
 def test_arquivar_o_projeto_libera_a_oportunidade(
-    admin_client: APIClient, convertida: tuple[Opportunity, int]
+    admin_client: APIClient, convertida: tuple[CommercialOpportunity, int]
 ) -> None:
     """O defeito: a instrução da mensagem de erro não desbloqueava nada."""
     opportunity, projeto_id = convertida
@@ -77,7 +77,7 @@ def test_arquivar_o_projeto_libera_a_oportunidade(
 
 @pytest.mark.django_db
 def test_com_projeto_ativo_a_recusa_continua(
-    admin_client: APIClient, convertida: tuple[Opportunity, int]
+    admin_client: APIClient, convertida: tuple[CommercialOpportunity, int]
 ) -> None:
     """A correção não pode afrouxar a guarda: projeto vivo segue bloqueando."""
     opportunity, _ = convertida
@@ -90,7 +90,7 @@ def test_com_projeto_ativo_a_recusa_continua(
 
 @pytest.mark.django_db
 def test_a_corrente_inteira_fecha(
-    admin_client: APIClient, convertida: tuple[Opportunity, int]
+    admin_client: APIClient, convertida: tuple[CommercialOpportunity, int]
 ) -> None:
     """Projeto → oportunidade → cliente, que é o caminho de quem quer encerrar um trabalho.
 
@@ -112,7 +112,7 @@ def test_a_corrente_inteira_fecha(
 
 @pytest.mark.django_db
 def test_com_o_projeto_arquivado_a_oportunidade_reconverte(
-    admin_client: APIClient, convertida: tuple[Opportunity, int]
+    admin_client: APIClient, convertida: tuple[CommercialOpportunity, int]
 ) -> None:
     """A última saída do beco, e ela **mudou de resposta** na ADR 0050.
 
@@ -148,7 +148,7 @@ def test_com_o_projeto_arquivado_a_oportunidade_reconverte(
 
 @pytest.mark.django_db
 def test_o_projeto_vivo_ainda_recusa_a_segunda_conversao(
-    admin_client: APIClient, convertida: tuple[Opportunity, int]
+    admin_client: APIClient, convertida: tuple[CommercialOpportunity, int]
 ) -> None:
     """O par do teste acima: a 1-N não pode virar licença para o duplo clique duplicar projeto."""
     opportunity, _ = convertida
@@ -170,7 +170,7 @@ def test_o_projeto_vivo_ainda_recusa_a_segunda_conversao(
 
 @pytest.mark.django_db
 def test_serializer_avisa_que_o_projeto_esta_arquivado(
-    admin_client: APIClient, convertida: tuple[Opportunity, int]
+    admin_client: APIClient, convertida: tuple[CommercialOpportunity, int]
 ) -> None:
     """Sem isto o card do pipeline oferece "Ver projeto" para um 404.
 

@@ -25,7 +25,7 @@ from apps.core.models import (
     Project,
 )
 from apps.core.tests.factories import (
-    OpportunityFactory,
+    CommercialOpportunityFactory,
     ProjectFactory,
 )
 
@@ -60,7 +60,7 @@ def test_o_snapshot_do_portal_nao_carrega_o_corpus(corpus_com_sentinela):
 @pytest.mark.django_db
 def test_o_contexto_de_proposta_nao_carrega_o_corpus(corpus_com_sentinela):
     """`build_opportunity_context` alimenta proposta e contrato — o que o **cliente lê**."""
-    oportunidade = OpportunityFactory()
+    oportunidade = CommercialOpportunityFactory()
     assert SENTINELA not in ai.build_opportunity_context(oportunidade)
 
 

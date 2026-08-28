@@ -29,8 +29,8 @@ from apps.core.models import (
 from .factories import (
     ArtifactFactory,
     ClientFactory,
+    CommercialOpportunityFactory,
     EngagementFactory,
-    OpportunityFactory,
     ProjectFactory,
 )
 
@@ -332,13 +332,13 @@ def test_snapshot_carries_the_date_of_the_first_accepted_artifact() -> None:
     depois = timezone.now() - timedelta(days=3)
     ArtifactFactory(
         kind=Artifact.Kind.CONTRACT,
-        opportunity=OpportunityFactory(client=project.client),
+        commercial_opportunity=CommercialOpportunityFactory(client=project.client),
         status=Artifact.Status.ACCEPTED,
         decided_at=primeiro,
     )
     ArtifactFactory(
         project=project,
-        opportunity=None,
+        commercial_opportunity=None,
         status=Artifact.Status.ACCEPTED,
         decided_at=depois,
     )
@@ -359,10 +359,10 @@ def test_an_artifact_still_awaiting_a_decision_is_not_a_rung() -> None:
     """
     project = ProjectFactory()
     ArtifactFactory(
-        opportunity=OpportunityFactory(client=project.client),
+        commercial_opportunity=CommercialOpportunityFactory(client=project.client),
         status=Artifact.Status.SENT,
     )
-    ArtifactFactory(project=project, opportunity=None, status=Artifact.Status.REJECTED)
+    ArtifactFactory(project=project, commercial_opportunity=None, status=Artifact.Status.REJECTED)
 
     assert portal.build_snapshot(project)["artifact_accepted_at"] is None
 
@@ -371,7 +371,7 @@ def test_an_artifact_still_awaiting_a_decision_is_not_a_rung() -> None:
 def test_an_archived_artifact_stops_counting_like_every_other_child() -> None:
     project = ProjectFactory()
     artifact = ArtifactFactory(
-        project=project, opportunity=None, status=Artifact.Status.ACCEPTED
+        project=project, commercial_opportunity=None, status=Artifact.Status.ACCEPTED
     )
     assert portal.build_snapshot(project)["artifact_accepted_at"] is not None
 
@@ -388,7 +388,7 @@ def test_accepting_an_artifact_emits_webhook(monkeypatch: pytest.MonkeyPatch) ->
     ele é um `save()` — o mesmo motivo pelo qual `archive()` emite.
     """
     project = ProjectFactory()
-    artifact = ArtifactFactory(project=project, opportunity=None, status=Artifact.Status.DRAFT)
+    artifact = ArtifactFactory(project=project, commercial_opportunity=None, status=Artifact.Status.DRAFT)
     calls: list[tuple] = []
     monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
 
@@ -419,7 +419,7 @@ def test_an_artifact_on_an_opportunity_names_the_clients_oldest_live_project(
 
     ArtifactFactory(
         kind=Artifact.Kind.CONTRACT,
-        opportunity=OpportunityFactory(client=client),
+        commercial_opportunity=CommercialOpportunityFactory(client=client),
         status=Artifact.Status.ACCEPTED,
     )
 
@@ -441,7 +441,7 @@ def test_accepting_before_any_project_exists_is_a_declared_limit(
 
     ArtifactFactory(
         kind=Artifact.Kind.CONTRACT,
-        opportunity=OpportunityFactory(client=ClientFactory()),
+        commercial_opportunity=CommercialOpportunityFactory(client=ClientFactory()),
         status=Artifact.Status.ACCEPTED,
     )
 

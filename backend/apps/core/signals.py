@@ -12,6 +12,7 @@ from . import cases, journey, notifications, portal, tasksync
 from .models import (
     Artifact,
     Client,
+    CommercialOpportunity,
     Decisao,
     DigitalEmployee,
     Document,
@@ -21,7 +22,6 @@ from .models import (
     Lead,
     Meeting,
     Milestone,
-    Opportunity,
     Pendencia,
     Project,
     ProjectDeliverable,
@@ -217,8 +217,8 @@ def _emit_project_deliverable(
 # recusou. É a mesma economia do `if created: return` dos dois receivers acima, por outro eixo.
 #
 # **O projeto tem de ser resolvido, e às vezes não existe.** `portal.emit` não faz nada sem
-# `project_id`, e o artefato pode estar preso a uma `Opportunity` — que é justamente onde o
-# contrato vive no caso típico, porque a aceitação dele é o que *cria* o projeto depois. Então:
+# `project_id`, e o artefato pode estar preso a uma `CommercialOpportunity` — que é justamente
+# onde o contrato vive no caso típico, porque a aceitação dele é o que *cria* o projeto depois. Então:
 # o projeto do artefato quando há; senão o projeto vivo mais antigo do mesmo cliente; senão nada,
 # e isso é limite declarado e não esquecimento — sem projeto o portal ainda não conhece aquela
 # organização, e o fato chega inteiro no primeiro snapshot depois que o projeto nascer, porque
@@ -230,12 +230,14 @@ def _emit_artifact(sender: type[Artifact], instance: Artifact, **kwargs: Any) ->
     if instance.status != Artifact.Status.ACCEPTED:
         return
     project_id = instance.project_id
-    if project_id is None and instance.opportunity_id is not None:
-        # Pela oportunidade e não pelo `instance.opportunity.client_id`: aquele caminho custa uma
-        # busca a mais só para descobrir o cliente que este `filter` já alcança pela travessia.
+    if project_id is None and instance.commercial_opportunity_id is not None:
+        # Pela oportunidade e não pelo `instance.commercial_opportunity.client_id`: aquele
+        # caminho custa uma busca a mais só para descobrir o cliente que este `filter` já
+        # alcança pela travessia.
         project_id = (
             Project.objects.filter(
-                client__opportunities=instance.opportunity_id, archived_at__isnull=True
+                client__opportunities=instance.commercial_opportunity_id,
+                archived_at__isnull=True,
             )
             .order_by("created_at", "id")
             .values_list("id", flat=True)
@@ -279,8 +281,10 @@ def _push_task_external(sender: type[Task], instance: Task, **kwargs: Any) -> No
     tasksync.push_update(instance)
 
 
-@receiver(post_save, sender=Opportunity)
-def _promote_client_on_won(sender: type[Opportunity], instance: Opportunity, **kwargs: Any) -> None:
+@receiver(post_save, sender=CommercialOpportunity)
+def _promote_client_on_won(
+    sender: type[CommercialOpportunity], instance: CommercialOpportunity, **kwargs: Any
+) -> None:
     """Promove o cliente de prospect para ativo quando a oportunidade é ganha (ADR/plano D)."""
     if instance.is_won:
         Client.objects.filter(pk=instance.client_id, status=Client.Status.PROSPECT).update(

@@ -17,6 +17,7 @@ from .views import (
     ClientViewSet,
     CobrancaSuspensaoViewSet,
     CobrancaViewSet,
+    CommercialOpportunityViewSet,
     ConfigView,
     ContactViewSet,
     DashboardView,
@@ -50,7 +51,6 @@ from .views import (
     MeView,
     MilestoneViewSet,
     NotificationViewSet,
-    OpportunityViewSet,
     PaymentsWebhookView,
     PendenciaViewSet,
     PhaseChecklistItemViewSet,
@@ -84,7 +84,11 @@ router.register("clients", ClientViewSet)
 router.register("contacts", ContactViewSet)
 router.register("activities", ActivityViewSet)
 router.register("pipeline-stages", PipelineStageViewSet)
-router.register("opportunities", OpportunityViewSet)
+# A rota e o `basename` **não** mudam com o renome da classe (ADR 0052): a rota canônica
+# `/commercial-opportunities/` nasce na `/api/v2/`. O `basename` passa a ser explícito porque
+# o derivado do queryset viraria `commercialopportunity` e quebraria todo
+# `reverse("opportunity-…")` do repositório.
+router.register("opportunities", CommercialOpportunityViewSet, basename="opportunity")
 # Entre a conta e o projeto (ADR 0050): o mandato que agrupa várias vendas e vários projetos.
 router.register("engagements", EngagementViewSet)
 router.register("projects", ProjectViewSet)

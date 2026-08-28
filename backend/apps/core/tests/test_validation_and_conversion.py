@@ -13,8 +13,8 @@ from apps.core.models import Document, Milestone, PipelineStage, Service, User
 
 from .factories import (
     ClientFactory,
+    CommercialOpportunityFactory,
     EngagementFactory,
-    OpportunityFactory,
     ProjectFactory,
     ServiceFactory,
     UserFactory,
@@ -181,7 +181,7 @@ def test_safe_original_name(raw: str | None, expected: str) -> None:
 @pytest.mark.django_db
 def test_conversion_rejects_delivery_foreign_client_and_invalid_dates() -> None:
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     endpoint = reverse("opportunity-convert-to-project", args=[opportunity.id])
 
     delivery_client = APIClient()
@@ -211,7 +211,7 @@ def test_conversion_rejects_delivery_foreign_client_and_invalid_dates() -> None:
 @pytest.mark.django_db
 def test_conversion_returns_conflict_without_partial_project_on_integrity_error() -> None:
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     client = APIClient()
     client.force_authenticate(sales)
     payload = {
@@ -239,7 +239,7 @@ def test_conversion_inherits_the_opportunity_product_tier() -> None:
     desde a ADR 0049 e a conversão a recusa (invariante 6)."""
     sales = UserFactory(role=User.Role.SALES)
     porta = Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT)
-    opportunity = OpportunityFactory(
+    opportunity = CommercialOpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=sales, service=porta
     )
     client = APIClient()
@@ -262,7 +262,7 @@ def test_conversion_inherits_the_opportunity_product_tier() -> None:
 def test_conversion_payload_overrides_the_inherited_service() -> None:
     sales = UserFactory(role=User.Role.SALES)
     chosen = ServiceFactory(name="Serviço combinado")
-    opportunity = OpportunityFactory(
+    opportunity = CommercialOpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=sales,
         service=Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL),
     )

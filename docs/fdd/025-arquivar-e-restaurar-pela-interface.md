@@ -18,7 +18,7 @@ de infraestrutura.
 **Não havia confirmação.** Os sete botões de excluir do portal disparavam o `DELETE` no clique.
 
 E havia um defeito silencioso por baixo: o soft delete é por registro, e nada cascateia.
-`ProjectViewSet` e `OpportunityViewSet` filtram o próprio `archived_at` e nunca o do cliente. Então
+`ProjectViewSet` e `CommercialOpportunityViewSet` filtram o próprio `archived_at` e nunca o do cliente. Então
 arquivar um cliente sumia com ele da tela de Clientes e **mantinha** os projetos e oportunidades
 dele nas listas, cada um exibindo o nome de um cliente que a interface já não mostra. O backend
 respondia 204, em silêncio.
@@ -34,7 +34,7 @@ respondia 204, em silêncio.
   desfazer — não "tem certeza?".
 - **Arquivar não pode deixar órfão visível.** `ClientViewSet.perform_destroy` recusa com **409**
   enquanto houver projeto ou oportunidade ativos, e a mensagem diz quantos: quem tentou precisa
-  saber o que fazer antes. `OpportunityViewSet.perform_destroy` recusa enquanto o projeto convertido
+  saber o que fazer antes. `CommercialOpportunityViewSet.perform_destroy` recusa enquanto o projeto convertido
   estiver **ativo** — ele é o outro lado dela, e a conversão não roda duas vezes.
 - **Toda recusa precisa ter saída, e a instrução dela precisa ser verdade.** É a outra metade da
   regra acima, e faltava. A guarda da oportunidade testava `hasattr(instance, "project")`, que
@@ -43,7 +43,7 @@ respondia 204, em silêncio.
   reconverte (o `OneToOneField` segue ocupado) e, viva, ainda bloqueava o cliente. Uma recusa cujo
   caminho de saída não existe é pior que nenhuma recusa: manda a pessoa trabalhar à toa. A condição
   passou a ser o **estado** do projeto, e a corrente projeto → oportunidade → cliente fecha.
-- **Estado em vez de ação que não existe.** Com o projeto arquivado, `OpportunitySerializer` expõe
+- **Estado em vez de ação que não existe.** Com o projeto arquivado, `CommercialOpportunitySerializer` expõe
   `project_archived` e o card do pipeline mostra "Projeto arquivado", sem link. `project` continua
   preenchido de propósito: anulá-lo faria a tela voltar a oferecer "Criar projeto", que responderia
   409 — trocaria um link morto por um botão morto.
@@ -92,7 +92,7 @@ verdade — etapa do pipeline e fase da jornada. Os seis ganharam guarda, 409 e 
 dois ganharam botão e confirmação e **nenhum caminho de recusa**, o que é exatamente o que esta FDD
 existe para não deixar acontecer.
 
-Os dois batem em FK `PROTECT` (`Opportunity.stage`, `ProjectPhase.phase`) e o `ProtectedError` não
+Os dois batem em FK `PROTECT` (`CommercialOpportunity.stage`, `ProjectPhase.phase`) e o `ProtectedError` não
 era tratado em lugar nenhum. Saía **500** — que o SPA mostra como "Não foi possível concluir a
 operação." e ainda **reporta ao Sentry**, porque `api.ts` reporta todo status ≥ 500. Uso legítimo da
 interface virava incidente, e a única informação útil (o que ainda depende do registro) não chegava
@@ -146,7 +146,7 @@ O expurgo continua sendo a única operação que destrói de propósito, e conti
 ## Onde está
 
 - Backend: `ArchiveModelViewSet` (`?archived=1`, `unarchive`), `StateConflict`,
-  `ClientViewSet.perform_destroy`, `OpportunityViewSet.perform_destroy`,
+  `ClientViewSet.perform_destroy`, `CommercialOpportunityViewSet.perform_destroy`,
   `PipelineStageViewSet.perform_destroy`, `JourneyPhaseViewSet.perform_destroy` e
   `PortalProjectSnapshotView` — todos em `backend/apps/core/views.py`; o campo `archived_at` do
   snapshot em `backend/apps/core/portal.py`; a rede do `ProtectedError` em

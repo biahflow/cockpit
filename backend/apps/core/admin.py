@@ -4,6 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     AppSetting,
     Client,
+    CommercialOpportunity,
     Contact,
     Decisao,
     Document,
@@ -12,7 +13,6 @@ from .models import (
     Invitation,
     Meeting,
     Milestone,
-    Opportunity,
     Pendencia,
     PipelineStage,
     Project,
@@ -23,8 +23,8 @@ from .models import (
 
 admin.site.register(User, UserAdmin)
 admin.site.register(
-    [Client, Contact, PipelineStage, Opportunity, Project, Milestone, Task, Document, Invitation,
-     AppSetting, Meeting, Pendencia, Decisao, EngineeringHandoff]
+    [Client, Contact, PipelineStage, CommercialOpportunity, Project, Milestone, Task, Document,
+     Invitation, AppSetting, Meeting, Pendencia, Decisao, EngineeringHandoff]
 )
 
 

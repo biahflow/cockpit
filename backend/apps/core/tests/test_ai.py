@@ -14,8 +14,8 @@ from apps.core.models import (
 
 from .factories import (
     ClientFactory,
+    CommercialOpportunityFactory,
     MeetingFactory,
-    OpportunityFactory,
     ProjectFactory,
     ServiceFactory,
     UserFactory,
@@ -41,7 +41,7 @@ def test_build_meeting_context_has_title_and_transcript():
 
 @pytest.mark.django_db
 def test_build_opportunity_context_has_client_and_value():
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
     context = ai.build_opportunity_context(opportunity)
     assert opportunity.client.name in context
     assert opportunity.title in context
@@ -52,7 +52,7 @@ def test_build_opportunity_context_has_client_and_value():
 @pytest.mark.django_db
 def test_build_opportunity_context_describes_the_product_tier():
     porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
-    context = ai.build_opportunity_context(OpportunityFactory(service=porta))
+    context = ai.build_opportunity_context(CommercialOpportunityFactory(service=porta))
 
     assert f"Nível de produto: {porta.name} (Qualification Call)" in context
     assert "Preço de tabela: gratuito" in context
@@ -65,14 +65,14 @@ def test_build_opportunity_context_prices_a_paid_tier():
     paid.list_price = Decimal("18000.00")
     paid.save(update_fields=["list_price"])
 
-    context = ai.build_opportunity_context(OpportunityFactory(service=paid))
+    context = ai.build_opportunity_context(CommercialOpportunityFactory(service=paid))
 
     assert "Preço de tabela: 18000.00" in context
 
 
 @pytest.mark.django_db
 def test_build_opportunity_context_names_a_service_without_tier():
-    context = ai.build_opportunity_context(OpportunityFactory(service=ServiceFactory(name="Avulso")))
+    context = ai.build_opportunity_context(CommercialOpportunityFactory(service=ServiceFactory(name="Avulso")))
 
     assert "Nível de produto: Avulso" in context
     assert "()" not in context
@@ -92,7 +92,7 @@ def test_build_opportunity_context_cites_the_catalog_resolved_by_vertical():
     )
 
     context = ai.build_opportunity_context(
-        OpportunityFactory(client=ClientFactory(vertical=vertical))
+        CommercialOpportunityFactory(client=ClientFactory(vertical=vertical))
     )
 
     assert "SDR (Comercial)" in context
@@ -110,7 +110,7 @@ def test_build_opportunity_context_only_offers_blocks_that_fit_the_tier():
     DigitalEmployeeBlueprint.objects.create(name="Bloco do PROVE", service=prove)
     DigitalEmployeeBlueprint.objects.create(name="Bloco genérico")
 
-    context = ai.build_opportunity_context(OpportunityFactory(service=sprint))
+    context = ai.build_opportunity_context(CommercialOpportunityFactory(service=sprint))
 
     assert "Bloco do Sprint" in context
     assert "Bloco genérico" in context
@@ -121,11 +121,11 @@ def test_build_opportunity_context_only_offers_blocks_that_fit_the_tier():
 def test_build_opportunity_context_ignores_retired_blocks_and_other_clients():
     """Antivazamento: o contexto lê esta oportunidade e o catálogo da casa, e nada mais."""
     outro = ClientFactory(name="Cliente de outra conta")
-    OpportunityFactory(client=outro, title="Oportunidade alheia")
+    CommercialOpportunityFactory(client=outro, title="Oportunidade alheia")
     DigitalEmployeeBlueprint.objects.create(name="Aposentado", active=False)
     DigitalEmployeeBlueprint.objects.create(name="Em catálogo")
 
-    context = ai.build_opportunity_context(OpportunityFactory())
+    context = ai.build_opportunity_context(CommercialOpportunityFactory())
 
     assert "Em catálogo" in context
     assert "Aposentado" not in context
@@ -138,7 +138,7 @@ def test_build_opportunity_context_caps_how_much_catalog_it_carries():
     for index in range(ai.OPPORTUNITY_BLUEPRINT_LIMIT + 3):
         DigitalEmployeeBlueprint.objects.create(name=f"Bloco {index:02d}")
 
-    context = ai.build_opportunity_context(OpportunityFactory())
+    context = ai.build_opportunity_context(CommercialOpportunityFactory())
 
     assert context.count("\n- ") == ai.OPPORTUNITY_BLUEPRINT_LIMIT
 

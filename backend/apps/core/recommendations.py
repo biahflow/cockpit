@@ -12,7 +12,7 @@ from django.utils import timezone
 
 
 def build_recommendations() -> list[dict[str, Any]]:
-    from .models import Client, Opportunity, PipelineStage, Project
+    from .models import Client, CommercialOpportunity, PipelineStage, Project
 
     today = timezone.localdate()
     recs: list[dict[str, Any]] = []
@@ -21,7 +21,7 @@ def build_recommendations() -> list[dict[str, Any]]:
     open_kind = PipelineStage.Kind.OPEN
     for client in Client.objects.filter(archived_at__isnull=True):
         has_project = Project.objects.filter(client=client, archived_at__isnull=True).exists()
-        has_open = Opportunity.objects.filter(
+        has_open = CommercialOpportunity.objects.filter(
             client=client, archived_at__isnull=True, stage__kind=open_kind
         ).exists()
         if has_project and not has_open:
@@ -34,7 +34,7 @@ def build_recommendations() -> list[dict[str, Any]]:
 
     # Oportunidades abertas paradas há mais de 30 dias → follow-up.
     stale_before = timezone.now() - timedelta(days=30)
-    for opportunity in Opportunity.objects.filter(
+    for opportunity in CommercialOpportunity.objects.filter(
         archived_at__isnull=True, stage__kind=open_kind, created_at__lt=stale_before
     ).select_related("client"):
         recs.append({

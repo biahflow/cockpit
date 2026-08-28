@@ -71,3 +71,10 @@ Activities do CRM (FDD 035).
 - **Híbrido** (cockpit assume Delivery; Notion segue com o CRM comercial): rejeitado por
   duplicar a fonte de verdade exatamente na fronteira mais movimentada — a conversão de
   oportunidade em projeto, que é a ação central deste produto.
+
+## Emenda (Issue #67 fatia 3, 28/08/2026) — o nome do modelo comercial
+
+Onde esta ADR diz `Opportunity` — inclusive na regra "Account ≠ Opportunity" citada no contexto —,
+o modelo do Pulse hoje se chama `CommercialOpportunity` (ADR 0052, `language-map` §5). O
+qualificador existe porque `Opportunity` sozinho colide com a melhoria operacional do FDE, que a
+Fase 4 chama de `ImprovementOpportunity`. A migração do Notion continua **nomeada e não feita**.

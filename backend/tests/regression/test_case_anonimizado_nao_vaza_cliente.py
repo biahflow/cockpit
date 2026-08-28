@@ -15,10 +15,10 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.core import ai, cases
-from apps.core.models import Case, Client, Opportunity, Project, Vertical
+from apps.core.models import Case, Client, CommercialOpportunity, Project, Vertical
 from apps.core.tests.factories import (
     ClientFactory,
-    OpportunityFactory,
+    CommercialOpportunityFactory,
     ProjectFactory,
     UserFactory,
 )
@@ -74,7 +74,7 @@ def test_a_listagem_de_cases_tambem_nao_traz_o_cliente() -> None:
 def test_a_proposta_cita_o_setor_e_nunca_o_nome() -> None:
     vertical = Vertical.objects.create(name="Imobiliárias", slug="imobiliarias")
     _case_publicado_anonimo(vertical)
-    outra: Opportunity = OpportunityFactory(
+    outra: CommercialOpportunity = CommercialOpportunityFactory(
         client=ClientFactory(name="Cliente novo", vertical=vertical)
     )
 

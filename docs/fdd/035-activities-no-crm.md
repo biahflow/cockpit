@@ -4,19 +4,19 @@
 
 O material do Notion trazido pela ADR 0030 tem uma database `Activities`: o registro de cada
 interação comercial com uma conta — ligação, reunião, e-mail, nota — que hoje só existe como
-memória de quem participou ou, na melhor das hipóteses, numa linha solta do `Opportunity.scope`.
-Quem chega numa oportunidade parada não tem como responder "quando foi o último contato, e o que
+memória de quem participou ou, na melhor das hipóteses, numa linha solta do
+`CommercialOpportunity.scope`. Quem chega numa oportunidade parada não tem como responder "quando foi o último contato, e o que
 foi dito" sem procurar a pessoa que fez a ligação.
 
-O CRM deste portal já tem `Client`, `Contact` e `Opportunity` — os equivalentes diretos de
+O CRM deste portal já tem `Client`, `Contact` e `CommercialOpportunity` — os equivalentes diretos de
 Accounts/Contacts/Opportunities do Notion (ADR 0030). Faltava só a quarta entidade: a que registra
 o histórico de contato como dado consultável, não como texto solto.
 
 ## O que esta fatia entrega
 
 Um modelo `Activity`: interação comercial (ligação, reunião, e-mail, nota) ligada sempre a um
-`Client` e, opcionalmente, a uma `Opportunity` — desde que a oportunidade seja do mesmo cliente.
-CRUD em `/api/v1/activities/`, com o mesmo regime de arquivamento reversível da casa (FDD 025).
+`Client` e, opcionalmente, a uma `CommercialOpportunity` — desde que a oportunidade seja do
+mesmo cliente. CRUD em `/api/v1/activities/`, com o mesmo regime de arquivamento reversível da casa (FDD 025).
 No frontend, um painel "Interações" no detalhe do cliente (lista em ordem cronológica inversa +
 formulário de criação + arquivar) e, no detalhe da oportunidade (modal do `CommercialPage`), o
 mesmo painel filtrado pela oportunidade aberta.
@@ -32,7 +32,8 @@ mesmo painel filtrado pela oportunidade aberta.
    e replicado no `validate()` do serializer (é o mesmo par que `Task`/`Document` já usam para
    validação cruzada).
 3. **Filtro por cliente e por oportunidade.** `?client=<id>` alimenta o painel do
-   `ClientDetailPage`; `?opportunity=<id>` alimenta o painel do detalhe da oportunidade.
+   `ClientDetailPage`; `?commercial_opportunity=<id>` alimenta o painel do detalhe da
+   oportunidade — e `?opportunity=<id>` continua valendo como alias da `/api/v1/`.
 4. **A Entrega só vê interação de cliente com projeto seu.** Mesma fronteira do `Contact`
    (`project_scope_q` sobre `client__projects`) — sem ela, a Entrega enxergaria o histórico
    comercial de clientes fora do seu escopo de projeto, o que a RFC 0003 já fecha para

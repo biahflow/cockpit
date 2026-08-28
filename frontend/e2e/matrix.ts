@@ -241,11 +241,13 @@ const FIXTURES: Record<string, unknown> = {
     source: "site", status: "new", ai_fit: "high", ai_score: 82,
     ai_summary: "Dor clara em processo manual, porte compatível.",
     ai_recommended_action: "Agendar discovery express.",
-    qualified_at: null, client: null, opportunity: null, qualification: null,
+    qualified_at: null, client: null, commercial_opportunity: null, opportunity: null,
+    qualification: null,
     qualification_outcome: "", created_at: `${HOJE}T09:00:00Z`,
   })),
   "/api/v1/documents/": serie(6, index => ({
-    id: index, client: index, opportunity: null, project: null, file: "/media/x.pdf",
+    id: index, client: index, commercial_opportunity: null, opportunity: null, project: null,
+    file: "/media/x.pdf",
     drive_link: "", original_name: `Contrato de prestação de serviços — ${NOME_LONGO}.pdf`,
     uploaded_by: 1, created_at: `${HOJE}T09:00:00Z`,
     signature_requests: index === 1
@@ -378,7 +380,7 @@ const FIXTURES: Record<string, unknown> = {
   // A interação com sinal de cobrança lavrado (FDD 036, camada 4): sem ela a linha do sinal na
   // timeline do cliente nunca renderiza, e a matriz aprovaria uma superfície que não abriu.
   "/api/v1/activities/": serie(3, index => ({
-    id: index, client: 1, opportunity: null,
+    id: index, client: 1, commercial_opportunity: null, opportunity: null,
     invoice: index === 1 ? 1 : null,
     cobranca_sinal: index === 1 ? "nao_pode" : "",
     cobranca_sinal_display: index === 1 ? "Não pôde pagar" : "",
@@ -558,7 +560,8 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/artifacts/": serie(4, index => ({
     id: index, kind: "proposal", kind_display: "Proposta", status: "draft",
     status_display: "Rascunho", title: `Proposta — ${NOME_LONGO}`,
-    content: "Rascunho gerado por IA para revisão humana.", opportunity: 1, project: null,
+    content: "Rascunho gerado por IA para revisão humana.", commercial_opportunity: 1,
+    opportunity: 1, project: null,
     source_meeting: null, document: null, ai_interaction: 1, created_by: 1,
     sent_at: null, decided_at: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   })),

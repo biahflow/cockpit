@@ -23,7 +23,7 @@ const services = [
 
 const proposalArtifact = {
   id: 3, kind: "proposal", kind_display: "Proposta", status: "draft", status_display: "Rascunho",
-  title: "Proposta — Oport X", content: "Rascunho gerado pela IA", opportunity: 1, project: null,
+  title: "Proposta — Oport X", content: "Rascunho gerado pela IA", commercial_opportunity: 1, opportunity: 1, project: null,
   source_meeting: null, document: null, ai_interaction: 4, created_by: 1, sent_at: null,
   decided_at: null, created_at: "2026-08-05T10:00:00Z", updated_at: "2026-08-05T10:00:00Z",
 };
@@ -37,8 +37,8 @@ function stub() {
     if (path === "/services/") return Promise.resolve(services);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
-    if (path.startsWith("/documents/?opportunity")) return Promise.resolve([{ id: 9, client: null, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
-    if (path.startsWith("/activities/?opportunity")) return Promise.resolve([{ id: 4, client: 1, opportunity: 1, kind: "meeting", kind_display: "Reunião", happened_on: "2026-08-12", summary: "Apresentação da proposta", notes: "", owner: 1, created_at: "2026-08-12T10:00:00Z", updated_at: "2026-08-12T10:00:00Z" }]);
+    if (path.startsWith("/documents/?commercial_opportunity")) return Promise.resolve([{ id: 9, client: null, commercial_opportunity: 1, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
+    if (path.startsWith("/activities/?commercial_opportunity")) return Promise.resolve([{ id: 4, client: 1, commercial_opportunity: 1, opportunity: 1, kind: "meeting", kind_display: "Reunião", happened_on: "2026-08-12", summary: "Apresentação da proposta", notes: "", owner: 1, created_at: "2026-08-12T10:00:00Z", updated_at: "2026-08-12T10:00:00Z" }]);
     if (path.includes("/convert-to-project/")) return Promise.resolve({ id: 7, name: "Oport X" });
     if (path.includes("/proposal/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4, artifact: proposalArtifact });
     if (path.includes("/summary/")) return Promise.resolve({ text: "Rascunho gerado pela IA", interaction: 4 });
@@ -265,7 +265,7 @@ test("mostra e registra interações da oportunidade pelo detalhe", async () => 
   await user.click(screen.getByRole("button", { name: "Registrar interação" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/activities/", expect.objectContaining({
-    method: "POST", body: expect.stringContaining('"opportunity":1'),
+    method: "POST", body: expect.stringContaining('"commercial_opportunity":1'),
   })));
 });
 
@@ -306,8 +306,8 @@ test("o erro do upload aparece dentro do modal", async () => {
     if (path === "/services/") return Promise.resolve(services);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
-    if (path.startsWith("/documents/?opportunity")) return Promise.resolve([{ id: 9, client: null, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
-    if (path.startsWith("/activities/?opportunity")) return Promise.resolve([]);
+    if (path.startsWith("/documents/?commercial_opportunity")) return Promise.resolve([{ id: 9, client: null, commercial_opportunity: 1, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
+    if (path.startsWith("/activities/?commercial_opportunity")) return Promise.resolve([]);
     if (path === "/documents/" && method === "POST") return Promise.reject(new Error("Tipo de arquivo não aceito."));
     return Promise.resolve({});
   });
@@ -360,8 +360,8 @@ test("erro ao salvar mantém o modal aberto", async () => {
     if (path === "/services/") return Promise.resolve(services);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
-    if (path.startsWith("/documents/?opportunity")) return Promise.resolve([]);
-    if (path.startsWith("/activities/?opportunity")) return Promise.resolve([]);
+    if (path.startsWith("/documents/?commercial_opportunity")) return Promise.resolve([]);
+    if (path.startsWith("/activities/?commercial_opportunity")) return Promise.resolve([]);
     if (path === "/opportunities/1/" && method === "PATCH") return Promise.reject(new Error("Não foi possível salvar."));
     return Promise.resolve({});
   });

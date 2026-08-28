@@ -9,7 +9,7 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from apps.core.models import Artifact
-from apps.core.tests.factories import OpportunityFactory, ProjectFactory, UserFactory
+from apps.core.tests.factories import CommercialOpportunityFactory, ProjectFactory, UserFactory
 
 
 @pytest.mark.django_db
@@ -25,7 +25,7 @@ def test_artifact_with_both_links_is_invalid() -> None:
     artifact = Artifact(
         kind=Artifact.Kind.PROPOSAL,
         title="Dupla",
-        opportunity=OpportunityFactory(),
+        commercial_opportunity=CommercialOpportunityFactory(),
         project=ProjectFactory(),
         created_by=UserFactory(),
     )

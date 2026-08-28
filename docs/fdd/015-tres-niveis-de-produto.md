@@ -40,11 +40,11 @@ avulso, que entra apenas no ROI por serviço.
 - **No máximo um serviço ativo por degrau**, garantido por `UniqueConstraint` condicional
   (`~Q(tier="") & Q(archived_at__isnull=True)`) — mesma invariante do `PipelineStage` ganho/perdido.
   Arquivar um degrau libera o `tier` para um substituto; serviços sem `tier` coexistem à vontade.
-- `Opportunity.service` é **opcional** (`SET_NULL`) — campo aditivo, não quebra as oportunidades
+- `CommercialOpportunity.service` é **opcional** (`SET_NULL`) — campo aditivo, não quebra as oportunidades
   existentes. O enum `TierEnum` do `/api/v1/`, esse sim, mudou de valores (ADR 0048).
 - **Conversão de lead:** `leads/{id}/convert/` cria a oportunidade já na **Qualification Call**
   ativa (quando existir) — o primeiro degrau, gratuito. Vendas troca o degrau depois, se for o caso.
-- **Conversão em projeto:** `convert-to-project` herda `opportunity.service` para o projeto,
+- **Conversão em projeto:** `convert-to-project` herda `commercial_opportunity.service` para o projeto,
   dentro da transação existente; um `service` explícito no payload prevalece. O status segue 201.
 - **Kickoff por degrau** (`kickoff.KICKOFF_TEMPLATES`): a Qualification Call semeia 1 marco, o
   Discovery + Assessment 2, o Discovery Sprint 3 (fechando em Executive Readout), a Feasibility 3
@@ -63,7 +63,7 @@ avulso, que entra apenas no ROI por serviço.
 - **Funil por degrau:** `GET /analytics/` traz `funnel.by_tier` com total, abertas, ganhas,
   perdidas, valor estimado e taxa de ganho — sempre os sete, mesmo zerados.
 - Acesso segue o RBAC já existente do recurso `service` (leitura para todos, escrita só admin) e
-  do recurso `opportunity`.
+  do recurso `commercial_opportunity`.
 
 ## Aceite
 

@@ -15,7 +15,12 @@ import pytest
 
 from apps.core import ai, cases
 from apps.core.models import Case, DigitalEmployee, KpiDirection, KpiUnit, Project, Vertical
-from apps.core.tests.factories import ClientFactory, OpportunityFactory, ProjectFactory, UserFactory
+from apps.core.tests.factories import (
+    ClientFactory,
+    CommercialOpportunityFactory,
+    ProjectFactory,
+    UserFactory,
+)
 
 RECEITA = "487500.00"
 CUSTO = "212300.00"
@@ -52,7 +57,7 @@ def _publicar(case: Case) -> Case:
 def test_a_proposta_cita_a_metrica_e_nunca_a_receita_nem_o_custo() -> None:
     vertical = _vertical()
     case = _publicar(_case_entregue(vertical))
-    nova = OpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
+    nova = CommercialOpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
 
     contexto = ai.build_opportunity_context(nova)
 
@@ -66,7 +71,7 @@ def test_a_proposta_cita_a_metrica_e_nunca_a_receita_nem_o_custo() -> None:
 def test_case_em_rascunho_nao_entra_na_proposta() -> None:
     vertical = _vertical()
     _case_entregue(vertical)  # fica em rascunho, sem consentimento
-    nova = OpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
+    nova = CommercialOpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
 
     assert "Cases já entregues" not in ai.build_opportunity_context(nova)
 
@@ -75,7 +80,7 @@ def test_case_em_rascunho_nao_entra_na_proposta() -> None:
 def test_case_de_outra_vertical_nao_entra_na_proposta() -> None:
     _publicar(_case_entregue(_vertical()))
     outra = Vertical.objects.create(name="Saúde", slug="saude")
-    nova = OpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=outra))
+    nova = CommercialOpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=outra))
 
     assert "Cases já entregues" not in ai.build_opportunity_context(nova)
 
@@ -84,7 +89,7 @@ def test_case_de_outra_vertical_nao_entra_na_proposta() -> None:
 def test_case_arquivado_nao_entra_na_proposta() -> None:
     vertical = _vertical()
     _publicar(_case_entregue(vertical)).archive()
-    nova = OpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
+    nova = CommercialOpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
 
     assert "Cases já entregues" not in ai.build_opportunity_context(nova)
 
@@ -100,7 +105,7 @@ def test_metrica_sem_base_registrada_diz_a_lacuna_em_vez_de_um_zero() -> None:
     project.status = Project.Status.COMPLETED
     project.save()
     _publicar(Case.objects.get(project=project))
-    nova = OpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
+    nova = CommercialOpportunityFactory(client=ClientFactory(name="Cliente novo", vertical=vertical))
 
     contexto = ai.build_opportunity_context(nova)
 
@@ -112,6 +117,6 @@ def test_metrica_sem_base_registrada_diz_a_lacuna_em_vez_de_um_zero() -> None:
 def test_cliente_sem_vertical_nao_recebe_case_de_setor_nenhum() -> None:
     """Sem setor não há "mesmo setor": citar qualquer case seria prova fraca vendida como forte."""
     _publicar(_case_entregue(_vertical()))
-    nova = OpportunityFactory(client=ClientFactory(name="Sem setor", vertical=None))
+    nova = CommercialOpportunityFactory(client=ClientFactory(name="Sem setor", vertical=None))
 
     assert "Cases já entregues" not in ai.build_opportunity_context(nova)

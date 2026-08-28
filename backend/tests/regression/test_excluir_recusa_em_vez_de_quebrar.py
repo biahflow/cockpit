@@ -2,7 +2,7 @@
 
 A FDD 025 deu botão e confirmação aos **dois** recursos que realmente excluem — etapa do pipeline
 e fase da jornada — e não lhes deu caminho de recusa. Os dois batem em FK `PROTECT`
-(`Opportunity.stage`, `ProjectPhase.phase`), e o `ProtectedError` não era tratado em lugar nenhum:
+(`CommercialOpportunity.stage`, `ProjectPhase.phase`), e o `ProtectedError` não era tratado em lugar nenhum:
 saía **500**, que o SPA mostra como "Não foi possível concluir a operação." e ainda reporta ao
 Sentry (`api.ts`), transformando uso legítimo da interface em incidente.
 
@@ -25,7 +25,7 @@ from apps.core.exceptions import api_exception_handler
 from apps.core.models import JourneyPhase, PipelineStage, ProjectPhase, User, Vertical
 from apps.core.tests.factories import (
     ClientFactory,
-    OpportunityFactory,
+    CommercialOpportunityFactory,
     PipelineStageFactory,
     ProjectFactory,
     UserFactory,
@@ -118,7 +118,7 @@ def test_fase_que_ninguem_materializou_ainda_e_excluida(admin_client: APIClient)
 @pytest.mark.django_db
 def test_etapa_com_oportunidade_recusa_com_409(admin_client: APIClient) -> None:
     etapa = PipelineStageFactory()
-    OpportunityFactory(stage=etapa)
+    CommercialOpportunityFactory(stage=etapa)
 
     resposta = admin_client.delete(reverse("pipelinestage-detail", args=[etapa.pk]))
 
@@ -136,7 +136,7 @@ def test_etapa_com_oportunidade_so_arquivada_diz_que_ela_existe(admin_client: AP
     que a interface esconde.
     """
     etapa = PipelineStageFactory()
-    oportunidade = OpportunityFactory(stage=etapa)
+    oportunidade = CommercialOpportunityFactory(stage=etapa)
     oportunidade.archive()
 
     resposta = admin_client.delete(reverse("pipelinestage-detail", args=[etapa.pk]))

@@ -106,7 +106,7 @@ export function LeadsPage() {
         {filter === "archived" ? <button className="btn btn--secondary" disabled={restoring === lead.id} onClick={() => void restore(lead.id)}><RotateCcw className="size-4" />{restoring === lead.id ? "Restaurando…" : "Restaurar"}</button> : <>
         <select className="field w-40" value={lead.status} onChange={event => void changeStatus(lead.id, event.target.value as LeadStatus)} aria-label={`Status do lead ${lead.name}`}>{(Object.keys(statusLabel) as LeadStatus[]).map(value => <option key={value} value={value}>{statusLabel[value]}</option>)}</select>
         {lead.qualification_outcome ? <span className={`state ${outcomeCls[lead.qualification_outcome]}`}>{outcomeLabel[lead.qualification_outcome]}</span> : null}
-        {lead.qualification_outcome === "qualified" || lead.opportunity ? null : <button className="btn" disabled={qualifying === lead.id} onClick={() => void qualify(lead.id)}>{qualifying === lead.id ? "Registrando…" : "Registrar qualificação"} <ArrowRight className="size-4" /></button>}
+        {lead.qualification_outcome === "qualified" || lead.commercial_opportunity ? null : <button className="btn" disabled={qualifying === lead.id} onClick={() => void qualify(lead.id)}>{qualifying === lead.id ? "Registrando…" : "Registrar qualificação"} <ArrowRight className="size-4" /></button>}
         <button className="btn btn--icon-danger ml-auto" aria-label={`Arquivar lead ${lead.name}`} onClick={() => setArchiving(lead)}><Trash2 className="size-4" /></button>
         </>}
       </div>

@@ -12,7 +12,7 @@ from apps.core.models import Activity, User
 from .factories import (
     ActivityFactory,
     ClientFactory,
-    OpportunityFactory,
+    CommercialOpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -118,14 +118,14 @@ def test_admin_gerencia_activity_de_qualquer_cliente(client: APIClient) -> None:
 def test_activity_com_oportunidade_de_outro_cliente_e_recusada(client: APIClient) -> None:
     sales = UserFactory(role=User.Role.SALES)
     cliente = ClientFactory()
-    oportunidade_de_outro_cliente = OpportunityFactory()
+    oportunidade_de_outro_cliente = CommercialOpportunityFactory()
     client.force_authenticate(sales)
 
     response = client.post(
         reverse("activity-list"),
         {
             "client": cliente.id,
-            "opportunity": oportunidade_de_outro_cliente.id,
+            "commercial_opportunity": oportunidade_de_outro_cliente.id,
             "kind": Activity.Kind.EMAIL,
             "happened_on": str(timezone.localdate()),
             "summary": "E-mail de follow-up",
@@ -134,20 +134,20 @@ def test_activity_com_oportunidade_de_outro_cliente_e_recusada(client: APIClient
     )
 
     assert response.status_code == 400
-    assert "opportunity" in response.data
+    assert "commercial_opportunity" in response.data
 
 
 @pytest.mark.django_db
 def test_activity_com_oportunidade_do_mesmo_cliente_e_aceita(client: APIClient) -> None:
     sales = UserFactory(role=User.Role.SALES)
-    oportunidade = OpportunityFactory()
+    oportunidade = CommercialOpportunityFactory()
     client.force_authenticate(sales)
 
     response = client.post(
         reverse("activity-list"),
         {
             "client": oportunidade.client_id,
-            "opportunity": oportunidade.id,
+            "commercial_opportunity": oportunidade.id,
             "kind": Activity.Kind.MEETING,
             "happened_on": str(timezone.localdate()),
             "summary": "Reunião de descoberta",
@@ -161,14 +161,16 @@ def test_activity_com_oportunidade_do_mesmo_cliente_e_aceita(client: APIClient) 
 @pytest.mark.django_db
 def test_filtro_por_client_e_opportunity(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
-    oportunidade = OpportunityFactory()
-    da_oportunidade = ActivityFactory(client=oportunidade.client, opportunity=oportunidade)
+    oportunidade = CommercialOpportunityFactory()
+    da_oportunidade = ActivityFactory(client=oportunidade.client, commercial_opportunity=oportunidade)
     do_mesmo_cliente_sem_oportunidade = ActivityFactory(client=oportunidade.client)
     de_outro_cliente = ActivityFactory()
     client.force_authenticate(admin)
 
     by_client = client.get(reverse("activity-list"), {"client": oportunidade.client_id})
-    by_opportunity = client.get(reverse("activity-list"), {"opportunity": oportunidade.id})
+    by_opportunity = client.get(
+        reverse("activity-list"), {"commercial_opportunity": oportunidade.id}
+    )
 
     assert {item["id"] for item in by_client.data} == {
         da_oportunidade.id,
@@ -183,10 +185,10 @@ def test_clean_recusa_oportunidade_de_outro_cliente_no_model() -> None:
     from django.core.exceptions import ValidationError
 
     cliente = ClientFactory()
-    oportunidade_de_outro_cliente = OpportunityFactory()
+    oportunidade_de_outro_cliente = CommercialOpportunityFactory()
     activity = Activity(
         client=cliente,
-        opportunity=oportunidade_de_outro_cliente,
+        commercial_opportunity=oportunidade_de_outro_cliente,
         kind=Activity.Kind.NOTE,
         happened_on=timezone.localdate() - timedelta(days=1),
         summary="Nota inválida",

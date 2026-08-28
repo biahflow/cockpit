@@ -13,7 +13,7 @@ from rest_framework.test import APIClient
 from apps.core.models import Artifact, User
 from apps.core.tests.factories import (
     ArtifactFactory,
-    OpportunityFactory,
+    CommercialOpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -34,17 +34,17 @@ def _delivery_client_and_user() -> tuple[APIClient, User]:
 
 
 def test_delivery_cannot_create_an_artifact_linked_to_an_opportunity() -> None:
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
 
     response = _delivery_client().post(reverse("artifact-list"), {
         "kind": Artifact.Kind.PROPOSAL,
         "title": "Proposta",
         "content": "Investimento de R$ 120.000.",
-        "opportunity": opportunity.id,
+        "commercial_opportunity": opportunity.id,
     }, format="json")
 
     assert response.status_code == 403
-    assert not Artifact.objects.filter(opportunity=opportunity).exists()
+    assert not Artifact.objects.filter(commercial_opportunity=opportunity).exists()
 
 
 def test_delivery_still_creates_artifacts_linked_to_a_project() -> None:
@@ -63,7 +63,7 @@ def test_delivery_still_creates_artifacts_linked_to_a_project() -> None:
 
 
 def test_delivery_cannot_reach_a_commercial_artifact_by_id() -> None:
-    artifact = ArtifactFactory(opportunity=OpportunityFactory())
+    artifact = ArtifactFactory(commercial_opportunity=CommercialOpportunityFactory())
     api = _delivery_client()
 
     assert api.get(reverse("artifact-detail", args=[artifact.id])).status_code == 404

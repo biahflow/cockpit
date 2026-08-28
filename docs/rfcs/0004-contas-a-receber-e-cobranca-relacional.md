@@ -9,7 +9,7 @@
 O portal carrega a oportunidade da venda até a operação, e para no ponto em que o dinheiro
 deveria entrar. Não há domínio de faturamento: entre os modelos de `apps/core/models.py` não
 existe fatura, pagamento, vencimento ou conta a receber. `Service.list_price` e
-`Opportunity.value` são **preço**; `Project.actual_value` é um número digitado. Nenhum
+`CommercialOpportunity.value` são **preço**; `Project.actual_value` é um número digitado. Nenhum
 deles responde "cobrei o cliente X, R$ Y, vence dia Z, está pago?".
 
 A consequência prática vem antes de qualquer discussão de agente de cobrança: **hoje a

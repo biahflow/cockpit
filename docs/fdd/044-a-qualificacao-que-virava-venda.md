@@ -9,7 +9,7 @@
 
 Alguém preenche o formulário do site. O lead cai na lista, o comercial olha, gosta do que vê e
 clica em **Converter em oportunidade**. Nesse clique o Pulse criava três coisas: um `Client` em
-estado prospect, uma `Opportunity` no degrau gratuito da escada (`service.tier =
+estado prospect, uma `CommercialOpportunity` no degrau gratuito da escada (`service.tier =
 qualification_call`) e um lead arquivado apontando para as duas.
 
 O problema não é o clique — é o que ele afirmava. Uma conversa de qualificação de trinta minutos,
@@ -80,7 +80,7 @@ As duas primeiras são as invariantes 5 e 6 do mapa de linguagem, e as duas vive
 só na view — shell, Django admin e migração futura não passam por rota nenhuma:
 
 1. `Qualification.outcome != qualified` não abre `CommercialOpportunity`. Na porta: 409. No modelo:
-   `Opportunity.clean()` recusa `origin_qualification` cuja avaliação não é `qualified`.
+   `CommercialOpportunity.clean()` recusa `origin_qualification` cuja avaliação não é `qualified`.
 2. Nenhum `Project` nasce de um `Service` com `category=acquisition`. Na porta: 400 em
    `convert-to-project`. No modelo: `Project.clean()`.
 3. A conta da avaliação é a mesma do lead, quando os dois já a têm (`Qualification.clean()`) — sem
@@ -93,7 +93,8 @@ só na view — shell, Django admin e migração futura não passam por rota nen
 
 ## O backfill
 
-`0052_backfill_qualification` traduz cada `Opportunity` de tier `qualification_call` que já existe.
+`0052_backfill_qualification` traduz cada `CommercialOpportunity` de tier `qualification_call` que
+já existe.
 O `outcome` é **derivado do estado comercial**, a única evidência que resta do que se decidiu na
 época: estágio `won` (ou já com projeto) foi `qualified`; `lost` foi `disqualified`; qualquer
 estágio aberto vira `nurture` — o resultado que não afirma nada, que é literalmente o estado
@@ -102,8 +103,8 @@ sem a nota ela sairia sem explicação.
 
 Três cuidados, cada um com teste em `tests/regression/test_qualification_backfill.py`:
 
-- **A oportunidade com projeto não é arquivada.** `Project.opportunity` é `PROTECT` e a tela do
-  projeto lê a oportunidade para montar o histórico comercial — o mesmo argumento do
+- **A oportunidade com projeto não é arquivada.** `Project.originating_commercial_opportunity` é
+  `PROTECT` e a tela do projeto lê a oportunidade para montar o histórico comercial — o mesmo argumento do
   `perform_destroy` da FDD 025.
 - **A oportunidade sem lead é pulada.** Uma avaliação sem lead não é avaliação de ninguém, e
   inventar um lead sintético colocaria dado falso na base para satisfazer uma chave estrangeira.
@@ -118,8 +119,8 @@ Três cuidados, cada um com teste em `tests/regression/test_qualification_backfi
 
 ## O que a construção decidiu
 
-**`Lead.opportunity` continua sendo ligado — agora na abertura da venda.** A análise de origem da
-FDD 030 atravessa `projeto → oportunidade → lead → source` por essa chave. Movendo a criação da
+**`Lead.commercial_opportunity` continua sendo ligado — agora na abertura da venda.** A análise
+de origem da FDD 030 atravessa `projeto → oportunidade → lead → source` por essa chave. Movendo a criação da
 oportunidade para fora do `convert` sem religar o lead, todo negócio nascido de lead passaria a
 contar como "Cadastro direto": uma tela de decisão de investimento errando em silêncio, com a
 tabela continuando a renderizar. O vínculo canônico da fatia é `origin_qualification`; este é o
@@ -152,9 +153,12 @@ divergir sem ninguém ter mudado nada.
   os aceita e a interface ainda não os oferece. Interface nova exige Design Approval Package, e não
   há um aprovado para esta superfície. A tela de Leads passou a falar em qualificação e a mostrar o
   resultado, e nada além disso.
-- **Os renomes físicos.** `Client`→`Account` e `Opportunity`→`CommercialOpportunity` são fatia
-  própria. `Qualification.account` já usa o nome canônico apontando para o modelo legado — é o alias
-  previsto, não um descuido.
+- **Os renomes físicos.** `Client`→`Account` é fatia própria. `Qualification.account` já usa o nome
+  canônico apontando para o modelo legado — é o alias previsto, não um descuido.
+  **Emenda de 28/08/2026:** `Opportunity`→`CommercialOpportunity` deixou de ser fatia futura — a
+  fatia 3 da issue #67 (ADR 0052) a executou, com a tabela `core_opportunity` e a rota
+  `/api/v1/opportunities/` intactas. `Qualification.legacy_opportunity` **não** mudou de nome:
+  `legacy_` é o escape reservado da `aliases.md` §3.
 - **`Engagement` entre Account e Project** (invariante 7 do mapa de linguagem), o split
   `Evidence`/`Finding` e o resto da ontologia: fatias próprias, cada uma com o seu backfill.
 - **A recorrência do Transformation Partnership**, que a FDD 015 já deixou nomeada e não feita.

@@ -97,7 +97,8 @@ class Client(TimestampedModel):
     name = models.CharField(max_length=255)
     legal_name = models.CharField(max_length=255, blank=True)
     tax_id = models.CharField(max_length=32, blank=True)
-    # Aditivo e opcional, na forma de `Opportunity.service`: é o que a instanciação de Funcionário
+    # Aditivo e opcional, na forma de `CommercialOpportunity.service`: é o que a instanciação
+    # de Funcionário
     # Digital usa como padrão e o que escolhe a variante do blueprint (FDD 026).
     vertical = models.ForeignKey(
         Vertical, on_delete=models.SET_NULL, null=True, blank=True, related_name="clients"
@@ -258,7 +259,7 @@ class PipelineStage(models.Model):
         return self.name
 
 
-class Opportunity(TimestampedModel):
+class CommercialOpportunity(TimestampedModel):
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="opportunities")
     contact = models.ForeignKey(Contact, on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=255)
@@ -293,14 +294,19 @@ class Opportunity(TimestampedModel):
     )
 
     class Meta:
+        # A classe renomeou na issue #67 e a **tabela fica** (ADR 0052): `db_table` fixa aqui o
+        # nome que ela já tem, para o `RenameModel` da migração não emitir `ALTER TABLE`. O nome
+        # da tabela é a Fase 6, e o que a `aliases.md` §2b protege é a pk — que só se move se a
+        # linha se mover.
+        db_table = "core_opportunity"
         ordering = ["expected_close_date", "id"]
 
     def clean(self) -> None:
         """Invariante 5 do mapa de linguagem, no modelo e não só na view.
 
         `POST /qualifications/{id}/open-opportunity/` é o caminho previsto e já recusa com 409, mas
-        a regra não pode morar só lá: shell, admin e migração futura criam `Opportunity` sem passar
-        por view nenhuma, e uma venda apontando para uma avaliação `nurture` diria que a casa vendeu
+        a regra não pode morar só lá: shell, admin e migração futura criam
+        `CommercialOpportunity` sem passar por view nenhuma, e uma venda apontando para uma avaliação `nurture` diria que a casa vendeu
         para quem ela mesma decidiu não vender ainda.
         """
         origem = self.origin_qualification if self.origin_qualification_id else None
@@ -378,11 +384,12 @@ class Project(TimestampedModel):
     # A venda que originou este projeto — **1-N e opcional**. Era `OneToOneField`, e a
     # cardinalidade antiga é o que impedia uma venda recorrente de originar mais de um projeto.
     # A garantia de "converte uma vez só" que o banco dava saiu daqui e virou ato explícito na
-    # `OpportunityViewSet.convert_to_project` (409 + `select_for_update`), porque o que se quer
-    # proteger é o **botão**, não a relação: um segundo projeto com a mesma origem é legítimo, e
+    # `CommercialOpportunityViewSet.convert_to_project` (409 + `select_for_update`), porque o
+    # que se quer proteger é o **botão**, não a relação: um segundo projeto com a mesma origem é legítimo, e
     # nasce por `POST /projects/`. Ver ADR 0050.
     originating_commercial_opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.PROTECT, related_name="projects", null=True, blank=True
+        CommercialOpportunity, on_delete=models.PROTECT, related_name="projects",
+        null=True, blank=True,
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -432,7 +439,7 @@ class Project(TimestampedModel):
             raise ValidationError({"due_date": "A data final não pode ser anterior à inicial."})
         # Invariante 6 do mapa de linguagem: nenhum projeto nasce de oferta de aquisição (ADR 0049).
         # A `convert-to-project` já recusa com 400, e a regra fica aqui pela razão da
-        # `Opportunity.clean()` logo acima — a via da view não é a única via.
+        # `CommercialOpportunity.clean()` logo acima — a via da view não é a única via.
         service = self.service if self.service_id else None
         if service is not None and service.category == Service.Category.ACQUISITION:
             raise ValidationError({
@@ -809,7 +816,9 @@ class GithubWebhookDelivery(models.Model):
 
 class Document(TimestampedModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
-    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, null=True, blank=True)
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.CASCADE, null=True, blank=True
+    )
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
     file = models.FileField(upload_to="documents/%Y/%m/", blank=True)
     drive_file_id = models.CharField(max_length=128, blank=True, default="")
@@ -818,13 +827,13 @@ class Document(TimestampedModel):
     uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="uploaded_documents")
 
     def clean(self) -> None:
-        links = [self.client_id, self.opportunity_id, self.project_id]
+        links = [self.client_id, self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError("O documento deve estar vinculado a exatamente um recurso.")
 
     @property
-    def linked_resource(self) -> Client | Opportunity | Project | None:
-        return self.client or self.opportunity or self.project
+    def linked_resource(self) -> Client | CommercialOpportunity | Project | None:
+        return self.client or self.commercial_opportunity or self.project
 
 
 class Meeting(TimestampedModel):
@@ -1052,8 +1061,9 @@ class Lead(TimestampedModel):
     ai_recommended_action = models.TextField(blank=True, default="")
     qualified_at = models.DateTimeField(null=True, blank=True)
     client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
-    opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="leads",
     )
 
     class Meta:
@@ -1066,8 +1076,8 @@ class Lead(TimestampedModel):
 class Qualification(TimestampedModel):
     """A avaliação que decide se um `Lead` vira venda — e que até aqui não existia (ADR 0049).
 
-    O `POST /leads/{id}/convert/` criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
-    gratuito da escada. Isso gravava uma conversa de qualificação como venda registrada: ela entrava
+    O `POST /leads/{id}/convert/` criava, num ato só, um `Client` **e** uma
+    `CommercialOpportunity` no degrau gratuito da escada. Isso gravava uma conversa de qualificação como venda registrada: ela entrava
     no funil, somava no pipeline e podia virar `Project`. A sequência normativa do Language Map é
     `Lead → Qualification → (qualified) → CommercialOpportunity`, e o degrau do meio precisava de
     linha própria para que a decisão tivesse autor, data e motivo (decisão D1).
@@ -1121,11 +1131,11 @@ class Qualification(TimestampedModel):
         max_length=16, choices=Outcome.choices, blank=True, default=""
     )
     ai_score_snapshot = models.PositiveSmallIntegerField(null=True, blank=True)
-    # Mapeamento do backfill da migração 0052: a `Opportunity` de tier `qualification_call` que
-    # esta avaliação passou a representar. `legacy_` é o único prefixo que o mapa de linguagem
+    # Mapeamento do backfill da migração 0052: a `CommercialOpportunity` de tier
+    # `qualification_call` que esta avaliação passou a representar. `legacy_` é o único prefixo que o mapa de linguagem
     # aceita em `opportunity` sem qualificador — é ponte para o nome antigo, não conceito novo.
     legacy_opportunity = models.OneToOneField(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="backfilled_qualification",
     )
 
@@ -1215,8 +1225,9 @@ class Activity(TimestampedModel):
         INSATISFEITO = "insatisfeito", "Insatisfeito"
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="activities")
-    opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="activities",
     )
     # A resposta do cliente à cobrança chega por aqui, digitada por quem atendeu (FDD 036).
     # `SET_NULL` como `Artifact.project`: a interação aconteceu, e sobrevive à fatura sumir do
@@ -1242,8 +1253,14 @@ class Activity(TimestampedModel):
         return f"{self.get_kind_display()}: {self.summary}"
 
     def clean(self) -> None:
-        if self.opportunity_id and self.opportunity and self.opportunity.client_id != self.client_id:
-            raise ValidationError({"opportunity": "A oportunidade deve pertencer ao mesmo cliente."})
+        if (
+            self.commercial_opportunity_id
+            and self.commercial_opportunity
+            and self.commercial_opportunity.client_id != self.client_id
+        ):
+            raise ValidationError(
+                {"commercial_opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
+            )
         # Mesma checagem para a fatura, e pela mesma razão que a da oportunidade: sem ela, uma
         # resposta de cobrança pode ficar pendurada na fatura de **outro** cliente — e é essa
         # linha que a tela de cobrança lê para decidir o próximo passo.
@@ -1370,7 +1387,8 @@ class Processo(TimestampedModel):
     e é a mesma distinção que o `Risco` faz em relação ao `risk.py` calculado.
 
     **Liga ao cliente e não ao projeto**, pelo argumento da `Satisfacao` acima: o processo mapeado
-    é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de Opportunity,
+    é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de
+    CommercialOpportunity,
     `docs/metodologia-fde.md:50-53`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
     novo Discovery da mesma empresa — que é exatamente o defeito que o `DigitalEmployee` tinha
     antes da FDD 026, quando o que valia morava só na instância e não no catálogo.
@@ -1950,7 +1968,8 @@ class Service(TimestampedModel):
         """O que a oferta faz pela casa — e é o que separa a escada comercial da porta (D4).
 
         `acquisition` é oferta de **aquisição**: existe para descobrir se há venda, não para ser
-        vendida. A Qualification Call é a única hoje. Ela nunca gera `Opportunity` nem `Project`,
+        vendida. A Qualification Call é a única hoje. Ela nunca gera `CommercialOpportunity`
+        nem `Project`,
         e é essa categoria — não o preço zero — que carrega a regra: gratuito também é o
         Discovery + Assessment do programa de founding client, e aquele é degrau vendável.
         """
@@ -2054,7 +2073,9 @@ class AiInteraction(models.Model):
     )
     feature = models.CharField(max_length=32)
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True)
-    opportunity = models.ForeignKey(Opportunity, on_delete=models.SET_NULL, null=True, blank=True)
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True
+    )
     lead = models.ForeignKey("Lead", on_delete=models.SET_NULL, null=True, blank=True)
     prompt_tokens = models.PositiveIntegerField(default=0)
     completion_tokens = models.PositiveIntegerField(default=0)
@@ -2576,8 +2597,9 @@ class Artifact(TimestampedModel):
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
     title = models.CharField(max_length=255)
     content = models.TextField(blank=True, default="")
-    opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="artifacts"
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="artifacts",
     )
     project = models.ForeignKey(
         Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="artifacts"
@@ -2603,7 +2625,7 @@ class Artifact(TimestampedModel):
         return f"{self.get_kind_display()} — {self.title}"
 
     def clean(self) -> None:
-        links = [self.opportunity_id, self.project_id]
+        links = [self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError(
                 "O artefato deve estar vinculado a uma oportunidade ou a um projeto."
@@ -2650,7 +2672,8 @@ class Case(TimestampedModel):
 
     # `PROTECT`, e não o `CASCADE` do resto do grafo de projeto: o case existe justamente para
     # sobreviver ao que acontece com o projeto depois. Deixar um `delete()` levar a prova junto
-    # derrotaria o ponto — é a mesma escolha de `Project.client` e `Project.opportunity`.
+    # derrotaria o ponto — é a mesma escolha de `Project.client` e de
+    # `Project.originating_commercial_opportunity`.
     project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="cases")
     title = models.CharField(max_length=255)
     summary = models.TextField(blank=True, default="")
@@ -2729,7 +2752,7 @@ class Invoice(TimestampedModel):
     """A fatura — o primeiro registro financeiro do portal (FDD 028, camada 0 da RFC 0004).
 
     O portal levava a oportunidade da venda até a operação e parava no ponto em que o dinheiro
-    deveria entrar: `Service.list_price` e `Opportunity.estimated_value` são **preço**,
+    deveria entrar: `Service.list_price` e `CommercialOpportunity.estimated_value` são **preço**,
     `Project.actual_value` é um número digitado, e nenhum deles responde "cobrei o cliente X, R$ Y,
     vence dia Z, está pago?". Sem data de vencimento e sem data de pagamento em lugar nenhum, a
     inadimplência era **imensurável** — e é por isso que este modelo vem antes de qualquer régua de

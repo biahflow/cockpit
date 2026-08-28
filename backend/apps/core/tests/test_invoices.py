@@ -12,8 +12,8 @@ from apps.core.models import Invoice, PipelineStage, Service
 
 from .factories import (
     ClientFactory,
+    CommercialOpportunityFactory,
     InvoiceFactory,
-    OpportunityFactory,
     ProjectFactory,
     ServiceFactory,
     UserFactory,
@@ -93,7 +93,7 @@ def test_semeadura_e_idempotente():
 
 @pytest.mark.django_db
 def test_valor_contratado_cai_para_a_oportunidade_e_depois_para_a_tabela():
-    oportunidade = OpportunityFactory(estimated_value=Decimal("7777.00"))
+    oportunidade = CommercialOpportunityFactory(estimated_value=Decimal("7777.00"))
     projeto = ProjectFactory(
         actual_value=Decimal("0"), originating_commercial_opportunity=oportunidade
     )
@@ -123,7 +123,7 @@ def test_vencimento_nao_passa_do_fim_do_projeto():
 def test_conversao_de_oportunidade_semeia_o_cronograma(admin_client_api):
     ganha = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
     servico = Service.objects.get(tier="prove")
-    oportunidade = OpportunityFactory(stage=ganha, service=servico)
+    oportunidade = CommercialOpportunityFactory(stage=ganha, service=servico)
     resposta = admin_client_api.post(
         f"/api/v1/opportunities/{oportunidade.id}/convert-to-project/",
         {

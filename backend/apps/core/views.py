@@ -85,6 +85,7 @@ from .models import (
     Client,
     CobrancaContato,
     CobrancaSuspensao,
+    CommercialOpportunity,
     Contact,
     Decisao,
     DigitalEmployee,
@@ -107,7 +108,6 @@ from .models import (
     Meeting,
     Milestone,
     Notification,
-    Opportunity,
     Pendencia,
     PhaseChecklistItem,
     PhaseDeliverable,
@@ -144,6 +144,7 @@ from .serializers import (
     ClientSerializer,
     CobrancaContatoSerializer,
     CobrancaSuspensaoSerializer,
+    CommercialOpportunitySerializer,
     ContactSerializer,
     DecisaoSerializer,
     DigitalEmployeeBlueprintSerializer,
@@ -171,7 +172,6 @@ from .serializers import (
     MilestoneSerializer,
     NotificationSerializer,
     OpenCommercialOpportunitySerializer,
-    OpportunitySerializer,
     PendenciaSerializer,
     PhaseChecklistItemSerializer,
     PhaseDeliverableSerializer,
@@ -292,11 +292,20 @@ class QueryParamFilterMixin:
 
     filter_fields: tuple[str, ...] = ()
     filter_exact_fields: tuple[str, ...] = ()
+    # Campo canônico → nome antigo do query param. A issue #67 renomeou o campo e a
+    # `docs/ontology/aliases.md` §2c mantém o nome antigo na `/api/v1/`: `?opportunity=`
+    # continua filtrando igual a `?commercial_opportunity=`. Sem isto o param antigo não
+    # ficaria "sem efeito" — ele estouraria `FieldError`, porque o nome do param **é** o
+    # caminho do ORM aqui. A canônica vence quando as duas vêm, como no corpo.
+    filter_field_aliases: dict[str, str] = {}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()  # type: ignore[misc]
         for field in self.filter_fields:
             value = self.request.query_params.get(field)  # type: ignore[attr-defined]
+            legado = self.filter_field_aliases.get(field)
+            if not value and legado:
+                value = self.request.query_params.get(legado)  # type: ignore[attr-defined]
             if value and value.isdigit():
                 queryset = queryset.filter(**{field: value})
         for field in self.filter_exact_fields:
@@ -575,7 +584,8 @@ def _ai_run(  # type: ignore[no-untyped-def]
     if grounding is not None:
         text, sources = knowledge.enforce_citations(text, grounding)
     interaction = AiInteraction.objects.create(
-        user=request.user, feature=feature, project=project, opportunity=opportunity,
+        user=request.user, feature=feature, project=project,
+        commercial_opportunity=opportunity,
         prompt_tokens=usage.get("prompt_tokens", 0), completion_tokens=usage.get("completion_tokens", 0),
         sources=sources,
     )
@@ -585,7 +595,8 @@ def _ai_run(  # type: ignore[no-untyped-def]
     if artifact_kind is not None:
         artifact = Artifact.objects.create(
             kind=artifact_kind, title=artifact_title, content=text,
-            opportunity=opportunity, project=project, source_meeting=source_meeting,
+            commercial_opportunity=opportunity, project=project,
+            source_meeting=source_meeting,
             ai_interaction=interaction, created_by=request.user,
         )
         payload["artifact"] = ArtifactSerializer(artifact).data
@@ -727,8 +738,8 @@ class ClientViewSet(ArchiveModelViewSet):
         """Arquiva o cliente e, junto, os contatos dele — recusando se ainda houver trabalho aberto.
 
         Soft delete não cascateia sozinho, e sem estas duas regras arquivar um cliente produzia
-        órfão visível: `ProjectViewSet` e `OpportunityViewSet` filtram o próprio `archived_at` e
-        nunca o do cliente, então projeto e oportunidade continuavam listados apontando para uma
+        órfão visível: `ProjectViewSet` e `CommercialOpportunityViewSet` filtram o próprio
+        `archived_at` e nunca o do cliente, então projeto e oportunidade continuavam listados apontando para uma
         linha que sumiu da tela de Clientes. O contato não tem esse problema (ninguém o lista
         sozinho), então ele acompanha em vez de bloquear.
 
@@ -738,7 +749,9 @@ class ClientViewSet(ArchiveModelViewSet):
         trabalho em aberto, é o resíduo dele. Acompanha o contato, na mesma transação.
         """
         projetos = Project.objects.filter(client=instance, archived_at__isnull=True).count()
-        oportunidades = Opportunity.objects.filter(client=instance, archived_at__isnull=True).count()
+        oportunidades = CommercialOpportunity.objects.filter(
+            client=instance, archived_at__isnull=True
+        ).count()
         if projetos or oportunidades:
             partes = []
             if projetos:
@@ -809,9 +822,12 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """Interação comercial com o cliente (ligação, reunião, e-mail, nota) — FDD 035."""
 
     resource = "activity"
-    queryset = Activity.objects.select_related("client", "opportunity", "owner").all()
+    queryset = Activity.objects.select_related(
+        "client", "commercial_opportunity", "owner"
+    ).all()
     serializer_class = ActivitySerializer
-    filter_fields = ("client", "opportunity")
+    filter_fields = ("client", "commercial_opportunity")
+    filter_field_aliases = {"commercial_opportunity": "opportunity"}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Mesma fronteira do Contact: a Entrega só enxerga interações de clientes com projeto seu.
@@ -878,8 +894,8 @@ class PipelineStageViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance: PipelineStage) -> None:
         """Recusa excluir etapa que ainda tem oportunidade — com 409, e dizendo quantas.
 
-        Um dos dois `DELETE` de verdade do portal (FDD 025). `Opportunity.stage` é `PROTECT`, e
-        sem esta guarda o banco recusava por baixo: `ProtectedError` sem tradução vira **500**.
+        Um dos dois `DELETE` de verdade do portal (FDD 025). `CommercialOpportunity.stage` é
+        `PROTECT`, e sem esta guarda o banco recusava por baixo: `ProtectedError` sem tradução vira **500**.
         """
         total = instance.opportunities.count()
         if total:
@@ -897,23 +913,24 @@ class PipelineStageViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-class OpportunityViewSet(ArchiveModelViewSet):
-    resource = "opportunity"
-    # `projects` é o reverso lido por `OpportunitySerializer._projeto_do_card`. Era
+class CommercialOpportunityViewSet(ArchiveModelViewSet):
+    resource = "commercial_opportunity"
+    # `projects` é o reverso lido por `CommercialOpportunitySerializer._projeto_do_card`. Era
     # `select_related("project")` enquanto a relação era 1-1; virou `prefetch_related` porque
     # 1-N não cabe num `JOIN` sem multiplicar a linha da oportunidade. O motivo de estar aqui é o
     # mesmo de antes: sem ele, a listagem do pipeline faz uma query por card (ADR 0014).
     queryset = (
-        Opportunity.objects.select_related("client", "contact", "stage", "owner", "service")
+        CommercialOpportunity.objects
+        .select_related("client", "contact", "stage", "owner", "service")
         .prefetch_related("projects")
         .all()
     )
-    serializer_class = OpportunitySerializer
+    serializer_class = CommercialOpportunitySerializer
 
-    def perform_create(self, serializer: OpportunitySerializer) -> None:
+    def perform_create(self, serializer: CommercialOpportunitySerializer) -> None:
         serializer.save(owner=self.request.user)
 
-    def perform_destroy(self, instance: Opportunity) -> None:
+    def perform_destroy(self, instance: CommercialOpportunity) -> None:
         """Recusa arquivar oportunidade cujo projeto ainda está **ativo**.
 
         `Project.originating_commercial_opportunity` é `PROTECT`, e o projeto lê a oportunidade
@@ -955,8 +972,9 @@ class OpportunityViewSet(ArchiveModelViewSet):
     def convert_to_project(self, request: Request, pk: str | None = None) -> Response:
         """Converte a oportunidade ganha num projeto — **uma vez**, e a garantia mudou de lugar.
 
-        Até a ADR 0050 quem garantia "converte uma vez só" era o banco: `Project.opportunity` era
-        `OneToOneField`, e a segunda conversão morria num `IntegrityError` que virava 409. Essa
+        Até a ADR 0050 quem garantia "converte uma vez só" era o banco: o campo hoje chamado
+        `Project.originating_commercial_opportunity` era `OneToOneField`, e a segunda conversão
+        morria num `IntegrityError` que virava 409. Essa
         cardinalidade caiu porque ela também impedia o que a casa passou a vender — uma
         Transformation Partnership origina vários projetos ao longo do mandato.
 
@@ -1009,7 +1027,7 @@ class OpportunityViewSet(ArchiveModelViewSet):
                 # linha da oportunidade fica bloqueada até o fim da transação, então a segunda
                 # requisição só lê o estado depois que a primeira gravou o projeto — e cai no 409
                 # abaixo em vez de criar o segundo.
-                travada = Opportunity.objects.select_for_update().get(pk=opportunity.pk)
+                travada = CommercialOpportunity.objects.select_for_update().get(pk=opportunity.pk)
                 vivo = travada.projects.filter(archived_at__isnull=True).order_by("id").first()
                 if vivo is not None:
                     return Response({"detail": "A oportunidade já foi convertida."}, status=409)
@@ -2255,10 +2273,11 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
 
     resource = "artifact"
     queryset = Artifact.objects.select_related(
-        "opportunity__client", "project__client", "document"
+        "commercial_opportunity__client", "project__client", "document"
     ).all()
     serializer_class = ArtifactSerializer
-    filter_fields = ("opportunity", "project")
+    filter_fields = ("commercial_opportunity", "project")
+    filter_field_aliases = {"commercial_opportunity": "opportunity"}
     filter_exact_fields = ("kind", "status")
 
     def create_kwargs(self) -> dict:
@@ -2272,7 +2291,7 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         if (
             user.role == User.Role.DELIVERY
             and not user.is_admin_role
-            and serializer.validated_data.get("opportunity") is not None
+            and serializer.validated_data.get("commercial_opportunity") is not None
         ):
             raise PermissionDenied("Entrega não vincula artefatos a oportunidades.")
         super().perform_create(serializer)
@@ -2287,10 +2306,11 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
 
     resource = "document"
     queryset = Document.objects.select_related(
-        "client", "opportunity", "project", "uploaded_by"
+        "client", "commercial_opportunity", "project", "uploaded_by"
     ).prefetch_related("signature_requests").all()
     serializer_class = DocumentSerializer
-    filter_fields = ("client", "opportunity", "project")
+    filter_fields = ("client", "commercial_opportunity", "project")
+    filter_field_aliases = {"commercial_opportunity": "opportunity"}
 
     @action(detail=True, methods=["get"])
     def download(self, request: Request, pk: str | None = None) -> FileResponse:
@@ -3085,7 +3105,7 @@ class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 class LeadViewSet(ArchiveModelViewSet):
     resource = "lead"
     queryset = (
-        Lead.objects.select_related("client", "opportunity")
+        Lead.objects.select_related("client", "commercial_opportunity")
         .prefetch_related("qualifications")
         .all()
     )
@@ -3101,14 +3121,14 @@ class LeadViewSet(ArchiveModelViewSet):
     def convert(self, request: Request, pk: str | None = None) -> Response:
         """Registra a **qualificação** do lead e resolve a conta — e não cria mais venda (ADR 0049).
 
-        Até aqui esta ação criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
-        gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
+        Até aqui esta ação criava, num ato só, um `Client` **e** uma `CommercialOpportunity` no
+        degrau gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
         somava no pipeline e podia virar `Project`. A sequência normativa é
         `Lead → Qualification → (qualified) → CommercialOpportunity`, e o passo comercial passou a
         ter porta própria: `POST /qualifications/{id}/open-opportunity/`.
 
-        Some daqui, junto com a `Opportunity`, a busca por `PipelineStage` aberto e pelo `Service`
-        de entrada — e os dois 400 que elas produziam. Qualificar um lead não depende mais de o
+        Some daqui, junto com a `CommercialOpportunity`, a busca por `PipelineStage` aberto e
+        pelo `Service` de entrada — e os dois 400 que elas produziam. Qualificar um lead não depende mais de o
         pipeline estar configurado.
         """
         lead = self.get_object()
@@ -3116,7 +3136,7 @@ class LeadViewSet(ArchiveModelViewSet):
         payload.is_valid(raise_exception=True)
         dados = payload.validated_data
 
-        if lead.opportunity_id:
+        if lead.commercial_opportunity_id:
             # Lead convertido pelo caminho antigo: a oportunidade dele já existe, e converter de
             # novo criaria uma segunda conta para a mesma empresa. O backfill da 0052 dá a
             # avaliação que faltava a essas linhas.
@@ -3217,7 +3237,7 @@ class QualificationViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         serializer.save(assessor=serializer.validated_data.get("assessor") or self.request.user)
 
     @extend_schema(
-        request=OpenCommercialOpportunitySerializer, responses=OpportunitySerializer
+        request=OpenCommercialOpportunitySerializer, responses=CommercialOpportunitySerializer
     )
     @action(detail=True, methods=["post"], url_path="open-opportunity")
     def open_opportunity(self, request: Request, pk: str | None = None) -> Response:
@@ -3262,7 +3282,7 @@ class QualificationViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             return Response({"detail": "Nenhuma etapa aberta configurada."}, status=400)
 
         with transaction.atomic():
-            opportunity = Opportunity.objects.create(
+            opportunity = CommercialOpportunity.objects.create(
                 client_id=qualification.account_id,
                 contact=contato,
                 title=dados["title"] or qualification.lead.name,
@@ -3276,8 +3296,8 @@ class QualificationViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
                 service=service,
                 origin_qualification=qualification,
             )
-            # **`Lead.opportunity` continua sendo ligado aqui**, e não é resíduo do caminho antigo:
-            # a análise de origem da FDD 030 atravessa `projeto → oportunidade → lead → source`
+            # **`Lead.commercial_opportunity` continua sendo ligado aqui**, e não é resíduo do
+            # caminho antigo: a análise de origem da FDD 030 atravessa `projeto → oportunidade → lead → source`
             # por esta chave. Movendo a criação da venda para cá sem religar o lead, todo negócio
             # nascido de lead passaria a contar como "Cadastro direto" — uma tela de decisão de
             # investimento errando em silêncio, que é o modo de falha que
@@ -3285,10 +3305,12 @@ class QualificationViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             # O vínculo canônico da fatia nova é `origin_qualification`; este é o atalho da
             # analítica, e some no dia em que ela souber ler a avaliação no meio do caminho.
             lead = qualification.lead
-            if lead.opportunity_id is None:
-                lead.opportunity = opportunity
-                lead.save(update_fields=["opportunity", "updated_at"])
-        return Response(OpportunitySerializer(opportunity).data, status=status.HTTP_201_CREATED)
+            if lead.commercial_opportunity_id is None:
+                lead.commercial_opportunity = opportunity
+                lead.save(update_fields=["commercial_opportunity", "updated_at"])
+        return Response(
+            CommercialOpportunitySerializer(opportunity).data, status=status.HTTP_201_CREATED
+        )
 
 
 # Token efêmero (assinado) que autoriza um lead qualificado a ver horários e agendar.
@@ -3714,15 +3736,15 @@ SEM_LEAD = "direto"
 def _lead_source(opportunity_path: str) -> Subquery:
     """O `source` do lead que originou aquele negócio, um por linha.
 
-    Subconsulta e não `join`: `Opportunity.leads` é reverso de FK e aceita mais de uma linha,
-    então agrupar pelo join multiplicaria o projeto por lead e a **receita seria somada duas
+    Subconsulta e não `join`: `CommercialOpportunity.leads` é reverso de FK e aceita mais de
+    uma linha, então agrupar pelo join multiplicaria o projeto por lead e a **receita seria somada duas
     vezes**. Aqui a origem é escalar por construção, e o dinheiro não pode dobrar.
 
     O critério de desempate é o lead mais antigo: quem trouxe o negócio é quem chegou
     primeiro, não quem foi cadastrado por último.
     """
     return Subquery(
-        Lead.objects.filter(opportunity=OuterRef(opportunity_path))
+        Lead.objects.filter(commercial_opportunity=OuterRef(opportunity_path))
         .order_by("created_at")
         .values("source")[:1]
     )
@@ -3750,7 +3772,7 @@ class AnalyticsView(APIView):
         leads = Lead.objects.filter(active)
         leads_by_status = {row["status"]: row["n"] for row in leads.values("status").annotate(n=Count("id"))}
 
-        opps = Opportunity.objects.filter(active)
+        opps = CommercialOpportunity.objects.filter(active)
         won = opps.filter(stage__kind=PipelineStage.Kind.WON).count()
         lost = opps.filter(stage__kind=PipelineStage.Kind.LOST).count()
         open_count = opps.filter(stage__kind=PipelineStage.Kind.OPEN).count()
@@ -3819,7 +3841,9 @@ class AnalyticsView(APIView):
             accepted = rows.filter(status=Artifact.Status.ACCEPTED).count()
             rejected = rows.filter(status=Artifact.Status.REJECTED).count()
             reached = (
-                rows.annotate(client=Coalesce("opportunity__client_id", "project__client_id"))
+                rows.annotate(
+                    client=Coalesce("commercial_opportunity__client_id", "project__client_id")
+                )
                 .values("client").distinct().count()
             )
             by_stage.append({
@@ -3837,7 +3861,8 @@ class AnalyticsView(APIView):
         # desperdício de demanda mora em canal que gera lead e não gera cliente, e essa
         # pergunta era irrespondível — não por falta de dado, mas por falta de leitor: a
         # travessia `projeto → oportunidade → lead → source` já existe em chaves desde a
-        # FDD 013, porque `Lead.opportunity` é FK e `Project.opportunity` é OneToOne.
+        # FDD 013, porque `Lead.commercial_opportunity` é FK e
+        # `Project.originating_commercial_opportunity` é FK desde a ADR 0050.
         #
         # A contagem de entrada é sobre `Lead.objects` **inteiro**, sem o `active` que é o
         # reflexo do resto deste método: `LeadViewSet.convert` chama `lead.archive()`, então
@@ -4039,7 +4064,7 @@ class DashboardView(APIView):
             request.user.role == User.Role.DELIVERY and not request.user.is_admin_role
         )
         # O funil traz valor estimado de **todas** as oportunidades, inclusive as não-ganhas,
-        # que o `OpportunityViewSet` já esconde de Entrega. O painel não pode ser o canal
+        # que o `CommercialOpportunityViewSet` já esconde de Entrega. O painel não pode ser o canal
         # lateral disso. O campo permanece (a forma do contrato não muda), vazio.
         stages = [] if is_delivery else list(PipelineStage.objects.annotate(
             opportunity_count=Count("opportunities"), estimated_total=Sum("opportunities__estimated_value")

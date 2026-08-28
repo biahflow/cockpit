@@ -8,6 +8,7 @@ from apps.core.models import (
     Activity,
     Artifact,
     Client,
+    CommercialOpportunity,
     Discovery,
     DiscoverySession,
     Engagement,
@@ -19,7 +20,6 @@ from apps.core.models import (
     Invoice,
     Lead,
     Meeting,
-    Opportunity,
     PipelineStage,
     Processo,
     ProcessObservation,
@@ -76,9 +76,9 @@ class ServiceFactory(factory.django.DjangoModelFactory):
     tier = ""
 
 
-class OpportunityFactory(factory.django.DjangoModelFactory):
+class CommercialOpportunityFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = Opportunity
+        model = CommercialOpportunity
 
     client = factory.SubFactory(ClientFactory)
     title = "Diagnóstico comercial"
@@ -208,7 +208,8 @@ class MeetingFactory(factory.django.DjangoModelFactory):
 
 
 class ArtifactFactory(factory.django.DjangoModelFactory):
-    """Artefato de proposta por padrão; passe `project=...`/`opportunity=None` para os de entrega."""
+    """Artefato de proposta por padrão; passe `project=…`/`commercial_opportunity=None` para
+    os de entrega."""
 
     class Meta:
         model = Artifact
@@ -216,7 +217,7 @@ class ArtifactFactory(factory.django.DjangoModelFactory):
     kind = Artifact.Kind.PROPOSAL
     title = "Proposta — Diagnóstico comercial"
     content = "Rascunho gerado para revisão humana."
-    opportunity = factory.SubFactory(OpportunityFactory)
+    commercial_opportunity = factory.SubFactory(CommercialOpportunityFactory)
     created_by = factory.SubFactory(UserFactory)
 
 

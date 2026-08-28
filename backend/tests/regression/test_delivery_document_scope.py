@@ -17,7 +17,7 @@ from rest_framework.test import APIClient
 from apps.core.models import Document, Task, User
 from apps.core.tests.factories import (
     ClientFactory,
-    OpportunityFactory,
+    CommercialOpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -42,7 +42,7 @@ def _document(**links: object) -> Document:
 
 def test_delivery_outside_the_project_sees_no_documents() -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
-    commercial = _document(opportunity=OpportunityFactory())
+    commercial = _document(commercial_opportunity=CommercialOpportunityFactory())
     other_project = _document(project=ProjectFactory())
 
     api = APIClient()
@@ -87,22 +87,22 @@ def test_delivery_sees_documents_of_the_project_it_works_on() -> None:
 def test_delivery_cannot_upload_a_document_linked_to_an_opportunity() -> None:
     """Sem isso, Entrega criaria um documento comercial que some da própria lista."""
     delivery = UserFactory(role=User.Role.DELIVERY)
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
 
     api = APIClient()
     api.force_authenticate(delivery)
     response = api.post(reverse("document-list"), {
-        "opportunity": opportunity.id,
+        "commercial_opportunity": opportunity.id,
         "file": SimpleUploadedFile("contrato.pdf", b"conteudo", content_type="application/pdf"),
     })
 
     assert response.status_code == 403
-    assert not Document.objects.filter(opportunity=opportunity).exists()
+    assert not Document.objects.filter(commercial_opportunity=opportunity).exists()
 
 
 def test_sales_keeps_full_access_to_documents() -> None:
     sales = UserFactory(role=User.Role.SALES)
-    commercial = _document(opportunity=OpportunityFactory())
+    commercial = _document(commercial_opportunity=CommercialOpportunityFactory())
     operational = _document(project=ProjectFactory())
     institutional = _document(client=ClientFactory())
 

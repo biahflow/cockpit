@@ -109,8 +109,8 @@ def contracted_value(project: Project) -> Decimal:
     semear um cronograma que não soma exatamente isso faria os dois números se contradizerem no
     primeiro dia, que é a colisão de verdade que a FDD existe para não cometer por acidente.
 
-    `Opportunity.estimated_value` em seguida: não tem default e nunca é nulo, então é o palpite
-    honesto — o que o pipeline dizia que o negócio valia. `Service.list_price` por último, e na
+    `CommercialOpportunity.estimated_value` em seguida: não tem default e nunca é nulo, então
+    é o palpite honesto — o que o pipeline dizia que o negócio valia. `Service.list_price` por último, e na
     prática quase sempre zero: a migração `0020` semeia os níveis pagos com preço a definir.
     """
     if project.actual_value and project.actual_value > 0:

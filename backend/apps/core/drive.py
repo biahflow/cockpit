@@ -68,7 +68,7 @@ def para_bucket_for(document: Document) -> str:
     """Subpasta PARA de acordo com o vínculo do documento."""
     if document.project_id:
         return PROJECT_BUCKET
-    if document.opportunity_id:
+    if document.commercial_opportunity_id:
         return OPPORTUNITY_BUCKET
     return CLIENT_BUCKET
 
@@ -77,7 +77,9 @@ def client_of(document: Document) -> Client | None:
     """Cliente-dono do documento, seguindo o vínculo (cliente, oportunidade ou projeto)."""
     if document.client_id:
         return document.client
-    opportunity = document.opportunity if document.opportunity_id else None
+    opportunity = (
+        document.commercial_opportunity if document.commercial_opportunity_id else None
+    )
     if opportunity:
         return opportunity.client
     project = document.project if document.project_id else None

@@ -41,7 +41,7 @@ _BASE = (
 
 
 def build_commercial_context(user: User) -> str:
-    from .models import Lead, Opportunity, PipelineStage
+    from .models import CommercialOpportunity, Lead, PipelineStage
 
     active = Q(archived_at__isnull=True)
     lines = ["Resumo comercial.", "Pipeline por etapa:"]
@@ -53,7 +53,7 @@ def build_commercial_context(user: User) -> str:
         lines.append(f"- {stage.name} [{stage.kind}]: {stage.n} oportunidade(s), total estimado {stage.total or 0}")
     stale_before = timezone.now() - timedelta(days=30)
     stale = list(
-        Opportunity.objects.filter(
+        CommercialOpportunity.objects.filter(
             active, stage__kind=PipelineStage.Kind.OPEN, created_at__lt=stale_before
         ).select_related("client")[:20]
     )

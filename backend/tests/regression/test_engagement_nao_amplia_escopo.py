@@ -18,8 +18,8 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Milestone, PipelineStage, Project, User
 from apps.core.tests.factories import (
+    CommercialOpportunityFactory,
     EngagementFactory,
-    OpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -109,7 +109,7 @@ def test_o_contrato_da_oportunidade_mantem_a_forma() -> None:
     api = APIClient()
     api.force_authenticate(admin)
     engagement = EngagementFactory()
-    origem = OpportunityFactory(
+    origem = CommercialOpportunityFactory(
         client=engagement.account, stage=PipelineStage.objects.get(kind="won"), owner=admin
     )
     primeiro = ProjectFactory(

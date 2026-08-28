@@ -12,7 +12,7 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 48), que conta **dívidas
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 43), que conta **dívidas
 #     distintas** — linhas deste arquivo, não ocorrências no código. Os dois números não medem a
 #     mesma coisa.
 #
@@ -31,18 +31,28 @@
 # payload** são a `/api/v2/`, e o split Evidence/Finding foi a Fase 3.
 
 # ---------------------------------------------------------------------------------------------
-# `Opportunity` sem qualificador — Fase 6 (renome físico para `CommercialOpportunity`).
-# A rota `/api/v1/opportunities/` sobrevive ao renome como alias e só morre na `/api/v2/`.
-# `Project.ai_opportunity` é caso à parte: o papel de prioridade passa a `PriorityAssessment` na
-# Fase 4 (language-map §5), e o campo em si é renomeado com o resto na Fase 6.
+# `Opportunity` sem qualificador — a rota e um campo que não é venda. Morrem em fases distintas.
+# O bloco tinha sete linhas e ficou com duas. A fatia 3 da issue #67 (ADR 0052) renomeou a classe
+# para `CommercialOpportunity` e os cinco campos que apontavam para ela para
+# `commercial_opportunity`: modelo, migração `0061`, serializers, viewset, `resource`,
+# permissões, portal e tipo TS já dizem o nome certo.
+#
+# O que ficou:
+#
+#   * `opportunities` em `urls.py` — a **rota**, que morre na `/api/v2/`. `/api/v1/opportunities/`
+#     e o `basename` `opportunity` respondem como sempre responderam, agora com o `basename`
+#     explícito porque o derivado da classe viraria `commercialopportunity`.
+#   * `ai_opportunity` — não é venda: é o AI Score de maturidade, escalar, e o papel dele vira
+#     `PriorityAssessment` na Fase 4 (language-map §5). O campo em si é renomeado na Fase 6.
+#
+# As **chaves de payload** (`opportunity` no corpo e na resposta de documento, artefato,
+# interação, lead e projeto) não aparecem aqui porque a regra casa declaração de campo de modelo
+# (`… = models.…`), e o alias é um `serializers.PrimaryKeyRelatedField`. Quem impede removê-lo
+# antes da `/api/v2/` é a regressão
+# `backend/tests/regression/test_o_alias_de_venda_sobrevive_na_v1.py`.
 # ---------------------------------------------------------------------------------------------
-backend/apps/core/models.py::opportunity-sem-qualificador::Opportunity::1
 backend/apps/core/models.py::opportunity-sem-qualificador::ai_opportunity::1
-backend/apps/core/models.py::opportunity-sem-qualificador::opportunity::5
-backend/apps/core/serializers.py::opportunity-sem-qualificador::OpportunitySerializer::1
 backend/apps/core/urls.py::opportunity-sem-qualificador::opportunities::1
-backend/apps/core/views.py::opportunity-sem-qualificador::OpportunityViewSet::1
-frontend/src/types.ts::opportunity-sem-qualificador::Opportunity::1
 
 # ---------------------------------------------------------------------------------------------
 # `Client` como organização — Fase 6 (renome físico para `Account`).

@@ -16,9 +16,9 @@ from rest_framework.test import APIClient
 
 from apps.core.models import (
     Client,
+    CommercialOpportunity,
     Contact,
     Lead,
-    Opportunity,
     PipelineStage,
     Project,
     Qualification,
@@ -28,8 +28,8 @@ from apps.core.models import (
 
 from .factories import (
     ClientFactory,
+    CommercialOpportunityFactory,
     LeadFactory,
-    OpportunityFactory,
     QualificationFactory,
     ServiceFactory,
     UserFactory,
@@ -67,8 +67,8 @@ def test_convert_cria_conta_e_qualificacao_sem_oportunidade(api: APIClient) -> N
     assert lead.client is not None
     assert lead.client.name == "ACME"
     assert lead.client.status == Client.Status.PROSPECT
-    assert lead.opportunity_id is None
-    assert Opportunity.objects.count() == 0
+    assert lead.commercial_opportunity_id is None
+    assert CommercialOpportunity.objects.count() == 0
     assert lead.qualifications.get().account_id == lead.client_id
 
 
@@ -262,7 +262,7 @@ def test_qualificacao_nao_qualificada_nao_abre_oportunidade(
     qualification = QualificationFactory(outcome=outcome, **extras)
 
     assert _abrir(api, qualification).status_code == 409
-    assert Opportunity.objects.count() == 0
+    assert CommercialOpportunity.objects.count() == 0
 
 
 def test_open_opportunity_cria_a_venda_com_a_origem(api: APIClient, vendas: User) -> None:
@@ -274,7 +274,7 @@ def test_open_opportunity_cria_a_venda_com_a_origem(api: APIClient, vendas: User
     assert response.status_code == 201
     corpo = response.json()
     assert corpo["origin_qualification"] == qualification.pk
-    opportunity = Opportunity.objects.get()
+    opportunity = CommercialOpportunity.objects.get()
     assert opportunity.client_id == qualification.account_id
     assert opportunity.owner_id == vendas.pk
     assert opportunity.stage_id == stage.pk
@@ -282,7 +282,7 @@ def test_open_opportunity_cria_a_venda_com_a_origem(api: APIClient, vendas: User
     assert opportunity.estimated_value == Decimal("45000.00")
     # Segunda chamada não duplica a venda.
     assert _abrir(api, qualification).status_code == 409
-    assert Opportunity.objects.count() == 1
+    assert CommercialOpportunity.objects.count() == 1
 
 
 def test_open_opportunity_recusa_oferta_de_aquisicao(api: APIClient) -> None:
@@ -292,7 +292,7 @@ def test_open_opportunity_recusa_oferta_de_aquisicao(api: APIClient) -> None:
     response = _abrir(api, qualification, service=porta.pk)
 
     assert response.status_code == 400
-    assert Opportunity.objects.count() == 0
+    assert CommercialOpportunity.objects.count() == 0
 
 
 def test_open_opportunity_sem_conta_recusa(api: APIClient) -> None:
@@ -309,7 +309,7 @@ def test_open_opportunity_recusa_contato_de_outro_cliente(api: APIClient) -> Non
     response = _abrir(api, qualification, contact=alheio.pk)
 
     assert response.status_code == 400
-    assert Opportunity.objects.count() == 0
+    assert CommercialOpportunity.objects.count() == 0
 
 
 def test_open_opportunity_sem_estagio_aberto_recusa(api: APIClient) -> None:
@@ -322,7 +322,7 @@ def test_open_opportunity_sem_estagio_aberto_recusa(api: APIClient) -> None:
 
 def test_lead_convertido_pelo_caminho_antigo_nao_reconverte(api: APIClient) -> None:
     """Guarda herdada: a linha antiga já tem venda, e converter de novo duplicaria a conta."""
-    antigo = LeadFactory(opportunity=OpportunityFactory())
+    antigo = LeadFactory(commercial_opportunity=CommercialOpportunityFactory())
 
     response = api.post(reverse("lead-convert", args=[antigo.pk]), format="json")
 
@@ -335,7 +335,7 @@ def test_lead_convertido_pelo_caminho_antigo_nao_reconverte(api: APIClient) -> N
 
 def test_convert_to_project_recusa_oferta_de_aquisicao(api: APIClient, vendas: User) -> None:
     porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
-    opportunity = OpportunityFactory(
+    opportunity = CommercialOpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=vendas, service=porta
     )
 
@@ -367,7 +367,7 @@ def test_opportunity_clean_recusa_origem_nao_qualificada() -> None:
         outcome=Qualification.Outcome.NURTURE,
         nurture_until=timezone.localdate() + timedelta(days=30),
     )
-    opportunity = OpportunityFactory.build(
+    opportunity = CommercialOpportunityFactory.build(
         client=qualification.account,
         stage=PipelineStage.objects.filter(kind="open").first(),
         owner=UserFactory(),

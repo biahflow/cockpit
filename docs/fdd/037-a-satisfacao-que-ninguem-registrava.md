@@ -126,7 +126,7 @@ cliente, e cliente sem projeto ativo ainda pode ter fatura vencida. Ligar só ao
 camada 5 sem alcance justamente em quem não está mais em entrega — que é onde a cobrança dói.
 
 O `clean()` exige que `project.client` seja o mesmo `client`, pela mesma forma que a `Activity` já
-usa para `opportunity` e `invoice`.
+usa para `commercial_opportunity` e `invoice`.
 
 ### Por que a nova escada reusa as chaves de degrau
 

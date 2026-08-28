@@ -27,8 +27,8 @@ from apps.core import ai
 from apps.core.models import Evidencia
 from apps.core.tests.factories import (
     ClientFactory,
+    CommercialOpportunityFactory,
     EvidenciaFactory,
-    OpportunityFactory,
     ProcessoEtapaFactory,
     ProcessoFactory,
 )
@@ -50,7 +50,7 @@ def _oportunidade_com_processo(**campos: object):  # type: ignore[no-untyped-def
     processo = ProcessoFactory(client=client, name="Faturamento mensal", **NUCLEO, **campos)
     ProcessoEtapaFactory(processo=processo, name="Conferir notas", position=1)
     ProcessoEtapaFactory(processo=processo, name="Emitir boletos", position=2)
-    return OpportunityFactory(client=client), processo
+    return CommercialOpportunityFactory(client=client), processo
 
 
 def test_sem_fato_o_numero_nao_entra_e_a_lacuna_e_declarada() -> None:
@@ -135,7 +135,7 @@ def test_o_total_parcial_diz_o_que_ficou_de_fora() -> None:
 
 def test_cliente_sem_processo_mapeado_segue_com_o_contexto_de_antes() -> None:
     """Silêncio, como `_case_lines` sem case: quem não fez Discovery estruturado não perde nada."""
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
 
     contexto = ai.build_opportunity_context(opportunity)
 

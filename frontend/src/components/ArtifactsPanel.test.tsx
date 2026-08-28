@@ -9,7 +9,7 @@ vi.mock("../api", () => ({ api: mocks.api }));
 
 const proposal = (overrides = {}) => ({
   id: 3, kind: "proposal", kind_display: "Proposta", status: "draft", status_display: "Rascunho",
-  title: "Proposta — Acme", content: "Escopo e investimento.", opportunity: 1, project: null,
+  title: "Proposta — Acme", content: "Escopo e investimento.", commercial_opportunity: 1, opportunity: 1, project: null,
   source_meeting: null, document: null, ai_interaction: 4, created_by: 1, sent_at: null,
   decided_at: null, created_at: "2026-08-05T10:00:00Z", updated_at: "2026-08-05T10:00:00Z",
   ...overrides,
@@ -30,7 +30,7 @@ test("lista os artefatos da oportunidade com estado e conteúdo", async () => {
   expect(await screen.findByText("Proposta — Acme")).toBeInTheDocument();
   expect(screen.getByText("Rascunho")).toBeInTheDocument();
   expect(screen.getByLabelText("Conteúdo de Proposta — Acme")).toHaveValue("Escopo e investimento.");
-  expect(mocks.api).toHaveBeenCalledWith("/artifacts/?opportunity=1");
+  expect(mocks.api).toHaveBeenCalledWith("/artifacts/?commercial_opportunity=1");
 });
 
 test("salva o texto revisado pelo humano", async () => {

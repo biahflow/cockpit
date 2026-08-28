@@ -11,7 +11,7 @@ vi.mock("../auth", () => ({ useAuth: () => authState }));
 
 function stub(signatureRequests: object[] = []) {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/documents/") return Promise.resolve([{ id: 1, client: 1, opportunity: null, project: null, file: "x", original_name: "contrato.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: signatureRequests }]);
+    if (path === "/documents/") return Promise.resolve([{ id: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "contrato.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: signatureRequests }]);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     return Promise.resolve([]);
   });
@@ -91,7 +91,7 @@ test("mostra o link de assinatura do fornecedor quando há", async () => {
 test("lista e restaura documentos arquivados", async () => {
   const user = userEvent.setup();
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/documents/?archived=1") return Promise.resolve([{ id: 2, client: 1, opportunity: null, project: null, file: "x", original_name: "antigo.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: [] }]);
+    if (path === "/documents/?archived=1") return Promise.resolve([{ id: 2, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "antigo.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: [] }]);
     if (path === "/documents/") return Promise.resolve([]);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     return Promise.resolve([]);

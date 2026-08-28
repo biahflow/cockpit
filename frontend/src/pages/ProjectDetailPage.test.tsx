@@ -14,7 +14,7 @@ vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 const artifact = () => ({
   id: 5, kind: "discovery", kind_display: "Discovery", status: "draft", status_display: "Rascunho",
-  title: "Discovery — Kickoff", content: "Análise da reunião", opportunity: null, project: 1,
+  title: "Discovery — Kickoff", content: "Análise da reunião", commercial_opportunity: null, opportunity: null, project: 1,
   source_meeting: 1, document: null, ai_interaction: 9, created_by: 1, sent_at: null,
   decided_at: null, created_at: "2026-08-05T10:00:00Z", updated_at: "2026-08-05T10:00:00Z",
 });

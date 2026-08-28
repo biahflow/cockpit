@@ -7,8 +7,8 @@ portal consome para backfill/reconciliação. Nenhum dado comercial é exposto.
 A única coisa que a linha acima precisa qualificar é `artifact_accepted_at` (emenda de
 07/08/2026 na ADR 0003): o que sai é o **instante** da primeira aceitação do cliente, para o
 funil de onboarding do portal — nunca `kind`, `title`, `content`, valor ou contagem. Nenhuma
-das três coisas que a ADR nomeia (Opportunity, PipelineStage, valores) cruza; o que cruza é
-a data em que o próprio cliente aprovou alguma coisa.
+das três coisas que a ADR nomeia (CommercialOpportunity, PipelineStage, valores) cruza; o que
+cruza é a data em que o próprio cliente aprovou alguma coisa.
 
 A segunda qualificação é o `rationale` das decisões (emenda de 12/08/2026 na ADR 0003, FDD 032).
 Ele é **texto** e atravessa, o que contrasta de propósito com a `Pendencia`: dela sai título e
@@ -91,11 +91,12 @@ def _artifact_accepted_at(project: Project) -> str | None:
 
     Escopado pelo **cliente** e não pelo projeto, porque o funil de lá é por organização e
     um cliente pode ter vários projetos: os dois lados do vínculo do artefato (`project` e
-    `opportunity`) chegam ao mesmo `Client`, e a aceitação do contrato quase sempre está no
-    lado da oportunidade, antes de existir projeto algum.
+    `commercial_opportunity`) chegam ao mesmo `Client`, e a aceitação do contrato quase sempre
+    está no lado da oportunidade, antes de existir projeto algum.
     """
     first = Artifact.objects.filter(
-        Q(project__client=project.client_id) | Q(opportunity__client=project.client_id),
+        Q(project__client=project.client_id)
+        | Q(commercial_opportunity__client=project.client_id),
         status=Artifact.Status.ACCEPTED,
         archived_at__isnull=True,
         decided_at__isnull=False,
@@ -173,6 +174,9 @@ def ai_score_snapshot(project: Project) -> dict[str, Any] | None:
         return None
     return {
         "maturity": project.ai_maturity,
+        # A colisão de nome com a venda é **léxica**: esta chave é o AI Score de maturidade
+        # (`Project.ai_opportunity`), escalar, e o papel dela vira `PriorityAssessment` na
+        # Fase 4. Renomeá-la aqui seria mudança de contrato do snapshot que o One consome.
         "opportunity": project.ai_opportunity,
         "dimensions": project.ai_dimensions,
         "summary": project.ai_score_summary,
