@@ -8,7 +8,7 @@ import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, Contact, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Processo, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, Contact, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -121,7 +121,7 @@ export function AccountDetailPage({ id }: { id: number }) {
   const [iaLigada, setIaLigada] = useState(false);
   const [classificando, setClassificando] = useState<number | null>(null);
   const [satisfacoes, setSatisfacoes] = useState<Satisfacao[]>([]);
-  const [processos, setProcessos] = useState<Processo[]>([]);
+  const [processos, setProcessos] = useState<Process[]>([]);
   const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
   const [engagementDraft, setEngagementDraft] = useState(blankEngagement);
@@ -150,7 +150,7 @@ export function AccountDetailPage({ id }: { id: number }) {
     api<AccountOverview>(`/clients/${id}/overview/`),
     api<Vertical[]>("/verticals/"),
     api<Satisfacao[]>(`/satisfacoes/?account=${id}`),
-    api<Processo[]>(`/processos/?account=${id}`),
+    api<Process[]>(`/processos/?account=${id}`),
     // Na **mesma** chamada que o resto da página, e não num `useEffect` próprio: a seção não tem
     // estado de carregamento seu (decisão do DAP), e uma segunda chamada criaria um — a tela
     // mostraria a seção vazia antes de mostrá-la cheia.
@@ -450,8 +450,8 @@ export function AccountDetailPage({ id }: { id: number }) {
         quando metade dos insumos não foi apurada é a casa afirmando ao cliente o oposto do que ela
         sabe.
 
-        A contagem de etapas ficou de fora, e o motivo é o payload: `ProcessoSerializer` não expõe
-        `etapas` nem um contador, e `/processo-etapas/` só filtra por `?processo=` — mostrá-la aqui
+        A contagem de etapas ficou de fora, e o motivo é o payload: `ProcessSerializer` não expõe
+        `steps` nem um contador, e `/processo-etapas/` só filtra por `?process=` — mostrá-la aqui
         custaria uma requisição por processo a cada `load()`, que esta tela dispara a cada contato,
         interação ou satisfação criados. */}
     <section className="panel space-y-4 sm:p-6">

@@ -10,12 +10,14 @@ primeira semana, e aí não protege nada.
 
 "Renome físico" era um termo que significava duas coisas, e a **ADR 0052** o desfez em três, com
 prazos distintos: o nome da **classe** é a issue #67 (uma fatia por PR), o nome da **tabela** é a
-Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. Três fatias já passaram —
-`GateOutcome` virou `GateDecision` com o campo `gate_decision`, `Opportunity` virou
-`CommercialOpportunity` com os cinco campos `commercial_opportunity`, e `Client` virou `Account`
-com os dez campos `account` e o `lifecycle_status` —, restando na allowlist as rotas, as chaves de
-payload que a v1 promete, o `ai_opportunity` (que nunca foi venda), o `client_consent` e o
-`Project.client`, que é a projeção que a Fase 6 remove.
+Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. As quatro fatias passaram e a #67
+fechou — `GateOutcome` virou `GateDecision` com o campo `gate_decision`, `Opportunity` virou
+`CommercialOpportunity` com os cinco campos `commercial_opportunity`, `Client` virou `Account` com
+os dez campos `account` e o `lifecycle_status`, e `Processo`/`ProcessoEtapa` viraram
+`Process`/`ProcessStep` com os três campos `process`/`step` —, restando na allowlist as rotas, as
+chaves de payload que a v1 promete, o `ai_opportunity` (que nunca foi venda), o `client_consent`,
+o `Project.client` (a projeção que a Fase 6 remove), a `Evidencia` (que não é renome: a Fase 3 a
+dividiu, e a Fase 6 a remove com o dual-write) e a família sem nome canônico na Ontology v1.
 
 O que a invariante §6 proíbe é **batizar** coisa nova com o nome errado. Batizar tem forma
 sintática: `class X`, `campo = models.…`, `router.register(...)`, `path(...)`, `type X`,
@@ -29,7 +31,8 @@ Três exceções são deliberadas e as fases seguintes dependem delas (ver `docs
   correção;
 * `commercial_` / `improvement_` — são exatamente os qualificadores que a §5 pede;
 * um campo chamado `account` — é o nome canônico, e desde a fatia 2 da #67 ele aponta para a
-  classe de nome certo. A regra `client-como-organizacao` casa `client`, nunca `account`.
+  classe de nome certo. A regra `client-como-organizacao` casa `client`, nunca `account`. O mesmo
+  vale para `process`/`step` desde a fatia 4.
 
 `GateOutcome`/`gate_outcome` é a única regra em que a **referência** é o problema: ali o
 identificador inteiro está errado, não o contexto — não existe uso legítimo do nome antigo dentro
@@ -222,8 +225,10 @@ REGRAS: tuple[Regra, ...] = (
     ),
     Regra(
         id="legado-congelado",
-        # Os quatro nomes que a Fase 3 divide e a Fase 6 renomeia. Enquanto a dívida existe ela
-        # fica declarada na allowlist; classe **nova** com esses nomes reprova aqui.
+        # Os quatro nomes banidos pela §5. Três já foram pagos (`GateOutcome` na fatia 1 da #67,
+        # `Processo`/`ProcessoEtapa` na fatia 4) e **continuam** no regex: lista fechada existe
+        # para barrar batismo novo, e nome pago segue banido. `Evidencia` é a única ainda de pé,
+        # declarada na allowlist até a Fase 6 remover o dual-write.
         padrao=re.compile(r"^\s*class\s+(ProcessoEtapa|Processo|Evidencia|GateOutcome)\b"),
         arquivos=ESCOPO_BACKEND,
         mensagem="use Evidence / Process / ProcessStep / GateDecision (language-map §5)",
@@ -340,7 +345,7 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # onze delas abaixa a contagem daquela linha sem mexer neste teto. **Este número só desce.**
 # Baixá-lo é o trabalho das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada
 # linha aqui é um nome que o repositório ainda diz errado.
-TETO_DA_ALLOWLIST = 37
+TETO_DA_ALLOWLIST = 29
 
 
 def test_nenhum_termo_banido_novo() -> None:

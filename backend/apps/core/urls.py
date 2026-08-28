@@ -58,8 +58,8 @@ from .views import (
     PipelineStageViewSet,
     PortalProjectSnapshotView,
     ProcessObservationViewSet,
-    ProcessoEtapaViewSet,
-    ProcessoViewSet,
+    ProcessStepViewSet,
+    ProcessViewSet,
     ProjectChecklistItemViewSet,
     ProjectDeliverableViewSet,
     ProjectMemberViewSet,
@@ -117,8 +117,14 @@ router.register("github-projections", GithubDeliveryProjectionViewSet)
 router.register("satisfacoes", SatisfacaoViewSet)
 # O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as três
 # rotas ficam fora de `/projects/`. Etapa e evidência pendem do processo, não do projeto.
-router.register("processos", ProcessoViewSet)
-router.register("processo-etapas", ProcessoEtapaViewSet)
+#
+# **As rotas ficam, e os `basename` viraram explícitos.** A fatia 4 da issue #67 renomeou as
+# classes para `Process`/`ProcessStep` (ADR 0052); o `basename` derivado do queryset passaria a
+# ser `process`/`processstep` e quebraria todo `reverse("processo-…")`. `/processes/` e
+# `/process-steps/` nascem na `/api/v2/`, que é o prazo que a `docs/ontology/aliases.md` sempre
+# deu à rota.
+router.register("processos", ProcessViewSet, basename="processo")
+router.register("processo-etapas", ProcessStepViewSet, basename="processoetapa")
 router.register("evidencias", EvidenciaViewSet)
 # O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). As duas âncoras convivem e a rota
 # mostra isso: `discoveries` e o que pende dele são de **projeto**; `evidence` e `findings` são da

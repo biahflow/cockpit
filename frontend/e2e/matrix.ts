@@ -90,8 +90,8 @@ const oportunidades = serie(8, index => ({
   title: `Discovery e assessment de automação — ${NOME_LONGO}`,
   scope: "Mapeamento de processos e desenho de agentes.", estimated_value: "150000.00",
   stage: (index % 3) + 1, stage_name: etapas[(index % 3)].name, owner: 1,
-  expected_close_date: HOJE, service: 1, service_name: "Discovery + Assessment",
-  service_tier: "discovery_assessment",
+  expected_close_date: HOJE, service: 1, service_name: "Discovery Sprint",
+  service_tier: "discovery_sprint",
 }));
 
 const itensDeTrabalho = serie(8, index => ({
@@ -131,7 +131,7 @@ const processos = serie(3, index => ({
 }));
 
 const processoEtapas = serie(3, index => ({
-  id: index, processo: 1, position: index,
+  id: index, process: 1, processo: 1, position: index,
   name: `Etapa ${index} — conferência manual da nota fiscal no ERP`,
   pessoas: "Analista de faturamento, duas pessoas em revezamento",
   sistema: "ERP Protheus e uma planilha de conferência no Drive",
@@ -154,7 +154,7 @@ const evidencias = [
   { rotulo: "desconhecido", rotulo_display: "Desconhecido", forma: "observacao", forma_display: "Observação (o que fazem)",
     content: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
 ].map((registro, indice) => ({
-  id: indice + 1, processo: 1, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
+  id: indice + 1, process: 1, processo: 1, step: null, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
 }));
 
 const saude = serie(8, index => ({
@@ -453,7 +453,7 @@ const FIXTURES: Record<string, unknown> = {
       projects: { total: 12, by_status: { active: 8, completed: 4 } },
       by_tier: [
         { tier: "discovery_sprint", label: "Discovery Sprint", total: 10, open: 4, won: 5, lost: 1, estimated_total: 0, win_rate: 0.83 },
-        { tier: "discovery_assessment", label: "Discovery + Assessment", total: 8, open: 3, won: 4, lost: 1, estimated_total: 320000, win_rate: 0.8 },
+        { tier: "feasibility", label: "Technical Feasibility (T.O.E.)", total: 8, open: 3, won: 4, lost: 1, estimated_total: 320000, win_rate: 0.8 },
         { tier: "prove", label: "PROVE (piloto)", total: 5, open: 2, won: 2, lost: 1, estimated_total: 900000, win_rate: 0.67 },
       ],
       by_stage: [

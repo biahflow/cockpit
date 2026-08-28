@@ -113,9 +113,9 @@ from .models import (
     PhaseDeliverable,
     PhaseEvent,
     PipelineStage,
-    Processo,
+    Process,
     ProcessObservation,
-    ProcessoEtapa,
+    ProcessStep,
     Project,
     ProjectChecklistItem,
     ProjectDeliverable,
@@ -178,8 +178,8 @@ from .serializers import (
     PhaseEventSerializer,
     PipelineStageSerializer,
     ProcessObservationSerializer,
-    ProcessoEtapaSerializer,
-    ProcessoSerializer,
+    ProcessSerializer,
+    ProcessStepSerializer,
     ProfileAvatarSerializer,
     ProfileSerializer,
     ProjectChecklistItemSerializer,
@@ -403,7 +403,7 @@ def decisoes_do_texto(text: str) -> list[dict]:
 
 
 #: Os seis campos da etapa, na ordem das seis letras do P-S-D-T-E-R
-#: (`docs/metodologia-fde.md:75-79`). Tupla e não literal repetido no parser e no prompt: a ordem
+#: (`docs/metodologia-fde.md:106-110`). Tupla e não literal repetido no parser e no prompt: a ordem
 #: **é** a pergunta feita na reunião, e uma sétima chave inventada aqui deixaria de casar com o
 #: formulário da tela.
 _ETAPA_PSDTER: tuple[str, ...] = ("pessoas", "sistema", "dados", "tempo", "erro", "retrabalho")
@@ -417,7 +417,7 @@ _ETAPA_PSDTER: tuple[str, ...] = ("pessoas", "sistema", "dados", "tempo", "erro"
 #: "o prompt pede" de "o código impõe", que é exatamente a distinção que ela existe para manter.
 #:
 #: Um modelo lendo transcrição produz **o que foi dito**, que é uma das cinco formas de evidência
-#: (`docs/metodologia-fde.md:81-84`) e não prova. Por isso as duas chaves são atribuídas como
+#: (`docs/metodologia-fde.md:112-115`) e não prova. Por isso as duas chaves são atribuídas como
 #: constantes em quem grava, e não pedidas aqui: pedir e sobrescrever depois transformaria a
 #: imposição em sugestão, e quem lesse este texto acharia que o modelo decide.
 _PROMPT_PROCESSOS = (
@@ -502,7 +502,7 @@ def processos_do_texto(text: str) -> list[dict]:
         if not nome:
             continue
         extraidos.append({
-            # 255 porque `Processo.name` e `ProcessoEtapa.name` são `CharField(max_length=255)`, e
+            # 255 porque `Process.name` e `ProcessStep.name` são `CharField(max_length=255)`, e
             # o modelo não tem como saber disso: um nome de 4.000 caracteres viraria `DataError` no
             # meio da gravação, derrubando o mapa inteiro por um item.
             "name": nome[:255],
@@ -1318,9 +1318,18 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         request=inline_serializer(
             "ApplyGate",
             {
-                "decision": serializers.ChoiceField(choices=ProjectPhase.GateDecision.choices),
+                "decision": serializers.ChoiceField(
+                    choices=ProjectPhase.DECISOES_DO_GATE,
+                    help_text=(
+                        "As sete saídas dos dois vocabulários (ADR 0053). O esquema aceita todas "
+                        "porque não sabe de qual fase se trata; **quem estreita é o servidor**, "
+                        "pelo `canonical_stage` da fase ativa — `prove` aceita SCALE / ITERATE / "
+                        "STOP, e qualquer outra fase de gate aceita GO / CONDITIONAL GO / "
+                        "REDESIGN / NO-GO. Fora do vocabulário da fase é 400."
+                    ),
+                ),
                 "outcome": serializers.ChoiceField(
-                    choices=ProjectPhase.GateDecision.choices,
+                    choices=ProjectPhase.DECISOES_DO_GATE,
                     required=False,
                     help_text=(
                         "Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na "
@@ -1334,10 +1343,14 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
     )
     @action(detail=True, methods=["post"], url_path="apply-gate")
     def apply_gate(self, request: Request, pk: str | None = None) -> Response:
-        """Registra o decision gate de quatro saídas na fase ativa (delivery/admin, FDD 033).
+        """Registra o decision gate na fase ativa (delivery/admin, FDD 033, ADR 0053).
 
-        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as quatro saídas mexem em
-        até duas fases, e a tela precisa da lista atualizada, não do que mudou.
+        Devolve a jornada inteira, no mesmo formato do `advance-phase`: as saídas mexem em até
+        duas fases, e a tela precisa da lista atualizada, não do que mudou.
+
+        **Não valida a decisão aqui.** Qual vocabulário vale depende da fase ativa, que só
+        `journey.apply_gate` resolve — e a invariante pertence ao domínio, não à rota (ADR 0053).
+        De lá vêm o 400 do valor fora do vocabulário e o 409 do estado que impede.
         """
         project = self.get_object()
         # `decision` é a chave canônica (D7, ADR 0052); `outcome` continua aceita como alias da
@@ -1345,11 +1358,6 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         # confusão do chamador, e resolver pela nova é o que não trava quem já migrou.
         bruto = request.data.get("decision") or request.data.get("outcome", "")
         decision = str(bruto).strip()
-        if decision not in ProjectPhase.GateDecision.values:
-            return Response(
-                {"detail": "Informe uma das quatro saídas: go, conditional_go, redesign, no_go."},
-                status=400,
-            )
         notes = str(request.data.get("notes", "") or "")
         journey.apply_gate(project, decision, notes, actor=request.user)
         return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
@@ -2487,19 +2495,19 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
         **A primeira é o que o modelo não decide.** Todo achado nasce rotulado como hipótese e com
         a origem "entrevista", sempre, atribuídos aqui como constantes — o `_PROMPT_PROCESSOS` não
         pergunta, e o `processos_do_texto` não lê. Um modelo lendo transcrição produz *o que foi
-        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:81-84`), não
+        dito*, que é uma das cinco formas de evidência (`docs/metodologia-fde.md:112-115`), não
         prova; promover a fato é ato de gente, pela mesma razão que a ADR 0032 recusou à IA gravar
         satisfação.
 
         **A segunda é a recusa de reexecução**, e ela é divergência deliberada do `extrair_decisoes`:
         lá cada execução cria `Decisao` em **rascunho**, um estado que a tela mostra como pendente
-        de revisão, e uma segunda rodada só dá mais rascunho para revisar. `Processo` não tem
+        de revisão, e uma segunda rodada só dá mais rascunho para revisar. `Process` não tem
         estado de rascunho — a segunda extração dobraria o mapa da operação do cliente **em
         silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
         e como sair dele, que é para o que o `StateConflict` existe.
 
         **Desde a FDD 045 a gravação é dupla, e a forma da resposta não muda.** Além de
-        `Processo`/`ProcessoEtapa`/`Evidencia`, a mesma transação escreve o par do split: uma
+        `Process`/`ProcessStep`/`Evidencia`, a mesma transação escreve o par do split: uma
         `Evidence` por processo, que diz de onde o achado veio, e um `Finding` por achado, que diz
         o que ele afirma — sempre em `hypothesis`, pela mesma razão que a `Evidencia` nasce
         `hipotese`. O legado continua porque o custo do estado atual e a tela ainda leem dele; a
@@ -2510,7 +2518,7 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
             return Response({"detail": "A reunião não tem transcrição."}, status=400)
         # **Antes** da IA, e não dentro do coletor: recusar depois de chamar o provedor gastaria a
         # cota diária de quem clicou por um trabalho que já se sabia que seria descartado.
-        ja_mapeados = Processo.objects.filter(
+        ja_mapeados = Process.objects.filter(
             source_meeting=meeting, archived_at__isnull=True
         ).count()
         if ja_mapeados:
@@ -2529,19 +2537,19 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
             # A extração entra **depois** do que já foi mapeado à mão: `position` é a ordem em que
             # a operação acontece, e intercalar processos vindos de um modelo no meio de uma
             # sequência que alguém montou reescreveria essa ordem sem pedir licença.
-            ultima = Processo.objects.filter(account=account, archived_at__isnull=True).aggregate(
+            ultima = Process.objects.filter(account=account, archived_at__isnull=True).aggregate(
                 maior=Max("position")
             )["maior"]
             proxima = (ultima or 0) + 1
-            criados: list[Processo] = []
+            criados: list[Process] = []
             for indice, bruto in enumerate(extraidos):
-                processo = Processo.objects.create(
+                processo = Process.objects.create(
                     account=account, name=bruto["name"], source_project=meeting.project,
                     source_meeting=meeting, registered_by=request.user,
                     position=proxima + indice,
                 )
-                ProcessoEtapa.objects.bulk_create([
-                    ProcessoEtapa(processo=processo, position=posicao, **etapa)
+                ProcessStep.objects.bulk_create([
+                    ProcessStep(process=processo, position=posicao, **etapa)
                     for posicao, etapa in enumerate(bruto["etapas"], start=1)
                 ])
                 if bruto["achados"]:
@@ -2560,8 +2568,8 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                     )
                     for achado in bruto["achados"]:
                         # **Dual-write, e nenhuma das duas gravações é opcional** (FDD 045): a
-                        # `Evidencia` legada continua porque `processos.custo_do_estado_atual` e a
-                        # tela `ProcessoDetailPage` leem dela — desligá-la aqui derrubaria as
+                        # `Evidencia` legada continua porque `process.custo_do_estado_atual` e a
+                        # tela `ProcessDetailPage` leem dela — desligá-la aqui derrubaria as
                         # duas. O par novo nasce ao lado, e o `legacy_evidencia` do `Finding`
                         # guarda de qual linha fundida ele saiu: é o vínculo que permite
                         # descontinuar o legado depois sem perder o rastro.
@@ -2570,10 +2578,10 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                         # `bulk_create` não devolve a chave em todo backend, e sem a chave o
                         # mapeamento viraria adivinhação por posição.
                         legado = Evidencia.objects.create(
-                            processo=processo,
+                            process=processo,
                             # Sem etapa de propósito: o modelo não distingue com confiança a qual
                             # delas o achado pertence, e vínculo errado é pior que vínculo nenhum.
-                            etapa=None,
+                            step=None,
                             rotulo=Evidencia.Rotulo.HIPOTESE,
                             forma=Evidencia.Forma.ENTREVISTA,
                             content=achado, source_meeting=meeting, registered_by=request.user,
@@ -2585,7 +2593,10 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                         )
                         achado_novo.evidences.add(evidence)
                 criados.append(processo)
-            return {"processos": ProcessoSerializer(criados, many=True).data}
+            # A chave `processos` do corpo **fica**: ela é chave de payload da `/api/v1/` e
+            # morre na `/api/v2/`, junto das rotas `/processos/` e `/processo-etapas/`
+            # (`docs/ontology/aliases.md` §2c).
+            return {"processos": ProcessSerializer(criados, many=True).data}
 
         try:
             # `atomic` pela razão do `extrair_decisoes`: se a gravação falhar no quinto processo,
@@ -2830,7 +2841,7 @@ def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
         raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
 
-class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class ProcessViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
     **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
@@ -2838,11 +2849,11 @@ class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
     """
 
-    resource = "processo"
-    queryset = Processo.objects.select_related(
+    resource = "process"
+    queryset = Process.objects.select_related(
         "account", "source_project", "source_meeting", "registered_by"
     ).all()
-    serializer_class = ProcessoSerializer
+    serializer_class = ProcessSerializer
     filter_fields = ("account",)
     filter_field_aliases = {"account": "client"}
 
@@ -2851,11 +2862,11 @@ class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         scope = project_scope_q(self.request.user, "account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
-    def perform_create(self, serializer: ProcessoSerializer) -> None:
+    def perform_create(self, serializer: ProcessSerializer) -> None:
         _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
         serializer.save(registered_by=self.request.user)
 
-    def perform_update(self, serializer: ProcessoSerializer) -> None:
+    def perform_update(self, serializer: ProcessSerializer) -> None:
         # Só quando o corpo tenta *mudar* o cliente — o caminho inverso: mover um processo próprio
         # para um cliente alheio seria o atalho para escrever lá dentro.
         if "account" in serializer.validated_data:
@@ -2863,7 +2874,7 @@ class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         super().perform_update(serializer)
 
     @extend_schema(
-        responses=inline_serializer("ProcessoUnarchived", {"id": serializers.IntegerField()}),
+        responses=inline_serializer("ProcessUnarchived", {"id": serializers.IntegerField()}),
         request=None,
     )
     @action(detail=True, methods=["post"])
@@ -2882,29 +2893,30 @@ class ProcessoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         return Response({"id": instance.pk})
 
 
-class ProcessoEtapaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class ProcessStepViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """As etapas do processo, descritas pelo P-S-D-T-E-R (FDD 039)."""
 
-    resource = "processo_etapa"
-    queryset = ProcessoEtapa.objects.select_related("processo", "processo__account").all()
-    serializer_class = ProcessoEtapaSerializer
-    filter_fields = ("processo",)
+    resource = "process_step"
+    queryset = ProcessStep.objects.select_related("process", "process__account").all()
+    serializer_class = ProcessStepSerializer
+    filter_fields = ("process",)
+    filter_field_aliases = {"process": "processo"}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "processo__account__projects")
+        scope = project_scope_q(self.request.user, "process__account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
-    def perform_create(self, serializer: ProcessoEtapaSerializer) -> None:
+    def perform_create(self, serializer: ProcessStepSerializer) -> None:
         # O cliente é resolvido **pelo processo pai**: é dele que a etapa herda a fronteira, e é
         # por ele que ela vazaria se ninguém perguntasse.
-        processo = serializer.validated_data.get("processo")
+        processo = serializer.validated_data.get("process")
         _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         serializer.save()
 
-    def perform_update(self, serializer: ProcessoEtapaSerializer) -> None:
-        if "processo" in serializer.validated_data:
-            processo = serializer.validated_data.get("processo")
+    def perform_update(self, serializer: ProcessStepSerializer) -> None:
+        if "process" in serializer.validated_data:
+            processo = serializer.validated_data.get("process")
             _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         super().perform_update(serializer)
 
@@ -2914,10 +2926,11 @@ class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "evidencia"
     queryset = Evidencia.objects.select_related(
-        "processo", "processo__account", "etapa", "source_meeting", "registered_by"
+        "process", "process__account", "step", "source_meeting", "registered_by"
     ).all()
     serializer_class = EvidenciaSerializer
-    filter_fields = ("processo", "etapa")
+    filter_fields = ("process", "step")
+    filter_field_aliases = {"process": "processo", "step": "etapa"}
     # `rotulo` e `forma` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
     # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?rotulo=fato`
     # cairia no chão sem erro nenhum — a lista voltaria inteira, com hipótese junto de fato, que é
@@ -2926,17 +2939,17 @@ class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "processo__account__projects")
+        scope = project_scope_q(self.request.user, "process__account__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: EvidenciaSerializer) -> None:
-        processo = serializer.validated_data.get("processo")
+        processo = serializer.validated_data.get("process")
         _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         serializer.save(registered_by=self.request.user)
 
     def perform_update(self, serializer: EvidenciaSerializer) -> None:
-        if "processo" in serializer.validated_data:
-            processo = serializer.validated_data.get("processo")
+        if "process" in serializer.validated_data:
+            processo = serializer.validated_data.get("process")
             _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
         super().perform_update(serializer)
 
@@ -2953,7 +2966,7 @@ STATUS_POR_OUTCOME = {
 class DiscoveryViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """O Discovery como unidade de levantamento (FDD 045).
 
-    **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+    **Com `ProjectScopedMixin`**, ao contrário do `ProcessViewSet` logo acima, e a diferença é a
     âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
     e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
     pela mesma guarda, como em todo recurso de projeto.
@@ -3025,7 +3038,7 @@ class ProcessObservationViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
 class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """O dado bruto que sustenta um achado (FDD 045).
 
-    **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+    **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
     dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
     evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
     `account` em vez de pelo processo pai.

@@ -15,7 +15,7 @@
  * centavos, e isso é decisão de produto, não de arrumação.
  *
  * **Duas casas, sempre.** O custo do estado atual (FDD 039) chega da API como string decimal de
- * duas casas, e o `Processo` inteiro existe para levar um número ao cliente com a conta à vista.
+ * duas casas, e o `Process` inteiro existe para levar um número ao cliente com a conta à vista.
  * Um total exibido sem centavos não fecharia com a soma das parcelas exibidas do lado.
  */
 
@@ -30,7 +30,7 @@ const BRL = new Intl.NumberFormat("pt-BR", {
  * Formata para exibição — e **só** para exibição.
  *
  * O `Number()` aqui é a última coisa que acontece com o valor, na borda da tela. A API manda
- * dinheiro como string de propósito (`COERCE_DECIMAL_TO_STRING`, e o `processos.py` evita `float`
+ * dinheiro como string de propósito (`COERCE_DECIMAL_TO_STRING`, e o `process.py` evita `float`
  * por dentro pela mesma razão), então somar, subtrair ou comparar esses valores em `number` no SPA
  * reintroduziria o erro de centavo que o backend gastou trabalho para não ter. Formatar não soma;
  * qualquer aritmética de dinheiro continua sendo do servidor.

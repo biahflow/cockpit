@@ -17,10 +17,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
-from .exceptions import StateConflict
+from .exceptions import InvalidInput, StateConflict
 
 if TYPE_CHECKING:
     from .models import Project, ProjectPhase, User
@@ -136,19 +136,31 @@ def _assert_checklist_allows_completion(project_phase: ProjectPhase) -> None:
         )
 
 
-def _assert_gate_allows_advance(project_phase: ProjectPhase) -> None:
-    """Decision gate: a fase marcada não avança sem uma das quatro saídas (FDD 033)."""
-    from .models import ProjectPhase
+def _decisoes_da_fase(project_phase: ProjectPhase) -> type[models.TextChoices]:
+    """O vocabulário aceito no gate desta fase — derivado do `canonical_stage` (ADR 0053)."""
+    from .models import decisoes_do_gate
 
+    return decisoes_do_gate(project_phase.phase.canonical_stage)
+
+
+def _assert_gate_allows_advance(project_phase: ProjectPhase) -> None:
+    """Decision gate: a fase marcada não avança sem uma saída registrada (FDD 033, ADR 0053).
+
+    A mensagem nomeia o vocabulário **daquela** fase e não as quatro fixas: mandar registrar
+    "GO / CONDITIONAL GO / REDESIGN / NO-GO" numa fase de PROVE é mandar a equipe digitar um
+    valor que a rota vai recusar.
+    """
     if not project_phase.phase.requires_gate:
         return
+    decisoes = _decisoes_da_fase(project_phase)
     if not project_phase.gate_decision:
         raise StateConflict(
-            "Esta fase termina em decision gate; registre GO / CONDITIONAL GO / REDESIGN / NO-GO "
-            "antes de concluí-la."
+            "Esta fase termina em decision gate; registre "
+            f"{' / '.join(decisoes.labels)} antes de concluí-la."
         )
-    blocking = {ProjectPhase.GateDecision.REDESIGN, ProjectPhase.GateDecision.NO_GO}
-    if project_phase.gate_decision in blocking:
+    from .models import REABREM_A_ANTERIOR, REGISTRAM_E_PARAM
+
+    if project_phase.gate_decision in REABREM_A_ANTERIOR | REGISTRAM_E_PARAM:
         raise StateConflict(
             f"O decision gate desta fase registrou "
             f"{project_phase.get_gate_decision_display()} — a jornada não segue adiante por aqui."
@@ -213,24 +225,37 @@ def advance_phase(project: Project, actor: User | None = None) -> ProjectPhase |
 def apply_gate(
     project: Project, decision: str, notes: str = "", actor: User | None = None
 ) -> ProjectPhase | None:
-    """Registra o decision gate da fase ativa e aplica o que ele decidiu (FDD 033).
+    """Registra o decision gate da fase ativa e aplica o que ele decidiu (FDD 033, ADR 0053).
 
-    Devolve a fase que ficou ativa depois da decisão: a próxima no GO/CONDITIONAL GO, a
-    **anterior** no REDESIGN, a própria no NO-GO.
+    Devolve a fase que ficou ativa depois da decisão: a próxima quando ela conclui e avança, a
+    **anterior** quando ela reabre, a própria quando ela só registra.
 
-    As quatro saídas não são quatro variações de "avançar":
+    As saídas não são variações de "avançar", e cada vocabulário tem as suas — GO / CONDITIONAL
+    GO / REDESIGN / NO-GO na Feasibility, SCALE / ITERATE / STOP no PROVE (`decisoes_do_gate`).
+    O que os dois compartilham são os **três efeitos**, e é por efeito que se ramifica aqui:
 
-    - `go`/`conditional_go` concluem a fase e ativam a seguinte — a diferença entre elas está
-      nas ressalvas gravadas, que é justamente o que se perderia colapsando as duas;
-    - `redesign` volta à fase anterior (a abordagem muda e se testa de novo) e **tranca** a
-      corrente, mantendo `started_at` e o `gate_decision` como registro do porquê;
-    - `no_go` só registra: a fase continua ativa e a jornada para ali. Mudar o status do
+    - `go`/`conditional_go`/`scale` concluem a fase e ativam a seguinte — a diferença entre GO e
+      CONDITIONAL GO está nas ressalvas gravadas, que é justamente o que se perderia colapsando
+      as duas;
+    - `redesign`/`iterate` voltam à fase anterior (a abordagem muda e se testa de novo) e
+      **trancam** a corrente, mantendo `started_at` e o `gate_decision` como registro do porquê;
+    - `no_go`/`stop` só registram: a fase continua ativa e a jornada para ali. Mudar o status do
       projeto é ato humano, fora desta função.
+
+    **A validação da decisão mora aqui, e não na view** (ADR 0053): qual vocabulário vale depende
+    da fase ativa, e só este ponto a conhece. É a mesma razão de `Opportunity.clean()` viver no
+    modelo — shell, admin e migração não passam por rota. Ela recusa com `InvalidInput` (400,
+    pedido malfeito) e não com `StateConflict` (409, estado impede).
 
     Tudo é validado antes de qualquer escrita, e o que escreve roda em transação: um gate
     recusado no meio não pode deixar a decisão gravada sem o efeito dela.
     """
-    from .models import PhaseEvent, ProjectPhase
+    from .models import (
+        CONCLUEM_E_AVANCAM,
+        REABREM_A_ANTERIOR,
+        PhaseEvent,
+        ProjectPhase,
+    )
 
     materialize_journey(project)
     phases = list(
@@ -247,8 +272,17 @@ def apply_gate(
             "gate na configuração da Jornada, se for o caso."
         )
 
+    # O estado primeiro, o corpo depois: uma fase que não é de gate recusa 409 seja qual for a
+    # decisão enviada — ali não existe vocabulário nenhum para o valor pertencer.
+    decisoes = _decisoes_da_fase(current)
+    if decision not in decisoes.values:
+        raise InvalidInput(
+            f"A fase {current.phase.name} aceita {' / '.join(decisoes.labels)}. "
+            f"{decision!r} não é uma delas."
+        )
+
     previous: ProjectPhase | None = None
-    if decision == ProjectPhase.GateDecision.REDESIGN:
+    if decision in REABREM_A_ANTERIOR:
         previous = next(
             (
                 p
@@ -259,10 +293,10 @@ def apply_gate(
         )
         if previous is None:
             raise StateConflict(
-                "REDESIGN volta à fase anterior, e esta é a primeira fase concluída da jornada — "
-                "não há para onde voltar."
+                f"{decisoes(decision).label} volta à fase anterior, e esta é a primeira fase "
+                "concluída da jornada — não há para onde voltar."
             )
-    elif decision in {ProjectPhase.GateDecision.GO, ProjectPhase.GateDecision.CONDITIONAL_GO}:
+    elif decision in CONCLUEM_E_AVANCAM:
         # Antes de gravar a decisão: um GO que esbarra no quality gate não pode deixar o gate
         # registrado sem a conclusão que ele autoriza.
         _assert_checklist_allows_completion(current)
@@ -271,8 +305,9 @@ def apply_gate(
         current.gate_decision = decision
         current.gate_notes = notes
         current.save(update_fields=["gate_decision", "gate_notes", "updated_at"])
-        # O gate é registrado no histórico *antes* da consequência — inclusive antes do REDESIGN
-        # apagar a decisão da fase que reabre. É a única cópia auditável dela (FDD 042).
+        # O gate é registrado no histórico *antes* da consequência — inclusive antes de o
+        # REDESIGN/ITERATE apagar a decisão da fase que reabre. É a única cópia auditável dela
+        # (FDD 042).
         _log_event(
             project,
             current,
@@ -282,10 +317,10 @@ def apply_gate(
             note=notes,
         )
 
-        if decision in {ProjectPhase.GateDecision.GO, ProjectPhase.GateDecision.CONDITIONAL_GO}:
+        if decision in CONCLUEM_E_AVANCAM:
             return advance_phase(project, actor)
 
-        if previous is not None:  # REDESIGN, com a fase anterior já resolvida acima
+        if previous is not None:  # REDESIGN/ITERATE, com a fase anterior já resolvida acima
             # Reabrir limpa o carimbo e o gate da fase que volta — precedente do `resolved_at`
             # da `Pendencia`: "concluída em" e "decidido" são estado corrente, e uma fase que
             # voltou a estar em andamento não tem nem um nem outro. É o oposto do `published_at`
@@ -321,7 +356,7 @@ def apply_gate(
             )
             return previous
 
-        return current  # NO-GO: a fase fica ativa e a jornada para ali
+        return current  # NO-GO/STOP: a fase fica ativa e a jornada para ali
 
 
 def set_phase_waiting(

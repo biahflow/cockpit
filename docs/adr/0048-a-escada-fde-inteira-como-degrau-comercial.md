@@ -73,3 +73,23 @@ Call; zero em qualquer outro degrau é "preço a definir".
   ADR 0025/FDD 025 pedem sobre não deixar órfão apontando para linha escondida.
 - **Um enum de escada separado do catálogo.** Dois conceitos de "o que vendemos" divergindo em
   silêncio, que é a razão de a FDD 015 ter posto os níveis sobre `Service` desde o começo.
+
+## Emenda (ADR 0053, 28/08/2026) — a escada perde um degrau, e o Sprint ganha preço
+
+A **ADR 0053** emenda esta em três pontos, e não a substitui:
+
+1. **`discovery_assessment` sai do enum** (migração `0064`, guardada). Esta ADR o manteve como a
+   porta gratuita do founding client; com o **Design Partner** cobrindo a entrada em vertical nova,
+   ele deixou de ter trabalho a fazer — e um degrau que ninguém vende é a mesma coluna que nunca
+   enche com que esta ADR recusou o PRIORITIZE. O `TierEnum` muda de valores pela segunda vez em
+   duas semanas: deliberado, e registrado lá.
+2. **O Discovery Sprint passa a R$ 3.000** de tabela, preço único. Ele tinha ficado em zero por
+   acidente de renomeação (a `0050` trocou a chave sem tocar no preço), e o material carregava
+   quatro números para a mesma coisa.
+3. **"O subsídio de founding client não vira degrau" continua valendo, com outro nome.** O valor
+   concedido ao Design Partner mora no `estimated_value` da oportunidade, como desconto sobre o
+   preço de tabela — exatamente a regra que esta ADR escolheu. É o único ponto desta seção que a
+   0053 confirma em vez de mexer.
+
+A invariante de um serviço ativo por degrau e a `list_price` sem recorrência ficam como estão. A
+escada passa a ter **seis** chaves.

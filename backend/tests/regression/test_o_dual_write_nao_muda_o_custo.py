@@ -1,9 +1,9 @@
 """Regressão: o split entra ao lado do legado, e o custo do estado atual continua idêntico (FDD 045).
 
-`processos.custo_do_estado_atual` decide se o número mais persuasivo de um Discovery entra na
+`process.custo_do_estado_atual` decide se o número mais persuasivo de um Discovery entra na
 proposta que o cliente lê (`ai._processo_lines`, FDD 039), e ele decide isso perguntando por
 `Evidencia` viva com `rotulo=fato`. A fatia do split **não** troca essa fonte: o dual-write existe
-justamente para que a tela `ProcessoDetailPage` e essa conta continuem funcionando sem tocar em
+justamente para que a tela `ProcessDetailPage` e essa conta continuem funcionando sem tocar em
 nada enquanto o modelo novo cresce ao lado.
 
 Duas coisas quebrariam em silêncio se ninguém as afirmasse aqui:
@@ -28,8 +28,8 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core import ai, processos
-from apps.core.models import Evidence, Evidencia, Finding, Meeting, Processo, User
+from apps.core import ai, process
+from apps.core.models import Evidence, Evidencia, Finding, Meeting, Process, User
 from apps.core.tests.factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 RESPOSTA = json.dumps([{
@@ -84,13 +84,13 @@ def test_quem_sustenta_o_custo_continua_sendo_a_evidencia_legada(
     api: APIClient, reuniao: Meeting
 ) -> None:
     api.post(reverse("meeting-estruturar", args=[reuniao.pk]))
-    processo = Processo.objects.get()
-    Processo.objects.filter(pk=processo.pk).update(**NUCLEO)
+    processo = Process.objects.get()
+    Process.objects.filter(pk=processo.pk).update(**NUCLEO)
     processo.refresh_from_db()
     revisor = UserFactory()
 
-    antes = processos.custo_do_estado_atual(processo)
-    assert antes["sustentacao"] == processos.HIPOTESE
+    antes = process.custo_do_estado_atual(processo)
+    assert antes["sustentacao"] == process.HIPOTESE
     assert antes["total"] == Decimal("20000.00")
 
     # Promover o **achado novo** não move o cálculo: ele ainda lê o legado, e é isso que o
@@ -99,13 +99,13 @@ def test_quem_sustenta_o_custo_continua_sendo_a_evidencia_legada(
     achado.reviewed_by = revisor
     achado.epistemic_status = Finding.EpistemicStatus.FACT
     achado.save()
-    assert processos.custo_do_estado_atual(processo)["sustentacao"] == processos.HIPOTESE
+    assert process.custo_do_estado_atual(processo)["sustentacao"] == process.HIPOTESE
 
     # Promover a **evidência legada** move — a conta continua exatamente onde estava.
     legada = Evidencia.objects.get()
     legada.rotulo = Evidencia.Rotulo.FATO
     legada.save(update_fields=["rotulo", "updated_at"])
-    depois = processos.custo_do_estado_atual(processo)
-    assert depois["sustentacao"] == processos.SUSTENTADO
+    depois = process.custo_do_estado_atual(processo)
+    assert depois["sustentacao"] == process.SUSTENTADO
     assert depois["total"] == antes["total"]
     assert depois["parcelas"] == antes["parcelas"]

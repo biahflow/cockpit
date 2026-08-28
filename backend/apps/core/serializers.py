@@ -13,7 +13,8 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, drive, knowledge, processos
+from . import blueprints, drive, knowledge
+from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
@@ -55,9 +56,9 @@ from .models import (
     PhaseDeliverable,
     PhaseEvent,
     PipelineStage,
-    Processo,
+    Process,
     ProcessObservation,
-    ProcessoEtapa,
+    ProcessStep,
     Project,
     ProjectChecklistItem,
     ProjectDeliverable,
@@ -864,10 +865,10 @@ class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Sati
         return attrs
 
 
-class ProcessoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Processo]):
+class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process]):
     """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
-    `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:87-88` aplicada
+    `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:118-119` aplicada
     aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
     mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
 
@@ -884,7 +885,7 @@ class ProcessoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Proces
     custo = serializers.SerializerMethodField()
 
     class Meta:
-        model = Processo
+        model = Process
         fields = ["id", "account", "client", "client_name", "name", "position", "source_project",
                   "source_meeting", "registered_by", "volume_mes", "tempo_horas", "pessoas",
                   "custo_hora", "retrabalho_mes", "erros_mes", "perdas_mes", "espera_mes",
@@ -893,11 +894,11 @@ class ProcessoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Proces
                             "updated_at"]
 
     @extend_schema_field(serializers.DictField())
-    def get_custo(self, processo: Processo) -> dict[str, Any]:
+    def get_custo(self, processo: Process) -> dict[str, Any]:
         """A conta à vista: parcelas, total, o que não foi apurado e se há fato sustentando.
 
         Quem lê **não** pode concluir "custa zero" de um total zerado: é `nao_apurado` que separa
-        "não há insumo" de "medimos e deu zero" (ver `processos.custo_do_estado_atual`).
+        "não há insumo" de "medimos e deu zero" (ver `process.custo_do_estado_atual`).
 
         **Os valores saem como texto, e não é preciosismo.** `SerializerMethodField` entrega o que
         devolver direto ao renderizador, e o encoder do DRF converte `Decimal` em `float`
@@ -905,13 +906,13 @@ class ProcessoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Proces
         existe para quem escapa de um `DecimalField`, que é este caso. Sem a conversão,
         `Decimal("5000.00")` chega ao cliente como `5000.0`, dinheiro trafega em ponto flutuante e
         `Invoice.amount` (string, pelo `COERCE_DECIMAL_TO_STRING`) e o custo passam a ter formatos
-        diferentes na mesma API. Também contrariaria o `processos.py`, que evita `float` por dentro
+        diferentes na mesma API. Também contrariaria o `process.py`, que evita `float` por dentro
         justamente para não somar centavos com erro.
 
         Um teste sobre `response.data` **não pega isto**: ali o valor ainda é `Decimal`, e a
         conversão só acontece na renderização. A regressão afirma sobre o JSON renderizado.
         """
-        custo = processos.custo_do_estado_atual(processo)
+        custo = process_module.custo_do_estado_atual(processo)
         return {
             **custo,
             "total": str(custo["total"]),
@@ -921,35 +922,51 @@ class ProcessoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Proces
         }
 
 
-class ProcessoEtapaSerializer(serializers.ModelSerializer[ProcessoEtapa]):
-    """A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`).
+class ProcessStepSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[ProcessStep]):
+    """A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:106-110`).
 
     Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
     reunião, e um formulário fora de ordem faz quem preenche pular a pergunta que faltou.
     """
 
+    ALIASES_DE_ENTRADA = {"processo": "process"}
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    processo = serializers.PrimaryKeyRelatedField(source="process", read_only=True)
+
     class Meta:
-        model = ProcessoEtapa
-        fields = ["id", "processo", "name", "position", "pessoas", "sistema", "dados", "tempo",
-                  "erro", "retrabalho", "created_at", "updated_at"]
+        model = ProcessStep
+        fields = ["id", "process", "processo", "name", "position", "pessoas", "sistema", "dados",
+                  "tempo", "erro", "retrabalho", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-class EvidenciaSerializer(serializers.ModelSerializer[Evidencia]):
-    """O achado com a forma de onde veio e o rótulo que a metodologia exige (`:81-86`).
+class EvidenciaSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Evidencia]):
+    """O achado com a forma de onde veio e o rótulo que a metodologia exige (`:112-117`).
 
     `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
     corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
     por quem não escolheu, sempre para o mesmo lado — chamar de fato o que ninguém confirmou.
     """
 
+    ALIASES_DE_ENTRADA = {"processo": "process", "etapa": "step"}
+
     forma_display = serializers.CharField(source="get_forma_display", read_only=True)
     rotulo_display = serializers.CharField(source="get_rotulo_display", read_only=True)
+    # Aliases de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): as chaves antigas saem
+    # com o mesmo valor das canônicas e morrem na `/api/v2/`. A escrita vem do
+    # `AliasDeEntradaMixin`. A classe continua se chamando `Evidencia` — ela não é renome, é a
+    # metade legada do split que a Fase 6 remove com o dual-write —, mas os **campos** dela
+    # passaram a `process` e `step` na fatia 4 da issue #67.
+    processo = serializers.PrimaryKeyRelatedField(source="process", read_only=True)
+    etapa = serializers.PrimaryKeyRelatedField(source="step", read_only=True)
 
     class Meta:
         model = Evidencia
-        fields = ["id", "processo", "etapa", "forma", "forma_display", "rotulo", "rotulo_display",
-                  "content", "source_meeting", "registered_by", "created_at", "updated_at"]
+        fields = ["id", "process", "processo", "step", "etapa", "forma", "forma_display",
+                  "rotulo", "rotulo_display", "content", "source_meeting", "registered_by",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "forma_display", "rotulo_display", "registered_by", "created_at",
                             "updated_at"]
 
@@ -961,14 +978,14 @@ class EvidenciaSerializer(serializers.ModelSerializer[Evidencia]):
         passasse pelo admin ou pelo shell.
         """
         processo = cast(
-            Processo | None, attrs.get("processo", getattr(self.instance, "processo", None))
+            Process | None, attrs.get("process", getattr(self.instance, "process", None))
         )
         etapa = cast(
-            ProcessoEtapa | None, attrs.get("etapa", getattr(self.instance, "etapa", None))
+            ProcessStep | None, attrs.get("step", getattr(self.instance, "step", None))
         )
-        if etapa and processo and etapa.processo_id != processo.id:
+        if etapa and processo and etapa.process_id != processo.id:
             raise serializers.ValidationError(
-                {"etapa": "A etapa deve pertencer ao mesmo processo."}
+                {"step": "A etapa deve pertencer ao mesmo processo."}
             )
         return attrs
 
@@ -1088,10 +1105,10 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
             Account | None, attrs.get("account", getattr(self.instance, "account", None))
         )
         process = cast(
-            Processo | None, attrs.get("process", getattr(self.instance, "process", None))
+            Process | None, attrs.get("process", getattr(self.instance, "process", None))
         )
         step = cast(
-            ProcessoEtapa | None, attrs.get("step", getattr(self.instance, "step", None))
+            ProcessStep | None, attrs.get("step", getattr(self.instance, "step", None))
         )
         discovery = cast(
             Discovery | None, attrs.get("discovery", getattr(self.instance, "discovery", None))
@@ -1104,13 +1121,13 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
         reference = cast(
             str, attrs.get("reference", getattr(self.instance, "reference", "")) or ""
         )
-        if step and process and step.processo_id != process.pk:
+        if step and process and step.process_id != process.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
         if process and account and process.account_id != account.pk:
             raise serializers.ValidationError(
                 {"process": "O processo deve pertencer à mesma conta."}
             )
-        if step and account and step.processo.account_id != account.pk:
+        if step and account and step.process.account_id != account.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         if discovery and account and discovery.project.client_id != account.pk:
             raise serializers.ValidationError(
@@ -1172,9 +1189,9 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
             Account | None, attrs.get("account", getattr(self.instance, "account", None))
         )
         process = cast(
-            Processo | None, attrs.get("process", getattr(self.instance, "process", None))
+            Process | None, attrs.get("process", getattr(self.instance, "process", None))
         )
-        step = cast(ProcessoEtapa | None, attrs.get("step", getattr(self.instance, "step", None)))
+        step = cast(ProcessStep | None, attrs.get("step", getattr(self.instance, "step", None)))
         confidence = cast(
             int | None, attrs.get("confidence", getattr(self.instance, "confidence", None))
         )
@@ -1184,9 +1201,9 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
             raise serializers.ValidationError(
                 {"process": "O processo deve pertencer à mesma conta."}
             )
-        if step and account and step.processo.account_id != account.pk:
+        if step and account and step.process.account_id != account.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
-        if step and process and step.processo_id != process.pk:
+        if step and process and step.process_id != process.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
 
         estado = attrs.get(

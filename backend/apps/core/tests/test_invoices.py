@@ -84,7 +84,9 @@ def test_nivel_pago_vendido_a_zero_nao_semeia():
 
 @pytest.mark.django_db
 def test_semeadura_e_idempotente():
-    servico = Service.objects.get(tier="discovery_assessment")
+    # Um degrau de duas parcelas, como o que a ADR 0053 removeu tinha: o que o teste afirma é a
+    # idempotência, e ela precisa de um cronograma com mais de uma linha para valer alguma coisa.
+    servico = Service.objects.get(tier="discovery_sprint")
     projeto = ProjectFactory(service=servico, actual_value=Decimal("8000.00"))
     assert invoices.seed_invoices(projeto) == 2
     assert invoices.seed_invoices(projeto) == 0

@@ -18,17 +18,18 @@ Três coisas são afirmadas porque as três podem regredir sem sintoma visível:
 """
 
 import importlib
+from typing import Any
 
 import pytest
 from django.apps import apps as django_apps
 from django.utils import timezone
 
-from apps.core.models import Evidence, Evidencia, Finding, Processo, hash_do_trecho
+from apps.core.models import Evidence, Evidencia, Finding, Process, hash_do_trecho
 from apps.core.tests.factories import (
     AccountFactory,
     EvidenciaFactory,
-    ProcessoEtapaFactory,
-    ProcessoFactory,
+    ProcessFactory,
+    ProcessStepFactory,
     UserFactory,
 )
 
@@ -38,33 +39,72 @@ MIGRACAO = importlib.import_module("apps.core.migrations.0054_backfill_evidence_
 
 
 @pytest.fixture(autouse=True)
-def _nome_historico_da_conta(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Reapresenta `Processo.client_id`, o nome que a coluna tinha quando a 0054 foi escrita.
+def _nomes_historicos(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reapresenta os três nomes que as colunas tinham quando a 0054 foi escrita.
 
-    A migração lê `processo.client_id` e **não muda**: num `migrate` de verdade ela recebe o
-    estado histórico, onde o campo ainda se chama `client` — a fatia 2 da issue #67 só o renomeou
-    na 0062 (ADR 0052). O que envelheceu foi o atalho deste teste, que sempre passou o registro
-    **vivo** em vez de reencenar o esquema (ver a docstring de `test_engagement_backfill.py` para
-    o caso em que reencenar é obrigatório).
+    A migração lê `processo.client_id`, `evidencia.processo` e `evidencia.etapa_id`, e **não
+    muda**: num `migrate` de verdade ela recebe o estado histórico, onde os campos ainda se
+    chamavam assim — a fatia 2 da issue #67 renomeou `client` na 0062 e a fatia 4 renomeou
+    `processo`/`etapa` na 0063 (ADR 0052). O que envelheceu foi o atalho deste teste, que sempre
+    passou o registro **vivo** em vez de reencenar o esquema (ver a docstring de
+    `test_engagement_backfill.py` para o caso em que reencenar é obrigatório).
 
-    Repor um id de leitura é mais barato e mais legível que rolar o esquema inteiro para trás só
-    para ler uma chave estrangeira, e o `monkeypatch` desfaz por teste — a propriedade não
-    sobrevive ao arquivo nem ressuscita o nome banido em código de produção.
+    Repor três atributos de leitura é mais barato e mais legível que rolar o esquema inteiro para
+    trás só para ler duas chaves estrangeiras, e o `monkeypatch` desfaz por teste — as
+    propriedades não sobrevivem ao arquivo nem ressuscitam o nome banido em código de produção.
     """
     monkeypatch.setattr(
-        Processo, "client_id", property(lambda self: self.account_id), raising=False
+        Process, "client_id", property(lambda self: self.account_id), raising=False
+    )
+    monkeypatch.setattr(
+        Evidencia, "processo", property(lambda self: self.process), raising=False
+    )
+    monkeypatch.setattr(
+        Evidencia, "etapa_id", property(lambda self: self.step_id), raising=False
     )
 
 
+class _GerenteHistorico:
+    """O gerente que a 0054 espera: ela pede `select_related("processo")`.
+
+    É o único ponto em que o nome antigo atravessa o **ORM** em vez do atributo, e ORM não se
+    resolve com `monkeypatch`: ali o nome do campo **é** o caminho da consulta, e pedir por
+    `processo` levanta `FieldError` em vez de ficar sem efeito. O resto da migração lê atributo,
+    e atributo a fixture acima repõe.
+    """
+
+    def __getattr__(self, nome: str) -> Any:
+        return getattr(Evidencia.objects, nome)
+
+    def select_related(self, *campos: str) -> Any:
+        return Evidencia.objects.select_related(
+            *("process" if campo == "processo" else campo for campo in campos)
+        )
+
+
+class _EvidenciaHistorica:
+    objects = _GerenteHistorico()
+
+
+class _AppsHistorico:
+    """O `apps` que a 0054 recebe num `migrate` de verdade, reduzido ao que ela usa."""
+
+    @staticmethod
+    def get_model(app_label: str, nome: str) -> Any:
+        if nome == "Evidencia":
+            return _EvidenciaHistorica
+        return django_apps.get_model(app_label, nome)
+
+
 def _backfill() -> None:
-    MIGRACAO.split_evidencias(django_apps, None)
+    MIGRACAO.split_evidencias(_AppsHistorico, None)
 
 
 def test_cada_evidencia_vira_um_par_ligado() -> None:
-    processo = ProcessoFactory(account=AccountFactory())
-    etapa = ProcessoEtapaFactory(processo=processo)
+    processo = ProcessFactory(account=AccountFactory())
+    etapa = ProcessStepFactory(process=processo)
     legada = EvidenciaFactory(
-        processo=processo, etapa=etapa, content="Disseram que leva dois dias.",
+        process=processo, step=etapa, content="Disseram que leva dois dias.",
         registered_by=UserFactory(),
     )
 
@@ -177,10 +217,10 @@ def test_a_reversa_apaga_so_o_que_veio_do_backfill() -> None:
     legada = EvidenciaFactory()
     _backfill()
     nascido_depois = Finding.objects.create(
-        account=legada.processo.account, statement="Achado registrado na tela."
+        account=legada.process.account, statement="Achado registrado na tela."
     )
     evidencia_nova = Evidence.objects.create(
-        account=legada.processo.account, kind=Evidence.Kind.DATA,
+        account=legada.process.account, kind=Evidence.Kind.DATA,
         raw_excerpt="400 notas no relatório de outubro.", captured_at=timezone.now(),
     )
 

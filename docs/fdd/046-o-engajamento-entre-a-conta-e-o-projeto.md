@@ -104,7 +104,7 @@ antigo, e só na falta de qualquer vivo o arquivado mais antigo. `CommercialPage
 `engagement.account`. Remover é a Fase 6. O que impede a projeção de divergir da fonte é
 `Project.clean()` (`engagement.account_id == client_id`) — e é o único lugar que o faz.
 
-**`Processo` e o Discovery estruturado.** Continuam pendurados na **conta** (FDD 039). O projeto
+**`Process` e o Discovery estruturado.** Continuam pendurados na **conta** (FDD 039). O projeto
 segue sendo proveniência opcional (`source_project`, `SET_NULL`), e nada disso passou a pender do
 projeto nem do engajamento.
 

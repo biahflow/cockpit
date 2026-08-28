@@ -43,3 +43,17 @@ One não conhece detalhes internos como GitHub Issue, Pull Request, ClickUp Cust
 2. Projeções devem ser reconstruíveis a partir da fonte da verdade ou de eventos duráveis.
 3. IDs externos podem ser armazenados como referências, nunca como identidade de domínio.
 4. Mudança de status em um sistema só pode atualizar outro sistema quando houver regra de ownership definida.
+
+## Emenda (ADR 0053, 28/08/2026) — o outro lado da fronteira: `docs/` manda no método
+
+Esta ADR deu ao Pulse a posse do **dado** comercial (Account, Lead, Contact, Opportunity). Ficava
+implícito quem manda no **método**, e a ausência produziu 23 fichas no Notion que se contradiziam
+em quatro pontos sem que nada fosse fonte de nada.
+
+A **ADR 0053** fecha o outro lado: **`docs/` neste repositório manda no método**; o Pulse manda no
+dado. A biblioteca do Notion é superfície de leitura e passa a **espelhar** `docs/`. Nenhuma ficha
+do Notion volta a se declarar fonte da verdade do método.
+
+Isso não muda nenhuma linha da tabela de ownership acima — método não é campo, e não há
+sincronização a definir. O que muda é que uma divergência entre a página e o repositório passa a
+ter resolução conhecida, em vez de virar `SOURCE_OF_TRUTH_CONFLICT` sem dono.
