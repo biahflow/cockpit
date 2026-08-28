@@ -7,15 +7,20 @@ from .models import (
     Case,
     Decisao,
     DigitalEmployee,
+    Discovery,
+    DiscoverySession,
     Document,
     EngineeringHandoff,
+    Evidence,
     Evidencia,
+    Finding,
     GithubDeliveryProjection,
     Meeting,
     Milestone,
     Opportunity,
     Pendencia,
     Processo,
+    ProcessObservation,
     ProcessoEtapa,
     Project,
     ProjectChecklistItem,
@@ -58,6 +63,11 @@ PROJECT_OF = {
     # O case é prova social, mas nasce de um projeto e herda a fronteira dele: a Entrega lê o case
     # dos projetos de que participa e não a vitrine inteira da casa (ADR 0010, FDD 027).
     Case: lambda obj: obj.project,
+    # O Discovery e o que pende dele são de projeto (FDD 045) — ao contrário de `Evidence` e
+    # `Finding`, logo abaixo, que ancoram na conta e por isso ficam fora deste mapa.
+    Discovery: lambda obj: obj.project,
+    DiscoverySession: lambda obj: obj.discovery.project,
+    ProcessObservation: lambda obj: obj.discovery.project,
 }
 
 
@@ -106,9 +116,14 @@ class RolePermission(BasePermission):
             # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
             # continua levantando dentro do projeto —, e um registro que só metade da casa pode
             # fazer é um registro que não acontece.
+            # Os cinco recursos do split (FDD 045) entram pelo mesmo argumento dos três da
+            # FDD 039 logo acima, e é o mesmo levantamento: o Discovery começa na venda e
+            # continua na entrega, e um achado que só metade da casa registra não é registrado.
             return resource in {"client", "contact", "opportunity", "document", "lead",
                                 "analytics", "artifact", "activity", "cobranca_suspensao",
-                                "satisfacao", "processo", "processo_etapa", "evidencia"}
+                                "satisfacao", "processo", "processo_etapa", "evidencia",
+                                "discovery", "discovery_session", "process_observation",
+                                "evidence", "finding"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
                             "risk", "health", "case", "activity"}:
@@ -140,11 +155,17 @@ class RolePermission(BasePermission):
             # Os três recursos do Discovery estruturado (FDD 039) entram aqui pelo mesmo motivo
             # que estão no conjunto de Vendas: o levantamento é feito pelas duas áreas. O objeto
             # abaixo decide qual cliente é o seu, e a âncora é o cliente — não o projeto.
+            # Os cinco do split (FDD 045) entram aqui pela razão dos três da FDD 039: o
+            # levantamento é das duas áreas. `discovery` e o que pende dele decidem o objeto pelo
+            # **projeto**; `evidence` e `finding`, pela **conta** — as duas âncoras convivem, e é
+            # a permissão de objeto abaixo que sabe qual pergunta fazer para cada um.
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
                                 "digital_employee", "artifact", "satisfacao",
                                 "processo", "processo_etapa", "evidencia",
+                                "discovery", "discovery_session", "process_observation",
+                                "evidence", "finding",
                                 "engineering_handoff", "github_projection"}
         return False
 
@@ -177,12 +198,23 @@ class RolePermission(BasePermission):
                 # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
                 # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
                 return Project.objects.visible_to(request.user).filter(client=obj.client).exists()
-            if isinstance(obj, Processo | ProcessoEtapa | Evidencia):
+            if isinstance(obj, Processo | ProcessoEtapa | Evidencia | Evidence | Finding):
                 # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui
                 # não por o projeto ser opcional, mas por não existir: o processo mapeado é do
                 # cliente e sobrevive à venda que o descobriu (FDD 039). A etapa e a evidência
                 # chegam ao cliente pelo processo pai, que é o mesmo caminho da queryset delas.
-                client = obj.client if isinstance(obj, Processo) else obj.processo.client
+                #
+                # `Evidence` e `Finding` (FDD 045) entram no mesmo ramo com um caminho a menos: a
+                # conta é campo deles (`account`), e não algo a resolver pelo pai. O `process` é
+                # opcional nos dois, então resolvê-la por ele devolveria `None` justamente no
+                # achado solto — 403 no detalhe de um registro que a listagem mostra, que é o
+                # defeito que a `Satisfacao` já previu.
+                if isinstance(obj, Evidence | Finding):
+                    client = obj.account
+                elif isinstance(obj, Processo):
+                    client = obj.client
+                else:
+                    client = obj.processo.client
                 return Project.objects.visible_to(request.user).filter(client=client).exists()
             if isinstance(obj, Opportunity):
                 return obj.is_won and request.method in SAFE_METHODS
