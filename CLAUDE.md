@@ -192,6 +192,13 @@ Key cross-cutting patterns to preserve:
   a rota é um `GET`, e incrementar na leitura produziria versões fora de ordem — o sinal exato que
   o comparador do outro lado usa para descartar o obsoleto. Duas leituras seguidas devolvendo a
   mesma versão é o caso comum, não sintoma. Ver FDD 047, ADR 0051 e a emenda de 28/08 na ADR 0003.
+- **O `Engagement` tem superfície, e ela mora no detalhe do cliente.** A seção "Engagements" de
+  `ClientDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
+  `docs/design/dap-engagement-r1/`, r1, decisões **A1** (título em inglês, copy em volta em pt-BR)
+  e **B1** (as duas pílulas de `commercial_model` sempre visíveis) — mudar a superfície exige
+  revisão nova do pacote, não julgamento na hora. `projects_count` é **recortado por
+  `project_scope_q`**, não é o total do mandato: dois usuários veem números diferentes para a mesma
+  linha, e é o mesmo comportamento de `/clients/overview/`. Ver a emenda de 28/08 na FDD 046.
 - **Pipeline invariants.** DB constraints enforce at most one "won" and one "lost"
   `PipelineStage`, and at most one active `Service` per product `tier`. DRF derives the
   serializer validation from these constraints — don't hand-roll a duplicate check.
