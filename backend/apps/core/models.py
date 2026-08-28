@@ -173,6 +173,10 @@ class Engagement(TimestampedModel):
         PAUSED = "paused", "Pausado"
         CLOSED = "closed", "Encerrado"
 
+    class CommercialModel(models.TextChoices):
+        DESIGN_PARTNER = "design_partner", "Design partner"
+        PAID = "paid", "Pago"
+
     # `account` e não `client`: é o termo canônico do mapa de linguagem, e o campo nasce com o
     # nome certo mesmo enquanto o modelo ainda se chama `Client` (o renome físico é a Fase 6).
     account = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="engagements")
@@ -194,6 +198,21 @@ class Engagement(TimestampedModel):
     # sejam jornadas distintas agrupadas num engajamento só. A migração não separa sozinha — ela
     # não tem como saber —, ela sinaliza para revisão humana. Ver a docstring da 0056.
     needs_review = models.BooleanField(default=False)
+    # O mandato nasce de dois jeitos: a conta paga, ou entra como `design_partner` — recebe
+    # Discovery sem cobrança em troca de servir de caso e de campo de prova. O campo registra a
+    # condição, não concede nada: nenhuma regra de preço, fatura ou catálogo o lê hoje, e ele
+    # existe só para os dois modos pararem de ser a mesma linha. Também não decide a pendência A2
+    # do `docs/ontology/language-map.md` §9 ("Design Partner é condição comercial de um degrau ou
+    # oferta própria?") — gravar o modo no mandato e decidir se existe um sétimo degrau no
+    # catálogo são coisas diferentes, e é fácil confundir as duas se isto não estiver escrito
+    # aqui. As linhas que já existiam antes deste campo viraram `paid` por inferência do
+    # backfill da 0056 (mandato só nascia de conta com projeto, e projeto veio de venda) — a
+    # correção de quem de fato é design partner é feita no admin do Django
+    # (`EngagementAdmin`), não em migração nem em comando de terminal: a lista de contas de
+    # design partner cresce por venda, não por deploy.
+    commercial_model = models.CharField(
+        max_length=16, choices=CommercialModel.choices, default=CommercialModel.PAID
+    )
 
     class Meta:
         ordering = ["-started_at", "-id"]

@@ -1019,6 +1019,9 @@ class OpportunityViewSet(ArchiveModelViewSet):
                         mandate=opportunity.scope or "",
                         owner=request.user,
                         started_at=timezone.localdate(),
+                        # Explícito e não herdado do default: aqui é pago por construção, porque
+                        # a action exige oportunidade em "Ganho".
+                        commercial_model=Engagement.CommercialModel.PAID,
                     )
                 project = serializer.save(
                     engagement=engagement,
