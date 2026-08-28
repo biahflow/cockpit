@@ -66,7 +66,7 @@ views (viewsets), permissions, and URLs all live there. There is no service laye
 business rules live in model `clean()`/`save()` methods and in viewset actions.
 
 Core domain flow (`apps/core/models.py`): `Client` → `Contact`, `Lead` → `Qualification` →
-`Opportunity` (on a configurable `PipelineStage`) → converts into a `Project` →
+`CommercialOpportunity` (on a configurable `PipelineStage`) → converts into a `Project` →
 `Milestone`/`Task` (both subclass the abstract `WorkItem`) plus `Document`. `User` extends
 `AbstractUser` with a `role` (admin/sales/delivery). `Invitation` drives email-based
 onboarding.
@@ -112,8 +112,8 @@ Key cross-cutting patterns to preserve:
   design partner receives Discovery free of charge in exchange for serving as case and proving
   ground, and it does **not** go through a sale — nothing in the schema ever required one.
 - **Opportunity → Project conversion** is the central business action: the
-  `convert-to-project` `@action` on `OpportunityViewSet`. It requires the opportunity be in the
-  "won" stage, enforces sales/admin role, and carries `Opportunity.service` over to
+  `convert-to-project` `@action` on `CommercialOpportunityViewSet`. It requires the sale be in the
+  "won" stage, enforces sales/admin role, and carries `CommercialOpportunity.service` over to
   `Project.service` (payload wins).
   **"Converts exactly once" is no longer a database guarantee — it moved into the action** (ADR
   0050). `Project.opportunity` was a `OneToOneField` and became
@@ -130,7 +130,7 @@ Key cross-cutting patterns to preserve:
   `backend/tests/regression/test_conversion_is_single_use.py`. Consequence: an opportunity whose
   only project is archived now reconverts (201) instead of 409 — the archived row no longer
   occupies a slot, which closes the last dead end of FDD 025.
-  `OpportunitySerializer.project`/`project_archived` keep their old shape (one id or null, never a
+  `CommercialOpportunitySerializer.project`/`project_archived` keep their old shape (one id or null, never a
   list): the oldest live project, or the oldest archived one when no live project remains.
 - **Product tiers live on `Service`, and they are the FDE ladder.** A `Service` with a `tier`
   (`qualification_call`/`discovery_assessment`/`discovery_sprint`/`feasibility`/`prove`/`scale`/
@@ -142,7 +142,7 @@ Key cross-cutting patterns to preserve:
   is free; zero anywhere else means "price to be decided" — the Transformation Partnership is
   monthly recurring and the catalog still cannot represent recurrence.
 - **A qualificação vem antes da venda, e é entidade.** `POST /leads/{id}/convert/` criava, no mesmo
-  clique, um `Client` **e** uma `Opportunity` no degrau gratuito — uma conversa de trinta minutos
+  clique, um `Client` **e** uma `CommercialOpportunity` no degrau gratuito — uma conversa de trinta minutos
   entrava no funil como venda registrada e podia virar `Project`. Desde a ADR 0049 ele registra uma
   `Qualification` (autor, data, cinco eixos, `outcome` ∈ `qualified`·`nurture`·`disqualified`) e
   **não cria oportunidade**; a venda nasce num ato explícito,
@@ -151,19 +151,19 @@ Key cross-cutting patterns to preserve:
   sobrescrever a primeira apagaria o histórico que a entidade existe para guardar; por isso
   `nurture` **não arquiva o lead**, que é o único jeito de ele voltar ao radar. A IA é insumo:
   `ai_suggested_outcome`/`ai_score_snapshot` guardam a sugestão e nada os copia para `outcome`. As
-  duas invariantes vivem no **modelo** e não só na view (`Opportunity.clean()`, `Project.clean()`),
+  duas invariantes vivem no **modelo** e não só na view (`CommercialOpportunity.clean()`, `Project.clean()`),
   porque shell, admin e migração não passam por rota. Ver FDD 044.
 - **`Service.category` separa a porta do degrau.** `acquisition` é oferta de aquisição — hoje só a
-  Qualification Call —, e ela nunca gera `Opportunity` nem `Project`; `commercial` é degrau
+  Qualification Call —, e ela nunca gera `CommercialOpportunity` nem `Project`; `commercial` é degrau
   vendável e é o default. A distinção é por **categoria, não por preço**: o Discovery + Assessment
   do founding client também é gratuito e é degrau. Restam seis degraus vendáveis na escada da FDD
   015.
 - **Documents are single-linked.** A `Document` must reference exactly one of
-  client/opportunity/project (enforced in `Document.clean()`); access is gated —
+  client/`commercial_opportunity`/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.
 - **Journey artifacts have state.** `Artifact` (one model, `kind` =
   discovery/assessment/proposal/contract) holds the AI-generated text plus a state machine
-  (`ARTIFACT_TRANSITIONS` in `models.py`), linked to exactly one of opportunity/project. The four
+  (`ARTIFACT_TRANSITIONS` in `models.py`), linked to exactly one of `commercial_opportunity`/project. The four
   AI actions create it in `draft` via `_ai_run(..., artifact_kind=...)`; `Document` stays the file
   and the e-sign target. Analytics exposes `funnel.by_stage` — see FDD 016 / ADR 0008.
 - **Evidência e achado são duas coisas, e o `Discovery` diz de quando.** `Evidencia` (FDD 039)
@@ -185,13 +185,29 @@ Key cross-cutting patterns to preserve:
   `portal.build_snapshot` é projeção de leitura do One, e o One **nunca renomeia** (`language-map`
   §3): por isso ele leva `account` (de `engagement.account`, a fonte — não de `Project.client`, que
   é a projeção temporária), `engagement`, e `canonical_stage`/`requires_gate`/`gate_decision` em
-  cada fase, com `gate_decision` lido da **propriedade** de `ProjectPhase` para o nome legado não
-  se espalhar. `client` fica como alias até a `/api/v2/`; `situation` e `waiting_party` **não**
+  cada fase. `gate_decision` era lido de uma **propriedade** de `ProjectPhase`, para o nome legado
+  não se espalhar; desde a #67 é o nome do próprio campo, e a chave emitida nunca mudou — que era
+  o ponto do alias. `client` fica como alias até a `/api/v2/`; `situation` e `waiting_party` **não**
   atravessam — são classificação interna de delivery. O carimbo `observed_at`/`projection_version`
   é escrito em `portal.emit` (`F()+1`, **antes** da guarda de flag), nunca no `build_snapshot`:
   a rota é um `GET`, e incrementar na leitura produziria versões fora de ordem — o sinal exato que
   o comparador do outro lado usa para descartar o obsoleto. Duas leituras seguidas devolvendo a
   mesma versão é o caso comum, não sintoma. Ver FDD 047, ADR 0051 e a emenda de 28/08 na ADR 0003.
+- **Os renomes da ontologia estão em curso, e "renome" são três coisas com prazos distintos**
+  (ADR 0052, issue #67). O nome da **classe** — e de tudo que a nomeia: serializer, viewset,
+  `resource`, campo FK, tipo TS — muda **agora**, uma fatia por PR. O nome da **tabela** fica para
+  a Fase 6: cada renome carrega `Meta.db_table` fixado no nome legado, e a migração é
+  `AlterModelTable` **antes** de `RenameModel`, nessa ordem, para as duas serem no-op no banco —
+  `alter_db_table` abre com `if old_db_table == new_db_table: return`, e inverter faz o banco
+  renomear a tabela e renomeá-la de volta. A **rota** e a **chave de payload** ficam para a
+  `/api/v2/`: a chave legada continua saindo no `GET` (campo com `source=`, `read_only`) e sendo
+  aceita no `POST`/`PATCH` (`AliasDeEntradaMixin`, um mecanismo para todas), e **a canônica vence
+  quando as duas vêm no mesmo corpo**. Todo alias de escrita precisa de regressão, porque a SPA
+  escreve o nome canônico: sem ela a linha do serializer não tem chamador aqui dentro, e a próxima
+  varredura atrás do nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem
+  nada ficar vermelho. Já pagos: `GateOutcome`→`GateDecision` e `Opportunity`→
+  `CommercialOpportunity`. O que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt`,
+  e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo vs. chave).
 - **O `Engagement` tem superfície, e ela mora no detalhe do cliente.** A seção "Engagements" de
   `ClientDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
   `docs/design/dap-engagement-r1/`, r1, decisões **A1** (título em inglês, copy em volta em pt-BR)
