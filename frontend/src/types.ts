@@ -4,7 +4,12 @@ export type AiScoreDimension = { label: string; score: number };
 // O mandato de transformação da conta, entre `Account` e `Project` (ADR 0050, FDD 046). Uma venda
 // avulsa também tem o seu — de escopo único, criado pela própria conversão.
 export type EngagementStatus = "active" | "paused" | "closed";
-export type Engagement = { id: number; account: number; account_name: string; name: string; mandate: string; sponsor: number | null; owner: number; owner_name: string | null; status: EngagementStatus; status_display: string; started_at: string | null; ended_at: string | null; success_definition: string; needs_review: boolean; archived_at: string | null; created_at: string; updated_at: string };
+// `design_partner` recebe Discovery sem cobrança em troca de servir de caso; `paid` é o
+// mandato vendido. O campo **registra** a condição e não concede nada — nenhuma regra de
+// preço, fatura ou catálogo o lê (FDD 046). Não atravessa para o One: é dado comercial
+// (`docs/ontology/language-map.md` §3).
+export type EngagementCommercialModel = "design_partner" | "paid";
+export type Engagement = { id: number; account: number; account_name: string; name: string; mandate: string; sponsor: number | null; owner: number; owner_name: string | null; status: EngagementStatus; status_display: string; commercial_model: EngagementCommercialModel; commercial_model_display: string; started_at: string | null; ended_at: string | null; success_definition: string; needs_review: boolean; archived_at: string | null; created_at: string; updated_at: string };
 // `opportunity` é **alias de leitura** de `originating_commercial_opportunity`, mantido para não
 // quebrar consumidor no meio do renome; sai na Fase 6 (`docs/ontology/language-map.md` §7).
 export type Project = { id: number; name: string; description: string; client: number; engagement: number; engagement_name: string; originating_commercial_opportunity: number | null; opportunity: number | null; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };
