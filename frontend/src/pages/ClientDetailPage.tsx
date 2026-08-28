@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Trash2, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, getConfig } from "../api";
@@ -7,7 +7,7 @@ import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Invoice, Processo, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Processo, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -22,6 +22,68 @@ const activityKindLabels: Record<ActivityKind, string> = { call: "Ligação", me
 const blankSatisfacao = { nivel: "satisfeito" as SatisfacaoNivel, fonte: "declarada" as SatisfacaoFonte, happened_on: new Date().toISOString().slice(0, 10), note: "" };
 const satisfacaoNivelLabels: Record<SatisfacaoNivel, string> = { promotor: "Promotor", satisfeito: "Satisfeito", neutro: "Neutro", insatisfeito: "Insatisfeito" };
 const satisfacaoFonteLabels: Record<SatisfacaoFonte, string> = { declarada: "Declarada pelo cliente", percebida: "Percebida por quem entrega" };
+
+/* -------------------------------------------------------------------------------------------
+   O mandato de transformação da conta (ADR 0050, FDD 046), desenhado no DAP
+   `docs/design/dap-engagement-r1/` — revisão 1, decisões **A1** e **B1**.
+
+   `owner` não está no rascunho de propósito: o formulário aprovado não pergunta quem é o
+   responsável, porque quem cria o mandato aqui dentro é quem está logado, e é
+   `EngagementViewSet.perform_create` que o grava.
+   ------------------------------------------------------------------------------------------- */
+const blankEngagement = {
+  name: "", commercial_model: "paid" as EngagementCommercialModel, status: "active" as EngagementStatus,
+  sponsor: "", started_at: "", ended_at: "", mandate: "", success_definition: "",
+};
+const engagementStatusLabels: Record<EngagementStatus, string> = { active: "Ativo", paused: "Pausado", closed: "Encerrado" };
+const engagementCommercialModelLabels: Record<EngagementCommercialModel, string> = { paid: "Pago", design_partner: "Design partner" };
+// Mapas de **variante**, nunca de cor (ADR 0026): `"state--1"`, jamais `"bg-emerald-50 …"`. Uma
+// segunda definição de "ativo" diverge da primeira em silêncio.
+//
+// `closed` é `state--off`, o neutro, e não `state--3`: um mandato encerrado é um mandato que
+// terminou, muitas vezes bem — pintá-lo de perigo faria a conta de melhor histórico parecer a mais
+// problemática. `paused` é o único dos três que pede alguém, e por isso é o único em âmbar.
+const engagementStatusBadge: Record<EngagementStatus, string> = { active: "state--1", paused: "state--2", closed: "state--off" };
+// Decisão **B1**: as duas pílulas sempre visíveis. `paid` no neutro e `design_partner` no azul de
+// informação — o mesmo selo que "Recebe cobrança" usa nesta página, e pelo mesmo motivo: é um fato
+// sobre o registro, não um aviso. Mostrar só a exceção faria "sem selo" significar duas coisas para
+// quem lê: conta paga, ou campo que ninguém preencheu.
+const engagementCommercialModelBadge: Record<EngagementCommercialModel, string> = { paid: "state--off", design_partner: "state--0" };
+
+/**
+ * Período com precisão de **mês** ("Desde 03/2026", "02/2026 → 05/2026") — decisão 6 do DAP: o
+ * mandato se mede em meses, e o dia exato vira ruído numa linha que já carrega quatro informações.
+ *
+ * Fatia a string ISO em vez de passar por `Date`: `new Date("2026-03-01")` é meia-noite **UTC** e
+ * volta como 28/02 em fuso negativo — o mês exibido seria o anterior. É o mesmo defeito que os
+ * vizinhos contornam com `T12:00:00`, e aqui não há por que abrir a data para fechá-la de novo.
+ */
+function mesEAno(iso: string): string {
+  const [ano, mes] = iso.split("-");
+  return `${mes}/${ano}`;
+}
+
+/** Nunca um travessão de preenchimento nem uma seta solta: sem `started_at`, não há período. */
+function periodoDoEngagement(engagement: Engagement): string {
+  if (!engagement.started_at) return "";
+  const inicio = mesEAno(engagement.started_at);
+  return engagement.ended_at ? `${inicio} → ${mesEAno(engagement.ended_at)}` : `Desde ${inicio}`;
+}
+
+/**
+ * A contagem é a que **quem está lendo alcança** — o backend a recorta por `project_scope_q`, e
+ * dois usuários veem números diferentes para o mesmo mandato (FDD 046).
+ */
+function projetosDoEngagement(quantos: number): string {
+  return `${quantos} ${quantos === 1 ? "projeto" : "projetos"}`;
+}
+
+/** O subtítulo do cabeçalho. Conta os **ativos**, que é o que a copy aprovada diz. */
+function resumoDeEngagements(engagements: Engagement[]): string {
+  if (!engagements.length) return "Nenhum engagement";
+  const ativos = engagements.filter(engagement => engagement.status === "active").length;
+  return `${ativos} ${ativos === 1 ? "engagement ativo" : "engagements ativos"} nesta conta`;
+}
 
 /**
  * O que fazer com cada sinal — e é isto, não o selo, que a tela precisa comunicar.
@@ -60,12 +122,25 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [satisfacoes, setSatisfacoes] = useState<Satisfacao[]>([]);
   const [processos, setProcessos] = useState<Processo[]>([]);
   const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
+  const [engagements, setEngagements] = useState<Engagement[]>([]);
+  const [engagementDraft, setEngagementDraft] = useState(blankEngagement);
+  const [editingEngagement, setEditingEngagement] = useState<Engagement | null>(null);
+  // O formulário de engagement abre por ação, ao contrário do de Contatos, que fica sempre à
+  // vista: é o que o board desenha (a lista renderiza sem formulário até "Novo engagement"), e é
+  // o que mantém a seção legível numa página que já empilha seis painéis.
+  const [engagementFormOpen, setEngagementFormOpen] = useState(false);
+  const [removingEngagement, setRemovingEngagement] = useState<Engagement | null>(null);
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
   const canWriteActivities = !!user && user.role !== "delivery";
   // Mesma regra de `canWriteActivities` — a Entrega só lê `contact` (RolePermission,
   // `permissions.py`) —, com nome próprio porque é o painel de Contatos que ela gate-ia aqui.
   const canWriteContacts = !!user && user.role !== "delivery";
+  // A mesma leitura de papel outra vez, e pelo mesmo motivo dos dois acima: a Entrega só lê
+  // `engagement` (`permissions.py`, e a assimetria é a decisão da FDD 046 — quem entrega precisa
+  // saber a que mandato o projeto pertence sem poder redefinir o que foi contratado). O desenho
+  // não inventa permissão: ele deixa de mostrar o que a API recusaria.
+  const canWriteEngagements = !!user && user.role !== "delivery";
 
   const load = useCallback(() => Promise.all([
     api<Client>(`/clients/${id}/`),
@@ -75,8 +150,12 @@ export function ClientDetailPage({ id }: { id: number }) {
     api<Vertical[]>("/verticals/"),
     api<Satisfacao[]>(`/satisfacoes/?client=${id}`),
     api<Processo[]>(`/processos/?client=${id}`),
-  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos);
+    // Na **mesma** chamada que o resto da página, e não num `useEffect` próprio: a seção não tem
+    // estado de carregamento seu (decisão do DAP), e uma segunda chamada criaria um — a tela
+    // mostraria a seção vazia antes de mostrá-la cheia.
+    api<Engagement[]>(`/engagements/?account=${id}`),
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
@@ -118,6 +197,53 @@ export function ClientDetailPage({ id }: { id: number }) {
     // viraria um 404 sem explicação.
     try { await api(`/contacts/${removingContact.id}/`, { method: "DELETE" }); if (editingContact?.id === removingContact.id) cancelContactEdit(); setRemovingContact(null); await load(); }
     catch (cause) { setRemovingContact(null); setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+  /**
+   * Cria ou edita o mandato, conforme `editingEngagement` — o padrão de Contatos, sem modal
+   * (decisão 3 do DAP). No erro, o rascunho e o modo de edição ficam como estavam.
+   *
+   * As datas e o patrocinador vão como `null` quando vazios, e não como `""`: os três campos são
+   * opcionais no modelo, e uma string vazia num `DateField` volta 400.
+   */
+  async function saveEngagement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const corpo = {
+      ...engagementDraft,
+      sponsor: engagementDraft.sponsor ? Number(engagementDraft.sponsor) : null,
+      started_at: engagementDraft.started_at || null,
+      ended_at: engagementDraft.ended_at || null,
+    };
+    try {
+      if (editingEngagement) await api(`/engagements/${editingEngagement.id}/`, { method: "PATCH", body: JSON.stringify(corpo) });
+      else await api("/engagements/", { method: "POST", body: JSON.stringify({ account: id, ...corpo }) });
+      closeEngagementForm(); await load();
+    } catch (cause) { setError((cause as Error).message); }
+  }
+  function startEngagementEdit(engagement: Engagement) {
+    setEditingEngagement(engagement);
+    setEngagementFormOpen(true);
+    setEngagementDraft({
+      name: engagement.name, commercial_model: engagement.commercial_model, status: engagement.status,
+      sponsor: engagement.sponsor ? String(engagement.sponsor) : "",
+      started_at: engagement.started_at ?? "", ended_at: engagement.ended_at ?? "",
+      mandate: engagement.mandate, success_definition: engagement.success_definition,
+    });
+  }
+  function closeEngagementForm() { setEditingEngagement(null); setEngagementFormOpen(false); setEngagementDraft(blankEngagement); }
+  async function removeEngagement() {
+    if (!removingEngagement) return;
+    setBusy(true);
+    // Arquivar quem está em edição sai do modo de edição junto, pela razão escrita no bloco de
+    // Contatos: o formulário seguiria apontando para uma linha que `ArchiveModelViewSet` já não
+    // devolve, e o "Salvar alterações" viraria um 404 sem explicação.
+    //
+    // O erro **não** passa por `mensagemDeFalha`: o 409 daqui é a recusa de arquivar mandato com
+    // projeto vivo, e o `detail` do backend já diz quantos projetos e o que fazer antes. A
+    // orientação genérica de 409 ("o estado mudou — recarregue") seria falsa: nada mudou, e
+    // recarregar não resolve.
+    try { await api(`/engagements/${removingEngagement.id}/`, { method: "DELETE" }); if (editingEngagement?.id === removingEngagement.id) closeEngagementForm(); setRemovingEngagement(null); await load(); }
+    catch (cause) { setRemovingEngagement(null); setError((cause as Error).message); }
     finally { setBusy(false); }
   }
   async function createActivity(event: FormEvent<HTMLFormElement>) {
@@ -179,6 +305,12 @@ export function ClientDetailPage({ id }: { id: number }) {
       confirmLabel="Remover" busy={busy}
       onCancel={() => setRemovingContact(null)} onConfirm={() => void removeContact()}
     />}
+    {removingEngagement && <ConfirmDialog
+      title="Arquivar engagement"
+      message={<>O engagement <strong className="text-ink">{removingEngagement.name}</strong> sai das listagens ativas. Nada é apagado — dá para restaurar depois.</>}
+      confirmLabel="Arquivar" busy={busy}
+      onCancel={() => setRemovingEngagement(null)} onConfirm={() => void removeEngagement()}
+    />}
     {isArchiving && <ConfirmDialog
       title="Arquivar cliente"
       message={<>O cliente <strong className="text-ink">{client.name}</strong> e os contatos dele saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
@@ -209,6 +341,75 @@ export function ClientDetailPage({ id }: { id: number }) {
         </section>
       : <p className="empty-state">Sem projeto ativo — a saúde da relação aparece quando houver uma jornada em andamento.</p>
     )}
+
+    {/* Os mandatos de transformação da conta (ADR 0050, FDD 046), governados pelo DAP
+        `docs/design/dap-engagement-r1/` — revisão 1, decisões **A1** e **B1**.
+
+        **Entre Saúde da relação e Satisfação, e a ordem é a decisão 1 do pacote**: a saúde é o
+        relance de *como estamos indo*, o engajamento é *o que estamos fazendo*, e estrutura vem
+        antes de histórico. Quem abre a conta precisa saber qual é o mandato antes de ler o que
+        aconteceu dentro dele. Esta é a primeira superfície do produto onde a espinha
+        `Account → Engagement → Project` fica visível.
+
+        O título fica em **inglês** (decisão A1) com a copy em volta em pt-BR: é o termo canônico
+        do `docs/ontology/language-map.md` §1, que não se traduz — traduz-se o texto em volta dele.
+
+        O ícone é o `Target` e não um aperto de mão: o `HeartHandshake` já desenha a Satisfação,
+        logo abaixo, e dois glifos de mãos colados um no outro é a diferença que ninguém enxerga.
+        O alvo diz a outra metade do conceito — o mandato tem `success_definition`. */}
+    <section className="panel sm:p-6" data-testid="engagements-panel">
+      <div className="panel-heading">
+        <div className="flex items-center gap-3">
+          <span className="metric-icon"><Target className="size-4" /></span>
+          <div>
+            <h2 className="font-semibold text-ink">{editingEngagement ? `Editando ${editingEngagement.name}` : "Engagements"}</h2>
+            <p className="text-sm text-slate-600">{resumoDeEngagements(engagements)}</p>
+          </div>
+        </div>
+        {canWriteEngagements && (engagementFormOpen
+          ? <button type="button" className="btn btn--secondary shrink-0" onClick={closeEngagementForm}>Cancelar</button>
+          : <button type="button" className="btn shrink-0" onClick={() => setEngagementFormOpen(true)}><Plus className="size-4" />Novo engagement</button>)}
+      </div>
+      {canWriteEngagements && engagementFormOpen && <form className="mb-4 space-y-4" onSubmit={event => void saveEngagement(event)}>
+        <label className="form-label">Nome<input className="field" value={engagementDraft.name} onChange={event => setEngagementDraft({ ...engagementDraft, name: event.target.value })} placeholder="Como a casa chama este mandato" required /></label>
+        <div className="form-grid">
+          <label className="form-label">Modelo comercial<select className="field" value={engagementDraft.commercial_model} onChange={event => setEngagementDraft({ ...engagementDraft, commercial_model: event.target.value as EngagementCommercialModel })}>{Object.entries(engagementCommercialModelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="form-label">Status<select className="field" value={engagementDraft.status} onChange={event => setEngagementDraft({ ...engagementDraft, status: event.target.value as EngagementStatus })}>{Object.entries(engagementStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          {/* Só os contatos **desta conta**, e não é conveniência: `Engagement.clean()` e
+              `EngagementSerializer.validate()` recusam patrocinador de outra organização. Um
+              select com o catálogo inteiro ofereceria justamente as opções que voltam 400. */}
+          <label className="form-label">Patrocinador<select className="field" value={engagementDraft.sponsor} onChange={event => setEngagementDraft({ ...engagementDraft, sponsor: event.target.value })}><option value="">Sem patrocinador definido</option>{contacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label>
+          <label className="form-label">Início<input className="field" type="date" value={engagementDraft.started_at} onChange={event => setEngagementDraft({ ...engagementDraft, started_at: event.target.value })} /></label>
+          <label className="form-label">Fim<input className="field" type="date" value={engagementDraft.ended_at} onChange={event => setEngagementDraft({ ...engagementDraft, ended_at: event.target.value })} /></label>
+        </div>
+        <label className="form-label">Mandato<textarea className="field min-h-20" value={engagementDraft.mandate} onChange={event => setEngagementDraft({ ...engagementDraft, mandate: event.target.value })} placeholder="O que a casa foi contratada para transformar" /></label>
+        <label className="form-label">Definição de sucesso<textarea className="field min-h-20" value={engagementDraft.success_definition} onChange={event => setEngagementDraft({ ...engagementDraft, success_definition: event.target.value })} placeholder="Como saberemos que deu certo" /></label>
+        <div className="flex gap-2">
+          <button className="btn" type="submit">{editingEngagement ? <><Save className="size-4" />Salvar alterações</> : <><Plus className="size-4" />Adicionar engagement</>}</button>
+          {editingEngagement && <button type="button" className="btn btn--secondary" onClick={closeEngagementForm}>Cancelar</button>}
+        </div>
+      </form>}
+      {engagements.length ? <div className="panel-rows">{engagements.map(engagement => <div className={`row ${editingEngagement?.id === engagement.id ? "opacity-50" : ""}`} key={engagement.id}>
+        <span className="metric-icon"><Target className="size-4" /></span>
+        <div className="row-main">
+          <strong>{engagement.name}</strong>
+          {engagement.sponsor_name && <span>Patrocínio de {engagement.sponsor_name}</span>}
+          <span>{[periodoDoEngagement(engagement), projetosDoEngagement(engagement.projects_count)].filter(Boolean).join(" · ")}</span>
+        </div>
+        {/* As duas pílulas são **irmãs** de `.row-main`, nunca filhas, pela razão escrita nos
+            blocos de Satisfação e Interações: `.row-main span` declara `block text-xs text-muted`
+            e um `.state` aninhado ali perderia a própria pele sem nada ficar vermelho.
+
+            E são **duas, sempre** (decisão B1): mostrar só o `design_partner` faria "sem selo"
+            significar duas coisas para quem lê — conta paga, ou campo que ninguém preencheu. */}
+        <span className={`state ${engagementStatusBadge[engagement.status]} shrink-0`}>{engagement.status_display}</span>
+        <span className={`state ${engagementCommercialModelBadge[engagement.commercial_model]} shrink-0`}>{engagement.commercial_model_display}</span>
+        {canWriteEngagements && <div className="flex shrink-0 gap-1.5">
+          <button type="button" className="btn btn--icon btn--secondary" aria-label={`Editar ${engagement.name}`} onClick={() => startEngagementEdit(engagement)}><Pencil className="size-4" /></button>
+          <button type="button" className="btn btn--icon btn--secondary btn--secondary-danger" aria-label={`Arquivar ${engagement.name}`} onClick={() => setRemovingEngagement(engagement)}><Trash2 className="size-4" /></button>
+        </div>}
+      </div>)}</div> : <p className="empty-state">Nenhum engagement nesta conta. Crie o mandato antes de converter uma oportunidade — é ele que agrupa as vendas e os projetos que são o mesmo trabalho.</p>}
+    </section>
 
     {/* A satisfação do cliente (FDD 037, ADR 0032) — logo depois da saúde da relação porque as
         duas respondem à mesma pergunta por ângulos diferentes: uma é o nosso trabalho, a outra é o
