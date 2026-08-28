@@ -9,8 +9,10 @@ vi.mock("../api", () => ({ api: mocks.api }));
 
 const services = [
   { id: 1, name: "Consultoria", active: true, tier: "", tier_display: "", list_price: "0.00", summary: "" },
-  { id: 2, name: "Discovery Express", active: true, tier: "discovery_express", tier_display: "Discovery Express", list_price: "0.00", summary: "Diagnóstico gratuito." },
-  { id: 3, name: "Implantação", active: true, tier: "implantacao", tier_display: "Implantação", list_price: "90000.00", summary: "Funcionários digitais." },
+  { id: 2, name: "Discovery Sprint", active: true, tier: "discovery_sprint", tier_display: "Discovery Sprint", list_price: "18000.00", summary: "Discovery pago com Executive Readout." },
+  { id: 3, name: "PROVE (piloto)", active: true, tier: "prove", tier_display: "PROVE (piloto)", list_price: "90000.00", summary: "Produção controlada com decision gate." },
+  { id: 4, name: "Qualification Call", active: true, tier: "qualification_call", tier_display: "Qualification Call", list_price: "0.00", summary: "Call gratuita de 30–45 min." },
+  { id: 5, name: "Transformation Partnership", active: true, tier: "transformation", tier_display: "Transformation Partnership", list_price: "0.00", summary: "Parceria contínua." },
 ];
 
 beforeEach(() => {
@@ -35,7 +37,7 @@ test("edita, salva e arquiva um serviço avulso", async () => {
   render(<ServicesPage />);
   await screen.findByDisplayValue("Consultoria");
   await user.click(screen.getByLabelText("Ativo"));
-  await user.click(screen.getAllByRole("button", { name: "Salvar" })[2]);
+  await user.click(screen.getAllByRole("button", { name: "Salvar" })[4]);
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/services/1/", expect.objectContaining({ method: "PATCH" })));
   await user.click(screen.getByLabelText("Arquivar serviço Consultoria"));
   // O clique abre a confirmação; o DELETE só sai depois do segundo passo.
@@ -46,17 +48,19 @@ test("edita, salva e arquiva um serviço avulso", async () => {
 
 test("separa os níveis de produto e mostra preço e escopo", async () => {
   render(<ServicesPage />);
-  expect(await screen.findByText("Níveis de produto")).toBeInTheDocument();
-  expect(screen.getByDisplayValue("Discovery Express")).toBeInTheDocument();
+  expect(await screen.findByText("Degraus da escada")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("Discovery Sprint")).toBeInTheDocument();
   expect(screen.getByText("Gratuito — porta de entrada da metodologia.")).toBeInTheDocument();
-  expect(screen.getByDisplayValue("Funcionários digitais.")).toBeInTheDocument();
+  // Zero na parceria contínua é preço a decidir, não gratuidade anunciada (ver `src/tiers.ts`).
+  expect(screen.getByText("Preço a definir.")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("Produção controlada com decision gate.")).toBeInTheDocument();
   expect(screen.getByText("Serviços avulsos")).toBeInTheDocument();
 });
 
 test("salva preço e escopo de um nível", async () => {
   const user = userEvent.setup();
   render(<ServicesPage />);
-  const price = await screen.findByLabelText("Preço de Implantação");
+  const price = await screen.findByLabelText("Preço de PROVE (piloto)");
   await user.clear(price);
   await user.type(price, "120000");
   await user.click(screen.getAllByRole("button", { name: "Salvar" })[1]);
@@ -71,7 +75,7 @@ test("cria um serviço já no nível escolhido", async () => {
   render(<ServicesPage />);
   await screen.findByDisplayValue("Consultoria");
   await user.type(screen.getByLabelText("Novo serviço"), "Assessment");
-  await user.selectOptions(screen.getByLabelText("Nível"), "discovery_assessment");
+  await user.selectOptions(screen.getByLabelText("Degrau"), "discovery_assessment");
   await user.click(screen.getByRole("button", { name: "Adicionar serviço" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/services/", expect.objectContaining({

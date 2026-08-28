@@ -146,7 +146,7 @@ def _blueprint_lines(opportunity: Opportunity) -> list[str]:
 
     É o que faz a proposta citar o Funcionário Digital concreto — "um SDR que qualifica lead fora
     do horário" — e não só o nível de produto. Aplicável significa: ativo, e ou amarrado ao nível
-    vendido ou genérico (sem `service`), porque um bloco de Implantação não cabe num Discovery.
+    vendido ou genérico (sem `service`), porque um bloco de PROVE não cabe num Discovery.
     Os valores saem **resolvidos** pela vertical do cliente, que é a razão de a variante existir.
 
     Sem catálogo, nada é emitido — quem não construiu biblioteca segue com o contexto de antes.

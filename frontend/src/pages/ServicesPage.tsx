@@ -3,13 +3,18 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
 import { ConfirmDialog } from "../components/Modal";
+import { ehGratuito, precoADefinir } from "../tiers";
 import type { Service, ServiceTier } from "../types";
 
 const tiers: { value: ServiceTier; label: string }[] = [
   { value: "", label: "Serviço avulso" },
-  { value: "discovery_express", label: "Discovery Express" },
-  { value: "discovery_assessment", label: "Discovery + Assessment" },
-  { value: "implantacao", label: "Implantação" },
+  { value: "qualification_call", label: "Qualification Call" },
+  { value: "discovery_assessment", label: "Discovery Express + Assessment" },
+  { value: "discovery_sprint", label: "Discovery Sprint" },
+  { value: "feasibility", label: "Technical Feasibility (T.O.E.)" },
+  { value: "prove", label: "PROVE (piloto)" },
+  { value: "scale", label: "Scale" },
+  { value: "transformation", label: "Transformation Partnership" },
 ];
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -67,16 +72,18 @@ export function ServicesPage() {
       onCancel={() => setArchiving(null)}
       onConfirm={() => void archive()}
     />}
-    <header className="page-head"><p className="eyebrow">Gestão</p><h1>Serviços e níveis de produto</h1><p>Os três níveis conduzem o pipeline, a proposta e o cronograma inicial do projeto. Serviços avulsos entram só no ROI por serviço.</p></header>
+    <header className="page-head"><p className="eyebrow">Gestão</p><h1>Serviços e degraus da escada</h1><p>Os degraus da escada FDE conduzem o pipeline, a proposta e o cronograma inicial do projeto. Serviços avulsos entram só no ROI por serviço.</p></header>
     {error && <p role="alert" className="alert--error">{error}</p>}
 
     <section className="space-y-4">
-      <h2 className="font-semibold text-ink">Níveis de produto</h2>
+      <h2 className="font-semibold text-ink">Degraus da escada</h2>
       {levels.length ? <div className="grid gap-4 lg:grid-cols-3">{levels.map(service => <article className="panel grid gap-3 sm:p-6" key={service.id}>
         <p className="eyebrow">{service.tier_display}</p>
         <label className="form-label">Nome<input className="field" value={service.name} onChange={event => updateLocal(service.id, { name: event.target.value })} aria-label={`Nome do serviço ${service.id}`} /></label>
         <label className="form-label">Preço de tabela<input className="field" type="number" min="0" step="0.01" value={service.list_price} onChange={event => updateLocal(service.id, { list_price: event.target.value })} aria-label={`Preço de ${service.name}`} /></label>
-        <p className="-mt-1 text-xs text-muted">{Number(service.list_price) === 0 ? "Gratuito — porta de entrada da metodologia." : money.format(Number(service.list_price))}</p>
+        {/* Zero não quer dizer gratuito: só a Qualification Call é de graça, e degrau novo nasce
+            sem preço decidido. Ver `src/tiers.ts`. */}
+        <p className="-mt-1 text-xs text-muted">{ehGratuito(service) ? "Gratuito — porta de entrada da metodologia." : precoADefinir(service) ? "Preço a definir." : money.format(Number(service.list_price))}</p>
         <label className="form-label">O que está incluso<textarea className="field min-h-24" value={service.summary} onChange={event => updateLocal(service.id, { summary: event.target.value })} aria-label={`Escopo de ${service.name}`} placeholder="Alimenta a proposta gerada pela IA" /></label>
         <label className="flex items-center gap-2 text-sm text-muted"><input type="checkbox" checked={service.active} onChange={event => updateLocal(service.id, { active: event.target.checked })} />Disponível para venda</label>
         <button className="btn" disabled={savingId === service.id} onClick={() => void save(service)}><Save className="size-4" />{savingId === service.id ? "Salvando…" : "Salvar"}</button>
@@ -97,7 +104,7 @@ export function ServicesPage() {
 
     <form className="toolbar" onSubmit={event => void create(event)}>
       <label className="form-label">Novo serviço<input className="field w-64" value={name} onChange={event => setName(event.target.value)} placeholder="Ex.: Consultoria de IA" required /></label>
-      <label className="form-label">Nível<select className="field w-56" value={tier} onChange={event => setTier(event.target.value as ServiceTier)}>{tiers.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label className="form-label">Degrau<select className="field w-56" value={tier} onChange={event => setTier(event.target.value as ServiceTier)}>{tiers.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <button className="btn" disabled={isCreating} type="submit"><Plus className="size-4" />{isCreating ? "Adicionando…" : "Adicionar serviço"}</button>
     </form>
   </section>;

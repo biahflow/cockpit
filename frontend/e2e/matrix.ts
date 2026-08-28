@@ -228,9 +228,9 @@ const FIXTURES: Record<string, unknown> = {
     })),
   },
   "/api/v1/services/": serie(4, index => ({
-    id: index, name: index === 1 ? "Discovery Express" : `Serviço avulso ${index}`,
-    active: true, tier: index === 1 ? "discovery_express" : "",
-    tier_display: index === 1 ? "Discovery Express" : "", list_price: "0.00",
+    id: index, name: index === 1 ? "Discovery Sprint" : `Serviço avulso ${index}`,
+    active: true, tier: index === 1 ? "discovery_sprint" : "",
+    tier_display: index === 1 ? "Discovery Sprint" : "", list_price: "0.00",
     summary: "Diagnóstico inicial gratuito de oportunidades de automação.",
   })),
   "/api/v1/leads/": serie(8, index => ({
@@ -444,9 +444,9 @@ const FIXTURES: Record<string, unknown> = {
       opportunities: { open: 9, won: 6, lost: 3 },
       projects: { total: 12, by_status: { active: 8, completed: 4 } },
       by_tier: [
-        { tier: "discovery_express", label: "Discovery Express", total: 10, open: 4, won: 5, lost: 1, estimated_total: 0, win_rate: 0.83 },
+        { tier: "discovery_sprint", label: "Discovery Sprint", total: 10, open: 4, won: 5, lost: 1, estimated_total: 0, win_rate: 0.83 },
         { tier: "discovery_assessment", label: "Discovery + Assessment", total: 8, open: 3, won: 4, lost: 1, estimated_total: 320000, win_rate: 0.8 },
-        { tier: "implantacao", label: "Implantação", total: 5, open: 2, won: 2, lost: 1, estimated_total: 900000, win_rate: 0.67 },
+        { tier: "prove", label: "PROVE (piloto)", total: 5, open: 2, won: 2, lost: 1, estimated_total: 900000, win_rate: 0.67 },
       ],
       by_stage: [
         { kind: "discovery", label: "Discovery", total: 12, sent: 10, accepted: 8, rejected: 1, acceptance_rate: 0.8, reached: 12 },

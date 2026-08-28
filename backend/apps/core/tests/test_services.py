@@ -1,4 +1,4 @@
-"""Níveis de produto sobre o catálogo de `Service` (FDD 015)."""
+"""Degraus da escada FDE sobre o catálogo de `Service` (FDD 015)."""
 
 import pytest
 from rest_framework.test import APIClient
@@ -9,12 +9,12 @@ from .factories import ServiceFactory, UserFactory
 
 
 @pytest.mark.django_db
-def test_migration_seeds_the_three_product_tiers():
+def test_migration_seeds_every_step_of_the_ladder():
     tiers = set(Service.objects.exclude(tier="").values_list("tier", flat=True))
     assert tiers == {t for t, _ in Service.Tier.choices}
-    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
-    assert express.is_free
-    assert express.summary
+    porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
+    assert porta.is_free
+    assert porta.summary
 
 
 @pytest.mark.django_db
@@ -29,7 +29,7 @@ def test_admin_updates_tier_price_and_summary():
 
     assert response.status_code == 200
     assert response.json()["list_price"] == "18000.00"
-    assert response.json()["tier_display"] == "Discovery + Assessment"
+    assert response.json()["tier_display"] == "Discovery Express + Assessment"
     service.refresh_from_db()
     assert service.summary == "Discovery aprofundado e assessment."
 
@@ -40,7 +40,7 @@ def test_second_active_service_in_the_same_tier_is_rejected():
     client.force_authenticate(UserFactory(role="admin"))
 
     response = client.post("/api/v1/services/", {
-        "name": "Outro Discovery", "tier": Service.Tier.DISCOVERY_EXPRESS,
+        "name": "Outro Discovery", "tier": Service.Tier.DISCOVERY_SPRINT,
     }, format="json")
 
     assert response.status_code == 400
@@ -51,14 +51,14 @@ def test_second_active_service_in_the_same_tier_is_rejected():
 def test_archiving_a_service_frees_its_tier():
     client = APIClient()
     client.force_authenticate(UserFactory(role="admin"))
-    seeded = Service.objects.get(tier=Service.Tier.IMPLEMENTATION)
+    seeded = Service.objects.get(tier=Service.Tier.PROVE)
 
     assert client.delete(f"/api/v1/services/{seeded.pk}/").status_code == 204
     seeded.refresh_from_db()
     assert seeded.is_archived
 
     response = client.post("/api/v1/services/", {
-        "name": "Implantação 2026", "tier": Service.Tier.IMPLEMENTATION, "list_price": "90000.00",
+        "name": "PROVE 2026", "tier": Service.Tier.PROVE, "list_price": "90000.00",
     }, format="json")
     assert response.status_code == 201
 
@@ -70,7 +70,7 @@ def test_moving_a_service_into_a_taken_tier_is_rejected():
     loose = ServiceFactory(name="Consultoria avulsa")
 
     response = client.patch(f"/api/v1/services/{loose.pk}/", {
-        "tier": Service.Tier.IMPLEMENTATION,
+        "tier": Service.Tier.PROVE,
     }, format="json")
 
     assert response.status_code == 400
@@ -81,14 +81,14 @@ def test_moving_a_service_into_a_taken_tier_is_rejected():
 def test_renaming_a_tier_service_keeps_its_own_tier():
     client = APIClient()
     client.force_authenticate(UserFactory(role="admin"))
-    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
+    sprint = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
 
-    response = client.patch(f"/api/v1/services/{express.pk}/", {
-        "name": "Diagnóstico Express", "tier": Service.Tier.DISCOVERY_EXPRESS,
+    response = client.patch(f"/api/v1/services/{sprint.pk}/", {
+        "name": "Diagnóstico Sprint", "tier": Service.Tier.DISCOVERY_SPRINT,
     }, format="json")
 
     assert response.status_code == 200
-    assert response.json()["name"] == "Diagnóstico Express"
+    assert response.json()["name"] == "Diagnóstico Sprint"
 
 
 @pytest.mark.django_db

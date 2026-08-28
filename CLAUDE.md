@@ -105,11 +105,15 @@ Key cross-cutting patterns to preserve:
   (`Project.opportunity`) + `transaction.atomic` + `IntegrityError` handling to
   guarantee a won opportunity converts exactly once without duplicating the client.
   It also carries `Opportunity.service` over to `Project.service` (payload wins).
-- **Product tiers live on `Service`.** A `Service` with a `tier`
-  (`discovery_express`/`discovery_assessment`/`implantacao`) is one of the three product
-  levels, seeded by migration `0020`; a blank `tier` is a loose catalog entry. The tier
-  drives the kickoff template (`kickoff.KICKOFF_TEMPLATES`), the proposal prompt context
-  (`ai.build_opportunity_context`) and the `by_tier` funnel in analytics — see FDD 015.
+- **Product tiers live on `Service`, and they are the FDE ladder.** A `Service` with a `tier`
+  (`qualification_call`/`discovery_assessment`/`discovery_sprint`/`feasibility`/`prove`/`scale`/
+  `transformation`) is one sellable step, seeded by migrations `0020` and `0050`; a blank `tier`
+  is a loose catalog entry. The tier drives the kickoff template (`kickoff.KICKOFF_TEMPLATES`),
+  the invoice schedule (`invoices.INVOICE_SCHEDULES`), the proposal prompt context
+  (`ai.build_opportunity_context`) and the `by_tier` funnel in analytics — see FDD 015, ADR 0048.
+  **Free is the step, not the zero price** (`frontend/src/tiers.ts`): only the Qualification Call
+  is free; zero anywhere else means "price to be decided" — the Transformation Partnership is
+  monthly recurring and the catalog still cannot represent recurrence.
 - **Documents are single-linked.** A `Document` must reference exactly one of
   client/opportunity/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.

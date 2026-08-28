@@ -228,9 +228,9 @@ def test_conversion_returns_conflict_without_partial_project_on_integrity_error(
 @pytest.mark.django_db
 def test_conversion_inherits_the_opportunity_product_tier() -> None:
     sales = UserFactory(role=User.Role.SALES)
-    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
+    porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
     opportunity = OpportunityFactory(
-        stage=PipelineStage.objects.get(kind="won"), owner=sales, service=express
+        stage=PipelineStage.objects.get(kind="won"), owner=sales, service=porta
     )
     client = APIClient()
     client.force_authenticate(sales)
@@ -243,8 +243,8 @@ def test_conversion_inherits_the_opportunity_product_tier() -> None:
     }, format="json")
 
     assert response.status_code == 201
-    assert response.json()["service"] == express.pk
-    # O cronograma segue o nível, não o template de implantação.
+    assert response.json()["service"] == porta.pk
+    # O cronograma segue o degrau, não o template genérico.
     assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 1
 
 
@@ -254,7 +254,7 @@ def test_conversion_payload_overrides_the_inherited_service() -> None:
     chosen = ServiceFactory(name="Serviço combinado")
     opportunity = OpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=sales,
-        service=Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS),
+        service=Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL),
     )
     client = APIClient()
     client.force_authenticate(sales)

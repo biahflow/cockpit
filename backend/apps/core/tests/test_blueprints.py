@@ -332,7 +332,7 @@ def test_catalog_is_readable_by_any_authenticated_role(role):
 @pytest.mark.django_db
 def test_delivery_reads_a_service_detail_too():
     """O buraco que a Biblioteca revelou já valia para o catálogo de serviços (FDD 015)."""
-    service = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
+    service = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
     client = APIClient()
     client.force_authenticate(UserFactory(role="delivery"))
     assert client.get(f"/api/v1/services/{service.pk}/").status_code == 200

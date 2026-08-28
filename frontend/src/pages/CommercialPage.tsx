@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { AgentPanel } from "../components/AgentPanel";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
+import { ehGratuito, precoADefinir } from "../tiers";
 import type { Activity, ActivityKind, Client, Contact, DocumentEntry, Opportunity, PipelineStage, Project, Service, ServiceTier } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -226,14 +227,21 @@ export function CommercialPage() {
   </section>;
 }
 
-// Os três níveis avançam do diagnóstico gratuito à implantação; a cor acompanha essa escada.
+// Os sete degraus avançam da call gratuita à parceria contínua, e a cor acompanha a escada: os
+// dois primeiros são a porta (claros), os dois do meio provam (intermediários), os três últimos
+// são compromisso de produção (escuros). Ler a coluna do pipeline deve dizer, sem legenda, o quão
+// fundo cada negociação está.
 const tierBadges: Record<ServiceTier, string> = {
-  discovery_express: "state--0",
+  qualification_call: "state--off",
   discovery_assessment: "state--0",
-  implantacao: "bg-ink text-white",
+  discovery_sprint: "state--0",
+  feasibility: "state--1",
+  prove: "state--1",
+  scale: "bg-ink text-white",
+  transformation: "bg-ink text-white",
   "": "state--off",
 };
 function tierBadgeClass(tier: ServiceTier) { return tierBadges[tier] ?? tierBadges[""]; }
-function serviceLabel(service: Service) { return service.tier ? `${service.name} — ${Number(service.list_price) === 0 ? "gratuito" : money.format(Number(service.list_price))}` : service.name; }
+function serviceLabel(service: Service) { return service.tier ? `${service.name} — ${ehGratuito(service) ? "gratuito" : precoADefinir(service) ? "preço a definir" : money.format(Number(service.list_price))}` : service.name; }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="form-label">{label}{children}</label>; }

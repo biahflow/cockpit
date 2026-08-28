@@ -51,12 +51,12 @@ def test_build_opportunity_context_has_client_and_value():
 
 @pytest.mark.django_db
 def test_build_opportunity_context_describes_the_product_tier():
-    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
-    context = ai.build_opportunity_context(OpportunityFactory(service=express))
+    porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
+    context = ai.build_opportunity_context(OpportunityFactory(service=porta))
 
-    assert f"Nível de produto: {express.name} (Discovery Express)" in context
+    assert f"Nível de produto: {porta.name} (Qualification Call)" in context
     assert "Preço de tabela: gratuito" in context
-    assert express.summary in context
+    assert porta.summary in context
 
 
 @pytest.mark.django_db
@@ -103,18 +103,18 @@ def test_build_opportunity_context_cites_the_catalog_resolved_by_vertical():
 
 @pytest.mark.django_db
 def test_build_opportunity_context_only_offers_blocks_that_fit_the_tier():
-    """Bloco de Implantação não cabe num Discovery — e o genérico serve aos dois."""
-    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
-    implantacao = Service.objects.get(tier=Service.Tier.IMPLEMENTATION)
-    DigitalEmployeeBlueprint.objects.create(name="Bloco do Express", service=express)
-    DigitalEmployeeBlueprint.objects.create(name="Bloco da Implantação", service=implantacao)
+    """Bloco de PROVE não cabe num Discovery — e o genérico serve aos dois."""
+    sprint = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
+    prove = Service.objects.get(tier=Service.Tier.PROVE)
+    DigitalEmployeeBlueprint.objects.create(name="Bloco do Sprint", service=sprint)
+    DigitalEmployeeBlueprint.objects.create(name="Bloco do PROVE", service=prove)
     DigitalEmployeeBlueprint.objects.create(name="Bloco genérico")
 
-    context = ai.build_opportunity_context(OpportunityFactory(service=express))
+    context = ai.build_opportunity_context(OpportunityFactory(service=sprint))
 
-    assert "Bloco do Express" in context
+    assert "Bloco do Sprint" in context
     assert "Bloco genérico" in context
-    assert "Bloco da Implantação" not in context
+    assert "Bloco do PROVE" not in context
 
 
 @pytest.mark.django_db

@@ -35,13 +35,41 @@ def test_seed_work_items_clamps_due_dates_to_short_window():
 
 
 @pytest.mark.django_db
-def test_discovery_express_gets_the_short_schedule():
-    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS))
+def test_qualification_call_gets_the_short_schedule():
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL))
 
     milestones, _ = kickoff.seed_work_items(project)
 
     assert milestones == 1
-    assert Milestone.objects.get(project=project).title == "Discovery"
+    assert Milestone.objects.get(project=project).title == "Qualification Call"
+
+
+@pytest.mark.django_db
+def test_discovery_sprint_ends_in_the_executive_readout():
+    """Sprint pago sem readout é trabalho feito que ninguém viu (ADR 0030)."""
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT))
+
+    milestones, _ = kickoff.seed_work_items(project)
+
+    assert milestones == len(kickoff.KICKOFF_TEMPLATES["discovery_sprint"])
+    titles = list(Milestone.objects.filter(project=project).order_by("due_date")
+                  .values_list("title", flat=True))
+    assert titles[-1] == "Executive Readout"
+    tasks = list(Task.objects.filter(project=project).values_list("title", flat=True))
+    assert "Calcular o Opportunity Score de cada processo" in tasks
+
+
+@pytest.mark.django_db
+def test_feasibility_sets_the_target_before_running_the_sample():
+    """Critério definido depois do resultado não é critério, é narrativa (ADR 0030)."""
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.FEASIBILITY))
+
+    milestones, _ = kickoff.seed_work_items(project)
+
+    assert milestones == len(kickoff.KICKOFF_TEMPLATES["feasibility"])
+    tasks = list(Task.objects.filter(project=project).values_list("title", flat=True))
+    assert "Definir a meta **antes** de rodar a amostra" in tasks
+    assert "Registrar o gate (GO / CONDITIONAL GO / REDESIGN / NO-GO)" in tasks
 
 
 @pytest.mark.django_db
@@ -56,17 +84,17 @@ def test_discovery_assessment_gets_two_milestones():
 
 
 @pytest.mark.django_db
-def test_implementation_gets_the_prove_schedule():
-    # ADR 0030: a implantação é o PROVE — baseline/critérios antes de construir e
-    # evidência + decision gate no encerramento fazem parte do cronograma semeado.
-    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.IMPLEMENTATION))
+def test_prove_gets_the_baseline_and_the_decision_gate():
+    # ADR 0030: baseline/critérios antes de construir e o decision gate no encerramento
+    # fazem parte do cronograma semeado.
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.PROVE))
 
     milestones, _ = kickoff.seed_work_items(project)
 
-    assert milestones == len(kickoff.KICKOFF_TEMPLATES["implantacao"])
+    assert milestones == len(kickoff.KICKOFF_TEMPLATES["prove"])
     tasks = list(Task.objects.filter(project=project).values_list("title", flat=True))
     assert "Registrar o baseline e os critérios de sucesso antes de construir" in tasks
-    assert "Registrar a evidência de produção controlada e o decision gate" in tasks
+    assert "Registrar a decisão SCALE / ITERATE / STOP" in tasks
 
 
 @pytest.mark.django_db

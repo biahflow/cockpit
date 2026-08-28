@@ -375,8 +375,8 @@ def test_sales_converts_lead_into_client_and_opportunity(api_client: APIClient):
     assert lead.status == Lead.Status.QUALIFIED
     assert lead.opportunity is not None
     assert lead.opportunity.client.name == "ACME"
-    # Porta de entrada da metodologia: o lead nasce no nível gratuito.
-    assert lead.opportunity.service.tier == Service.Tier.DISCOVERY_EXPRESS
+    # Porta de entrada da metodologia: o lead nasce no primeiro degrau, gratuito.
+    assert lead.opportunity.service.tier == Service.Tier.QUALIFICATION_CALL
 
 
 @pytest.mark.django_db
@@ -645,9 +645,9 @@ def test_analytics_computes_win_rate_and_roi(api_client: APIClient, admin_user: 
 def test_analytics_breaks_the_funnel_down_by_product_tier(api_client: APIClient, admin_user: User):
     won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
     lost = PipelineStage.objects.get(kind=PipelineStage.Kind.LOST)
-    express = Service.objects.get(tier=Service.Tier.DISCOVERY_EXPRESS)
-    OpportunityFactory(stage=won, owner=admin_user, service=express, estimated_value=0)
-    OpportunityFactory(stage=lost, owner=admin_user, service=express, estimated_value=0)
+    sprint = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
+    OpportunityFactory(stage=won, owner=admin_user, service=sprint, estimated_value=0)
+    OpportunityFactory(stage=lost, owner=admin_user, service=sprint, estimated_value=0)
     api_client.force_authenticate(admin_user)
 
     response = api_client.get(reverse("analytics"))
@@ -655,10 +655,10 @@ def test_analytics_breaks_the_funnel_down_by_product_tier(api_client: APIClient,
     assert response.status_code == 200
     by_tier = {row["tier"]: row for row in response.data["funnel"]["by_tier"]}
     assert set(by_tier) == {tier for tier, _ in Service.Tier.choices}
-    assert by_tier["discovery_express"]["total"] == 2
-    assert by_tier["discovery_express"]["win_rate"] == 0.5
-    assert by_tier["implantacao"]["total"] == 0
-    assert by_tier["implantacao"]["win_rate"] is None
+    assert by_tier["discovery_sprint"]["total"] == 2
+    assert by_tier["discovery_sprint"]["win_rate"] == 0.5
+    assert by_tier["prove"]["total"] == 0
+    assert by_tier["prove"]["win_rate"] is None
 
 
 @pytest.mark.django_db

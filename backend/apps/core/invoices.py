@@ -49,20 +49,44 @@ class Parcela:
 # para cada nível. Fatura que vence num dia em que nada foi entregue é briga marcada, e alinhar os
 # dois cronogramas é o que evita isso sem ninguém precisar lembrar.
 #
-# `discovery_express` é lista vazia, e não uma parcela de R$ 0,00: o nível é gratuito por definição
-# da metodologia, e semear uma fatura de zero inventaria cobrança onde a casa promete gratuidade —
-# além de produzir inadimplência fantasma no primeiro relatório.
+# `qualification_call` é lista vazia, e não uma parcela de R$ 0,00: o degrau é gratuito por
+# definição da metodologia, e semear uma fatura de zero inventaria cobrança onde a casa promete
+# gratuidade — além de produzir inadimplência fantasma no primeiro relatório.
+#
+# `transformation` também é lista vazia, mas por motivo **oposto e mais incômodo**: ele é
+# recorrente mensal, e este dicionário só sabe descrever parcelas de um contrato de valor único
+# medidas em dias a partir do início do projeto. Semear qualquer coisa aqui cobraria uma vez o
+# que se cobra todo mês. Enquanto `Service` não tiver recorrência, quem vende a parceria monta a
+# cobrança na tela — que é exatamente o que `schedule_for` já faz com serviço avulso.
+#
+# `discovery_assessment` é gratuito só no programa de founding client, e o programa não muda o
+# cronograma: o desconto mora no `estimated_value` da oportunidade. Projeto com valor zero gera
+# parcelas de zero, e é assim que o subsídio continua visível em vez de virar ausência de dado.
 INVOICE_SCHEDULES: dict[str, list[Parcela]] = {
-    "discovery_express": [],
+    "qualification_call": [],
     "discovery_assessment": [
-        Parcela("Discovery + Assessment — entrada", Decimal("0.5"), 0),
-        Parcela("Discovery + Assessment — entrega do assessment", Decimal("0.5"), 21),
+        Parcela("Discovery Express + Assessment — entrada", Decimal("0.5"), 0),
+        Parcela("Discovery Express + Assessment — entrega do assessment", Decimal("0.5"), 21),
     ],
-    "implantacao": [
-        Parcela("Implantação — entrada", Decimal("0.3"), 0),
-        Parcela("Implantação — go-live", Decimal("0.4"), 60),
-        Parcela("Implantação — encerramento", Decimal("0.3"), 90),
+    "discovery_sprint": [
+        Parcela("Discovery Sprint — entrada", Decimal("0.5"), 0),
+        Parcela("Discovery Sprint — Executive Readout", Decimal("0.5"), 7),
     ],
+    "feasibility": [
+        Parcela("Technical Feasibility — entrada", Decimal("0.5"), 0),
+        Parcela("Technical Feasibility — decision gate", Decimal("0.5"), 21),
+    ],
+    "prove": [
+        Parcela("PROVE — entrada", Decimal("0.3"), 0),
+        Parcela("PROVE — produção controlada", Decimal("0.4"), 60),
+        Parcela("PROVE — decision gate", Decimal("0.3"), 90),
+    ],
+    "scale": [
+        Parcela("Scale — entrada", Decimal("0.3"), 14),
+        Parcela("Scale — rollout", Decimal("0.4"), 60),
+        Parcela("Scale — captura de valor", Decimal("0.3"), 120),
+    ],
+    "transformation": [],
 }
 
 
@@ -125,10 +149,11 @@ def seed_invoices(project: Project) -> int:
         return 0
     parcelas = schedule_for(project)
     base = contracted_value(project)
-    # As duas guardas, e as duas são necessárias. A lista vazia declara a intenção para o
-    # Discovery Express; o `base <= 0` é o que de fato salva, porque a gratuidade é do **valor**,
-    # não do nível — os níveis pagos vêm semeados com `list_price=0` (migração `0020`), e sem esta
-    # linha uma implantação vendida a zero produziria três rascunhos de R$ 0,00.
+    # As duas guardas, e as duas são necessárias. A lista vazia declara a intenção para a
+    # Qualification Call (gratuita) e para a Transformation Partnership (recorrente, que este
+    # dicionário não sabe descrever); o `base <= 0` é o que de fato salva, porque a gratuidade é do
+    # **valor**, não do degrau — degrau pago pode chegar com `list_price=0` (migração `0020`), e
+    # sem esta linha um PROVE vendido a zero produziria três rascunhos de R$ 0,00.
     if not parcelas or base <= 0:
         return 0
     for parcela, valor in zip(parcelas, _split(base, parcelas), strict=True):

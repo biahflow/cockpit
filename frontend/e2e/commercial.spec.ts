@@ -1,8 +1,8 @@
 import { expect, test } from "./fixtures";
 
 const services = [
-  { id: 10, name: "Discovery Express", active: true, tier: "discovery_express", tier_display: "Discovery Express", list_price: "0.00", summary: "Diagnóstico gratuito." },
-  { id: 11, name: "Implantação", active: true, tier: "implantacao", tier_display: "Implantação", list_price: "90000.00", summary: "Funcionários digitais." },
+  { id: 10, name: "Discovery Sprint", active: true, tier: "discovery_sprint", tier_display: "Discovery Sprint", list_price: "18000.00", summary: "Discovery pago com Executive Readout." },
+  { id: 11, name: "PROVE (piloto)", active: true, tier: "prove", tier_display: "PROVE (piloto)", list_price: "90000.00", summary: "Produção controlada com decision gate." },
 ];
 
 test("movimenta uma oportunidade pelo pipeline", async ({ page }) => {
@@ -14,7 +14,7 @@ test("movimenta uma oportunidade pelo pipeline", async ({ page }) => {
   const opportunities = [{
     id: 7, client: 1, title: "Diagnóstico Biahflow", scope: "", estimated_value: "1000.00",
     stage: 1, stage_name: "Prospecção", owner: 1, expected_close_date: "2026-08-10",
-    service: 10, service_name: "Discovery Express", service_tier: "discovery_express",
+    service: 10, service_name: "Discovery Sprint", service_tier: "discovery_sprint",
   }];
   await page.route("**/api/v1/pipeline-stages/", route => route.fulfill({ json: stages }));
   await page.route("**/api/v1/opportunities/", route => route.fulfill({ json: opportunities }));
@@ -28,7 +28,7 @@ test("movimenta uma oportunidade pelo pipeline", async ({ page }) => {
   await page.goto("/comercial");
   await expect(page.getByText("Diagnóstico Biahflow")).toBeVisible();
   const opportunity = page.locator("article").filter({ hasText: "Diagnóstico Biahflow" });
-  await expect(opportunity.getByText("Discovery Express")).toBeVisible();
+  await expect(opportunity.getByText("Discovery Sprint")).toBeVisible();
   const negotiation = page.locator("section.w-72", { has: page.getByRole("heading", { name: "Negociação" }) });
   await opportunity.dragTo(negotiation);
   await expect(negotiation.getByText("Diagnóstico Biahflow")).toBeVisible();
