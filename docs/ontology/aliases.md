@@ -15,27 +15,49 @@ declarada, linha a linha, em [`legacy-allowlist.txt`](legacy-allowlist.txt).
 
 ## Os aliases vivos
 
+**"Renome" eram três coisas, e a ADR 0052 as separou.** O nome da **classe** morre na issue #67,
+uma fatia por PR; o nome da **tabela** morre na Fase 6; a **rota** e a **chave de payload** morrem
+na `/api/v2/`. A tabela abaixo tem uma linha por prazo, e não uma por conceito, porque era a
+compressão delas em "renome físico na Fase 6" que fazia o mesmo termo significar duas coisas.
+
 | Alias vivo hoje | Nome canônico | Onde vive | Morre em |
 | --- | --- | --- | --- |
-| modelo `Client` | `Account` | `backend/apps/core/models.py` | renome físico na Fase 6 |
-| rota `/api/v1/clients/` | `/accounts/` | `backend/apps/core/urls.py` | `/api/v2/` |
-| modelo `Opportunity` | `CommercialOpportunity` | `backend/apps/core/models.py` | renome físico na Fase 6 |
-| rota `/api/v1/opportunities/` | `/commercial-opportunities/` | `backend/apps/core/urls.py` | `/api/v2/` |
-| `Processo` / `ProcessoEtapa` / `Evidencia` | `Process` / `ProcessStep` / `Evidence` | `backend/apps/core/models.py` | Fase 3 (split Evidence/Finding) + Fase 6 (renome) |
-| `GateOutcome` | `GateDecision` | `backend/apps/core/models.py` | Fase 6 |
+| classe `Client` | `Account` | `backend/apps/core/models.py` | **#67, fatia 2** |
+| tabela `core_client` | `core_account` | `Meta.db_table` | Fase 6 |
+| rota `/api/v1/clients/` e chave `client` | `/accounts/` e `account` | `urls.py`, `serializers.py` | `/api/v2/` |
+| classe `Opportunity` | `CommercialOpportunity` | `backend/apps/core/models.py` | **#67, fatia 3** |
+| tabela `core_opportunity` | `core_commercialopportunity` | `Meta.db_table` | Fase 6 |
+| rota `/api/v1/opportunities/` e chave `opportunity` | `/commercial-opportunities/` e `commercial_opportunity` | `urls.py`, `serializers.py` | `/api/v2/` |
+| classes `Processo` / `ProcessoEtapa` | `Process` / `ProcessStep` | `backend/apps/core/models.py` | **#67, fatia 4** |
+| tabelas `core_processo` / `core_processoetapa` | `core_process` / `core_processstep` | `Meta.db_table` | Fase 6 |
+| rotas `/processos/` e `/processo-etapas/` | `/processes/` e `/process-steps/` | `urls.py` | `/api/v2/` |
+| `GateOutcome` / `gate_outcome` | `GateDecision` / `gate_decision` | `backend/apps/core/models.py` | **#67, fatia 1** |
+| classe `Evidencia` (o dual-write) | `Evidence` + `Finding` | `backend/apps/core/models.py` | Fase 6 |
 
-`Evidencia` é o único que não é só renome: a Fase 3 a **divide** em `Evidence` (o registro bruto) e
-`Finding` (a conclusão, com `epistemic_status`), conforme a decisão D6. Trocar o nome sem dividir
-resolveria o idioma e preservaria o defeito de linguagem que a divisão existe para corrigir.
+`Evidencia` é o único que não é só renome, e por isso é o único que **não** entra na #67: a Fase 3
+a **dividiu** em `Evidence` (o registro bruto) e `Finding` (a conclusão, com `epistemic_status`),
+conforme a decisão D6. Trocar o nome sem dividir resolveria o idioma e preservaria o defeito de
+linguagem que a divisão existe para corrigir. A classe legada segue de pé porque ainda tem leitor
+vivo (`processos.custo_do_estado_atual` e `ProcessoDetailPage`), e quem a remove é a Fase 6, junto
+com o dual-write.
+
+Depois da #67 sobra uma dívida com forma nova e nome antigo: a tabela `core_processo` guardando
+linhas de uma classe chamada `Process`. É desconfortável no `dbshell` e é de propósito — o risco
+que a espera protegia é o da **pk**, e pk é o que a §2b trata.
 
 ## As três regras
 
 ### 1. Alias é dívida com data
 
 Enquanto o alias vive, **campo novo e código novo usam o nome canônico apontando para o modelo
-legado**. É o que a Fase 1 faz: `Qualification.account` é uma `ForeignKey` para o modelo que ainda
-se chama `Client`. O nome do campo é o compromisso público; o nome da tabela é detalhe que a Fase 6
-acerta.
+legado**. É o que a Fase 1 fez: `Qualification.account` é uma `ForeignKey` para o modelo que ainda
+se chamava `Client` quando ela foi escrita. O nome do campo é o compromisso público; o nome da
+tabela é detalhe que a Fase 6 acerta.
+
+A #67 não revoga essa regra — ela reduz o alcance dela. Depois de cada fatia, o modelo legado que
+aquela fatia renomeou deixa de existir sob o nome antigo, e a regra passa a valer só para os que
+ainda não foram renomeados. Enquanto isso, um campo canônico apontando para um modelo já renomeado
+é só um campo com o nome certo apontando para a classe certa, que é onde tudo isto queria chegar.
 
 Escrever `Qualification.client` "porque o modelo se chama Client" seria criar o alias de novo, em
 código que nasceu depois da decisão — e é exatamente isso que a regra `client-como-organizacao`
@@ -57,6 +79,20 @@ começa antes da 5, e a v2 não nasce antes da 6.
 **Normativo.** Todo renome de modelo desta migração se faz com `RenameModel`, que preserva tabela,
 linhas e **pk**. Nunca com modelo novo mais migração de dados, ainda que a tabela nova ficasse mais
 limpa.
+
+Na #67 ele preserva ainda mais do que isso, e é o que autoriza antecipar o renome de classe: com
+`Meta.db_table` fixado no nome legado **antes** da operação, `RenameModel` não emite SQL nenhum —
+`alter_db_table` abre com `if old_db_table == new_db_table: return`. Cada fatia escreve as duas
+operações na ordem, e a primeira é no-op por já ser verdade:
+
+```python
+migrations.AlterModelTable(name="client", table="core_client"),
+migrations.RenameModel(old_name="Client", new_name="Account"),
+```
+
+Invertê-las, ou omitir a primeira, faz o banco renomear a tabela e renomeá-la de volta — duas
+`ALTER TABLE` para chegar onde já se estava, num caminho em que falhar no meio deixa a tabela com
+o nome errado. Ver ADR 0052.
 
 A proibição não é estética. **Estas pks saíram deste repositório.** O snapshot do portal
 (`portal.build_snapshot`) emite onze ids, e o One deriva chave de identidade de seis deles e a

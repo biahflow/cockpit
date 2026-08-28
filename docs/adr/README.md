@@ -57,3 +57,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0049 — A ontologia entra pela linguagem, antes do schema
 - 0050 — O Engagement como espinha dorsal, e a origem comercial deixando de ser 1-1
 - 0051 — A projeção ganha versão e hora, e quem carimba é quem muda o estado
+- 0052 — O renome de classe vem antes da Fase 6; a tabela e a rota ficam

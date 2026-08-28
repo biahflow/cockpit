@@ -160,7 +160,7 @@ def test_journey_template_is_admin_only(client: APIClient) -> None:
 
 
 @pytest.mark.django_db
-def test_fase_com_gate_nao_avanca_sem_outcome(client: APIClient) -> None:
+def test_fase_com_gate_nao_avanca_sem_decisao(client: APIClient) -> None:
     """O gate é obrigatório onde a metodologia diz que é: sem decisão, a fase não fecha."""
     admin = UserFactory(role=User.Role.ADMIN)
     project = ProjectFactory()
@@ -175,8 +175,8 @@ def test_fase_com_gate_nao_avanca_sem_outcome(client: APIClient) -> None:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("outcome", ["go", "conditional_go"])
-def test_gate_go_e_conditional_go_concluem_e_avancam(client: APIClient, outcome: str) -> None:
+@pytest.mark.parametrize("decision", ["go", "conditional_go"])
+def test_gate_go_e_conditional_go_concluem_e_avancam(client: APIClient, decision: str) -> None:
     """As duas saídas de continuidade fazem a mesma coisa com a jornada — e guardam o que as separa."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
@@ -186,7 +186,7 @@ def test_gate_go_e_conditional_go_concluem_e_avancam(client: APIClient, outcome:
 
     response = client.post(
         reverse("project-apply-gate", args=[project.id]),
-        {"outcome": outcome, "notes": "Latência acima do alvo — monitorar por 30 dias."},
+        {"decision": decision, "notes": "Latência acima do alvo — monitorar por 30 dias."},
         format="json",
     )
 
@@ -194,11 +194,11 @@ def test_gate_go_e_conditional_go_concluem_e_avancam(client: APIClient, outcome:
     first, second = _phase_at(project, 0), _phase_at(project, 1)
     assert first.status == ProjectPhase.Status.DONE
     assert first.completed_at is not None
-    assert first.gate_outcome == outcome
+    assert first.gate_decision == decision
     assert first.gate_notes.startswith("Latência")
     assert second.status == ProjectPhase.Status.ACTIVE
     # A lista devolvida é a mesma do `advance-phase`, com o gate visível na fase concluída.
-    assert response.data[0]["gate_outcome"] == outcome
+    assert response.data[0]["gate_decision"] == decision
     assert response.data[0]["requires_gate"] is True
 
 
@@ -213,7 +213,7 @@ def test_gate_redesign_reabre_a_anterior_e_tranca_a_corrente(client: APIClient) 
 
     response = client.post(
         reverse("project-apply-gate", args=[project.id]),
-        {"outcome": "redesign", "notes": "A abordagem de extração não sustenta o volume."},
+        {"decision": "redesign", "notes": "A abordagem de extração não sustenta o volume."},
         format="json",
     )
 
@@ -223,7 +223,7 @@ def test_gate_redesign_reabre_a_anterior_e_tranca_a_corrente(client: APIClient) 
     assert first.completed_at is None  # reabrir limpa o carimbo (precedente `Pendencia`)
     assert second.status == ProjectPhase.Status.LOCKED
     assert second.started_at is not None  # passou por aqui, e isso não se apaga
-    assert second.gate_outcome == ProjectPhase.GateOutcome.REDESIGN
+    assert second.gate_decision == ProjectPhase.GateDecision.REDESIGN
     assert "extração" in second.gate_notes
 
 
@@ -237,13 +237,13 @@ def test_gate_redesign_sem_fase_anterior_recusa(client: APIClient) -> None:
 
     response = client.post(
         reverse("project-apply-gate", args=[project.id]),
-        {"outcome": "redesign"},
+        {"decision": "redesign"},
         format="json",
     )
 
     assert response.status_code == 409
     assert "não há para onde voltar" in response.data["detail"]
-    assert _phase_at(project, 0).gate_outcome == ""  # nada gravado numa decisão que não aconteceu
+    assert _phase_at(project, 0).gate_decision == ""  # nada gravado numa decisão que não aconteceu
 
 
 @pytest.mark.django_db
@@ -256,7 +256,7 @@ def test_gate_no_go_registra_e_a_jornada_para_ali(client: APIClient) -> None:
 
     applied = client.post(
         reverse("project-apply-gate", args=[project.id]),
-        {"outcome": "no_go", "notes": "O modelo não alcança a precisão mínima do processo."},
+        {"decision": "no_go", "notes": "O modelo não alcança a precisão mínima do processo."},
         format="json",
     )
     advanced = client.post(reverse("project-advance-phase", args=[project.id]))
@@ -264,34 +264,34 @@ def test_gate_no_go_registra_e_a_jornada_para_ali(client: APIClient) -> None:
     assert applied.status_code == 200
     first = _phase_at(project, 0)
     assert first.status == ProjectPhase.Status.ACTIVE  # a fase não fecha
-    assert first.gate_outcome == ProjectPhase.GateOutcome.NO_GO
+    assert first.gate_decision == ProjectPhase.GateDecision.NO_GO
     assert advanced.status_code == 409
     assert "NO-GO" in advanced.data["detail"]
     assert _phase_at(project, 1).status == ProjectPhase.Status.LOCKED
 
 
 @pytest.mark.django_db
-def test_apply_gate_recusa_fase_sem_gate_e_outcome_invalido(client: APIClient) -> None:
+def test_apply_gate_recusa_fase_sem_gate_e_decisao_invalida(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     project = ProjectFactory()
     client.force_authenticate(admin)
 
     sem_gate = client.post(
-        reverse("project-apply-gate", args=[project.id]), {"outcome": "go"}, format="json"
+        reverse("project-apply-gate", args=[project.id]), {"decision": "go"}, format="json"
     )
     _requires_gate(project, 0)
     invalido = client.post(
-        reverse("project-apply-gate", args=[project.id]), {"outcome": "talvez"}, format="json"
+        reverse("project-apply-gate", args=[project.id]), {"decision": "talvez"}, format="json"
     )
 
     assert sem_gate.status_code == 409  # o estado é que impede: a fase não é de gate
     assert invalido.status_code == 400  # o corpo é que está errado
-    assert _phase_at(project, 0).gate_outcome == ""
+    assert _phase_at(project, 0).gate_decision == ""
 
 
 @pytest.mark.django_db
 def test_gate_nao_entra_por_patch_direto(client: APIClient) -> None:
-    """A decisão só entra pela action: um PATCH gravaria o outcome sem nenhuma consequência."""
+    """A decisão só entra pela action: um PATCH a gravaria sem nenhuma consequência."""
     admin = UserFactory(role=User.Role.ADMIN)
     project = ProjectFactory()
     phase = _requires_gate(project, 0)
@@ -299,13 +299,13 @@ def test_gate_nao_entra_por_patch_direto(client: APIClient) -> None:
 
     response = client.patch(
         reverse("projectphase-detail", args=[phase.id]),
-        {"gate_outcome": "go", "gate_notes": "por fora"},
+        {"gate_decision": "go", "gate_notes": "por fora"},
         format="json",
     )
 
     assert response.status_code == 200  # read-only no DRF é ignorado, não recusado
     phase.refresh_from_db()
-    assert phase.gate_outcome == ""
+    assert phase.gate_decision == ""
     assert phase.gate_notes == ""
 
 
@@ -317,7 +317,7 @@ def test_apply_gate_sem_fase_ativa_recusa(client: APIClient) -> None:
     client.force_authenticate(admin)
 
     response = client.post(
-        reverse("project-apply-gate", args=[project.id]), {"outcome": "go"}, format="json"
+        reverse("project-apply-gate", args=[project.id]), {"decision": "go"}, format="json"
     )
 
     assert response.status_code == 409
@@ -431,7 +431,7 @@ def test_item_arquivado_nao_trava_a_fase(client: APIClient) -> None:
 
 
 @pytest.mark.django_db
-def test_gate_go_esbarra_no_checklist_sem_gravar_o_outcome(client: APIClient) -> None:
+def test_gate_go_esbarra_no_checklist_sem_gravar_a_decisao(client: APIClient) -> None:
     """Os dois gates valem juntos, e o GO recusado não deixa decisão registrada pela metade."""
     admin = UserFactory(role=User.Role.ADMIN)
     project = ProjectFactory()
@@ -440,13 +440,13 @@ def test_gate_go_esbarra_no_checklist_sem_gravar_o_outcome(client: APIClient) ->
     client.force_authenticate(admin)
 
     response = client.post(
-        reverse("project-apply-gate", args=[project.id]), {"outcome": "go"}, format="json"
+        reverse("project-apply-gate", args=[project.id]), {"decision": "go"}, format="json"
     )
 
     assert response.status_code == 409
     assert "checklist" in response.data["detail"].lower()
     phase.refresh_from_db()
-    assert phase.gate_outcome == ""
+    assert phase.gate_decision == ""
     assert phase.status == ProjectPhase.Status.ACTIVE
 
 
@@ -470,7 +470,7 @@ def test_vendas_le_o_checklist_mas_nao_marca_nem_aplica_gate(client: APIClient) 
         reverse("projectchecklistitem-detail", args=[item.id]), {"checked": True}, format="json"
     )
     gated = client.post(
-        reverse("project-apply-gate", args=[project.id]), {"outcome": "go"}, format="json"
+        reverse("project-apply-gate", args=[project.id]), {"decision": "go"}, format="json"
     )
 
     assert listed.status_code == 200
@@ -503,7 +503,7 @@ def test_entrega_so_alcanca_o_checklist_do_projeto_de_que_participa(client: APIC
         format="json",
     )
     alheio_gate = client.post(
-        reverse("project-apply-gate", args=[alheio.id]), {"outcome": "go"}, format="json"
+        reverse("project-apply-gate", args=[alheio.id]), {"decision": "go"}, format="json"
     )
 
     assert [row["id"] for row in listed.data] == [meu_item.id]

@@ -202,7 +202,7 @@ export type ProjectDeliverableStatus = "pending" | "delivered";
 export type ProjectDeliverable = { id: number; project_phase: number; name: string; status: ProjectDeliverableStatus; document: number | null; position: number; delivered_at: string | null };
 // As quatro saídas do decision gate (FDD 033). `""` é "ainda não decidido" — o gate não tem
 // default, porque um default seria uma decisão que ninguém tomou.
-export type GateOutcome = "go" | "conditional_go" | "redesign" | "no_go";
+export type GateDecision = "go" | "conditional_go" | "redesign" | "no_go";
 export type ProjectChecklistItem = { id: number; project_phase: number; text: string; position: number; checked: boolean; checked_at: string | null };
 // A jornada canônica de entrega — o vocabulário FDE (FDD 042). Classificação **opcional** da fase
 // configurável; `""` é a fase operacional Biahflow sem equivalente FDE. `feasibility` é membro
@@ -214,9 +214,9 @@ export type WaitingParty = "" | "biahflow" | "client" | "engineering" | "externa
 // O estado semântico derivado, determinístico no backend (FDD 042). A tela mapeia situação →
 // variante de selo, nunca recalcula a regra.
 export type PhaseSituation = "active" | "completed" | "blocked" | "waiting_decision" | "cancelled" | "replanned" | "pending";
-export type ProjectPhase = { id: number; project: number; phase: number; phase_name: string; phase_description: string; phase_position: number; requires_gate: boolean; canonical_stage: CanonicalStage; status: JourneyPhaseStatus; situation: PhaseSituation; started_at: string | null; completed_at: string | null; target_date: string | null; gate_outcome: GateOutcome | ""; gate_notes: string; checklist_waiver: string; waiting_party: WaitingParty; blocker_note: string; deliverables: ProjectDeliverable[]; checklist_items: ProjectChecklistItem[] };
+export type ProjectPhase = { id: number; project: number; phase: number; phase_name: string; phase_description: string; phase_position: number; requires_gate: boolean; canonical_stage: CanonicalStage; status: JourneyPhaseStatus; situation: PhaseSituation; started_at: string | null; completed_at: string | null; target_date: string | null; gate_decision: GateDecision | ""; gate_notes: string; checklist_waiver: string; waiting_party: WaitingParty; blocker_note: string; deliverables: ProjectDeliverable[]; checklist_items: ProjectChecklistItem[] };
 export type PhaseEventKind = "started" | "completed" | "reopened" | "locked_by_redesign" | "gate_recorded" | "waiting_set" | "waiting_cleared";
-export type PhaseEvent = { id: number; project: number; project_phase: number | null; phase_name: string; kind: PhaseEventKind; from_status: string; to_status: string; gate_outcome: GateOutcome | ""; waiting_party: WaitingParty; note: string; actor: number | null; actor_name: string | null; source: "user" | "system"; created_at: string };
+export type PhaseEvent = { id: number; project: number; project_phase: number | null; phase_name: string; kind: PhaseEventKind; from_status: string; to_status: string; gate_decision: GateDecision | ""; waiting_party: WaitingParty; note: string; actor: number | null; actor_name: string | null; source: "user" | "system"; created_at: string };
 export type ProjectTimeline = {
   project: number;
   phases: ProjectPhase[];

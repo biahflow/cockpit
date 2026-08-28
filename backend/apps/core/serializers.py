@@ -341,7 +341,7 @@ class ProjectChecklistItemSerializer(serializers.ModelSerializer[ProjectChecklis
 class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
     """Fase da jornada de um projeto (estado). A equipe edita `target_date` e a justificativa.
 
-    `gate_outcome`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
+    `gate_decision`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
     action `apply-gate`, que é onde moram as consequências de cada saída — concluir e avançar,
     reabrir a fase anterior, ou parar. Um PATCH direto gravaria "REDESIGN" sem nada acontecer, e
     o campo passaria a mentir sobre o estado da jornada.
@@ -354,8 +354,13 @@ class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
     canonical_stage = serializers.CharField(source="phase.canonical_stage", read_only=True)
     # `situation` é o estado semântico derivado (FDD 042): a tela mapeia situação → variante de
     # selo, sem recalcular a regra. `waiting_party`/`blocker_note` são read-only aqui e escritos
-    # só pela action `set-waiting`, para a mudança deixar rastro auditável (como `gate_outcome`).
+    # só pela action `set-waiting`, para a mudança deixar rastro auditável (como a decisão do gate).
     situation = serializers.CharField(read_only=True)
+    # Alias de compatibilidade da `/api/v1/`: o campo canônico é `gate_decision` (D7, ADR 0052) e
+    # esta chave continua saindo com o mesmo valor até a `/api/v2/`. `CharField` e não
+    # `ChoiceField` de propósito — um segundo conjunto com os mesmos quatro valores disputaria o
+    # nome do componente no esquema, que é o defeito que `ENUM_NAME_OVERRIDES` existe para evitar.
+    gate_outcome = serializers.CharField(source="gate_decision", read_only=True)
     deliverables = ProjectDeliverableSerializer(many=True, read_only=True)
     checklist_items = ProjectChecklistItemSerializer(many=True, read_only=True)
 
@@ -364,14 +369,14 @@ class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
         fields = [
             "id", "project", "phase", "phase_name", "phase_description", "phase_position",
             "requires_gate", "canonical_stage", "status", "situation", "started_at",
-            "completed_at", "target_date", "gate_outcome", "gate_notes", "checklist_waiver",
-            "waiting_party", "blocker_note", "deliverables", "checklist_items",
+            "completed_at", "target_date", "gate_decision", "gate_outcome", "gate_notes",
+            "checklist_waiver", "waiting_party", "blocker_note", "deliverables", "checklist_items",
         ]
         read_only_fields = [
             "id", "project", "phase", "phase_name", "phase_description", "phase_position",
             "requires_gate", "canonical_stage", "status", "situation", "started_at",
-            "completed_at", "gate_outcome", "gate_notes", "waiting_party", "blocker_note",
-            "deliverables", "checklist_items",
+            "completed_at", "gate_decision", "gate_outcome", "gate_notes", "waiting_party",
+            "blocker_note", "deliverables", "checklist_items",
         ]
 
 
@@ -379,12 +384,16 @@ class PhaseEventSerializer(serializers.ModelSerializer[PhaseEvent]):
     """Uma linha do histórico append-only da jornada (FDD 042). Só-leitura — nunca se edita."""
 
     actor_name = serializers.SerializerMethodField()
+    # O mesmo alias de compatibilidade do `ProjectPhaseSerializer`, pelo mesmo motivo: o histórico
+    # é lido pela mesma tela, e tirar a chave só de um dos dois quebraria metade do consumidor.
+    gate_outcome = serializers.CharField(source="gate_decision", read_only=True)
 
     class Meta:
         model = PhaseEvent
         fields = [
             "id", "project", "project_phase", "phase_name", "kind", "from_status", "to_status",
-            "gate_outcome", "waiting_party", "note", "actor", "actor_name", "source", "created_at",
+            "gate_decision", "gate_outcome", "waiting_party", "note", "actor", "actor_name",
+            "source", "created_at",
         ]
         read_only_fields = fields
 

@@ -14,7 +14,7 @@ O que ela não tinha era três coisas que a issue #42 pede, e cada uma é a raz�
 - a **jornada canônica** — o vocabulário configurável (`Welcome`, `Launch Session`, …) não é a
   escada FDE;
 - o **histórico** — `ProjectPhase` guarda o estado corrente, não a sequência; e o REDESIGN chega a
-  **apagar** `completed_at`/`gate_outcome` da fase que reabre (FDD 033), então a auditoria de por
+  **apagar** `completed_at`/`gate_decision` da fase que reabre (FDD 033), então a auditoria de por
   que se voltou não sobrevivia;
 - **quem está esperando** — não dava para ler, sem abrir a nota crua, que a fase parou aguardando o
   cliente, a engenharia ou uma decisão humana.
@@ -35,7 +35,7 @@ situação, próximo gate e classificação de bloqueio saem de campos explícit
 
 - **Parte aguardada e situação.** `ProjectPhase.waiting_party` (`biahflow`/`client`/`engineering`/
   `external`/`human_gate`) + `blocker_note`, escritos só pela action `set-waiting` (como o
-  `gate_outcome`, para deixar rastro). A `situation` — `active`/`completed`/`blocked`/
+  `gate_decision`, para deixar rastro). A `situation` — `active`/`completed`/`blocked`/
   `waiting_decision`/`cancelled`/`replanned`/`pending` — é **derivada** desses campos; a tela mapeia
   situação → **variante** de `.state`, nunca a cor (ADR 0026).
 
@@ -51,7 +51,7 @@ próximo gate e o histórico), e o widget "Jornada de entrega" no dashboard.
 1. **Todo projeto ativo expõe sua fase canônica corrente.** O `timeline`/`timeline-overview`
    devolve `canonical_stage` da fase ativa — e degrada com o nome da fase quando o admin não mapeou.
 2. **A mudança de fase é auditável.** Toda transição vira `PhaseEvent`; o histórico do REDESIGN
-   sobrevive mesmo com o `gate_outcome` apagado do estado corrente.
+   sobrevive mesmo com o `gate_decision` apagado do estado corrente.
 3. **Feasibility é opcional e explícita.** É membro do enum canônico; a jornada que não a percorre
    não tem fase nela, sem que isso quebre nada.
 4. **O próximo gate/marco é visível.** `next_gate` é a próxima fase (na ordem) que exige gate e ainda
@@ -75,7 +75,7 @@ uma jornada só.
 
 ### Por que `waiting_party`/`blocker_note` são read-only no serializer
 
-Mesmo desenho do `gate_outcome` (FDD 033): a mudança precisa deixar um `PhaseEvent` com autor. Um
+Mesmo desenho do `gate_decision` (FDD 033): a mudança precisa deixar um `PhaseEvent` com autor. Um
 PATCH direto gravaria o estado sem o registro de quem e por quê — a pior forma de defeito, porque a
 tela mostraria a espera certa sobre um sistema que não a registrou. A action `set-waiting` é o único
 lugar onde a mudança e o rastro dela são a mesma operação.
@@ -130,3 +130,14 @@ gerar sufixo instável. Nada removido — a mudança é aditiva.
   humano (FDD 011/033), e nada equaciona `PR merged` a `DONE`.
 - **Semear `canonical_stage` além dos nomes da semente padrão.** Quem mapeia a fase configurável
   sobre a canônica é o admin, como já decide `requires_gate`.
+
+## Emenda (28/08/2026) — o campo do gate passou a se chamar `gate_decision`
+
+`PhaseEvent.gate_outcome` virou `PhaseEvent.gate_decision`, junto do campo homônimo de
+`ProjectPhase` (decisão D7 do `docs/ontology/language-map.md`, autorizada pela ADR 0052, migração
+`0060`). O histórico não muda: os quatro valores são os mesmos, as linhas gravadas continuam
+válidas, e `RenameField` renomeia a coluna sem mover linha nem pk.
+
+`PhaseEventSerializer` passa a expor as **duas** chaves com o mesmo valor — `gate_decision`, a
+canônica, e `gate_outcome`, alias de leitura que só morre na `/api/v2/`. A linha do tempo da tela
+lê a canônica. Ver a emenda de mesma data na FDD 033.

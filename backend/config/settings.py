@@ -258,9 +258,9 @@ SPECTACULAR_SETTINGS = {
         "ProjectStatusEnum": "apps.core.models.Project.Status",
         "WorkItemStatusEnum": "apps.core.models.WorkItem.Status",
         # O gate aparece em dois lugares com conjuntos diferentes: o campo do modelo (que aceita
-        # o branco de "ainda não decidido") e o corpo da action `apply-gate` (onde as quatro
-        # saídas são obrigatórias). Sem o override, os dois disputam o mesmo nome de enum.
-        "GateOutcomeEnum": "apps.core.models.ProjectPhase.GateOutcome",
+        # o branco de "ainda não decidido") e o corpo da action `apply-gate` (onde a decisão é
+        # obrigatória). Sem o override, os dois disputam o mesmo nome de enum.
+        "GateDecisionEnum": "apps.core.models.ProjectPhase.GateDecision",
         # `PhaseEvent.source` (FDD 042) introduz um segundo conjunto `source` no esquema (o
         # primeiro é o `linear/github` da sincronia de tarefas). Sem override, os dois disputam o
         # nome `SourceEnum` e drf-spectacular resolve com um sufixo numérico instável

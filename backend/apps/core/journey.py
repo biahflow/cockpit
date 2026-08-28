@@ -34,7 +34,7 @@ def _log_event(
     actor: User | None = None,
     from_status: str = "",
     to_status: str = "",
-    gate_outcome: str = "",
+    gate_decision: str = "",
     waiting_party: str = "",
     note: str = "",
 ) -> None:
@@ -53,7 +53,7 @@ def _log_event(
         kind=kind,
         from_status=from_status,
         to_status=to_status,
-        gate_outcome=gate_outcome,
+        gate_decision=gate_decision,
         waiting_party=waiting_party,
         note=note,
         actor=actor,
@@ -142,16 +142,16 @@ def _assert_gate_allows_advance(project_phase: ProjectPhase) -> None:
 
     if not project_phase.phase.requires_gate:
         return
-    if not project_phase.gate_outcome:
+    if not project_phase.gate_decision:
         raise StateConflict(
             "Esta fase termina em decision gate; registre GO / CONDITIONAL GO / REDESIGN / NO-GO "
             "antes de concluí-la."
         )
-    blocking = {ProjectPhase.GateOutcome.REDESIGN, ProjectPhase.GateOutcome.NO_GO}
-    if project_phase.gate_outcome in blocking:
+    blocking = {ProjectPhase.GateDecision.REDESIGN, ProjectPhase.GateDecision.NO_GO}
+    if project_phase.gate_decision in blocking:
         raise StateConflict(
             f"O decision gate desta fase registrou "
-            f"{project_phase.get_gate_outcome_display()} — a jornada não segue adiante por aqui."
+            f"{project_phase.get_gate_decision_display()} — a jornada não segue adiante por aqui."
         )
 
 
@@ -211,7 +211,7 @@ def advance_phase(project: Project, actor: User | None = None) -> ProjectPhase |
 
 
 def apply_gate(
-    project: Project, outcome: str, notes: str = "", actor: User | None = None
+    project: Project, decision: str, notes: str = "", actor: User | None = None
 ) -> ProjectPhase | None:
     """Registra o decision gate da fase ativa e aplica o que ele decidiu (FDD 033).
 
@@ -223,12 +223,12 @@ def apply_gate(
     - `go`/`conditional_go` concluem a fase e ativam a seguinte — a diferença entre elas está
       nas ressalvas gravadas, que é justamente o que se perderia colapsando as duas;
     - `redesign` volta à fase anterior (a abordagem muda e se testa de novo) e **tranca** a
-      corrente, mantendo `started_at` e o `gate_outcome` como registro do porquê;
+      corrente, mantendo `started_at` e o `gate_decision` como registro do porquê;
     - `no_go` só registra: a fase continua ativa e a jornada para ali. Mudar o status do
       projeto é ato humano, fora desta função.
 
     Tudo é validado antes de qualquer escrita, e o que escreve roda em transação: um gate
-    recusado no meio não pode deixar o outcome gravado sem o efeito dele.
+    recusado no meio não pode deixar a decisão gravada sem o efeito dela.
     """
     from .models import PhaseEvent, ProjectPhase
 
@@ -248,7 +248,7 @@ def apply_gate(
         )
 
     previous: ProjectPhase | None = None
-    if outcome == ProjectPhase.GateOutcome.REDESIGN:
+    if decision == ProjectPhase.GateDecision.REDESIGN:
         previous = next(
             (
                 p
@@ -262,27 +262,27 @@ def apply_gate(
                 "REDESIGN volta à fase anterior, e esta é a primeira fase concluída da jornada — "
                 "não há para onde voltar."
             )
-    elif outcome in {ProjectPhase.GateOutcome.GO, ProjectPhase.GateOutcome.CONDITIONAL_GO}:
-        # Antes de gravar o outcome: um GO que esbarra no quality gate não pode deixar o gate
+    elif decision in {ProjectPhase.GateDecision.GO, ProjectPhase.GateDecision.CONDITIONAL_GO}:
+        # Antes de gravar a decisão: um GO que esbarra no quality gate não pode deixar o gate
         # registrado sem a conclusão que ele autoriza.
         _assert_checklist_allows_completion(current)
 
     with transaction.atomic():
-        current.gate_outcome = outcome
+        current.gate_decision = decision
         current.gate_notes = notes
-        current.save(update_fields=["gate_outcome", "gate_notes", "updated_at"])
+        current.save(update_fields=["gate_decision", "gate_notes", "updated_at"])
         # O gate é registrado no histórico *antes* da consequência — inclusive antes do REDESIGN
-        # apagar o outcome da fase que reabre. É a única cópia auditável da decisão (FDD 042).
+        # apagar a decisão da fase que reabre. É a única cópia auditável dela (FDD 042).
         _log_event(
             project,
             current,
             PhaseEvent.Kind.GATE_RECORDED,
             actor=actor,
-            gate_outcome=outcome,
+            gate_decision=decision,
             note=notes,
         )
 
-        if outcome in {ProjectPhase.GateOutcome.GO, ProjectPhase.GateOutcome.CONDITIONAL_GO}:
+        if decision in {ProjectPhase.GateDecision.GO, ProjectPhase.GateDecision.CONDITIONAL_GO}:
             return advance_phase(project, actor)
 
         if previous is not None:  # REDESIGN, com a fase anterior já resolvida acima
@@ -292,10 +292,10 @@ def apply_gate(
             # da `Decisao`, que é fato histórico e sobrevive à despublicação (FDD 032).
             previous.status = ProjectPhase.Status.ACTIVE
             previous.completed_at = None
-            previous.gate_outcome = ""
+            previous.gate_decision = ""
             previous.gate_notes = ""
             previous.save(
-                update_fields=["status", "completed_at", "gate_outcome", "gate_notes", "updated_at"]
+                update_fields=["status", "completed_at", "gate_decision", "gate_notes", "updated_at"]
             )
             _log_event(
                 project,
@@ -306,7 +306,7 @@ def apply_gate(
                 to_status=ProjectPhase.Status.ACTIVE,
                 note=notes,
             )
-            # A corrente tranca **mantendo** `started_at` e o outcome: é o registro de que se
+            # A corrente tranca **mantendo** `started_at` e a decisão: é o registro de que se
             # passou por aqui e do porquê de ter voltado.
             current.status = ProjectPhase.Status.LOCKED
             current.save(update_fields=["status", "updated_at"])
@@ -317,7 +317,7 @@ def apply_gate(
                 actor=actor,
                 from_status=ProjectPhase.Status.ACTIVE,
                 to_status=ProjectPhase.Status.LOCKED,
-                gate_outcome=outcome,
+                gate_decision=decision,
             )
             return previous
 
@@ -334,7 +334,7 @@ def set_phase_waiting(
 
     `waiting_party` vazio limpa o bloqueio. A mudança vira um `PhaseEvent` — é o que a torna
     auditável e o motivo de o campo ser read-only no serializer: um PATCH direto gravaria o estado
-    sem o registro de quem e por quê, o mesmo desenho do `gate_outcome` (FDD 033). Determinístico,
+    sem o registro de quem e por quê, o mesmo desenho do `gate_decision` (FDD 033). Determinístico,
     sem LLM (FinOps).
     """
     from .models import PhaseEvent, ProjectPhase

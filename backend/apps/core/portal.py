@@ -118,9 +118,10 @@ def _journey(project: Project) -> list[dict[str, Any]]:
     * `requires_gate` vem do **template**, não da instância, e é ele que permite ao One
       distinguir "exige gate e ninguém decidiu" de "não tem gate": sem ele os dois casos são o
       mesmo `gate_decision` vazio.
-    * `gate_decision` é o nome do D7, lido da propriedade canônica de `ProjectPhase`. A
-      projeção emite canônico enquanto o modelo ainda não renomeou, porque *o One nunca
-      renomeia* (`language-map` §3).
+    * `gate_decision` é o nome do D7, lido direto do campo canônico de `ProjectPhase` desde a
+      ADR 0052 — antes dela era uma propriedade-alias, porque o campo ainda se chamava pelo nome
+      antigo. A chave emitida nunca mudou, e é essa a razão de o alias ter existido: a projeção
+      emite canônico porque *o One nunca renomeia* (`language-map` §3).
 
     **`situation` fica de fora, e isso é escolha.** Ela colapsa `waiting_party`, que é
     classificação interna de delivery ("estamos esperando engenharia") e não atravessa a

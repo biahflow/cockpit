@@ -28,7 +28,7 @@ registro de *por que* se decidiu avançar.
 Os dois gates, materializados na jornada que já existe:
 
 - **Decision gate de quatro saídas.** O template `JourneyPhase` ganha `requires_gate`; a
-  instância `ProjectPhase` ganha `gate_outcome` e `gate_notes`. A decisão entra por uma action
+  instância `ProjectPhase` ganha `gate_decision` e `gate_notes`. A decisão entra por uma action
   nova, `POST /api/v1/projects/{id}/apply-gate/`, e cada saída faz uma coisa diferente com a
   jornada — GO/CONDITIONAL GO concluem e avançam, REDESIGN reabre a fase anterior e tranca a
   corrente, NO-GO registra e para ali.
@@ -36,20 +36,20 @@ Os dois gates, materializados na jornada que já existe:
   instância, espelhos exatos de `PhaseDeliverable`/`ProjectDeliverable`. Concluir a fase ativa
   exige checklist completa **ou** `checklist_waiver` preenchida.
 
-Na tela: o checklist e o painel do gate na fase ativa do detalhe do projeto, o selo do outcome
+Na tela: o checklist e o painel do gate na fase ativa do detalhe do projeto, o selo da decisão
 acompanhando a fase que já decidiu, e a configuração dos dois na tela de Jornada.
 
 ## Critérios de aceite
 
 1. **Fase de gate não fecha sem decisão.** `advance_phase` recusa com 409 quando a fase ativa tem
-   `requires_gate` e `gate_outcome` vazio, e recusa de novo quando o outcome gravado é REDESIGN ou
+   `requires_gate` e `gate_decision` vazio, e recusa de novo quando a decisão gravada é REDESIGN ou
    NO-GO — o gate decidiu não seguir, e "avançar mesmo assim" não é uma quinta saída.
 2. **As quatro saídas não são quatro nomes para avançar.** REDESIGN reabre a fase anterior e
    tranca a corrente; NO-GO deixa a fase ativa e não avança nada. Mudar o status do projeto
    continua sendo ato humano, fora deste recorte.
 3. **REDESIGN limpa o que deixou de ser verdade, e só isso.** A fase reaberta perde
    `completed_at` e o próprio gate; a fase trancada **mantém** `started_at` e o
-   `gate_outcome=redesign`, que é o registro de por que se voltou.
+   `gate_decision=redesign`, que é o registro de por que se voltou.
 4. **A checklist trava a conclusão por qualquer caminho.** Vale no `advance-phase` e na conclusão
    embutida no `apply-gate` — a guarda mora em `journey.py`, não na view. Zero itens passa: as
    fases semeadas antes desta FDD não têm checklist, e travá-las quebraria a jornada de todo
@@ -66,9 +66,9 @@ acompanhando a fase que já decidiu, e a configuração dos dois na tela de Jorn
 
 ## Decisões
 
-### Por que `gate_outcome` só entra pela action
+### Por que `gate_decision` só entra pela action
 
-`gate_outcome` e `gate_notes` são **read-only no `ProjectPhaseSerializer`**. Um PATCH direto
+`gate_decision` e `gate_notes` são **read-only no `ProjectPhaseSerializer`**. Um PATCH direto
 gravaria "REDESIGN" sem que nada acontecesse: a fase anterior não reabriria, a corrente não
 trancaria, e o campo passaria a mentir sobre o estado da jornada — a pior forma de defeito, porque
 a tela mostraria a decisão certa sobre um sistema que não a executou. A action é o único lugar
@@ -88,10 +88,10 @@ Há dois precedentes opostos na casa, e o gate segue o primeiro:
 
 "Concluída em" é do primeiro tipo. Uma fase reaberta para ser refeita não está concluída, e manter
 a data faria a jornada afirmar duas coisas incompatíveis ao mesmo tempo. O mesmo raciocínio limpa
-o `gate_outcome` da fase que volta: o gate dela ainda vai ser decidido de novo.
+o `gate_decision` da fase que volta: o gate dela ainda vai ser decidido de novo.
 
 Já `started_at` da fase trancada **fica**. Ele não é estado corrente, é fato: passou-se por ali, e
-o `gate_outcome=redesign` preservado ao lado é o que explica por que se voltou.
+o `gate_decision=redesign` preservado ao lado é o que explica por que se voltou.
 
 ### Onde moram as guardas
 
@@ -122,24 +122,24 @@ Rotas novas, todas em `/api/v1/`:
 | `/phase-checklist-items/` (CRUD) | admin (`resource = "journey"`, como o template de entregáveis) |
 | `/project-checklist-items/` (CRUD + `?archived=1` + `unarchive`) | delivery no próprio projeto / admin; Vendas só lê |
 
-Campos novos: `JourneyPhase.requires_gate`; `ProjectPhase.gate_outcome`, `gate_notes`,
+Campos novos: `JourneyPhase.requires_gate`; `ProjectPhase.gate_decision`, `gate_notes`,
 `checklist_waiver` e o `requires_gate` derivado do template; `checklist_items` aninhado nos dois
 serializers de fase. Nada removido — a mudança é aditiva.
 
-`ENUM_NAME_OVERRIDES` ganha `GateOutcomeEnum`: as quatro saídas aparecem no esquema em dois
+`ENUM_NAME_OVERRIDES` ganha `GateDecisionEnum`: as quatro saídas aparecem no esquema em dois
 conjuntos diferentes (o campo do modelo, que aceita o branco de "ainda não decidido", e o corpo da
 action, onde a escolha é obrigatória), e sem o override os dois disputavam o mesmo nome.
 
 ## Testes
 
-- `apps/core/tests/test_journey.py` — as quatro saídas, a recusa sem outcome, a recusa depois de
-  REDESIGN/NO-GO, REDESIGN sem fase anterior, gate em fase que não é de gate (409) e outcome
-  inválido (400), o PATCH direto que não grava o gate, a herança do checklist na materialização, a
+- `apps/core/tests/test_journey.py` — as quatro saídas, a recusa sem decisão, a recusa depois de
+  REDESIGN/NO-GO, REDESIGN sem fase anterior, gate em fase que não é de gate (409) e decisão
+  inválida (400), o PATCH direto que não grava o gate, a herança do checklist na materialização, a
   fase que não fecha com item pendente, a justificativa que destrava, o item arquivado que não
-  conta, o GO que esbarra no quality gate sem gravar o outcome, e o RBAC dos dois gates (Vendas
+  conta, o GO que esbarra no quality gate sem gravar a decisão, e o RBAC dos dois gates (Vendas
   lê e não marca; Entrega só alcança o projeto de que participa; template só de admin).
 - `ProjectDetailJourney.test.tsx` — marcar item, registrar justificativa, aplicar GO com notas,
-  a confirmação de REDESIGN/NO-GO, o selo do outcome e o 409 do avanço exibido na tela.
+  a confirmação de REDESIGN/NO-GO, o selo da decisão e o 409 do avanço exibido na tela.
 - `ProjectDetailJourneyReadonly.test.tsx` — Vendas lê o checklist, não o marca e não vê o painel
   do gate.
 - `JourneyConfigPage.test.tsx` — o toggle do gate com o aviso do que ele passa a exigir, e o CRUD
@@ -157,3 +157,38 @@ action, onde a escolha é obrigatória), e sem o override os dois disputavam o m
   (Feasibility, PROVE). Quem marca quais fases terminam em gate é o admin, na tela de Jornada.
 - **Mudar o status do projeto no NO-GO.** A jornada para; encerrar, pausar ou renegociar o projeto
   é decisão humana com consequências comerciais próprias.
+
+## Emenda (28/08/2026) — `GateOutcome` vira `GateDecision`, e a chave antiga fica na `/api/v1/`
+
+A decisão **D7** do `docs/ontology/language-map.md` renomeia `GateOutcome` para `GateDecision`,
+porque "Outcome" já é o **resultado de negócio medido** (`Measurement(kind=outcome)`, na tabela
+mestra §2) e a saída de um decision gate não é isso — é uma decisão. Os **quatro valores não
+mudam**: `go`, `conditional_go`, `redesign` e `no_go` já eram os canônicos. O texto acima foi
+atualizado para o nome novo; o comportamento descrito nele é o mesmo de antes, linha por linha.
+
+**O que mudou de nome.** A classe aninhada `ProjectPhase.GateOutcome` → `GateDecision`; o campo
+`ProjectPhase.gate_outcome` e o `PhaseEvent.gate_outcome` → `gate_decision` (migração `0060`, só
+`RenameField`: coluna renomeada preserva linha e pk, que é a invariante da `aliases.md` §2b); o
+componente `GateOutcomeEnum` do esquema → `GateDecisionEnum`; o tipo TS `GateOutcome` →
+`GateDecision`. O parâmetro de `journey.apply_gate` passou de `outcome` a `decision`.
+
+**A propriedade-alias `ProjectPhase.gate_decision` deixou de existir**, e não por remoção: o campo
+passou a ter o nome dela. Ela nasceu na Issue #71 para o snapshot do portal emitir canônico
+enquanto o modelo não renomeava (`portal.py` lia por ela em vez de tocar o nome antigo). O
+snapshot continua emitindo exatamente a mesma chave com o mesmo valor — agora lendo o campo.
+
+**A `/api/v1/` não muda.** `ProjectPhaseSerializer` e `PhaseEventSerializer` passam a expor as
+**duas** chaves com o mesmo valor: `gate_decision`, a canônica, e `gate_outcome`, alias de leitura
+com data de morte na `/api/v2/`. A action `apply-gate` aceita `decision` no corpo e continua
+aceitando `outcome` — a canônica tem precedência quando as duas vêm juntas. Quem integrou com a v1
+não precisa fazer nada; quem escrever integração nova escreve o nome certo. A regressão que impede
+alguém remover o alias antes da hora é
+`backend/tests/regression/test_o_alias_do_gate_sobrevive_na_v1.py`.
+
+**Por que agora, e não na Fase 6.** A **ADR 0052** desfez o termo "renome físico" em três coisas
+com prazos distintos: o nome da **classe** é a issue #67 (uma fatia por PR, e esta é a primeira),
+o nome da **tabela** é a Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. O risco
+que a espera protegia é o da pk, e pk é exatamente o que um `RenameField` não toca.
+
+**A UI não muda de idioma.** `gateLabel` continua devolvendo GO / CONDITIONAL GO / REDESIGN /
+NO-GO: são os rótulos da metodologia (`docs/metodologia-fde.md`), não identificadores.

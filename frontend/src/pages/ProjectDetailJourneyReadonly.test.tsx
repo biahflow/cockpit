@@ -8,7 +8,7 @@ vi.mock("../api", () => ({ api: mocks.api }));
 vi.mock("../auth", () => ({ useAuth: () => ({ aiEnabled: false, calendarEnabled: false, user: { role: "sales" } }) }));
 
 const PHASES = [
-  { id: 11, project: 1, phase: 2, phase_name: "Prove", phase_description: "Piloto", phase_position: 1, requires_gate: true, status: "active", started_at: "2026-08-02T00:00:00Z", completed_at: null, target_date: "2026-08-30", gate_outcome: "", gate_notes: "", checklist_waiver: "", deliverables: [{ id: 100, project_phase: 11, name: "Dashboard", status: "delivered", document: null, position: 0, delivered_at: "2026-08-10T00:00:00Z" }], checklist_items: [{ id: 200, project_phase: 11, text: "Baseline registrado?", position: 0, checked: false, checked_at: null }] },
+  { id: 11, project: 1, phase: 2, phase_name: "Prove", phase_description: "Piloto", phase_position: 1, requires_gate: true, status: "active", started_at: "2026-08-02T00:00:00Z", completed_at: null, target_date: "2026-08-30", gate_decision: "", gate_notes: "", checklist_waiver: "", deliverables: [{ id: 100, project_phase: 11, name: "Dashboard", status: "delivered", document: null, position: 0, delivered_at: "2026-08-10T00:00:00Z" }], checklist_items: [{ id: 200, project_phase: 11, text: "Baseline registrado?", position: 0, checked: false, checked_at: null }] },
 ];
 
 beforeEach(() => {
