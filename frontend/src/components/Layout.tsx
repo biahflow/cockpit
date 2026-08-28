@@ -14,7 +14,7 @@ const links: NavLink[] = [
   ["/", "Visão geral", LayoutDashboard],
   ["/comercial", "Comercial", WalletCards],
   ["/leads", "Leads", Inbox, ["admin", "sales"]],
-  ["/clientes", "Clientes", UsersRound],
+  ["/contas", "Contas", UsersRound],
   ["/projetos", "Projetos", FolderKanban],
   ["/documentos", "Documentos", FileText],
   ["/indicadores", "Indicadores", BarChart3, ["admin", "sales"]],
@@ -92,7 +92,7 @@ export function Layout({ children }: { children: ReactNode }) {
   // O rastro do topo (ADR 0025), no lugar da frase decorativa que ficava aqui. Sai do mesmo
   // `links` que desenha o menu: uma rota nova ganha rastro sem ninguém lembrar de uma segunda
   // lista, que é como um breadcrumb passa a mentir. Sem correspondência (uma rota de detalhe
-  // como `/clientes/1`) o casamento por prefixo do `isActive` resolve.
+  // como `/contas/1`) o casamento por prefixo do `isActive` resolve.
   const currentLabel = visibleLinks.find(([to]) => isActive(to))?.[1];
 
   return <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[254px_1fr]">

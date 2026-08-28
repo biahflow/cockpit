@@ -32,15 +32,15 @@
 > uma lacuna de modelo. O que se construiu foi a leitura, com duas armadilhas medidas e
 > fixadas em regressão (`tests/regression/test_origem_do_lead_sobrevive_a_conversao.py`): o
 > lead convertido está **arquivado**, então contar a entrada com o filtro `active` habitual
-> apagaria justamente quem fechou; e `Opportunity.leads` é reverso de FK, então agrupar por
+> apagaria justamente quem fechou; e `CommercialOpportunity.leads` é reverso de FK, então agrupar por
 > `join` somaria a **receita duas vezes** — a origem sai de `Subquery`.
 
 ## Jornada
 
 "Tenho um formulário no site que salva no CRM" descreve bem menos do que existe. O `Lead`
 já carrega **qualificação por IA completa** — `ai_fit` (alto, médio, baixo), `ai_score`,
-`ai_summary`, `ai_recommended_action`, `qualified_at` — e converte para `Client` e
-`Opportunity` sem duplicar contexto. E o **agendamento automático já está construído**:
+`ai_summary`, `ai_recommended_action`, `qualified_at` — e converte para `Account` e
+`CommercialOpportunity` sem duplicar contexto. E o **agendamento automático já está construído**:
 `booking.py` gera os horários livres a partir da grade de horário comercial **menos o
 free/busy real do Google menos as reservas existentes**, e materializa a reserva criando o
 evento no Calendar, atrás da flag `calendar`, com a geração de slots pura e testável. É a
@@ -87,7 +87,7 @@ existe, ou é o canal errado para este perfil.
   enriquecimento deve preencher a vertical do cliente quando conseguir inferi-la.
 - **Medir até o cliente fechado, não até o formulário.** O desperdício de demanda mora em
   canal que gera lead e não gera cliente. O `source` do `Lead` precisa sobreviver à conversão
-  em `Opportunity` e em `Project`, para que a pergunta "que canal produz negócio fechado"
+  em `CommercialOpportunity` e em `Project`, para que a pergunta "que canal produz negócio fechado"
   tenha resposta — é o "medir para agir" apontado para o topo do funil.
 
 ## Aceite

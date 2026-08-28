@@ -26,13 +26,13 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Opportunity, PipelineStage, Project, User
-from apps.core.tests.factories import OpportunityFactory, UserFactory
+from apps.core.models import CommercialOpportunity, PipelineStage, Project, User
+from apps.core.tests.factories import CommercialOpportunityFactory, UserFactory
 
 
-def _corpo(opportunity: Opportunity, sales: User, nome: str = "Projeto") -> dict:
+def _corpo(opportunity: CommercialOpportunity, sales: User, nome: str = "Projeto") -> dict:
     return {
-        "client": opportunity.client_id, "name": nome, "owner": sales.id,
+        "client": opportunity.account_id, "name": nome, "owner": sales.id,
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=10)),
         "status": "planning",
@@ -42,7 +42,7 @@ def _corpo(opportunity: Opportunity, sales: User, nome: str = "Projeto") -> dict
 @pytest.mark.django_db
 def test_second_conversion_returns_conflict_without_new_project():
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     client = APIClient()
     client.force_authenticate(sales)
     endpoint = reverse("opportunity-convert-to-project", args=[opportunity.id])
@@ -60,7 +60,7 @@ def test_a_segunda_conversao_nao_cria_um_segundo_mandato():
     trás a cada clique, e a listagem de engajamentos encheria de linhas sem projeto nenhum.
     """
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     client = APIClient()
     client.force_authenticate(sales)
     endpoint = reverse("opportunity-convert-to-project", args=[opportunity.id])
@@ -68,7 +68,7 @@ def test_a_segunda_conversao_nao_cria_um_segundo_mandato():
     client.post(endpoint, _corpo(opportunity, sales), format="json")
     client.post(endpoint, _corpo(opportunity, sales, "De novo"), format="json")
 
-    assert opportunity.client.engagements.count() == 1
+    assert opportunity.account.engagements.count() == 1
 
 
 @pytest.mark.django_db
@@ -81,7 +81,7 @@ def test_a_conversao_tranca_a_oportunidade_na_transacao():
     (`has_select_for_update = False`), então a consulta travada e uma `get()` comum saem idênticas.
 
     O que dá para afirmar de forma determinística — e é o que se perde num refactor distraído — é
-    que a conversão **chama** `select_for_update()` sobre `Opportunity`. Django já garante o
+    que a conversão **chama** `select_for_update()` sobre `CommercialOpportunity`. Django já garante o
     resto: fora de um bloco atômico a chamada levanta `TransactionManagementError`, então observar
     a chamada num 201 é observar a trava dentro da transação.
 
@@ -89,7 +89,7 @@ def test_a_conversao_tranca_a_oportunidade_na_transacao():
     o defeito que o `IntegrityError` cobria de graça até a ADR 0050.
     """
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     client = APIClient()
     client.force_authenticate(sales)
     travados: list[str] = []
@@ -107,7 +107,7 @@ def test_a_conversao_tranca_a_oportunidade_na_transacao():
         )
 
     assert resposta.status_code == 201
-    assert "Opportunity" in travados, (
+    assert "CommercialOpportunity" in travados, (
         "a conversão precisa travar a linha da oportunidade — sem o `select_for_update()` "
         "duas conversões simultâneas criam dois projetos"
     )

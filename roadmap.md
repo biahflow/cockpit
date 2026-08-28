@@ -271,10 +271,10 @@ cobre ~70% da visão; abaixo o que falta construir aqui. Prioridade em ordem.
       ROI negativo); satisfação/bugs/acessos ficam de fora até haver onde registrá-los.
       Endpoints `/health/` e `/projects/<id>/health/`; exibido em Indicadores e no detalhe do
       projeto. Testes em `apps/core/tests/test_health.py`.
-- [x] **Visão multi-cliente 🟢🟡🔴 — Fase 2.** `ClientsPage` como grid com semáforo por saúde
-      (componente `StatusDot`); `ClientViewSet.overview` (lista `/clients/overview/` e detalhe
+- [x] **Visão multi-cliente 🟢🟡🔴 — Fase 2.** `AccountsPage` como grid com semáforo por saúde
+      (componente `StatusDot`); `AccountViewSet.overview` (lista `/clients/overview/` e detalhe
       `/clients/<id>/overview/`) agrega por cliente **fase da jornada, health, risco, ROI somado
-      e próxima reunião**; `ClientDetailPage` ganhou o painel "Saúde da relação".
+      e próxima reunião**; `AccountDetailPage` ganhou o painel "Saúde da relação".
 - [x] **Funcionários Digitais como entidade — Fase 3.** Modelo `DigitalEmployee` (projeto,
       nome, área, o que faz, status, KPI, horas/mês, ROI/mês) + CRUD (`/digital-employees/`) +
       roster no `ProjectDetailPage`; flui ao cliente pelo snapshot (`digital_employees`).

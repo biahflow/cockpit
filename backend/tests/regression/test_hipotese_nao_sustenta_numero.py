@@ -1,6 +1,6 @@
 """Regressão: o custo do estado atual só vira número na proposta quando há **fato** atrás (FDD 039).
 
-`docs/metodologia-fde.md:86` é explícito: todo achado é rotulado e **nunca se apresenta hipótese
+`docs/metodologia-fde.md:117` é explícito: todo achado é rotulado e **nunca se apresenta hipótese
 como fato**. O custo do estado atual é a conta mais persuasiva que sai de um Discovery — e é
 exatamente por isso que ele é o pior lugar para uma suposição: escrito numa proposta que o cliente
 lê, o número volta na reunião seguinte como compromisso da casa, e ninguém consegue mais dizer que
@@ -26,11 +26,11 @@ import pytest
 from apps.core import ai
 from apps.core.models import Evidencia
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
+    CommercialOpportunityFactory,
     EvidenciaFactory,
-    OpportunityFactory,
-    ProcessoEtapaFactory,
-    ProcessoFactory,
+    ProcessFactory,
+    ProcessStepFactory,
 )
 
 pytestmark = pytest.mark.django_db
@@ -46,11 +46,11 @@ NUMERO = "R$ 20.000,00"
 
 
 def _oportunidade_com_processo(**campos: object):  # type: ignore[no-untyped-def]
-    client = ClientFactory()
-    processo = ProcessoFactory(client=client, name="Faturamento mensal", **NUCLEO, **campos)
-    ProcessoEtapaFactory(processo=processo, name="Conferir notas", position=1)
-    ProcessoEtapaFactory(processo=processo, name="Emitir boletos", position=2)
-    return OpportunityFactory(client=client), processo
+    account = AccountFactory()
+    processo = ProcessFactory(account=account, name="Faturamento mensal", **NUCLEO, **campos)
+    ProcessStepFactory(process=processo, name="Conferir notas", position=1)
+    ProcessStepFactory(process=processo, name="Emitir boletos", position=2)
+    return CommercialOpportunityFactory(account=account), processo
 
 
 def test_sem_fato_o_numero_nao_entra_e_a_lacuna_e_declarada() -> None:
@@ -84,7 +84,7 @@ def test_com_fato_registrado_o_numero_aparece() -> None:
     """A metade complementar: sem ela, tudo passaria por o número nunca sair de lugar nenhum."""
     opportunity, processo = _oportunidade_com_processo()
     EvidenciaFactory(
-        processo=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
+        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
         content="Relatório do ERP: 400 notas conferidas em abril.",
     )
 
@@ -104,7 +104,7 @@ def test_arquivar_o_fato_faz_o_numero_sumir_de_novo() -> None:
     """
     opportunity, processo = _oportunidade_com_processo()
     fato = EvidenciaFactory(
-        processo=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
+        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
         content="Relatório do ERP: 400 notas conferidas em abril.",
     )
     assert NUMERO in ai.build_opportunity_context(opportunity)
@@ -120,7 +120,7 @@ def test_o_total_parcial_diz_o_que_ficou_de_fora() -> None:
     """Sustentado não quer dizer completo: os cinco aditivos da fórmula não foram apurados aqui."""
     opportunity, processo = _oportunidade_com_processo()
     EvidenciaFactory(
-        processo=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
+        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
         content="Relatório do ERP: 400 notas conferidas em abril.",
     )
 
@@ -135,7 +135,7 @@ def test_o_total_parcial_diz_o_que_ficou_de_fora() -> None:
 
 def test_cliente_sem_processo_mapeado_segue_com_o_contexto_de_antes() -> None:
     """Silêncio, como `_case_lines` sem case: quem não fez Discovery estruturado não perde nada."""
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
 
     contexto = ai.build_opportunity_context(opportunity)
 
@@ -147,7 +147,7 @@ def test_processo_arquivado_nao_entra_na_proposta() -> None:
     desfaria o arquivamento pela porta dos fundos."""
     opportunity, processo = _oportunidade_com_processo()
     EvidenciaFactory(
-        processo=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
+        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
         content="Relatório do ERP.",
     )
     processo.archive()

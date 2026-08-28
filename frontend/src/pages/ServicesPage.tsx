@@ -9,7 +9,6 @@ import type { Service, ServiceTier } from "../types";
 const tiers: { value: ServiceTier; label: string }[] = [
   { value: "", label: "Serviço avulso" },
   { value: "qualification_call", label: "Qualification Call" },
-  { value: "discovery_assessment", label: "Discovery Express + Assessment" },
   { value: "discovery_sprint", label: "Discovery Sprint" },
   { value: "feasibility", label: "Technical Feasibility (T.O.E.)" },
   { value: "prove", label: "PROVE (piloto)" },

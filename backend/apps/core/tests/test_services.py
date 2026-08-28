@@ -1,5 +1,7 @@
 """Degraus da escada FDE sobre o catálogo de `Service` (FDD 015)."""
 
+from decimal import Decimal
+
 import pytest
 from rest_framework.test import APIClient
 
@@ -12,16 +14,28 @@ from .factories import ServiceFactory, UserFactory
 def test_migration_seeds_every_step_of_the_ladder():
     tiers = set(Service.objects.exclude(tier="").values_list("tier", flat=True))
     assert tiers == {t for t, _ in Service.Tier.choices}
+    # Seis, e nenhum a mais: a `0064` tirou o `discovery_assessment` do catálogo junto com a
+    # chave (ADR 0053), e um banco migrado do zero não pode trazer a linha de volta.
+    assert len(tiers) == 6
     porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
     assert porta.is_free
     assert porta.summary
 
 
 @pytest.mark.django_db
+def test_o_discovery_sprint_sai_da_migracao_com_o_preco_de_tabela():
+    """R$ 3.000 (ADR 0053), e não o zero que a renomeação da `0050` tinha deixado para trás."""
+    sprint = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
+
+    assert sprint.list_price == Decimal("3000.00")
+    assert not sprint.is_free  # zero num degrau pago se lê como "preço a definir" na tela
+
+
+@pytest.mark.django_db
 def test_admin_updates_tier_price_and_summary():
     client = APIClient()
     client.force_authenticate(UserFactory(role="admin"))
-    service = Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT)
+    service = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
 
     response = client.patch(f"/api/v1/services/{service.pk}/", {
         "list_price": "18000.00", "summary": "Discovery aprofundado e assessment.",
@@ -29,7 +43,7 @@ def test_admin_updates_tier_price_and_summary():
 
     assert response.status_code == 200
     assert response.json()["list_price"] == "18000.00"
-    assert response.json()["tier_display"] == "Discovery Express + Assessment"
+    assert response.json()["tier_display"] == "Discovery Sprint"
     service.refresh_from_db()
     assert service.summary == "Discovery aprofundado e assessment."
 

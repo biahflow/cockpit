@@ -57,7 +57,7 @@ Activities do CRM (FDD 035).
   (`KB_SOURCES`), consultável com citação — o antídoto declarado ao "texto demais".
 - FDD 033, 034 e 035 nascem desta decisão e entram no roadmap como próximos work items.
 - A migração dos dados do Notion (as databases Accounts/Contacts/Opportunities/Activities)
-  fica **nomeada e não feita**: os equivalentes diretos existem (`Client`, `Contact`,
+  fica **nomeada e não feita**: os equivalentes diretos existem (`Account`, `Contact`,
   `Opportunity` e a `Activity` da FDD 035), mas importar é trabalho separado, com decisão
   própria de dedupe e corte.
 - O risco assumido: sem a disciplina do "portal só depois de estabilizar", cada bloco novo da
@@ -71,3 +71,10 @@ Activities do CRM (FDD 035).
 - **Híbrido** (cockpit assume Delivery; Notion segue com o CRM comercial): rejeitado por
   duplicar a fonte de verdade exatamente na fronteira mais movimentada — a conversão de
   oportunidade em projeto, que é a ação central deste produto.
+
+## Emenda (Issue #67 fatia 3, 28/08/2026) — o nome do modelo comercial
+
+Onde esta ADR diz `Opportunity` — inclusive na regra "Account ≠ Opportunity" citada no contexto —,
+o modelo do Pulse hoje se chama `CommercialOpportunity` (ADR 0052, `language-map` §5). O
+qualificador existe porque `Opportunity` sozinho colide com a melhoria operacional do FDE, que a
+Fase 4 chama de `ImprovementOpportunity`. A migração do Notion continua **nomeada e não feita**.

@@ -8,7 +8,7 @@ vi.mock("../api", () => ({
   api: vi.fn((path: string) => {
     if (path === "/risk/") return Promise.resolve({ projects: [{ project_id: 7, name: "Projeto Z", score: 70, level: "alto", signals: [{ label: "Projeto vencido", detail: "3 dias", weight: 30 }] }] });
     if (path === "/health/") return Promise.resolve({ projects: [{ project_id: 8, name: "Projeto W", score: 55, level: "atenção", signals: [{ label: "Decisões pendentes", detail: "2 em aberto", weight: 15 }] }] });
-    if (path === "/recommendations/") return Promise.resolve({ items: [{ kind: "upsell", label: "Novo negócio com ACME", detail: "Cliente ativo", url: "/clientes/1" }] });
+    if (path === "/recommendations/") return Promise.resolve({ items: [{ kind: "upsell", label: "Novo negócio com ACME", detail: "Cliente ativo", url: "/contas/1" }] });
     return Promise.resolve({
       funnel: {
         leads: { total: 3, by_status: { new: 3 } }, opportunities: { open: 2, won: 1, lost: 1 },

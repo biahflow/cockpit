@@ -3,11 +3,12 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 
 import { api, getConfig } from "../api";
 import { useAuth } from "../auth";
+import { LifecycleOptions } from "../components/AccountLifecycle";
 import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Activity, ActivityKind, Client, ClientOverview, ClientStatus, CobrancaSinal, Contact, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Processo, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, Contact, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -101,13 +102,13 @@ const condutaDoSinal: Record<Exclude<CobrancaSinal, "">, string> = {
   insatisfeito: "não é problema de cobrança — é problema de relação disfarçado, e é onde insistir piora tudo.",
 };
 
-export function ClientDetailPage({ id }: { id: number }) {
-  const [client, setClient] = useState<Client>();
+export function AccountDetailPage({ id }: { id: number }) {
+  const [client, setClient] = useState<Account>();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [overview, setOverview] = useState<ClientOverview>();
+  const [overview, setOverview] = useState<AccountOverview>();
   const [verticals, setVerticals] = useState<Vertical[]>([]);
-  const [form, setForm] = useState<{ name: string; legal_name: string; tax_id: string; status: ClientStatus; vertical: string }>({ name: "", legal_name: "", tax_id: "", status: "prospect", vertical: "" });
+  const [form, setForm] = useState<{ name: string; legal_name: string; tax_id: string; lifecycle_status: AccountLifecycleStatus; vertical: string }>({ name: "", legal_name: "", tax_id: "", lifecycle_status: "prospect", vertical: "" });
   const [contactDraft, setContactDraft] = useState(blankContact);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [activityDraft, setActivityDraft] = useState(blankActivity);
@@ -120,7 +121,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   const [iaLigada, setIaLigada] = useState(false);
   const [classificando, setClassificando] = useState<number | null>(null);
   const [satisfacoes, setSatisfacoes] = useState<Satisfacao[]>([]);
-  const [processos, setProcessos] = useState<Processo[]>([]);
+  const [processos, setProcessos] = useState<Process[]>([]);
   const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
   const [engagementDraft, setEngagementDraft] = useState(blankEngagement);
@@ -143,20 +144,20 @@ export function ClientDetailPage({ id }: { id: number }) {
   const canWriteEngagements = !!user && user.role !== "delivery";
 
   const load = useCallback(() => Promise.all([
-    api<Client>(`/clients/${id}/`),
-    api<Contact[]>(`/contacts/?client=${id}`),
-    api<Activity[]>(`/activities/?client=${id}`),
-    api<ClientOverview>(`/clients/${id}/overview/`),
+    api<Account>(`/clients/${id}/`),
+    api<Contact[]>(`/contacts/?account=${id}`),
+    api<Activity[]>(`/activities/?account=${id}`),
+    api<AccountOverview>(`/clients/${id}/overview/`),
     api<Vertical[]>("/verticals/"),
-    api<Satisfacao[]>(`/satisfacoes/?client=${id}`),
-    api<Processo[]>(`/processos/?client=${id}`),
+    api<Satisfacao[]>(`/satisfacoes/?account=${id}`),
+    api<Process[]>(`/processos/?account=${id}`),
     // Na **mesma** chamada que o resto da página, e não num `useEffect` próprio: a seção não tem
     // estado de carregamento seu (decisão do DAP), e uma segunda chamada criaria um — a tela
     // mostraria a seção vazia antes de mostrá-la cheia.
     api<Engagement[]>(`/engagements/?account=${id}`),
   ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements]) => {
     setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements);
-    setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, status: loadedClient.status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
+    setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, lifecycle_status: loadedClient.lifecycle_status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [id]);
   useEffect(() => { void load(); }, [load]);
   // A flag `ai` tira o botão de classificar da tela, como tira o de rascunhar na Cobrança
@@ -164,7 +165,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   useEffect(() => {
     if (!canWriteActivities) return;
     void getConfig().then(config => setIaLigada(config.ai_enabled)).catch(() => setIaLigada(false));
-    void api<Invoice[]>(`/invoices/?client=${id}`).then(setInvoices).catch(() => setInvoices([]));
+    void api<Invoice[]>(`/invoices/?account=${id}`).then(setInvoices).catch(() => setInvoices([]));
   }, [canWriteActivities, id]);
 
   async function saveClient(event: FormEvent<HTMLFormElement>) {
@@ -180,7 +181,7 @@ export function ClientDetailPage({ id }: { id: number }) {
     event.preventDefault();
     try {
       if (editingContact) await api(`/contacts/${editingContact.id}/`, { method: "PATCH", body: JSON.stringify(contactDraft) });
-      else await api("/contacts/", { method: "POST", body: JSON.stringify({ client: id, ...contactDraft }) });
+      else await api("/contacts/", { method: "POST", body: JSON.stringify({ account: id, ...contactDraft }) });
       setContactDraft(blankContact); setEditingContact(null); await load();
     } catch (cause) { setError((cause as Error).message); }
   }
@@ -249,7 +250,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   async function createActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const { invoice, ...resto } = activityDraft;
-    try { await api("/activities/", { method: "POST", body: JSON.stringify({ client: id, ...resto, invoice: invoice ? Number(invoice) : null }) }); setActivityDraft(blankActivity); await load(); }
+    try { await api("/activities/", { method: "POST", body: JSON.stringify({ account: id, ...resto, invoice: invoice ? Number(invoice) : null }) }); setActivityDraft(blankActivity); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   /**
@@ -260,7 +261,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   async function createSatisfacao(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    try { await api("/satisfacoes/", { method: "POST", body: JSON.stringify({ client: id, ...satisfacaoDraft }) }); setSatisfacaoDraft(blankSatisfacao); await load(); }
+    try { await api("/satisfacoes/", { method: "POST", body: JSON.stringify({ account: id, ...satisfacaoDraft }) }); setSatisfacaoDraft(blankSatisfacao); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   /**
@@ -286,7 +287,7 @@ export function ClientDetailPage({ id }: { id: number }) {
     setBusy(true);
     try {
       await api(`/clients/${id}/`, { method: "DELETE" });
-      window.location.assign("/clientes");
+      window.location.assign("/contas");
     } catch (cause) {
       // O 409 das guardas de integridade chega aqui com o motivo ("ainda tem 2 projeto(s)…"),
       // que é exatamente o que quem tentou precisa ler para saber o que fazer antes.
@@ -298,7 +299,7 @@ export function ClientDetailPage({ id }: { id: number }) {
   if (!client) return <div className="animate-pulse space-y-6"><div className="h-10 w-64 rounded-xl bg-slate-200" /><div className="h-56 rounded-2xl bg-white" /></div>;
 
   return <section className="space-y-7">
-    <a href="/clientes" className="back-link"><ArrowLeft className="size-4" />Voltar para clientes</a>
+    <a href="/contas" className="back-link"><ArrowLeft className="size-4" />Voltar para contas</a>
     {removingContact && <ConfirmDialog
       title="Remover contato"
       message={<>Remover <strong className="text-ink">{removingContact.name}</strong> da lista de contatos deste cliente?</>}
@@ -449,8 +450,8 @@ export function ClientDetailPage({ id }: { id: number }) {
         quando metade dos insumos não foi apurada é a casa afirmando ao cliente o oposto do que ela
         sabe.
 
-        A contagem de etapas ficou de fora, e o motivo é o payload: `ProcessoSerializer` não expõe
-        `etapas` nem um contador, e `/processo-etapas/` só filtra por `?processo=` — mostrá-la aqui
+        A contagem de etapas ficou de fora, e o motivo é o payload: `ProcessSerializer` não expõe
+        `steps` nem um contador, e `/processo-etapas/` só filtra por `?process=` — mostrá-la aqui
         custaria uma requisição por processo a cada `load()`, que esta tela dispara a cada contato,
         interação ou satisfação criados. */}
     <section className="panel space-y-4 sm:p-6">
@@ -464,7 +465,7 @@ export function ClientDetailPage({ id }: { id: number }) {
         {/* Selo e link como irmãos do `.row-main`, pela razão escrita no bloco de Satisfação acima:
             `.row-main span`/`strong` sobrescrevem display e cor de qualquer primitiva aninhada. */}
         <span className={`state ${sustentacaoBadgeClass(processo.custo.sustentacao)} shrink-0`}>{SUSTENTACAO_LABEL[processo.custo.sustentacao]}</span>
-        <a className="btn btn--secondary shrink-0" href={`/clientes/${id}/processos/${processo.id}`}>Abrir o mapa</a>
+        <a className="btn btn--secondary shrink-0" href={`/contas/${id}/processos/${processo.id}`}>Abrir o mapa</a>
       </div>)}</div> : <p className="empty-state">Nenhum processo mapeado para este cliente.</p>}
     </section>
 
@@ -480,7 +481,7 @@ export function ClientDetailPage({ id }: { id: number }) {
             Digital (FDD 026). Sem ela nada quebra: o catálogo inteiro segue disponível, com os
             valores genéricos. */}
         <Field label="Vertical"><select className="field" value={form.vertical} onChange={event => { setForm({ ...form, vertical: event.target.value }); setSaved(false); }}><option value="">Sem vertical definida</option>{verticals.filter(vertical => vertical.active || String(vertical.id) === form.vertical).map(vertical => <option key={vertical.id} value={vertical.id}>{vertical.name}</option>)}</select></Field>
-        <Field label="Situação"><select className="field" value={form.status} onChange={event => { setForm({ ...form, status: event.target.value as ClientStatus }); setSaved(false); }}><option value="prospect">Prospect — ainda não fechou</option><option value="active">Cliente ativo — já fechou</option></select></Field>
+        <Field label="Situação"><select className="field" value={form.lifecycle_status} onChange={event => { setForm({ ...form, lifecycle_status: event.target.value as AccountLifecycleStatus }); setSaved(false); }}><LifecycleOptions /></select></Field>
         <button className="btn" type="submit"><Save className="size-4" />Salvar alterações</button>
         {saved && <p className="text-sm font-medium text-emerald-700">Dados atualizados.</p>}
       </form>

@@ -1,5 +1,5 @@
 export type PipelineStage = { id: number; name: string; kind: "open" | "won" | "lost"; position: number; opportunity_count?: number; estimated_total?: string | null };
-export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier; project: number | null; project_archived: boolean; origin_qualification: number | null };
+export type CommercialOpportunity = { id: number; account: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier; project: number | null; project_archived: boolean; origin_qualification: number | null };
 export type AiScoreDimension = { label: string; score: number };
 // O mandato de transformação da conta, entre `Account` e `Project` (ADR 0050, FDD 046). Uma venda
 // avulsa também tem o seu — de escopo único, criado pela própria conversão.
@@ -14,9 +14,9 @@ export type EngagementCommercialModel = "design_partner" | "paid";
 // É o mesmo comportamento de `/clients/overview/` (FDD 046, emenda de 28/08/2026).
 export type Engagement = { id: number; account: number; account_name: string; name: string; mandate: string; sponsor: number | null; sponsor_name: string | null; owner: number; owner_name: string | null; status: EngagementStatus; status_display: string; commercial_model: EngagementCommercialModel; commercial_model_display: string; started_at: string | null; ended_at: string | null; success_definition: string; projects_count: number; needs_review: boolean; archived_at: string | null; created_at: string; updated_at: string };
 // `opportunity` é **alias de leitura** de `originating_commercial_opportunity`, mantido para não
-// quebrar consumidor no meio do renome; sai na Fase 6 (`docs/ontology/language-map.md` §7).
+// quebrar consumidor no meio do renome; morre na `/api/v2/` (`docs/ontology/aliases.md` §2c).
 export type Project = { id: number; name: string; description: string; client: number; engagement: number; engagement_name: string; originating_commercial_opportunity: number | null; opportunity: number | null; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };
-export type ServiceTier = "qualification_call" | "discovery_assessment" | "discovery_sprint" | "feasibility" | "prove" | "scale" | "transformation" | "";
+export type ServiceTier = "qualification_call" | "discovery_sprint" | "feasibility" | "prove" | "scale" | "transformation" | "";
 // `acquisition` é a porta (a Qualification Call), `commercial` é degrau vendável — e é a
 // categoria, não o preço zero, que decide: o Discovery + Assessment do founding client também é
 // gratuito e é degrau (ADR 0049).
@@ -41,24 +41,30 @@ export type Analytics = {
   pipeline: { id: number; name: string; kind: string; position: number; opportunity_count: number; estimated_total: number | null }[];
   roi: { revenue: number; cost: number; roi: number | null; by_client: RoiRow[]; by_service: RoiRow[] };
 };
-export type ClientStatus = "prospect" | "active";
-export type Client = { id: number; name: string; legal_name: string; tax_id: string; owner: number; status: ClientStatus; vertical: number | null; vertical_name: string };
+// Onde a conta está na relação com a casa. **"Cliente" é o rótulo de `active`, não o nome da
+// entidade** (`docs/ontology/language-map.md` §4): `prospect` ainda não fechou, `active` é
+// cliente de fato, `inactive` já foi e hoje não tem trabalho em andamento. `status` continua
+// saindo com o mesmo valor — é alias da `/api/v1/` e morre na `/api/v2/`.
+export type AccountLifecycleStatus = "prospect" | "active" | "inactive";
+export type Account = { id: number; name: string; legal_name: string; tax_id: string; owner: number; lifecycle_status: AccountLifecycleStatus; status: AccountLifecycleStatus; vertical: number | null; vertical_name: string };
 // `receives_billing` marca quem recebe cobrança (FDD 036). Sem ninguém marcado, o degrau **não**
 // vira e-mail ao cliente: vira escalada interna com o motivo escrito — a casa cala quando não sabe
 // em vez de chutar o destinatário de um e-mail sobre dinheiro.
 // `name` é derivado e só-leitura (issue #55, FDD 001) — `first_name` + `last_name`, sem espaço
 // solto quando não há sobrenome. Quem escreve manda `first_name`/`last_name`, nunca `name`.
-export type Contact = { id: number; client: number; first_name: string; last_name: string; name: string; email: string; phone: string; job_title: string; receives_billing: boolean };
+export type Contact = { id: number; account: number; client: number; first_name: string; last_name: string; name: string; email: string; phone: string; job_title: string; receives_billing: boolean };
 // Interação comercial com o cliente (FDD 035, ADR 0030) — a materialização das "Activities" do
-// CRM na leitura FDE. `opportunity` é opcional e, quando preenchida, tem de ser do mesmo cliente
-// (o backend recusa com 400; ver `docs/metodologia-fde.md`).
+// CRM na leitura FDE. `commercial_opportunity` é opcional e, quando preenchida, tem de ser do
+// mesmo cliente (o backend recusa com 400; ver `docs/metodologia-fde.md`).
 export type ActivityKind = "call" | "meeting" | "email" | "note";
 // `cobranca_sinal` é lavrado por `POST /activities/{id}/classificar/` e é **só de leitura** aqui: a
 // IA grava o sinal e não age (ADR 0031). Os três valores roteiam condutas diferentes — `esqueceu` já
 // se resolveu com o lembrete, `nao_pode` pede renegociação, `insatisfeito` não é problema de
 // cobrança e é onde insistir piora tudo.
 export type CobrancaSinal = "" | "esqueceu" | "nao_pode" | "insatisfeito";
-export type Activity = { id: number; client: number; opportunity: number | null; invoice: number | null; cobranca_sinal: CobrancaSinal; cobranca_sinal_display: string; kind: ActivityKind; kind_display: string; happened_on: string; summary: string; notes: string; owner: number | null; created_at: string; updated_at: string };
+// `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
+// (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.
+export type Activity = { id: number; account: number; client: number; commercial_opportunity: number | null; opportunity: number | null; invoice: number | null; cobranca_sinal: CobrancaSinal; cobranca_sinal_display: string; kind: ActivityKind; kind_display: string; happened_on: string; summary: string; notes: string; owner: number | null; created_at: string; updated_at: string };
 export type WorkItemStatus = "todo" | "in_progress" | "done";
 export type Party = "provider" | "client";
 export type Milestone = { id: number; project: number; title: string; description: string; owner: number; due_date: string; completed_at: string | null; status: WorkItemStatus; party: Party; is_overdue: boolean };
@@ -89,28 +95,31 @@ export type GithubDeliveryProjection = { id: number; project: number; handoff: n
 // **Os nove insumos são `string | null` e nulo é "não apurado", nunca zero.** Zerar afirmaria que
 // executar o processo não custa nada; o backend devolve o que faltou em `custo.nao_apurado` em vez
 // de somar zero, e a tela precisa poder dizer a mesma coisa.
-export type Processo = { id: number; client: number; client_name: string; name: string; position: number; source_project: number | null; source_meeting: number | null; registered_by: number | null; volume_mes: number | null; tempo_horas: string | null; pessoas: number | null; custo_hora: string | null; retrabalho_mes: string | null; erros_mes: string | null; perdas_mes: string | null; espera_mes: string | null; risco_mes: string | null; custo: CustoEstadoAtual; created_at: string; updated_at: string };
+export type Process = { id: number; account: number; client: number; client_name: string; name: string; position: number; source_project: number | null; source_meeting: number | null; registered_by: number | null; volume_mes: number | null; tempo_horas: string | null; pessoas: number | null; custo_hora: string | null; retrabalho_mes: string | null; erros_mes: string | null; perdas_mes: string | null; espera_mes: string | null; risco_mes: string | null; custo: CustoEstadoAtual; created_at: string; updated_at: string };
 // A conta do custo do estado atual, derivada e só de leitura. **Os valores são texto**, como
 // `Invoice.amount`: dinheiro em `number` soma centavos com erro, e este total existe para ser
 // levado a uma reunião. `nao_apurado` é o que separa "não há insumo" de "medimos e deu zero" —
 // um total mostrado sem ele vira "custo zero" na leitura rápida. `sustentacao` responde a outra
 // metade da metodologia: só há **fato** por trás do número, ou ainda é hipótese da casa.
 export type CustoEstadoAtual = { parcelas: { label: string; valor: string }[]; total: string; nao_apurado: string[]; sustentacao: "sustentado" | "hipotese" };
-// A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:75-79`). Os seis campos são exatamente as
+// A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:106-110`). Os seis campos são exatamente as
 // seis letras, nessa ordem: é assim que a pergunta é feita na reunião, e um formulário fora de
 // ordem faz quem preenche pular a que faltou. Aqui `tempo`, `erro` e `retrabalho` são **descrição**
-// — os homônimos `_mes` do `Processo` são dinheiro e quantidade, e não se confundem.
-export type ProcessoEtapa = { id: number; processo: number; name: string; position: number; pessoas: string; sistema: string; dados: string; tempo: string; erro: string; retrabalho: string };
+// — os homônimos `_mes` do `Process` são dinheiro e quantidade, e não se confundem.
+// **`process` é a canônica e `processo` é o alias da `/api/v1/`** (`docs/ontology/aliases.md`
+// §2c): a fatia 4 da issue #67 renomeou o campo do modelo, e a chave antiga continua saindo no GET
+// e sendo aceita na escrita até a `/api/v2/`. As telas leem e escrevem a canônica.
+export type ProcessStep = { id: number; process: number; processo: number; name: string; position: number; pessoas: string; sistema: string; dados: string; tempo: string; erro: string; retrabalho: string };
 export type EvidenciaForma = "entrevista" | "observacao" | "artefato" | "sistema" | "dado";
-// FATO / HIPÓTESE / DESCONHECIDO (`docs/metodologia-fde.md:86`). **`rotulo` não tem default no
+// FATO / HIPÓTESE / DESCONHECIDO (`docs/metodologia-fde.md:117`). **`rotulo` não tem default no
 // banco (ADR 0034)** e não pode ganhar um na tela: um select que já abre em "hipótese" faz a casa
 // escolher por quem não escolheu, e o erro cai sempre para o mesmo lado. `desconhecido` é valor de
 // primeira classe — nomear o que ainda não se sabe é fazer o trabalho, não deixar de fazê-lo.
 export type EvidenciaRotulo = "fato" | "hipotese" | "desconhecido";
-export type Evidencia = { id: number; processo: number; etapa: number | null; forma: EvidenciaForma; forma_display: string; rotulo: EvidenciaRotulo; rotulo_display: string; content: string; source_meeting: number | null; registered_by: number | null };
+export type Evidencia = { id: number; process: number; processo: number; step: number | null; etapa: number | null; forma: EvidenciaForma; forma_display: string; rotulo: EvidenciaRotulo; rotulo_display: string; content: string; source_meeting: number | null; registered_by: number | null };
 // O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). **Nenhuma tela consome estes tipos
-// ainda**, e isso é o recorte da fatia, não esquecimento: o dual-write mantém `ProcessoDetailPage`
-// e `ClientDetailPage` funcionando sobre `Evidencia`/`Processo`, e a interface nova (tela de
+// ainda**, e isso é o recorte da fatia, não esquecimento: o dual-write mantém `ProcessDetailPage`
+// e `AccountDetailPage` funcionando sobre `Evidencia`/`Process`, e a interface nova (tela de
 // Discovery, painel de achados) exige Design Approval Package que não existe. Eles entram aqui
 // para que a próxima fatia não comece do zero — e para que a forma do contrato fique escrita do
 // lado do consumidor no mesmo commit em que ela nasce no servidor.
@@ -137,10 +146,14 @@ export type Evidence = { id: number; account: number; discovery: number | null; 
 export type EpistemicStatus = "fact" | "hypothesis" | "unknown";
 export type Finding = { id: number; account: number; process: number | null; step: number | null; statement: string; epistemic_status: EpistemicStatus; epistemic_status_display: string; confidence: number | null; reviewed_by: number | null; reviewed_at: string | null; evidences: number[]; legacy_evidencia: number | null; created_at: string; updated_at: string };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
-export type DocumentEntry = { id: number; client: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };
+// `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
+// (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.
+export type DocumentEntry = { id: number; account: number | null; client: number | null; commercial_opportunity: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";
 export type ArtifactStatus = "draft" | "review" | "sent" | "accepted" | "rejected";
-export type Artifact = { id: number; kind: ArtifactKind; kind_display: string; status: ArtifactStatus; status_display: string; title: string; content: string; opportunity: number | null; project: number | null; source_meeting: number | null; document: number | null; ai_interaction: number | null; created_by: number; sent_at: string | null; decided_at: string | null; created_at: string; updated_at: string };
+// `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
+// (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.
+export type Artifact = { id: number; kind: ArtifactKind; kind_display: string; status: ArtifactStatus; status_display: string; title: string; content: string; commercial_opportunity: number | null; opportunity: number | null; project: number | null; source_meeting: number | null; document: number | null; ai_interaction: number | null; created_by: number; sent_at: string | null; decided_at: string | null; created_at: string; updated_at: string };
 export type Dashboard = { pipeline: PipelineStage[]; active_projects: number; overdue_count: number; upcoming_tasks: { id: number; title: string; due_date: string; project_id: number }[] };
 // `is_admin` vem do backend (`User.is_admin_role`: papel admin **ou** superusuário) em vez de ser
 // derivado aqui. É o mesmo predicado que a API usa para autorizar, então a tela não pode divergir
@@ -161,10 +174,12 @@ export type RiskForecast = { predicted_finish_date: string; delay_days: number; 
 export type RiskAssessment = { project_id: number; name: string; score: number; level: string; signals: RiskSignal[]; forecast: RiskForecast | null };
 export type HealthLevel = "saudável" | "atenção" | "crítico";
 export type HealthAssessment = { project_id: number; name: string; score: number; level: HealthLevel; signals: RiskSignal[] };
-export type ClientOverview = {
+export type AccountOverview = {
   client_id: number;
   name: string;
-  status: ClientStatus;
+  lifecycle_status: AccountLifecycleStatus;
+  // Alias da `/api/v1/`, com o mesmo valor de `lifecycle_status`. Morre na `/api/v2/`.
+  status: AccountLifecycleStatus;
   roi: { revenue: number; cost: number; roi: number | null };
   health: { score: number; level: HealthLevel; project_id: number } | null;
   risk_level: string | null;
@@ -202,7 +217,10 @@ export type ProjectDeliverableStatus = "pending" | "delivered";
 export type ProjectDeliverable = { id: number; project_phase: number; name: string; status: ProjectDeliverableStatus; document: number | null; position: number; delivered_at: string | null };
 // As quatro saídas do decision gate (FDD 033). `""` é "ainda não decidido" — o gate não tem
 // default, porque um default seria uma decisão que ninguém tomou.
-export type GateDecision = "go" | "conditional_go" | "redesign" | "no_go";
+// As sete saídas dos dois vocabulários de gate (ADR 0053): as quatro da Feasibility ("a
+// tecnologia consegue fazer a tarefa?") e as três do PROVE ("funcionou em produção controlada?").
+// Qual delas vale numa fase sai de `journey.ts`, a partir do `canonical_stage`.
+export type GateDecision = "go" | "conditional_go" | "redesign" | "no_go" | "scale" | "iterate" | "stop";
 export type ProjectChecklistItem = { id: number; project_phase: number; text: string; position: number; checked: boolean; checked_at: string | null };
 // A jornada canônica de entrega — o vocabulário FDE (FDD 042). Classificação **opcional** da fase
 // configurável; `""` é a fase operacional Biahflow sem equivalente FDE. `feasibility` é membro
@@ -235,7 +253,9 @@ export type LeadFit = "high" | "medium" | "low" | "";
 // O cadastro público que o enriquecimento trouxe (FDD 030). Todo campo é opcional porque o objeto
 // inteiro é opcional: sem CNPJ, com a flag desligada ou com o fornecedor fora do ar, ele é `{}`.
 export type LeadEnrichment = { cnpj?: string; legal_name?: string; trade_name?: string; cnae_code?: string; cnae_label?: string; size?: string; share_capital?: string; status?: string; city?: string; state?: string; opened_on?: string };
-export type Lead = { id: number; name: string; email: string; company: string; phone: string; cnpj: string; message: string; source: string; status: LeadStatus; ai_fit: LeadFit; ai_score: number | null; ai_summary: string; ai_recommended_action: string; qualified_at: string | null; enrichment: LeadEnrichment; client: number | null; opportunity: number | null; qualification: number | null; qualification_outcome: QualificationOutcome | ""; created_at: string };
+// `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
+// (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.
+export type Lead = { id: number; name: string; email: string; company: string; phone: string; cnpj: string; message: string; source: string; status: LeadStatus; ai_fit: LeadFit; ai_score: number | null; ai_summary: string; ai_recommended_action: string; qualified_at: string | null; enrichment: LeadEnrichment; account: number | null; client: number | null; commercial_opportunity: number | null; opportunity: number | null; qualification: number | null; qualification_outcome: QualificationOutcome | ""; created_at: string };
 
 // A avaliação que decide se um lead vira venda (ADR 0049). Só `qualified` abre oportunidade
 // comercial — e ela é um **segundo ato**, em `POST /qualifications/{id}/open-opportunity/`.
@@ -257,7 +277,7 @@ export type Case = { id: number; project: number; project_name: string; title: s
 // job das 06:00, e entre a virada do dia e ele a tela precisa dizer a verdade.
 export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "renegotiated" | "cancelled";
 export type InvoiceMethod = "pix" | "boleto" | "card" | "transfer" | "other" | "";
-export type Invoice = { id: number; client: number; client_name: string; project: number | null; project_name: string; service: number | null; service_name: string; number: string; amount: string; description: string; due_date: string; method: InvoiceMethod; method_display: string; status: InvoiceStatus; status_display: string; is_overdue: boolean; issued_at: string | null; issued_by: number | null; paid_at: string | null; settled_by: number | null; cancelled_at: string | null; cancelled_by: number | null; cancel_reason: string; provider: string; external_reference: string; payment_url: string; created_at: string; updated_at: string };
+export type Invoice = { id: number; account: number; client: number; client_name: string; project: number | null; project_name: string; service: number | null; service_name: string; number: string; amount: string; description: string; due_date: string; method: InvoiceMethod; method_display: string; status: InvoiceStatus; status_display: string; is_overdue: boolean; issued_at: string | null; issued_by: number | null; paid_at: string | null; settled_by: number | null; cancelled_at: string | null; cancelled_by: number | null; cancel_reason: string; provider: string; external_reference: string; payment_url: string; created_at: string; updated_at: string };
 export type InvoiceSummary = { open: string; overdue: string; paid: string; open_count: number; overdue_count: number; paid_count: number };
 
 // A régua de cobrança (FDD 036, ADR 0031). **Nada aqui é calculado no SPA.** Próximo degrau, régua
@@ -282,7 +302,7 @@ export type CobrancaSuspensaoResumo = { id: number; until: string; owner: number
 export type SatisfacaoNivel = "promotor" | "satisfeito" | "neutro" | "insatisfeito";
 export type SatisfacaoFonte = "declarada" | "percebida";
 export type Satisfacao = {
-  id: number; client: number; project: number | null; source_meeting: number | null;
+  id: number; account: number; client: number; project: number | null; source_meeting: number | null;
   // A resposta de cobrança que a IA classificou e que originou este registro (FDD 038). É o que
   // faz o painel parar de oferecer o atalho depois do registro — sem ela, o mesmo sinal insistiria
   // para sempre. Continua sendo **uma pessoa** que salva: a IA lê, ela não registra (ADR 0032).
@@ -318,8 +338,8 @@ export type CobrancaPainelLinha = {
   sinal_em: string | null; sinal_activity: number | null;
 };
 export type CobrancaTensaoCausa = "satisfacao" | "entrega" | "ambas";
-export type CobrancaContato = { id: number; invoice: number; invoice_number: string; client: number; client_name: string; degrau: CobrancaDegrau; degrau_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
-export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; client: number | null; client_name: string; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };
+export type CobrancaContato = { id: number; invoice: number; invoice_number: string; account: number; client: number; client_name: string; degrau: CobrancaDegrau; degrau_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
+export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; account: number | null; client: number | null; client_name: string; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };
 export type CobrancaRascunho = { text: string; interaction: number; degrau: CobrancaDegrau };
 
 // Base de conhecimento interna (FDD 029). `status` é derivado no backend — depende do dono da área

@@ -6,7 +6,7 @@ from django.utils import timezone
 from apps.core import recommendations, risk
 from apps.core.models import Milestone, Task
 
-from .factories import ClientFactory, ProjectFactory
+from .factories import AccountFactory, ProjectFactory
 
 
 @pytest.mark.django_db
@@ -65,8 +65,8 @@ def test_assess_project_low_risk_when_healthy():
 
 @pytest.mark.django_db
 def test_recommendations_cover_upsell_and_deadline():
-    client = ClientFactory()
-    ProjectFactory(client=client, due_date=timezone.localdate() + timedelta(days=3), status="active")
+    account = AccountFactory()
+    ProjectFactory(client=account, due_date=timezone.localdate() + timedelta(days=3), status="active")
 
     kinds = {rec["kind"] for rec in recommendations.build_recommendations()}
 

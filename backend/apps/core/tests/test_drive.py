@@ -3,30 +3,30 @@ import pytest
 from apps.core import drive
 from apps.core.models import Document
 
-from .factories import ClientFactory, OpportunityFactory, ProjectFactory
+from .factories import AccountFactory, CommercialOpportunityFactory, ProjectFactory
 
 
 @pytest.mark.django_db
 def test_para_bucket_for_follows_link_type():
-    client = ClientFactory()
-    opportunity = OpportunityFactory(client=client)
-    project = ProjectFactory(client=client)
+    account = AccountFactory()
+    opportunity = CommercialOpportunityFactory(account=account)
+    project = ProjectFactory(client=account)
 
-    assert drive.para_bucket_for(Document(client=client)) == drive.CLIENT_BUCKET
-    assert drive.para_bucket_for(Document(opportunity=opportunity)) == drive.OPPORTUNITY_BUCKET
+    assert drive.para_bucket_for(Document(account=account)) == drive.CLIENT_BUCKET
+    assert drive.para_bucket_for(Document(commercial_opportunity=opportunity)) == drive.OPPORTUNITY_BUCKET
     assert drive.para_bucket_for(Document(project=project)) == drive.PROJECT_BUCKET
 
 
 @pytest.mark.django_db
-def test_client_of_resolves_owner_from_any_link():
-    client = ClientFactory()
-    opportunity = OpportunityFactory(client=client)
-    project = ProjectFactory(client=client)
+def test_account_of_resolves_owner_from_any_link():
+    account = AccountFactory()
+    opportunity = CommercialOpportunityFactory(account=account)
+    project = ProjectFactory(client=account)
 
-    assert drive.client_of(Document(client=client)) == client
-    assert drive.client_of(Document(opportunity=opportunity)) == client
-    assert drive.client_of(Document(project=project)) == client
-    assert drive.client_of(Document()) is None
+    assert drive.account_of(Document(account=account)) == account
+    assert drive.account_of(Document(commercial_opportunity=opportunity)) == account
+    assert drive.account_of(Document(project=project)) == account
+    assert drive.account_of(Document()) is None
 
 
 @pytest.mark.django_db

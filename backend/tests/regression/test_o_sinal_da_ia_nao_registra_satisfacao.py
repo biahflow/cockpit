@@ -25,8 +25,8 @@ from rest_framework.test import APIClient
 from apps.core import ai, cobranca, health
 from apps.core.models import Activity, Invoice, Satisfacao, User
 from apps.core.tests.factories import (
+    AccountFactory,
     ActivityFactory,
-    ClientFactory,
     InvoiceFactory,
     ProjectFactory,
     UserFactory,
@@ -53,13 +53,13 @@ def insatisfeito(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _resposta_de_cobranca() -> Activity:
-    client = ClientFactory()
+    account = AccountFactory()
     invoice = InvoiceFactory(
-        client=client, status=Invoice.Status.OVERDUE, number="2026-0001",
+        account=account, status=Invoice.Status.OVERDUE, number="2026-0001",
         due_date=HOJE - timedelta(days=12),
     )
     return ActivityFactory(
-        client=client, invoice=invoice,
+        account=account, invoice=invoice,
         summary="Cliente disse que não paga enquanto o marco 2 não entrar.",
         happened_on=timezone.localdate(),
     )
@@ -83,7 +83,7 @@ def test_classificar_nao_move_o_health_score(admin_api: APIClient, insatisfeito:
     """20 pontos por inferência seriam indistinguíveis de 20 pontos por evidência — e um número
     errado é consultado com a mesma confiança de um número certo."""
     activity = _resposta_de_cobranca()
-    project = ProjectFactory(client=activity.client)
+    project = ProjectFactory(client=activity.account)
     antes = health.assess_project_health(project)
 
     admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
@@ -102,7 +102,7 @@ def test_classificar_nao_troca_a_escada(admin_api: APIClient, insatisfeito: None
 
     admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
 
-    assert cobranca.regua_para(activity.client, HOJE, ignorando=invoice) is cobranca.PADRAO
+    assert cobranca.regua_para(activity.account, HOJE, ignorando=invoice) is cobranca.PADRAO
     degrau = cobranca.degrau_devido(invoice, HOJE)
     assert degrau is not None and degrau.key == "firme"
 
@@ -119,7 +119,7 @@ def test_so_o_registro_humano_move_a_escada(admin_api: APIClient, insatisfeito: 
     resposta = admin_api.post(
         "/api/v1/satisfacoes/",
         {
-            "client": activity.client_id,
+            "account": activity.account_id,
             "source_activity": activity.pk,
             "nivel": Satisfacao.Nivel.INSATISFEITO,
             "fonte": Satisfacao.Fonte.DECLARADA,
@@ -134,19 +134,19 @@ def test_so_o_registro_humano_move_a_escada(admin_api: APIClient, insatisfeito: 
     # Quem afirma tem nome, e o nome é o da sessão — não o do modelo.
     assert registro.registered_by is not None
     assert registro.source_activity_id == activity.pk
-    assert cobranca.regua_para(activity.client, HOJE, ignorando=invoice) is cobranca.RELACAO_TENSA
+    assert cobranca.regua_para(activity.account, HOJE, ignorando=invoice) is cobranca.RELACAO_TENSA
 
 
 def test_o_atalho_nao_atravessa_o_cliente(admin_api: APIClient) -> None:
     """A fronteira do `source_activity`: o id vem do corpo da requisição, e a resposta de **outro**
     cliente viraria a satisfação declarada deste — a linha que troca a escada e tira 20 pontos."""
     alheia = ActivityFactory(cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO)
-    client = ClientFactory()
+    account = AccountFactory()
 
     resposta = admin_api.post(
         "/api/v1/satisfacoes/",
         {
-            "client": client.pk,
+            "account": account.pk,
             "source_activity": alheia.pk,
             "nivel": Satisfacao.Nivel.INSATISFEITO,
             "fonte": Satisfacao.Fonte.DECLARADA,

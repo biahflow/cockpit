@@ -29,7 +29,7 @@ from decimal import Decimal
 import pytest
 
 from apps.core import portal
-from apps.core.models import Evidencia, Processo, ProcessoEtapa
+from apps.core.models import Evidencia, Process, ProcessStep
 from apps.core.tests.factories import ProjectFactory
 
 pytestmark = pytest.mark.django_db
@@ -60,8 +60,8 @@ PROIBIDOS_NA_FONTE = (*PROIBIDOS, "processo", "etapas", "rotulo")
 def projeto_com_discovery():  # type: ignore[no-untyped-def]
     """Cenário em que os três registros existem, e o mais constrangedor possível se vazasse."""
     project = ProjectFactory()
-    processo = Processo.objects.create(
-        client=project.client,
+    processo = Process.objects.create(
+        account=project.client,
         source_project=project,
         name="Faturamento manual",
         volume_mes=400,
@@ -70,16 +70,16 @@ def projeto_com_discovery():  # type: ignore[no-untyped-def]
         custo_hora=Decimal("70.00"),
         retrabalho_mes=Decimal("9000.00"),
     )
-    etapa = ProcessoEtapa.objects.create(
-        processo=processo,
+    etapa = ProcessStep.objects.create(
+        process=processo,
         name="Conferência manual de pedidos",
         pessoas="Duas analistas do financeiro",
         erro="Pedido faturado com preço desatualizado",
         retrabalho="Nota cancelada e reemitida no dia seguinte",
     )
     Evidencia.objects.create(
-        processo=processo,
-        etapa=etapa,
+        process=processo,
+        step=etapa,
         forma=Evidencia.Forma.ENTREVISTA,
         rotulo=Evidencia.Rotulo.HIPOTESE,
         content="Suspeita nossa: o time do cliente não confere o preço antes de faturar.",

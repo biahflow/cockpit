@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AcceptInvitationView,
+    AccountViewSet,
     ActivityViewSet,
     AgentView,
     AiFeedbackView,
@@ -14,9 +15,9 @@ from .views import (
     BookingSlotsView,
     CalendarSyncView,
     CaseViewSet,
-    ClientViewSet,
     CobrancaSuspensaoViewSet,
     CobrancaViewSet,
+    CommercialOpportunityViewSet,
     ConfigView,
     ContactViewSet,
     DashboardView,
@@ -50,7 +51,6 @@ from .views import (
     MeView,
     MilestoneViewSet,
     NotificationViewSet,
-    OpportunityViewSet,
     PaymentsWebhookView,
     PendenciaViewSet,
     PhaseChecklistItemViewSet,
@@ -58,8 +58,8 @@ from .views import (
     PipelineStageViewSet,
     PortalProjectSnapshotView,
     ProcessObservationViewSet,
-    ProcessoEtapaViewSet,
-    ProcessoViewSet,
+    ProcessStepViewSet,
+    ProcessViewSet,
     ProjectChecklistItemViewSet,
     ProjectDeliverableViewSet,
     ProjectMemberViewSet,
@@ -80,11 +80,18 @@ from .views import (
 )
 
 router = DefaultRouter()
-router.register("clients", ClientViewSet)
+# A rota e o `basename` **não** mudam com o renome da classe (ADR 0052): a rota canônica
+# `/accounts/` nasce na `/api/v2/`. O `basename` passa a ser explícito porque o derivado do
+# queryset viraria `account` e quebraria todo `reverse("client-…")` do repositório.
+router.register("clients", AccountViewSet, basename="client")
 router.register("contacts", ContactViewSet)
 router.register("activities", ActivityViewSet)
 router.register("pipeline-stages", PipelineStageViewSet)
-router.register("opportunities", OpportunityViewSet)
+# A rota e o `basename` **não** mudam com o renome da classe (ADR 0052): a rota canônica
+# `/commercial-opportunities/` nasce na `/api/v2/`. O `basename` passa a ser explícito porque
+# o derivado do queryset viraria `commercialopportunity` e quebraria todo
+# `reverse("opportunity-…")` do repositório.
+router.register("opportunities", CommercialOpportunityViewSet, basename="opportunity")
 # Entre a conta e o projeto (ADR 0050): o mandato que agrupa várias vendas e vários projetos.
 router.register("engagements", EngagementViewSet)
 router.register("projects", ProjectViewSet)
@@ -110,8 +117,14 @@ router.register("github-projections", GithubDeliveryProjectionViewSet)
 router.register("satisfacoes", SatisfacaoViewSet)
 # O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as três
 # rotas ficam fora de `/projects/`. Etapa e evidência pendem do processo, não do projeto.
-router.register("processos", ProcessoViewSet)
-router.register("processo-etapas", ProcessoEtapaViewSet)
+#
+# **As rotas ficam, e os `basename` viraram explícitos.** A fatia 4 da issue #67 renomeou as
+# classes para `Process`/`ProcessStep` (ADR 0052); o `basename` derivado do queryset passaria a
+# ser `process`/`processstep` e quebraria todo `reverse("processo-…")`. `/processes/` e
+# `/process-steps/` nascem na `/api/v2/`, que é o prazo que a `docs/ontology/aliases.md` sempre
+# deu à rota.
+router.register("processos", ProcessViewSet, basename="processo")
+router.register("processo-etapas", ProcessStepViewSet, basename="processoetapa")
 router.register("evidencias", EvidenciaViewSet)
 # O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). As duas âncoras convivem e a rota
 # mostra isso: `discoveries` e o que pende dele são de **projeto**; `evidence` e `findings` são da

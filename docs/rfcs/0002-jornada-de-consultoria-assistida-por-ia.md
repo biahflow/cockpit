@@ -33,8 +33,8 @@ Atualizado em 05/08/2026. Salvo onde marcado, todas as etapas já têm primitivo
   reunião de origem. O contrato acompanha a decisão do signatário pelo webhook, e a conversão
   **entre etapas** passa a ser medida em `funnel.by_stage`.
 - **Nível de produto → `Service.tier` (FDD 015).** Discovery Express (grátis), Discovery +
-  Assessment e Implantação estruturam o catálogo: a `Opportunity` carrega o nível vendido, o
-  projeto o herda na conversão, e ele define o cronograma de kickoff e o escopo/preço da proposta.
+  Assessment e Implantação estruturam o catálogo: a `CommercialOpportunity` carrega o nível
+  vendido, o projeto o herda na conversão, e ele define o cronograma de kickoff e o escopo/preço da proposta.
 - Kickoff → `convert-to-project` com marcos/tarefas de template por nível, pasta no Drive e
   e-mail + notificação ao dono (`kickoff.py`, FDD 008).
 - Implantação/Testes → portal do cliente + tarefas/pendências. Go-live/Hypercare → notificações

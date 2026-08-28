@@ -265,7 +265,7 @@ export function CobrancaPage() {
           // Um **ou** o outro, nunca os dois — a regra é do `clean()` do modelo, e mandar os dois
           // seria pedir 400 para dizer o que a tela já sabia.
           ...(suspensao.alcance === "cliente"
-            ? { client: suspendendo.client }
+            ? { account: suspendendo.client }
             : { invoice: suspendendo.invoice }),
           owner: Number(suspensao.owner),
           until: suspensao.until,
@@ -294,7 +294,7 @@ export function CobrancaPage() {
       await api("/satisfacoes/", {
         method: "POST",
         body: JSON.stringify({
-          client: registrando.client,
+          account: registrando.client,
           source_activity: registrando.sinal_activity,
           nivel: registro.nivel,
           fonte: "declarada",

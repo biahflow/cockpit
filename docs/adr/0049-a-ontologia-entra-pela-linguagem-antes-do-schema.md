@@ -179,3 +179,36 @@ edição.
 - **Duas guardas, uma por stack.** Cada uma na linguagem que ela varre, com a regra escrita duas
   vezes. Regra duplicada diverge, e a divergência entre elas não deixaria nada vermelho — que é
   exatamente o modo de falha que a ADR 0026 descreve para as primitivas de UI.
+
+## Emenda (issue #67, fatia 2 — 28/08/2026) — `Client` virou `Account`
+
+O exemplo desta ADR usa `client = models.ForeignKey(Client, …)` para descrever a dívida que a
+guarda tolera. Essa dívida foi paga: a fatia 2 da #67 renomeou a classe para `Account`, os dez
+campos que apontavam para ela para `account` e o `status` da conta para `lifecycle_status`
+(ADR 0052). O bloco `client-como-organizacao` da allowlist caiu de nove linhas para três —
+`Project.client` (a projeção da ADR 0050, que a Fase 6 remove), `client_consent` e a rota — e o
+`TETO_DA_ALLOWLIST` desceu de 43 para 37.
+
+O que a guarda continua deixando passar não muda de forma: um campo chamado `account` é o nome
+canônico, e agora ele aponta para a classe de nome certo. A regra segue casando `client`, nunca
+`account`, e o contexto HTTP/SDK (`GitHubIssuesClient`, `api_client`) segue isento.
+
+## Emenda (issue #67, fatia 4 — 28/08/2026) — `Processo`/`ProcessoEtapa` viraram `Process`/`ProcessStep`, e a #67 fechou
+
+A alternativa "renomear tudo agora, numa PR só" citava seis nomes; a ADR 0052 os separou em quatro
+fatias, e esta é a última. `Processo` virou `Process`, `ProcessoEtapa` virou `ProcessStep`, e os
+três campos que apontavam para os dois (`ProcessStep.processo`, `Evidencia.processo`,
+`Evidencia.etapa`) viraram `process` e `step`. O bloco `modelo-em-portugues` da allowlist caiu de
+dezenove linhas para treze, o `legado-congelado` de três para uma, e o `TETO_DA_ALLOWLIST` desceu
+de 37 para 29.
+
+A regra `legado-congelado` **mantém** `Processo` e `ProcessoEtapa` no regex, como já manteve
+`GateOutcome`: ela é lista fechada contra batismo novo, e nome pago segue banido. O caso sintético
+de `ProcessObservation` continua fixado nos dois sentidos — a sequência `Processo` que a emenda de
+`Process` + `Observation` produz é justamente o nome canônico da tabela mestra §2, e é o pior modo
+de falha que esta guarda tem.
+
+Dos seis nomes originais sobra **um**, e ele nunca foi fatia da #67: `Evidencia`, que a Fase 3
+dividiu e a Fase 6 remove junto com o dual-write. O que mais fica para a Fase 6 não é nome de
+classe — são as quatro **tabelas** (`core_client`, `core_opportunity`, `core_processo`,
+`core_processoetapa`), fixadas em `Meta.db_table` justamente para que nenhuma pk se movesse aqui.

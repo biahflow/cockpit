@@ -1,6 +1,6 @@
 """O custo do estado atual de um processo mapeado (FDD 039).
 
-A fórmula é do material, literal (`docs/metodologia-fde.md:87-88`):
+A fórmula é do material, literal (`docs/metodologia-fde.md:118-119`):
 `Volume × Tempo × Pessoas × Custo + Retrabalho + Erros + Perdas + Espera + Risco`.
 
 Função pura e explicável, no molde de `health.assess_project_health`: devolve **as parcelas**
@@ -23,7 +23,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import Processo
+    from .models import Process
 
 #: O rótulo do núcleo multiplicativo — as quatro perguntas que, juntas, dizem quanto custa
 #: simplesmente executar o processo como ele é hoje.
@@ -62,7 +62,7 @@ def _centavos(valor: Decimal) -> Decimal:
     return valor.quantize(CENTAVOS, rounding=ROUND_HALF_UP)
 
 
-def custo_do_estado_atual(processo: Processo) -> dict[str, Any]:
+def custo_do_estado_atual(processo: Process) -> dict[str, Any]:
     """Quanto o processo custa por mês como ele é hoje — com a conta à vista.
 
     Devolve `parcelas` (o que foi possível apurar, com rótulo e valor), `total` (a soma delas),
@@ -74,7 +74,7 @@ def custo_do_estado_atual(processo: Processo) -> dict[str, Any]:
     "custo zero" seria a casa afirmando ao cliente o oposto do que ela sabe.
 
     `sustentacao` responde à outra metade da metodologia: o número vale mais ou menos conforme
-    exista evidência rotulada como **fato** por trás dele (`docs/metodologia-fde.md:86`). É
+    exista evidência rotulada como **fato** por trás dele (`docs/metodologia-fde.md:117`). É
     `"sustentado"` quando há pelo menos uma evidência viva com `rotulo=fato` no processo, e
     `"hipotese"` caso contrário — inclusive quando o único fato registrado foi arquivado, porque
     registro desfeito não sustenta número.

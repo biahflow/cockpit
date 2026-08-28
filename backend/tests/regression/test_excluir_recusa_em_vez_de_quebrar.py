@@ -2,7 +2,7 @@
 
 A FDD 025 deu botão e confirmação aos **dois** recursos que realmente excluem — etapa do pipeline
 e fase da jornada — e não lhes deu caminho de recusa. Os dois batem em FK `PROTECT`
-(`Opportunity.stage`, `ProjectPhase.phase`), e o `ProtectedError` não era tratado em lugar nenhum:
+(`CommercialOpportunity.stage`, `ProjectPhase.phase`), e o `ProtectedError` não era tratado em lugar nenhum:
 saía **500**, que o SPA mostra como "Não foi possível concluir a operação." e ainda reporta ao
 Sentry (`api.ts`), transformando uso legítimo da interface em incidente.
 
@@ -24,8 +24,8 @@ from rest_framework.test import APIClient
 from apps.core.exceptions import api_exception_handler
 from apps.core.models import JourneyPhase, PipelineStage, ProjectPhase, User, Vertical
 from apps.core.tests.factories import (
-    ClientFactory,
-    OpportunityFactory,
+    AccountFactory,
+    CommercialOpportunityFactory,
     PipelineStageFactory,
     ProjectFactory,
     UserFactory,
@@ -118,7 +118,7 @@ def test_fase_que_ninguem_materializou_ainda_e_excluida(admin_client: APIClient)
 @pytest.mark.django_db
 def test_etapa_com_oportunidade_recusa_com_409(admin_client: APIClient) -> None:
     etapa = PipelineStageFactory()
-    OpportunityFactory(stage=etapa)
+    CommercialOpportunityFactory(stage=etapa)
 
     resposta = admin_client.delete(reverse("pipelinestage-detail", args=[etapa.pk]))
 
@@ -136,7 +136,7 @@ def test_etapa_com_oportunidade_so_arquivada_diz_que_ela_existe(admin_client: AP
     que a interface esconde.
     """
     etapa = PipelineStageFactory()
-    oportunidade = OpportunityFactory(stage=etapa)
+    oportunidade = CommercialOpportunityFactory(stage=etapa)
     oportunidade.archive()
 
     resposta = admin_client.delete(reverse("pipelinestage-detail", args=[etapa.pk]))
@@ -159,13 +159,13 @@ def test_vertical_em_uso_nao_apaga_calada_o_setor_dos_clientes(admin_client: API
     """A rede global **não** cobre este caso, e é por isso que ele está aqui (FDD 026).
 
     Todo dependente deste arquivo até agora era `PROTECT`: o banco recusava e o único defeito era o
-    status. `Client.vertical` é `SET_NULL` — o banco aceita de bom grado e zera o setor de **todos**
+    status. `Account.vertical` é `SET_NULL` — o banco aceita de bom grado e zera o setor de **todos**
     os clientes que a tinham, com 204 na tela e nada dizendo o que se perdeu. Aqui a guarda
     explícita do viewset não é a mensagem boa sobre uma recusa que existiria de qualquer jeito: ela
     é a recusa.
     """
     vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
-    cliente = ClientFactory(vertical=vertical)
+    cliente = AccountFactory(vertical=vertical)
 
     resposta = admin_client.delete(reverse("vertical-detail", args=[vertical.pk]))
 

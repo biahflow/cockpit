@@ -41,7 +41,7 @@ celular e com a base grande — e como eu descubro isso antes do cliente?**
   têm falso positivo.
 - **As fixtures têm volume e nomes longos.** Lista vazia nunca estoura na horizontal. Uma matriz de
   responsividade alimentada com "Cliente 1" e tabelas vazias passaria inteira sem provar nada, e o
-  estado vazio de `ProjectsPage`/`ClientsPage` é justamente o caminho mais fácil de acertar. As
+  estado vazio de `ProjectsPage`/`AccountsPage` é justamente o caminho mais fácil de acertar. As
   fixtures trazem 8 linhas por lista e razões sociais de ~60 caracteres.
 - **O axe roda no browser, não em jsdom.** As duas falhas que mais doíam aqui — contraste e foco —
   dependem de layout e de CSS aplicado, e jsdom não calcula nem um nem outro. Um `jest-axe` no

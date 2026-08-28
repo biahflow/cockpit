@@ -44,9 +44,9 @@ from . import satisfacao as satisfacao_module
 
 if TYPE_CHECKING:
     from .models import (
+        Account,
         Activity,
         AiInteraction,
-        Client,
         CobrancaContato,
         CobrancaSuspensao,
         Contact,
@@ -321,7 +321,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         return PainelContexto(hoje=hoje)
 
     ids = [invoice.pk for invoice in invoices]
-    clientes = {invoice.client_id for invoice in invoices}
+    clientes = {invoice.account_id for invoice in invoices}
 
     por_fatura: dict[int, CobrancaSuspensao] = {}
     por_cliente: dict[int, CobrancaSuspensao] = {}
@@ -329,13 +329,13 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     # distante — o mesmo que `.first()` escolheria na consulta fatura a fatura.
     for suspensao in (
         CobrancaSuspensao.objects.filter(lifted_at__isnull=True, until__gte=hoje)
-        .filter(Q(invoice_id__in=ids) | Q(client_id__in=clientes))
+        .filter(Q(invoice_id__in=ids) | Q(account_id__in=clientes))
         .select_related("owner")
     ):
         if suspensao.invoice_id is not None:
             por_fatura.setdefault(suspensao.invoice_id, suspensao)
-        elif suspensao.client_id is not None:
-            por_cliente.setdefault(suspensao.client_id, suspensao)
+        elif suspensao.account_id is not None:
+            por_cliente.setdefault(suspensao.account_id, suspensao)
 
     gastos: dict[int, set[str]] = defaultdict(set)
     for invoice_id, degrau in CobrancaContato.objects.filter(invoice_id__in=ids).values_list(
@@ -346,25 +346,25 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     corte = hoje - timedelta(days=settings.DUNNING_MIN_DAYS_BETWEEN_CONTACTS)
     no_teto = set(
         CobrancaContato.objects.filter(
-            client_id__in=clientes, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
-        ).values_list("client_id", flat=True)
+            account_id__in=clientes, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
+        ).values_list("account_id", flat=True)
     )
 
     # A **mesma** expressão de `reincidente`, e não uma cópia: `_q_em_atraso` existe para isso.
     atrasos: dict[int, set[int]] = defaultdict(set)
-    for client_id, invoice_id in (
-        InvoiceModel.objects.filter(client_id__in=clientes)
+    for account_id, invoice_id in (
+        InvoiceModel.objects.filter(account_id__in=clientes)
         .filter(_q_em_atraso(hoje))
-        .values_list("client_id", "id")
+        .values_list("account_id", "id")
     ):
-        atrasos[client_id].add(invoice_id)
+        atrasos[account_id].add(invoice_id)
 
     recebido = {
-        linha["client_id"]: linha["total"]
+        linha["account_id"]: linha["total"]
         for linha in InvoiceModel.objects.filter(
-            client_id__in=clientes, status=InvoiceModel.Status.PAID
+            account_id__in=clientes, status=InvoiceModel.Status.PAID
         )
-        .values("client_id")
+        .values("account_id")
         .annotate(total=Sum("amount"))
     }
 
@@ -383,14 +383,14 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     for avaliacao in health_module.assess_projects_health(ativos):
         niveis[cliente_do_projeto[avaliacao["project_id"]]].append(avaliacao["level"])
     saude: dict[int, str] = {}
-    for client_id, lista in niveis.items():
+    for account_id, lista in niveis.items():
         # O **pior** nível, e a ordem é de `health` (a definição de "crítico" mora lá, e o limiar
         # não se redefine aqui). Cliente com um projeto em frangalhos e outro saudável não tem meia
         # saúde: a régua já reagiu ao crítico, e mostrar o saudável seria a tela contradizendo o
         # relógio.
         pior = health_module.worst_level(lista)
         if pior is not None:
-            saude[client_id] = pior
+            saude[account_id] = pior
 
     # A última resposta classificada e ainda não registrada, por cliente. O `exclude` sobre a
     # relação reversa é o que faz o atalho parar de insistir depois do registro — e ele olha só a
@@ -401,7 +401,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         source_activity__isnull=False, archived_at__isnull=True
     ).values("source_activity_id")
     for activity in (
-        Activity.objects.filter(client_id__in=clientes, archived_at__isnull=True)
+        Activity.objects.filter(account_id__in=clientes, archived_at__isnull=True)
         .exclude(cobranca_sinal="")
         # Subconsulta explícita, e **não** `.exclude(satisfacoes__archived_at__isnull=True)`: o
         # `exclude` sobre relação reversa monta um LEFT JOIN, e para a atividade sem nenhuma
@@ -412,7 +412,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         # não pode depender de uma linha de outro arquivo continuar onde está.
         .order_by("-happened_on", "-created_at")
     ):
-        sinais.setdefault(activity.client_id, activity)
+        sinais.setdefault(activity.account_id, activity)
 
     return PainelContexto(
         hoje=hoje,
@@ -449,8 +449,8 @@ def _hoje(hoje: date | None) -> date:
     return hoje or timezone.localdate()
 
 
-def tempo_de_casa_dias(client: Client, hoje: date | None = None) -> int:
-    return (_hoje(hoje) - timezone.localtime(client.created_at).date()).days
+def tempo_de_casa_dias(account: Account, hoje: date | None = None) -> int:
+    return (_hoje(hoje) - timezone.localtime(account.created_at).date()).days
 
 
 def _q_em_atraso(dia: date) -> Q:
@@ -472,7 +472,7 @@ def _q_em_atraso(dia: date) -> Q:
 
 
 def reincidente(
-    client: Client,
+    account: Account,
     hoje: date | None = None,
     ignorando: Invoice | None = None,
     contexto: PainelContexto | None = None,
@@ -494,16 +494,16 @@ def reincidente(
         # O mesmo conjunto que a consulta abaixo produziria, já carregado em lote. A exclusão da
         # própria fatura é feita aqui, e não na pré-carga, porque o conjunto é **por cliente** e
         # cada fatura dele exclui uma diferente.
-        atrasadas: set[int] = contexto.atrasos_por_cliente.get(client.pk, set())
+        atrasadas: set[int] = contexto.atrasos_por_cliente.get(account.pk, set())
         return bool(atrasadas - {ignorando.pk}) if ignorando is not None else bool(atrasadas)
-    consulta = Invoice.objects.filter(client=client)
+    consulta = Invoice.objects.filter(account=account)
     if ignorando is not None and ignorando.pk:
         consulta = consulta.exclude(pk=ignorando.pk)
     return consulta.filter(_q_em_atraso(dia)).exists()
 
 
 def satisfacao_vigente(
-    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+    account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
 ) -> Satisfacao | None:
     """O registro de satisfação que ainda vale hoje para este cliente, de **qualquer** fonte.
 
@@ -513,16 +513,16 @@ def satisfacao_vigente(
     """
     dia = _hoje(hoje)
     if contexto is not None:
-        registros = contexto.satisfacoes_por_cliente.get(client.pk, [])
+        registros = contexto.satisfacoes_por_cliente.get(account.pk, [])
     else:
-        registros = satisfacao_module.registros_vigentes_por_cliente([client.pk], dia).get(
-            client.pk, []
+        registros = satisfacao_module.registros_vigentes_por_cliente([account.pk], dia).get(
+            account.pk, []
         )
     return satisfacao_module.vigente(registros, dia)
 
 
 def insatisfacao_declarada(
-    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+    account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
 ) -> Satisfacao | None:
     """A insatisfação que troca a escada: **declarada** pelo cliente e ainda vigente.
 
@@ -539,10 +539,10 @@ def insatisfacao_declarada(
 
     dia = _hoje(hoje)
     if contexto is not None:
-        registros = contexto.satisfacoes_por_cliente.get(client.pk, [])
+        registros = contexto.satisfacoes_por_cliente.get(account.pk, [])
     else:
-        registros = satisfacao_module.registros_vigentes_por_cliente([client.pk], dia).get(
-            client.pk, []
+        registros = satisfacao_module.registros_vigentes_por_cliente([account.pk], dia).get(
+            account.pk, []
         )
     registro = satisfacao_module.vigente(registros, dia, fonte=Satisfacao.Fonte.DECLARADA)
     if registro is None or registro.nivel != Satisfacao.Nivel.INSATISFEITO:
@@ -551,7 +551,7 @@ def insatisfacao_declarada(
 
 
 def entrega_critica(
-    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+    account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
 ) -> bool:
     """A outra metade da camada 5: **a nossa entrega** está em estado crítico para este cliente?
 
@@ -576,9 +576,9 @@ def entrega_critica(
     if contexto is not None:
         # A **mesma** leitura que a linha do painel mostra, e não uma segunda consulta: é isto que
         # impede a tela de dizer "saudável" com a régua já tensa por entrega.
-        return contexto.health_por_cliente.get(client.pk) == health_module.CRITICAL
+        return contexto.health_por_cliente.get(account.pk) == health_module.CRITICAL
     ativos = list(
-        Project.objects.filter(client=client, archived_at__isnull=True).exclude(
+        Project.objects.filter(client=account, archived_at__isnull=True).exclude(
             status=Project.Status.COMPLETED
         )
     )
@@ -589,7 +589,7 @@ def entrega_critica(
 
 
 def causa_da_tensao(
-    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+    account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
 ) -> str | None:
     """Por que a relação está tensa — `satisfacao`, `entrega`, `ambas`, ou nada.
 
@@ -599,8 +599,8 @@ def causa_da_tensao(
     causas sugerem são diferentes, e uma é consertável por quem entrega.
     """
     dia = _hoje(hoje)
-    por_satisfacao = insatisfacao_declarada(client, dia, contexto=contexto) is not None
-    por_entrega = entrega_critica(client, dia, contexto=contexto)
+    por_satisfacao = insatisfacao_declarada(account, dia, contexto=contexto) is not None
+    por_entrega = entrega_critica(account, dia, contexto=contexto)
     if por_satisfacao and por_entrega:
         return TENSAO_AMBAS
     if por_satisfacao:
@@ -611,7 +611,7 @@ def causa_da_tensao(
 
 
 def regua_para(
-    client: Client,
+    account: Account,
     hoje: date | None = None,
     ignorando: Invoice | None = None,
     contexto: PainelContexto | None = None,
@@ -633,12 +633,12 @@ def regua_para(
     tela, e quem responde é `causa_da_tensao`.
     """
     dia = _hoje(hoje)
-    if insatisfacao_declarada(client, dia, contexto=contexto) is not None or entrega_critica(
-        client, dia, contexto=contexto
+    if insatisfacao_declarada(account, dia, contexto=contexto) is not None or entrega_critica(
+        account, dia, contexto=contexto
     ):
         return RELACAO_TENSA
-    if tempo_de_casa_dias(client, dia) >= RELACAO_LONGA_DIAS and not reincidente(
-        client, dia, ignorando=ignorando, contexto=contexto
+    if tempo_de_casa_dias(account, dia) >= RELACAO_LONGA_DIAS and not reincidente(
+        account, dia, ignorando=ignorando, contexto=contexto
     ):
         return RELACAO_LONGA
     return PADRAO
@@ -663,20 +663,20 @@ def suspensao_ativa(
             suspensao
             for suspensao in (
                 contexto.suspensao_por_fatura.get(invoice.pk),
-                contexto.suspensao_por_cliente.get(invoice.client_id),
+                contexto.suspensao_por_cliente.get(invoice.account_id),
             )
             if suspensao is not None
         ]
         return max(candidatas, key=lambda s: (s.until, s.pk)) if candidatas else None
     return (
         CobrancaSuspensao.objects.filter(lifted_at__isnull=True, until__gte=dia)
-        .filter(Q(invoice=invoice) | Q(client_id=invoice.client_id))
+        .filter(Q(invoice=invoice) | Q(account_id=invoice.account_id))
         .first()
     )
 
 
 def pode_contatar(
-    client: Client, hoje: date | None = None, contexto: PainelContexto | None = None
+    account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
 ) -> bool:
     """O teto duro de frequência: um contato ao cliente a cada N dias, somando todas as faturas.
 
@@ -688,20 +688,20 @@ def pode_contatar(
 
     dia = _hoje(hoje)
     if contexto is not None:
-        return client.pk not in contexto.clientes_no_teto
+        return account.pk not in contexto.clientes_no_teto
     corte = dia - timedelta(days=settings.DUNNING_MIN_DAYS_BETWEEN_CONTACTS)
     return not CobrancaContato.objects.filter(
-        client=client, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
+        account=account, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
     ).exists()
 
 
-def destinatarios(client: Client) -> list[Contact]:
+def destinatarios(account: Account) -> list[Contact]:
     """Os contatos que recebem cobrança neste cliente. Vazio é resposta legítima, não erro."""
     from .models import Contact
 
     return list(
         Contact.objects.filter(
-            client=client, receives_billing=True, archived_at__isnull=True
+            account=account, receives_billing=True, archived_at__isnull=True
         ).exclude(email="")
     )
 
@@ -745,14 +745,14 @@ def avaliar(
     if suspensao_ativa(invoice, dia, contexto=contexto) is not None:
         return Avaliacao(None, SUSPENSA)
 
-    regua = regua_para(invoice.client, dia, ignorando=invoice, contexto=contexto)
+    regua = regua_para(invoice.account, dia, ignorando=invoice, contexto=contexto)
     dias = dias_de_atraso(invoice, dia)
     degrau = next((d for d in regua if d.cabe_em(dias)), None)
     if degrau is None:
         return Avaliacao(None, SEM_DEGRAU)
     if _degrau_gasto(invoice, degrau, contexto):
         return Avaliacao(None, DEGRAU_GASTO)
-    if degrau.destino == CLIENTE and not pode_contatar(invoice.client, dia, contexto=contexto):
+    if degrau.destino == CLIENTE and not pode_contatar(invoice.account, dia, contexto=contexto):
         return Avaliacao(None, TETO_DE_FREQUENCIA)
     return Avaliacao(degrau, "")
 
@@ -789,7 +789,7 @@ def texto_do_degrau(invoice: Invoice, degrau: Degrau, hoje: date | None = None) 
     dias = dias_de_atraso(invoice, hoje)
     campos = {
         "numero": invoice.number or f"#{invoice.pk}",
-        "cliente": invoice.client.name,
+        "cliente": invoice.account.name,
         "valor": moeda(invoice.amount),
         "vencimento": invoice.due_date.strftime("%d/%m/%Y"),
         "dias": max(dias, 0),
@@ -798,7 +798,7 @@ def texto_do_degrau(invoice: Invoice, degrau: Degrau, hoje: date | None = None) 
     return degrau.assunto.format(**campos), degrau.corpo.format(**campos)
 
 
-def _internos(client: Client) -> list[User]:
+def _internos(account: Account) -> list[User]:
     """Quem responde pela relação: o dono do cliente e os admins.
 
     **Não é a equipe do projeto**, e por isso a notificação sai sem `project=`: o filtro de
@@ -818,8 +818,8 @@ def _internos(client: Client) -> list[User]:
             Q(role=User.Role.ADMIN) | Q(is_superuser=True), is_active=True
         )
     }
-    if client.owner_id and client.owner.is_active:
-        pessoas.setdefault(client.owner_id, client.owner)
+    if account.owner_id and account.owner.is_active:
+        pessoas.setdefault(account.owner_id, account.owner)
     return list(pessoas.values())
 
 
@@ -846,7 +846,7 @@ def registrar(
 
     return CobrancaContato.objects.create(
         invoice=invoice,
-        client=invoice.client,
+        account=invoice.account,
         degrau=degrau.key,
         canal=canal,
         sent_on=_hoje(hoje),
@@ -880,10 +880,10 @@ def enviar_ao_cliente(
     assunto, corpo = texto_do_degrau(invoice, degrau, hoje)
     assunto, corpo = subject or assunto, body or corpo
 
-    contatos = destinatarios(invoice.client)
+    contatos = destinatarios(invoice.account)
     if not contatos:
         motivo = (
-            f"{degrau.key}: nada saiu para o cliente porque {invoice.client.name} não tem "
+            f"{degrau.key}: nada saiu para o cliente porque {invoice.account.name} não tem "
             "nenhum contato marcado como 'recebe cobrança' com e-mail preenchido."
         )
         return _escalar(invoice, degrau, hoje=hoje, subject=assunto, body=motivo, sent_by=sent_by)
@@ -921,7 +921,7 @@ def _escalar(
 
     assunto, corpo = texto_do_degrau(invoice, degrau, hoje)
     assunto, corpo = subject or assunto, body or corpo
-    internos = _internos(invoice.client)
+    internos = _internos(invoice.account)
     if not internos:
         # **Escalada sem ninguém a acordar não gasta o degrau.** Registrar aqui produziria o pior
         # dos dois mundos: a régua pararia de falar com o cliente (o degrau interno assumiu) e
@@ -930,7 +930,7 @@ def _escalar(
         # (ADR 0012), e o degrau volta a caber amanhã, quando existir a quem escalar.
         raise SemDestinatarioInterno(
             f"Nenhum admin ativo e nenhum dono ativo para escalar a cobrança de "
-            f"{invoice.client.name}."
+            f"{invoice.account.name}."
         )
     notifications.notify(internos, "cobranca", f"{assunto} — {corpo}", "/cobranca")
     return registrar(
@@ -982,7 +982,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
         # projeto **da fatura** e passou a ser o pior nível do cliente, e nenhuma outra coluna lê o
         # projeto. Um `select_related` sem leitor é um join pago por nada.
         Invoice.objects.filter(status__in=COBRAVEIS)
-        .select_related("client")
+        .select_related("account")
         .order_by("due_date", "id")
     )
     contexto = contexto_do_painel(invoices, dia)
@@ -1003,15 +1003,17 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
     for invoice in invoices:
         avaliacao = avaliar(invoice, dia, contexto=contexto)
         degrau = avaliacao.degrau
-        regua = regua_para(invoice.client, dia, ignorando=invoice, contexto=contexto)
+        regua = regua_para(invoice.account, dia, ignorando=invoice, contexto=contexto)
         suspensao = suspensao_ativa(invoice, dia, contexto=contexto)
-        satisfacao = satisfacao_vigente(invoice.client, dia, contexto=contexto)
-        sinal = contexto.sinal_por_cliente.get(invoice.client_id)
+        satisfacao = satisfacao_vigente(invoice.account, dia, contexto=contexto)
+        sinal = contexto.sinal_por_cliente.get(invoice.account_id)
         linhas.append({
             "invoice": invoice.pk,
             "number": invoice.number,
-            "client": invoice.client_id,
-            "client_name": invoice.client.name,
+            # Chaves de payload da `/api/v1/`: o campo virou `account` e a chave não
+            # (`docs/ontology/aliases.md` §2c). Elas morrem na `/api/v2/`.
+            "client": invoice.account_id,
+            "client_name": invoice.account.name,
             "amount": _dinheiro(invoice.amount),
             "due_date": invoice.due_date,
             "status": invoice.status,
@@ -1033,8 +1035,8 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             # projetos ativos do cliente, então a tela diria "saudável" com a régua já tensa. Nulo
             # quando o cliente não tem projeto ativo nenhum. Ver a cerca comercial em
             # `PainelContexto`.
-            "health_level": contexto.health_por_cliente.get(invoice.client_id),
-            "tempo_de_casa_dias": tempo_de_casa_dias(invoice.client, dia),
+            "health_level": contexto.health_por_cliente.get(invoice.account_id),
+            "tempo_de_casa_dias": tempo_de_casa_dias(invoice.account, dia),
             # A satisfação vigente, na mesma linha do próximo degrau (FDD 037) — a exigência da
             # RFC 0004 de decidir *"na mesma tela, não a dois cliques"*, agora com o sinal que
             # vinha da outra parte da relação. Vai a **fonte** junto, e não só o nível, porque a
@@ -1047,7 +1049,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             "satisfacao_dias": (dia - satisfacao.happened_on).days if satisfacao else None,
             # Por que a relação está tensa, quando está (FDD 038). Rótulo, não decisão: a escada
             # é a mesma nas três causas, e é `regua` que diz qual escada vale.
-            "tensao_causa": causa_da_tensao(invoice.client, dia, contexto=contexto),
+            "tensao_causa": causa_da_tensao(invoice.account, dia, contexto=contexto),
             # A leitura da IA que **ninguém registrou ainda** (ADR 0032). Vai rotulada como leitura
             # justamente para não se confundir com a satisfação vigente logo acima: aquela é
             # registro, esta é uma resposta lida. Some da linha quando alguém registrar.
@@ -1055,12 +1057,12 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             "sinal_display": sinal.get_cobranca_sinal_display() if sinal else None,
             "sinal_em": sinal.happened_on if sinal else None,
             "sinal_activity": sinal.pk if sinal else None,
-            "reincidente": reincidente(invoice.client, dia, ignorando=invoice, contexto=contexto),
+            "reincidente": reincidente(invoice.account, dia, ignorando=invoice, contexto=contexto),
             "regua": _nome_da_regua(regua),
             # O "valor do cliente" que a RFC pede à vista: o que a casa já recebeu dele, e não o
             # que ela estimou ganhar. Custo, margem e ROI continuam fora — aqui como no rascunho.
             "recebido_do_cliente": _dinheiro(
-                contexto.recebido_por_cliente.get(invoice.client_id, Decimal("0"))
+                contexto.recebido_por_cliente.get(invoice.account_id, Decimal("0"))
             ),
             "suspensao": (
                 {
@@ -1115,7 +1117,7 @@ def executar(hoje: date | None = None) -> dict[str, object]:
     # cliente a isso, e o job roda sobre a carteira toda. É a mesma pré-carga do painel, e a
     # equivalência entre os dois caminhos tem teste próprio — `contexto` troca a fonte do dado,
     # nunca a regra.
-    cobraveis = list(Invoice.objects.filter(status__in=COBRAVEIS).select_related("client__owner"))
+    cobraveis = list(Invoice.objects.filter(status__in=COBRAVEIS).select_related("account__owner"))
     contexto = contexto_do_painel(cobraveis, dia)
     for invoice in cobraveis:
         avaliadas += 1
@@ -1148,7 +1150,7 @@ def executar(hoje: date | None = None) -> dict[str, object]:
             # livre. Era o que a consulta fatura a fatura fazia de graça, e é o preço de pré-carregar
             # o que o próprio laço altera. As outras dimensões (suspensão, reincidência, satisfação,
             # health) não mudam por a régua ter falado.
-            contexto.clientes_no_teto.add(invoice.client_id)
+            contexto.clientes_no_teto.add(invoice.account_id)
         else:
             escaladas += 1
 

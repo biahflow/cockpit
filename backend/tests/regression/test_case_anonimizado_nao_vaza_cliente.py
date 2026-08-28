@@ -15,10 +15,10 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.core import ai, cases
-from apps.core.models import Case, Client, Opportunity, Project, Vertical
+from apps.core.models import Account, Case, CommercialOpportunity, Project, Vertical
 from apps.core.tests.factories import (
-    ClientFactory,
-    OpportunityFactory,
+    AccountFactory,
+    CommercialOpportunityFactory,
     ProjectFactory,
     UserFactory,
 )
@@ -29,9 +29,9 @@ CNPJ = "12.345.678/0001-90"
 
 
 def _case_publicado_anonimo(vertical: Vertical) -> Case:
-    client = ClientFactory(name=NOME, legal_name=RAZAO, tax_id=CNPJ, vertical=vertical)
+    account = AccountFactory(name=NOME, legal_name=RAZAO, tax_id=CNPJ, vertical=vertical)
     project = ProjectFactory(
-        client=client, name="Implantação de agentes",
+        client=account, name="Implantação de agentes",
         actual_value=Decimal("100.00"), cost=Decimal("50.00"),
     )
     project.status = Project.Status.COMPLETED
@@ -74,8 +74,8 @@ def test_a_listagem_de_cases_tambem_nao_traz_o_cliente() -> None:
 def test_a_proposta_cita_o_setor_e_nunca_o_nome() -> None:
     vertical = Vertical.objects.create(name="Imobiliárias", slug="imobiliarias")
     _case_publicado_anonimo(vertical)
-    outra: Opportunity = OpportunityFactory(
-        client=ClientFactory(name="Cliente novo", vertical=vertical)
+    outra: CommercialOpportunity = CommercialOpportunityFactory(
+        account=AccountFactory(name="Cliente novo", vertical=vertical)
     )
 
     contexto = ai.build_opportunity_context(outra)
@@ -109,6 +109,6 @@ def test_o_cliente_do_case_continua_intacto_no_cadastro() -> None:
     vertical = Vertical.objects.create(name="Imobiliárias", slug="imobiliarias")
     case = _case_publicado_anonimo(vertical)
 
-    cliente = Client.objects.get(pk=case.project.client_id)
+    cliente = Account.objects.get(pk=case.project.client_id)
 
     assert (cliente.name, cliente.legal_name, cliente.tax_id) == (NOME, RAZAO, CNPJ)

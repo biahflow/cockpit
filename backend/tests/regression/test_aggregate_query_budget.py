@@ -36,7 +36,7 @@ from apps.core.models import (
     User,
     WorkItem,
 )
-from apps.core.tests.factories import ClientFactory, ProjectFactory, UserFactory
+from apps.core.tests.factories import AccountFactory, ProjectFactory, UserFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -67,9 +67,9 @@ def seed(clients: int) -> None:
     """
     ontem = timezone.localdate() - timedelta(days=1)
     for _ in range(clients):
-        client = ClientFactory()
+        account = AccountFactory()
         for _ in range(2):
-            project = ProjectFactory(client=client, due_date=ontem)
+            project = ProjectFactory(client=account, due_date=ontem)
             dono = project.owner
             Milestone.objects.create(project=project, title="Marco", due_date=ontem, owner=dono)
             Task.objects.create(project=project, title="Tarefa", due_date=ontem, owner=dono)
@@ -103,7 +103,7 @@ def test_avaliacao_em_lote_da_o_mesmo_resultado_da_individual() -> None:
     projects = list(Project.objects.order_by("id"))
     # Um projeto sem nenhum filho: o caso em que o lote precisa devolver lista vazia, e não
     # o dado do vizinho no dicionário.
-    projects.append(ProjectFactory(client=ClientFactory()))
+    projects.append(ProjectFactory(client=AccountFactory()))
 
     assert risk.assess_projects(projects) == [risk.assess_project(p) for p in projects]
     assert health.assess_projects_health(projects) == [
@@ -162,14 +162,14 @@ def seed_cobranca(clients: int) -> None:
 
     hoje = timezone.localdate()
     for _ in range(clients):
-        client = ClientFactory()
-        project = ProjectFactory(client=client, due_date=hoje - timedelta(days=1))
+        account = AccountFactory()
+        project = ProjectFactory(client=account, due_date=hoje - timedelta(days=1))
         Milestone.objects.create(
             project=project, title="Marco", due_date=hoje - timedelta(days=1), owner=project.owner
         )
         # O segundo projeto, em estado crítico: é ele que troca a escada para `relacao_tensa` e
         # obriga o painel a escolher o pior nível entre os dois.
-        critico = ProjectFactory(client=client, due_date=hoje - timedelta(days=1))
+        critico = ProjectFactory(client=account, due_date=hoje - timedelta(days=1))
         for indice in range(4):
             Milestone.objects.create(
                 project=critico, title=f"Marco {indice}", due_date=hoje - timedelta(days=1),
@@ -186,34 +186,34 @@ def seed_cobranca(clients: int) -> None:
         )
         # A resposta classificada e ainda não registrada: o atalho da linha.
         ActivityFactory(
-            client=client, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+            account=account, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
             happened_on=hoje - timedelta(days=2),
         )
         Contact.objects.create(
-            client=client, first_name="Financeiro", email="fin@cliente.test",
+            account=account, first_name="Financeiro", email="fin@cliente.test",
             receives_billing=True,
         )
         sequencial = Invoice.objects.count()
         atrasada = InvoiceFactory(
-            client=client, project=project, status=Invoice.Status.OVERDUE,
+            account=account, project=project, status=Invoice.Status.OVERDUE,
             number=f"2026-{sequencial + 1:05d}", due_date=hoje - timedelta(days=12),
         )
         InvoiceFactory(
-            client=client, project=project, status=Invoice.Status.ISSUED,
+            account=account, project=project, status=Invoice.Status.ISSUED,
             number=f"2026-{sequencial + 2:05d}", due_date=hoje - timedelta(days=3),
         )
         InvoiceFactory(
-            client=client, status=Invoice.Status.PAID, number=f"2026-{sequencial + 3:05d}",
+            account=account, status=Invoice.Status.PAID, number=f"2026-{sequencial + 3:05d}",
             due_date=hoje - timedelta(days=200),
             paid_at=timezone.now() - timedelta(days=190),
         )
         CobrancaContato.objects.create(
-            invoice=atrasada, client=client, degrau="lembrete",
+            invoice=atrasada, account=account, degrau="lembrete",
             canal=CobrancaContato.Canal.EMAIL, sent_on=hoje - timedelta(days=30),
             subject="Fatura em aberto", body="...",
         )
         CobrancaSuspensao.objects.create(
-            invoice=atrasada, owner=client.owner, until=hoje - timedelta(days=1),
+            invoice=atrasada, owner=account.owner, until=hoje - timedelta(days=1),
             reason="Suspensão vencida, para a régua ter voltado sozinha.",
         )
 

@@ -102,11 +102,11 @@ def registros_vigentes_por_cliente(
         return {}
     por_cliente: dict[int, list[Satisfacao]] = defaultdict(list)
     for registro in (
-        Satisfacao.objects.filter(client_id__in=ids, archived_at__isnull=True)
+        Satisfacao.objects.filter(account_id__in=ids, archived_at__isnull=True)
         .filter(_q_na_janela(hoje))
-        .select_related("client")
+        .select_related("account")
     ):
-        por_cliente[registro.client_id].append(registro)
+        por_cliente[registro.account_id].append(registro)
     return dict(por_cliente)
 
 

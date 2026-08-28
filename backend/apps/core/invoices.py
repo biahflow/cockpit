@@ -59,15 +59,11 @@ class Parcela:
 # que se cobra todo mês. Enquanto `Service` não tiver recorrência, quem vende a parceria monta a
 # cobrança na tela — que é exatamente o que `schedule_for` já faz com serviço avulso.
 #
-# `discovery_assessment` é gratuito só no programa de founding client, e o programa não muda o
-# cronograma: o desconto mora no `estimated_value` da oportunidade. Projeto com valor zero gera
-# parcelas de zero, e é assim que o subsídio continua visível em vez de virar ausência de dado.
+# O **Design Partner** (ADR 0053) não muda cronograma nenhum, e é de propósito: o subsídio mora no
+# `estimated_value` da oportunidade, não aqui. Projeto com valor zero gera parcelas de zero, e é
+# assim que o valor concedido continua visível em vez de virar ausência de dado.
 INVOICE_SCHEDULES: dict[str, list[Parcela]] = {
     "qualification_call": [],
-    "discovery_assessment": [
-        Parcela("Discovery Express + Assessment — entrada", Decimal("0.5"), 0),
-        Parcela("Discovery Express + Assessment — entrega do assessment", Decimal("0.5"), 21),
-    ],
     "discovery_sprint": [
         Parcela("Discovery Sprint — entrada", Decimal("0.5"), 0),
         Parcela("Discovery Sprint — Executive Readout", Decimal("0.5"), 7),
@@ -109,8 +105,8 @@ def contracted_value(project: Project) -> Decimal:
     semear um cronograma que não soma exatamente isso faria os dois números se contradizerem no
     primeiro dia, que é a colisão de verdade que a FDD existe para não cometer por acidente.
 
-    `Opportunity.estimated_value` em seguida: não tem default e nunca é nulo, então é o palpite
-    honesto — o que o pipeline dizia que o negócio valia. `Service.list_price` por último, e na
+    `CommercialOpportunity.estimated_value` em seguida: não tem default e nunca é nulo, então
+    é o palpite honesto — o que o pipeline dizia que o negócio valia. `Service.list_price` por último, e na
     prática quase sempre zero: a migração `0020` semeia os níveis pagos com preço a definir.
     """
     if project.actual_value and project.actual_value > 0:
@@ -158,7 +154,7 @@ def seed_invoices(project: Project) -> int:
         return 0
     for parcela, valor in zip(parcelas, _split(base, parcelas), strict=True):
         Invoice.objects.create(
-            client=project.client,
+            account=project.client,
             project=project,
             service=project.service,
             amount=valor,

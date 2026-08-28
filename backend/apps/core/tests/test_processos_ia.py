@@ -22,13 +22,13 @@ from apps.core.models import (
     Evidencia,
     Finding,
     Meeting,
-    Processo,
-    ProcessoEtapa,
+    Process,
+    ProcessStep,
     User,
 )
 from apps.core.views import processos_do_texto
 
-from .factories import ProcessoFactory, ProjectFactory, ProjectMemberFactory, UserFactory
+from .factories import ProcessFactory, ProjectFactory, ProjectMemberFactory, UserFactory
 
 MAPA = [
     {
@@ -131,7 +131,7 @@ def test_sem_array_nenhum_nao_houve_extracao() -> None:
 
 
 def test_o_modelo_nao_estoura_o_tamanho_das_colunas() -> None:
-    """`Processo.name` e `ProcessoEtapa.name` são `CharField(255)`, e o modelo não sabe disso."""
+    """`Process.name` e `ProcessStep.name` são `CharField(255)`, e o modelo não sabe disso."""
     texto = json.dumps([{"name": "p" * 4000, "etapas": [{"name": "e" * 4000}]}])
 
     (processo,) = processos_do_texto(texto)
@@ -205,20 +205,20 @@ def test_a_extracao_grava_processos_etapas_e_achados(
     assert [p["name"] for p in resposta.json()["processos"]] == [
         "Faturamento mensal", "Atendimento ao cliente"
     ]
-    assert Processo.objects.count() == 2
-    faturamento = Processo.objects.get(name="Faturamento mensal")
+    assert Process.objects.count() == 2
+    faturamento = Process.objects.get(name="Faturamento mensal")
     # Procedência: de que cliente é o mapa, e de onde ele veio.
-    assert faturamento.client_id == meeting.project.client_id
+    assert faturamento.account_id == meeting.project.client_id
     assert faturamento.source_meeting_id == meeting.pk
     assert faturamento.source_project_id == meeting.project_id
     assert faturamento.registered_by_id == delivery.pk
-    assert [(e.name, e.position) for e in faturamento.etapas.all()] == [
+    assert [(e.name, e.position) for e in faturamento.steps.all()] == [
         ("Conferir notas", 1), ("Emitir boletos", 2)
     ]
-    conferir = faturamento.etapas.first()
+    conferir = faturamento.steps.first()
     assert conferir is not None and conferir.tempo == "Dois dias"
     assert faturamento.evidencias.count() == 2
-    assert ProcessoEtapa.objects.count() == 2
+    assert ProcessStep.objects.count() == 2
     assert Evidencia.objects.count() == 2
 
 
@@ -230,7 +230,7 @@ def test_todo_achado_nasce_hipotese_vinda_de_entrevista(
     """O teste central da fatia — e ele manda o modelo dizer o contrário.
 
     Um modelo lendo transcrição produz *o que foi dito*: entrevista, uma das cinco formas de
-    evidência (`docs/metodologia-fde.md:81-84`), e nunca prova. Promover a fato é ato de gente.
+    evidência (`docs/metodologia-fde.md:112-115`), e nunca prova. Promover a fato é ato de gente.
     """
     meeting = _reuniao_de_discovery(delivery)
     _responde(monkeypatch, json.dumps([{
@@ -248,7 +248,7 @@ def test_todo_achado_nasce_hipotese_vinda_de_entrevista(
     assert {a.rotulo for a in achados} == {Evidencia.Rotulo.HIPOTESE}
     assert {a.forma for a in achados} == {Evidencia.Forma.ENTREVISTA}
     # E o achado fica no processo, não na etapa: vínculo errado é pior que vínculo nenhum.
-    assert all(a.etapa_id is None for a in achados)
+    assert all(a.step_id is None for a in achados)
     assert all(a.source_meeting_id == meeting.pk for a in achados)
     assert all(a.registered_by_id == delivery.pk for a in achados)
 
@@ -267,8 +267,8 @@ def test_etapa_sem_nome_nao_derruba_o_processo_ponta_a_ponta(
     resposta = api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
     assert resposta.status_code == 200, resposta.data
-    assert [p.name for p in Processo.objects.all()] == ["Faturamento"]
-    assert [e.name for e in ProcessoEtapa.objects.all()] == ["Conferir"]
+    assert [p.name for p in Process.objects.all()] == ["Faturamento"]
+    assert [e.name for e in ProcessStep.objects.all()] == ["Conferir"]
 
 
 @pytest.mark.django_db
@@ -284,7 +284,7 @@ def test_resposta_inutilizavel_nao_grava_nada_e_diz_isso(
     resposta = api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
     assert resposta.status_code == 502
-    assert Processo.objects.count() == 0
+    assert Process.objects.count() == 0
     assert Evidencia.objects.count() == 0
 
 
@@ -301,7 +301,7 @@ def test_reuniao_sem_transcricao_e_recusada_antes_de_chamar_a_ia(
     resposta = api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
     assert resposta.status_code == 400
-    assert Processo.objects.count() == 0
+    assert Process.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -309,7 +309,7 @@ def test_reuniao_sem_transcricao_e_recusada_antes_de_chamar_a_ia(
 def test_a_segunda_extracao_e_recusada_com_409(
     api: APIClient, delivery: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Divergência deliberada do `extrair_decisoes`: `Processo` não tem estado de rascunho.
+    """Divergência deliberada do `extrair_decisoes`: `Process` não tem estado de rascunho.
 
     Lá a segunda rodada dá mais rascunho para revisar; aqui ela dobraria o mapa da operação do
     cliente em silêncio, e um duplo clique bastaria.
@@ -322,7 +322,7 @@ def test_a_segunda_extracao_e_recusada_com_409(
 
     assert resposta.status_code == 409
     assert "2" in resposta.json()["detail"]  # diz **quantos**, e não só que já houve
-    assert Processo.objects.count() == 2
+    assert Process.objects.count() == 2
     assert Evidencia.objects.count() == 2
 
 
@@ -335,14 +335,14 @@ def test_arquivar_o_que_foi_extraido_reabre_a_extracao(
     meeting = _reuniao_de_discovery(delivery)
     _responde(monkeypatch, json.dumps(MAPA))
     api.post(reverse("meeting-estruturar", args=[meeting.pk]))
-    for processo in Processo.objects.all():
+    for processo in Process.objects.all():
         processo.archive()
 
     resposta = api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
     assert resposta.status_code == 200, resposta.data
-    assert Processo.objects.filter(archived_at__isnull=True).count() == 2
-    assert Processo.objects.count() == 4
+    assert Process.objects.filter(archived_at__isnull=True).count() == 2
+    assert Process.objects.count() == 4
 
 
 @pytest.mark.django_db
@@ -352,18 +352,18 @@ def test_a_extracao_entra_depois_do_que_foi_mapeado_a_mao(
 ) -> None:
     """`position` é a ordem em que a operação acontece; o que veio do modelo não se intercala."""
     meeting = _reuniao_de_discovery(delivery)
-    client = meeting.project.client
-    ProcessoFactory(client=client, name="Compras", position=1)
-    ProcessoFactory(client=client, name="Expedição", position=7)
+    account = meeting.project.client
+    ProcessFactory(account=account, name="Compras", position=1)
+    ProcessFactory(account=account, name="Expedição", position=7)
     # Arquivado não conta como ocupante da ordem — senão um mapa antigo empurraria o novo sem
     # motivo visível na tela.
-    ProcessoFactory(client=client, name="Antigo", position=90).archive()
+    ProcessFactory(account=account, name="Antigo", position=90).archive()
     _responde(monkeypatch, json.dumps(MAPA))
 
     resposta = api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
     assert resposta.status_code == 200, resposta.data
-    extraidos = Processo.objects.filter(source_meeting=meeting).order_by("position")
+    extraidos = Process.objects.filter(source_meeting=meeting).order_by("position")
     assert [(p.name, p.position) for p in extraidos] == [
         ("Faturamento mensal", 8), ("Atendimento ao cliente", 9)
     ]
@@ -389,8 +389,8 @@ def test_falha_no_meio_nao_deixa_nada_para_tras(
     with pytest.raises(RuntimeError):
         api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
-    assert Processo.objects.count() == 0
-    assert ProcessoEtapa.objects.count() == 0
+    assert Process.objects.count() == 0
+    assert ProcessStep.objects.count() == 0
     assert Evidencia.objects.count() == 0
     # A transação cobre os dois lados da gravação dupla: um `Finding` sobrevivente descreveria um
     # processo que não existe mais.
@@ -412,7 +412,7 @@ def test_quem_nao_participa_do_projeto_nao_extrai(monkeypatch: pytest.MonkeyPatc
     resposta = api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
     assert resposta.status_code == 404
-    assert Processo.objects.count() == 0
+    assert Process.objects.count() == 0
 
 
 @pytest.mark.django_db

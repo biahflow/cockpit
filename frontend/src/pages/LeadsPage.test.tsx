@@ -7,7 +7,7 @@ import { LeadsPage } from "./LeadsPage";
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock("../api", () => ({ api: mocks.api }));
 
-const lead = { id: 1, name: "Fulano", email: "f@x.com", company: "ACME", phone: "", message: "quero ajuda", source: "site", status: "new", client: null, opportunity: null, created_at: "2026-08-01" };
+const lead = { id: 1, name: "Fulano", email: "f@x.com", company: "ACME", phone: "", message: "quero ajuda", source: "site", status: "new", client: null, commercial_opportunity: null, opportunity: null, created_at: "2026-08-01" };
 
 beforeEach(() => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {

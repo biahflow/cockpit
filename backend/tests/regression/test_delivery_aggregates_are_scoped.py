@@ -13,7 +13,7 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Task, User
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -85,7 +85,7 @@ def test_client_list_only_shows_clients_i_work_for(api: APIClient, mine, theirs)
 
 def test_client_overview_aggregates_only_my_projects(api: APIClient, delivery) -> None:  # type: ignore[no-untyped-def]
     """O agregado é por cliente: estreitar a lista de clientes não bastaria."""
-    shared = ClientFactory()
+    shared = AccountFactory()
     mine = ProjectFactory(client=shared, actual_value=100, cost=40)
     ProjectMemberFactory(project=mine, user=delivery)
     ProjectFactory(client=shared, actual_value=900, cost=300)
@@ -161,17 +161,17 @@ def test_delivery_agent_context_does_not_leak_satisfaction_from_other_clients(de
 
     hoje = timezone.localdate()
     Satisfacao.objects.create(
-        client=mine.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=mine.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=hoje, note="Ficou quieto na última call.",
     )
     Satisfacao.objects.create(
-        client=theirs.client, nivel=Satisfacao.Nivel.INSATISFEITO,
+        account=theirs.client, nivel=Satisfacao.Nivel.INSATISFEITO,
         fonte=Satisfacao.Fonte.DECLARADA, happened_on=hoje,
         note="Segredo do cliente alheio.",
     )
     # Fora da janela de 90 dias: registro que já não é o estado de hoje não entra no contexto.
     Satisfacao.objects.create(
-        client=mine.client, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+        account=mine.client, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=date(2000, 1, 1), note="Elogio de outra era.",
     )
 

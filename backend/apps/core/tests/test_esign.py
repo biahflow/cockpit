@@ -12,15 +12,15 @@ from apps.core import esign
 from apps.core.models import Document, Notification, SignatureRequest
 from apps.core.portal import sign
 
-from .factories import ClientFactory, UserFactory
+from .factories import AccountFactory, UserFactory
 
 SECRET = "webhook-secret"
 
 
 def _document() -> Document:
     user = UserFactory()
-    client = ClientFactory(owner=user)
-    return Document.objects.create(client=client, original_name="contrato.pdf", uploaded_by=user)
+    account = AccountFactory(owner=user)
+    return Document.objects.create(account=account, original_name="contrato.pdf", uploaded_by=user)
 
 
 def _payload(
@@ -197,7 +197,7 @@ def test_clicksign_send_with_token_calls_the_provider(monkeypatch: pytest.Monkey
 def test_document_bytes_reads_local_storage_and_drive(monkeypatch: pytest.MonkeyPatch):
     user = UserFactory()
     document = Document.objects.create(
-        client=ClientFactory(owner=user),
+        account=AccountFactory(owner=user),
         original_name="contrato.pdf",
         uploaded_by=user,
         file=SimpleUploadedFile("contrato.pdf", b"%PDF-local", content_type="application/pdf"),

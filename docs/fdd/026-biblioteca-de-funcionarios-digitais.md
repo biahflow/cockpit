@@ -71,7 +71,7 @@ aplicação do mesmo padrão.
 - **`Vertical` é taxonomia, não enum.** Modelo próprio (`name`, `slug`, `position`,
   `active`), editável pelo admin, na forma de `PipelineStage` e `JourneyPhase` — o domínio
   não tinha **nenhum eixo de setor**, e cravar um enum no código repetiria o erro de
-  `area`. `Client` ganhou `vertical` (`SET_NULL`, opcional): campo aditivo, sem quebra do
+  `area`. `Account` ganhou `vertical` (`SET_NULL`, opcional): campo aditivo, sem quebra do
   contrato `/api/v1/`. `ProjectSerializer` expõe `client_vertical`/`client_vertical_name`
   (read-only), para o detalhe do projeto pedir o catálogo resolvido sem carregar o cliente
   inteiro por causa de um id.
@@ -132,7 +132,7 @@ aplicação do mesmo padrão.
 - **Aposentar é desativar.** Blueprint e vertical em uso não se excluem: seguem a decisão da
   FDD 025 e da FDD 011 — `active = False` como saída, e `DELETE` recusado com 409 quando
   houver dependente. Na vertical a guarda é a recusa, não só a boa mensagem sobre ela:
-  `Client.vertical` é `SET_NULL`, então o banco aceitaria de bom grado e zeraria o setor de
+  `Account.vertical` é `SET_NULL`, então o banco aceitaria de bom grado e zeraria o setor de
   todos os clientes que a tinham, com 204 na tela e nada dizendo o que se perdeu.
 
 ## Aceite

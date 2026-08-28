@@ -110,3 +110,15 @@ Registrado aqui para não se perder:
   conversa de negócio que ainda não aconteceu.
 - **Expurgo pela interface.** Rejeitada por ora: operação destrutiva atrás de um clique, sem
   ensaio, é como se apaga o que não se queria.
+
+## Emenda (Issue #67 fatia 3, 28/08/2026) — o nome do modelo comercial
+
+Onde esta ADR diz `Opportunity`, o modelo hoje se chama `CommercialOpportunity` (ADR 0052).
+A decisão não muda: `Client`, `Project` e a venda continuam **fora** do expurgo automático, pelo
+mesmo motivo registrado acima. A tabela segue sendo `core_opportunity`.
+
+## Emenda (issue #67, fatia 2 — 28/08/2026) — a organização se chama `Account`
+
+Onde esta ADR diz `Client`, o modelo hoje se chama `Account` (ADR 0052). A decisão não muda: a
+conta, o projeto e a venda continuam **fora** do expurgo automático, pelo mesmo motivo registrado
+acima. A tabela segue sendo `core_client`.

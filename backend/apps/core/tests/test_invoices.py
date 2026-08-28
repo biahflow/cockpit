@@ -11,9 +11,9 @@ from apps.core import invoices
 from apps.core.models import Invoice, PipelineStage, Service
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
+    CommercialOpportunityFactory,
     InvoiceFactory,
-    OpportunityFactory,
     ProjectFactory,
     ServiceFactory,
     UserFactory,
@@ -84,7 +84,9 @@ def test_nivel_pago_vendido_a_zero_nao_semeia():
 
 @pytest.mark.django_db
 def test_semeadura_e_idempotente():
-    servico = Service.objects.get(tier="discovery_assessment")
+    # Um degrau de duas parcelas, como o que a ADR 0053 removeu tinha: o que o teste afirma é a
+    # idempotência, e ela precisa de um cronograma com mais de uma linha para valer alguma coisa.
+    servico = Service.objects.get(tier="discovery_sprint")
     projeto = ProjectFactory(service=servico, actual_value=Decimal("8000.00"))
     assert invoices.seed_invoices(projeto) == 2
     assert invoices.seed_invoices(projeto) == 0
@@ -93,7 +95,7 @@ def test_semeadura_e_idempotente():
 
 @pytest.mark.django_db
 def test_valor_contratado_cai_para_a_oportunidade_e_depois_para_a_tabela():
-    oportunidade = OpportunityFactory(estimated_value=Decimal("7777.00"))
+    oportunidade = CommercialOpportunityFactory(estimated_value=Decimal("7777.00"))
     projeto = ProjectFactory(
         actual_value=Decimal("0"), originating_commercial_opportunity=oportunidade
     )
@@ -123,11 +125,11 @@ def test_vencimento_nao_passa_do_fim_do_projeto():
 def test_conversao_de_oportunidade_semeia_o_cronograma(admin_client_api):
     ganha = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
     servico = Service.objects.get(tier="prove")
-    oportunidade = OpportunityFactory(stage=ganha, service=servico)
+    oportunidade = CommercialOpportunityFactory(stage=ganha, service=servico)
     resposta = admin_client_api.post(
         f"/api/v1/opportunities/{oportunidade.id}/convert-to-project/",
         {
-            "client": oportunidade.client_id,
+            "client": oportunidade.account_id,
             "name": "PROVE",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=120)),
@@ -333,14 +335,14 @@ def test_estado_que_tem_acao_por_tras_nao_se_digita(admin_client_api):
 
 @pytest.mark.django_db
 def test_summary_soma_por_faixa(admin_client_api):
-    cliente = ClientFactory()
-    InvoiceFactory(client=cliente, status=Invoice.Status.ISSUED, number="2026-1001",
+    cliente = AccountFactory()
+    InvoiceFactory(account=cliente, status=Invoice.Status.ISSUED, number="2026-1001",
                    amount=Decimal("100.00"))
-    InvoiceFactory(client=cliente, status=Invoice.Status.OVERDUE, number="2026-1002",
+    InvoiceFactory(account=cliente, status=Invoice.Status.OVERDUE, number="2026-1002",
                    amount=Decimal("200.00"))
-    InvoiceFactory(client=cliente, status=Invoice.Status.PAID, number="2026-1003",
+    InvoiceFactory(account=cliente, status=Invoice.Status.PAID, number="2026-1003",
                    amount=Decimal("300.00"))
-    InvoiceFactory(client=cliente, amount=Decimal("999.00"))  # rascunho não entra em faixa nenhuma
+    InvoiceFactory(account=cliente, amount=Decimal("999.00"))  # rascunho não entra em faixa nenhuma
 
     dados = admin_client_api.get("/api/v1/invoices/summary/").data
     assert Decimal(dados["open"]) == Decimal("100.00")

@@ -17,9 +17,9 @@ export type Screen = { path: string; name: string; role: Role | null };
 export const ROUTES: readonly Screen[] = [
   { path: "/", name: "Visão geral", role: "admin" },
   { path: "/comercial", name: "Comercial", role: "admin" },
-  { path: "/clientes", name: "Clientes", role: "admin" },
-  { path: "/clientes/1", name: "Detalhe do cliente", role: "admin" },
-  { path: "/clientes/1/processos/1", name: "Processo mapeado", role: "admin" },
+  { path: "/contas", name: "Contas", role: "admin" },
+  { path: "/contas/1", name: "Detalhe da conta", role: "admin" },
+  { path: "/contas/1/processos/1", name: "Processo mapeado", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
@@ -65,7 +65,10 @@ const serie = <T,>(quantos: number, molde: (indice: number) => T): T[] =>
 
 const clientes = serie(8, index => ({
   id: index, name: `${NOME_LONGO} — unidade ${index}`, legal_name: NOME_LONGO,
-  tax_id: "12.345.678/0001-90", owner: 1, status: index % 2 ? "active" : "prospect",
+  tax_id: "12.345.678/0001-90", owner: 1,
+  // Os três estados vivos entram na amostra: a pílula "Inativo" também precisa passar pelo axe.
+  lifecycle_status: index % 3 === 0 ? "inactive" : index % 2 ? "active" : "prospect",
+  status: index % 3 === 0 ? "inactive" : index % 2 ? "active" : "prospect",
 }));
 
 const projetos = serie(8, index => ({
@@ -87,8 +90,8 @@ const oportunidades = serie(8, index => ({
   title: `Discovery e assessment de automação — ${NOME_LONGO}`,
   scope: "Mapeamento de processos e desenho de agentes.", estimated_value: "150000.00",
   stage: (index % 3) + 1, stage_name: etapas[(index % 3)].name, owner: 1,
-  expected_close_date: HOJE, service: 1, service_name: "Discovery + Assessment",
-  service_tier: "discovery_assessment",
+  expected_close_date: HOJE, service: 1, service_name: "Discovery Sprint",
+  service_tier: "discovery_sprint",
 }));
 
 const itensDeTrabalho = serie(8, index => ({
@@ -128,7 +131,7 @@ const processos = serie(3, index => ({
 }));
 
 const processoEtapas = serie(3, index => ({
-  id: index, processo: 1, position: index,
+  id: index, process: 1, processo: 1, position: index,
   name: `Etapa ${index} — conferência manual da nota fiscal no ERP`,
   pessoas: "Analista de faturamento, duas pessoas em revezamento",
   sistema: "ERP Protheus e uma planilha de conferência no Drive",
@@ -151,7 +154,7 @@ const evidencias = [
   { rotulo: "desconhecido", rotulo_display: "Desconhecido", forma: "observacao", forma_display: "Observação (o que fazem)",
     content: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
 ].map((registro, indice) => ({
-  id: indice + 1, processo: 1, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
+  id: indice + 1, process: 1, processo: 1, step: null, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
 }));
 
 const saude = serie(8, index => ({
@@ -194,7 +197,8 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/clients/1/": clientes[0],
   "/api/v1/clients/overview/": {
     clients: clientes.map(cliente => ({
-      client_id: cliente.id, name: cliente.name, status: cliente.status,
+      client_id: cliente.id, name: cliente.name,
+      lifecycle_status: cliente.lifecycle_status, status: cliente.status,
       roi: { revenue: 180000, cost: 90000, roi: 1 },
       health: { score: 42, level: "crítico", project_id: cliente.id },
       risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
@@ -204,7 +208,7 @@ const FIXTURES: Record<string, unknown> = {
     })),
   },
   "/api/v1/clients/1/overview/": {
-    client_id: 1, name: clientes[0].name, status: "active",
+    client_id: 1, name: clientes[0].name, lifecycle_status: "active", status: "active",
     roi: { revenue: 180000, cost: 90000, roi: 1 },
     health: { score: 42, level: "crítico", project_id: 1 },
     risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
@@ -224,7 +228,7 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/recommendations/": {
     items: serie(5, index => ({
       kind: "followup", label: `Retomar contato com ${NOME_LONGO}`,
-      detail: "Sem interação registrada há 21 dias.", url: `/clientes/${index}`,
+      detail: "Sem interação registrada há 21 dias.", url: `/contas/${index}`,
     })),
   },
   "/api/v1/services/": serie(4, index => ({
@@ -241,11 +245,13 @@ const FIXTURES: Record<string, unknown> = {
     source: "site", status: "new", ai_fit: "high", ai_score: 82,
     ai_summary: "Dor clara em processo manual, porte compatível.",
     ai_recommended_action: "Agendar discovery express.",
-    qualified_at: null, client: null, opportunity: null, qualification: null,
+    qualified_at: null, client: null, commercial_opportunity: null, opportunity: null,
+    qualification: null,
     qualification_outcome: "", created_at: `${HOJE}T09:00:00Z`,
   })),
   "/api/v1/documents/": serie(6, index => ({
-    id: index, client: index, opportunity: null, project: null, file: "/media/x.pdf",
+    id: index, client: index, commercial_opportunity: null, opportunity: null, project: null,
+    file: "/media/x.pdf",
     drive_link: "", original_name: `Contrato de prestação de serviços — ${NOME_LONGO}.pdf`,
     uploaded_by: 1, created_at: `${HOJE}T09:00:00Z`,
     signature_requests: index === 1
@@ -378,7 +384,7 @@ const FIXTURES: Record<string, unknown> = {
   // A interação com sinal de cobrança lavrado (FDD 036, camada 4): sem ela a linha do sinal na
   // timeline do cliente nunca renderiza, e a matriz aprovaria uma superfície que não abriu.
   "/api/v1/activities/": serie(3, index => ({
-    id: index, client: 1, opportunity: null,
+    id: index, client: 1, commercial_opportunity: null, opportunity: null,
     invoice: index === 1 ? 1 : null,
     cobranca_sinal: index === 1 ? "nao_pode" : "",
     cobranca_sinal_display: index === 1 ? "Não pôde pagar" : "",
@@ -447,7 +453,7 @@ const FIXTURES: Record<string, unknown> = {
       projects: { total: 12, by_status: { active: 8, completed: 4 } },
       by_tier: [
         { tier: "discovery_sprint", label: "Discovery Sprint", total: 10, open: 4, won: 5, lost: 1, estimated_total: 0, win_rate: 0.83 },
-        { tier: "discovery_assessment", label: "Discovery + Assessment", total: 8, open: 3, won: 4, lost: 1, estimated_total: 320000, win_rate: 0.8 },
+        { tier: "feasibility", label: "Technical Feasibility (T.O.E.)", total: 8, open: 3, won: 4, lost: 1, estimated_total: 320000, win_rate: 0.8 },
         { tier: "prove", label: "PROVE (piloto)", total: 5, open: 2, won: 2, lost: 1, estimated_total: 900000, win_rate: 0.67 },
       ],
       by_stage: [
@@ -558,7 +564,8 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/artifacts/": serie(4, index => ({
     id: index, kind: "proposal", kind_display: "Proposta", status: "draft",
     status_display: "Rascunho", title: `Proposta — ${NOME_LONGO}`,
-    content: "Rascunho gerado por IA para revisão humana.", opportunity: 1, project: null,
+    content: "Rascunho gerado por IA para revisão humana.", commercial_opportunity: 1,
+    opportunity: 1, project: null,
     source_meeting: null, document: null, ai_interaction: 1, created_by: 1,
     sent_at: null, decided_at: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   })),

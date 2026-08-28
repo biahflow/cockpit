@@ -44,8 +44,11 @@ KICKOFF_TEMPLATE: list[dict] = [
 # - a Feasibility define a **meta antes** de rodar a amostra, e o PROVE registra baseline e
 #   critérios **antes** de construir. Critério definido depois do resultado não é critério, é
 #   narrativa — e é a regra que dá credibilidade ao método inteiro;
-# - o gate de saída é tarefa explícita nos dois, com as quatro saídas nomeadas. Gate que não
-#   vira item de trabalho é gate que não acontece.
+# - o gate de saída é tarefa explícita nos dois, com as saídas nomeadas — e são **vocabulários
+#   diferentes** (ADR 0053): a Feasibility responde "a tecnologia consegue?" (GO / CONDITIONAL GO
+#   / REDESIGN / NO-GO) e o PROVE responde "funcionou em produção controlada?" (SCALE / ITERATE /
+#   STOP). O template do PROVE já dizia isso antes de a rota aceitar; desde a ADR 0053 as duas
+#   coisas concordam. Gate que não vira item de trabalho é gate que não acontece.
 #
 # O template padrão continua genérico: serviço avulso não é PROVE.
 KICKOFF_TEMPLATES: dict[str, list[dict]] = {
@@ -53,15 +56,6 @@ KICKOFF_TEMPLATES: dict[str, list[dict]] = {
         {"title": "Qualification Call", "offset": 3,
          "tasks": ["Realizar a call de qualificação (30–45 min)",
                    "Registrar o fit e o próximo passo (avançar para Discovery ou NO-GO)"]},
-    ],
-    "discovery_assessment": [
-        {"title": "Discovery", "offset": 7,
-         "tasks": ["Agendar a sessão de discovery", "Registrar a transcrição da reunião",
-                   "Mapear o processo com o P-S-D-T-E-R"]},
-        {"title": "Assessment e recomendações", "offset": 21,
-         "tasks": ["Gerar o assessment de maturidade", "Priorizar as recomendações",
-                   "Apresentar o plano de ação",
-                   "Registrar o próximo passo recomendado (gate: PROVE ou Feasibility)"]},
     ],
     "discovery_sprint": [
         {"title": "Discovery", "offset": 3,

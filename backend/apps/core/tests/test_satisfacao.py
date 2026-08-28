@@ -20,7 +20,7 @@ from rest_framework.test import APIClient
 from apps.core import satisfacao as satisfacao_module
 from apps.core.models import Satisfacao, User
 
-from .factories import ClientFactory, ProjectFactory, ProjectMemberFactory, UserFactory
+from .factories import AccountFactory, ProjectFactory, ProjectMemberFactory, UserFactory
 
 HOJE = date(2026, 9, 2)
 
@@ -30,9 +30,9 @@ def client() -> APIClient:
     return APIClient()
 
 
-def _payload(client_id: int, **overrides: object) -> dict:
+def _payload(account_id: int, **overrides: object) -> dict:
     base: dict = {
-        "client": client_id,
+        "account": account_id,
         "nivel": Satisfacao.Nivel.SATISFEITO,
         "fonte": Satisfacao.Fonte.DECLARADA,
         "happened_on": "2026-09-01",
@@ -97,9 +97,9 @@ def test_a_vigente_e_a_mais_recente_da_fonte_pedida() -> None:
 
 @pytest.mark.django_db
 def test_arquivado_nao_e_vigente_nem_em_lote_nem_na_lista() -> None:
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     registro = Satisfacao.objects.create(
-        client=cliente, nivel=Satisfacao.Nivel.INSATISFEITO,
+        account=cliente, nivel=Satisfacao.Nivel.INSATISFEITO,
         fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE, note="Reclamou do prazo.",
     )
     registro.archive()
@@ -110,17 +110,17 @@ def test_arquivado_nao_e_vigente_nem_em_lote_nem_na_lista() -> None:
 
 @pytest.mark.django_db
 def test_o_lote_devolve_uma_vigente_por_cliente_em_uma_query() -> None:
-    um, outro = ClientFactory(), ClientFactory()
+    um, outro = AccountFactory(), AccountFactory()
     antiga = Satisfacao.objects.create(
-        client=um, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.DECLARADA,
+        account=um, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=HOJE - timedelta(days=30),
     )
     nova = Satisfacao.objects.create(
-        client=um, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+        account=um, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=HOJE - timedelta(days=1),
     )
     Satisfacao.objects.create(
-        client=outro, nivel=Satisfacao.Nivel.SATISFEITO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=outro, nivel=Satisfacao.Nivel.SATISFEITO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=HOJE - timedelta(days=200),  # fora da janela
     )
 
@@ -136,12 +136,12 @@ def test_o_lote_devolve_uma_vigente_por_cliente_em_uma_query() -> None:
 
 @pytest.mark.django_db
 def test_o_clean_recusa_projeto_de_outro_cliente() -> None:
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     alheio = ProjectFactory()
 
     with pytest.raises(ValidationError) as erro:
         Satisfacao(
-            client=cliente, project=alheio, nivel=Satisfacao.Nivel.NEUTRO,
+            account=cliente, project=alheio, nivel=Satisfacao.Nivel.NEUTRO,
             fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE,
         ).clean()
 
@@ -152,17 +152,17 @@ def test_o_clean_recusa_projeto_de_outro_cliente() -> None:
 def test_o_clean_exige_nota_no_insatisfeito_e_so_nele() -> None:
     """É o único nível que muda comportamento — Health Score e escada da régua —, e um sinal que
     muda comportamento sem motivo escrito é o que apodrece."""
-    cliente = ClientFactory()
+    cliente = AccountFactory()
 
     with pytest.raises(ValidationError) as erro:
         Satisfacao(
-            client=cliente, nivel=Satisfacao.Nivel.INSATISFEITO,
+            account=cliente, nivel=Satisfacao.Nivel.INSATISFEITO,
             fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE, note="   ",
         ).clean()
     assert "note" in erro.value.message_dict
 
     Satisfacao(
-        client=cliente, nivel=Satisfacao.Nivel.NEUTRO,
+        account=cliente, nivel=Satisfacao.Nivel.NEUTRO,
         fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE,
     ).clean()
 
@@ -174,7 +174,7 @@ def test_o_clean_exige_nota_no_insatisfeito_e_so_nele() -> None:
 def test_vendas_cria_le_edita_e_arquiva(client: APIClient) -> None:
     """Vendas **escreve**, e é a diferença deste recurso para o `risco` (só Entrega)."""
     sales = UserFactory(role=User.Role.SALES)
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     client.force_authenticate(sales)
 
     created = client.post(reverse("satisfacao-list"), _payload(cliente.id), format="json")
@@ -230,9 +230,9 @@ def test_entrega_nao_alcanca_cliente_sem_projeto_seu_nem_para_ler(client: APICli
     delivery = UserFactory(role=User.Role.DELIVERY)
     meu = ProjectFactory()
     ProjectMemberFactory(project=meu, user=delivery)
-    alheio = ClientFactory(name="Cliente alheio")
+    alheio = AccountFactory(name="Cliente alheio")
     registro_alheio = Satisfacao.objects.create(
-        client=alheio, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+        account=alheio, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=HOJE, note="Segredo do cliente alheio.",
     )
     client.force_authenticate(delivery)
@@ -244,7 +244,7 @@ def test_entrega_nao_alcanca_cliente_sem_projeto_seu_nem_para_ler(client: APICli
     assert [row["id"] for row in listed.data] == []
     assert detalhe.status_code == 404  # fora da queryset: nem existe, do ponto de vista dela
     assert criacao.status_code in {403, 404}
-    assert Satisfacao.objects.filter(client=alheio).count() == 1
+    assert Satisfacao.objects.filter(account=alheio).count() == 1
 
 
 @pytest.mark.django_db
@@ -253,28 +253,28 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     delivery = UserFactory(role=User.Role.DELIVERY)
     meu = ProjectFactory()
     ProjectMemberFactory(project=meu, user=delivery)
-    alheio = ClientFactory()
+    alheio = AccountFactory()
     registro = Satisfacao.objects.create(
-        client=meu.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=meu.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=HOJE,
     )
     client.force_authenticate(delivery)
 
     response = client.patch(
-        reverse("satisfacao-detail", args=[registro.id]), {"client": alheio.id}, format="json"
+        reverse("satisfacao-detail", args=[registro.id]), {"account": alheio.id}, format="json"
     )
 
     assert response.status_code == 403
     registro.refresh_from_db()
-    assert registro.client_id == meu.client_id
+    assert registro.account_id == meu.client_id
 
 
 @pytest.mark.django_db
 def test_quem_nao_foi_liberado_nao_alcanca_o_recurso(client: APIClient) -> None:
     """Recurso novo nasce fechado: o papel sem nenhuma linha para ele cai no `return False`."""
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     registro = Satisfacao.objects.create(
-        client=cliente, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=cliente, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=HOJE,
     )
     sem_papel = UserFactory(role="")
@@ -291,7 +291,7 @@ def test_quem_nao_foi_liberado_nao_alcanca_o_recurso(client: APIClient) -> None:
 def test_o_autor_nao_entra_pelo_corpo(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     outro = UserFactory(role=User.Role.DELIVERY)
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     client.force_authenticate(admin)
 
     created = client.post(
@@ -307,7 +307,7 @@ def test_o_autor_nao_entra_pelo_corpo(client: APIClient) -> None:
 @pytest.mark.django_db
 def test_a_api_recusa_projeto_de_outro_cliente_com_400(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     alheio = ProjectFactory()
     client.force_authenticate(admin)
 
@@ -323,7 +323,7 @@ def test_a_api_recusa_projeto_de_outro_cliente_com_400(client: APIClient) -> Non
 def test_insatisfeito_sem_nota_e_recusado_com_400(client: APIClient) -> None:
     """Critério de aceite 8: 400 e não 500 — a regra do `clean()` repetida no serializer."""
     admin = UserFactory(role=User.Role.ADMIN)
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     client.force_authenticate(admin)
 
     response = client.post(
@@ -340,17 +340,17 @@ def test_insatisfeito_sem_nota_e_recusado_com_400(client: APIClient) -> None:
 @pytest.mark.django_db
 def test_os_filtros_separam_cliente_nivel_e_fonte(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
-    um, outro = ClientFactory(), ClientFactory()
+    um, outro = AccountFactory(), AccountFactory()
     declarada = Satisfacao.objects.create(
-        client=um, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+        account=um, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=HOJE, note="Reclamou do prazo do marco 2.",
     )
     percebida = Satisfacao.objects.create(
-        client=um, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=um, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=HOJE,
     )
     Satisfacao.objects.create(
-        client=outro, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+        account=outro, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=HOJE,
     )
     client.force_authenticate(admin)
@@ -358,6 +358,6 @@ def test_os_filtros_separam_cliente_nivel_e_fonte(client: APIClient) -> None:
     def _ids(**params: object) -> list[int]:
         return [row["id"] for row in client.get(reverse("satisfacao-list"), params).data]
 
-    assert set(_ids(client=um.id)) == {declarada.id, percebida.id}
+    assert set(_ids(account=um.id)) == {declarada.id, percebida.id}
     assert _ids(fonte=Satisfacao.Fonte.PERCEBIDA) == [percebida.id]
     assert _ids(nivel=Satisfacao.Nivel.INSATISFEITO) == [declarada.id]

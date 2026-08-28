@@ -35,22 +35,53 @@ DISCOVER → PRIORITIZE → [ TECHNICAL FEASIBILITY ] → PROVE → SCALE → OP
 | Scale | Como capturamos o valor? |
 | Optimize | Como continuamos melhorando? |
 
-**Feasibility é condicional:** entra somente quando há dúvida se a tecnologia sustenta a
-tarefa. Quando a tecnologia é sabida e a dúvida é de resultado operacional, vai-se direto ao
-PROVE.
+**Feasibility é sempre gate e às vezes produto (ADR 0053).** O Decision Gate T.O.E. acontece em
+100% dos casos e sai no Executive Readout do Discovery, sem cobrança — ninguém o pula. A
+*Technical Feasibility* como degrau vendido entra somente quando responder ao gate exige
+**medição**: puxar amostra de dado real ainda não vista, medir o Ceiling de Input, testar a
+integração. Quando a tecnologia é sabida e a dúvida é de resultado operacional, não há o que medir
+e vai-se direto ao PROVE.
 
-**Decision gate (obrigatório ao fim de Feasibility e de PROVE)** — exatamente uma de quatro
-saídas, decidida por humano:
+**Cada gate tem seu vocabulário (ADR 0053)** — exatamente uma saída, decidida por humano.
+
+Ao fim de **Feasibility**, que responde *"a tecnologia consegue fazer a tarefa?"*:
 
 - **GO** — segue para a próxima fase.
 - **CONDITIONAL GO** — segue com ressalvas nomeadas e monitoradas.
 - **REDESIGN** — muda a abordagem técnica e testa de novo (volta à fase anterior).
 - **NO-GO** — a tecnologia/hipótese não sustenta a tarefa como está; não segue.
 
-Comercialmente, cada degrau é uma **Opportunity separada na mesma conta** (Account ≠
-Opportunity): a empresa é uma conta; cada venda — Discovery Sprint, Feasibility, PROVE,
+Ao fim de **PROVE**, que responde *"funcionou em produção controlada?"*:
+
+- **SCALE** — o resultado se sustenta; expande.
+- **ITERATE** — a hipótese vale, a execução ainda não; ajusta e mede de novo.
+- **STOP** — não se sustenta (técnica, econômica ou operacionalmente); não segue.
+
+**"Fase" nomeia o ciclo do cliente, e só ele (ADR 0053).** A entrada da casa numa vertical nova se
+chama **Passo 0 a 6** — palavra diferente para escala diferente. Nenhum documento chama de "fase" a
+numeração de entrada em vertical.
+
+Comercialmente, cada degrau é uma **CommercialOpportunity separada na mesma conta** (Account ≠
+CommercialOpportunity): a empresa é uma conta; cada venda — Discovery Sprint, Feasibility, PROVE,
 Scale, partnership — é uma oportunidade própria no pipeline, o que torna a expansão de
 receita visível.
+
+## Design Partner — o modo de entrada em vertical nova (ADR 0053)
+
+Até **três** organizações por vertical nova entram sem cobrança. O acordo fixa **escopo, não
+calendário**: um Discovery, um gate, uma Feasibility quando disparar, e um PROVE, sobre **um**
+processo-alvo. Sem teto por fase; encerramento automático em 120 dias se o cliente travar.
+
+A conversa comercial acontece **no go-live do PROVE**, não no fim de uma janela — continuar rodando
+já é Transformation Partnership, paga desde o primeiro mês, e a medição corre em paralelo sem
+segurar a cobrança.
+
+A contrapartida é contratual, não moral: acesso a dado real, sponsor nomeado, horas semanais
+comprometidas do time do cliente, e case + depoimento + referência por escrito. Descumprimento
+encerra o acordo.
+
+No funil, o gratuito aparece como **oportunidade real**: `estimated_value` no preço de tabela e o
+subsídio registrado como desconto. Valor concedido é número que se olha; oportunidade zerada some.
 
 ## Discovery
 

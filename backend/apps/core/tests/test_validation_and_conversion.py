@@ -12,9 +12,9 @@ from rest_framework.test import APIClient
 from apps.core.models import Document, Milestone, PipelineStage, Service, User
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
+    CommercialOpportunityFactory,
     EngagementFactory,
-    OpportunityFactory,
     ProjectFactory,
     ServiceFactory,
     UserFactory,
@@ -32,11 +32,11 @@ def sales_client() -> tuple[APIClient, User]:
 @pytest.mark.django_db
 def test_opportunity_rejects_contact_from_different_client(sales_client: tuple[APIClient, User]) -> None:
     client, _ = sales_client
-    first = ClientFactory()
-    second = ClientFactory()
+    first = AccountFactory()
+    second = AccountFactory()
     contact = second.contacts.create(first_name="Contato externo")
     response = client.post(reverse("opportunity-list"), {
-        "client": first.id,
+        "account": first.id,
         "contact": contact.id,
         "title": "Escopo",
         "estimated_value": "1000.00",
@@ -53,7 +53,7 @@ def test_project_rejects_end_date_before_start() -> None:
     # Criar projeto passou a ser de admin/Vendas (RFC 0003): Entrega recebe 403 antes da
     # validação de datas, então o caso de borda precisa de quem realmente cria projeto.
     admin = UserFactory(role=User.Role.ADMIN)
-    project_client = ClientFactory()
+    project_client = AccountFactory()
     # `engagement` é obrigatório desde a ADR 0050; sem ele o 400 seria do campo faltando e este
     # teste passaria sem nunca exercitar a validação de datas que ele existe para cobrir.
     engagement = EngagementFactory(account=project_client)
@@ -99,18 +99,18 @@ def test_task_rejects_milestone_from_another_project() -> None:
 @override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
 def test_document_rejects_multiple_links_and_excessive_size() -> None:
     admin = UserFactory(role=User.Role.ADMIN)
-    first = ClientFactory(owner=admin)
-    second = ClientFactory(owner=admin)
+    first = AccountFactory(owner=admin)
+    second = AccountFactory(owner=admin)
     client = APIClient()
     client.force_authenticate(admin)
 
     linked_twice = client.post(reverse("document-list"), {
-        "client": first.id,
+        "account": first.id,
         "project": ProjectFactory(client=second).id,
         "file": SimpleUploadedFile("duplicado.pdf", b"ok"),
     })
     oversized = client.post(reverse("document-list"), {
-        "client": first.id,
+        "account": first.id,
         "file": SimpleUploadedFile("grande.pdf", b"x" * (10 * 1024 * 1024 + 1)),
     })
 
@@ -124,13 +124,13 @@ def test_document_rejects_multiple_links_and_excessive_size() -> None:
 def test_document_rejects_file_types_outside_the_allowlist() -> None:
     """Nome de arquivo é entrada do usuário e viaja para o Drive e para o fornecedor de assinatura."""
     admin = UserFactory(role=User.Role.ADMIN)
-    linked = ClientFactory(owner=admin)
+    linked = AccountFactory(owner=admin)
     client = APIClient()
     client.force_authenticate(admin)
 
     for name in ("payload.html", "icone.svg", "instalador.exe", "sem-extensao"):
         rejected = client.post(reverse("document-list"), {
-            "client": linked.id,
+            "account": linked.id,
             "file": SimpleUploadedFile(name, b"conteudo"),
         })
         assert rejected.status_code == 400, name
@@ -138,7 +138,7 @@ def test_document_rejects_file_types_outside_the_allowlist() -> None:
 
     for name in ("proposta.pdf", "planilha.XLSX", "notas.txt", "print.png"):
         accepted = client.post(reverse("document-list"), {
-            "client": linked.id,
+            "account": linked.id,
             "file": SimpleUploadedFile(name, b"conteudo"),
         })
         assert accepted.status_code == 201, name
@@ -149,12 +149,12 @@ def test_document_rejects_file_types_outside_the_allowlist() -> None:
 def test_document_original_name_never_carries_a_path() -> None:
     """`original_name` é repassado cru ao Drive, ao fornecedor de assinatura e ao portal."""
     admin = UserFactory(role=User.Role.ADMIN)
-    linked = ClientFactory(owner=admin)
+    linked = AccountFactory(owner=admin)
     client = APIClient()
     client.force_authenticate(admin)
 
     response = client.post(reverse("document-list"), {
-        "client": linked.id,
+        "account": linked.id,
         "file": SimpleUploadedFile("../../etc/passwd.pdf", b"conteudo"),
     })
 
@@ -181,7 +181,7 @@ def test_safe_original_name(raw: str | None, expected: str) -> None:
 @pytest.mark.django_db
 def test_conversion_rejects_delivery_foreign_client_and_invalid_dates() -> None:
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     endpoint = reverse("opportunity-convert-to-project", args=[opportunity.id])
 
     delivery_client = APIClient()
@@ -191,13 +191,13 @@ def test_conversion_rejects_delivery_foreign_client_and_invalid_dates() -> None:
     sales_client = APIClient()
     sales_client.force_authenticate(sales)
     foreign = sales_client.post(endpoint, {
-        "client": ClientFactory().id,
+        "client": AccountFactory().id,
         "name": "Cliente incorreto",
         "start_date": "2026-08-01",
         "due_date": "2026-08-10",
     }, format="json")
     invalid_dates = sales_client.post(endpoint, {
-        "client": opportunity.client_id,
+        "account": opportunity.account_id,
         "name": "Datas inválidas",
         "start_date": "2026-08-10",
         "due_date": "2026-08-01",
@@ -211,11 +211,11 @@ def test_conversion_rejects_delivery_foreign_client_and_invalid_dates() -> None:
 @pytest.mark.django_db
 def test_conversion_returns_conflict_without_partial_project_on_integrity_error() -> None:
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     client = APIClient()
     client.force_authenticate(sales)
     payload = {
-        "client": opportunity.client_id,
+        "client": opportunity.account_id,
         "name": "Projeto",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=10)),
@@ -230,7 +230,7 @@ def test_conversion_returns_conflict_without_partial_project_on_integrity_error(
     # A transação inteira desfeita: nem projeto parcial, nem o engajamento de escopo único que a
     # conversão cria quando o payload não traz um (ADR 0050).
     assert not opportunity.projects.exists()
-    assert not opportunity.client.engagements.exists()
+    assert not opportunity.account.engagements.exists()
 
 
 @pytest.mark.django_db
@@ -238,15 +238,15 @@ def test_conversion_inherits_the_opportunity_product_tier() -> None:
     """O primeiro degrau **vendável**, e não a Qualification Call: aquela é oferta de aquisição
     desde a ADR 0049 e a conversão a recusa (invariante 6)."""
     sales = UserFactory(role=User.Role.SALES)
-    porta = Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT)
-    opportunity = OpportunityFactory(
+    porta = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
+    opportunity = CommercialOpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=sales, service=porta
     )
     client = APIClient()
     client.force_authenticate(sales)
 
     response = client.post(reverse("opportunity-convert-to-project", args=[opportunity.id]), {
-        "client": opportunity.client_id,
+        "client": opportunity.account_id,
         "name": "Discovery do cliente",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=30)),
@@ -254,15 +254,16 @@ def test_conversion_inherits_the_opportunity_product_tier() -> None:
 
     assert response.status_code == 201
     assert response.json()["service"] == porta.pk
-    # O cronograma segue o degrau, não o template genérico.
-    assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 2
+    # O cronograma segue o degrau, não o template genérico: o Discovery Sprint semeia três
+    # marcos e fecha em Executive Readout, e o padrão semearia quatro genéricos.
+    assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 3
 
 
 @pytest.mark.django_db
 def test_conversion_payload_overrides_the_inherited_service() -> None:
     sales = UserFactory(role=User.Role.SALES)
     chosen = ServiceFactory(name="Serviço combinado")
-    opportunity = OpportunityFactory(
+    opportunity = CommercialOpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=sales,
         service=Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL),
     )
@@ -270,7 +271,7 @@ def test_conversion_payload_overrides_the_inherited_service() -> None:
     client.force_authenticate(sales)
 
     response = client.post(reverse("opportunity-convert-to-project", args=[opportunity.id]), {
-        "client": opportunity.client_id,
+        "client": opportunity.account_id,
         "name": "Projeto",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=30)),

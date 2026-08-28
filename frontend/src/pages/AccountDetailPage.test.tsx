@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-import { ClientDetailPage } from "./ClientDetailPage";
+import { AccountDetailPage } from "./AccountDetailPage";
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 function atividade(overrides: Record<string, unknown> = {}) {
   return {
-    id: 9, client: 1, opportunity: null, invoice: null, cobranca_sinal: "", cobranca_sinal_display: "",
+    id: 9, client: 1, commercial_opportunity: null, opportunity: null, invoice: null, cobranca_sinal: "", cobranca_sinal_display: "",
     kind: "call", kind_display: "Ligação", happened_on: "2026-08-10", summary: "Alinhamento de escopo",
     notes: "Cliente confirmou prazo.", owner: 1,
     created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
@@ -96,9 +96,9 @@ let engagements: unknown[] = [];
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active", vertical: null, vertical_name: "" });
+    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "" });
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
-    if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
+    if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve(contacts);
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
@@ -124,7 +124,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 test("mostra cliente e seus contatos", async () => {
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   expect(await screen.findByRole("heading", { name: "Cliente A" })).toBeInTheDocument();
   expect(screen.getByText("João")).toBeInTheDocument();
   expect(screen.getByText("CEO")).toBeInTheDocument();
@@ -136,7 +136,7 @@ test("mostra cliente e seus contatos", async () => {
 
 test("salva o cliente, cria e remove contato", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const cliente = within(screen.getByTestId("client-form"));
   const painel = within(screen.getByTestId("contacts-panel"));
@@ -159,7 +159,7 @@ test("salva o cliente, cria e remove contato", async () => {
 });
 
 test("o formulário de contato tem campo Nome e campo Sobrenome", async () => {
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("contacts-panel"));
 
@@ -170,7 +170,7 @@ test("o formulário de contato tem campo Nome e campo Sobrenome", async () => {
 test("o lápis carrega o contato no formulário e salva com PATCH", async () => {
   contacts = [contato({ id: 5, first_name: "Maria", last_name: "Souza", name: "Maria Souza", email: "maria@x.com" })];
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("contacts-panel"));
 
@@ -190,7 +190,7 @@ test("o lápis carrega o contato no formulário e salva com PATCH", async () => 
 test("cancelar a edição de contato volta ao modo de criação sem requisição", async () => {
   contacts = [contato({ id: 5, first_name: "Maria", last_name: "Souza", name: "Maria Souza" })];
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("contacts-panel"));
 
@@ -209,7 +209,7 @@ test("arquivar o contato em edição sai do modo de edição", async () => {
   // devolve, e o "Salvar alterações" seguinte vira um 404 sem explicação.
   contacts = [contato({ id: 5, first_name: "Maria", last_name: "Souza", name: "Maria Souza" })];
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("contacts-panel"));
 
@@ -227,16 +227,16 @@ test("arquivar o contato em edição sai do modo de edição", async () => {
 
 test("contato sem sobrenome não renderiza espaço solto", async () => {
   contacts = [contato({ id: 1, first_name: "Madonna", last_name: "", name: "Madonna" })];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("contacts-panel"));
 
   expect(painel.getByText("Madonna", { exact: true })).toBeInTheDocument();
 });
 
-test("corrige a situação do cliente e leva o status no PATCH", async () => {
+test("corrige a situação da conta e leva o `lifecycle_status` no PATCH", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   // O formulário nasce com o que veio da API, não com um default que apagaria o valor real.
   expect(screen.getByLabelText("Situação")).toHaveValue("active");
@@ -245,7 +245,7 @@ test("corrige a situação do cliente e leva o status no PATCH", async () => {
   await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({
-    method: "PATCH", body: expect.stringContaining("\"status\":\"prospect\""),
+    method: "PATCH", body: expect.stringContaining("\"lifecycle_status\":\"prospect\""),
   })));
 });
 
@@ -253,7 +253,7 @@ test("corrige a situação do cliente e leva o status no PATCH", async () => {
 test("atribui uma vertical ao cliente", async () => {
   // É ela que escolhe a variante do blueprint quando a entrega instancia um bloco (FDD 026).
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   await user.selectOptions(screen.getByLabelText("Vertical"), "7");
@@ -266,7 +266,7 @@ test("atribui uma vertical ao cliente", async () => {
 
 test("cliente sem vertical continua funcionando", async () => {
   // Regra da FDD 026: nada exige vertical. Sem ela o catálogo inteiro segue disponível, genérico.
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   expect(screen.getByLabelText("Vertical")).toHaveValue("");
@@ -276,7 +276,7 @@ test("cliente sem vertical continua funcionando", async () => {
 
 test("lista as interações do cliente e registra uma nova", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   expect(screen.getByText("Alinhamento de escopo")).toBeInTheDocument();
@@ -286,13 +286,13 @@ test("lista as interações do cliente e registra uma nova", async () => {
   await user.click(screen.getByRole("button", { name: "Registrar interação" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/activities/", expect.objectContaining({
-    method: "POST", body: expect.stringContaining('"client":1'),
+    method: "POST", body: expect.stringContaining('"account":1'),
   })));
 });
 
 test("arquiva uma interação do cliente", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   await user.click(screen.getByLabelText("Arquivar interação: Alinhamento de escopo"));
@@ -302,7 +302,7 @@ test("arquiva uma interação do cliente", async () => {
 
 test("entrega não vê o formulário nem o botão de arquivar de interações", async () => {
   mocks.auth.user = { id: 2, is_admin: false, role: "delivery" };
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByText("Alinhamento de escopo");
 
   expect(screen.queryByPlaceholderText("Do que se tratou o contato")).not.toBeInTheDocument();
@@ -311,7 +311,7 @@ test("entrega não vê o formulário nem o botão de arquivar de interações", 
 
 test("classificar chama a rota e o sinal gravado volta com a conduta, não só com o selo", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   // A segunda carga já traz o sinal lavrado pelo backend — a tela não o adivinha.
@@ -331,7 +331,7 @@ test("classificar chama a rota e o sinal gravado volta com a conduta, não só c
 
 test("a interação já classificada não oferece classificar de novo", async () => {
   atividades = [atividade({ cobranca_sinal: "esqueceu", cobranca_sinal_display: "Esqueceu" })];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByText("Alinhamento de escopo");
 
   expect(screen.queryByLabelText(/Classificar resposta/)).not.toBeInTheDocument();
@@ -339,14 +339,14 @@ test("a interação já classificada não oferece classificar de novo", async ()
 });
 
 test("a tela diz, e não só o código, que a IA grava o sinal e não age", async () => {
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByText("Alinhamento de escopo");
   expect(screen.getByText(/grava o sinal — não age/)).toBeInTheDocument();
 });
 
 test("com a IA desligada o botão de classificar some da tela", async () => {
   mocks.getConfig.mockResolvedValue({ ai_enabled: false, calendar_enabled: false, esign_enabled: false, integrations: [] });
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByText("Alinhamento de escopo");
 
   await waitFor(() => expect(mocks.getConfig).toHaveBeenCalled());
@@ -356,7 +356,7 @@ test("com a IA desligada o botão de classificar some da tela", async () => {
 
 test("o 502 diz que nada foi gravado — é diferente de um palpite gravado em silêncio", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   mocks.api.mockImplementationOnce(() => Promise.reject(
@@ -369,7 +369,7 @@ test("o 502 diz que nada foi gravado — é diferente de um palpite gravado em s
 
 test("a interação pode responder a uma fatura, e é ela que dá contexto ao classificador", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   await user.type(screen.getByPlaceholderText("Do que se tratou o contato"), "Retorno sobre a fatura");
@@ -383,7 +383,7 @@ test("a interação pode responder a uma fatura, e é ela que dá contexto ao cl
 
 test("entrega não classifica nem pergunta pela flag: o recurso é fechado para ela", async () => {
   mocks.auth.user = { id: 2, is_admin: false, role: "delivery" };
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByText("Alinhamento de escopo");
 
   expect(screen.queryByLabelText(/Classificar resposta/)).not.toBeInTheDocument();
@@ -397,7 +397,7 @@ test("a lista de satisfação distingue as duas fontes, não só o nível", asyn
     satisfacaoRegistro(),
     satisfacaoRegistro({ id: 4, nivel: "promotor", nivel_display: "Promotor", fonte: "percebida", fonte_display: "Percebida por quem entrega", happened_on: "2026-08-01", note: "" }),
   ];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   expect(await screen.findByText("Satisfação")).toBeInTheDocument();
@@ -418,7 +418,7 @@ test("a lista de satisfação distingue as duas fontes, não só o nível", asyn
 
 test("registra uma satisfação nova", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   await user.selectOptions(screen.getByLabelText("Nível"), "promotor");
@@ -427,7 +427,7 @@ test("registra uma satisfação nova", async () => {
   await user.click(screen.getByRole("button", { name: "Registrar satisfação" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
-    method: "POST", body: expect.stringContaining('"client":1'),
+    method: "POST", body: expect.stringContaining('"account":1'),
   })));
   expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
     body: expect.stringContaining('"nivel":"promotor"'),
@@ -439,7 +439,7 @@ test("registra uma satisfação nova", async () => {
 
 test("insatisfeito sem nota volta 400 e a tela mostra a mensagem do campo, não uma falha genérica", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   mocks.api.mockImplementationOnce(() => Promise.reject(
@@ -460,7 +460,7 @@ test("o painel de processos leva ao mapa e diz se o número se sustenta", async 
     processoMapeado(),
     processoMapeado({ id: 13, name: "Cobrança por planilha", custo: { parcelas: [{ label: "Execução do processo", valor: "9000.00" }], total: "9000.00", nao_apurado: [], sustentacao: "sustentado" } }),
   ];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   expect(await screen.findByText("Processos mapeados")).toBeInTheDocument();
@@ -472,7 +472,7 @@ test("o painel de processos leva ao mapa e diz se o número se sustenta", async 
   // O total nunca vai sozinho quando é parcial: sem esta marca, R$ 35.200,00 é lido como a conta
   // inteira de um processo cujos quatro últimos insumos ninguém apurou.
   expect(dentroHipotese.getByText(/R\$ 35\.200,00 por mês · total parcial, 4 sem apuração/)).toBeInTheDocument();
-  expect(dentroHipotese.getByRole("link", { name: "Abrir o mapa" })).toHaveAttribute("href", "/clientes/1/processos/12");
+  expect(dentroHipotese.getByRole("link", { name: "Abrir o mapa" })).toHaveAttribute("href", "/contas/1/processos/12");
 
   const sustentado = (await screen.findByText("Cobrança por planilha")).closest(".row");
   const dentroSustentado = within(sustentado as HTMLElement);
@@ -482,7 +482,7 @@ test("o painel de processos leva ao mapa e diz se o número se sustenta", async 
 });
 
 test("cliente sem processo mapeado mostra o estado vazio, não um painel em branco", async () => {
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
   expect(await screen.findByText("Nenhum processo mapeado para este cliente.")).toBeInTheDocument();
@@ -499,7 +499,7 @@ test("a seção lista os mandatos com status e as duas pílulas de modelo comerc
       started_at: "2026-06-01", projects_count: 1,
     }),
   ];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 
@@ -525,7 +525,7 @@ test("mandato encerrado é neutro, não vermelho, e mostra o período fechado", 
     name: "Piloto Atendimento 24h", status: "closed", status_display: "Encerrado",
     started_at: "2026-02-10", ended_at: "2026-05-20", projects_count: 2,
   })];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 
@@ -538,7 +538,7 @@ test("mandato encerrado é neutro, não vermelho, e mostra o período fechado", 
 });
 
 test("conta sem mandato mostra o estado vazio, não um painel em branco", async () => {
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 
@@ -553,7 +553,7 @@ test("conta sem mandato mostra o estado vazio, não um painel em branco", async 
 test("entrega vê a lista de mandatos e nenhuma ação sobre ela", async () => {
   mocks.auth.user = { id: 3, is_admin: false, role: "delivery" };
   engagements = [mandato({ sponsor_name: "Marina Alencar" })];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 
@@ -567,7 +567,7 @@ test("entrega vê a lista de mandatos e nenhuma ação sobre ela", async () => {
 
 test("o formulário embutido cria o mandato e não pede responsável", async () => {
   const user = userEvent.setup();
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 
@@ -590,7 +590,7 @@ test("o formulário embutido cria o mandato e não pede responsável", async () 
 test("o lápis carrega o mandato no formulário e o título vira Editando", async () => {
   const user = userEvent.setup();
   engagements = [mandato()];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 
@@ -613,7 +613,7 @@ test("o lápis carrega o mandato no formulário e o título vira Editando", asyn
 test("cancelar a edição volta ao modo de criação sem requisição", async () => {
   const user = userEvent.setup();
   engagements = [mandato()];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 
@@ -628,7 +628,7 @@ test("cancelar a edição volta ao modo de criação sem requisição", async ()
 test("arquivar mandato com projeto vivo mostra a recusa do backend no topo da página", async () => {
   const user = userEvent.setup();
   engagements = [mandato()];
-  render(<ClientDetailPage id={1} />);
+  render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
   const painel = within(screen.getByTestId("engagements-panel"));
 

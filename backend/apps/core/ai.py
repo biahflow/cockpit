@@ -21,7 +21,7 @@ from django.utils import timezone
 from . import flags
 
 if TYPE_CHECKING:
-    from .models import Activity, Invoice, Lead, Meeting, Opportunity, Project, User
+    from .models import Activity, CommercialOpportunity, Invoice, Lead, Meeting, Project, User
 
 # Limite de caracteres da transcrição enviada ao modelo (controle de tokens/custo).
 MEETING_TRANSCRIPT_LIMIT = 12000
@@ -116,10 +116,10 @@ def build_meeting_context(meeting: Meeting) -> str:
     return "\n".join(lines)
 
 
-def build_opportunity_context(opportunity: Opportunity) -> str:
+def build_opportunity_context(opportunity: CommercialOpportunity) -> str:
     lines = [
         f"Oportunidade: {opportunity.title}",
-        f"Cliente: {opportunity.client.name}",
+        f"Cliente: {opportunity.account.name}",
         f"Valor estimado: {opportunity.estimated_value}",
         f"Etapa: {opportunity.stage.name}",
         f"Previsão de fechamento: {opportunity.expected_close_date}",
@@ -141,7 +141,7 @@ def build_opportunity_context(opportunity: Opportunity) -> str:
     return "\n".join(lines)
 
 
-def _blueprint_lines(opportunity: Opportunity) -> list[str]:
+def _blueprint_lines(opportunity: CommercialOpportunity) -> list[str]:
     """Os blocos do catálogo aplicáveis a esta oportunidade (FDD 026).
 
     É o que faz a proposta citar o Funcionário Digital concreto — "um SDR que qualifica lead fora
@@ -163,7 +163,7 @@ def _blueprint_lines(opportunity: Opportunity) -> list[str]:
     )
     if not aplicaveis:
         return []
-    vertical = opportunity.client.vertical
+    vertical = opportunity.account.vertical
     lines = ["Funcionários Digitais do catálogo aplicáveis a esta venda:"]
     for blueprint in aplicaveis:
         valores = blueprints.resolve(blueprint, vertical)
@@ -193,7 +193,7 @@ def _numero_kpi(valor: str | None, unidade: str) -> str:
     return f"R$ {valor}" if unidade == "currency" else f"{valor}{sufixo}"
 
 
-def _case_lines(opportunity: Opportunity) -> list[str]:
+def _case_lines(opportunity: CommercialOpportunity) -> list[str]:
     """Os cases publicados da mesma vertical — a prova, ao lado da promessa (FDD 027).
 
     Três guardas fazem esta função, e nenhuma é decorativa:
@@ -212,7 +212,7 @@ def _case_lines(opportunity: Opportunity) -> list[str]:
     """
     from .models import Case
 
-    vertical = opportunity.client.vertical
+    vertical = opportunity.account.vertical
     if vertical is None:
         # Sem vertical não há "mesmo setor", e citar case de qualquer setor seria prova fraca
         # vendida como forte. Ao contrário do catálogo, que resolve para o genérico, aqui o
@@ -254,7 +254,7 @@ def _case_lines(opportunity: Opportunity) -> list[str]:
     return lines
 
 
-def _processo_lines(opportunity: Opportunity) -> list[str]:
+def _processo_lines(opportunity: CommercialOpportunity) -> list[str]:
     """O que o Discovery levantou da operação do cliente — e **só o número que tem fato atrás**
     (FDD 039).
 
@@ -265,9 +265,9 @@ def _processo_lines(opportunity: Opportunity) -> list[str]:
     2. **O mapa qualitativo sempre entra**: o nome do processo e os nomes das etapas. É descrição
        do que foi levantado, não afirmação de quantidade — não depende de sustentação nenhuma.
     3. **O número do custo só entra quando há evidência rotulada como fato por trás dele**
-       (`processos.custo_do_estado_atual` responde isso em `sustentacao`). Levar para uma proposta
+       (`process.custo_do_estado_atual` responde isso em `sustentacao`). Levar para uma proposta
        que o cliente lê um custo apoiado só em hipótese é literalmente o que
-       `docs/metodologia-fde.md:86` proíbe: apresentar hipótese como fato. E o dano não é o número
+       `docs/metodologia-fde.md:117` proíbe: apresentar hipótese como fato. E o dano não é o número
        errado — é que ele volta na reunião seguinte como compromisso da casa.
     4. **A lacuna é dita, não silenciada.** Omitir o processo não sustentado deixaria o modelo
        diante de um buraco, e diante de um buraco o modelo preenche — foi o defeito que a rodada 5
@@ -277,7 +277,7 @@ def _processo_lines(opportunity: Opportunity) -> list[str]:
 
     O antivazamento fica intacto: isto lê os processos **deste** cliente, e nada de terceiros.
     """
-    from . import processos as processos_module
+    from . import process as process_module
 
     # A formatação de dinheiro vem de `cobranca` e não é reescrita aqui: duas definições de
     # "R$ 10.000,01" divergem no dia em que alguém corrigir uma só, e o sintoma seria a proposta e
@@ -285,14 +285,14 @@ def _processo_lines(opportunity: Opportunity) -> list[str]:
     # o segundo consumidor — sublinhado é o aviso de "não importe isto", e importá-lo assim mesmo
     # deixaria uma renomeação em `cobranca.py` quebrar a proposta sem nada apontar para cá.
     from .cobranca import moeda
-    from .models import Processo, ProcessoEtapa
+    from .models import Process, ProcessStep
 
     mapeados = list(
-        Processo.objects.filter(client=opportunity.client_id, archived_at__isnull=True)
+        Process.objects.filter(account=opportunity.account_id, archived_at__isnull=True)
         .prefetch_related(
             # A etapa arquivada por conta própria (o processo vivo, ela não) é uma etapa que
             # alguém removeu do mapa; ressuscitá-la no prompt desfaria a remoção.
-            Prefetch("etapas", queryset=ProcessoEtapa.objects.filter(archived_at__isnull=True))
+            Prefetch("steps", queryset=ProcessStep.objects.filter(archived_at__isnull=True))
         )[:OPPORTUNITY_PROCESSO_LIMIT]
     )
     if not mapeados:
@@ -300,11 +300,11 @@ def _processo_lines(opportunity: Opportunity) -> list[str]:
     lines = ["Processos da operação do cliente já mapeados no Discovery:"]
     for processo in mapeados:
         lines.append(f"- {processo.name}")
-        etapas = [etapa.name for etapa in processo.etapas.all()]
+        etapas = [etapa.name for etapa in processo.steps.all()]
         if etapas:
             lines.append(f"  Etapas: {' → '.join(etapas)}")
-        custo = processos_module.custo_do_estado_atual(processo)
-        if custo["sustentacao"] != processos_module.SUSTENTADO:
+        custo = process_module.custo_do_estado_atual(processo)
+        if custo["sustentacao"] != process_module.SUSTENTADO:
             lines.append(
                 "  Custo do estado atual: ainda NÃO sustentado por evidência — o que se sabe deste "
                 "processo é hipótese. NÃO afirme número de custo, economia ou retorno para ele."
@@ -478,11 +478,11 @@ def build_cobranca_context(invoice: Invoice, degrau: str = "", hoje: date | None
     from .models import Milestone, Task
 
     dia = hoje or timezone.localdate()
-    client = invoice.client
+    account = invoice.account
     dias = (dia - invoice.due_date).days
     lines = [
         f"Hoje é {dia}.",
-        f"Cliente: {client.name}",
+        f"Cliente: {account.name}",
         f"Fatura: {invoice.number or 'sem número'}",
         f"Valor: {invoice.amount}",
         f"Vencimento: {invoice.due_date}",
@@ -496,13 +496,13 @@ def build_cobranca_context(invoice: Invoice, degrau: str = "", hoje: date | None
         lines.append(f"Referente a: {invoice.description}")
     if degrau:
         lines.append(f"Degrau da régua: {degrau}")
-    anos = cobranca.tempo_de_casa_dias(client, dia) // 365
+    anos = cobranca.tempo_de_casa_dias(account, dia) // 365
     lines.append(
         f"Tempo de casa: {anos} ano(s) completo(s)" if anos else "Tempo de casa: menos de um ano"
     )
     lines.append(
         "Histórico: já atrasou antes."
-        if cobranca.reincidente(client, dia, ignorando=invoice)
+        if cobranca.reincidente(account, dia, ignorando=invoice)
         else "Histórico: nunca atrasou antes."
     )
     project = invoice.project
@@ -534,7 +534,7 @@ def build_resposta_de_cobranca_context(activity: Activity) -> str:
     tudo o que sobrasse aqui seria contexto de cliente entrando num prompt sem razão declarada.
     """
     lines = [
-        f"Cliente: {activity.client.name}",
+        f"Cliente: {activity.account.name}",
         f"Tipo de interação: {activity.get_kind_display()}",
         f"Data: {activity.happened_on}",
         f"Resumo: {activity.summary}",

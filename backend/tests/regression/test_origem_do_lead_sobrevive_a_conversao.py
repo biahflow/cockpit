@@ -9,7 +9,8 @@ continuaria renderizando, com todo negócio caindo em "Cadastro direto".
 
 Desde a ADR 0049 a travessia tem **um elo a mais**: converter o lead registra uma `Qualification`,
 e a venda só nasce em `POST /qualifications/{id}/open-opportunity/`. É essa ação que religa
-`Lead.opportunity` — sem isso, todo negócio nascido de lead cairia em "Cadastro direto" e esta
+`Lead.commercial_opportunity` — sem isso, todo negócio nascido de lead cairia em "Cadastro
+direto" e esta
 tela erraria em silêncio, que é exatamente o que os testes abaixo medem.
 
 As duas armadilhas medidas, cada uma com seu teste:
@@ -30,13 +31,13 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Lead, Opportunity, PipelineStage, Qualification, User
-from apps.core.tests.factories import OpportunityFactory, UserFactory
+from apps.core.models import CommercialOpportunity, Lead, PipelineStage, Qualification, User
+from apps.core.tests.factories import CommercialOpportunityFactory, UserFactory
 
 pytestmark = pytest.mark.django_db
 
 
-def _converter_e_abrir(api: APIClient, lead: Lead) -> Opportunity:
+def _converter_e_abrir(api: APIClient, lead: Lead) -> CommercialOpportunity:
     """Os dois atos da sequência normativa: qualificar o lead e então abrir a venda (ADR 0049)."""
     convertido = api.post(reverse("lead-convert", args=[lead.id]), {}, format="json")
     assert convertido.status_code == 201, convertido.data
@@ -46,17 +47,17 @@ def _converter_e_abrir(api: APIClient, lead: Lead) -> Opportunity:
     )
     assert aberta.status_code == 201, aberta.data
     lead.refresh_from_db()
-    return Opportunity.objects.get(pk=aberta.data["id"])
+    return CommercialOpportunity.objects.get(pk=aberta.data["id"])
 
 
-def _fechar(api: APIClient, opportunity: Opportunity, owner: User) -> None:
+def _fechar(api: APIClient, opportunity: CommercialOpportunity, owner: User) -> None:
     """Leva a oportunidade a Ganho e converte em projeto pela rota real."""
     opportunity.stage = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
     opportunity.save(update_fields=["stage"])
     response = api.post(
         reverse("opportunity-convert-to-project", args=[opportunity.id]),
         {
-            "client": opportunity.client_id,
+            "client": opportunity.account_id,
             "name": f"Projeto {opportunity.id}",
             "owner": owner.id,
             "start_date": str(timezone.localdate()),
@@ -91,7 +92,7 @@ def test_origem_atravessa_as_duas_conversoes(api: APIClient, sales: User) -> Non
     lead = Lead.objects.create(name="Ana", email="ana@exemplo.com", source="indicacao")
     opportunity = _converter_e_abrir(api, lead)
 
-    assert lead.opportunity_id == opportunity.pk
+    assert lead.commercial_opportunity_id == opportunity.pk
     _fechar(api, opportunity, sales)
 
     linha = _by_source(api)["indicacao"]
@@ -125,7 +126,7 @@ def test_negocio_sem_lead_tem_origem_propria_e_os_totais_reconciliam(
     """Oportunidade cadastrada à mão vira "direto", e a soma bate com o funil de cima."""
     lead = Lead.objects.create(name="Carla", email="carla@exemplo.com", source="site")
     _fechar(api, _converter_e_abrir(api, lead), sales)
-    _fechar(api, OpportunityFactory(owner=sales), sales)
+    _fechar(api, CommercialOpportunityFactory(owner=sales), sales)
 
     funnel = api.get("/api/v1/analytics/").data["funnel"]
     por_origem = {row["source"]: row for row in funnel["by_source"]}
@@ -137,7 +138,7 @@ def test_negocio_sem_lead_tem_origem_propria_e_os_totais_reconciliam(
 def test_receita_nao_dobra_quando_dois_leads_apontam_o_mesmo_negocio(
     api: APIClient, sales: User
 ) -> None:
-    """`Opportunity.leads` é reverso de FK: agrupar por `join` somaria a receita duas vezes.
+    """`CommercialOpportunity.leads` é reverso de FK: agrupar por `join` somaria a receita duas vezes.
 
     É a razão de a origem sair de `Subquery` e não de `join`, e o modo de falha é o pior tipo —
     um número de dinheiro maior que o verdadeiro, numa tela cujo propósito é decidir onde
@@ -150,7 +151,7 @@ def test_receita_nao_dobra_quando_dois_leads_apontam_o_mesmo_negocio(
         name="Dora (2)",
         email="dora@exemplo.com",
         source="indicacao",
-        opportunity=opportunity,
+        commercial_opportunity=opportunity,
     )
     _fechar(api, opportunity, sales)
 

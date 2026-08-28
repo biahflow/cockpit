@@ -4,7 +4,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
-import type { Client, Invoice, InvoiceStatus, InvoiceSummary } from "../types";
+import type { Account, Invoice, InvoiceStatus, InvoiceSummary } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -32,14 +32,14 @@ function porQueNaoEmite(invoice: Invoice): string {
   return "";
 }
 
-const vazio = { client: "", amount: "", due_date: "", description: "" };
+const vazio = { account: "", amount: "", due_date: "", description: "" };
 
 export function FinanceiroPage() {
   const { user } = useAuth();
   const isAdmin = Boolean(user?.is_admin);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState<InvoiceSummary | null>(null);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [form, setForm] = useState(vazio);
   const [cancelling, setCancelling] = useState<Invoice | null>(null);
@@ -61,7 +61,7 @@ export function FinanceiroPage() {
   }, [statusFilter]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { void api<Client[]>("/clients/").then(setClients).catch(() => setClients([])); }, []);
+  useEffect(() => { void api<Account[]>("/clients/").then(setAccounts).catch(() => setAccounts([])); }, []);
 
   async function acao(invoice: Invoice, rota: string, body?: unknown) {
     setError(""); setNotice(""); setBusy(true);
@@ -146,9 +146,9 @@ export function FinanceiroPage() {
       <h2 className="font-semibold text-ink">Nova fatura</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="form-label">Cliente
-          <select required className="field" value={form.client} onChange={event => setForm({ ...form, client: event.target.value })}>
+          <select required className="field" value={form.account} onChange={event => setForm({ ...form, account: event.target.value })}>
             <option value="">Selecione</option>
-            {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+            {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
           </select>
         </label>
         <label className="form-label">Valor (R$)

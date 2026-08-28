@@ -13,7 +13,7 @@ from rest_framework.test import APIClient
 
 from apps.core.models import Document, Notification, SignatureRequest
 from apps.core.portal import sign
-from apps.core.tests.factories import ClientFactory, UserFactory
+from apps.core.tests.factories import AccountFactory, UserFactory
 
 SECRET = "webhook-secret"
 
@@ -24,7 +24,7 @@ SECRET = "webhook-secret"
 def test_duplicate_delivery_keeps_signed_at_and_single_notification() -> None:
     user = UserFactory()
     document = Document.objects.create(
-        client=ClientFactory(owner=user), original_name="contrato.pdf", uploaded_by=user
+        account=AccountFactory(owner=user), original_name="contrato.pdf", uploaded_by=user
     )
     signature = SignatureRequest.objects.create(
         document=document, signer_email="quem@x.test", provider_ref="req-1", document_ref="doc-1"

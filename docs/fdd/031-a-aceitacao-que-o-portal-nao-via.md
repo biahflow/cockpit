@@ -41,7 +41,8 @@ do convite, ou da criação da organização, que é a data em que ele por acaso
   que cruza é a data em que **o próprio cliente aprovou** alguma coisa.
 - **O cálculo é por cliente, não por projeto.** O funil de lá é escopado por organização e um
   cliente pode ter vários projetos; os dois vínculos possíveis do artefato (`project` e
-  `opportunity`) chegam ao mesmo `Client`. É pelo lado da oportunidade que o contrato quase
+  `commercial_opportunity`) chegam à mesma `Account`. É pelo lado da oportunidade que o contrato
+  quase
   sempre vive, porque aceitá-lo é o que *cria* o projeto depois.
 - **Arquivado para de contar**, como todo filho no snapshot.
 - **Só `ACCEPTED` emite.** Rascunho, revisão e envio mudam a linha várias vezes sem mover

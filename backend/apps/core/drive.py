@@ -4,7 +4,7 @@ Organiza os documentos por cliente usando o método PARA:
 ``[raiz]/{Cliente}/{1-Projetos|2-Áreas|3-Recursos|4-Arquivo}/arquivo``.
 Quando ``GOOGLE_DRIVE_ENABLED`` está desligado, o app usa o storage local e nada
 aqui é chamado. As funções que falam com a API do Google são finas e ficam fora da
-cobertura de teste; a lógica de negócio (bucket PARA e cliente-dono) é testada.
+cobertura de teste; a lógica de negócio (bucket PARA e conta-dona) é testada.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from django.conf import settings
 from . import flags
 
 if TYPE_CHECKING:
-    from .models import Client, Document, Project
+    from .models import Account, Document, Project
 
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
 FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -68,20 +68,24 @@ def para_bucket_for(document: Document) -> str:
     """Subpasta PARA de acordo com o vínculo do documento."""
     if document.project_id:
         return PROJECT_BUCKET
-    if document.opportunity_id:
+    if document.commercial_opportunity_id:
         return OPPORTUNITY_BUCKET
     return CLIENT_BUCKET
 
 
-def client_of(document: Document) -> Client | None:
-    """Cliente-dono do documento, seguindo o vínculo (cliente, oportunidade ou projeto)."""
-    if document.client_id:
-        return document.client
-    opportunity = document.opportunity if document.opportunity_id else None
+def account_of(document: Document) -> Account | None:
+    """Conta-dona do documento, seguindo o vínculo (conta, oportunidade ou projeto)."""
+    if document.account_id:
+        return document.account
+    opportunity = (
+        document.commercial_opportunity if document.commercial_opportunity_id else None
+    )
     if opportunity:
-        return opportunity.client
+        return opportunity.account
     project = document.project if document.project_id else None
     if project:
+        # `project.client` e não `project.account`: a projeção é o único campo `client` que a
+        # fatia 2 da issue #67 preservou (ADR 0052), e a Fase 6 é quem a remove.
         return project.client
     return None
 
@@ -127,12 +131,12 @@ def _ensure_subfolder(service, name: str, parent: str) -> str:  # pragma: no cov
     return _find_folder(service, name, parent) or _create_folder(service, name, parent)
 
 
-def _ensure_client_folder(service, client: Client) -> str:  # pragma: no cover - I/O
-    if client.drive_folder_id:
-        return client.drive_folder_id
-    folder_id = _ensure_subfolder(service, client.name, root_folder_id())
-    client.drive_folder_id = folder_id
-    client.save(update_fields=["drive_folder_id", "updated_at"])
+def _ensure_account_folder(service, account: Account) -> str:  # pragma: no cover - I/O
+    if account.drive_folder_id:
+        return account.drive_folder_id
+    folder_id = _ensure_subfolder(service, account.name, root_folder_id())
+    account.drive_folder_id = folder_id
+    account.save(update_fields=["drive_folder_id", "updated_at"])
     return folder_id
 
 
@@ -146,8 +150,8 @@ def ensure_project_folder(project: Project) -> str:  # pragma: no cover - I/O
     if project.drive_folder_id:
         return project.drive_folder_id
     service = _service()
-    client_folder = _ensure_client_folder(service, project.client)
-    bucket_folder = _ensure_subfolder(service, PROJECT_BUCKET, client_folder)
+    account_folder = _ensure_account_folder(service, project.client)
+    bucket_folder = _ensure_subfolder(service, PROJECT_BUCKET, account_folder)
     folder_id = _ensure_subfolder(service, project.name, bucket_folder)
     project.drive_folder_id = folder_id
     project.save(update_fields=["drive_folder_id", "updated_at"])
@@ -158,12 +162,12 @@ def upload_document(document: Document, uploaded_file) -> tuple[str, str]:  # pr
     """Sobe o arquivo para ``{Cliente}/{subpasta PARA}`` e retorna ``(file_id, link)``."""
     from googleapiclient.http import MediaIoBaseUpload
 
-    client = client_of(document)
-    if client is None:
-        raise ValueError("Documento sem cliente-dono para o Drive.")
+    account = account_of(document)
+    if account is None:
+        raise ValueError("Documento sem conta-dona para o Drive.")
     service = _service()
-    client_folder = _ensure_client_folder(service, client)
-    bucket_folder = _ensure_subfolder(service, para_bucket_for(document), client_folder)
+    account_folder = _ensure_account_folder(service, account)
+    bucket_folder = _ensure_subfolder(service, para_bucket_for(document), account_folder)
     media = MediaIoBaseUpload(
         io.BytesIO(uploaded_file.read()),
         mimetype=getattr(uploaded_file, "content_type", None) or "application/octet-stream",

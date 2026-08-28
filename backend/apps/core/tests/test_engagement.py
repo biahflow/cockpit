@@ -18,12 +18,19 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Contact, Engagement, Opportunity, PipelineStage, Project, User
+from apps.core.models import (
+    CommercialOpportunity,
+    Contact,
+    Engagement,
+    PipelineStage,
+    Project,
+    User,
+)
 
 from .factories import (
-    ClientFactory,
+    AccountFactory,
+    CommercialOpportunityFactory,
     EngagementFactory,
-    OpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -45,7 +52,7 @@ def _api(role: str = User.Role.ADMIN) -> tuple[APIClient, User]:
 def test_engagement_recusa_data_final_anterior_a_inicial() -> None:
     hoje = timezone.localdate()
     engagement = EngagementFactory.build(
-        account=ClientFactory(), owner=UserFactory(), started_at=hoje, ended_at=hoje - timedelta(1)
+        account=AccountFactory(), owner=UserFactory(), started_at=hoje, ended_at=hoje - timedelta(1)
     )
 
     with pytest.raises(ValidationError) as erro:
@@ -56,7 +63,7 @@ def test_engagement_recusa_data_final_anterior_a_inicial() -> None:
 
 def test_engagement_encerrado_exige_data_final() -> None:
     engagement = EngagementFactory.build(
-        account=ClientFactory(), owner=UserFactory(),
+        account=AccountFactory(), owner=UserFactory(),
         status=Engagement.Status.CLOSED, ended_at=None,
     )
 
@@ -69,10 +76,10 @@ def test_engagement_encerrado_exige_data_final() -> None:
 def test_patrocinador_precisa_ser_contato_da_mesma_conta() -> None:
     """Um patrocinador de outra organização exibiria, na tela do mandato, um nome que não pertence
     àquela conta — e nada acusaria."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     engagement = EngagementFactory.build(
         account=conta, owner=UserFactory(),
-        sponsor=Contact.objects.create(client=ClientFactory(), first_name="Alheia"),
+        sponsor=Contact.objects.create(account=AccountFactory(), first_name="Alheia"),
     )
 
     with pytest.raises(ValidationError) as erro:
@@ -82,10 +89,10 @@ def test_patrocinador_precisa_ser_contato_da_mesma_conta() -> None:
 
 
 def test_patrocinador_da_propria_conta_passa() -> None:
-    conta = ClientFactory()
+    conta = AccountFactory()
     engagement = EngagementFactory.build(
         account=conta, owner=UserFactory(),
-        sponsor=Contact.objects.create(client=conta, first_name="Patrocinadora"),
+        sponsor=Contact.objects.create(account=conta, first_name="Patrocinadora"),
     )
 
     engagement.clean()  # não levanta
@@ -95,7 +102,7 @@ def test_projeto_recusa_engajamento_de_outra_conta() -> None:
     """A validação que mantém honesta a projeção `Project.client` (ADR 0050): sem ela, o projeto
     apareceria na carteira de uma conta e no mandato de outra."""
     projeto = ProjectFactory.build(
-        client=ClientFactory(), engagement=EngagementFactory(), owner=UserFactory(),
+        client=AccountFactory(), engagement=EngagementFactory(), owner=UserFactory(),
         start_date=timezone.localdate(), due_date=timezone.localdate() + timedelta(days=10),
     )
 
@@ -117,14 +124,14 @@ def test_todo_projeto_de_fabrica_tem_engajamento_coerente() -> None:
 
 
 def test_engagement_nasce_pago_por_padrao() -> None:
-    engagement = EngagementFactory(account=ClientFactory(), owner=UserFactory())
+    engagement = EngagementFactory(account=AccountFactory(), owner=UserFactory())
 
     assert engagement.commercial_model == Engagement.CommercialModel.PAID
 
 
 def test_design_partner_so_quando_explicito() -> None:
     engagement = EngagementFactory(
-        account=ClientFactory(), owner=UserFactory(),
+        account=AccountFactory(), owner=UserFactory(),
         commercial_model=Engagement.CommercialModel.DESIGN_PARTNER,
     )
 
@@ -133,7 +140,7 @@ def test_design_partner_so_quando_explicito() -> None:
 
 def test_post_engagement_aceita_e_devolve_commercial_model() -> None:
     api, vendedora = _api(User.Role.SALES)
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(
         reverse("engagement-list"),
@@ -151,7 +158,7 @@ def test_post_engagement_aceita_e_devolve_commercial_model() -> None:
 
 def test_commercial_model_fora_do_enum_e_recusado() -> None:
     api, vendedora = _api(User.Role.SALES)
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(
         reverse("engagement-list"),
@@ -164,11 +171,11 @@ def test_commercial_model_fora_do_enum_e_recusado() -> None:
 
 
 def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() -> None:
-    """A invariante que motivou a emenda: hoje não existe FK de `Engagement` para `Opportunity`
+    """A invariante que motivou a emenda: hoje não existe FK de `Engagement` para `CommercialOpportunity`
     (a direção é a inversa), então um mandato de design partner já pode nascer — e um projeto
     pendurar nele — sem nenhuma oportunidade no banco."""
     api, vendedora = _api(User.Role.SALES)
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     criado = api.post(
         reverse("engagement-list"),
@@ -184,7 +191,7 @@ def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() ->
 
     assert projeto.engagement_id is not None
     assert projeto.engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER
-    assert not Opportunity.objects.exists()
+    assert not CommercialOpportunity.objects.exists()
 
 
 # ------------------------------------------------------------------- POST /projects/
@@ -204,7 +211,7 @@ def _payload_de_projeto(conta, engagement=None) -> dict:
 
 def test_criar_projeto_sem_engajamento_e_recusado() -> None:
     api, _ = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(reverse("project-list"), _payload_de_projeto(conta), format="json")
 
@@ -214,7 +221,7 @@ def test_criar_projeto_sem_engajamento_e_recusado() -> None:
 
 def test_criar_projeto_com_engajamento_de_outra_conta_e_recusado() -> None:
     api, _ = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
     alheio = EngagementFactory()
 
     resposta = api.post(
@@ -227,7 +234,7 @@ def test_criar_projeto_com_engajamento_de_outra_conta_e_recusado() -> None:
 
 def test_criar_projeto_com_engajamento_da_conta_passa() -> None:
     api, _ = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
     engagement = EngagementFactory(account=conta)
 
     resposta = api.post(
@@ -242,9 +249,9 @@ def test_criar_projeto_com_engajamento_da_conta_passa() -> None:
 def test_segundo_projeto_da_mesma_origem_nasce_por_post_projects() -> None:
     """O caminho da venda recorrente: o banco deixou de proibir 1-N, e é aqui que ele se usa."""
     api, _ = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
     engagement = EngagementFactory(account=conta)
-    origem = OpportunityFactory(client=conta, stage=PipelineStage.objects.get(kind="won"))
+    origem = CommercialOpportunityFactory(account=conta, stage=PipelineStage.objects.get(kind="won"))
     corpo = _payload_de_projeto(conta, engagement) | {
         "originating_commercial_opportunity": origem.pk
     }
@@ -262,7 +269,7 @@ def test_a_origem_comercial_nao_se_reescreve_por_patch() -> None:
     """A proveniência é fato histórico: o funil e o ciclo médio a leem como tal."""
     api, _ = _api()
     projeto = ProjectFactory()
-    outra = OpportunityFactory(client=projeto.client)
+    outra = CommercialOpportunityFactory(account=projeto.client)
 
     resposta = api.patch(
         reverse("project-detail", args=[projeto.pk]),
@@ -280,7 +287,7 @@ def test_a_origem_comercial_nao_se_reescreve_por_patch() -> None:
 
 def _converter(api: APIClient, opportunity, **extra) -> object:
     corpo = {
-        "client": opportunity.client_id,
+        "client": opportunity.account_id,
         "name": "Projeto convertido",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=10)),
@@ -293,14 +300,14 @@ def _converter(api: APIClient, opportunity, **extra) -> object:
 def test_conversao_sem_engajamento_cria_um_de_escopo_unico() -> None:
     """D3 em código: a venda avulsa não vira caso especial, ela cria o próprio mandato."""
     api, user = _api()
-    opportunity = OpportunityFactory(
+    opportunity = CommercialOpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), title="Discovery da Acme", scope="Escopo X"
     )
 
     resposta = _converter(api, opportunity)
 
     assert resposta.status_code == 201
-    engagement = Engagement.objects.get(account_id=opportunity.client_id)
+    engagement = Engagement.objects.get(account_id=opportunity.account_id)
     assert resposta.data["engagement"] == engagement.pk
     assert engagement.name == "Discovery da Acme"
     assert engagement.mandate == "Escopo X"
@@ -313,20 +320,20 @@ def test_conversao_sem_engajamento_cria_um_de_escopo_unico() -> None:
 
 def test_conversao_com_engajamento_no_payload_usa_o_informado() -> None:
     api, _ = _api()
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
-    engagement = EngagementFactory(account=opportunity.client)
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+    engagement = EngagementFactory(account=opportunity.account)
 
     resposta = _converter(api, opportunity, engagement=engagement.pk)
 
     assert resposta.status_code == 201
     assert resposta.data["engagement"] == engagement.pk
     # Não criou um segundo mandato por baixo.
-    assert Engagement.objects.filter(account=opportunity.client).count() == 1
+    assert Engagement.objects.filter(account=opportunity.account).count() == 1
 
 
 def test_conversao_recusa_engajamento_de_outra_conta() -> None:
     api, _ = _api()
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
 
     resposta = _converter(api, opportunity, engagement=EngagementFactory().pk)
 
@@ -339,7 +346,7 @@ def test_conversao_recusa_engajamento_de_outra_conta() -> None:
 
 def test_vendas_escreve_e_entrega_so_le() -> None:
     """O engajamento é o mandato comercial: quem entrega precisa sabê-lo, não redefini-lo."""
-    conta = ClientFactory()
+    conta = AccountFactory()
     vendas, vendedora = _api(User.Role.SALES)
     entrega, pessoa = _api(User.Role.DELIVERY)
     engagement = EngagementFactory(account=conta)
@@ -390,7 +397,7 @@ def test_o_mandato_nao_se_duplica_por_ter_dois_projetos() -> None:
 
 def test_filtros_por_conta_e_status() -> None:
     api, _ = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
     ativo = EngagementFactory(account=conta)
     EngagementFactory(account=conta, status=Engagement.Status.PAUSED)
     EngagementFactory()
@@ -432,7 +439,7 @@ def test_arquivar_a_conta_leva_o_mandato_junto() -> None:
 
 def test_serializer_recusa_encerrado_sem_data_final() -> None:
     api, user = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(
         reverse("engagement-list"),
@@ -475,10 +482,10 @@ def test_sponsor_name_vem_preenchido_e_e_nulo_sem_patrocinador() -> None:
     """O board desenha "Patrocínio de {nome}", e `sponsor` é opcional: sem patrocinador a linha
     não mostra a frase, em vez de mostrar uma frase pela metade."""
     api, _ = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
     com_patrocinio = EngagementFactory(
         account=conta,
-        sponsor=Contact.objects.create(client=conta, first_name="Marina", last_name="Alencar"),
+        sponsor=Contact.objects.create(account=conta, first_name="Marina", last_name="Alencar"),
     )
     sem_patrocinio = EngagementFactory(account=conta)
 
@@ -544,7 +551,7 @@ def test_criar_sem_owner_grava_quem_esta_logado() -> None:
     """O formulário aprovado não expõe "Responsável": a seção vive dentro do detalhe do cliente,
     onde quem cria é quem está logado. Mesmo precedente da `convert-to-project`."""
     api, vendedora = _api(User.Role.SALES)
-    conta = ClientFactory()
+    conta = AccountFactory()
 
     resposta = api.post(
         reverse("engagement-list"),
@@ -560,7 +567,7 @@ def test_criar_sem_owner_grava_quem_esta_logado() -> None:
 def test_criar_com_owner_no_payload_respeita_o_informado() -> None:
     """Relaxar a exigência não é tirar o campo: `owner` continua gravável no contrato."""
     api, _ = _api()
-    conta = ClientFactory()
+    conta = AccountFactory()
     outra = UserFactory(role=User.Role.SALES)
 
     resposta = api.post(
@@ -592,17 +599,17 @@ def test_a_recusa_de_arquivar_diz_engagement_e_nao_engajamento() -> None:
 def test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer() -> None:
     """**A segunda troca de copy que o spec pediu está em ramo morto, e isto o registra.**
 
-    `convert_to_project` compara `engagement.account_id` com `opportunity.client_id` depois de já
+    `convert_to_project` compara `engagement.account_id` com `opportunity.account_id` depois de já
     ter passado por dois filtros que juntos tornam a divergência impossível:
-    `ProjectSerializer.validate` recusa `engagement.account != client`, e a própria action recusa
-    `client != opportunity.client`. Quem chega à terceira comparação já tem as duas igualdades.
+    `ProjectSerializer.validate` recusa `engagement.account != account`, e a própria action recusa
+    `account != opportunity.account`. Quem chega à terceira comparação já tem as duas igualdades.
 
     A mensagem que a pessoa de fato lê nesse caminho é a **do serializer**, e ela continua em
     português — mas é da superfície de Projetos/Comercial, não da seção de Engagements que o DAP
     `dap-engagement-r1` aprovou. Trocá-la é varredura própria, fora deste escopo.
     """
     api, _ = _api()
-    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+    opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
 
     resposta = _converter(api, opportunity, engagement=EngagementFactory().pk)
 

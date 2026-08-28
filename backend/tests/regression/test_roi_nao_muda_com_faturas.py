@@ -25,7 +25,7 @@ from rest_framework.test import APIClient
 from apps.core import agents, health, invoices, portal
 from apps.core.models import Invoice, Service
 from apps.core.tests.factories import (
-    ClientFactory,
+    AccountFactory,
     InvoiceFactory,
     ProjectFactory,
     UserFactory,
@@ -37,7 +37,7 @@ def cenario():
     admin = UserFactory(role="admin")
     api = APIClient()
     api.force_authenticate(admin)
-    cliente = ClientFactory()
+    cliente = AccountFactory()
     projeto = ProjectFactory(
         client=cliente,
         owner=admin,
@@ -83,7 +83,7 @@ def test_fatura_vencida_tambem_nao_mexe_no_roi(cenario):
     antes = _fotografar(api, projeto, admin)
 
     InvoiceFactory(
-        client=projeto.client,
+        account=projeto.client,
         project=projeto,
         status=Invoice.Status.OVERDUE,
         number="2026-6001",

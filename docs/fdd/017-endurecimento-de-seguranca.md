@@ -14,7 +14,7 @@ Três achados eram vazamento real, dois eram defeito, e a maior parte da superf�
 ## Regras
 
 - **Entrega vê o documento do projeto em que atua.** `DocumentViewSet` estreita `get_queryset` por
-  função, como `OpportunityViewSet` já fazia; "atuar" é ser dono do projeto ou de um marco/tarefa
+  função, como `CommercialOpportunityViewSet` já fazia; "atuar" é ser dono do projeto ou de um marco/tarefa
   dele (`_acts_on_project`). A escrita acompanha: Entrega não vincula documento a cliente nem a
   oportunidade, e não vincula artefato a oportunidade. Antes, proposta e contrato salvos como
   `.txt` pelo painel de artefatos ficavam ligados à oportunidade e Entrega baixava os dois — o

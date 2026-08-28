@@ -22,24 +22,49 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 
 | Alias vivo hoje | Nome canônico | Onde vive | Morre em |
 | --- | --- | --- | --- |
-| classe `Client` | `Account` | `backend/apps/core/models.py` | **#67, fatia 2** |
 | tabela `core_client` | `core_account` | `Meta.db_table` | Fase 6 |
-| rota `/api/v1/clients/` e chave `client` | `/accounts/` e `account` | `urls.py`, `serializers.py` | `/api/v2/` |
-| classe `Opportunity` | `CommercialOpportunity` | `backend/apps/core/models.py` | **#67, fatia 3** |
+| rota `/api/v1/clients/` e chaves `client` / `status` | `/accounts/`, `account`, `lifecycle_status` | `urls.py`, `serializers.py` | `/api/v2/` |
+| campo `Project.client` | `engagement.account` (é projeção, não alias) | `backend/apps/core/models.py` | Fase 6 |
 | tabela `core_opportunity` | `core_commercialopportunity` | `Meta.db_table` | Fase 6 |
 | rota `/api/v1/opportunities/` e chave `opportunity` | `/commercial-opportunities/` e `commercial_opportunity` | `urls.py`, `serializers.py` | `/api/v2/` |
-| classes `Processo` / `ProcessoEtapa` | `Process` / `ProcessStep` | `backend/apps/core/models.py` | **#67, fatia 4** |
+| chave de payload `gate_outcome` | `gate_decision` | `serializers.py` | `/api/v2/` |
 | tabelas `core_processo` / `core_processoetapa` | `core_process` / `core_processstep` | `Meta.db_table` | Fase 6 |
 | rotas `/processos/` e `/processo-etapas/` | `/processes/` e `/process-steps/` | `urls.py` | `/api/v2/` |
-| `GateOutcome` / `gate_outcome` | `GateDecision` / `gate_decision` | `backend/apps/core/models.py` | **#67, fatia 1** |
 | classe `Evidencia` (o dual-write) | `Evidence` + `Finding` | `backend/apps/core/models.py` | Fase 6 |
+
+### Já pagos pela #67 — 28/08/2026
+
+Quatro renomes de classe saíram da tabela porque deixaram de ser alias: o nome antigo não existe
+mais em código. **Sair daqui não é o fim da dívida** — é o fim de *uma* das três, e as outras duas
+continuam listadas acima.
+
+**A #67 fechou com a fatia 4.** O que ela deixa para trás está inteiro nas linhas de cima, e são
+duas coisas: as **tabelas** (`core_client`, `core_opportunity`, `core_processo`,
+`core_processoetapa`) e a classe `Evidencia`, que a Fase 6 remove junto com o dual-write, mais
+`Project.client`, que é projeção e não alias. As **rotas** (`/clients/`, `/opportunities/`,
+`/processos/`, `/processo-etapas/`) e as **chaves de payload** (`client`, `status`, `opportunity`,
+`gate_outcome`, `processo`, `etapa`) morrem na `/api/v2/`, e a v2 não nasce antes da Fase 6.
+
+| Foi | É | Fatia |
+| --- | --- | --- |
+| `GateOutcome` / `gate_outcome` | `GateDecision` / `gate_decision` | 1 |
+| classe `Opportunity` e 5 campos `opportunity` | `CommercialOpportunity` / `commercial_opportunity` | 3 |
+| classe `Client`, 10 campos `client`, `status` | `Account` / `account` / `lifecycle_status` | 2 |
+| classes `Processo` / `ProcessoEtapa` e 3 campos `processo`/`etapa` | `Process` / `ProcessStep` / `process` / `step` | 4 |
+
+**`Project.client` sobreviveu à fatia 2 de propósito, e é a única exceção.** Ele não é alias: é a
+**projeção** temporária cuja fonte canônica é `engagement.account` (ADR 0050), mantida honesta por
+`Project.clean()`. Renomeá-lo para `account` criaria duas coisas com o nome canônico no mesmo
+objeto — `project.account` e `project.engagement.account` — que podem divergir, e aí o nome
+canônico deixaria de identificar a fonte. Quem o remove é a Fase 6.
 
 `Evidencia` é o único que não é só renome, e por isso é o único que **não** entra na #67: a Fase 3
 a **dividiu** em `Evidence` (o registro bruto) e `Finding` (a conclusão, com `epistemic_status`),
 conforme a decisão D6. Trocar o nome sem dividir resolveria o idioma e preservaria o defeito de
 linguagem que a divisão existe para corrigir. A classe legada segue de pé porque ainda tem leitor
-vivo (`processos.custo_do_estado_atual` e `ProcessoDetailPage`), e quem a remove é a Fase 6, junto
-com o dual-write.
+vivo (`process.custo_do_estado_atual` e `ProcessDetailPage`), e quem a remove é a Fase 6, junto
+com o dual-write. Os **campos** dela, esses sim, passaram a `process` e `step` na fatia 4 — renome
+de campo é `RenameField`, e ele preserva linha e pk.
 
 Depois da #67 sobra uma dívida com forma nova e nome antigo: a tabela `core_processo` guardando
 linhas de uma classe chamada `Process`. É desconfortável no `dbshell` e é de propósito — o risco
@@ -143,6 +168,33 @@ vai recalcular diferente.
 Regra prática, para a fase que ainda não começou: **em toda travessia de nome, a linha e a pk
 sobrevivem; só o rótulo muda.** Uma migração que crie linha nova para o mesmo fato precisa dizer,
 no próprio arquivo, como o consumidor externo continua achando o registro antigo.
+
+### 2c. Campo renomeia; **chave de payload** não
+
+A #67 renomeia o campo junto da classe — `Document.opportunity` vira
+`Document.commercial_opportunity`, `Contact.client` vira `Contact.account`, `Evidencia.etapa` vira
+`Evidencia.step`. É `RenameField`, que
+renomeia coluna e preserva linha e pk.
+
+**O que não muda é o corpo da requisição.** Cada chave legada continua saindo no `GET` e continua
+sendo aceita no `POST`/`PATCH`, com um mecanismo só para todas elas, e não uma cópia por
+serializer:
+
+- **leitura** — a chave antiga é um campo declarado com `source=` apontando para o canônico,
+  `read_only=True`. As duas saem, com o mesmo valor.
+- **escrita** — um mixin de serializer normaliza a chave antiga para a canônica antes da
+  validação. Quando as duas vêm no mesmo corpo, **a canônica vence**: um corpo com as duas é
+  confusão do chamador, e resolver pela nova é o que não trava quem já migrou. É a mesma regra que
+  `apply-gate` usa desde a fatia 1.
+
+O mecanismo é um só porque a alternativa é `if` de compatibilidade espalhado por dezessete
+serializers, e o décimo oitavo esquece — que é a mesma razão de `StatusDot.tsx` guardar os mapas de
+estado num lugar em vez de um por tela (ADR 0026).
+
+Cada alias de escrita precisa de regressão. Sem ela, a linha do serializer não tem chamador
+**dentro** do repositório — a SPA escreve o nome canônico — e a próxima varredura atrás do último
+resquício do nome antigo a remove achando que está pagando dívida. Estaria quebrando a `/api/v1/`
+em silêncio, no único lugar onde nada aqui dentro fica vermelho.
 
 ### 3. `legacy_` é o escape reservado
 

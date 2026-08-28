@@ -191,3 +191,11 @@ materializada e viva, porque o template passou a atravessar. A guarda da ADR 002
 nenhum dos dois: ela compara chaves de topo, e estas são aninhadas.
 
 O carimbo de versão e hora que entrou junto tem ADR própria: ver a **ADR 0051**.
+
+## Emenda (issue #67, fatia 2 — 28/08/2026) — a organização se chama `Account`
+
+Onde esta ADR diz `Client`, o modelo hoje se chama `Account`, e o `status` dele se chama
+`lifecycle_status` (ADR 0052). A chave `client` do snapshot **não muda** — é alias com data de morte na `/api/v2/`, e o One a
+consome. A **tabela** continua `core_client` e a **rota** continua
+`/api/v1/clients/`: o que a `docs/ontology/aliases.md` §2b protege é a linha e a pk, e nenhuma das
+duas se move.

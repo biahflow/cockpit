@@ -41,7 +41,7 @@ _BASE = (
 
 
 def build_commercial_context(user: User) -> str:
-    from .models import Lead, Opportunity, PipelineStage
+    from .models import CommercialOpportunity, Lead, PipelineStage
 
     active = Q(archived_at__isnull=True)
     lines = ["Resumo comercial.", "Pipeline por etapa:"]
@@ -53,13 +53,13 @@ def build_commercial_context(user: User) -> str:
         lines.append(f"- {stage.name} [{stage.kind}]: {stage.n} oportunidade(s), total estimado {stage.total or 0}")
     stale_before = timezone.now() - timedelta(days=30)
     stale = list(
-        Opportunity.objects.filter(
+        CommercialOpportunity.objects.filter(
             active, stage__kind=PipelineStage.Kind.OPEN, created_at__lt=stale_before
-        ).select_related("client")[:20]
+        ).select_related("account")[:20]
     )
     if stale:
         lines.append("Oportunidades abertas paradas há mais de 30 dias:")
-        lines += [f"- {o.title} ({o.client.name}), valor {o.estimated_value}" for o in stale]
+        lines += [f"- {o.title} ({o.account.name}), valor {o.estimated_value}" for o in stale]
     lines.append(f"Leads novos (não trabalhados): {Lead.objects.filter(active, status=Lead.Status.NEW).count()}")
     return "\n".join(lines)
 
@@ -171,11 +171,11 @@ def build_delivery_context(user: User) -> str:
     )
     if vigentes:
         lines.append("Satisfação registrada (o mais recente por cliente, últimos 90 dias):")
-        registros = sorted(vigentes.values(), key=lambda registro: registro.client.name)
+        registros = sorted(vigentes.values(), key=lambda registro: registro.account.name)
         for registro in registros[:_MAX_POR_BLOCO]:
             nota = registro.note.strip() or "sem nota"
             lines.append(
-                f"- {registro.client.name}: {registro.get_nivel_display().lower()} "
+                f"- {registro.account.name}: {registro.get_nivel_display().lower()} "
                 f"({registro.get_fonte_display().lower()}, em {registro.happened_on}) — {nota}"
             )
         if len(registros) > _MAX_POR_BLOCO:

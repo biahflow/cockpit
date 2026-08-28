@@ -24,11 +24,11 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.models import (
+    CommercialOpportunity,
     Discovery,
     Evidence,
     Finding,
     Lead,
-    Opportunity,
     PipelineStage,
     Project,
     Qualification,
@@ -55,7 +55,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
     qualification = Qualification.objects.get(pk=convertido.data["qualification"]["id"])
     assert qualification.outcome == Qualification.Outcome.QUALIFIED
     # Fase 1: converter registra a avaliação e **não** abre venda.
-    assert Opportunity.objects.count() == 0
+    assert CommercialOpportunity.objects.count() == 0
 
     degrau = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
     aberta = api.post(
@@ -64,7 +64,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
         format="json",
     )
     assert aberta.status_code == 201, aberta.data
-    opportunity = Opportunity.objects.get(pk=aberta.data["id"])
+    opportunity = CommercialOpportunity.objects.get(pk=aberta.data["id"])
     assert opportunity.origin_qualification_id == qualification.pk
 
     opportunity.stage = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
@@ -72,7 +72,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
     convertida = api.post(
         reverse("opportunity-convert-to-project", args=[opportunity.pk]),
         {
-            "client": opportunity.client_id, "name": "Discovery Sprint ACME",
+            "client": opportunity.account_id, "name": "Discovery Sprint ACME",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=30)), "status": "planning",
         },
@@ -82,7 +82,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
     projeto = Project.objects.get(pk=convertida.data["id"])
     # Fase 2: a venda avulsa não vira caso especial — ela cria o mandato de escopo único (D3).
     assert projeto.engagement_id is not None
-    assert projeto.engagement.account_id == opportunity.client_id
+    assert projeto.engagement.account_id == opportunity.account_id
     assert projeto.originating_commercial_opportunity_id == opportunity.pk
 
     criado = api.post(
@@ -133,4 +133,4 @@ def test_a_oferta_de_aquisicao_continua_barrada_depois_do_engagement(api: APICli
     )
 
     assert recusada.status_code == 400, recusada.data
-    assert Opportunity.objects.count() == 0
+    assert CommercialOpportunity.objects.count() == 0

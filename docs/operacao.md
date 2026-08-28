@@ -229,9 +229,9 @@ precisa ser decidido. Enquanto ninguém decidir, o comando diz isso em voz alta 
 rodou e não achou nada.
 
 Duas coisas que valem saber antes de configurar: o expurgo **não é desfeito pelo backup** (se a
-cópia trouxesse de volta, não teria sido expurgo — pense na janela das duas juntas), e `Client`,
-`Project` e `Opportunity` ficam **de fora de propósito**, porque apagá-los cascatearia sobre o
-histórico comercial inteiro.
+cópia trouxesse de volta, não teria sido expurgo — pense na janela das duas juntas), e `Account`,
+`Project` e `CommercialOpportunity` ficam **de fora de propósito**, porque apagá-los
+cascatearia sobre o histórico comercial inteiro.
 
 ## Limites de requisição
 

@@ -96,7 +96,7 @@ dele" — seria ampliação silenciosa de privilégio, porque o mandato agrupa a
 sintoma seria uma lista um pouco maior, não um erro. Há regressão dedicada a isso
 (`tests/regression/test_engagement_nao_amplia_escopo.py`).
 
-**O contrato `/api/v1/` do pipeline.** `OpportunitySerializer.project` e `project_archived`
+**O contrato `/api/v1/` do pipeline.** `CommercialOpportunitySerializer.project` e `project_archived`
 mantêm nome e forma — um id ou nulo, nunca uma lista. Passam a devolver o projeto vivo mais
 antigo, e só na falta de qualquer vivo o arquivado mais antigo. `CommercialPage.tsx` não mudou.
 
@@ -104,7 +104,7 @@ antigo, e só na falta de qualquer vivo o arquivado mais antigo. `CommercialPage
 `engagement.account`. Remover é a Fase 6. O que impede a projeção de divergir da fonte é
 `Project.clean()` (`engagement.account_id == client_id`) — e é o único lugar que o faz.
 
-**`Processo` e o Discovery estruturado.** Continuam pendurados na **conta** (FDD 039). O projeto
+**`Process` e o Discovery estruturado.** Continuam pendurados na **conta** (FDD 039). O projeto
 segue sendo proveniência opcional (`source_project`, `SET_NULL`), e nada disso passou a pender do
 projeto nem do engajamento.
 
@@ -155,7 +155,7 @@ a aplicação porque a coluna nunca foi fechada.
 
 ### O backfill agrupa por conta, e sinaliza o que não sabe
 
-Um engajamento por `Client` que tenha ao menos um projeto, com `name = "Engajamento — <conta>"`
+Um engajamento por `Account` que tenha ao menos um projeto, com `name = "Engajamento — <conta>"`
 (nome derivado e reconhecível como automático, para ser trocado em vez de aceito por inércia),
 `owner = client.owner`, `status = active` e `started_at` = o menor `start_date` entre os projetos.
 Conta sem projeto **não** ganha engajamento: o mandato nasce quando a primeira venda vira projeto.
@@ -179,7 +179,7 @@ Separar os mandatos carimbados é trabalho humano. Não há automação prevista
 
 ## Fora de escopo
 
-Tela de Engagement, navegação por engajamento, redesenho de `ClientDetailPage` ou `ProjectsPage`,
+Tela de Engagement, navegação por engajamento, redesenho de `AccountDetailPage` ou `ProjectsPage`,
 e exposição do engajamento nos agregadores (`/clients/overview/`, `/risk/`, `/health/`,
 `/dashboard/`). Interface nova exige Design Approval Package, e não há um aprovado para esta
 superfície. O frontend recebeu apenas os tipos.
@@ -201,7 +201,7 @@ que recebe Discovery sem cobrança em troca de servir de caso e de campo de prov
 dois eram a mesma linha.
 
 **O schema nunca exigiu o caminho Won, então nada foi derrubado.** Não existe FK nem constraint de
-`Engagement` para `CommercialOpportunity` — a direção é a inversa (`Opportunity.engagement`,
+`Engagement` para `CommercialOpportunity` — a direção é a inversa (`CommercialOpportunity.engagement`,
 opcional, `SET_NULL`) —, e o `EngagementSerializer` sempre exigiu só `account`, `name` e `owner`.
 Um mandato de design partner já podia ser criado por `POST /engagements/` sem nenhuma oportunidade
 antes desta emenda, e continua podendo: a emenda acrescenta um rótulo a uma origem que já era
@@ -241,7 +241,7 @@ Package, e não há um aprovado para esta superfície"*. **Agora há**:
 as decisões **A1** e **B1**. O pacote é a especificação da superfície, e é ele que governa forma e
 copy — não esta FDD.
 
-O que entrou: uma `<section className="panel">` em `ClientDetailPage`, **entre "Saúde da relação" e
+O que entrou: uma `<section className="panel">` em `AccountDetailPage`, **entre "Saúde da relação" e
 "Satisfação"**, que lista os mandatos da conta com status, modelo comercial, patrocínio, período e
 contagem de projetos, e permite criar, editar e arquivar. É a primeira superfície do produto onde a
 espinha `Account → Engagement → Project` fica visível. O que **continua** fora: tela de lista no

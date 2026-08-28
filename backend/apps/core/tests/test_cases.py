@@ -20,7 +20,7 @@ from apps.core.models import (
     WorkItem,
 )
 
-from .factories import ClientFactory, ProjectFactory, ProjectMemberFactory, UserFactory
+from .factories import AccountFactory, ProjectFactory, ProjectMemberFactory, UserFactory
 
 
 def _api(role: str = "admin") -> APIClient:
@@ -62,7 +62,7 @@ def _completed_project(**overrides) -> Project:
 def test_concluir_projeto_congela_um_case_em_rascunho():
     vertical = _vertical()
     project = _completed_project(
-        client=ClientFactory(vertical=vertical),
+        client=AccountFactory(vertical=vertical),
         actual_value=Decimal("180000.00"),
         cost=Decimal("90000.00"),
     )
@@ -252,8 +252,8 @@ def test_numeros_congelados_sao_somente_leitura_na_api():
 @pytest.mark.django_db
 def test_lista_filtra_por_vertical_e_por_status():
     igrejas, saude = _vertical(), _vertical("Saúde", "saude")
-    _completed_project(client=ClientFactory(vertical=igrejas))
-    _completed_project(client=ClientFactory(vertical=saude))
+    _completed_project(client=AccountFactory(vertical=igrejas))
+    _completed_project(client=AccountFactory(vertical=saude))
     api = _api()
 
     por_vertical = api.get(f"/api/v1/cases/?vertical={igrejas.pk}")

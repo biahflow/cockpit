@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 from apps.core import health
 from apps.core.models import Meeting, Pendencia, Satisfacao, Task, WorkItem
 
-from .factories import ClientFactory, ProjectFactory, UserFactory
+from .factories import AccountFactory, ProjectFactory, UserFactory
 
 
 @pytest.mark.django_db
@@ -61,7 +61,7 @@ def test_health_penalizes_negative_roi():
 
 def _satisfacao(project, **kwargs):  # type: ignore[no-untyped-def]
     campos = {
-        "client": project.client,
+        "account": project.client,
         "nivel": Satisfacao.Nivel.INSATISFEITO,
         "fonte": Satisfacao.Fonte.DECLARADA,
         "happened_on": timezone.localdate(),
@@ -152,7 +152,7 @@ def test_health_endpoint_lists_worst_first():
 
 @pytest.mark.django_db
 def test_client_overview_aggregates_health_phase_roi_and_next_meeting():
-    client_obj = ClientFactory(status="active")
+    client_obj = AccountFactory(lifecycle_status="active")
     project = ProjectFactory(client=client_obj, status="active", actual_value=1000, cost=250)
     Task.objects.create(
         project=project, title="Atraso", owner=project.owner,
@@ -170,6 +170,7 @@ def test_client_overview_aggregates_health_phase_roi_and_next_meeting():
     assert response.status_code == 200
     data = response.json()
     assert data["client_id"] == client_obj.pk
+    assert data["lifecycle_status"] == data["status"] == "active"
     assert data["health"]["level"] in {"saudável", "atenção", "crítico"}
     assert data["health"]["score"] < 100  # há item atrasado
     assert data["risk_level"] in {"baixo", "médio", "alto"}
@@ -179,7 +180,7 @@ def test_client_overview_aggregates_health_phase_roi_and_next_meeting():
 
 @pytest.mark.django_db
 def test_client_overview_includes_reviewed_ai_score():
-    client_obj = ClientFactory(status="active")
+    client_obj = AccountFactory(lifecycle_status="active")
     ProjectFactory(
         client=client_obj, status="active",
         ai_maturity=35, ai_opportunity=80, ai_dimensions=[{"label": "Dados", "score": 30}],
@@ -198,7 +199,7 @@ def test_client_overview_includes_reviewed_ai_score():
 
 @pytest.mark.django_db
 def test_client_overview_is_blank_for_prospect_without_projects():
-    prospect = ClientFactory(status="prospect")
+    prospect = AccountFactory(lifecycle_status="prospect")
     api = APIClient()
     api.force_authenticate(UserFactory())
     response = api.get(reverse("client-overview-detail", args=[prospect.pk]))

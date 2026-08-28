@@ -89,15 +89,42 @@ class Vertical(models.Model):
         return self.name
 
 
-class Client(TimestampedModel):
-    class Status(models.TextChoices):
+class Account(TimestampedModel):
+    """A organização com quem a casa se relaciona — desde antes de ela comprar.
+
+    O nome canônico é `Account` (`docs/ontology/language-map.md` §2), e "cliente" deixa de ser o
+    nome da entidade para virar o **rótulo** de um dos estados dela. A ADR 0052 é o que autoriza
+    renomear a classe agora, na issue #67, em vez de esperar a Fase 6: a **tabela** continua
+    `core_client` (ver `Meta` abaixo), e é a tabela — a linha e a pk — que a `aliases.md` §2b
+    protege, porque o One deriva `organization.slug = biahflow-client-{id}` e a persiste.
+    """
+
+    class LifecycleStatus(models.TextChoices):
+        """Onde a conta está na relação com a casa — três estados, e o do meio é que se chama
+        "Cliente".
+
+        `prospect` é a organização que ainda não fechou nada; `active` é cliente de fato, com
+        venda ganha; `inactive` é quem **já foi** cliente e hoje não tem trabalho em andamento.
+        Sem o terceiro, a conta que terminou o mandato só tinha dois destinos igualmente errados:
+        continuar dizendo "Cliente" — e inflar toda contagem de carteira — ou ser arquivada, que
+        é sumir do histórico. É o `language-map` §4.
+
+        **Entrar em `inactive` não tem automação, e é decisão.** A promoção `prospect → active`
+        é do signal `_promote_account_on_won`, porque "houve venda ganha" é fato observável no
+        banco. "Não tem trabalho em andamento" não é: projeto pausado, mandato em renovação e
+        cliente que sumiu produzem o mesmo estado no schema e significados diferentes. Quem
+        edita a conta afirma.
+        """
+
         PROSPECT = "prospect", "Prospect"
         ACTIVE = "active", "Ativo"
+        INACTIVE = "inactive", "Inativo"
 
     name = models.CharField(max_length=255)
     legal_name = models.CharField(max_length=255, blank=True)
     tax_id = models.CharField(max_length=32, blank=True)
-    # Aditivo e opcional, na forma de `Opportunity.service`: é o que a instanciação de Funcionário
+    # Aditivo e opcional, na forma de `CommercialOpportunity.service`: é o que a instanciação
+    # de Funcionário
     # Digital usa como padrão e o que escolhe a variante do blueprint (FDD 026).
     vertical = models.ForeignKey(
         Vertical, on_delete=models.SET_NULL, null=True, blank=True, related_name="clients"
@@ -109,21 +136,28 @@ class Client(TimestampedModel):
     # novo por fatura quebraria a deduplicação e os relatórios do próprio fornecedor. Precedente da
     # casa: `drive_folder_id` acima já é id de fornecedor morando num modelo do domínio.
     payment_customer_ref = models.CharField(max_length=128, blank=True, default="")
-    # Quem cadastra afirma o status (a SPA oferece a escolha); o default é o mais conservador,
-    # porque um POST que omite o campo não deve alegar uma venda que não houve. O cliente vindo de
+    # Quem cadastra afirma o estado (a SPA oferece a escolha); o default é o mais conservador,
+    # porque um POST que omite o campo não deve alegar uma venda que não houve. A conta vinda de
     # conversão de lead também nasce "prospect", e vira "active" pelo signal quando a oportunidade
-    # é ganha — promoção que um PATCH não desfaz (ver `ClientSerializer.validate_status`).
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PROSPECT)
+    # é ganha — promoção que um PATCH não desfaz (ver `AccountSerializer.validate_lifecycle_status`).
+    lifecycle_status = models.CharField(
+        max_length=16, choices=LifecycleStatus.choices, default=LifecycleStatus.PROSPECT
+    )
 
     class Meta:
         ordering = ["name"]
+        # **A tabela não se move** (ADR 0052). Fixá-la aqui é o que torna o `RenameModel` da
+        # migração `0062` um no-op no banco: `alter_db_table` abre com
+        # `if old_db_table == new_db_table: return`. O nome da tabela é a Fase 6; o que sai agora
+        # é só o nome da classe.
+        db_table = "core_client"
 
     def __str__(self) -> str:
         return self.name
 
 
 class Contact(TimestampedModel):
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="contacts")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="contacts")
     first_name = models.CharField(max_length=128)
     # Sobrenome é opcional (issue #55, FDD 001): nem todo contato cadastrado tem um, e exigi-lo
     # obrigaria quem cadastra a inventar um valor só para satisfazer o formulário.
@@ -177,9 +211,10 @@ class Engagement(TimestampedModel):
         DESIGN_PARTNER = "design_partner", "Design partner"
         PAID = "paid", "Pago"
 
-    # `account` e não `client`: é o termo canônico do mapa de linguagem, e o campo nasce com o
-    # nome certo mesmo enquanto o modelo ainda se chama `Client` (o renome físico é a Fase 6).
-    account = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="engagements")
+    # `account` é o termo canônico do mapa de linguagem. O campo nasceu com o nome certo quando
+    # a classe ainda se chamava `Client`; desde a fatia 2 da issue #67 (ADR 0052) os dois nomes
+    # coincidem, e o que resta de legado é a tabela, que a Fase 6 renomeia.
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="engagements")
     name = models.CharField(max_length=255)
     # O mandato em si: o que a casa foi contratada para transformar. Texto livre e opcional
     # porque o engajamento de escopo único nasce da conversão, onde o que existe é o escopo da
@@ -229,7 +264,7 @@ class Engagement(TimestampedModel):
         # organização aqui seria o mesmo defeito que `Activity.clean()` já fecha na oportunidade:
         # a tela mostraria um nome que não pertence àquele cliente, e ninguém acusaria.
         sponsor = self.sponsor if self.sponsor_id else None
-        if sponsor is not None and sponsor.client_id != self.account_id:
+        if sponsor is not None and sponsor.account_id != self.account_id:
             raise ValidationError({"sponsor": "O patrocinador deve ser contato da mesma conta."})
 
 
@@ -258,8 +293,8 @@ class PipelineStage(models.Model):
         return self.name
 
 
-class Opportunity(TimestampedModel):
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="opportunities")
+class CommercialOpportunity(TimestampedModel):
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="opportunities")
     contact = models.ForeignKey(Contact, on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=255)
     scope = models.TextField(blank=True)
@@ -293,14 +328,19 @@ class Opportunity(TimestampedModel):
     )
 
     class Meta:
+        # A classe renomeou na issue #67 e a **tabela fica** (ADR 0052): `db_table` fixa aqui o
+        # nome que ela já tem, para o `RenameModel` da migração não emitir `ALTER TABLE`. O nome
+        # da tabela é a Fase 6, e o que a `aliases.md` §2b protege é a pk — que só se move se a
+        # linha se mover.
+        db_table = "core_opportunity"
         ordering = ["expected_close_date", "id"]
 
     def clean(self) -> None:
         """Invariante 5 do mapa de linguagem, no modelo e não só na view.
 
         `POST /qualifications/{id}/open-opportunity/` é o caminho previsto e já recusa com 409, mas
-        a regra não pode morar só lá: shell, admin e migração futura criam `Opportunity` sem passar
-        por view nenhuma, e uma venda apontando para uma avaliação `nurture` diria que a casa vendeu
+        a regra não pode morar só lá: shell, admin e migração futura criam
+        `CommercialOpportunity` sem passar por view nenhuma, e uma venda apontando para uma avaliação `nurture` diria que a casa vendeu
         para quem ela mesma decidiu não vender ainda.
         """
         origem = self.origin_qualification if self.origin_qualification_id else None
@@ -370,7 +410,13 @@ class Project(TimestampedModel):
     # cliente direto, e removê-lo é a Fase 6. O que o mantém honesto é a validação em `clean()`
     # abaixo — sem ela, a projeção divergiria da fonte em silêncio, que é exatamente o defeito
     # que uma projeção introduz quando ninguém a amarra.
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="projects")
+    #
+    # **É o único campo que a fatia 2 da issue #67 não renomeou, e isso é decisão.** Chamá-lo de
+    # `account` criaria duas coisas com o nome canônico no mesmo objeto — `project.account` e
+    # `project.engagement.account` — que podem divergir; o nome canônico deixaria de identificar
+    # a fonte, que é a única coisa que ele existe para fazer. Ele fica com o nome antigo até a
+    # Fase 6 removê-lo. Ver ADR 0052.
+    client = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="projects")
     # O mandato a que este projeto pertence — **obrigatório** (invariante 7 do mapa de linguagem).
     # Nasceu nulo na 0055 e virou NOT NULL na 0057, com o backfill da 0056 no meio; ver a
     # docstring da 0057 para por que os três passos são migrações separadas.
@@ -378,11 +424,12 @@ class Project(TimestampedModel):
     # A venda que originou este projeto — **1-N e opcional**. Era `OneToOneField`, e a
     # cardinalidade antiga é o que impedia uma venda recorrente de originar mais de um projeto.
     # A garantia de "converte uma vez só" que o banco dava saiu daqui e virou ato explícito na
-    # `OpportunityViewSet.convert_to_project` (409 + `select_for_update`), porque o que se quer
-    # proteger é o **botão**, não a relação: um segundo projeto com a mesma origem é legítimo, e
+    # `CommercialOpportunityViewSet.convert_to_project` (409 + `select_for_update`), porque o
+    # que se quer proteger é o **botão**, não a relação: um segundo projeto com a mesma origem é legítimo, e
     # nasce por `POST /projects/`. Ver ADR 0050.
     originating_commercial_opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.PROTECT, related_name="projects", null=True, blank=True
+        CommercialOpportunity, on_delete=models.PROTECT, related_name="projects",
+        null=True, blank=True,
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -432,7 +479,7 @@ class Project(TimestampedModel):
             raise ValidationError({"due_date": "A data final não pode ser anterior à inicial."})
         # Invariante 6 do mapa de linguagem: nenhum projeto nasce de oferta de aquisição (ADR 0049).
         # A `convert-to-project` já recusa com 400, e a regra fica aqui pela razão da
-        # `Opportunity.clean()` logo acima — a via da view não é a única via.
+        # `CommercialOpportunity.clean()` logo acima — a via da view não é a única via.
         service = self.service if self.service_id else None
         if service is not None and service.category == Service.Category.ACQUISITION:
             raise ValidationError({
@@ -808,8 +855,10 @@ class GithubWebhookDelivery(models.Model):
 
 
 class Document(TimestampedModel):
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, null=True, blank=True)
-    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, null=True, blank=True)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, null=True, blank=True)
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.CASCADE, null=True, blank=True
+    )
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
     file = models.FileField(upload_to="documents/%Y/%m/", blank=True)
     drive_file_id = models.CharField(max_length=128, blank=True, default="")
@@ -818,13 +867,13 @@ class Document(TimestampedModel):
     uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="uploaded_documents")
 
     def clean(self) -> None:
-        links = [self.client_id, self.opportunity_id, self.project_id]
+        links = [self.account_id, self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError("O documento deve estar vinculado a exatamente um recurso.")
 
     @property
-    def linked_resource(self) -> Client | Opportunity | Project | None:
-        return self.client or self.opportunity or self.project
+    def linked_resource(self) -> Account | CommercialOpportunity | Project | None:
+        return self.account or self.commercial_opportunity or self.project
 
 
 class Meeting(TimestampedModel):
@@ -1051,9 +1100,10 @@ class Lead(TimestampedModel):
     ai_summary = models.TextField(blank=True, default="")
     ai_recommended_action = models.TextField(blank=True, default="")
     qualified_at = models.DateTimeField(null=True, blank=True)
-    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
-    opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads"
+    account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="leads",
     )
 
     class Meta:
@@ -1066,8 +1116,8 @@ class Lead(TimestampedModel):
 class Qualification(TimestampedModel):
     """A avaliação que decide se um `Lead` vira venda — e que até aqui não existia (ADR 0049).
 
-    O `POST /leads/{id}/convert/` criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
-    gratuito da escada. Isso gravava uma conversa de qualificação como venda registrada: ela entrava
+    O `POST /leads/{id}/convert/` criava, num ato só, um `Account` **e** uma
+    `CommercialOpportunity` no degrau gratuito da escada. Isso gravava uma conversa de qualificação como venda registrada: ela entrava
     no funil, somava no pipeline e podia virar `Project`. A sequência normativa do Language Map é
     `Lead → Qualification → (qualified) → CommercialOpportunity`, e o degrau do meio precisava de
     linha própria para que a decisão tivesse autor, data e motivo (decisão D1).
@@ -1096,7 +1146,7 @@ class Qualification(TimestampedModel):
     # avaliação registrada é ato deliberado, não efeito colateral. Nula enquanto a conversão ainda
     # não resolveu a organização (avaliação de lead desqualificado não precisa criar conta).
     account = models.ForeignKey(
-        Client, on_delete=models.PROTECT, null=True, blank=True, related_name="qualifications"
+        Account, on_delete=models.PROTECT, null=True, blank=True, related_name="qualifications"
     )
     happened_at = models.DateTimeField(default=timezone.now)
     assessor = models.ForeignKey(
@@ -1121,11 +1171,11 @@ class Qualification(TimestampedModel):
         max_length=16, choices=Outcome.choices, blank=True, default=""
     )
     ai_score_snapshot = models.PositiveSmallIntegerField(null=True, blank=True)
-    # Mapeamento do backfill da migração 0052: a `Opportunity` de tier `qualification_call` que
-    # esta avaliação passou a representar. `legacy_` é o único prefixo que o mapa de linguagem
+    # Mapeamento do backfill da migração 0052: a `CommercialOpportunity` de tier
+    # `qualification_call` que esta avaliação passou a representar. `legacy_` é o único prefixo que o mapa de linguagem
     # aceita em `opportunity` sem qualificador — é ponte para o nome antigo, não conceito novo.
     legacy_opportunity = models.OneToOneField(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="backfilled_qualification",
     )
 
@@ -1149,8 +1199,8 @@ class Qualification(TimestampedModel):
             )
         # Fronteira de conta: sem isto, uma avaliação pode ficar pendurada na organização de
         # **outro** lead — o mesmo vazamento por campo opcional que `Activity.clean()` fecha.
-        if self.account_id and self.lead_id and self.lead.client_id:
-            if self.lead.client_id != self.account_id:
+        if self.account_id and self.lead_id and self.lead.account_id:
+            if self.lead.account_id != self.account_id:
                 raise ValidationError(
                     {"account": "A conta deve ser a mesma já vinculada ao lead."}
                 )
@@ -1214,9 +1264,10 @@ class Activity(TimestampedModel):
         NAO_PODE = "nao_pode", "Não pôde pagar"
         INSATISFEITO = "insatisfeito", "Insatisfeito"
 
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="activities")
-    opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="activities")
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="activities",
     )
     # A resposta do cliente à cobrança chega por aqui, digitada por quem atendeu (FDD 036).
     # `SET_NULL` como `Artifact.project`: a interação aconteceu, e sobrevive à fatura sumir do
@@ -1242,12 +1293,18 @@ class Activity(TimestampedModel):
         return f"{self.get_kind_display()}: {self.summary}"
 
     def clean(self) -> None:
-        if self.opportunity_id and self.opportunity and self.opportunity.client_id != self.client_id:
-            raise ValidationError({"opportunity": "A oportunidade deve pertencer ao mesmo cliente."})
+        if (
+            self.commercial_opportunity_id
+            and self.commercial_opportunity
+            and self.commercial_opportunity.account_id != self.account_id
+        ):
+            raise ValidationError(
+                {"commercial_opportunity": "A oportunidade deve pertencer ao mesmo cliente."}
+            )
         # Mesma checagem para a fatura, e pela mesma razão que a da oportunidade: sem ela, uma
         # resposta de cobrança pode ficar pendurada na fatura de **outro** cliente — e é essa
         # linha que a tela de cobrança lê para decidir o próximo passo.
-        if self.invoice_id and self.invoice and self.invoice.client_id != self.client_id:
+        if self.invoice_id and self.invoice and self.invoice.account_id != self.account_id:
             raise ValidationError({"invoice": "A fatura deve pertencer ao mesmo cliente."})
 
 
@@ -1288,7 +1345,7 @@ class Satisfacao(TimestampedModel):
         DECLARADA = "declarada", "Declarada pelo cliente"
         PERCEBIDA = "percebida", "Percebida por quem entrega"
 
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="satisfacoes")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="satisfacoes")
     project = models.ForeignKey(
         Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
     )
@@ -1325,10 +1382,10 @@ class Satisfacao(TimestampedModel):
         ordering = ["-happened_on", "-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.get_nivel_display()} — {self.client.name} ({self.happened_on})"
+        return f"{self.get_nivel_display()} — {self.account.name} ({self.happened_on})"
 
     def clean(self) -> None:
-        if self.project_id and self.project and self.project.client_id != self.client_id:
+        if self.project_id and self.project and self.project.client_id != self.account_id:
             raise ValidationError({"project": "O projeto deve pertencer ao mesmo cliente."})
         # Mesma checagem para a atividade de origem, e pela mesma razão: sem ela, a resposta de
         # **outro** cliente viraria a satisfação declarada deste — e essa é a linha que troca a
@@ -1336,7 +1393,7 @@ class Satisfacao(TimestampedModel):
         if (
             self.source_activity_id
             and self.source_activity
-            and self.source_activity.client_id != self.client_id
+            and self.source_activity.account_id != self.account_id
         ):
             raise ValidationError(
                 {"source_activity": "A interação deve pertencer ao mesmo cliente."}
@@ -1352,11 +1409,11 @@ class Satisfacao(TimestampedModel):
             )
 
 
-class Processo(TimestampedModel):
+class Process(TimestampedModel):
     """Um processo da operação do cliente, mapeado no Discovery estruturado (FDD 039).
 
     **Por que a entidade existe se a metodologia não a define.** O material
-    (`docs/metodologia-fde.md:75-79`) descreve o P-S-D-T-E-R como o esquema "para cada etapa de um
+    (`docs/metodologia-fde.md:106-110`) descreve o P-S-D-T-E-R como o esquema "para cada etapa de um
     processo": o processo não é uma invenção deste modelo, é o que o próprio esquema exige para
     que a etapa tenha onde pendurar. Por isso ele nasce com nome, ordem e os insumos da fórmula do
     custo do estado atual — **e nada mais**. Sem `status`, sem `dono`, sem `nivel`: o que a
@@ -1370,13 +1427,13 @@ class Processo(TimestampedModel):
     e é a mesma distinção que o `Risco` faz em relação ao `risk.py` calculado.
 
     **Liga ao cliente e não ao projeto**, pelo argumento da `Satisfacao` acima: o processo mapeado
-    é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de Opportunity,
-    `docs/metodologia-fde.md:50-53`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
+    é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de
+    CommercialOpportunity, `docs/metodologia-fde.md:64-67`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
     novo Discovery da mesma empresa — que é exatamente o defeito que o `DigitalEmployee` tinha
     antes da FDD 026, quando o que valia morava só na instância e não no catálogo.
     """
 
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="processos")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="processos")
     name = models.CharField(max_length=255)
     position = models.PositiveIntegerField(default=0)
     # Procedência, e não vínculo: apagar o projeto ou a reunião não desfaz o mapa levantado neles.
@@ -1393,7 +1450,7 @@ class Processo(TimestampedModel):
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="processos"
     )
 
-    # Os nove insumos do custo do estado atual (`docs/metodologia-fde.md:87-88`):
+    # Os nove insumos do custo do estado atual (`docs/metodologia-fde.md:118-119`):
     # `Volume × Tempo × Pessoas × Custo + Retrabalho + Erros + Perdas + Espera + Risco`.
     #
     # Todos nulos, e **nulo aqui é "não apurado", nunca zero**: `processos.custo_do_estado_atual`
@@ -1401,7 +1458,7 @@ class Processo(TimestampedModel):
     # executar o processo não custa nada. É a lacuna dita e não preenchida, como em `ai.py` no
     # KPI sem base registrada (FDD 027).
     #
-    # **O sufixo `_mes` não é decoração.** `ProcessoEtapa` tem `tempo`, `erro` e `retrabalho`, e
+    # **O sufixo `_mes` não é decoração.** `ProcessStep` tem `tempo`, `erro` e `retrabalho`, e
     # lá eles são **descrição** ("quanto demora", "o que pode dar errado"); aqui são dinheiro e
     # quantidade. Nomes iguais para perguntas diferentes fariam a segunda resposta vencer a
     # primeira em silêncio — quem lesse `retrabalho` não saberia se recebe um texto ou um valor.
@@ -1420,6 +1477,10 @@ class Processo(TimestampedModel):
     risco_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
+        # A tabela **não** se move (ADR 0052): `RenameModel` com o `db_table` já fixado no nome
+        # legado não emite SQL nenhum, e é a pk que a `docs/ontology/aliases.md` §2b protege. O
+        # renome da tabela é a Fase 6.
+        db_table = "core_processo"
         ordering = ["position", "id"]
 
     def __str__(self) -> str:
@@ -1430,8 +1491,8 @@ class Processo(TimestampedModel):
 
         A regra transversal da FDD 025 é que arquivar não cascateia — e que, quando os filhos
         são listáveis por conta própria, quem os tem precisa escolher: recusar com 409 ou arquivar
-        junto. Etapa e evidência são listáveis (`/processo-etapas/?processo=`,
-        `/evidencias/?processo=`), então sem escolha ficariam visíveis apontando para um pai
+        junto. Etapa e evidência são listáveis (`/processo-etapas/?process=`,
+        `/evidencias/?process=`), então sem escolha ficariam visíveis apontando para um pai
         oculto — e, pior aqui do que no caso geral, uma evidência órfã continua sendo uma
         afirmação sobre a operação de um cliente, sem o processo que lhe dava contexto.
 
@@ -1446,7 +1507,7 @@ class Processo(TimestampedModel):
         momento = timezone.now()
         self.archived_at = momento
         self.save(update_fields=["archived_at", "updated_at"])
-        self.etapas.filter(archived_at__isnull=True).update(archived_at=momento)
+        self.steps.filter(archived_at__isnull=True).update(archived_at=momento)
         self.evidencias.filter(archived_at__isnull=True).update(archived_at=momento)
 
     def unarchive(self) -> None:
@@ -1462,12 +1523,12 @@ class Processo(TimestampedModel):
         self.save(update_fields=["archived_at", "updated_at"])
         if momento is None:
             return
-        self.etapas.filter(archived_at=momento).update(archived_at=None)
+        self.steps.filter(archived_at=momento).update(archived_at=None)
         self.evidencias.filter(archived_at=momento).update(archived_at=None)
 
 
-class ProcessoEtapa(TimestampedModel):
-    """Uma etapa do processo, descrita pelo P-S-D-T-E-R (`docs/metodologia-fde.md:75-79`).
+class ProcessStep(TimestampedModel):
+    """Uma etapa do processo, descrita pelo P-S-D-T-E-R (`docs/metodologia-fde.md:106-110`).
 
     Os seis campos abaixo são **exatamente** as seis letras, nessa ordem. É a única parte do
     material que já é esquema de campos, e o valor dela está em não ser adaptada: renomear,
@@ -1475,7 +1536,7 @@ class ProcessoEtapa(TimestampedModel):
     o formulário, e a conferência ("perguntei tudo?") deixaria de ser possível olhando a tela.
     """
 
-    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="etapas")
+    process = models.ForeignKey(Process, on_delete=models.CASCADE, related_name="steps")
     name = models.CharField(max_length=255)
     position = models.PositiveIntegerField(default=0)
     pessoas = models.TextField(blank=True, default="")  # P — quem faz
@@ -1486,6 +1547,8 @@ class ProcessoEtapa(TimestampedModel):
     retrabalho = models.TextField(blank=True, default="")  # R — o que acontece quando dá errado
 
     class Meta:
+        # Mesma razão do `Process` acima: a classe troca de nome, a tabela fica (ADR 0052).
+        db_table = "core_processoetapa"
         ordering = ["position", "id"]
 
     def __str__(self) -> str:
@@ -1496,14 +1559,14 @@ class Evidencia(TimestampedModel):
     """O que sustenta (ou não sustenta) cada achado do Discovery — a distinção central da FDD 039.
 
     A metodologia exige duas coisas que a prosa de uma ata não guarda: que o achado venha de uma
-    das cinco formas de evidência, "nunca só entrevista" (`docs/metodologia-fde.md:81-84`), e que
+    das cinco formas de evidência, "nunca só entrevista" (`docs/metodologia-fde.md:112-115`), e que
     todo achado seja rotulado FATO / HIPÓTESE / DESCONHECIDO, porque **"nunca se apresenta
-    hipótese como fato"** (`:86`). Guardar isso como campo é o que permite responder, depois da
+    hipótese como fato"** (`:117`). Guardar isso como campo é o que permite responder, depois da
     reunião, quanto do mapa é observação e quanto é suposição da casa.
     """
 
     class Forma(models.TextChoices):
-        """As cinco formas de evidência (`docs/metodologia-fde.md:81-84`)."""
+        """As cinco formas de evidência (`docs/metodologia-fde.md:112-115`)."""
 
         ENTREVISTA = "entrevista", "Entrevista (o que dizem)"
         OBSERVACAO = "observacao", "Observação (o que fazem)"
@@ -1512,11 +1575,11 @@ class Evidencia(TimestampedModel):
         DADO = "dado", "Dado (volume, tempo, custo, erro)"
 
     class Rotulo(models.TextChoices):
-        """Os três rótulos (`docs/metodologia-fde.md:86`).
+        """Os três rótulos (`docs/metodologia-fde.md:117`).
 
         `DESCONHECIDO` é valor de primeira classe, e não ausência de valor: um Discovery que
         nomeia o que ainda não sabe está fazendo o trabalho, não deixando de fazê-lo — é a postura
-        que o material pede ao sair da reunião (`:97-98`). Por isso ele é uma opção a escolher, e
+        que o material pede ao sair da reunião (`:128-129`). Por isso ele é uma opção a escolher, e
         não o que sobra quando ninguém escolheu.
         """
 
@@ -1524,11 +1587,11 @@ class Evidencia(TimestampedModel):
         HIPOTESE = "hipotese", "Hipótese"
         DESCONHECIDO = "desconhecido", "Desconhecido"
 
-    processo = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="evidencias")
+    process = models.ForeignKey(Process, on_delete=models.CASCADE, related_name="evidencias")
     # A etapa é opcional: nem todo achado é de uma etapa — "o volume é de 400 pedidos/mês" é do
     # processo inteiro. Quando vier preenchida, o `clean()` abaixo exige que seja deste processo.
-    etapa = models.ForeignKey(
-        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
+    step = models.ForeignKey(
+        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
     )
     # **Sem default nos dois**, no precedente literal de `Satisfacao.fonte`: um default faria a
     # casa escolher por quem não escolheu, e o erro cairia sempre para o mesmo lado — chamar
@@ -1555,8 +1618,8 @@ class Evidencia(TimestampedModel):
         # uma evidência pode apontar para a etapa de um processo de **outro cliente** — vazamento
         # entre contas por um campo opcional, que é a pior forma de vazar porque ninguém preenche
         # o campo pensando nisso.
-        if self.etapa_id and self.etapa and self.etapa.processo_id != self.processo_id:
-            raise ValidationError({"etapa": "A etapa deve pertencer ao mesmo processo."})
+        if self.step_id and self.step and self.step.process_id != self.process_id:
+            raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
 
 
 class Discovery(TimestampedModel):
@@ -1564,7 +1627,7 @@ class Discovery(TimestampedModel):
 
     A FDD 039 ancorou o mapa da operação no cliente, e fez isso certo: o processo sobrevive à
     venda que o descobriu. O que ficou faltando é o outro lado — **quando** aquele mapa foi
-    levantado, por quem, com que recorte. `Processo.source_project`/`source_meeting` respondem por
+    levantado, por quem, com que recorte. `Process.source_project`/`source_meeting` respondem por
     uma origem só, e o mesmo processo revisitado no Discovery seguinte não tem onde ser
     registrado: a segunda passada ou sobrescreve a primeira em silêncio ou vira um processo
     duplicado.
@@ -1653,7 +1716,7 @@ class DiscoverySession(TimestampedModel):
 class ProcessObservation(TimestampedModel):
     """A observação de um processo **dentro de um Discovery** (FDD 045).
 
-    Esta tabela é o que desfaz a proveniência única de `Processo.source_project`/`source_meeting`:
+    Esta tabela é o que desfaz a proveniência única de `Process.source_project`/`source_meeting`:
     o mesmo processo observado em dois Discoveries são **duas linhas aqui**, e nenhuma sobrescreve
     a outra. É o registro que permite dizer "o AS-IS de faturamento foi levantado no Discovery
     Sprint e revisitado no PROVE" sem duplicar o processo nem perder a primeira leitura.
@@ -1667,7 +1730,7 @@ class ProcessObservation(TimestampedModel):
     discovery = models.ForeignKey(
         Discovery, on_delete=models.CASCADE, related_name="process_observations"
     )
-    process = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name="observations")
+    process = models.ForeignKey(Process, on_delete=models.CASCADE, related_name="observations")
     observed_at = models.DateField()
     observation_type = models.CharField(max_length=16, choices=Kind.choices, default=Kind.INITIAL)
     source_session = models.ForeignKey(
@@ -1713,12 +1776,12 @@ class Evidence(TimestampedModel):
     Uma evidência sem `raw_excerpt` e sem `reference` não é evidência — é uma linha dizendo que
     existe alguma coisa em algum lugar. O `clean()` exige um dos dois.
 
-    Ancora na **conta** (`account`), e não no projeto, pelo mesmo argumento do `Processo`: o que
+    Ancora na **conta** (`account`), e não no projeto, pelo mesmo argumento do `Process`: o que
     se observou sobre a operação de uma empresa sobrevive à venda que a descobriu.
     """
 
     class Kind(models.TextChoices):
-        """As cinco formas de evidência (`docs/metodologia-fde.md:81-84`), em inglês canônico.
+        """As cinco formas de evidência (`docs/metodologia-fde.md:112-115`), em inglês canônico.
 
         Espelho um a um da `Evidencia.Forma`, e é essa correspondência que o backfill da migração
         `0054` traduz. Sem default, como lá: escolher a forma é um ato, e recebê-la por omissão
@@ -1731,18 +1794,18 @@ class Evidence(TimestampedModel):
         SYSTEM = "system", "Sistema (ERP, CRM, CAD, WhatsApp)"
         DATA = "data", "Dado (volume, tempo, custo, erro)"
 
-    # `account`, `process` e `step` são os nomes canônicos da ADR 0049 apontando para os modelos
-    # legados (`Client`, `Processo`, `ProcessoEtapa`). O renome físico dos modelos é a Fase 6; até
-    # lá o nome canônico vive no **campo**, que é onde ele é lido e escrito todo dia.
-    account = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="evidence")
+    # `account`, `process` e `step` são os nomes canônicos da ADR 0049, e desde a fatia 4 da issue
+    # #67 os três apontam para a classe de nome certo — `Account`, `Process` e `ProcessStep`. O
+    # renome da **tabela** dos três continua sendo a Fase 6.
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="evidence")
     discovery = models.ForeignKey(
         Discovery, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
     )
     process = models.ForeignKey(
-        Processo, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+        Process, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
     )
     step = models.ForeignKey(
-        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
+        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidence"
     )
     kind = models.CharField(max_length=16, choices=Kind.choices)
     # O trecho **como foi dito ou observado**, sem interpretação. Conclusão da casa vai para
@@ -1784,14 +1847,14 @@ class Evidence(TimestampedModel):
 
     def clean(self) -> None:
         etapa = self.step if self.step_id else None
-        if etapa is not None and self.process_id and etapa.processo_id != self.process_id:
+        if etapa is not None and self.process_id and etapa.process_id != self.process_id:
             raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
         # A mesma fronteira de conta da `Evidencia.clean()`, agora nas duas pontas: sem ela uma
         # evidência da conta A citaria o processo da conta B por um campo opcional.
         processo = self.process if self.process_id else None
-        if processo is not None and processo.client_id != self.account_id:
+        if processo is not None and processo.account_id != self.account_id:
             raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
-        if etapa is not None and etapa.processo.client_id != self.account_id:
+        if etapa is not None and etapa.process.account_id != self.account_id:
             raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         # O terceiro campo opcional entra na **mesma** pergunta que os dois acima, e a simetria é
         # o ponto: dois vínculos validados contra a conta e um terceiro fora faria quem lesse isto
@@ -1839,7 +1902,7 @@ FINDING_TRANSITIONS: dict[str, set[str]] = {
 class Finding(TimestampedModel):
     """A afirmação que a casa extraiu da evidência — a metade "o que isso quer dizer" (FDD 045).
 
-    É aqui que mora o rótulo que a metodologia exige (`docs/metodologia-fde.md:86`), agora com o
+    É aqui que mora o rótulo que a metodologia exige (`docs/metodologia-fde.md:117`), agora com o
     nome canônico da ADR 0049: `epistemic_status` ∈ `fact` · `hypothesis` · `unknown`. E é aqui
     que a regra ganha dente, porque o achado deixou de ser a mesma linha do dado que o sustenta:
     **um `fact` aponta para a `Evidence` viva que o sustenta e para o humano que o promoveu.**
@@ -1857,26 +1920,26 @@ class Finding(TimestampedModel):
         HYPOTHESIS = "hypothesis", "Hipótese"
         UNKNOWN = "unknown", "Desconhecido"
 
-    account = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="findings")
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="findings")
     process = models.ForeignKey(
-        Processo, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
+        Process, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
     )
     step = models.ForeignKey(
-        ProcessoEtapa, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
+        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="findings"
     )
     statement = models.TextField()
     epistemic_status = models.CharField(
         max_length=16, choices=EpistemicStatus.choices, default=EpistemicStatus.HYPOTHESIS
     )
     # 0–100 e opcional: confiança que ninguém mediu não vira zero, pelo motivo dos nove insumos do
-    # `Processo` — zero é uma afirmação, e "não estimamos" não é.
+    # `Process` — zero é uma afirmação, e "não estimamos" não é.
     confidence = models.PositiveSmallIntegerField(null=True, blank=True)
     reviewed_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_findings"
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
     # M2M porque um achado costuma se apoiar em mais de uma fonte — e é justamente o "nunca só
-    # entrevista" do material (`docs/metodologia-fde.md:81-84`) que só se consegue verificar
+    # entrevista" do material (`docs/metodologia-fde.md:112-115`) que só se consegue verificar
     # quando as fontes são contáveis.
     evidences = models.ManyToManyField(Evidence, blank=True, related_name="findings")
     legacy_evidencia = models.ForeignKey(
@@ -1894,11 +1957,11 @@ class Finding(TimestampedModel):
             raise ValidationError({"confidence": "A confiança vai de 0 a 100."})
         etapa = self.step if self.step_id else None
         processo = self.process if self.process_id else None
-        if processo is not None and processo.client_id != self.account_id:
+        if processo is not None and processo.account_id != self.account_id:
             raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
-        if etapa is not None and etapa.processo.client_id != self.account_id:
+        if etapa is not None and etapa.process.account_id != self.account_id:
             raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
-        if etapa is not None and self.process_id and etapa.processo_id != self.process_id:
+        if etapa is not None and self.process_id and etapa.process_id != self.process_id:
             raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
         # A metade da invariante §6.9 que dá para checar sem o M2M: **fato tem revisor**. A outra
         # metade — ao menos uma `Evidence` viva — vive no serializer, porque o vínculo M2M só
@@ -1926,15 +1989,14 @@ class Service(TimestampedModel):
     comerciais da escada, um por fase vendável:
 
     - `QUALIFICATION_CALL` — a porta gratuita, antes do Discover. Termina em avançar ou NO-GO.
-    - `DISCOVERY_ASSESSMENT` — Discovery Express + Assessment. Gratuito no programa de founding
-      client, pago para os demais; o subsídio mora no `estimated_value` da oportunidade, não no
-      preço de tabela, justamente para continuar visível.
-    - `DISCOVERY_SPRINT` — o Discovery pago, fechando em Executive Readout com o custo do
-      estado atual e o ranking por Opportunity Score.
-    - `FEASIBILITY` — a Technical Feasibility (T.O.E.), condicional na escada: só quando há
-      dúvida sobre a tecnologia dar conta. Termina em decision gate de quatro saídas.
+    - `DISCOVERY_SPRINT` — o Discovery pago (R$ 3.000 de tabela desde a ADR 0053), fechando em
+      Executive Readout com o custo do estado atual e o ranking por Opportunity Score.
+    - `FEASIBILITY` — a Technical Feasibility (T.O.E.). O **gate** T.O.E. acontece em 100% dos
+      casos e sai no readout do Discovery, sem cobrança; o **degrau** só existe quando responder
+      "conseguimos fazer?" exige medir uma amostra de dado real ainda não vista (ADR 0053).
+      Termina em decision gate GO / CONDITIONAL GO / REDESIGN / NO-GO.
     - `PROVE` — produção controlada com baseline e critérios de sucesso definidos **antes** de
-      construir, e decision gate no fim.
+      construir, e decision gate SCALE / ITERATE / STOP no fim.
     - `SCALE` — a captura de valor depois do PROVE aprovado.
     - `TRANSFORMATION` — a parceria contínua (OPTIMIZE). **É recorrente mensal, e o modelo
       ainda não sabe disso**: `list_price` é valor único, então o pipeline soma um mês como se
@@ -1943,16 +2005,20 @@ class Service(TimestampedModel):
 
     PRIORITIZE não tem tier de propósito: não se fatura separado — é o entregável do Discovery
     Sprint (o ranking por Opportunity Score), e um degrau que ninguém compra seria uma coluna
-    que nunca enche.
+    que nunca enche. `DISCOVERY_ASSESSMENT` **saiu** pelo mesmo argumento (ADR 0053, migração
+    `0064`): era a porta gratuita do founding client, e com o Design Partner cobrindo a entrada
+    não sobrou trabalho para ele fazer.
     """
 
     class Category(models.TextChoices):
         """O que a oferta faz pela casa — e é o que separa a escada comercial da porta (D4).
 
         `acquisition` é oferta de **aquisição**: existe para descobrir se há venda, não para ser
-        vendida. A Qualification Call é a única hoje. Ela nunca gera `Opportunity` nem `Project`,
-        e é essa categoria — não o preço zero — que carrega a regra: gratuito também é o
-        Discovery + Assessment do programa de founding client, e aquele é degrau vendável.
+        vendida. A Qualification Call é a única hoje. Ela nunca gera `CommercialOpportunity`
+        nem `Project`,
+        e é essa categoria — não o preço zero — que carrega a regra: o Design Partner recebe
+        Discovery, gate e PROVE sem cobrar (ADR 0053), e aqueles continuam sendo degraus
+        vendáveis — o subsídio mora no `estimated_value` da oportunidade, não na categoria.
         """
 
         ACQUISITION = "acquisition", "Aquisição"
@@ -1960,7 +2026,6 @@ class Service(TimestampedModel):
 
     class Tier(models.TextChoices):
         QUALIFICATION_CALL = "qualification_call", "Qualification Call"
-        DISCOVERY_ASSESSMENT = "discovery_assessment", "Discovery Express + Assessment"
         DISCOVERY_SPRINT = "discovery_sprint", "Discovery Sprint"
         FEASIBILITY = "feasibility", "Technical Feasibility (T.O.E.)"
         PROVE = "prove", "PROVE (piloto)"
@@ -2054,7 +2119,9 @@ class AiInteraction(models.Model):
     )
     feature = models.CharField(max_length=32)
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True)
-    opportunity = models.ForeignKey(Opportunity, on_delete=models.SET_NULL, null=True, blank=True)
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True
+    )
     lead = models.ForeignKey("Lead", on_delete=models.SET_NULL, null=True, blank=True)
     prompt_tokens = models.PositiveIntegerField(default=0)
     completion_tokens = models.PositiveIntegerField(default=0)
@@ -2173,17 +2240,41 @@ class ProjectPhase(TimestampedModel):
         DONE = "done", "Concluída"
 
     class GateDecision(models.TextChoices):
-        """As quatro saídas do decision gate (FDD 033, `docs/metodologia-fde.md`).
+        """As quatro saídas do gate de **Feasibility** (FDD 033, `docs/metodologia-fde.md`).
 
-        São exatamente quatro porque a metodologia diz quatro, e o valor delas está em *não*
-        colapsarem: "seguiu com ressalvas" e "seguiu" acabam no mesmo lugar da jornada, mas só
-        um dos dois deixa dívida nomeada para monitorar.
+        A pergunta que elas respondem é *"a tecnologia consegue fazer a tarefa?"*. São exatamente
+        quatro porque a metodologia diz quatro, e o valor delas está em *não* colapsarem: "seguiu
+        com ressalvas" e "seguiu" acabam no mesmo lugar da jornada, mas só um dos dois deixa
+        dívida nomeada para monitorar.
+
+        Até a ADR 0053 este era o vocabulário de **todo** gate, e o repositório se contradizia
+        sozinho: `kickoff.KICKOFF_TEMPLATES["prove"]` já mandava registrar SCALE / ITERATE / STOP
+        numa fase em que só estes quatro valores eram aceitos.
         """
 
         GO = "go", "GO"
         CONDITIONAL_GO = "conditional_go", "CONDITIONAL GO"
         REDESIGN = "redesign", "REDESIGN"
         NO_GO = "no_go", "NO-GO"
+
+    class ProveDecision(models.TextChoices):
+        """As três saídas do gate de **PROVE** (ADR 0053).
+
+        A pergunta é outra — *"funcionou em produção controlada?"* —, e pergunta diferente merece
+        saídas diferentes. Cada uma cai num dos mesmos três efeitos das quatro acima: `SCALE`
+        conclui e avança (como GO), `ITERATE` reabre a fase anterior (como REDESIGN) e `STOP`
+        registra e para (como NO-GO).
+        """
+
+        SCALE = "scale", "SCALE"
+        ITERATE = "iterate", "ITERATE"
+        STOP = "stop", "STOP"
+
+    # As sete saídas num conjunto só: é o que a coluna aceita, o que o corpo da action publica no
+    # esquema (`GateDecisionEnum`, override em `config/settings.py`) e o que `decisoes_do_gate`
+    # estreita por fase. Uma segunda soma escrita à mão em qualquer um desses três lugares seria a
+    # que esquece o valor novo — e um valor fora do enum grava sem erro num `CharField`.
+    DECISOES_DO_GATE = GateDecision.choices + ProveDecision.choices
 
     class WaitingParty(models.TextChoices):
         """Quem/o quê a fase ativa está esperando, para a linha do tempo interna (FDD 042).
@@ -2209,14 +2300,19 @@ class ProjectPhase(TimestampedModel):
     target_date = models.DateField(null=True, blank=True)  # a "prevista" mostrada na UI
     # O gate decidido, e o porquê. Em branco enquanto ninguém decidiu — e é esse branco que
     # `journey.advance_phase` recusa quando a fase do template exige gate. As notas não são
-    # opcionais de fato em três das quatro saídas: as ressalvas do CONDITIONAL GO e o motivo do
-    # REDESIGN/NO-GO são a única coisa que atravessa o tempo (FDD 033).
+    # opcionais de fato nas saídas que não são de continuidade: as ressalvas do CONDITIONAL GO e
+    # o motivo do REDESIGN/NO-GO/ITERATE/STOP são a única coisa que atravessa o tempo (FDD 033).
     # O nome canônico do D7 é do próprio campo desde a ADR 0052 — a propriedade-alias que
     # `aliases.md` prescrevia perdeu o objeto no momento em que o campo passou a se chamar como
     # ela. O nome antigo sobrevive só como **chave de payload** no serializer, com data de morte
     # na `/api/v2/`; nada no domínio o lê.
+    #
+    # **Um campo só, com os dois vocabulários** (ADR 0053). O fato é um só — "a decisão registrada
+    # no gate desta fase" —, e duas colunas seriam duas definições dele, com a segunda divergindo
+    # da primeira em silêncio. Quem estreita as sete para as que valem naquela fase é
+    # `decisoes_do_gate`, a partir do `canonical_stage` do template.
     gate_decision = models.CharField(
-        max_length=16, choices=GateDecision.choices, blank=True, default=""
+        max_length=16, choices=DECISOES_DO_GATE, blank=True, default=""
     )
     gate_notes = models.TextField(blank=True, default="")
     # Concluir com checklist incompleta é legítimo — o que não é legítimo é fazê-lo em silêncio.
@@ -2250,14 +2346,17 @@ class ProjectPhase(TimestampedModel):
         `pending`. É a fonte única da variante de selo — a tela mapeia *situação → variante*, nunca
         recalcula a regra. Puro: não toca no banco.
         """
-        if self.gate_decision == self.GateDecision.NO_GO:
+        # As saídas dos dois vocabulários caem nos mesmos três efeitos (ADR 0053): o `STOP` do
+        # PROVE cancela como o `NO-GO` da Feasibility, e o `ITERATE` replaneja como o `REDESIGN`.
+        if self.gate_decision in {self.GateDecision.NO_GO, self.ProveDecision.STOP}:
             return "cancelled"
         if self.status == self.Status.DONE:
             return "completed"
         if self.status == self.Status.LOCKED:
-            # Trancada por um REDESIGN (guarda a decisão) é "replanejada"; trancada e ainda
-            # intocada é só "pendente" — uma fase futura da jornada, não um alerta.
-            return "replanned" if self.gate_decision == self.GateDecision.REDESIGN else "pending"
+            # Trancada por um REDESIGN/ITERATE (guarda a decisão) é "replanejada"; trancada e
+            # ainda intocada é só "pendente" — fase futura da jornada, não um alerta.
+            reabriu = {self.GateDecision.REDESIGN, self.ProveDecision.ITERATE}
+            return "replanned" if self.gate_decision in reabriu else "pending"
         # A partir daqui a fase está ativa.
         awaiting_gate = self.phase.requires_gate and not self.gate_decision
         if self.waiting_party == self.WaitingParty.HUMAN_GATE or awaiting_gate:
@@ -2265,6 +2364,48 @@ class ProjectPhase(TimestampedModel):
         if self.waiting_party:
             return "blocked"
         return "active"
+
+
+def decisoes_do_gate(canonical_stage: str) -> type[models.TextChoices]:
+    """O vocabulário do gate desta fase (ADR 0053).
+
+    **Deriva do `canonical_stage`, e não de um campo novo no template.** Um
+    `JourneyPhase.gate_vocabulary` seria uma segunda expressão do mesmo fato: quem diz que o gate
+    do PROVE é SCALE / ITERATE / STOP é a metodologia, e `canonical_stage` já é exatamente "qual
+    fase FDE é esta". Duas fontes para o mesmo fato divergem na primeira fase configurada pela
+    tela sem ninguém perceber.
+
+    **Uma função só, e todo mundo a consome.** A alternativa — `if canonical_stage == "prove"`
+    espalhado por `journey`, `views` e a tela — é a que esquece o quinto lugar.
+
+    Fase que exige gate mas está **sem** `canonical_stage` recebe as quatro da Feasibility: é o
+    comportamento de todo gate anterior a esta ADR (nenhuma fase semeada tem a classificação
+    preenchida, migração `0015`), e as quatro são as saídas de propósito geral — GO/NO-GO
+    respondem a qualquer gate, SCALE/STOP só fazem sentido depois de um piloto rodando.
+    """
+    if canonical_stage == JourneyPhase.CanonicalStage.PROVE:
+        return ProjectPhase.ProveDecision
+    return ProjectPhase.GateDecision
+
+
+# Cada saída dos dois vocabulários cai em **um** de três efeitos sobre a jornada (ADR 0053):
+# conclui e avança, reabre a fase anterior, ou registra e para. É a tabela que deixa
+# `journey.apply_gate` ramificar por *efeito* em vez de por valor literal — sem ela, cada saída
+# nova obrigaria a caçar todos os `if decision == GO or decision == CONDITIONAL_GO` do módulo, e
+# o que ficasse para trás falharia em silêncio (o gate gravado sem a consequência dele).
+CONCLUEM_E_AVANCAM = frozenset(
+    {
+        ProjectPhase.GateDecision.GO,
+        ProjectPhase.GateDecision.CONDITIONAL_GO,
+        ProjectPhase.ProveDecision.SCALE,
+    }
+)
+REABREM_A_ANTERIOR = frozenset(
+    {ProjectPhase.GateDecision.REDESIGN, ProjectPhase.ProveDecision.ITERATE}
+)
+REGISTRAM_E_PARAM = frozenset(
+    {ProjectPhase.GateDecision.NO_GO, ProjectPhase.ProveDecision.STOP}
+)
 
 
 class ProjectDeliverable(TimestampedModel):
@@ -2576,8 +2717,9 @@ class Artifact(TimestampedModel):
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
     title = models.CharField(max_length=255)
     content = models.TextField(blank=True, default="")
-    opportunity = models.ForeignKey(
-        Opportunity, on_delete=models.SET_NULL, null=True, blank=True, related_name="artifacts"
+    commercial_opportunity = models.ForeignKey(
+        CommercialOpportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="artifacts",
     )
     project = models.ForeignKey(
         Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="artifacts"
@@ -2603,7 +2745,7 @@ class Artifact(TimestampedModel):
         return f"{self.get_kind_display()} — {self.title}"
 
     def clean(self) -> None:
-        links = [self.opportunity_id, self.project_id]
+        links = [self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError(
                 "O artefato deve estar vinculado a uma oportunidade ou a um projeto."
@@ -2650,7 +2792,8 @@ class Case(TimestampedModel):
 
     # `PROTECT`, e não o `CASCADE` do resto do grafo de projeto: o case existe justamente para
     # sobreviver ao que acontece com o projeto depois. Deixar um `delete()` levar a prova junto
-    # derrotaria o ponto — é a mesma escolha de `Project.client` e `Project.opportunity`.
+    # derrotaria o ponto — é a mesma escolha de `Project.client` e de
+    # `Project.originating_commercial_opportunity`.
     project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="cases")
     title = models.CharField(max_length=255)
     summary = models.TextField(blank=True, default="")
@@ -2729,7 +2872,7 @@ class Invoice(TimestampedModel):
     """A fatura — o primeiro registro financeiro do portal (FDD 028, camada 0 da RFC 0004).
 
     O portal levava a oportunidade da venda até a operação e parava no ponto em que o dinheiro
-    deveria entrar: `Service.list_price` e `Opportunity.estimated_value` são **preço**,
+    deveria entrar: `Service.list_price` e `CommercialOpportunity.estimated_value` são **preço**,
     `Project.actual_value` é um número digitado, e nenhum deles responde "cobrei o cliente X, R$ Y,
     vence dia Z, está pago?". Sem data de vencimento e sem data de pagamento em lugar nenhum, a
     inadimplência era **imensurável** — e é por isso que este modelo vem antes de qualquer régua de
@@ -2765,7 +2908,7 @@ class Invoice(TimestampedModel):
         TRANSFER = "transfer", "Transferência"
         OTHER = "other", "Outro"
 
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="invoices")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="invoices")
     # `SET_NULL` e não `PROTECT`: a fatura sobrevive ao arquivamento do projeto que a originou —
     # o dinheiro continuou devido. É a mesma escolha de `Artifact.project`.
     project = models.ForeignKey(
@@ -2834,7 +2977,7 @@ class Invoice(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.number or 'rascunho'} — {self.client.name}"
+        return f"{self.number or 'rascunho'} — {self.account.name}"
 
     @property
     def is_overdue(self) -> bool:
@@ -2860,7 +3003,7 @@ class CobrancaContato(TimestampedModel):
     pergunta "nós importunamos este cliente?" deixaria de ter resposta exatamente no caso em que
     alguém quer escondê-la.
 
-    **`client` é desnormalizado de propósito.** O teto de frequência é por cliente somando *todas*
+    **`account` é desnormalizado de propósito.** O teto de frequência é por cliente somando *todas*
     as faturas dele; sem esta coluna a consulta viraria um `JOIN` por avaliação de degrau, dentro
     de um laço sobre faturas.
 
@@ -2881,7 +3024,7 @@ class CobrancaContato(TimestampedModel):
         INTERNO = "interno", "Aviso interno"
 
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="cobrancas")
-    client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="cobrancas")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="cobrancas")
     degrau = models.CharField(max_length=16, choices=Degrau.choices)
     canal = models.CharField(max_length=8, choices=Canal.choices)
     # **Data e não carimbo de relógio**, ao contrário de `Invoice.paid_at`. Toda regra da régua é
@@ -2910,7 +3053,7 @@ class CobrancaContato(TimestampedModel):
 
     class Meta:
         ordering = ["-sent_on", "-id"]
-        indexes = [models.Index(fields=["client", "sent_on"])]
+        indexes = [models.Index(fields=["account", "sent_on"])]
         constraints = [
             # **A idempotência do degrau mora aqui, e não numa guarda em Python.** Duas execuções
             # no mesmo dia, ou o job e uma pessoa ao mesmo tempo, param no banco em vez de
@@ -2924,7 +3067,7 @@ class CobrancaContato(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.get_degrau_display()} — {self.client.name} ({self.sent_on})"
+        return f"{self.get_degrau_display()} — {self.account.name} ({self.sent_on})"
 
 
 class CobrancaSuspensao(TimestampedModel):
@@ -2944,8 +3087,8 @@ class CobrancaSuspensao(TimestampedModel):
     invoice = models.ForeignKey(
         Invoice, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
     )
-    client = models.ForeignKey(
-        Client, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, null=True, blank=True, related_name="suspensoes"
     )
     # `PROTECT` e obrigatório: suspensão sem dono é a suspensão que apodrece. Apagar a conta de
     # quem suspendeu não pode deixar a decisão órfã.
@@ -2972,11 +3115,11 @@ class CobrancaSuspensao(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        alvo = self.invoice or self.client
+        alvo = self.invoice or self.account
         return f"Suspensão até {self.until} — {alvo}"
 
     def clean(self) -> None:
-        links = [self.invoice_id, self.client_id]
+        links = [self.invoice_id, self.account_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError(
                 "A suspensão vale para exatamente uma fatura ou para um cliente."
@@ -3084,7 +3227,7 @@ class KnowledgeChunk(models.Model):
     viewset, sem rota e fora do `admin.py`**. A única saída do texto daqui é o `AgentView`, e isso
     é o anti-vazamento sendo estrutural em vez de vigiado.
 
-    **Não tem FK para `Project`, `Client` nem `Document`, e é a invariante em forma de esquema:**
+    **Não tem FK para `Project`, `Account` nem `Document`, e é a invariante em forma de esquema:**
     este corpus é a metodologia da casa, e conteúdo de cliente não entra por caminho nenhum. O
     `ai.build_project_context` continua passando documento como *nome*, como sempre passou.
     """

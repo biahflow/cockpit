@@ -60,7 +60,7 @@ def _populate(project):  # type: ignore[no-untyped-def]
         ),
         "pendencia": Pendencia.objects.create(project=project, title="Pendência"),
         "digitalemployee": DigitalEmployee.objects.create(project=project, name="Bia"),
-        "artifact": ArtifactFactory(project=project, opportunity=None, kind=Artifact.Kind.DISCOVERY),
+        "artifact": ArtifactFactory(project=project, commercial_opportunity=None, kind=Artifact.Kind.DISCOVERY),
     }
 
 

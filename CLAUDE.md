@@ -65,8 +65,8 @@ source of truth for the complete CI suite is [`.github/workflows/quality.yml`](.
 views (viewsets), permissions, and URLs all live there. There is no service layer —
 business rules live in model `clean()`/`save()` methods and in viewset actions.
 
-Core domain flow (`apps/core/models.py`): `Client` → `Contact`, `Lead` → `Qualification` →
-`Opportunity` (on a configurable `PipelineStage`) → converts into a `Project` →
+Core domain flow (`apps/core/models.py`): `Account` → `Contact`, `Lead` → `Qualification` →
+`CommercialOpportunity` (on a configurable `PipelineStage`) → converts into a `Project` →
 `Milestone`/`Task` (both subclass the abstract `WorkItem`) plus `Document`. `User` extends
 `AbstractUser` with a `role` (admin/sales/delivery). `Invitation` drives email-based
 onboarding.
@@ -85,7 +85,7 @@ Key cross-cutting patterns to preserve:
   two resources that really hard-delete (pipeline stage, journey phase). See FDD 025.
 - **Authorization is two-layered.** `RolePermission` (`permissions.py`) enforces a
   coarse role policy keyed off each viewset's `resource` string attribute
-  (e.g. `resource = "client"`), plus per-object `has_object_permission`, which
+  (e.g. `resource = "account"`), plus per-object `has_object_permission`, which
   **denies by default** so a new resource starts closed. When adding a viewset, set
   `resource` and update `RolePermission`.
 - **Project scope is the delivery boundary.** Delivery users see only the projects they
@@ -111,9 +111,23 @@ Key cross-cutting patterns to preserve:
   The mandate also records `commercial_model` (`paid`/`design_partner`, default `paid`): a
   design partner receives Discovery free of charge in exchange for serving as case and proving
   ground, and it does **not** go through a sale — nothing in the schema ever required one.
+- **A organização é `Account`, e "Cliente" é o rótulo de um dos estados dela.** O nome canônico
+  vale desde antes de a conta comprar (`language-map` §4), e `Account.lifecycle_status` tem três
+  valores: `prospect` (não fechou), `active` (é cliente) e `inactive` (**já foi** cliente e hoje
+  não tem trabalho em andamento). Só `prospect → active` é automático — o signal
+  `_promote_account_on_won`; entrar em `inactive` é escolha de quem edita a conta, porque "não tem
+  trabalho em andamento" não é fato observável no banco. **`inactive` não é arquivamento**: a
+  conta continua na listagem e no agregado, e só o `archived_at` a esconde
+  (`test_inativo_nao_e_arquivado.py`). Na `/api/v1/` a chave `status` continua saindo e sendo
+  aceita, com o mesmo valor de `lifecycle_status`. A superfície (menu "Contas", as cinco pastilhas
+  de filtro, as três pílulas, os textos de vazio) é governada pelo DAP
+  `docs/design/dap-lifecycle-status-r1/`, decisões **A1 · B1 · C1**, e os mapas de rótulo e de
+  variante moram em `frontend/src/components/AccountLifecycle.tsx` — um lugar só, no molde de
+  `StatusDot` (ADR 0026). A rota da SPA é `/contas`; `/clientes*` redireciona e morre na
+  `/api/v2/`.
 - **Opportunity → Project conversion** is the central business action: the
-  `convert-to-project` `@action` on `OpportunityViewSet`. It requires the opportunity be in the
-  "won" stage, enforces sales/admin role, and carries `Opportunity.service` over to
+  `convert-to-project` `@action` on `CommercialOpportunityViewSet`. It requires the sale be in the
+  "won" stage, enforces sales/admin role, and carries `CommercialOpportunity.service` over to
   `Project.service` (payload wins).
   **"Converts exactly once" is no longer a database guarantee — it moved into the action** (ADR
   0050). `Project.opportunity` was a `OneToOneField` and became
@@ -130,19 +144,44 @@ Key cross-cutting patterns to preserve:
   `backend/tests/regression/test_conversion_is_single_use.py`. Consequence: an opportunity whose
   only project is archived now reconverts (201) instead of 409 — the archived row no longer
   occupies a slot, which closes the last dead end of FDD 025.
-  `OpportunitySerializer.project`/`project_archived` keep their old shape (one id or null, never a
+  `CommercialOpportunitySerializer.project`/`project_archived` keep their old shape (one id or null, never a
   list): the oldest live project, or the oldest archived one when no live project remains.
 - **Product tiers live on `Service`, and they are the FDE ladder.** A `Service` with a `tier`
-  (`qualification_call`/`discovery_assessment`/`discovery_sprint`/`feasibility`/`prove`/`scale`/
-  `transformation`) is one sellable step, seeded by migrations `0020` and `0050`; a blank `tier`
-  is a loose catalog entry. The tier drives the kickoff template (`kickoff.KICKOFF_TEMPLATES`),
-  the invoice schedule (`invoices.INVOICE_SCHEDULES`), the proposal prompt context
-  (`ai.build_opportunity_context`) and the `by_tier` funnel in analytics — see FDD 015, ADR 0048.
-  **Free is the step, not the zero price** (`frontend/src/tiers.ts`): only the Qualification Call
-  is free; zero anywhere else means "price to be decided" — the Transformation Partnership is
-  monthly recurring and the catalog still cannot represent recurrence.
+  (`qualification_call`/`discovery_sprint`/`feasibility`/`prove`/`scale`/`transformation`) is one
+  sellable step, seeded by migrations `0020` and `0050`; a blank `tier` is a loose catalog entry.
+  They are **six** since ADR 0053: `discovery_assessment` left the enum (migration `0064`, guarded
+  — it refuses to delete a row that any `CommercialOpportunity`, `Project`, `Invoice` or blueprint
+  still points at, and refuses to overwrite a row someone edited on screen), because the **Design
+  Partner** now covers free entry into a new vertical and a step nobody sells is a funnel column
+  that never fills. The same migration prices the Discovery Sprint at R$ 3.000 — but only over the
+  still-seeded row, since editing a price on screen is the normal path. The tier drives the kickoff
+  template (`kickoff.KICKOFF_TEMPLATES`), the invoice schedule (`invoices.INVOICE_SCHEDULES`), the
+  proposal prompt context (`ai.build_opportunity_context`) and the `by_tier` funnel in analytics —
+  see FDD 015, ADR 0048, ADR 0053. **Free is the step, not the zero price**
+  (`frontend/src/tiers.ts`): only the Qualification Call is free; zero anywhere else means "price
+  to be decided" — the Transformation Partnership is monthly recurring and the catalog still cannot
+  represent recurrence. The Design Partner is **not** a field: what is granted lives in the
+  opportunity's `estimated_value` as a discount, because a zeroed opportunity disappears from the
+  funnel and value granted is a number someone looks at.
+- **Cada gate tem seu vocabulário, e um campo só carrega os dois.** A Feasibility responde *"a
+  tecnologia consegue fazer a tarefa?"* → `GO`·`CONDITIONAL GO`·`REDESIGN`·`NO-GO`; o PROVE responde
+  *"funcionou em produção controlada?"* → `SCALE`·`ITERATE`·`STOP` (ADR 0053, emenda na FDD 033).
+  `ProjectPhase.gate_decision` continua **um** campo com as sete choices
+  (`ProjectPhase.DECISOES_DO_GATE`) — duas colunas seriam duas definições do mesmo fato. Quem
+  estreita é `models.decisoes_do_gate`, **derivando de `JourneyPhase.canonical_stage`** e não de um
+  campo novo: quem diz que o gate do PROVE é SCALE/ITERATE/STOP é a metodologia, e `canonical_stage`
+  já é "qual fase FDE é esta". Fase de gate **sem** classificação recebe as quatro — é o
+  comportamento de toda fase semeada. As três saídas novas não inventam efeito: caem nos mesmos três
+  (`CONCLUEM_E_AVANCAM`/`REABREM_A_ANTERIOR`/`REGISTRAM_E_PARAM`), e é por efeito que `journey.py` e
+  a tela ramificam — `STOP` é o `cancelled` do `NO-GO` e `ITERATE` o `replanned` do `REDESIGN` em
+  `situation`. **A validação da decisão mora em `journey.apply_gate`, não na view**: o vocabulário
+  depende da fase ativa, e só ali ela é conhecida — 400 via `exceptions.InvalidInput` (o pedido é
+  que está errado), nunca `StateConflict`, que é 409. O esquema publica as sete e o servidor
+  estreita. Na tela, `frontend/src/journey.ts` é o **único** mapa (`GATE_DECISION_LABEL`,
+  `GATE_EFFECT`, `gateDecisions`), lido pelo detalhe do projeto e pela tela de Jornada; os rótulos
+  não se traduzem.
 - **A qualificação vem antes da venda, e é entidade.** `POST /leads/{id}/convert/` criava, no mesmo
-  clique, um `Client` **e** uma `Opportunity` no degrau gratuito — uma conversa de trinta minutos
+  clique, uma `Account` **e** uma `CommercialOpportunity` no degrau gratuito — uma conversa de trinta minutos
   entrava no funil como venda registrada e podia virar `Project`. Desde a ADR 0049 ele registra uma
   `Qualification` (autor, data, cinco eixos, `outcome` ∈ `qualified`·`nurture`·`disqualified`) e
   **não cria oportunidade**; a venda nasce num ato explícito,
@@ -151,19 +190,20 @@ Key cross-cutting patterns to preserve:
   sobrescrever a primeira apagaria o histórico que a entidade existe para guardar; por isso
   `nurture` **não arquiva o lead**, que é o único jeito de ele voltar ao radar. A IA é insumo:
   `ai_suggested_outcome`/`ai_score_snapshot` guardam a sugestão e nada os copia para `outcome`. As
-  duas invariantes vivem no **modelo** e não só na view (`Opportunity.clean()`, `Project.clean()`),
+  duas invariantes vivem no **modelo** e não só na view (`CommercialOpportunity.clean()`, `Project.clean()`),
   porque shell, admin e migração não passam por rota. Ver FDD 044.
 - **`Service.category` separa a porta do degrau.** `acquisition` é oferta de aquisição — hoje só a
-  Qualification Call —, e ela nunca gera `Opportunity` nem `Project`; `commercial` é degrau
-  vendável e é o default. A distinção é por **categoria, não por preço**: o Discovery + Assessment
-  do founding client também é gratuito e é degrau. Restam seis degraus vendáveis na escada da FDD
-  015.
+  Qualification Call —, e ela nunca gera `CommercialOpportunity` nem `Project`; `commercial` é degrau
+  vendável e é o default. A distinção é por **categoria, não por preço**: o Design Partner recebe
+  Discovery, gate e PROVE sem cobrar (ADR 0053) e aqueles continuam degraus vendáveis. Restam
+  **cinco** degraus vendáveis na escada da FDD 015, depois que a ADR 0053 tirou o
+  `discovery_assessment`.
 - **Documents are single-linked.** A `Document` must reference exactly one of
-  client/opportunity/project (enforced in `Document.clean()`); access is gated —
+  `account`/`commercial_opportunity`/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.
 - **Journey artifacts have state.** `Artifact` (one model, `kind` =
   discovery/assessment/proposal/contract) holds the AI-generated text plus a state machine
-  (`ARTIFACT_TRANSITIONS` in `models.py`), linked to exactly one of opportunity/project. The four
+  (`ARTIFACT_TRANSITIONS` in `models.py`), linked to exactly one of `commercial_opportunity`/project. The four
   AI actions create it in `draft` via `_ai_run(..., artifact_kind=...)`; `Document` stays the file
   and the e-sign target. Analytics exposes `funnel.by_stage` — see FDD 016 / ADR 0008.
 - **Evidência e achado são duas coisas, e o `Discovery` diz de quando.** `Evidencia` (FDD 039)
@@ -175,25 +215,49 @@ Key cross-cutting patterns to preserve:
   uma `Evidence` viva**: a metade do revisor está no `clean()`, a do M2M só cabe no serializer, e
   arquivar a última evidência viva de um fato é 409. `Discovery`/`DiscoverySession`/
   `ProcessObservation` dão tempo e autoria ao levantamento — é a `ProcessObservation` que desfaz a
-  proveniência única de `Processo.source_project`, permitindo o mesmo processo em dois Discoveries.
+  proveniência única de `Process.source_project`, permitindo o mesmo processo em dois Discoveries.
   **O dual-write é obrigatório enquanto durar esta fase**: `MeetingViewSet.estruturar` grava
-  `Evidencia` **e** o par novo, porque `processos.custo_do_estado_atual` e `ProcessoDetailPage`
-  ainda leem o legado — há regressão afirmando que promover um `Finding` não move o custo. Campos
-  com nome canônico (`account`, `process`, `step`) apontam para os modelos legados; o renome físico
-  é fase posterior, e `legacy_evidencia` é o escape de mapeamento do backfill (migração `0054`).
+  `Evidencia` **e** o par novo, porque `process.custo_do_estado_atual` e `ProcessDetailPage`
+  ainda leem o legado — há regressão afirmando que promover um `Finding` não move o custo. Os campos
+  com nome canônico (`account`, `process`, `step`) já apontam para as classes de nome certo desde a
+  #67; o que sobra do legado é a própria `Evidencia`, que a Fase 6 remove com o dual-write, e
+  `legacy_evidencia` é o escape de mapeamento do backfill (migração `0054`).
 - **O snapshot do portal fala canônico, e quem carimba a projeção é quem muda o estado.**
   `portal.build_snapshot` é projeção de leitura do One, e o One **nunca renomeia** (`language-map`
   §3): por isso ele leva `account` (de `engagement.account`, a fonte — não de `Project.client`, que
   é a projeção temporária), `engagement`, e `canonical_stage`/`requires_gate`/`gate_decision` em
-  cada fase, com `gate_decision` lido da **propriedade** de `ProjectPhase` para o nome legado não
-  se espalhar. `client` fica como alias até a `/api/v2/`; `situation` e `waiting_party` **não**
+  cada fase. `gate_decision` era lido de uma **propriedade** de `ProjectPhase`, para o nome legado
+  não se espalhar; desde a #67 é o nome do próprio campo, e a chave emitida nunca mudou — que era
+  o ponto do alias. `client` fica como alias até a `/api/v2/`; `situation` e `waiting_party` **não**
   atravessam — são classificação interna de delivery. O carimbo `observed_at`/`projection_version`
   é escrito em `portal.emit` (`F()+1`, **antes** da guarda de flag), nunca no `build_snapshot`:
   a rota é um `GET`, e incrementar na leitura produziria versões fora de ordem — o sinal exato que
   o comparador do outro lado usa para descartar o obsoleto. Duas leituras seguidas devolvendo a
   mesma versão é o caso comum, não sintoma. Ver FDD 047, ADR 0051 e a emenda de 28/08 na ADR 0003.
-- **O `Engagement` tem superfície, e ela mora no detalhe do cliente.** A seção "Engagements" de
-  `ClientDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
+- **Os renomes da ontologia estão em curso, e "renome" são três coisas com prazos distintos**
+  (ADR 0052, issue #67). O nome da **classe** — e de tudo que a nomeia: serializer, viewset,
+  `resource`, campo FK, tipo TS — muda **agora**, uma fatia por PR. O nome da **tabela** fica para
+  a Fase 6: cada renome carrega `Meta.db_table` fixado no nome legado, e a migração é
+  `AlterModelTable` **antes** de `RenameModel`, nessa ordem, para as duas serem no-op no banco —
+  `alter_db_table` abre com `if old_db_table == new_db_table: return`, e inverter faz o banco
+  renomear a tabela e renomeá-la de volta. A **rota** e a **chave de payload** ficam para a
+  `/api/v2/`: a chave legada continua saindo no `GET` (campo com `source=`, `read_only`) e sendo
+  aceita no `POST`/`PATCH` (`AliasDeEntradaMixin`, um mecanismo para todas), e **a canônica vence
+  quando as duas vêm no mesmo corpo**. Todo alias de escrita precisa de regressão, porque a SPA
+  escreve o nome canônico: sem ela a linha do serializer não tem chamador aqui dentro, e a próxima
+  varredura atrás do nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem
+  nada ficar vermelho. **A #67 fechou**, com os quatro renomes pagos: `GateOutcome`→`GateDecision`,
+  `Opportunity`→`CommercialOpportunity`, `Client`→`Account` (fatia 2, migração `0062`, com os dez
+  campos FK virando `account` e `Client.status` virando `Account.lifecycle_status`) e
+  `Processo`/`ProcessoEtapa`→`Process`/`ProcessStep` (fatia 4, migração `0063`, com
+  `ProcessStep.processo` e `Evidencia.processo`/`etapa` virando `process`/`step`, e o módulo
+  `processos.py` virando `process.py`). `Evidencia` **não** foi renomeada: ela é a metade legada do
+  split e sai na Fase 6, com o dual-write. Sobram as **tabelas** (Fase 6) e as rotas e chaves de
+  payload (`/api/v2/`). O que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt`
+  (teto 29), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo
+  vs. chave).
+- **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
+  `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
   `docs/design/dap-engagement-r1/`, r1, decisões **A1** (título em inglês, copy em volta em pt-BR)
   e **B1** (as duas pílulas de `commercial_model` sempre visíveis) — mudar a superfície exige
   revisão nova do pacote, não julgamento na hora. `projects_count` é **recortado por
@@ -211,7 +275,7 @@ fetches a CSRF token from `/api/v1/auth/csrf/` before any mutating request, send
 unset; email goes through SMTP (Mailpit in dev).
 
 **Frontend structure:** thin SPA — `src/api.ts` is the single API client, `src/pages/*`
-are the screens (Login, Dashboard, Clients, Commercial, Projects), `src/components/Layout.tsx`
+are the screens (Login, Dashboard, Accounts, Commercial, Projects), `src/components/Layout.tsx`
 is the shell, `src/types.ts` holds shared types.
 
 **O design system é compartilhado com o portal do cliente, e a skill que o descreve é

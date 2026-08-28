@@ -36,7 +36,7 @@ def fatura_de_projeto_lucrativo() -> Invoice:
     por ausência de dado, não por ausência de vazamento."""
     project = ProjectFactory(actual_value=Decimal("250000.00"))
     return InvoiceFactory(
-        client=project.client,
+        account=project.client,
         project=project,
         status=Invoice.Status.OVERDUE,
         number="2026-0001",
@@ -89,7 +89,7 @@ def test_o_contexto_nao_alcanca_fatura_de_outro_cliente(
     contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firme", HOJE)
 
     assert "77777" not in contexto
-    assert de_outro.client.name not in contexto
+    assert de_outro.account.name not in contexto
 
 
 # --- Camada estrutural --------------------------------------------------------

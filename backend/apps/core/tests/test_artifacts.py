@@ -7,8 +7,8 @@ from apps.core.models import Artifact
 
 from .factories import (
     ArtifactFactory,
+    CommercialOpportunityFactory,
     MeetingFactory,
-    OpportunityFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -21,33 +21,33 @@ def _mock_ai(monkeypatch, text="Rascunho gerado pela IA."):
 
 @pytest.mark.django_db
 def test_sales_can_create_and_list_artifacts():
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
     client = APIClient()
     client.force_authenticate(UserFactory(role="sales"))
 
     created = client.post("/api/v1/artifacts/", {
         "kind": "proposal", "title": "Proposta — Acme", "content": "Escopo e investimento.",
-        "opportunity": opportunity.pk,
+        "commercial_opportunity": opportunity.pk,
     }, format="json")
     assert created.status_code == 201
     assert created.json()["status"] == "draft"
     assert created.json()["kind_display"] == "Proposta"
 
-    listed = client.get(f"/api/v1/artifacts/?opportunity={opportunity.pk}")
+    listed = client.get(f"/api/v1/artifacts/?commercial_opportunity={opportunity.pk}")
     assert listed.status_code == 200
     assert [row["title"] for row in listed.json()] == ["Proposta — Acme"]
 
 
 @pytest.mark.django_db
 def test_created_by_comes_from_the_session_not_the_payload():
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
     author = UserFactory(role="sales")
     other = UserFactory(role="sales")
     client = APIClient()
     client.force_authenticate(author)
 
     created = client.post("/api/v1/artifacts/", {
-        "kind": "proposal", "title": "Proposta", "opportunity": opportunity.pk,
+        "kind": "proposal", "title": "Proposta", "commercial_opportunity": opportunity.pk,
         "created_by": other.pk,
     }, format="json")
 
@@ -65,23 +65,24 @@ def test_artifact_must_link_to_exactly_one_resource():
 
     both = client.post("/api/v1/artifacts/", {
         "kind": "proposal", "title": "Dupla",
-        "opportunity": OpportunityFactory().pk, "project": ProjectFactory().pk,
+        "commercial_opportunity": CommercialOpportunityFactory().pk,
+        "project": ProjectFactory().pk,
     }, format="json")
     assert both.status_code == 400
 
 
 @pytest.mark.django_db
 def test_filters_by_kind_and_status():
-    opportunity = OpportunityFactory()
-    ArtifactFactory(opportunity=opportunity, kind=Artifact.Kind.PROPOSAL)
-    ArtifactFactory(opportunity=opportunity, kind=Artifact.Kind.CONTRACT, status=Artifact.Status.SENT)
+    opportunity = CommercialOpportunityFactory()
+    ArtifactFactory(commercial_opportunity=opportunity, kind=Artifact.Kind.PROPOSAL)
+    ArtifactFactory(commercial_opportunity=opportunity, kind=Artifact.Kind.CONTRACT, status=Artifact.Status.SENT)
     client = APIClient()
     client.force_authenticate(UserFactory(role="sales"))
 
-    by_kind = client.get(f"/api/v1/artifacts/?opportunity={opportunity.pk}&kind=contract")
+    by_kind = client.get(f"/api/v1/artifacts/?commercial_opportunity={opportunity.pk}&kind=contract")
     assert [row["kind"] for row in by_kind.json()] == ["contract"]
 
-    by_status = client.get(f"/api/v1/artifacts/?opportunity={opportunity.pk}&status=draft")
+    by_status = client.get(f"/api/v1/artifacts/?commercial_opportunity={opportunity.pk}&status=draft")
     assert [row["kind"] for row in by_status.json()] == ["proposal"]
 
 
@@ -128,12 +129,12 @@ def test_decided_artifact_is_terminal():
 
 @pytest.mark.django_db
 def test_archived_artifact_is_hidden_from_list():
-    opportunity = OpportunityFactory()
-    ArtifactFactory(opportunity=opportunity).archive()
+    opportunity = CommercialOpportunityFactory()
+    ArtifactFactory(commercial_opportunity=opportunity).archive()
     client = APIClient()
     client.force_authenticate(UserFactory(role="sales"))
 
-    assert client.get(f"/api/v1/artifacts/?opportunity={opportunity.pk}").json() == []
+    assert client.get(f"/api/v1/artifacts/?commercial_opportunity={opportunity.pk}").json() == []
 
 
 @pytest.mark.django_db
@@ -150,7 +151,7 @@ def test_delete_archives_instead_of_erasing():
 @pytest.mark.django_db
 def test_delivery_sees_project_artifacts_but_not_commercial_ones():
     project = ProjectFactory()
-    ArtifactFactory(opportunity=None, project=project, kind=Artifact.Kind.ASSESSMENT,
+    ArtifactFactory(commercial_opportunity=None, project=project, kind=Artifact.Kind.ASSESSMENT,
                     title="Assessment — Acme")
     ArtifactFactory(title="Proposta — Acme")  # ligada a oportunidade
     person = UserFactory(role="delivery")
@@ -172,7 +173,7 @@ def test_anonymous_cannot_reach_artifacts():
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_generating_a_proposal_persists_a_draft_artifact(monkeypatch):
     _mock_ai(monkeypatch, "Proposta em três frentes.")
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
     user = UserFactory(role="sales")
     client = APIClient()
     client.force_authenticate(user)
@@ -188,7 +189,7 @@ def test_generating_a_proposal_persists_a_draft_artifact(monkeypatch):
     assert artifact.kind == Artifact.Kind.PROPOSAL
     assert artifact.status == Artifact.Status.DRAFT
     assert artifact.content == "Proposta em três frentes."
-    assert artifact.opportunity_id == opportunity.pk
+    assert artifact.commercial_opportunity_id == opportunity.pk
     assert artifact.created_by_id == user.pk
     assert artifact.ai_interaction_id == body["interaction"]
 
@@ -197,14 +198,14 @@ def test_generating_a_proposal_persists_a_draft_artifact(monkeypatch):
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x")
 def test_generating_a_contract_persists_a_draft_artifact(monkeypatch):
     _mock_ai(monkeypatch)
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
     client = APIClient()
     client.force_authenticate(UserFactory(role="sales"))
 
     response = client.post(f"/api/v1/opportunities/{opportunity.pk}/contract/", {}, format="json")
 
     assert response.json()["artifact"]["kind"] == "contract"
-    assert Artifact.objects.filter(kind=Artifact.Kind.CONTRACT, opportunity=opportunity).exists()
+    assert Artifact.objects.filter(kind=Artifact.Kind.CONTRACT, commercial_opportunity=opportunity).exists()
 
 
 @pytest.mark.django_db
@@ -224,14 +225,14 @@ def test_meeting_analysis_survives_the_page(monkeypatch, action, kind):
     artifact = Artifact.objects.get(kind=kind)
     assert artifact.content == "Diagnóstico da transcrição."
     assert artifact.project_id == meeting.project_id
-    assert artifact.opportunity_id is None
+    assert artifact.commercial_opportunity_id is None
     assert artifact.source_meeting_id == meeting.pk
 
 
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=False)
 def test_disabled_ai_creates_no_artifact():
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
     client = APIClient()
     client.force_authenticate(UserFactory(role="sales"))
 

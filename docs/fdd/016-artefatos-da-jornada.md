@@ -21,7 +21,7 @@ O artefato apenas o referencia quando o rascunho revisado vira documento.
 - **Um modelo, quatro tipos.** `Artifact` com `kind` (`discovery`/`assessment`/`proposal`/
   `contract`) em vez de quatro modelos — mesma escolha do `Service.tier` (FDD 015), e o que deixa
   o funil por etapa ser uma consulta só. Ver ADR 0008.
-- **Vínculo único:** exatamente um de `opportunity`/`project`, validado em `clean()` e no
+- **Vínculo único:** exatamente um de `commercial_opportunity`/`project`, validado em `clean()` e no
   serializer — mesma invariante do `Document`, e pelo mesmo motivo: o vínculo define quem enxerga
   o conteúdo. Não há campo `client`; o cliente vem sempre pela ponta vinculada.
 - **Estados:** `draft → review → sent → accepted | rejected`. Rascunho e revisão vão e voltam
@@ -35,7 +35,8 @@ O artefato apenas o referencia quando o rascunho revisado vira documento.
   Nada muda para quem já consumia essas rotas — `text` e `interaction` seguem iguais e a chave
   `artifact` é **aditiva** (contrato `/api/v1/` preservado). IA desligada não cria artefato.
 - **CRUD:** `/api/v1/artifacts/` sobre `ArchiveModelViewSet` (exclusão lógica como todo recurso de
-  negócio), filtrável por `opportunity`, `project`, `kind` e `status`. `created_by` vem da sessão,
+  negócio), filtrável por `commercial_opportunity` (com `opportunity` vivo como alias da
+  `/api/v1/`), `project`, `kind` e `status`. `created_by` vem da sessão,
   nunca do payload.
 - **RBAC** (`resource = "artifact"`): Comercial lê e escreve tudo; Entrega lê e escreve apenas os
   artefatos **ligados a projeto** — proposta e contrato carregam valor e condição comercial, então

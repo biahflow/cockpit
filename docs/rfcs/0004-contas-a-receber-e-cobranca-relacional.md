@@ -9,7 +9,7 @@
 O portal carrega a oportunidade da venda até a operação, e para no ponto em que o dinheiro
 deveria entrar. Não há domínio de faturamento: entre os modelos de `apps/core/models.py` não
 existe fatura, pagamento, vencimento ou conta a receber. `Service.list_price` e
-`Opportunity.value` são **preço**; `Project.actual_value` é um número digitado. Nenhum
+`CommercialOpportunity.value` são **preço**; `Project.actual_value` é um número digitado. Nenhum
 deles responde "cobrei o cliente X, R$ Y, vence dia Z, está pago?".
 
 A consequência prática vem antes de qualquer discussão de agente de cobrança: **hoje a
@@ -53,7 +53,7 @@ cliente**. No instante em que existir fatura, passam a existir duas verdades sob
 "recebido", ou `actual_value` passa a ser derivado das faturas. Sem decisão, o ROI deriva em
 silêncio — e é um número que o cliente já vê.
 
-**Camada 0 — a fatura.** Modelo ligado a `Client`, opcionalmente a `Project` e `Service`,
+**Camada 0 — a fatura.** Modelo ligado a `Account`, opcionalmente a `Project` e `Service`,
 com valor, emissão, vencimento, meio de pagamento, referência externa do pagamento e estado
 com mapa de transições no molde de `ARTIFACT_TRANSITIONS`: `rascunho → emitida → paga /
 vencida / renegociada / cancelada`. A conversão de oportunidade em projeto pode **semear** o

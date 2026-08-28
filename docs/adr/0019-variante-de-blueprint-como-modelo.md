@@ -68,3 +68,10 @@ reescreve o que foi entregue ontem. É a terceira aplicação do molde da FDD 01
   `valid_from`/`version` sem migração de dado; um JSON teria de ser reinterpretado inteiro. Não é
   motivo para decidir agora — está em "Fora deste recorte" da FDD 026 —, mas é uma porta que esta
   escolha deixa aberta e a outra fecharia.
+
+## Emenda (issue #67, fatia 2 — 28/08/2026) — a organização se chama `Account`
+
+Onde esta ADR diz `Client`, o modelo hoje se chama `Account`, e o `status` dele se chama
+`lifecycle_status` (ADR 0052). `Account.vertical` e `Project.client_vertical` continuam com a mesma forma. A **tabela** continua `core_client` e a **rota** continua
+`/api/v1/clients/`: o que a `docs/ontology/aliases.md` §2b protege é a linha e a pk, e nenhuma das
+duas se move.

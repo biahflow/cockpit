@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAP — lifecycle_status da Account · r1</title>
+<style>
+  /* Valores copiados um a um de `frontend/src/index.css`. O board é auto-contido de propósito:
+     abre sem build, sem toolchain e sem rede. Onde um valor diverge do produto, o produto vence. */
+  :root {
+    --ink: #12110f;
+    --muted: #57534e;
+    --line: #e7e5e4;
+    --line-strong: #d6d3d1;
+    --canvas: #fafaf9;
+    --surface: #ffffff;
+    --surface-subtle: #f5f5f4;
+    --brand-50: #fdf1ec;
+    --brand-100: #fadfd4;
+    --brand-500: #bd4a30;
+    --brand-700: #9c3c26;
+    --success: #047857;
+    --success-50: #ecfdf5;
+    --warning: #b45309;
+    --warning-50: #fffbeb;
+    --info: #1d4ed8;
+    --info-50: #eff6ff;
+    --danger: #b91c1c;
+    --danger-50: #fef2f2;
+    --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.06);
+    --text-title: 1rem;
+    --text-body: .875rem;
+    --text-label: .75rem;
+    --text-meta: .6875rem;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px;
+    background: var(--canvas); color: var(--ink);
+    font-family: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--text-body); line-height: 1.375rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; }
+  .eyebrow {
+    font-size: var(--text-meta); font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--brand-500);
+  }
+  h1 { font-size: 2rem; line-height: 2.375rem; margin: 6px 0 8px; letter-spacing: -.02em; }
+  h2 { font-size: 1.25rem; margin: 0 0 6px; letter-spacing: -.01em; }
+  h3 { font-size: var(--text-title); margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 4px; max-width: 74ch; }
+  .rule { height: 1px; background: var(--line); margin: 40px 0 28px; border: 0; }
+
+  .panel {
+    border-radius: 12px; border: 1px solid var(--line);
+    background: var(--surface); padding: 20px; box-shadow: var(--shadow-card);
+  }
+  .panel--flush { padding: 0; overflow: hidden; }
+
+  .state {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 9999px; padding: 4px 10px;
+    font-size: 11px; font-weight: 600; line-height: 1;
+  }
+  .state--0 { background: var(--info-50); color: var(--info); }
+  .state--1 { background: var(--success-50); color: var(--success); }
+  .state--2 { background: var(--warning-50); color: var(--warning); }
+  .state--3 { background: var(--danger-50); color: var(--danger); }
+  .state--off { background: var(--surface-subtle); color: var(--muted); }
+
+  .chip {
+    border-radius: 9999px; border: 1px solid var(--line-strong);
+    background: var(--surface); color: var(--muted);
+    padding: 6px 14px; font-size: var(--text-label); font-weight: 600; line-height: 1;
+  }
+  .chip--on { background: var(--brand-50); border-color: var(--brand-100); color: var(--brand-700); }
+
+  .grid2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .grid3 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+
+  .opt { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }
+  .opt > header {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface-subtle);
+  }
+  .opt > header b { font-size: var(--text-label); letter-spacing: .04em; }
+  .opt > header span { font-size: var(--text-meta); color: var(--muted); }
+  .opt--rec > header { background: var(--brand-50); border-bottom-color: var(--brand-100); }
+  .opt--rec > header b { color: var(--brand-700); }
+  .opt .body { padding: 16px; }
+  .note { font-size: var(--text-label); color: var(--muted); margin: 10px 0 0; }
+
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .icon {
+    width: 36px; height: 36px; border-radius: 10px; flex: none;
+    background: var(--surface-subtle); color: var(--muted);
+    display: grid; place-items: center; font-size: 13px; font-weight: 700;
+  }
+  .row .who { flex: 1 1 auto; min-width: 0; }
+  .row .who b { display: block; font-size: var(--text-body); font-weight: 600; }
+  .row .who small { display: block; font-size: var(--text-label); color: var(--muted); margin-top: 1px; }
+
+  .sidebar {
+    width: 230px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--surface); padding: 12px; box-shadow: var(--shadow-card);
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    border-radius: 8px; padding: 8px 10px; font-size: var(--text-body); color: var(--muted);
+  }
+  .nav-item--on { background: var(--brand-50); color: var(--brand-700); font-weight: 600; }
+  .nav-item .dot { width: 16px; height: 16px; border-radius: 5px; background: currentColor; opacity: .35; flex: none; }
+
+  .field {
+    display: block; width: 100%; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: var(--surface); padding: 8px 10px; font-size: var(--text-body); color: var(--ink);
+  }
+  .form-label { display: block; font-size: var(--text-label); font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 8px; background: var(--ink); color: #fff; border: 0;
+    padding: 9px 16px; font-size: var(--text-body); font-weight: 600; width: 100%;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: var(--text-meta); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--surface-subtle); padding: 1px 5px; border-radius: 4px; }
+
+  .flag { display: inline-block; font-size: var(--text-meta); font-weight: 700; color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Design Approval Package · revisão 1</p>
+  <h1>O rótulo “cliente” passa a depender do estado da conta</h1>
+  <p class="lead">
+    <code>Account.lifecycle_status</code> ∈ <code>prospect</code> · <code>active</code> ·
+    <code>inactive</code>. Hoje o modelo só tem dois estados e a interface chama de “cliente”
+    todos eles. Três decisões de copy, desenhadas lado a lado. Nada aqui é implementação.
+  </p>
+
+  <hr class="rule">
+
+  <!-- ============================= HOJE ============================= -->
+  <h2>O que existe hoje</h2>
+  <p class="lead">
+    <code>frontend/src/pages/ClientsPage.tsx</code>. A palavra “cliente” aparece treze vezes no
+    arquivo — em copy e na rota —, e a lista que ela nomeia contém prospects.
+  </p>
+
+  <div class="grid2" style="margin-top:16px; align-items:start;">
+    <div class="panel panel--flush">
+      <div style="display:flex; gap:8px; padding:14px 16px; border-bottom:1px solid var(--line);">
+        <span class="chip chip--on">Todos</span>
+        <span class="chip">Ativos</span>
+        <span class="chip">Prospects</span>
+        <span class="chip">Arquivados</span>
+      </div>
+      <div class="row">
+        <span class="icon">AL</span>
+        <span class="who"><b>Alfa Logística</b><small>Jornada · Discovery</small></span>
+        <span class="state state--0">Ativo</span>
+      </div>
+      <div class="row">
+        <span class="icon">BR</span>
+        <span class="who"><b>Bravo Refrigeração</b><small>Sem jornada ativa</small></span>
+        <span class="state state--off">Prospect</span>
+      </div>
+      <div class="row">
+        <span class="icon">CE</span>
+        <span class="who"><b>Cedro Engenharia</b><small>Jornada · Prove</small></span>
+        <span class="state state--0">Ativo</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Novo cliente <span class="flag">← chama de cliente quem ainda não é</span></h3>
+      <p style="color:var(--muted); margin:2px 0 14px;">Comece pelo nome principal.</p>
+      <label class="form-label">Nome do cliente</label>
+      <input class="field" value="" placeholder="Ex.: Empresa Exemplo" disabled>
+      <label class="form-label" style="margin-top:12px;">Situação</label>
+      <select class="field" disabled>
+        <option>Prospect — ainda não fechou</option>
+      </select>
+      <button class="btn" style="margin-top:14px;" disabled>Cadastrar cliente</button>
+      <p class="note">
+        E o menu lateral diz <b>Clientes</b>, apontando para <code>/clientes</code>.
+      </p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================= DECISÃO A ============================= -->
+  <h2>Decisão A — como a seção se chama, se ela contém prospects</h2>
+  <p class="lead">
+    A regra do <code>language-map</code> §4 é literal: <i>rótulo “cliente” só em
+    <code>active</code></i>. Um formulário chamado “Novo cliente” que cria um prospect viola isso
+    no ato de cadastrar. As três opções mudam <b>menu, rota, título e copy do formulário</b>; a
+    pílula de cada linha é a Decisão B.
+  </p>
+
+  <div class="grid3" style="margin-top:16px;">
+    <div class="opt opt--rec">
+      <header><b>A1 · Contas</b><span>recomendada</span></header>
+      <div class="body">
+        <div class="sidebar" style="width:auto;">
+          <div class="nav-item"><span class="dot"></span>Início</div>
+          <div class="nav-item"><span class="dot"></span>Leads</div>
+          <div class="nav-item nav-item--on"><span class="dot"></span>Contas</div>
+          <div class="nav-item"><span class="dot"></span>Comercial</div>
+        </div>
+        <p class="note" style="margin-top:14px;">
+          <b>Novo cliente</b> → <b>Nova conta</b><br>
+          <b>Cadastrar cliente</b> → <b>Cadastrar conta</b><br>
+          <b>Nome do cliente</b> → <b>Nome da conta</b><br>
+          <code>/clientes</code> → <code>/contas</code>
+        </p>
+      </div>
+    </div>
+
+    <div class="opt">
+      <header><b>A2 · Accounts</b><span>termo canônico em inglês</span></header>
+      <div class="body">
+        <div class="sidebar" style="width:auto;">
+          <div class="nav-item"><span class="dot"></span>Início</div>
+          <div class="nav-item"><span class="dot"></span>Leads</div>
+          <div class="nav-item nav-item--on"><span class="dot"></span>Accounts</div>
+          <div class="nav-item"><span class="dot"></span>Comercial</div>
+        </div>
+        <p class="note" style="margin-top:14px;">
+          <b>Nova account</b> · <b>Cadastrar account</b><br>
+          <code>/accounts</code><br>
+          Mesmo padrão da decisão A1 do DAP de Engagements: título em inglês, copy em volta em
+          pt-BR.
+        </p>
+      </div>
+    </div>
+
+    <div class="opt">
+      <header><b>A3 · Clientes</b><span>manter como está</span></header>
+      <div class="body">
+        <div class="sidebar" style="width:auto;">
+          <div class="nav-item"><span class="dot"></span>Início</div>
+          <div class="nav-item"><span class="dot"></span>Leads</div>
+          <div class="nav-item nav-item--on"><span class="dot"></span>Clientes</div>
+          <div class="nav-item"><span class="dot"></span>Comercial</div>
+        </div>
+        <p class="note" style="margin-top:14px;">
+          Nada muda no menu nem no formulário. A regra do §4 passa a valer só para a pílula de
+          estado.<br><span class="flag">Deixa a violação de pé no formulário.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================= DECISÃO B ============================= -->
+  <h2>Decisão B — o que a pílula diz em cada um dos três estados</h2>
+  <p class="lead">
+    Três estados, três pílulas. <code>inactive</code> não existe hoje e precisa de palavra e de
+    variante. As variantes vêm da primitiva <code>.state</code>; nenhuma cor é escrita à mão.
+  </p>
+
+  <div class="grid2" style="margin-top:16px;">
+    <div class="opt opt--rec">
+      <header><b>B1</b><span>recomendada</span></header>
+      <div class="body">
+        <div class="panel panel--flush" style="box-shadow:none;">
+          <div class="row"><span class="icon">BR</span><span class="who"><b>Bravo Refrigeração</b><small>Sem jornada ativa</small></span><span class="state state--off">Prospect</span></div>
+          <div class="row"><span class="icon">AL</span><span class="who"><b>Alfa Logística</b><small>Jornada · Discovery</small></span><span class="state state--1">Cliente</span></div>
+          <div class="row"><span class="icon">DM</span><span class="who"><b>Delta Metalúrgica</b><small>Sem jornada ativa</small></span><span class="state state--off">Inativo</span></div>
+        </div>
+        <p class="note">
+          <code>prospect</code> → “Prospect”, <code>.state--off</code><br>
+          <code>active</code> → <b>“Cliente”</b>, <code>.state--1</code><br>
+          <code>inactive</code> → “Inativo”, <code>.state--off</code><br><br>
+          A palavra “Cliente” passa a ser <b>informação</b>: ela aparece exatamente onde a conta é
+          cliente de fato. Verde e não azul porque <code>.state--1</code> é o “concluído/ok” do
+          produto e é o que a satisfação e a saúde já usam.
+        </p>
+      </div>
+    </div>
+
+    <div class="opt">
+      <header><b>B2</b><span>mantém “Ativo”</span></header>
+      <div class="body">
+        <div class="panel panel--flush" style="box-shadow:none;">
+          <div class="row"><span class="icon">BR</span><span class="who"><b>Bravo Refrigeração</b><small>Sem jornada ativa</small></span><span class="state state--off">Prospect</span></div>
+          <div class="row"><span class="icon">AL</span><span class="who"><b>Alfa Logística</b><small>Jornada · Discovery</small></span><span class="state state--0">Ativo</span></div>
+          <div class="row"><span class="icon">DM</span><span class="who"><b>Delta Metalúrgica</b><small>Sem jornada ativa</small></span><span class="state state--off">Encerrado</span></div>
+        </div>
+        <p class="note">
+          Só acrescenta o terceiro estado e não toca nos dois de hoje.<br><br>
+          O preço: a palavra “cliente” não aparece em lugar nenhum da tela, e a regra do §4 vira
+          uma regra sem consequência visível — o que o produto mostra continua sendo “ativo”,
+          que é vocabulário de banco.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================= DECISÃO C ============================= -->
+  <h2>Decisão C — o filtro ganha uma quarta pastilha, ou <code>inactive</code> some da lista</h2>
+
+  <div class="grid2" style="margin-top:16px;">
+    <div class="opt opt--rec">
+      <header><b>C1 · pastilha própria</b><span>recomendada</span></header>
+      <div class="body">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <span class="chip chip--on">Todos</span>
+          <span class="chip">Prospects</span>
+          <span class="chip">Clientes</span>
+          <span class="chip">Inativos</span>
+          <span class="chip">Arquivados</span>
+        </div>
+        <p class="note" style="margin-top:14px;">
+          Cinco pastilhas. “Todos” continua trazendo os três estados vivos — inativo é uma conta
+          que existe, não uma conta arquivada, e some da lista só quem foi arquivado.
+        </p>
+        <p class="note">
+          <b>Vazio de “Inativos”:</b> “Nenhuma conta inativa” · “Inativa é a conta que já foi
+          cliente e hoje não tem trabalho em andamento. Ela continua no histórico e volta a ser
+          cliente quando uma oportunidade for ganha.”
+        </p>
+      </div>
+    </div>
+
+    <div class="opt">
+      <header><b>C2 · sem pastilha</b><span>inativo só em “Todos”</span></header>
+      <div class="body">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <span class="chip chip--on">Todos</span>
+          <span class="chip">Prospects</span>
+          <span class="chip">Clientes</span>
+          <span class="chip">Arquivados</span>
+        </div>
+        <p class="note" style="margin-top:14px;">
+          Quatro pastilhas, como hoje. A conta inativa aparece só em “Todos”, com a pílula dela.
+          Menos superfície; e sem jeito de responder “quem parou de comprar?”, que é a pergunta
+          para a qual o estado foi criado.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================= FORMULÁRIO ============================= -->
+  <h2>O formulário, sob A1 + B1 + C1</h2>
+  <p class="lead">
+    Consequência das três decisões juntas, para se ver o resultado e não só as partes. O
+    <code>&lt;select&gt;</code> “Situação” aparece em dois lugares —
+    <code>ClientsPage.tsx</code> (cadastro) e <code>ClientDetailPage.tsx:483</code> (edição) — e os
+    dois passam a ter três opções.
+  </p>
+
+  <div class="grid2" style="margin-top:16px; align-items:start;">
+    <div class="panel">
+      <h3>Nova conta</h3>
+      <p style="color:var(--muted); margin:2px 0 14px;">Comece pelo nome principal.</p>
+      <label class="form-label">Nome da conta</label>
+      <input class="field" placeholder="Ex.: Empresa Exemplo" disabled>
+      <label class="form-label" style="margin-top:12px;">Razão social</label>
+      <input class="field" placeholder="Opcional" disabled>
+      <label class="form-label" style="margin-top:12px;">Situação</label>
+      <select class="field" disabled>
+        <option>Prospect — ainda não fechou</option>
+      </select>
+      <button class="btn" style="margin-top:14px;" disabled>Cadastrar conta</button>
+      <p class="note">
+        As três opções do select: <br>
+        “Prospect — ainda não fechou” · “Cliente — já fechou” · “Inativo — foi cliente, não tem
+        trabalho em andamento”
+      </p>
+    </div>
+
+    <div class="panel panel--flush">
+      <div style="display:flex; gap:8px; padding:14px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap;">
+        <span class="chip chip--on">Todos</span>
+        <span class="chip">Prospects</span>
+        <span class="chip">Clientes</span>
+        <span class="chip">Inativos</span>
+        <span class="chip">Arquivados</span>
+      </div>
+      <div class="row"><span class="icon">AL</span><span class="who"><b>Alfa Logística</b><small>Jornada · Discovery</small></span><span class="state state--1">Cliente</span></div>
+      <div class="row"><span class="icon">BR</span><span class="who"><b>Bravo Refrigeração</b><small>Sem jornada ativa</small></span><span class="state state--off">Prospect</span></div>
+      <div class="row"><span class="icon">CE</span><span class="who"><b>Cedro Engenharia</b><small>Jornada · Prove</small></span><span class="state state--1">Cliente</span></div>
+      <div class="row"><span class="icon">DM</span><span class="who"><b>Delta Metalúrgica</b><small>Sem jornada ativa</small></span><span class="state state--off">Inativo</span></div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================= CONTRASTE ============================= -->
+  <h2>Contraste dos pares novos</h2>
+  <p class="lead">
+    Nenhum par de cor novo é introduzido: as três pílulas usam variantes que já existem e que o
+    <code>e2e/a11y.spec.ts</code> já mede em 24 telas × 3 larguras. A tabela existe para registrar
+    que a checagem foi feita, não para substituir o axe.
+  </p>
+  <div class="panel panel--flush" style="margin-top:16px;">
+    <table>
+      <tr><th>Par</th><th>Onde</th><th>Razão medida</th><th>AA</th></tr>
+      <tr><td><code>--success</code> sobre <code>--success-50</code></td><td>pílula “Cliente”</td><td>5,21:1</td><td>passa</td></tr>
+      <tr><td><code>--muted</code> sobre <code>--surface-subtle</code></td><td>pílulas “Prospect” e “Inativo”</td><td>6,99:1</td><td>passa</td></tr>
+      <tr><td><code>--brand-700</code> sobre <code>--brand-50</code></td><td>pastilha de filtro ligada</td><td>6,14:1</td><td>passa</td></tr>
+    </table>
+  </div>
+  <p class="note" style="max-width:74ch;">
+    “Prospect” e “Inativo” dividem <code>.state--off</code> — o neutro. É deliberado e é a regra
+    que a ADR 0026 escreveu: nenhum dos dois é aviso nem falha. Quem distingue os dois é a
+    palavra, não a cor, e é por isso que a Decisão B escolhe palavras e não variantes.
+  </p>
+
+</div>
+</body>
+</html>

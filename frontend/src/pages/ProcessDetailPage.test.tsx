@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-import { ProcessoDetailPage } from "./ProcessoDetailPage";
+import { ProcessDetailPage } from "./ProcessDetailPage";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock("../api", () => ({ api: mocks.api }));
@@ -38,7 +38,7 @@ function processoMapeado(overrides: Record<string, unknown> = {}) {
 
 function evidencia(overrides: Record<string, unknown> = {}) {
   return {
-    id: 7, processo: 1, etapa: null,
+    id: 7, process: 1, processo: 1, step: null, etapa: null,
     forma: "entrevista", forma_display: "Entrevista (o que dizem)",
     rotulo: "hipotese", rotulo_display: "Hipótese",
     content: "A equipe acredita que metade do retrabalho vem de cadastro desatualizado.",
@@ -74,14 +74,14 @@ function linhaDe(texto: string): HTMLElement {
 beforeEach(() => {
   mocks.api.mockReset();
   processo = processoMapeado();
-  etapas = [{ id: 5, processo: 1, name: "Conferência da nota no ERP", position: 1, pessoas: "Analista de faturamento", sistema: "ERP Protheus", dados: "Entra o pedido; sai a nota", tempo: "30 minutos por nota", erro: "", retrabalho: "" }];
+  etapas = [{ id: 5, process: 1, processo: 1, name: "Conferência da nota no ERP", position: 1, pessoas: "Analista de faturamento", sistema: "ERP Protheus", dados: "Entra o pedido; sai a nota", tempo: "30 minutos por nota", erro: "", retrabalho: "" }];
   evidencias = [evidencia()];
   stub();
 });
 afterEach(cleanup);
 
 test("mostra o processo com a conta à vista, e não só o total", async () => {
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   expect(await screen.findByRole("heading", { name: "Faturamento manual de notas" })).toBeInTheDocument();
 
   expect(screen.getByText("R$ 35.200,00")).toBeInTheDocument();
@@ -93,7 +93,7 @@ test("mostra o processo com a conta à vista, e não só o total", async () => {
 });
 
 test("o total parcial nunca aparece sozinho: a tela diz o que ficou de fora", async () => {
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   // Sem esta linha, um total parcial vira "custo zero" na leitura rápida — e "não medimos as
@@ -105,7 +105,7 @@ test("o total parcial nunca aparece sozinho: a tela diz o que ficou de fora", as
 
 test("sem insumo nenhum a tela não mostra conta: zero não seria a resposta", async () => {
   processo = processoMapeado({ custo: custo({ parcelas: [], total: "0.00", nao_apurado: ["Execução do processo", "Retrabalho", "Erros", "Perdas", "Espera", "Risco"] }) });
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   expect(screen.getByText(/O total é parcial/)).toHaveTextContent("Execução do processo");
@@ -113,7 +113,7 @@ test("sem insumo nenhum a tela não mostra conta: zero não seria a resposta", a
 });
 
 test("o processo em hipótese diz que ainda é hipótese", async () => {
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   expect(screen.getByText("Ainda em hipótese")).toBeInTheDocument();
@@ -122,7 +122,7 @@ test("o processo em hipótese diz que ainda é hipótese", async () => {
 
 test("o processo com fato registrado diz que o número se sustenta", async () => {
   processo = processoMapeado({ custo: custo({ sustentacao: "sustentado" }) });
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   expect(screen.getByText("Sustentado por evidência")).toBeInTheDocument();
@@ -130,7 +130,7 @@ test("o processo com fato registrado diz que o número se sustenta", async () =>
 });
 
 test("as seis perguntas do P-S-D-T-E-R aparecem, inclusive as que ninguém respondeu", async () => {
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   const etapa = linhaDe("Conferência da nota no ERP");
@@ -148,7 +148,7 @@ test("as seis perguntas do P-S-D-T-E-R aparecem, inclusive as que ninguém respo
 
 test("cria a etapa com as seis perguntas na ordem em que se pergunta", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   await user.type(screen.getByPlaceholderText("O que acontece nesta etapa"), "Aprovação do fiscal");
@@ -156,7 +156,7 @@ test("cria a etapa com as seis perguntas na ordem em que se pergunta", async () 
   await user.click(screen.getByRole("button", { name: "Adicionar etapa" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/processo-etapas/", expect.objectContaining({
-    method: "POST", body: expect.stringContaining('"processo":1'),
+    method: "POST", body: expect.stringContaining('"process":1'),
   })));
   expect(mocks.api).toHaveBeenCalledWith("/processo-etapas/", expect.objectContaining({
     body: expect.stringContaining('"erro":"Fiscal ausente trava a fila"'),
@@ -170,7 +170,7 @@ test("a evidência mostra a forma, o rótulo e o achado", async () => {
     evidencia(),
     evidencia({ id: 8, rotulo: "desconhecido", rotulo_display: "Desconhecido", forma: "observacao", forma_display: "Observação (o que fazem)", content: "Ninguém soube dizer quanto a nota espera na fila." }),
   ];
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   const suposicao = within(linhaDe("A equipe acredita que metade do retrabalho vem de cadastro desatualizado."));
@@ -184,7 +184,7 @@ test("a evidência mostra a forma, o rótulo e o achado", async () => {
 
 test("promover a fato é um ato humano: manda o PATCH e o selo muda", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   const achado = "A equipe acredita que metade do retrabalho vem de cadastro desatualizado.";
@@ -204,14 +204,14 @@ test("promover a fato é um ato humano: manda o PATCH e o selo muda", async () =
 
 test("a evidência que já é fato não oferece promover", async () => {
   evidencias = [evidencia({ rotulo: "fato", rotulo_display: "Fato" })];
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   expect(screen.queryByLabelText(/Promover a fato:/)).not.toBeInTheDocument();
 });
 
 test("rótulo e forma abrem sem escolha feita — o default que a ADR 0034 recusou no banco não volta pela tela", async () => {
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   const rotulo = screen.getByLabelText("Rótulo") as HTMLSelectElement;
@@ -225,7 +225,7 @@ test("rótulo e forma abrem sem escolha feita — o default que a ADR 0034 recus
 
 test("registra a evidência com o rótulo e a forma escolhidos", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   await user.selectOptions(screen.getByLabelText("Rótulo"), "fato");
@@ -243,7 +243,7 @@ test("registra a evidência com o rótulo e a forma escolhidos", async () => {
 
 test("arquivar avisa que etapas e evidências vão junto", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   // Nada foi arquivado ainda: a confirmação é o que existe entre o clique e o `DELETE`.
@@ -259,14 +259,14 @@ test("a falha da API chega traduzida, com a orientação da tabela de erros", as
   mocks.api.mockImplementation(() => Promise.reject(
     Object.assign(new Error("O estado deste processo mudou."), { status: 409 }),
   ));
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
 
   expect(await screen.findByRole("alert")).toHaveTextContent(/recarregue para ver o que vale agora/);
 });
 
 
 test("os insumos do custo são editáveis, e o que já foi medido vem preenchido", async () => {
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   // Sem este formulário a conta seria zero para sempre: a extração traz o mapa, e os números são
@@ -279,7 +279,7 @@ test("os insumos do custo são editáveis, e o que já foi medido vem preenchido
 
 test("campo em branco vira null no envio, e nunca zero", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   await user.type(screen.getByLabelText("Perdas — R$/mês"), "1500");
@@ -302,7 +302,7 @@ test("campo em branco vira null no envio, e nunca zero", async () => {
 
 test("limpar um insumo já medido devolve o campo a não apurado", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   await user.clear(screen.getByLabelText("Retrabalho — R$/mês"));
@@ -318,7 +318,7 @@ test("limpar um insumo já medido devolve o campo a não apurado", async () => {
 
 test("o achado pode ser ligado a uma etapa, e sem escolha vai como null", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   // O padrão é o processo inteiro: a extração nunca liga achado a etapa, porque o modelo não sabe
@@ -332,12 +332,12 @@ test("o achado pode ser ligado a uma etapa, e sem escolha vai como null", async 
   const semEtapa = JSON.parse(
     (mocks.api.mock.calls.find(([path, init]) => path === "/evidencias/" && init?.method === "POST")![1] as RequestInit).body as string
   );
-  expect(semEtapa.etapa).toBeNull();
+  expect(semEtapa.step).toBeNull();
 });
 
 test("escolher a etapa manda o id dela no achado", async () => {
   const user = userEvent.setup();
-  render(<ProcessoDetailPage clientId={4} id={1} />);
+  render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   await user.selectOptions(screen.getByLabelText("Etapa (opcional)"), "5");
@@ -350,5 +350,5 @@ test("escolher a etapa manda o id dela no achado", async () => {
   const corpo = JSON.parse(
     (mocks.api.mock.calls.find(([path, init]) => path === "/evidencias/" && init?.method === "POST")![1] as RequestInit).body as string
   );
-  expect(corpo.etapa).toBe("5");
+  expect(corpo.step).toBe("5");
 });

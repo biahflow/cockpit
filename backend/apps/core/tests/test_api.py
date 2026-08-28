@@ -21,10 +21,10 @@ from apps.core.models import (
 )
 
 from .factories import (
+    AccountFactory,
     ArtifactFactory,
-    ClientFactory,
+    CommercialOpportunityFactory,
     MeetingFactory,
-    OpportunityFactory,
     ProjectFactory,
     UserFactory,
 )
@@ -44,10 +44,10 @@ def admin_user() -> User:
 def test_sales_can_convert_won_opportunity_once(api_client: APIClient):
     sales = UserFactory(role=User.Role.SALES)
     won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
-    opportunity = OpportunityFactory(stage=won, owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=won, owner=sales)
     api_client.force_authenticate(sales)
     payload = {
-        "client": opportunity.client_id,
+        "client": opportunity.account_id,
         "name": "Projeto gerado",
         "description": "",
         "owner": sales.id,
@@ -68,7 +68,7 @@ def test_sales_can_convert_won_opportunity_once(api_client: APIClient):
 @pytest.mark.django_db
 def test_cannot_convert_opportunity_that_is_not_won(api_client: APIClient):
     sales = UserFactory(role=User.Role.SALES)
-    opportunity = OpportunityFactory(owner=sales)
+    opportunity = CommercialOpportunityFactory(owner=sales)
     api_client.force_authenticate(sales)
     response = api_client.post(
         reverse("opportunity-convert-to-project", args=[opportunity.id]), {}, format="json"
@@ -83,10 +83,10 @@ def test_conversion_seeds_kickoff_schedule_and_emails_owner(api_client: APIClien
 
     sales = UserFactory(role=User.Role.SALES, email="vendas@example.test")
     won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
-    opportunity = OpportunityFactory(stage=won, owner=sales)
+    opportunity = CommercialOpportunityFactory(stage=won, owner=sales)
     api_client.force_authenticate(sales)
     payload = {
-        "client": opportunity.client_id, "name": "Projeto gerado",
+        "client": opportunity.account_id, "name": "Projeto gerado",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=90)),
     }
@@ -104,7 +104,7 @@ def test_conversion_seeds_kickoff_schedule_and_emails_owner(api_client: APIClien
 @pytest.mark.django_db
 def test_delivery_cannot_edit_opportunities(api_client: APIClient):
     delivery = UserFactory(role=User.Role.DELIVERY)
-    opportunity = OpportunityFactory()
+    opportunity = CommercialOpportunityFactory()
     api_client.force_authenticate(delivery)
     response = api_client.patch(
         reverse("opportunity-detail", args=[opportunity.id]), {"title": "Alterado"}, format="json"
@@ -115,10 +115,10 @@ def test_delivery_cannot_edit_opportunities(api_client: APIClient):
 @pytest.mark.django_db
 @override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
 def test_document_requires_exactly_one_link_and_keeps_private_access(api_client: APIClient, admin_user: User):
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
     file = SimpleUploadedFile("proposta.pdf", b"conteudo", content_type="application/pdf")
-    response = api_client.post(reverse("document-list"), {"client": client.id, "file": file})
+    response = api_client.post(reverse("document-list"), {"account": account.id, "file": file})
     assert response.status_code == 201
     document = Document.objects.get()
     assert document.original_name == "proposta.pdf"
@@ -140,11 +140,11 @@ def test_document_upload_goes_to_drive_when_enabled(api_client: APIClient, admin
     from apps.core import drive
 
     monkeypatch.setattr(drive, "upload_document", lambda document, uploaded: ("fileid-123", "https://drive.example/view"))
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
     file = SimpleUploadedFile("proposta.pdf", b"conteudo", content_type="application/pdf")
 
-    response = api_client.post(reverse("document-list"), {"client": client.id, "file": file})
+    response = api_client.post(reverse("document-list"), {"account": account.id, "file": file})
 
     assert response.status_code == 201
     assert response.data["drive_link"] == "https://drive.example/view"
@@ -217,13 +217,13 @@ def test_task_list_filters_by_project(api_client: APIClient, admin_user: User):
 
 @pytest.mark.django_db
 def test_contact_list_filters_by_client(api_client: APIClient, admin_user: User):
-    client = ClientFactory(owner=admin_user)
-    other = ClientFactory(owner=admin_user)
-    Contact.objects.create(client=client, first_name="Contato certo")
-    Contact.objects.create(client=other, first_name="Contato errado")
+    account = AccountFactory(owner=admin_user)
+    other = AccountFactory(owner=admin_user)
+    Contact.objects.create(account=account, first_name="Contato certo")
+    Contact.objects.create(account=other, first_name="Contato errado")
     api_client.force_authenticate(admin_user)
 
-    response = api_client.get(reverse("contact-list"), {"client": client.id})
+    response = api_client.get(reverse("contact-list"), {"account": account.id})
 
     assert [contact["name"] for contact in response.data] == ["Contato certo"]
 
@@ -235,8 +235,8 @@ def test_contact_list_filters_by_client(api_client: APIClient, admin_user: User)
 @pytest.mark.parametrize("role", [User.Role.SALES, User.Role.ADMIN])
 def test_contact_patch_altera_nome_e_sobrenome_por_sales_e_admin(api_client: APIClient, role: str):
     user = UserFactory(role=role)
-    client = ClientFactory(owner=user)
-    contact = Contact.objects.create(client=client, first_name="Ana", last_name="Silva")
+    account = AccountFactory(owner=user)
+    contact = Contact.objects.create(account=account, first_name="Ana", last_name="Silva")
     api_client.force_authenticate(user)
 
     response = api_client.patch(
@@ -254,8 +254,8 @@ def test_contact_patch_altera_nome_e_sobrenome_por_sales_e_admin(api_client: API
 @pytest.mark.django_db
 def test_contact_patch_e_negado_para_delivery(api_client: APIClient):
     delivery = UserFactory(role=User.Role.DELIVERY)
-    client = ClientFactory()
-    contact = Contact.objects.create(client=client, first_name="Ana", last_name="Silva")
+    account = AccountFactory()
+    contact = Contact.objects.create(account=account, first_name="Ana", last_name="Silva")
     api_client.force_authenticate(delivery)
 
     response = api_client.patch(
@@ -267,11 +267,11 @@ def test_contact_patch_e_negado_para_delivery(api_client: APIClient):
 
 @pytest.mark.django_db
 def test_contact_sem_sobrenome_e_aceito_e_name_nao_sobra_espaco(api_client: APIClient, admin_user: User):
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
 
     response = api_client.post(
-        reverse("contact-list"), {"client": client.id, "first_name": "Madonna"}, format="json",
+        reverse("contact-list"), {"account": account.id, "first_name": "Madonna"}, format="json",
     )
 
     assert response.status_code == 201, response.data
@@ -281,12 +281,12 @@ def test_contact_sem_sobrenome_e_aceito_e_name_nao_sobra_espaco(api_client: APIC
 
 @pytest.mark.django_db
 def test_contact_name_e_somente_leitura(api_client: APIClient, admin_user: User):
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
 
     response = api_client.post(
         reverse("contact-list"),
-        {"client": client.id, "first_name": "Ana", "last_name": "Silva", "name": "Nome Ignorado"},
+        {"account": account.id, "first_name": "Ana", "last_name": "Silva", "name": "Nome Ignorado"},
         format="json",
     )
 
@@ -307,12 +307,12 @@ def test_contact_name_e_somente_leitura(api_client: APIClient, admin_user: User)
 
 @pytest.mark.django_db
 def test_contact_arquivado_nao_aparece_na_listagem_padrao(api_client: APIClient, admin_user: User):
-    client = ClientFactory(owner=admin_user)
-    contact = Contact.objects.create(client=client, first_name="Ana")
+    account = AccountFactory(owner=admin_user)
+    contact = Contact.objects.create(account=account, first_name="Ana")
     contact.archive()
     api_client.force_authenticate(admin_user)
 
-    response = api_client.get(reverse("contact-list"), {"client": client.id})
+    response = api_client.get(reverse("contact-list"), {"account": account.id})
 
     assert response.data == []
 
@@ -364,11 +364,11 @@ def test_lead_intake_honeypot_is_silently_dropped(api_client: APIClient):
 def test_sales_converts_lead_into_client_and_qualification(api_client: APIClient):
     """Converter registra a **avaliação** e a conta — a venda é um segundo ato (ADR 0049).
 
-    Antes esta ação criava direto uma `Opportunity` no degrau gratuito: a conversa de qualificação
+    Antes esta ação criava direto uma `CommercialOpportunity` no degrau gratuito: a conversa de qualificação
     entrava no funil como venda registrada. A sequência normativa é
     `Lead → Qualification → (qualified) → CommercialOpportunity`.
     """
-    from apps.core.models import Lead, Opportunity, Qualification
+    from apps.core.models import CommercialOpportunity, Lead, Qualification
 
     sales = UserFactory(role=User.Role.SALES)
     lead = Lead.objects.create(name="Fulano", email="f@x.com", company="ACME", message="olá")
@@ -379,10 +379,10 @@ def test_sales_converts_lead_into_client_and_qualification(api_client: APIClient
     assert response.status_code == 201
     lead.refresh_from_db()
     assert lead.status == Lead.Status.QUALIFIED
-    assert lead.client is not None
-    assert lead.client.name == "ACME"
-    assert lead.opportunity is None
-    assert Opportunity.objects.count() == 0
+    assert lead.account is not None
+    assert lead.account.name == "ACME"
+    assert lead.commercial_opportunity is None
+    assert CommercialOpportunity.objects.count() == 0
     qualification = lead.qualifications.get()
     assert qualification.outcome == Qualification.Outcome.QUALIFIED
     assert qualification.assessor_id == sales.pk
@@ -457,7 +457,7 @@ def test_ai_action_returns_503_when_disabled(api_client: APIClient, admin_user: 
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-x", AI_DAILY_LIMIT=0)
 def test_ai_action_returns_429_over_daily_limit(api_client: APIClient, admin_user: User):
-    opportunity = OpportunityFactory(owner=admin_user)
+    opportunity = CommercialOpportunityFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
     response = api_client.post(reverse("opportunity-proposal", args=[opportunity.id]), {}, format="json")
     assert response.status_code == 429
@@ -470,14 +470,14 @@ def test_contract_action_returns_draft_and_logs_interaction(api_client: APIClien
     from apps.core.models import AiInteraction
 
     monkeypatch.setattr(ai, "complete", lambda system, user: ("CONTRATO...", {"prompt_tokens": 4, "completion_tokens": 3}))
-    opportunity = OpportunityFactory(owner=admin_user)
+    opportunity = CommercialOpportunityFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
 
     response = api_client.post(reverse("opportunity-contract", args=[opportunity.id]), {}, format="json")
 
     assert response.status_code == 200
     assert response.data["text"] == "CONTRATO..."
-    assert AiInteraction.objects.filter(feature="contract", opportunity=opportunity).count() == 1
+    assert AiInteraction.objects.filter(feature="contract", commercial_opportunity=opportunity).count() == 1
 
 
 @pytest.mark.django_db
@@ -544,10 +544,10 @@ def test_add_to_calendar_returns_503_when_disabled(api_client: APIClient, admin_
 def test_request_signature_flag_gated(api_client: APIClient, admin_user: User):
     from apps.core.models import SignatureRequest
 
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
     file = SimpleUploadedFile("contrato.pdf", b"x", content_type="application/pdf")
-    document = api_client.post(reverse("document-list"), {"client": client.id, "file": file}).data
+    document = api_client.post(reverse("document-list"), {"account": account.id, "file": file}).data
 
     off = api_client.post(reverse("document-request-signature", args=[document["id"]]), {"signer_email": "a@b.com"}, format="json")
     assert off.status_code == 503
@@ -563,10 +563,10 @@ def test_request_signature_flag_gated(api_client: APIClient, admin_user: User):
 def test_remind_signature_and_mark_signed_close_the_loop(api_client: APIClient, admin_user: User, mailoutbox):
     from apps.core.models import SignatureRequest
 
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
     file = SimpleUploadedFile("contrato.pdf", b"x", content_type="application/pdf")
-    document = api_client.post(reverse("document-list"), {"client": client.id, "file": file}).data
+    document = api_client.post(reverse("document-list"), {"account": account.id, "file": file}).data
     with override_settings(ESIGN_ENABLED=True):  # sem provedor: registro local + mark-signed
         api_client.post(reverse("document-request-signature", args=[document["id"]]), {"signer_email": "quem@assina.test"}, format="json")
 
@@ -590,10 +590,10 @@ def test_remind_signature_and_mark_signed_close_the_loop(api_client: APIClient, 
 @pytest.mark.django_db
 @override_settings(MEDIA_ROOT="/tmp/biahflow-test-media", ESIGN_ENABLED=True)
 def test_mark_signed_unknown_signature_returns_404(api_client: APIClient, admin_user: User):
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     api_client.force_authenticate(admin_user)
     file = SimpleUploadedFile("contrato.pdf", b"x", content_type="application/pdf")
-    document = api_client.post(reverse("document-list"), {"client": client.id, "file": file}).data
+    document = api_client.post(reverse("document-list"), {"account": account.id, "file": file}).data
     response = api_client.post(reverse("document-mark-signed", args=[document["id"]]), {"signature": 999999}, format="json")
     assert response.status_code == 404
 
@@ -638,8 +638,8 @@ def test_next_steps_returns_503_when_ai_disabled(api_client: APIClient, admin_us
 def test_analytics_computes_win_rate_and_roi(api_client: APIClient, admin_user: User):
     won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
     lost = PipelineStage.objects.get(kind=PipelineStage.Kind.LOST)
-    OpportunityFactory(stage=won, owner=admin_user, estimated_value=1000)
-    OpportunityFactory(stage=lost, owner=admin_user)
+    CommercialOpportunityFactory(stage=won, owner=admin_user, estimated_value=1000)
+    CommercialOpportunityFactory(stage=lost, owner=admin_user)
     ProjectFactory(owner=admin_user, actual_value=1000, cost=400)
     api_client.force_authenticate(admin_user)
 
@@ -655,8 +655,8 @@ def test_analytics_breaks_the_funnel_down_by_product_tier(api_client: APIClient,
     won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
     lost = PipelineStage.objects.get(kind=PipelineStage.Kind.LOST)
     sprint = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
-    OpportunityFactory(stage=won, owner=admin_user, service=sprint, estimated_value=0)
-    OpportunityFactory(stage=lost, owner=admin_user, service=sprint, estimated_value=0)
+    CommercialOpportunityFactory(stage=won, owner=admin_user, service=sprint, estimated_value=0)
+    CommercialOpportunityFactory(stage=lost, owner=admin_user, service=sprint, estimated_value=0)
     api_client.force_authenticate(admin_user)
 
     response = api_client.get(reverse("analytics"))
@@ -672,13 +672,13 @@ def test_analytics_breaks_the_funnel_down_by_product_tier(api_client: APIClient,
 
 @pytest.mark.django_db
 def test_analytics_breaks_the_funnel_down_by_journey_stage(api_client: APIClient, admin_user: User):
-    client = ClientFactory(owner=admin_user)
+    account = AccountFactory(owner=admin_user)
     # Duas propostas para o mesmo cliente: dois artefatos, um só cliente alcançado.
-    ArtifactFactory(opportunity=OpportunityFactory(client=client, owner=admin_user),
+    ArtifactFactory(commercial_opportunity=CommercialOpportunityFactory(account=account, owner=admin_user),
                     status=Artifact.Status.ACCEPTED)
-    ArtifactFactory(opportunity=OpportunityFactory(client=client, owner=admin_user),
+    ArtifactFactory(commercial_opportunity=CommercialOpportunityFactory(account=account, owner=admin_user),
                     status=Artifact.Status.REJECTED)
-    ArtifactFactory(opportunity=None, project=ProjectFactory(client=client, owner=admin_user),
+    ArtifactFactory(commercial_opportunity=None, project=ProjectFactory(client=account, owner=admin_user),
                     kind=Artifact.Kind.ASSESSMENT, status=Artifact.Status.SENT)
     api_client.force_authenticate(admin_user)
 
@@ -774,12 +774,12 @@ def test_client_status_is_declared_on_creation(api_client: APIClient, admin_user
 @pytest.mark.django_db
 def test_opportunity_exposes_the_project_it_became(api_client: APIClient, admin_user: User):
     won = PipelineStage.objects.get(kind=PipelineStage.Kind.WON)
-    converted = OpportunityFactory(stage=won, owner=admin_user)
-    pending = OpportunityFactory(stage=won, owner=admin_user)
+    converted = CommercialOpportunityFactory(stage=won, owner=admin_user)
+    pending = CommercialOpportunityFactory(stage=won, owner=admin_user)
     api_client.force_authenticate(admin_user)
     api_client.post(
         reverse("opportunity-convert-to-project", args=[converted.pk]),
-        {"client": converted.client_id, "name": "Projeto", "start_date": "2026-08-01",
+        {"client": converted.account_id, "name": "Projeto", "start_date": "2026-08-01",
          "due_date": "2026-09-01", "status": "planning"},
         format="json",
     )

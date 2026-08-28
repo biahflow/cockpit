@@ -30,11 +30,18 @@ def _phase_at(project: Project, index: int) -> ProjectPhase:
     return project.phases.select_related("phase").order_by("phase__position", "id")[index]
 
 
-def _requires_gate(project: Project, index: int) -> ProjectPhase:
-    """Marca a fase de posição `index` como fase de decision gate (é config do template)."""
+def _requires_gate(
+    project: Project, index: int, canonical_stage: str = ""
+) -> ProjectPhase:
+    """Marca a fase de posição `index` como fase de decision gate (é config do template).
+
+    `canonical_stage` é o que decide o vocabulário do gate desde a ADR 0053, e mora no mesmo
+    template — por isso entra por aqui, e não por um segundo helper.
+    """
     project_phase = _phase_at(project, index)
     project_phase.phase.requires_gate = True
-    project_phase.phase.save(update_fields=["requires_gate"])
+    project_phase.phase.canonical_stage = canonical_stage
+    project_phase.phase.save(update_fields=["requires_gate", "canonical_stage"])
     return project_phase
 
 
@@ -322,6 +329,136 @@ def test_apply_gate_sem_fase_ativa_recusa(client: APIClient) -> None:
 
     assert response.status_code == 409
     assert "fase ativa" in response.data["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Cada gate com seu vocabulário (ADR 0053)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_gate_do_prove_aceita_scale_e_recusa_go(client: APIClient) -> None:
+    """A fase classificada `prove` fala SCALE / ITERATE / STOP — e só."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    project = ProjectFactory()
+    _requires_gate(project, 0, canonical_stage=JourneyPhase.CanonicalStage.PROVE)
+    client.force_authenticate(admin)
+
+    fora_do_vocabulario = client.post(
+        reverse("project-apply-gate", args=[project.id]), {"decision": "go"}, format="json"
+    )
+    aplicado = client.post(
+        reverse("project-apply-gate", args=[project.id]),
+        {"decision": "scale", "notes": "10 casos reais acima da meta."},
+        format="json",
+    )
+
+    assert fora_do_vocabulario.status_code == 400
+    assert "SCALE / ITERATE / STOP" in fora_do_vocabulario.data["detail"]
+    assert aplicado.status_code == 200
+    first, second = _phase_at(project, 0), _phase_at(project, 1)
+    assert first.status == ProjectPhase.Status.DONE  # SCALE conclui e avança, como o GO
+    assert first.gate_decision == ProjectPhase.ProveDecision.SCALE
+    assert second.status == ProjectPhase.Status.ACTIVE
+
+
+@pytest.mark.django_db
+def test_gate_da_feasibility_recusa_o_vocabulario_do_prove(client: APIClient) -> None:
+    """E o contrário também: SCALE não é saída de "a tecnologia consegue fazer a tarefa?"."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    project = ProjectFactory()
+    _requires_gate(project, 0, canonical_stage=JourneyPhase.CanonicalStage.FEASIBILITY)
+    client.force_authenticate(admin)
+
+    recusado = client.post(
+        reverse("project-apply-gate", args=[project.id]), {"decision": "scale"}, format="json"
+    )
+    aceito = client.post(
+        reverse("project-apply-gate", args=[project.id]), {"decision": "go"}, format="json"
+    )
+
+    assert recusado.status_code == 400
+    assert "GO / CONDITIONAL GO / REDESIGN / NO-GO" in recusado.data["detail"]
+    assert aceito.status_code == 200
+
+
+@pytest.mark.django_db
+def test_fase_de_gate_sem_classificacao_fica_com_as_quatro(client: APIClient) -> None:
+    """Em branco é o caso de toda fase semeada, e as quatro são as saídas de propósito geral."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    project = ProjectFactory()
+    project_phase = _requires_gate(project, 0)
+    assert project_phase.phase.canonical_stage == ""
+    client.force_authenticate(admin)
+
+    recusado = client.post(
+        reverse("project-apply-gate", args=[project.id]), {"decision": "stop"}, format="json"
+    )
+    aceito = client.post(
+        reverse("project-apply-gate", args=[project.id]), {"decision": "no_go"}, format="json"
+    )
+
+    assert recusado.status_code == 400
+    assert aceito.status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_recusa_do_avanco_nomeia_o_vocabulario_da_fase(client: APIClient) -> None:
+    """Mandar registrar GO numa fase de PROVE é mandar digitar o que a rota vai recusar."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    project = ProjectFactory()
+    _requires_gate(project, 0, canonical_stage=JourneyPhase.CanonicalStage.PROVE)
+    client.force_authenticate(admin)
+
+    response = client.post(reverse("project-advance-phase", args=[project.id]))
+
+    assert response.status_code == 409
+    assert "SCALE / ITERATE / STOP" in response.data["detail"]
+    assert "CONDITIONAL GO" not in response.data["detail"]
+
+
+@pytest.mark.django_db
+def test_stop_cancela_a_fase_como_o_no_go(client: APIClient) -> None:
+    """`situation` colapsa por **efeito** (ADR 0053): STOP é o `cancelled` do NO-GO."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    project = ProjectFactory()
+    _requires_gate(project, 0, canonical_stage=JourneyPhase.CanonicalStage.PROVE)
+    client.force_authenticate(admin)
+
+    response = client.post(
+        reverse("project-apply-gate", args=[project.id]),
+        {"decision": "stop", "notes": "O ganho medido não paga a operação."},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    parada = _phase_at(project, 0)
+    assert parada.status == ProjectPhase.Status.ACTIVE  # STOP registra e para; não fecha a fase
+    assert parada.situation == "cancelled"
+    assert response.data[0]["situation"] == "cancelled"
+
+
+@pytest.mark.django_db
+def test_iterate_reabre_a_anterior_e_a_trancada_fica_replanejada(client: APIClient) -> None:
+    """ITERATE é o REDESIGN do PROVE: volta uma fase, e a que tranca aparece como replanejada."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    project = ProjectFactory()
+    client.force_authenticate(admin)
+    assert client.post(reverse("project-advance-phase", args=[project.id])).status_code == 200
+    _requires_gate(project, 1, canonical_stage=JourneyPhase.CanonicalStage.PROVE)
+
+    response = client.post(
+        reverse("project-apply-gate", args=[project.id]),
+        {"decision": "iterate", "notes": "A hipótese vale; a execução ainda não."},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    trancada = _phase_at(project, 1)
+    assert trancada.status == ProjectPhase.Status.LOCKED
+    assert trancada.gate_decision == ProjectPhase.ProveDecision.ITERATE
+    assert trancada.situation == "replanned"
+    assert _phase_at(project, 0).status == ProjectPhase.Status.ACTIVE  # a anterior reabriu
 
 
 # ---------------------------------------------------------------------------

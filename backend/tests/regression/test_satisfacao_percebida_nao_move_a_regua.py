@@ -1,7 +1,7 @@
 """Regressão: só a **declarada** move número (FDD 037, ADR 0032).
 
 É a decisão central da fatia e a única que um refactor desatento apaga em silêncio. Somar as duas
-fontes num filtro só — `Satisfacao.objects.filter(client=...)` sem `fonte=` — deixa **todos** os
+fontes num filtro só — `Satisfacao.objects.filter(account=...)` sem `fonte=` — deixa **todos** os
 testes de comportamento passando: o Health Score continua descontando, a escada continua trocando,
 e nada fica vermelho. O que muda é o significado: o sinal do cliente vira a opinião do time sobre
 si mesmo com aparência de medição, e um número errado é consultado com a mesma confiança de um
@@ -22,17 +22,17 @@ import pytest
 from django.utils import timezone
 
 from apps.core import cobranca, health
-from apps.core.models import Client, Invoice, Satisfacao
-from apps.core.tests.factories import ClientFactory, InvoiceFactory, ProjectFactory
+from apps.core.models import Account, Invoice, Satisfacao
+from apps.core.tests.factories import AccountFactory, InvoiceFactory, ProjectFactory
 
 HOJE = date(2026, 9, 2)  # uma quarta-feira, como no resto da suíte de cobrança
 
 pytestmark = pytest.mark.django_db
 
 
-def _registrar(client, fonte: str, **kwargs):  # type: ignore[no-untyped-def]
+def _registrar(account, fonte: str, **kwargs):  # type: ignore[no-untyped-def]
     campos = {
-        "client": client,
+        "account": account,
         "nivel": Satisfacao.Nivel.INSATISFEITO,
         "fonte": fonte,
         # O dia real, e não `HOJE`: o Health Score não recebe "hoje" por parâmetro (é função pura
@@ -104,17 +104,17 @@ def test_o_lote_e_o_individual_concordam_sobre_a_fonte() -> None:
 
 
 def test_a_percebida_nao_troca_a_escada() -> None:
-    client = ClientFactory()
-    _registrar(client, Satisfacao.Fonte.PERCEBIDA)
+    account = AccountFactory()
+    _registrar(account, Satisfacao.Fonte.PERCEBIDA)
 
-    assert cobranca.regua_para(client, HOJE) is cobranca.PADRAO
+    assert cobranca.regua_para(account, HOJE) is cobranca.PADRAO
 
 
 def test_a_percebida_nao_alcanca_nem_o_cliente_de_relacao_longa() -> None:
     """A régua da relação longa é a que a percebida teria mais chance de derrubar por engano: ela
     é escolhida por outra condição, e a tensão é avaliada **antes** dela."""
-    antigo = ClientFactory()
-    Client.objects.filter(pk=antigo.pk).update(created_at=timezone.now() - timedelta(days=800))
+    antigo = AccountFactory()
+    Account.objects.filter(pk=antigo.pk).update(created_at=timezone.now() - timedelta(days=800))
     antigo.refresh_from_db()
     _registrar(antigo, Satisfacao.Fonte.PERCEBIDA)
 
@@ -122,19 +122,19 @@ def test_a_percebida_nao_alcanca_nem_o_cliente_de_relacao_longa() -> None:
 
 
 def test_a_declarada_troca_a_escada() -> None:
-    client = ClientFactory()
-    _registrar(client, Satisfacao.Fonte.DECLARADA)
+    account = AccountFactory()
+    _registrar(account, Satisfacao.Fonte.DECLARADA)
 
-    assert cobranca.regua_para(client, HOJE) is cobranca.RELACAO_TENSA
+    assert cobranca.regua_para(account, HOJE) is cobranca.RELACAO_TENSA
 
 
 def test_a_percebida_nao_muda_o_degrau_que_sai_hoje() -> None:
     """O teste de comportamento por trás dos três acima: em D+12 a régua padrão manda o `firme`, e
     é justamente esse degrau que a tensão tira."""
-    com_percebida = ClientFactory()
+    com_percebida = AccountFactory()
     _registrar(com_percebida, Satisfacao.Fonte.PERCEBIDA)
     invoice = InvoiceFactory(
-        client=com_percebida, status=Invoice.Status.OVERDUE, number="2026-0001",
+        account=com_percebida, status=Invoice.Status.OVERDUE, number="2026-0001",
         amount=Decimal("1000.00"), due_date=HOJE - timedelta(days=12),
     )
 
@@ -145,10 +145,10 @@ def test_a_percebida_nao_cala_a_regua_nem_a_declarada() -> None:
     """Critério de aceite 3: nenhuma das duas fontes produz avaliação sem degrau. A trava troca a
     escada; ela nunca vira silêncio (RFC 0004, "Segurança")."""
     for fonte in (Satisfacao.Fonte.PERCEBIDA, Satisfacao.Fonte.DECLARADA):
-        client = ClientFactory()
-        _registrar(client, fonte)
+        account = AccountFactory()
+        _registrar(account, fonte)
         invoice = InvoiceFactory(
-            client=client, status=Invoice.Status.OVERDUE, number=f"2026-1{fonte[:3]}",
+            account=account, status=Invoice.Status.OVERDUE, number=f"2026-1{fonte[:3]}",
             amount=Decimal("1000.00"), due_date=HOJE - timedelta(days=12),
         )
 
