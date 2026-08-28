@@ -463,3 +463,150 @@ def test_o_engajamento_nao_e_fronteira_de_acesso() -> None:
         linha["id"] for linha in entrega.get(reverse("project-list")).data
     ] == [meu.pk]
     assert Project.objects.visible_to(pessoa).filter(pk=vizinho.pk).exists() is False
+
+
+# ------------------------------------------------- a superfície da seção (DAP dap-engagement-r1)
+#
+# O payload que a seção de Engagements do detalhe do cliente consome, e a copy que a decisão A1
+# arrasta para o servidor. O pacote aprovado é `docs/design/dap-engagement-r1/`.
+
+
+def test_sponsor_name_vem_preenchido_e_e_nulo_sem_patrocinador() -> None:
+    """O board desenha "Patrocínio de {nome}", e `sponsor` é opcional: sem patrocinador a linha
+    não mostra a frase, em vez de mostrar uma frase pela metade."""
+    api, _ = _api()
+    conta = ClientFactory()
+    com_patrocinio = EngagementFactory(
+        account=conta,
+        sponsor=Contact.objects.create(client=conta, first_name="Marina", last_name="Alencar"),
+    )
+    sem_patrocinio = EngagementFactory(account=conta)
+
+    linhas = {
+        linha["id"]: linha
+        for linha in api.get(reverse("engagement-list"), {"account": conta.pk}).data
+    }
+
+    assert linhas[com_patrocinio.pk]["sponsor_name"] == "Marina Alencar"
+    assert linhas[sem_patrocinio.pk]["sponsor_name"] is None
+
+
+def test_a_contagem_de_projetos_e_recortada_pelo_escopo_de_quem_le() -> None:
+    """O agregador narrowed by hand desta seção, e o teste que o `CLAUDE.md` exige de cada um.
+
+    **Dois usuários veem números diferentes para o mesmo mandato**, e isso é honesto: cada um vê o
+    que alcança. Um total cru contaria, para a Entrega, projetos fora do recorte dela — sinal
+    fraco, mas ainda assim informação sobre o que ela não pode ver.
+    """
+    admin, _ = _api()
+    entrega, pessoa = _api(User.Role.DELIVERY)
+    engagement = EngagementFactory()
+    projetos = [ProjectFactory(client=engagement.account, engagement=engagement) for _ in range(3)]
+    ProjectMemberFactory(project=projetos[0], user=pessoa)
+
+    do_admin = admin.get(reverse("engagement-detail", args=[engagement.pk])).data
+    da_entrega = entrega.get(reverse("engagement-detail", args=[engagement.pk])).data
+
+    assert do_admin["projects_count"] == 3
+    assert da_entrega["projects_count"] == 1
+
+
+def test_a_contagem_ignora_projeto_arquivado() -> None:
+    """`archived_at__isnull=True` no `filter` do `Count`: um mandato cujo projeto foi arquivado
+    não tem trabalho em aberto, e mostrar "1 projeto" ali convidaria a procurá-lo na tela."""
+    admin, _ = _api()
+    engagement = EngagementFactory()
+    ProjectFactory(client=engagement.account, engagement=engagement)
+    arquivado = ProjectFactory(client=engagement.account, engagement=engagement)
+    admin.delete(reverse("project-detail", args=[arquivado.pk]))
+
+    resposta = admin.get(reverse("engagement-detail", args=[engagement.pk]))
+
+    assert resposta.data["projects_count"] == 1
+
+
+def test_a_contagem_nao_infla_com_o_join_da_entrega() -> None:
+    """A armadilha do `distinct=True`: o recorte atravessa `projects__members` e o filtro da
+    Entrega atravessa `projects` de novo, então a linha do projeto se repete no join. Sem o
+    `distinct`, dois membros no mesmo projeto virariam "2 projetos"."""
+    entrega, pessoa = _api(User.Role.DELIVERY)
+    engagement = EngagementFactory()
+    projeto = ProjectFactory(client=engagement.account, engagement=engagement)
+    ProjectMemberFactory(project=projeto, user=pessoa)
+    ProjectMemberFactory(project=projeto, user=UserFactory(role=User.Role.DELIVERY))
+
+    linhas = entrega.get(reverse("engagement-list")).data
+
+    assert [linha["projects_count"] for linha in linhas] == [1]
+
+
+def test_criar_sem_owner_grava_quem_esta_logado() -> None:
+    """O formulário aprovado não expõe "Responsável": a seção vive dentro do detalhe do cliente,
+    onde quem cria é quem está logado. Mesmo precedente da `convert-to-project`."""
+    api, vendedora = _api(User.Role.SALES)
+    conta = ClientFactory()
+
+    resposta = api.post(
+        reverse("engagement-list"),
+        {"account": conta.pk, "name": "Transformação Financeira"},
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["owner"] == vendedora.pk
+    assert Engagement.objects.get(pk=resposta.data["id"]).owner_id == vendedora.pk
+
+
+def test_criar_com_owner_no_payload_respeita_o_informado() -> None:
+    """Relaxar a exigência não é tirar o campo: `owner` continua gravável no contrato."""
+    api, _ = _api()
+    conta = ClientFactory()
+    outra = UserFactory(role=User.Role.SALES)
+
+    resposta = api.post(
+        reverse("engagement-list"),
+        {"account": conta.pk, "name": "Mandato de outra pessoa", "owner": outra.pk},
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["owner"] == outra.pk
+
+
+def test_a_recusa_de_arquivar_diz_engagement_e_nao_engajamento() -> None:
+    """Consequência da decisão A1 do DAP: com o título em inglês na tela, a mensagem do servidor
+    em português deixaria **três** palavras para o mesmo conceito diante de quem lê."""
+    api, _ = _api()
+    engagement = EngagementFactory()
+    ProjectFactory(client=engagement.account, engagement=engagement)
+
+    resposta = api.delete(reverse("engagement-detail", args=[engagement.pk]))
+
+    assert resposta.status_code == 409
+    assert resposta.data["detail"] == (
+        "Este engagement ainda tem 1 projeto(s) em aberto. "
+        "Arquive esses projetos antes de arquivar o engagement."
+    )
+
+
+def test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer() -> None:
+    """**A segunda troca de copy que o spec pediu está em ramo morto, e isto o registra.**
+
+    `convert_to_project` compara `engagement.account_id` com `opportunity.client_id` depois de já
+    ter passado por dois filtros que juntos tornam a divergência impossível:
+    `ProjectSerializer.validate` recusa `engagement.account != client`, e a própria action recusa
+    `client != opportunity.client`. Quem chega à terceira comparação já tem as duas igualdades.
+
+    A mensagem que a pessoa de fato lê nesse caminho é a **do serializer**, e ela continua em
+    português — mas é da superfície de Projetos/Comercial, não da seção de Engagements que o DAP
+    `dap-engagement-r1` aprovou. Trocá-la é varredura própria, fora deste escopo.
+    """
+    api, _ = _api()
+    opportunity = OpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
+
+    resposta = _converter(api, opportunity, engagement=EngagementFactory().pk)
+
+    assert resposta.status_code == 400
+    assert resposta.data["engagement"] == [
+        "O engajamento deve pertencer ao mesmo cliente do projeto."
+    ]
