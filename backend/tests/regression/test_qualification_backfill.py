@@ -157,6 +157,39 @@ def test_reversa_nao_desarquiva_quem_ja_estava_arquivado(porta: Service) -> None
     assert opportunity.archived_at is not None
 
 
+def test_reversa_nao_desarquiva_quem_alguem_arquivou_depois(porta: Service) -> None:
+    """O outro lado da linha do tempo, e o caso que separa assinatura de janela.
+
+    A ida arquiva com o **mesmo instante** da avaliação, e a volta compara por igualdade. Um
+    critério de janela — "carimbo posterior ao da avaliação" — passaria neste cenário e ainda assim
+    estaria errado: quem arquivou a oportunidade **depois** do deploy tomou uma decisão, e a
+    reversa a desfaria em silêncio.
+    """
+    opportunity, _ = _oportunidade_de_qualificacao(
+        porta, stage=PipelineStage.objects.get(kind="won")
+    )
+    ProjectFactory(client=opportunity.client, opportunity=opportunity)  # a ida não arquiva
+    _rodar_backfill()
+    depois = timezone.now() + timedelta(days=1)
+    Opportunity.objects.filter(pk=opportunity.pk).update(archived_at=depois)
+
+    _reverter_backfill()
+
+    opportunity.refresh_from_db()
+    assert opportunity.archived_at == depois
+
+
+def test_a_ida_carimba_o_arquivamento_com_o_instante_da_avaliacao(porta: Service) -> None:
+    """A assinatura em si: o par de carimbos idênticos é o que a reversa reconhece."""
+    opportunity, _ = _oportunidade_de_qualificacao(porta)
+
+    _rodar_backfill()
+
+    qualification = Qualification.objects.get()
+    opportunity.refresh_from_db()
+    assert opportunity.archived_at == qualification.created_at
+
+
 def test_comando_de_reconciliacao_reporta_o_que_ficou(porta: Service, capsys) -> None:
     from django.core.management import call_command
 

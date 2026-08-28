@@ -25,7 +25,11 @@ O que a migração faz, por oportunidade de `qualification_call`:
 
 **Nada é apagado.** Arquivamento é soft (`archived_at`), `legacy_opportunity` guarda o vínculo, e a
 reversa desfaz os dois lados: apaga as avaliações que esta migração criou (as que têm
-`legacy_opportunity`), remove as notas de auditoria e desarquiva o que ela arquivou.
+`legacy_opportunity`), remove as notas de auditoria e desarquiva o que ela arquivou — **só** isso.
+O que ela arquivou se reconhece por uma assinatura, não por uma janela de tempo: a ida grava
+`archived_at` com o **mesmo instante** da avaliação que acabou de criar, e a volta compara por
+igualdade. Arquivamento feito por gente, antes ou depois do deploy, tem outro instante e a reversa
+não o toca.
 
 **Oportunidade de `qualification_call` sem lead é pulada.** `Qualification.lead` é obrigatório
 porque uma avaliação sem lead não é avaliação de ninguém; inventar um lead sintético colocaria dado
@@ -38,7 +42,6 @@ uma é de gente, e é por isso que ela não está aqui.
 from datetime import timedelta
 
 from django.db import migrations
-from django.utils import timezone
 
 NURTURE_DIAS = 180
 
@@ -68,7 +71,7 @@ def backfill_qualification(apps, schema_editor):
         else:
             outcome = "nurture"
             nurture_until = (opportunity.created_at + timedelta(days=NURTURE_DIAS)).date()
-        Qualification.objects.create(
+        qualification = Qualification.objects.create(
             lead=lead,
             account_id=opportunity.client_id,
             happened_at=opportunity.created_at,
@@ -87,7 +90,13 @@ def backfill_qualification(apps, schema_editor):
             owner_id=opportunity.owner_id,
         )
         if not tem_projeto and opportunity.archived_at is None:
-            opportunity.archived_at = timezone.now()
+            # **O carimbo é o instante da avaliação, e não `now()`.** É o que torna "arquivado por
+            # esta migração" uma *assinatura* em vez de uma janela de tempo: a reversa compara por
+            # igualdade e não toca em nada com outro instante. Com um carimbo próprio, a volta
+            # precisaria de um critério aproximado ("posterior à avaliação"), e ele ressuscitaria
+            # a oportunidade que uma pessoa arquivou **depois** do deploy — a mesma perda que ele
+            # existiria para evitar, do outro lado da linha do tempo.
+            opportunity.archived_at = qualification.created_at
             opportunity.save(update_fields=["archived_at"])
 
 
@@ -99,14 +108,16 @@ def desfazer_backfill(apps, schema_editor):
     migradas = Qualification.objects.filter(legacy_opportunity__isnull=False)
     ids, desarquivar = [], []
     # Tudo antes do `delete()`: depois, o vínculo que diz quais oportunidades foram tocadas já não
-    # existe. E desarquiva **só o que esta migração arquivou** — a ida pulou quem já estava
-    # arquivado, e a volta desarquivar em bloco restauraria uma oportunidade que alguém tinha
-    # tirado da lista de propósito. O critério é o carimbo: a ida grava `archived_at` logo depois
-    # de criar a avaliação, então quem foi arquivado por ela tem carimbo posterior ao dela.
+    # existe. E desarquiva **só o que esta migração arquivou**, por **igualdade** de carimbo: a ida
+    # grava `archived_at` com o mesmo instante da avaliação que criou, então o par idêntico é a
+    # assinatura dela. Desarquivar em bloco restauraria uma oportunidade que alguém tirou da lista
+    # de propósito, e um critério de janela ("carimbo posterior ao da avaliação") erraria nos dois
+    # sentidos: pega o arquivamento humano **depois** do deploy e depende de a ida ter acontecido
+    # antes dele. Instante diferente é decisão de gente, e a volta não a desfaz.
     for qualification in migradas.select_related("legacy_opportunity"):
         opportunity = qualification.legacy_opportunity
         ids.append(opportunity.pk)
-        if opportunity.archived_at and opportunity.archived_at >= qualification.created_at:
+        if opportunity.archived_at == qualification.created_at:
             desarquivar.append(opportunity.pk)
     Opportunity.objects.filter(id__in=desarquivar).update(archived_at=None)
     Activity.objects.filter(

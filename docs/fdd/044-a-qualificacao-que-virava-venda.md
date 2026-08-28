@@ -110,8 +110,11 @@ Três cuidados, cada um com teste em `tests/regression/test_qualification_backfi
   `manage.py reconciliar_qualification` lista essas linhas depois do deploy: uma migração que aponta
   o que não conseguiu traduzir vale mais que uma que finge cobertura total.
 - **Nada é apagado.** O arquivamento é soft, `legacy_opportunity` guarda o vínculo, e a reversa
-  desfaz os dois lados — desarquivando **só** o que a ida arquivou, aferido pelo carimbo, para não
-  trazer de volta a oportunidade que alguém tinha tirado da lista de propósito.
+  desfaz os dois lados — desarquivando **só** o que a ida arquivou. O critério é uma **assinatura**
+  e não uma janela de tempo: a ida carimba `archived_at` com o mesmo instante da avaliação que
+  criou, e a volta compara por igualdade. "Carimbo posterior ao da avaliação" pareceria equivalente
+  e erraria nos dois sentidos — ressuscitaria a oportunidade que alguém arquivou **depois** do
+  deploy, que é a mesma perda que o critério existe para evitar, do outro lado da linha do tempo.
 
 ## O que a construção decidiu
 
