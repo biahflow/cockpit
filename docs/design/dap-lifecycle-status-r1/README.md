@@ -2,7 +2,7 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Pending approval**
+Status: **Approved**
 Data: 2026-08-28
 Produzido por: harness (Claude Code), sob `workflows/design-approval.md`
 Issue: #67 (ontologia, P1), fatia 2 de 4
@@ -161,8 +161,33 @@ Copy do vazio de "Inativos", que é o estado que nasce vazio e portanto o primei
   B1 ela precisa passar a dizer "Cliente" onde diz "Ativo", e continuar explicando a promoção,
   que não muda.
 
-## Como aprovar
+## Registro de aprovação
 
-Responda com uma letra por decisão — por exemplo **A1 · B1 · C1**, que é a recomendação. Qualquer
-combinação é válida; as três são independentes. Uma decisão recusada sem alternativa escolhida vira
-revisão r2 deste pacote, não julgamento na hora da implementação.
+| Campo | Valor |
+| --- | --- |
+| O que está sendo pedido | **copy** da revisão 1, com as decisões **A**, **B** e **C** aprovadas explicitamente |
+| Aprovado por | Daniel Campos |
+| Data | 2026-08-28 |
+| Revisão aprovada | r1 |
+| Decisão **A** | **A1 — "Contas"**: menu, rota `/contas`, "Nova conta", "Nome da conta", "Cadastrar conta" |
+| Decisão **B** | **B1 — "Prospect" · "Cliente" · "Inativo"**, com `active` saindo de `.state--0` para `.state--1` |
+| Decisão **C** | **C1 — cinco pastilhas**, com "Inativos" própria |
+| Explicitamente **não** aprovado | o que está nas seções "O que este pacote não decide" e "Consequências que o board não desenha" |
+
+**Status: aprovado.** Copy da revisão 1, com A1, B1 e C1.
+
+Três consequências que a aprovação arrasta e que ficam registradas aqui, porque o board não traça
+consequência fora da tela:
+
+- **`/clientes` precisa redirecionar para `/contas`.** O link antigo está no navegador de quem usa
+  o produto todo dia, e link que morre é o mesmo defeito que a `aliases.md` descreve para rota de
+  API, uma camada acima. O redirecionamento é alias com data: sai na `/api/v2/`, com o resto.
+- **A copy do vazio de "Ativos" muda de nome, não de conteúdo.** Ela hoje explica a promoção
+  automática (`ClientsPage.tsx:22`); sob B1 passa a dizer "Cliente" onde dizia "Ativo", e continua
+  explicando a promoção, que não muda.
+- **O `<select>` "Situação" vive em dois arquivos** e passa a ter três opções nos dois. Um mapa
+  compartilhado, no molde de `StatusDot.tsx`, e não duas listas — uma cópia por tela é a segunda
+  definição que diverge sem nada ficar vermelho (ADR 0026).
+
+Aprovação da revisão 1 não é aprovação de uma revisão posterior: um pacote materialmente alterado é
+revisão nova e precisa do próprio registro.
