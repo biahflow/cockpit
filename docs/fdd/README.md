@@ -48,3 +48,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 042 — Linha do tempo operacional da entrega
 - 043 — Perfil do próprio usuário
 - 044 — A qualificação que virava venda
+- 046 — O engajamento entre a conta e o projeto
