@@ -15,6 +15,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.core import signing
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.storage import Storage
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
@@ -114,6 +115,7 @@ from .models import (
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    Qualification,
     Risco,
     Satisfacao,
     Service,
@@ -149,6 +151,7 @@ from .serializers import (
     JourneyPhaseSerializer,
     KnowledgeAreaSerializer,
     KnowledgePieceSerializer,
+    LeadConvertSerializer,
     LeadIntakeSerializer,
     LeadSerializer,
     LinkExternalSerializer,
@@ -156,6 +159,7 @@ from .serializers import (
     MeetingSerializer,
     MilestoneSerializer,
     NotificationSerializer,
+    OpenCommercialOpportunitySerializer,
     OpportunitySerializer,
     PendenciaSerializer,
     PhaseChecklistItemSerializer,
@@ -171,6 +175,7 @@ from .serializers import (
     ProjectMemberSerializer,
     ProjectPhaseSerializer,
     ProjectSerializer,
+    QualificationSerializer,
     RiscoSerializer,
     SatisfacaoSerializer,
     ServiceSerializer,
@@ -941,6 +946,16 @@ class OpportunityViewSet(ArchiveModelViewSet):
             return Response({"client": "O projeto deve usar o cliente da oportunidade."}, status=400)
         # O nível de produto vendido segue para a entrega; o payload pode sobrescrever.
         service = serializer.validated_data.get("service") or opportunity.service
+        # Invariante 6 do mapa de linguagem (ADR 0049): oferta de **aquisição** não gera projeto.
+        # A Qualification Call existe para descobrir se há venda, não para ser entregue — e era
+        # justamente por ela que a conversa de qualificação virava projeto. `Project.clean()`
+        # repete a regra para quem não passa por aqui.
+        if service and service.category == Service.Category.ACQUISITION:
+            return Response(
+                {"service": "Oferta de aquisição não gera projeto — a Qualification Call abre a "
+                            "venda, ela não é a venda. Escolha um degrau da escada."},
+                status=400,
+            )
         try:
             with transaction.atomic():
                 project = serializer.save(
@@ -2679,53 +2694,223 @@ class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         super().perform_update(serializer)
 
 
+# `outcome` da avaliação → `status` do lead. O mapa é explícito porque as duas escalas existiam
+# antes uma da outra: `nurture` cai em "contatado" (o lead segue no radar, sem decisão tomada) e
+# não em "qualificado", que afirmaria uma venda que ninguém abriu.
+STATUS_POR_OUTCOME = {
+    Qualification.Outcome.QUALIFIED: Lead.Status.QUALIFIED,
+    Qualification.Outcome.NURTURE: Lead.Status.CONTACTED,
+    Qualification.Outcome.DISQUALIFIED: Lead.Status.DISCARDED,
+}
+
+
 class LeadViewSet(ArchiveModelViewSet):
     resource = "lead"
-    queryset = Lead.objects.select_related("client", "opportunity").all()
+    queryset = (
+        Lead.objects.select_related("client", "opportunity")
+        .prefetch_related("qualifications")
+        .all()
+    )
     serializer_class = LeadSerializer
 
+    @extend_schema(
+        request=LeadConvertSerializer,
+        responses=inline_serializer("LeadConverted", {
+            "lead": LeadSerializer(), "qualification": QualificationSerializer(),
+        }),
+    )
     @action(detail=True, methods=["post"])
     def convert(self, request: Request, pk: str | None = None) -> Response:
+        """Registra a **qualificação** do lead e resolve a conta — e não cria mais venda (ADR 0049).
+
+        Até aqui esta ação criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
+        gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
+        somava no pipeline e podia virar `Project`. A sequência normativa é
+        `Lead → Qualification → (qualified) → CommercialOpportunity`, e o passo comercial passou a
+        ter porta própria: `POST /qualifications/{id}/open-opportunity/`.
+
+        Some daqui, junto com a `Opportunity`, a busca por `PipelineStage` aberto e pelo `Service`
+        de entrada — e os dois 400 que elas produziam. Qualificar um lead não depende mais de o
+        pipeline estar configurado.
+        """
         lead = self.get_object()
+        payload = LeadConvertSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        dados = payload.validated_data
+
         if lead.opportunity_id:
+            # Lead convertido pelo caminho antigo: a oportunidade dele já existe, e converter de
+            # novo criaria uma segunda conta para a mesma empresa. O backfill da 0052 dá a
+            # avaliação que faltava a essas linhas.
             return Response({"detail": "Lead já convertido."}, status=status.HTTP_409_CONFLICT)
-        stage = PipelineStage.objects.filter(kind=PipelineStage.Kind.OPEN).order_by("position").first()
-        if stage is None:
-            return Response({"detail": "Nenhuma etapa aberta configurada."}, status=400)
-        # Todo lead entra pelo primeiro degrau gratuito da escada — a Qualification Call; Vendas
-        # troca o nível depois se for o caso.
-        entry_service = Service.objects.filter(
-            tier=Service.Tier.QUALIFICATION_CALL, active=True, archived_at__isnull=True
-        ).first()
+        if lead.qualifications.filter(
+            outcome=Qualification.Outcome.QUALIFIED, archived_at__isnull=True
+        ).exists():
+            return Response(
+                {"detail": "Este lead já foi qualificado — abra a oportunidade pela qualificação."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        if dados["account"] and lead.client_id and dados["account"].pk != lead.client_id:
+            # Mover o lead para outra conta deixaria a avaliação anterior apontando para a antiga,
+            # e `Qualification.clean()` passaria a recusar qualquer edição naquela linha. Corrigir
+            # a conta de um lead é ato próprio, na tela do lead — não efeito de qualificá-lo.
+            return Response(
+                {"account_id": "Este lead já está vinculado a outra conta."}, status=400
+            )
+
+        with transaction.atomic():
+            account = dados["account"] or lead.client or self._nova_conta(lead, request.user)
+            lead.client = account
+            lead.status = STATUS_POR_OUTCOME[dados["outcome"]]
+            lead.save(update_fields=["client", "status", "updated_at"])
+            qualification = Qualification(
+                lead=lead,
+                account=account,
+                assessor=request.user,
+                outcome=dados["outcome"],
+                fit=dados["fit"],
+                need=dados["need"],
+                urgency=dados["urgency"],
+                authority=dados["authority"],
+                capacity=dados["capacity"],
+                evidence=dados["evidence"],
+                rationale=dados["rationale"] or lead.message,
+                next_step=dados["next_step"],
+                nurture_until=dados["nurture_until"],
+                # Retrato do que a IA achou **no momento da avaliação**, e nada o copia para
+                # `outcome`: a IA é insumo, quem qualifica é o `assessor` (mapa de linguagem §5).
+                ai_suggested_outcome="",
+                ai_score_snapshot=lead.ai_score,
+            )
+            try:
+                qualification.full_clean()
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.message_dict) from exc
+            qualification.save()
+            # **Nutrir não arquiva.** Quem volta ao radar em `nurture_until` precisa continuar na
+            # lista ativa; arquivar aqui esconderia exatamente o lead que a nutrição existe para
+            # trazer de volta. Qualificado e desqualificado saem da fila de triagem.
+            if dados["outcome"] != Qualification.Outcome.NURTURE:
+                lead.archive()  # sai da lista ativa de Leads, preservando o histórico
+
+        lead.refresh_from_db()
+        return Response(
+            {
+                "lead": LeadSerializer(lead).data,
+                "qualification": QualificationSerializer(qualification).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _nova_conta(self, lead: Lead, owner: User) -> Client:
         # A vertical que o CNAE sugere, quando o enriquecimento a trouxe e o admin já cadastrou
         # aquela vertical (FDD 030, FDD 026). Derivada aqui e não gravada no lead: o CNAE é a
         # fonte, e um segundo campo com a mesma verdade diverge no dia em que alguém corrigir só
         # um. Sem CNAE, sem mapa ou sem a vertical cadastrada, o cliente nasce sem setor — que é o
         # estado que a FDD 026 já trata, e não uma lacuna nova.
         vertical = enrichment.infer_vertical(lead.enrichment.get("cnae_code", ""))
-        with transaction.atomic():
-            client = Client.objects.create(
-                name=lead.company or lead.name,
-                owner=request.user,
-                status=Client.Status.PROSPECT,  # vira "ativo" quando a oportunidade é ganha
-                vertical=vertical,
+        return Client.objects.create(
+            name=lead.company or lead.name,
+            owner=owner,
+            status=Client.Status.PROSPECT,  # vira "ativo" quando a oportunidade é ganha
+            vertical=vertical,
+        )
+
+
+class QualificationViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """A avaliação que decide se um lead vira venda (ADR 0049, FDD 044).
+
+    Fechada para a Entrega, como `lead`: a qualificação é ato comercial e não atravessa para o
+    portal do cliente (mapa de linguagem §3). Quem produz o 403 é o `return False` do
+    `RolePermission` — recurso novo nasce fechado.
+    """
+
+    resource = "qualification"
+    queryset = Qualification.objects.select_related("lead", "account", "assessor").all()
+    serializer_class = QualificationSerializer
+    filter_fields = ("lead", "account")
+    # `outcome` é texto de valores fechados e por isso vai em `filter_exact_fields`: o teste de
+    # dígito de `filter_fields` deixaria `?outcome=nurture` cair no chão sem erro, devolvendo a
+    # lista inteira — a mistura que este recurso existe para desfazer.
+    filter_exact_fields = ("outcome",)
+
+    def perform_create(self, serializer: QualificationSerializer) -> None:
+        serializer.save(assessor=serializer.validated_data.get("assessor") or self.request.user)
+
+    @extend_schema(
+        request=OpenCommercialOpportunitySerializer, responses=OpportunitySerializer
+    )
+    @action(detail=True, methods=["post"], url_path="open-opportunity")
+    def open_opportunity(self, request: Request, pk: str | None = None) -> Response:
+        """Abre a oportunidade comercial a partir de uma avaliação — o único caminho lead→venda.
+
+        É um **ato explícito**, e é essa a diferença para o que existia: antes a venda nascia de
+        graça junto com a conta, no mesmo clique que registrava a conversa. Aqui alguém decide
+        abrir, e o sistema recusa quando a avaliação não autoriza (invariante 5).
+        """
+        qualification = self.get_object()
+        if qualification.outcome != Qualification.Outcome.QUALIFIED:
+            raise StateConflict(
+                "Só uma qualificação com resultado Qualificado abre oportunidade comercial."
             )
+        if qualification.commercial_opportunities.exists():
+            raise StateConflict("Esta qualificação já abriu uma oportunidade comercial.")
+        if qualification.account_id is None:
+            return Response(
+                {"account": "A qualificação precisa de uma conta antes de virar oportunidade."},
+                status=400,
+            )
+        payload = OpenCommercialOpportunitySerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        dados = payload.validated_data
+
+        service = dados["service"]
+        if service and service.category == Service.Category.ACQUISITION:
+            return Response(
+                {"service": "Oferta de aquisição não vira oportunidade comercial — "
+                            "escolha um degrau da escada."},
+                status=400,
+            )
+        contato = dados["contact"]
+        if contato and contato.client_id != qualification.account_id:
+            return Response(
+                {"contact": "O contato deve pertencer ao cliente selecionado."}, status=400
+            )
+        stage = (
+            PipelineStage.objects.filter(kind=PipelineStage.Kind.OPEN).order_by("position").first()
+        )
+        if stage is None:
+            return Response({"detail": "Nenhuma etapa aberta configurada."}, status=400)
+
+        with transaction.atomic():
             opportunity = Opportunity.objects.create(
-                client=client,
-                title=lead.name,
-                scope=lead.message,
-                estimated_value=0,
+                client_id=qualification.account_id,
+                contact=contato,
+                title=dados["title"] or qualification.lead.name,
+                scope=dados["scope"] or qualification.rationale,
+                estimated_value=dados["estimated_value"],
                 stage=stage,
                 owner=request.user,
-                expected_close_date=timezone.localdate() + timedelta(days=30),
-                service=entry_service,
+                expected_close_date=(
+                    dados["expected_close_date"] or timezone.localdate() + timedelta(days=30)
+                ),
+                service=service,
+                origin_qualification=qualification,
             )
-            lead.client = client
-            lead.opportunity = opportunity
-            lead.status = Lead.Status.QUALIFIED
-            lead.save(update_fields=["client", "opportunity", "status", "updated_at"])
-            lead.archive()  # sai da lista ativa de Leads, preservando o histórico
-        return Response(LeadSerializer(lead).data, status=status.HTTP_201_CREATED)
+            # **`Lead.opportunity` continua sendo ligado aqui**, e não é resíduo do caminho antigo:
+            # a análise de origem da FDD 030 atravessa `projeto → oportunidade → lead → source`
+            # por esta chave. Movendo a criação da venda para cá sem religar o lead, todo negócio
+            # nascido de lead passaria a contar como "Cadastro direto" — uma tela de decisão de
+            # investimento errando em silêncio, que é o modo de falha que
+            # `tests/regression/test_origem_do_lead_sobrevive_a_conversao.py` existe para pegar.
+            # O vínculo canônico da fatia nova é `origin_qualification`; este é o atalho da
+            # analítica, e some no dia em que ela souber ler a avaliação no meio do caminho.
+            lead = qualification.lead
+            if lead.opportunity_id is None:
+                lead.opportunity = opportunity
+                lead.save(update_fields=["opportunity", "updated_at"])
+        return Response(OpportunitySerializer(opportunity).data, status=status.HTTP_201_CREATED)
 
 
 # Token efêmero (assinado) que autoriza um lead qualificado a ver horários e agendar.

@@ -1,9 +1,13 @@
 export type PipelineStage = { id: number; name: string; kind: "open" | "won" | "lost"; position: number; opportunity_count?: number; estimated_total?: string | null };
-export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier; project: number | null; project_archived: boolean };
+export type Opportunity = { id: number; client: number; contact: number | null; title: string; scope: string; estimated_value: string; stage: number; stage_name: string; owner: number; expected_close_date: string; service: number | null; service_name: string; service_tier: ServiceTier; project: number | null; project_archived: boolean; origin_qualification: number | null };
 export type AiScoreDimension = { label: string; score: number };
 export type Project = { id: number; name: string; description: string; client: number; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };
 export type ServiceTier = "qualification_call" | "discovery_assessment" | "discovery_sprint" | "feasibility" | "prove" | "scale" | "transformation" | "";
-export type Service = { id: number; name: string; active: boolean; tier: ServiceTier; tier_display: string; list_price: string; summary: string };
+// `acquisition` é a porta (a Qualification Call), `commercial` é degrau vendável — e é a
+// categoria, não o preço zero, que decide: o Discovery + Assessment do founding client também é
+// gratuito e é degrau (ADR 0049).
+export type ServiceCategory = "acquisition" | "commercial";
+export type Service = { id: number; name: string; active: boolean; tier: ServiceTier; tier_display: string; category: ServiceCategory; category_display: string; list_price: string; summary: string };
 export type TierFunnelRow = { tier: ServiceTier; label: string; total: number; open: number; won: number; lost: number; estimated_total: number; win_rate: number | null };
 export type StageFunnelRow = { kind: ArtifactKind; label: string; total: number; sent: number; accepted: number; rejected: number; acceptance_rate: number | null; reached: number };
 export type SourceFunnelRow = { source: string; leads: number; won: number; projects: number; revenue: number };
@@ -189,7 +193,13 @@ export type LeadFit = "high" | "medium" | "low" | "";
 // O cadastro público que o enriquecimento trouxe (FDD 030). Todo campo é opcional porque o objeto
 // inteiro é opcional: sem CNPJ, com a flag desligada ou com o fornecedor fora do ar, ele é `{}`.
 export type LeadEnrichment = { cnpj?: string; legal_name?: string; trade_name?: string; cnae_code?: string; cnae_label?: string; size?: string; share_capital?: string; status?: string; city?: string; state?: string; opened_on?: string };
-export type Lead = { id: number; name: string; email: string; company: string; phone: string; cnpj: string; message: string; source: string; status: LeadStatus; ai_fit: LeadFit; ai_score: number | null; ai_summary: string; ai_recommended_action: string; qualified_at: string | null; enrichment: LeadEnrichment; client: number | null; opportunity: number | null; created_at: string };
+export type Lead = { id: number; name: string; email: string; company: string; phone: string; cnpj: string; message: string; source: string; status: LeadStatus; ai_fit: LeadFit; ai_score: number | null; ai_summary: string; ai_recommended_action: string; qualified_at: string | null; enrichment: LeadEnrichment; client: number | null; opportunity: number | null; qualification: number | null; qualification_outcome: QualificationOutcome | ""; created_at: string };
+
+// A avaliação que decide se um lead vira venda (ADR 0049). Só `qualified` abre oportunidade
+// comercial — e ela é um **segundo ato**, em `POST /qualifications/{id}/open-opportunity/`.
+export type QualificationOutcome = "qualified" | "nurture" | "disqualified";
+export type QualificationLevel = "high" | "medium" | "low" | "";
+export type Qualification = { id: number; lead: number; lead_name: string; account: number | null; account_name: string; happened_at: string; assessor: number | null; fit: QualificationLevel; need: QualificationLevel; urgency: QualificationLevel; authority: QualificationLevel; capacity: QualificationLevel; evidence: string; outcome: QualificationOutcome; outcome_display: string; rationale: string; next_step: string; nurture_until: string | null; ai_suggested_outcome: QualificationOutcome | ""; ai_score_snapshot: number | null; legacy_opportunity: number | null; created_at: string; updated_at: string };
 
 // O case de um projeto concluído (FDD 027). Os três campos de snapshot são **fotografia**: vêm
 // congelados do backend e não há como reescrevê-los pela API — a tela só os exibe.

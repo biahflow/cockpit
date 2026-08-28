@@ -106,9 +106,14 @@ class RolePermission(BasePermission):
             # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
             # continua levantando dentro do projeto —, e um registro que só metade da casa pode
             # fazer é um registro que não acontece.
+            # `qualification` (ADR 0049) entra ao lado de `lead`, e **não** aparece em
+            # nenhum conjunto da Entrega logo abaixo: a avaliação é ato comercial e não
+            # atravessa para o portal do cliente (mapa de linguagem §3). O 403 dela vem do
+            # `return False` do fim, sem regra nova — recurso novo nasce fechado.
             return resource in {"client", "contact", "opportunity", "document", "lead",
                                 "analytics", "artifact", "activity", "cobranca_suspensao",
-                                "satisfacao", "processo", "processo_etapa", "evidencia"}
+                                "satisfacao", "processo", "processo_etapa", "evidencia",
+                                "qualification"}
         if request.user.role == User.Role.DELIVERY:
             if resource in {"client", "contact", "opportunity", "project_member",
                             "risk", "health", "case", "activity"}:

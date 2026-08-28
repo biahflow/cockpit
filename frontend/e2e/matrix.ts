@@ -231,6 +231,7 @@ const FIXTURES: Record<string, unknown> = {
     id: index, name: index === 1 ? "Discovery Sprint" : `Serviço avulso ${index}`,
     active: true, tier: index === 1 ? "discovery_sprint" : "",
     tier_display: index === 1 ? "Discovery Sprint" : "", list_price: "0.00",
+    category: "commercial", category_display: "Comercial",
     summary: "Diagnóstico inicial gratuito de oportunidades de automação.",
   })),
   "/api/v1/leads/": serie(8, index => ({
@@ -240,7 +241,8 @@ const FIXTURES: Record<string, unknown> = {
     source: "site", status: "new", ai_fit: "high", ai_score: 82,
     ai_summary: "Dor clara em processo manual, porte compatível.",
     ai_recommended_action: "Agendar discovery express.",
-    qualified_at: null, client: null, opportunity: null, created_at: `${HOJE}T09:00:00Z`,
+    qualified_at: null, client: null, opportunity: null, qualification: null,
+    qualification_outcome: "", created_at: `${HOJE}T09:00:00Z`,
   })),
   "/api/v1/documents/": serie(6, index => ({
     id: index, client: index, opportunity: null, project: null, file: "/media/x.pdf",

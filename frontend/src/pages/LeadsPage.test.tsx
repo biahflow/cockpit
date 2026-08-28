@@ -41,12 +41,32 @@ test("mostra o setor que o enriquecimento trouxe, e cala sem ele", async () => {
   expect(screen.getByText("Fulano")).toBeInTheDocument();
 });
 
-test("converte um lead em oportunidade", async () => {
+test("registra a qualificação do lead e diz o resultado", async () => {
+  // A ação deixou de prometer oportunidade (ADR 0049): ela registra a avaliação, e a venda é um
+  // segundo ato. A resposta mudou de forma junto — `{lead, qualification}` —, e é dela que sai o
+  // texto de feedback; consumi-la como antes deixaria a tela muda no sucesso.
   const user = userEvent.setup();
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path === "/leads/" && (options?.method ?? "GET") === "GET") return Promise.resolve([lead]);
+    if (path === "/leads/1/convert/") return Promise.resolve({ lead: { ...lead, status: "qualified" }, qualification: { id: 7, outcome: "qualified" } });
+    return Promise.resolve({});
+  });
   render(<LeadsPage />);
   await screen.findByText("Fulano");
-  await user.click(screen.getByRole("button", { name: /Converter em oportunidade/ }));
+  await user.click(screen.getByRole("button", { name: /Registrar qualificação/ }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/leads/1/convert/", expect.objectContaining({ method: "POST" })));
+  expect(await screen.findByRole("status")).toHaveTextContent(/Qualificação registrada: Qualificado/);
+});
+
+test("lead já qualificado mostra o resultado e não oferece qualificar de novo", async () => {
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/leads/") return Promise.resolve([{ ...lead, id: 4, name: "Já avaliado", status: "qualified", qualification: 9, qualification_outcome: "qualified" }]);
+    return Promise.resolve({});
+  });
+  render(<LeadsPage />);
+  await screen.findByText("Já avaliado");
+  expect(screen.getAllByText("Qualificado").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: /Registrar qualificação/ })).not.toBeInTheDocument();
 });
 
 

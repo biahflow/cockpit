@@ -55,6 +55,7 @@ from .models import (
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    Qualification,
     Risco,
     Satisfacao,
     Service,
@@ -400,9 +401,14 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
         fields = [
             "id", "client", "contact", "title", "scope", "estimated_value", "stage", "stage_name",
             "owner", "expected_close_date", "service", "service_name", "service_tier", "project",
-            "project_archived", "created_at", "updated_at",
+            "project_archived", "origin_qualification", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+        # `origin_qualification` é **só de leitura**, e a assimetria é a guarda: o único caminho
+        # que a preenche é `POST /qualifications/{id}/open-opportunity/`, que confere o resultado
+        # da avaliação antes. Editável aqui, um `PATCH` cru gravaria a mesma coluna sem passar por
+        # `Opportunity.clean()` — a distinção entre "campo" e "ato" que a FDD 028 já fez no
+        # `status` da fatura.
+        read_only_fields = ["id", "owner", "origin_qualification", "created_at", "updated_at"]
 
     @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_project(self, obj: Opportunity) -> int | None:
@@ -957,14 +963,15 @@ class ProjectMemberSerializer(serializers.ModelSerializer[ProjectMember]):
 
 class ServiceSerializer(serializers.ModelSerializer[Service]):
     tier_display = serializers.CharField(source="get_tier_display", read_only=True)
+    category_display = serializers.CharField(source="get_category_display", read_only=True)
 
     class Meta:
         model = Service
-        fields = ["id", "name", "active", "tier", "tier_display", "list_price", "summary",
-                  "created_at", "updated_at"]
+        fields = ["id", "name", "active", "tier", "tier_display", "category", "category_display",
+                  "list_price", "summary", "created_at", "updated_at"]
         # A unicidade do `tier` ativo vem da UniqueConstraint do modelo; o DRF a deriva
         # sozinho (respeitando a condição), como no `PipelineStage`.
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "tier_display", "category_display", "created_at", "updated_at"]
 
 
 class VerticalSerializer(serializers.ModelSerializer[Vertical]):
@@ -1369,21 +1376,155 @@ class NotificationSerializer(serializers.ModelSerializer[Notification]):
         read_only_fields = fields
 
 
+class QualificationSerializer(serializers.ModelSerializer[Qualification]):
+    """A avaliação de um lead (ADR 0049). `outcome` é obrigatório e não tem default."""
+
+    outcome_display = serializers.CharField(source="get_outcome_display", read_only=True)
+    lead_name = serializers.CharField(source="lead.name", read_only=True)
+    account_name = serializers.CharField(source="account.name", read_only=True, default="")
+
+    class Meta:
+        model = Qualification
+        fields = [
+            "id", "lead", "lead_name", "account", "account_name", "happened_at", "assessor",
+            "fit", "need", "urgency", "authority", "capacity", "evidence", "outcome",
+            "outcome_display", "rationale", "next_step", "nurture_until", "ai_suggested_outcome",
+            "ai_score_snapshot", "legacy_opportunity", "created_at", "updated_at",
+        ]
+        # `ai_*` são só de leitura pela regra do mapa de linguagem §5: a IA é insumo, e um campo
+        # editável que diz "a IA sugeriu" logo deixa de dizer o que a IA sugeriu.
+        # `legacy_opportunity` é vínculo do backfill e não se digita.
+        read_only_fields = [
+            "id", "lead_name", "account_name", "outcome_display", "ai_suggested_outcome",
+            "ai_score_snapshot", "legacy_opportunity", "created_at", "updated_at",
+        ]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        # Espelha `Qualification.clean()` em vez de duplicar o critério: o DRF não chama o
+        # `full_clean` do modelo, e sem isto o 400 de "nutrir sem data" viraria IntegrityError
+        # nenhum — a linha entraria e a lista de nutrição nasceria com um registro sem retorno.
+        instancia = Qualification(
+            outcome=cast(str, attrs.get("outcome", getattr(self.instance, "outcome", ""))),
+            nurture_until=cast(
+                date | None,
+                attrs.get("nurture_until", getattr(self.instance, "nurture_until", None)),
+            ),
+            lead=cast(Lead | None, attrs.get("lead", getattr(self.instance, "lead", None))),
+            account=cast(
+                Client | None, attrs.get("account", getattr(self.instance, "account", None))
+            ),
+        )
+        try:
+            instancia.clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        return attrs
+
+
+class LeadConvertSerializer(serializers.Serializer):
+    """Corpo do `POST /leads/{id}/convert/` — a avaliação que a conversão registra.
+
+    Tudo é opcional, e `outcome` cai em `qualified` quando ausente: converter um lead sempre
+    significou "isto é real", e o botão que já existe na tela não manda corpo nenhum. Mudar o
+    default aqui trocaria uma decisão de produto por um efeito colateral de refatoração.
+    """
+
+    outcome = serializers.ChoiceField(
+        choices=Qualification.Outcome.choices, required=False,
+        default=Qualification.Outcome.QUALIFIED,
+    )
+    fit = serializers.ChoiceField(
+        choices=Qualification.Level.choices, required=False, allow_blank=True, default=""
+    )
+    need = serializers.ChoiceField(
+        choices=Qualification.Level.choices, required=False, allow_blank=True, default=""
+    )
+    urgency = serializers.ChoiceField(
+        choices=Qualification.Level.choices, required=False, allow_blank=True, default=""
+    )
+    authority = serializers.ChoiceField(
+        choices=Qualification.Level.choices, required=False, allow_blank=True, default=""
+    )
+    capacity = serializers.ChoiceField(
+        choices=Qualification.Level.choices, required=False, allow_blank=True, default=""
+    )
+    evidence = serializers.CharField(required=False, allow_blank=True, default="")
+    rationale = serializers.CharField(required=False, allow_blank=True, default="")
+    next_step = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, default=""
+    )
+    nurture_until = serializers.DateField(required=False, allow_null=True, default=None)
+    # A conta existente que a avaliação deve usar, em vez de criar outra. A queryset já exclui a
+    # arquivada: reabrir uma conta que alguém tirou da lista não é efeito de converter um lead.
+    account_id = serializers.PrimaryKeyRelatedField(
+        queryset=Client.objects.filter(archived_at__isnull=True),
+        source="account", required=False, allow_null=True, default=None,
+    )
+
+
+class OpenCommercialOpportunitySerializer(serializers.Serializer):
+    """Corpo do `POST /qualifications/{id}/open-opportunity/` — o único caminho lead→venda.
+
+    Todos os campos são opcionais porque a ação existe para ser o passo seguinte de uma avaliação
+    já registrada: o que ela precisa saber (conta, origem, dono) vem da qualificação e da sessão.
+    O corpo serve para quem já sabe o que está vendendo.
+    """
+
+    title = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    scope = serializers.CharField(required=False, allow_blank=True, default="")
+    estimated_value = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, default=0
+    )
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.filter(archived_at__isnull=True),
+        required=False, allow_null=True, default=None,
+    )
+    expected_close_date = serializers.DateField(required=False, allow_null=True, default=None)
+    contact = serializers.PrimaryKeyRelatedField(
+        queryset=Contact.objects.filter(archived_at__isnull=True),
+        required=False, allow_null=True, default=None,
+    )
+
+
 class LeadSerializer(serializers.ModelSerializer[Lead]):
+    # A avaliação mais recente do lead, para a tela saber que ele já passou pela qualificação sem
+    # ter de pedir `/qualifications/?lead=`. Não substitui a coleção: o lead tem várias, e o que a
+    # lista precisa é do estado atual.
+    qualification = serializers.SerializerMethodField()
+    qualification_outcome = serializers.SerializerMethodField()
+
     class Meta:
         model = Lead
         fields = [
             "id", "name", "email", "company", "phone", "cnpj", "message", "source", "status",
             "ai_fit", "ai_score", "ai_summary", "ai_recommended_action", "qualified_at",
-            "enrichment", "client", "opportunity", "created_at", "updated_at",
+            "enrichment", "client", "opportunity", "qualification", "qualification_outcome",
+            "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "source", "ai_fit", "ai_score", "ai_summary", "ai_recommended_action",
             # `enrichment` é retrato do fornecedor, não campo de trabalho: editável pela tela, ele
             # deixaria de responder "o que a Receita diz" e passaria a responder "o que alguém
             # digitou", que é a diferença entre dado enriquecido e dado inventado.
-            "qualified_at", "enrichment", "client", "opportunity", "created_at", "updated_at",
+            "qualified_at", "enrichment", "client", "opportunity", "qualification",
+            "qualification_outcome", "created_at", "updated_at",
         ]
+
+    def _ultima(self, lead: Lead) -> Qualification | None:
+        # Em Python e não com `.first()`: o viewset faz `prefetch_related("qualifications")`, e uma
+        # consulta por linha aqui devolveria o N+1 pela porta dos fundos, na tela que lista leads.
+        vivas = [q for q in lead.qualifications.all() if q.archived_at is None]
+        return vivas[0] if vivas else None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_qualification(self, lead: Lead) -> int | None:
+        ultima = self._ultima(lead)
+        return ultima.pk if ultima else None
+
+    @extend_schema_field(serializers.CharField())
+    def get_qualification_outcome(self, lead: Lead) -> str:
+        ultima = self._ultima(lead)
+        return ultima.outcome if ultima else ""
 
 
 class LeadIntakeSerializer(serializers.Serializer):

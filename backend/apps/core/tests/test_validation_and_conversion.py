@@ -227,8 +227,10 @@ def test_conversion_returns_conflict_without_partial_project_on_integrity_error(
 
 @pytest.mark.django_db
 def test_conversion_inherits_the_opportunity_product_tier() -> None:
+    """O primeiro degrau **vendável**, e não a Qualification Call: aquela é oferta de aquisição
+    desde a ADR 0049 e a conversão a recusa (invariante 6)."""
     sales = UserFactory(role=User.Role.SALES)
-    porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
+    porta = Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT)
     opportunity = OpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=sales, service=porta
     )
@@ -245,7 +247,7 @@ def test_conversion_inherits_the_opportunity_product_tier() -> None:
     assert response.status_code == 201
     assert response.json()["service"] == porta.pk
     # O cronograma segue o degrau, não o template genérico.
-    assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 1
+    assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 2
 
 
 @pytest.mark.django_db

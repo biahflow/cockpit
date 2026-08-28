@@ -12,6 +12,7 @@ from apps.core.models import (
     Evidencia,
     GithubDeliveryProjection,
     Invoice,
+    Lead,
     Meeting,
     Opportunity,
     PipelineStage,
@@ -19,6 +20,7 @@ from apps.core.models import (
     ProcessoEtapa,
     Project,
     ProjectMember,
+    Qualification,
     Service,
     User,
 )
@@ -79,6 +81,35 @@ class OpportunityFactory(factory.django.DjangoModelFactory):
     stage = factory.SubFactory(PipelineStageFactory)
     owner = factory.SubFactory(UserFactory)
     expected_close_date = factory.LazyFunction(lambda: timezone.localdate() + timedelta(days=7))
+
+
+class LeadFactory(factory.django.DjangoModelFactory):
+    """Lead recém-recebido pelo formulário do site — o estado em que a triagem o encontra."""
+
+    class Meta:
+        model = Lead
+
+    name = factory.Sequence(lambda n: f"Lead {n}")
+    email = factory.LazyAttribute(lambda obj: f"{obj.name.lower().replace(' ', '')}@example.test")
+    company = factory.Sequence(lambda n: f"Empresa {n}")
+    message = "Quer entender como automatizar o faturamento."
+
+
+class QualificationFactory(factory.django.DjangoModelFactory):
+    """Avaliação qualificada, com conta — o caso que abre oportunidade comercial.
+
+    `outcome` explícito porque o modelo **não** tem default (uma avaliação sem resultado é uma
+    avaliação que não aconteceu); quem testa `nurture` passa `nurture_until` junto, senão o
+    `clean()` recusa — que é exatamente o que o teste daquele caso quer ver.
+    """
+
+    class Meta:
+        model = Qualification
+
+    lead = factory.SubFactory(LeadFactory)
+    account = factory.SubFactory(ClientFactory)
+    outcome = Qualification.Outcome.QUALIFIED
+    assessor = factory.SubFactory(UserFactory)
 
 
 class ActivityFactory(factory.django.DjangoModelFactory):

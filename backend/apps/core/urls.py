@@ -59,6 +59,7 @@ from .views import (
     ProjectMemberViewSet,
     ProjectPhaseViewSet,
     ProjectViewSet,
+    QualificationViewSet,
     RecommendationsView,
     RiscoViewSet,
     RiskView,
@@ -117,6 +118,9 @@ router.register("cobranca", CobrancaViewSet, basename="cobranca")
 router.register("knowledge-areas", KnowledgeAreaViewSet)
 router.register("knowledge-pieces", KnowledgePieceViewSet)
 router.register("leads", LeadViewSet)
+# A avaliação do lead (ADR 0049, FDD 044). Fora de `/leads/` porque um lead tem **várias**: o
+# `nurture` de hoje vira `qualified` daqui a seis meses, e as duas são fatos distintos.
+router.register("qualifications", QualificationViewSet)
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("services", ServiceViewSet)
 router.register("verticals", VerticalViewSet)

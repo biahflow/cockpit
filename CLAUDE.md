@@ -65,9 +65,9 @@ source of truth for the complete CI suite is [`.github/workflows/quality.yml`](.
 views (viewsets), permissions, and URLs all live there. There is no service layer —
 business rules live in model `clean()`/`save()` methods and in viewset actions.
 
-Core domain flow (`apps/core/models.py`): `Client` → `Contact`, `Opportunity` (on a
-configurable `PipelineStage`) → converts into a `Project` → `Milestone`/`Task`
-(both subclass the abstract `WorkItem`) plus `Document`. `User` extends
+Core domain flow (`apps/core/models.py`): `Client` → `Contact`, `Lead` → `Qualification` →
+`Opportunity` (on a configurable `PipelineStage`) → converts into a `Project` →
+`Milestone`/`Task` (both subclass the abstract `WorkItem`) plus `Document`. `User` extends
 `AbstractUser` with a `role` (admin/sales/delivery). `Invitation` drives email-based
 onboarding.
 
@@ -114,6 +114,23 @@ Key cross-cutting patterns to preserve:
   **Free is the step, not the zero price** (`frontend/src/tiers.ts`): only the Qualification Call
   is free; zero anywhere else means "price to be decided" — the Transformation Partnership is
   monthly recurring and the catalog still cannot represent recurrence.
+- **A qualificação vem antes da venda, e é entidade.** `POST /leads/{id}/convert/` criava, no mesmo
+  clique, um `Client` **e** uma `Opportunity` no degrau gratuito — uma conversa de trinta minutos
+  entrava no funil como venda registrada e podia virar `Project`. Desde a ADR 0049 ele registra uma
+  `Qualification` (autor, data, cinco eixos, `outcome` ∈ `qualified`·`nurture`·`disqualified`) e
+  **não cria oportunidade**; a venda nasce num ato explícito,
+  `POST /qualifications/{id}/open-opportunity/`, que recusa origem não-qualificada. Um lead tem
+  **várias** avaliações de propósito — o `nurture` de hoje vira `qualified` em seis meses, e
+  sobrescrever a primeira apagaria o histórico que a entidade existe para guardar; por isso
+  `nurture` **não arquiva o lead**, que é o único jeito de ele voltar ao radar. A IA é insumo:
+  `ai_suggested_outcome`/`ai_score_snapshot` guardam a sugestão e nada os copia para `outcome`. As
+  duas invariantes vivem no **modelo** e não só na view (`Opportunity.clean()`, `Project.clean()`),
+  porque shell, admin e migração não passam por rota. Ver FDD 044.
+- **`Service.category` separa a porta do degrau.** `acquisition` é oferta de aquisição — hoje só a
+  Qualification Call —, e ela nunca gera `Opportunity` nem `Project`; `commercial` é degrau
+  vendável e é o default. A distinção é por **categoria, não por preço**: o Discovery + Assessment
+  do founding client também é gratuito e é degrau. Restam seis degraus vendáveis na escada da FDD
+  015.
 - **Documents are single-linked.** A `Document` must reference exactly one of
   client/opportunity/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.

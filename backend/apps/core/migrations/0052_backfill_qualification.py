@@ -1,0 +1,126 @@
+"""Traduz em `Qualification` a conversa que estava gravada como venda (ADR 0049).
+
+Até a 0051, `POST /leads/{id}/convert/` criava uma `Opportunity` no degrau `qualification_call`.
+Cada uma dessas linhas é uma **avaliação de lead**, não uma venda: ela nunca teve valor, nunca
+passou por proposta e, ainda assim, somava no funil e podia virar `Project`. Deixá-las como estão
+manteria a leitura errada do pipeline exatamente onde a fatia nova promete corrigi-la.
+
+O que a migração faz, por oportunidade de `qualification_call`:
+
+1. **Cria a `Qualification`** com o lead que aponta para a oportunidade, a conta, a data de criação
+   e o dono da oportunidade como avaliador. O `outcome` é **derivado do estado comercial**, que é a
+   única evidência que existe do que se decidiu na época: estágio `won` (ou já com projeto) foi
+   `qualified`; estágio `lost` foi `disqualified`; qualquer estágio aberto vira `nurture`, o
+   resultado que **não** afirma nada — a conversa aconteceu e a decisão ficou em aberto, que é
+   literalmente o estado daquela linha. Para o `nurture`, `nurture_until` é a criação + 180 dias,
+   porque o `clean()` do modelo exige data de retorno e inventar "hoje" faria a lista de nutrição
+   nascer inteira vencida.
+2. **Registra uma `Activity`** de nota no cliente, apontando para a oportunidade. É a auditoria de
+   que a linha existiu e do que aconteceu com ela — sem isso, quem abrir a conta daqui a um ano vê
+   uma oportunidade arquivada sem explicação.
+3. **Arquiva a oportunidade**, e só quando ela **não** tem `Project`. Com projeto, fica como está:
+   `Project.opportunity` é `PROTECT` e a tela do projeto lê a oportunidade para montar o histórico
+   comercial — escondê-la deixaria o projeto apontando para um registro que a interface não mostra
+   (o mesmo argumento de `OpportunityViewSet.perform_destroy`, FDD 025).
+
+**Nada é apagado.** Arquivamento é soft (`archived_at`), `legacy_opportunity` guarda o vínculo, e a
+reversa desfaz os dois lados: apaga as avaliações que esta migração criou (as que têm
+`legacy_opportunity`), remove as notas de auditoria e desarquiva o que ela arquivou.
+
+**Oportunidade de `qualification_call` sem lead é pulada.** `Qualification.lead` é obrigatório
+porque uma avaliação sem lead não é avaliação de ninguém; inventar um lead sintético colocaria dado
+falso na base para satisfazer uma FK. O caso aparece quando alguém criou a oportunidade à mão pela
+tela do pipeline, escolhendo o degrau gratuito. O comando
+`manage.py reconciliar_qualification` lista essas linhas depois do deploy — a decisão sobre cada
+uma é de gente, e é por isso que ela não está aqui.
+"""
+
+from datetime import timedelta
+
+from django.db import migrations
+from django.utils import timezone
+
+NURTURE_DIAS = 180
+
+
+def backfill_qualification(apps, schema_editor):
+    Opportunity = apps.get_model("core", "Opportunity")
+    Qualification = apps.get_model("core", "Qualification")
+    Activity = apps.get_model("core", "Activity")
+
+    candidatas = (
+        Opportunity.objects.filter(service__tier="qualification_call")
+        .select_related("stage")
+        .order_by("id")
+    )
+    for opportunity in candidatas.iterator():
+        if hasattr(opportunity, "backfilled_qualification"):
+            continue  # já traduzida (a migração é idempotente por linha)
+        lead = opportunity.leads.order_by("id").first()
+        if lead is None:
+            continue  # sem lead não há avaliação; o comando de reconciliação reporta
+        tem_projeto = hasattr(opportunity, "project")
+        kind = opportunity.stage.kind if opportunity.stage_id else "open"
+        if kind == "won" or tem_projeto:
+            outcome, nurture_until = "qualified", None
+        elif kind == "lost":
+            outcome, nurture_until = "disqualified", None
+        else:
+            outcome = "nurture"
+            nurture_until = (opportunity.created_at + timedelta(days=NURTURE_DIAS)).date()
+        Qualification.objects.create(
+            lead=lead,
+            account_id=opportunity.client_id,
+            happened_at=opportunity.created_at,
+            assessor_id=opportunity.owner_id,
+            outcome=outcome,
+            nurture_until=nurture_until,
+            rationale=opportunity.scope or "",
+            legacy_opportunity=opportunity,
+        )
+        Activity.objects.create(
+            client_id=opportunity.client_id,
+            opportunity=opportunity,
+            kind="note",
+            happened_on=opportunity.created_at.date(),
+            summary=f"Qualificação migrada da oportunidade #{opportunity.pk}",
+            owner_id=opportunity.owner_id,
+        )
+        if not tem_projeto and opportunity.archived_at is None:
+            opportunity.archived_at = timezone.now()
+            opportunity.save(update_fields=["archived_at"])
+
+
+def desfazer_backfill(apps, schema_editor):
+    Opportunity = apps.get_model("core", "Opportunity")
+    Qualification = apps.get_model("core", "Qualification")
+    Activity = apps.get_model("core", "Activity")
+
+    migradas = Qualification.objects.filter(legacy_opportunity__isnull=False)
+    ids, desarquivar = [], []
+    # Tudo antes do `delete()`: depois, o vínculo que diz quais oportunidades foram tocadas já não
+    # existe. E desarquiva **só o que esta migração arquivou** — a ida pulou quem já estava
+    # arquivado, e a volta desarquivar em bloco restauraria uma oportunidade que alguém tinha
+    # tirado da lista de propósito. O critério é o carimbo: a ida grava `archived_at` logo depois
+    # de criar a avaliação, então quem foi arquivado por ela tem carimbo posterior ao dela.
+    for qualification in migradas.select_related("legacy_opportunity"):
+        opportunity = qualification.legacy_opportunity
+        ids.append(opportunity.pk)
+        if opportunity.archived_at and opportunity.archived_at >= qualification.created_at:
+            desarquivar.append(opportunity.pk)
+    Opportunity.objects.filter(id__in=desarquivar).update(archived_at=None)
+    Activity.objects.filter(
+        opportunity_id__in=ids, kind="note", summary__startswith="Qualificação migrada da "
+    ).delete()
+    migradas.delete()
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("core", "0051_qualification_e_service_category"),
+    ]
+
+    operations = [
+        migrations.RunPython(backfill_qualification, desfazer_backfill),
+    ]

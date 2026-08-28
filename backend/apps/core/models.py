@@ -184,9 +184,36 @@ class Opportunity(TimestampedModel):
     service = models.ForeignKey(
         "Service", on_delete=models.SET_NULL, null=True, blank=True, related_name="opportunities"
     )
+    # A avaliação que autorizou esta venda (ADR 0049). Referência por string porque
+    # `Qualification` é declarada depois de `Lead`, bem abaixo daqui — e ela fica *depois* de
+    # propósito: a avaliação pende do lead, não da oportunidade.
+    #
+    # Nula no que já existia e no que nasce fora do funil de lead (indicação, conta que volta a
+    # comprar). Obrigá-la agora invalidaria a carteira inteira; o que a invariante 5 do mapa de
+    # linguagem exige é o inverso — quando ela existe, ela é `qualified`, e é o `clean()` abaixo
+    # que garante isso.
+    origin_qualification = models.ForeignKey(
+        "Qualification", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="commercial_opportunities",
+    )
 
     class Meta:
         ordering = ["expected_close_date", "id"]
+
+    def clean(self) -> None:
+        """Invariante 5 do mapa de linguagem, no modelo e não só na view.
+
+        `POST /qualifications/{id}/open-opportunity/` é o caminho previsto e já recusa com 409, mas
+        a regra não pode morar só lá: shell, admin e migração futura criam `Opportunity` sem passar
+        por view nenhuma, e uma venda apontando para uma avaliação `nurture` diria que a casa vendeu
+        para quem ela mesma decidiu não vender ainda.
+        """
+        origem = self.origin_qualification if self.origin_qualification_id else None
+        if origem is not None and origem.outcome != Qualification.Outcome.QUALIFIED:
+            raise ValidationError({
+                "origin_qualification":
+                    "Só uma qualificação com resultado Qualificado abre oportunidade comercial."
+            })
 
     @property
     def is_won(self) -> bool:
@@ -280,6 +307,14 @@ class Project(TimestampedModel):
     def clean(self) -> None:
         if self.due_date < self.start_date:
             raise ValidationError({"due_date": "A data final não pode ser anterior à inicial."})
+        # Invariante 6 do mapa de linguagem: nenhum projeto nasce de oferta de aquisição (ADR 0049).
+        # A `convert-to-project` já recusa com 400, e a regra fica aqui pela razão da
+        # `Opportunity.clean()` logo acima — a via da view não é a única via.
+        service = self.service if self.service_id else None
+        if service is not None and service.category == Service.Category.ACQUISITION:
+            raise ValidationError({
+                "service": "Oferta de aquisição não gera projeto — escolha um degrau da escada."
+            })
 
     @property
     def current_phase(self) -> ProjectPhase | None:
@@ -896,6 +931,99 @@ class Lead(TimestampedModel):
         return f"{self.name} <{self.email}>"
 
 
+class Qualification(TimestampedModel):
+    """A avaliação que decide se um `Lead` vira venda — e que até aqui não existia (ADR 0049).
+
+    O `POST /leads/{id}/convert/` criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
+    gratuito da escada. Isso gravava uma conversa de qualificação como venda registrada: ela entrava
+    no funil, somava no pipeline e podia virar `Project`. A sequência normativa do Language Map é
+    `Lead → Qualification → (qualified) → CommercialOpportunity`, e o degrau do meio precisava de
+    linha própria para que a decisão tivesse autor, data e motivo (decisão D1).
+
+    **Um lead tem várias.** O `nurture` de hoje vira `qualified` daqui a seis meses, e as duas
+    avaliações são fatos distintos — não há constraint de unicidade por lead, de propósito.
+    Sobrescrever a avaliação anterior apagaria justamente o histórico que ela existe para guardar.
+
+    **A IA é insumo, nunca decisão** (Language Map §5). `ai_suggested_outcome` e `ai_score_snapshot`
+    guardam o que o modelo achou no momento da avaliação, e nada os copia para `outcome`: quem
+    qualifica é o `assessor`.
+    """
+
+    class Outcome(models.TextChoices):
+        QUALIFIED = "qualified", "Qualificado"
+        NURTURE = "nurture", "Nutrir"
+        DISQUALIFIED = "disqualified", "Desqualificado"
+
+    class Level(models.TextChoices):
+        HIGH = "high", "Alto"
+        MEDIUM = "medium", "Médio"
+        LOW = "low", "Baixo"
+
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="qualifications")
+    # `PROTECT` e não `CASCADE`: a conta sobrevive à avaliação, e apagar uma conta que já tem
+    # avaliação registrada é ato deliberado, não efeito colateral. Nula enquanto a conversão ainda
+    # não resolveu a organização (avaliação de lead desqualificado não precisa criar conta).
+    account = models.ForeignKey(
+        Client, on_delete=models.PROTECT, null=True, blank=True, related_name="qualifications"
+    )
+    happened_at = models.DateTimeField(default=timezone.now)
+    assessor = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="qualifications_assessed",
+    )
+    # Os cinco eixos do roteiro de qualificação. Todos opcionais: o registro tem de acontecer mesmo
+    # quando quem avaliou só sabe dizer o resultado, senão ele não acontece.
+    fit = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    need = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    urgency = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    authority = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    capacity = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    evidence = models.TextField(blank=True, default="")
+    # **Sem default**, e é a decisão central desta entidade: uma avaliação sem resultado é uma
+    # avaliação que não aconteceu, e um default faria o formulário meio-preenchido virar decisão.
+    outcome = models.CharField(max_length=16, choices=Outcome.choices)
+    rationale = models.TextField(blank=True, default="")
+    next_step = models.CharField(max_length=200, blank=True, default="")
+    nurture_until = models.DateField(null=True, blank=True)
+    ai_suggested_outcome = models.CharField(
+        max_length=16, choices=Outcome.choices, blank=True, default=""
+    )
+    ai_score_snapshot = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Mapeamento do backfill da migração 0052: a `Opportunity` de tier `qualification_call` que
+    # esta avaliação passou a representar. `legacy_` é o único prefixo que o mapa de linguagem
+    # aceita em `opportunity` sem qualificador — é ponte para o nome antigo, não conceito novo.
+    legacy_opportunity = models.OneToOneField(
+        Opportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="backfilled_qualification",
+    )
+
+    class Meta:
+        ordering = ["-happened_at"]
+
+    def __str__(self) -> str:
+        return f"{self.lead_id} · {self.get_outcome_display()}"
+
+    def clean(self) -> None:
+        if self.outcome == self.Outcome.NURTURE and self.nurture_until is None:
+            raise ValidationError(
+                {"nurture_until": "Nutrir exige a data em que este lead volta ao radar."}
+            )
+        # O inverso também é erro, e não zelo excessivo: guardar data de retorno para quem foi
+        # qualificado ou descartado promete um follow-up que ninguém vai fazer, e a lista de
+        # nutrição passa a mostrar quem não está em nutrição.
+        if self.outcome != self.Outcome.NURTURE and self.nurture_until is not None:
+            raise ValidationError(
+                {"nurture_until": "Só faz sentido em uma avaliação com resultado Nutrir."}
+            )
+        # Fronteira de conta: sem isto, uma avaliação pode ficar pendurada na organização de
+        # **outro** lead — o mesmo vazamento por campo opcional que `Activity.clean()` fecha.
+        if self.account_id and self.lead_id and self.lead.client_id:
+            if self.lead.client_id != self.account_id:
+                raise ValidationError(
+                    {"account": "A conta deve ser a mesma já vinculada ao lead."}
+                )
+
+
 class Booking(TimestampedModel):
     """Reunião de pré-venda agendada por um lead qualificado (FDD 013).
 
@@ -1329,6 +1457,18 @@ class Service(TimestampedModel):
     que nunca enche.
     """
 
+    class Category(models.TextChoices):
+        """O que a oferta faz pela casa — e é o que separa a escada comercial da porta (D4).
+
+        `acquisition` é oferta de **aquisição**: existe para descobrir se há venda, não para ser
+        vendida. A Qualification Call é a única hoje. Ela nunca gera `Opportunity` nem `Project`,
+        e é essa categoria — não o preço zero — que carrega a regra: gratuito também é o
+        Discovery + Assessment do programa de founding client, e aquele é degrau vendável.
+        """
+
+        ACQUISITION = "acquisition", "Aquisição"
+        COMMERCIAL = "commercial", "Comercial"
+
     class Tier(models.TextChoices):
         QUALIFICATION_CALL = "qualification_call", "Qualification Call"
         DISCOVERY_ASSESSMENT = "discovery_assessment", "Discovery Express + Assessment"
@@ -1341,6 +1481,10 @@ class Service(TimestampedModel):
     name = models.CharField(max_length=120)
     active = models.BooleanField(default=True)
     tier = models.CharField(max_length=32, choices=Tier.choices, blank=True, default="")
+    # `commercial` por padrão: serviço novo é para vender, e a exceção é a porta de aquisição.
+    category = models.CharField(
+        max_length=16, choices=Category.choices, default=Category.COMMERCIAL
+    )
     list_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     summary = models.TextField(blank=True, default="")
 
