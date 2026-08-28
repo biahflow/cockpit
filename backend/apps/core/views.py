@@ -4389,5 +4389,10 @@ class PortalProjectSnapshotView(APIView):
         provided = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not expected or not hmac.compare_digest(provided, expected):
             return Response({"detail": "Token inválido."}, status=status.HTTP_401_UNAUTHORIZED)
-        project = get_object_or_404(Project, pk=pk)
+        # `select_related` porque o snapshot lê `client`, `engagement` e a conta do engajamento
+        # (Issue #71): sem ele, cada leitura somaria três consultas ao que já é uma projeção
+        # inteira montada por requisição.
+        project = get_object_or_404(
+            Project.objects.select_related("client", "engagement", "engagement__account"), pk=pk
+        )
         return Response(portal.build_snapshot(project))

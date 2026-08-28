@@ -16,6 +16,7 @@ from apps.core.models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    JourneyPhase,
     Meeting,
     Milestone,
     Pendencia,
@@ -25,7 +26,13 @@ from apps.core.models import (
     Vertical,
 )
 
-from .factories import ArtifactFactory, ClientFactory, OpportunityFactory, ProjectFactory
+from .factories import (
+    ArtifactFactory,
+    ClientFactory,
+    EngagementFactory,
+    OpportunityFactory,
+    ProjectFactory,
+)
 
 
 def _milestone(project: Project, status: str = Milestone.Status.TODO, days: int = 5) -> Milestone:
@@ -592,15 +599,19 @@ _MODELO_DA_CHAVE = {
 #: `NOT_AN_ALERT` do outro repositório: entrada sem motivo é a lista digitada voltando pela porta
 #: dos fundos.
 _DERIVADA_DE = {
-    "project": "o próprio projeto, coberto por `_emit_project`",
+    "project": "o próprio projeto, coberto por `_emit_project`; o bloco `engagement`/`account` "
+    "que ele passou a carregar tem `_emit_engagement`",
     "completion": "derivada dos marcos; muda quando um `Milestone` salva",
     "health": "derivada dos marcos e do projeto",
     "roi": "derivado dos marcos e do valor do projeto",
     "resultados": "derivado dos marcos",
-    "journey": "derivada de `ProjectPhase`/`ProjectDeliverable`, que têm emissor próprio",
+    "journey": "derivada de `ProjectPhase`/`ProjectDeliverable`, que têm emissor próprio; o "
+    "template por trás de `canonical_stage`/`requires_gate` tem `_emit_journey_phase`",
     "next_meeting": "derivada de `Meeting`, que tem emissor próprio",
     "ai_score": "colunas do próprio `Project`, cobertas por `_emit_project`",
     "artifact_accepted_at": "derivada de `Artifact`, que tem emissor desde a FDD 031",
+    "observed_at": "carimbada por `portal.emit`, que todo emissor `_emit_*` chama",
+    "projection_version": "idem — a versão avança quando a projeção muda, não quando alguém lê",
 }
 
 
@@ -720,3 +731,270 @@ def test_saving_publishing_and_archiving_a_decision_all_emit(
     calls.clear()
     decisao.archive()
     assert ("updated", "decisao", project.pk) in calls
+
+
+# --- O vocabulário canônico na projeção (Issue #71, ADR 0051) ------------------
+#
+# O One é projeção de leitura do Pulse e **nunca renomeia** (`language-map` §3). Enquanto o
+# modelo carrega os nomes de 2025, é a projeção que fala canônico — e é aqui que isso é cobrado.
+
+
+@pytest.mark.django_db
+def test_snapshot_leva_a_conta_e_o_engajamento_canonicos() -> None:
+    """`account` e `engagement` entram; `client` fica, inalterado, até a `/api/v2/`.
+
+    A conta sai do **engajamento** e não de `Project.client`: os dois são iguais por construção
+    (`Project.clean()` amarra `engagement.account_id == client_id`), e ler pela fonte é o que
+    faz o consumidor não precisar mudar quando a Fase 6 remover a projeção temporária.
+    """
+    project = ProjectFactory()
+
+    bloco = portal.build_snapshot(project)["project"]
+
+    assert bloco["account"] == {
+        "id": project.engagement.account_id,
+        "name": project.engagement.account.name,
+    }
+    assert bloco["engagement"] == {
+        "id": project.engagement_id,
+        "name": project.engagement.name,
+        "status": "active",
+    }
+    # O alias com data continua saindo exatamente como saía.
+    assert bloco["client"] == {"id": project.client_id, "name": project.client.name}
+
+
+@pytest.mark.django_db
+def test_a_conta_do_engajamento_e_a_do_projeto_nao_divergem() -> None:
+    """A projeção não pode divergir da fonte — é o que `Project.clean()` protege no modelo.
+
+    Se um dia elas divergirem, o projeto aparece na carteira de uma conta e no mandato de outra,
+    e o slug que o One deriva do `id` passa a apontar para a organização errada.
+    """
+    snapshot = portal.build_snapshot(ProjectFactory())
+    assert snapshot["project"]["account"]["id"] == snapshot["project"]["client"]["id"]
+    assert snapshot["project"]["account"]["name"] == snapshot["project"]["client"]["name"]
+
+
+@pytest.mark.django_db
+def test_as_fases_levam_estagio_canonico_gate_e_exigencia_de_gate() -> None:
+    """As três chaves da fase, e o vazio que **não** é dado faltando.
+
+    `canonical_stage` em branco é a fase operacional Biahflow sem equivalente FDE (a docstring
+    de `JourneyPhase.CanonicalStage` cita `Activation`) — nenhum default é inventado. E
+    `requires_gate` vem do template: sem ele, "exige gate e ninguém decidiu" e "não tem gate"
+    seriam o mesmo `gate_decision` vazio.
+    """
+    project = ProjectFactory()
+    journey.materialize_journey(project)
+    primeira = ProjectPhase.objects.filter(project=project).order_by("phase__position").first()
+    assert primeira is not None
+    template = primeira.phase
+    template.canonical_stage = JourneyPhase.CanonicalStage.DISCOVER
+    template.requires_gate = True
+    template.save()
+
+    sem_equivalente = JourneyPhase.objects.create(
+        name="Activation", position=999, canonical_stage="", requires_gate=False
+    )
+    ProjectPhase.objects.create(project=project, phase=sem_equivalente)
+
+    fases = {f["name"]: f for f in portal.build_snapshot(project)["journey"]["phases"]}
+
+    assert fases[template.name]["canonical_stage"] == "discover"
+    assert fases[template.name]["requires_gate"] is True
+    assert fases[template.name]["gate_decision"] == ""  # ninguém decidiu ainda
+
+    assert fases["Activation"]["canonical_stage"] == ""  # legítimo, não lacuna
+    assert fases["Activation"]["requires_gate"] is False
+    assert fases["Activation"]["gate_decision"] == ""
+
+
+@pytest.mark.django_db
+def test_gate_decision_devolve_o_que_o_gate_decidiu() -> None:
+    """O alias canônico aponta para o campo legado — mesmo valor, nome do D7.
+
+    A projeção lê `ProjectPhase.gate_decision` e não o campo antigo, o que mantém o nome legado
+    contido em `models.py` (uma ocorrência, a do próprio alias) em vez de espalhá-lo por
+    `portal.py`. O renome físico é a Fase 6; até lá, quem fala com o cliente já fala certo.
+    """
+    project = ProjectFactory()
+    journey.materialize_journey(project)
+    ativa_antes = ProjectPhase.objects.filter(
+        project=project, status=ProjectPhase.Status.ACTIVE
+    ).first()
+    assert ativa_antes is not None
+    JourneyPhase.objects.filter(pk=ativa_antes.phase_id).update(requires_gate=True)
+
+    ativa = journey.apply_gate(project, ProjectPhase.GateOutcome.CONDITIONAL_GO, notes="Ressalva.")
+    assert ativa is not None
+
+    decidida = ProjectPhase.objects.filter(
+        project=project, gate_outcome=ProjectPhase.GateOutcome.CONDITIONAL_GO
+    ).first()
+    assert decidida is not None
+    assert decidida.gate_decision == decidida.gate_outcome == "conditional_go"
+
+    fases = {f["id"]: f for f in portal.build_snapshot(project)["journey"]["phases"]}
+    assert fases[decidida.pk]["gate_decision"] == "conditional_go"
+
+
+@pytest.mark.django_db
+def test_a_situacao_interna_nao_atravessa_a_fronteira_do_cliente() -> None:
+    """`situation` colapsa `waiting_party`, que é classificação interna de delivery.
+
+    "Estamos esperando engenharia" é conversa de dentro de casa (`language-map` §3). O One
+    deriva o que precisa do par `requires_gate`/`gate_decision`.
+    """
+    project = ProjectFactory()
+    journey.materialize_journey(project)
+    serializado = json.dumps(portal.build_snapshot(project)["journey"], default=str)
+    for chave in ("situation", "waiting_party", "blocker_note", "gate_notes", "checklist_waiver"):
+        assert chave not in serializado
+
+
+# --- O carimbo da projeção (ADR 0051) -----------------------------------------
+
+
+def _carimbo(project: Project) -> tuple[int, object]:
+    project.refresh_from_db()
+    return project.projection_version, project.projection_observed_at
+
+
+@pytest.mark.django_db
+def test_salvar_o_que_emite_avanca_a_versao_e_move_a_hora() -> None:
+    """Quem muda o estado carimba. Três caminhos, três modelos, um só ponto de escrita."""
+    project = ProjectFactory()
+    versao_inicial, hora_inicial = _carimbo(project)
+    assert versao_inicial >= 1  # a criação já passou por `_emit_project`
+    assert hora_inicial is not None
+
+    project.name = "Projeto renomeado"
+    project.save()
+    versao_projeto, hora_projeto = _carimbo(project)
+    assert versao_projeto == versao_inicial + 1
+    assert hora_projeto >= hora_inicial
+
+    _milestone(project)
+    versao_marco, _ = _carimbo(project)
+    assert versao_marco == versao_projeto + 1
+
+    engagement = project.engagement
+    engagement.name = "Mandato renomeado"
+    engagement.save()
+    versao_engajamento, _ = _carimbo(project)
+    assert versao_engajamento == versao_marco + 1
+
+
+@pytest.mark.django_db
+def test_duas_leituras_seguidas_do_snapshot_nao_mudam_a_versao() -> None:
+    """**Nenhum `GET` escreve** — e é este teste que protege o desenho inteiro.
+
+    Mover o incremento para o `build_snapshot` deixaria tudo o mais verde e faria duas
+    requisições concorrentes produzirem versões iguais ou fora de ordem, que é exatamente o
+    sinal que o comparador do outro lado usa para decidir o que é obsoleto (ADR 0076 do `one`).
+    Versão repetida entre duas leituras é o caso comum deste desenho, não sintoma: a projeção
+    não mudou, e o `sync_snapshot` de lá trata empate aplicando o snapshot.
+    """
+    project = ProjectFactory()
+    project.refresh_from_db()  # a criação já carimbou; o objeto em memória é anterior a ela
+    primeira = portal.build_snapshot(project)
+    project.refresh_from_db()
+    segunda = portal.build_snapshot(project)
+
+    assert primeira["projection_version"] == segunda["projection_version"]
+    assert primeira["observed_at"] == segunda["observed_at"]
+
+    versao_antes, hora_antes = _carimbo(project)
+    client = APIClient()
+    url = reverse("portal-project-snapshot", args=[project.pk])
+    with override_settings(PORTAL_READ_TOKEN="token-secreto"):
+        um = client.get(url, HTTP_AUTHORIZATION="Bearer token-secreto").json()
+        dois = client.get(url, HTTP_AUTHORIZATION="Bearer token-secreto").json()
+
+    assert um["projection_version"] == dois["projection_version"] == versao_antes
+    assert _carimbo(project) == (versao_antes, hora_antes)
+
+
+@pytest.mark.django_db
+def test_a_versao_avanca_mesmo_com_a_flag_do_portal_desligada() -> None:
+    """O estado mudou; só o aviso não saiu (ADR 0018).
+
+    Carimbar depois da guarda de flag faria o One, ao religar a integração, receber estado novo
+    com versão velha — e **recusá-lo** por parecer obsoleto.
+    """
+    project = ProjectFactory()
+    AppSetting.objects.create(key="portal", enabled=False)
+    versao_antes, _ = _carimbo(project)
+
+    project.name = "Renomeado com o portal desligado"
+    project.save()
+
+    versao_depois, _ = _carimbo(project)
+    assert versao_depois == versao_antes + 1
+
+
+@pytest.mark.django_db
+def test_o_snapshot_le_o_carimbo_em_vez_de_calcula_lo() -> None:
+    project = ProjectFactory()
+    project.refresh_from_db()
+
+    snapshot = portal.build_snapshot(project)
+
+    assert snapshot["projection_version"] == project.projection_version
+    assert snapshot["observed_at"] == project.projection_observed_at.isoformat()
+
+
+# --- Os dois emissores que as chaves novas exigem (ADR 0003) -------------------
+
+
+@pytest.mark.django_db
+def test_renomear_um_engajamento_emite_para_todos_os_projetos_dele(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fan-out deliberado: o mandato muda o snapshot de todos os projetos, e todos precisam saber.
+
+    É o contrário do `_emit_artifact`, que escolhe **um** projeto porque só um é afetado.
+    """
+    engagement = EngagementFactory()
+    um = ProjectFactory(client=engagement.account, engagement=engagement)
+    outro = ProjectFactory(client=engagement.account, engagement=engagement)
+    de_fora = ProjectFactory()
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+    engagement.name = "Mandato renomeado"
+    engagement.save()
+
+    assert ("updated", "engagement", um.pk) in calls
+    assert ("updated", "engagement", outro.pk) in calls
+    assert ("updated", "engagement", de_fora.pk) not in calls
+
+
+@pytest.mark.django_db
+def test_editar_a_fase_do_template_emite_para_quem_a_tem_materializada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """O template atravessa desde a Issue #71 (`canonical_stage`/`requires_gate`), logo emite.
+
+    Fan-out maior que o do engajamento, e o que o justifica é a raridade: é tela de admin da
+    metodologia, não fluxo de operação. Fase arquivada no projeto já saiu do snapshot e não entra.
+    """
+    com_a_fase = ProjectFactory()
+    journey.materialize_journey(com_a_fase)
+    fase = JourneyPhase.objects.order_by("position", "id").first()
+    assert fase is not None
+
+    arquivado = ProjectFactory()
+    journey.materialize_journey(arquivado)
+    ProjectPhase.objects.filter(project=arquivado, phase=fase).update(
+        archived_at=timezone.now()
+    )
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+    fase.description = "Descrição revista pelo admin."
+    fase.save()
+
+    assert ("updated", "journey_phase", com_a_fase.pk) in calls
+    assert ("updated", "journey_phase", arquivado.pk) not in calls

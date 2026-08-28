@@ -50,3 +50,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 044 — A qualificação que virava venda
 - 045 — A hipótese e a prova eram a mesma linha
 - 046 — O engajamento entre a conta e o projeto
+- 047 — O snapshot que falava o vocabulário antigo

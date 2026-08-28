@@ -389,6 +389,19 @@ class Project(TimestampedModel):
     ai_score_meeting = models.ForeignKey(
         "Meeting", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # O carimbo da projeção que o One consome (ADR 0051). Duas colunas e uma regra: **quem
+    # carimba é quem muda o estado, não quem lê**. A rota do snapshot é um `GET`, e incrementar
+    # ali seria escrita a cada leitura — com duas requisições concorrentes produzindo versões
+    # iguais ou fora de ordem, que é justamente o sinal que o comparador do outro lado usa para
+    # descartar o obsoleto. Quem escreve é `portal.emit`, o estrangulamento por onde passam os
+    # onze receivers `_emit_*`.
+    #
+    # `observed_at` é o instante em que **este** lado observou o estado, e o nome vem de
+    # `GithubDeliveryProjection.observed_at`, a projeção inversa (GitHub → Pulse), com o mesmo
+    # sentido. Sem backfill: projeto que não mudou desde o deploy fica em `0`/`None`, e a ADR
+    # 0076 do repo `one` declara que versão ausente de um lado não recusa nada.
+    projection_version = models.PositiveIntegerField(default=0)
+    projection_observed_at = models.DateTimeField(null=True, blank=True)
 
     objects = ProjectQuerySet.as_manager()
 
@@ -2204,6 +2217,17 @@ class ProjectPhase(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.project_id} · {self.phase.name}"
+
+    @property
+    def gate_decision(self) -> str:
+        """O nome canônico do D7, apontando para o campo que a Fase 6 vai renomear.
+
+        É o alias que `docs/ontology/aliases.md` prescreve — código novo escreve o nome canônico
+        e o schema acerta depois. Existe porque a projeção do portal **emite canônico** (o One
+        nunca renomeia, `language-map` §3) e lê daqui em vez de tocar o campo legado: assim o
+        nome antigo não se espalha para mais um arquivo, e a Fase 6 renomeia um lugar só.
+        """
+        return self.gate_outcome
 
     @property
     def situation(self) -> str:

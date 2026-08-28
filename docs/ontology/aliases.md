@@ -52,6 +52,33 @@ responderam, com o mesmo payload — inclusive depois de o modelo Python trocar 
 comentário `# TODO(2026)` que sobrevive a três reorganizações do time. A ordem, não: a Fase 6 não
 começa antes da 5, e a v2 não nasce antes da 6.
 
+### 2b. O renome da Fase 6 é `RenameModel` — a pk de `Client` é identidade pública
+
+**Normativo.** `Client → Account` se faz com `RenameModel`, que preserva tabela, linhas e **pk**.
+Nunca com um modelo novo mais migração de dados, ainda que a tabela nova ficasse mais limpa.
+
+A proibição não é estética. **A pk de `Client` saiu deste repositório.** O One deriva dela o slug
+`biahflow-client-{id}` — a identidade da organização lá dentro — e o **persiste**: membership,
+projetos e documentos indexados já estão gravados contra ele. Um `Account` com pk nova faz o
+`select` por slug do outro lado não achar nada, e o sync **cria uma organização órfã ao lado** da
+que existe.
+
+O modo de falha é o pior possível: não é erro, é silêncio. Nenhum dos dois lados levanta exceção,
+o cliente perde acesso ao próprio projeto, e a organização vazia parece só um cadastro novo.
+Enquanto isso, `project.account.id` e `project.client.id` continuam iguais na projeção — hoje por
+construção (`Project.clean()` amarra `engagement.account_id == client_id`), e há teste que compara
+os dois —, o que protege a invariante de **hoje** e não alcança a de amanhã, porque a migração
+ainda não existe.
+
+**O mesmo vale para `engagement.id`**, que o One passa a derivar em `biahflow-engagement-{id}`:
+tem de ser a pk estável da linha, nunca um valor recalculável — slug, hash do nome, número de
+sequência por conta. Identificador que alguém pode recalcular é identificador que alguém vai
+recalcular diferente.
+
+Regra prática, para a fase que ainda não começou: **em toda travessia de nome, a linha e a pk
+sobrevivem; só o rótulo muda.** Uma migração que crie linha nova para o mesmo fato precisa dizer,
+no próprio arquivo, como o consumidor externo continua achando o registro antigo.
+
 ### 3. `legacy_` é o escape reservado
 
 `legacy_opportunity` e `legacy_evidencia` são nomes **legítimos em código novo**, e a guarda os

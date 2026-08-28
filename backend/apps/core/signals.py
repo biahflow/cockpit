@@ -15,7 +15,9 @@ from .models import (
     Decisao,
     DigitalEmployee,
     Document,
+    Engagement,
     Invoice,
+    JourneyPhase,
     Lead,
     Meeting,
     Milestone,
@@ -156,6 +158,45 @@ def _emit_project_phase(
     if created:
         return
     portal.emit("updated", "project_phase", instance.project_id)
+
+
+# O engajamento entrou no snapshot (Issue #71) e precisa de emissor, pela regra da ADR 0003.
+#
+# **Fan-out deliberado, e o contraste com o artefato é o argumento.** `_emit_artifact` escolhe
+# **um** projeto de propósito (emenda de 07/08/2026 na ADR 0003), porque só um é afetado: a data
+# da primeira aceitação é um fato do cliente, e um aviso basta. Aqui é o oposto — renomear ou
+# pausar um mandato muda `project.engagement` no snapshot de **todos** os projetos dele, e um
+# projeto que não recebesse o aviso ficaria exibindo o nome antigo até o próximo salvamento de
+# outra coisa. É o defeito do funcionário digital por outro eixo.
+#
+# Sem guarda de `created`: um engajamento recém-criado ainda não tem projeto (a conversão o cria
+# antes do projeto), então o laço não itera e a criação já sai de graça. O que importa é o update.
+@receiver(post_save, sender=Engagement)
+def _emit_engagement(sender: type[Engagement], instance: Engagement, **kwargs: Any) -> None:
+    for project_id in instance.projects.values_list("id", flat=True):
+        portal.emit("updated", "engagement", project_id)
+
+
+# O **template** da fase agora atravessa: `canonical_stage` e `requires_gate` saem dele, não da
+# instância (Issue #71). Editar a fase pela tela de configuração muda o snapshot de todo projeto
+# que a tem materializada, e sem este receiver nenhum deles saberia.
+#
+# É fan-out maior que o do engajamento — uma fase do template é comum a toda a carteira —, e o
+# que o justifica é a raridade: isto é tela de admin da metodologia, não fluxo de operação.
+#
+# `archived_at__isnull=True` porque a fase arquivada já saiu do snapshot daquele projeto. O
+# `distinct()` é defensivo e não corretivo — hoje a `UniqueConstraint(project, phase)` garante uma
+# linha por par, e a redundância custa nada; o que ela evita é um webhook duplicado por projeto se
+# a restrição um dia mudar de forma.
+@receiver(post_save, sender=JourneyPhase)
+def _emit_journey_phase(sender: type[JourneyPhase], instance: JourneyPhase, **kwargs: Any) -> None:
+    project_ids = (
+        ProjectPhase.objects.filter(phase=instance, archived_at__isnull=True)
+        .values_list("project_id", flat=True)
+        .distinct()
+    )
+    for project_id in project_ids:
+        portal.emit("updated", "journey_phase", project_id)
 
 
 @receiver(post_save, sender=ProjectDeliverable)
