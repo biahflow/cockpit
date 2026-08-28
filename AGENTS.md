@@ -21,7 +21,18 @@ Leia [`docs/project-context.md`](docs/project-context.md) para as
 fontes canônicas do projeto, ciclo de features, perfis de validação e gates humanos. Ele complementa
 a Engineering OS global; não a substitui.
 
-1. Leia `PRD.md`, os FDDs relevantes e ADRs antes de alterar comportamento.
+1. Leia `PRD.md`, os FDDs relevantes e ADRs antes de alterar comportamento — e leia
+   [`docs/ontology/language-map.md`](docs/ontology/language-map.md) **antes de nomear qualquer
+   coisa nova** (modelo, campo, rota, componente, prop). Ele é normativo: um conceito, um nome,
+   quatro superfícies. A §5 lista os termos banidos e a §6 as invariantes; os aliases ainda
+   vivos e a fase em que cada um morre estão em
+   [`docs/ontology/aliases.md`](docs/ontology/aliases.md). A regra é cobrada, não só escrita:
+   `backend/tests/test_vocabulario.py` (ADR 0049) reprova declaração **nova** fora do
+   vocabulário canônico, e a dívida legada que ela tolera está declarada linha a linha em
+   `docs/ontology/legacy-allowlist.txt` — arquivo que só encolhe. Precedência: a página do
+   Notion vence no **significado**, este espelho vence no **rótulo dentro do repositório**, e
+   `AGENTS.md`/`CLAUDE.md` apontam para ele sem poder enfraquecê-lo. O espelho é cópia fiel e
+   não se edita aqui.
 2. Não exponha segredos, dados pessoais ou documentos em código, testes, logs ou commits.
 3. Toda funcionalidade relevante atualiza seu FDD; decisão técnica duradoura exige ADR; mudança transversal ou incompatível exige RFC.
 4. Preserve o contrato `/api/v1/`. Toda alteração incompatível deve ser deliberada e documentada.

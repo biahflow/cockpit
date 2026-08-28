@@ -9,8 +9,12 @@ from apps.core.models import (
     Artifact,
     Client,
     Engagement,
+    Discovery,
+    DiscoverySession,
     EngineeringHandoff,
+    Evidence,
     Evidencia,
+    Finding,
     GithubDeliveryProjection,
     Invoice,
     Lead,
@@ -18,6 +22,7 @@ from apps.core.models import (
     Opportunity,
     PipelineStage,
     Processo,
+    ProcessObservation,
     ProcessoEtapa,
     Project,
     ProjectMember,
@@ -271,3 +276,64 @@ class EvidenciaFactory(factory.django.DjangoModelFactory):
     forma = Evidencia.Forma.ENTREVISTA
     rotulo = Evidencia.Rotulo.HIPOTESE
     content = "O time diz que o fechamento leva dois dias."
+
+
+class DiscoveryFactory(factory.django.DjangoModelFactory):
+    """Discovery em andamento — o estado em que quase todo teste quer o levantamento (FDD 045)."""
+
+    class Meta:
+        model = Discovery
+
+    project = factory.SubFactory(ProjectFactory)
+    scope = "Faturamento e expedição"
+    status = Discovery.Status.RUNNING
+    started_at = factory.LazyFunction(timezone.localdate)
+
+
+class DiscoverySessionFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = DiscoverySession
+
+    discovery = factory.SubFactory(DiscoveryFactory)
+    happened_at = factory.LazyFunction(timezone.now)
+    participants = "Analista financeiro, coordenadora de expedição"
+
+
+class ProcessObservationFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ProcessObservation
+
+    discovery = factory.SubFactory(DiscoveryFactory)
+    process = factory.SubFactory(ProcessoFactory)
+    observed_at = factory.LazyFunction(timezone.localdate)
+
+
+class EvidenceFactory(factory.django.DjangoModelFactory):
+    """Trecho de entrevista, com o texto **bruto** e sem conclusão nenhuma (FDD 045).
+
+    `kind` não tem default no modelo, como a `forma` da `Evidencia`; a fábrica escolhe um valor
+    explícito para não obrigar todo teste a repeti-lo, e quem testa a ausência monta o payload.
+    """
+
+    class Meta:
+        model = Evidence
+
+    account = factory.SubFactory(ClientFactory)
+    kind = Evidence.Kind.INTERVIEW
+    raw_excerpt = "A gente confere nota por nota, e no fim do mês são umas quatrocentas."
+
+
+class FindingFactory(factory.django.DjangoModelFactory):
+    """Achado nascendo **hipótese**, no espírito da `EvidenciaFactory` acima (FDD 045).
+
+    Nunca `fact` por padrão: promover exige revisor e evidência viva, e uma fábrica que entregasse
+    fatos de graça faria todo teste da invariante §6.9 começar desfazendo o que ela fez — e o
+    primeiro teste esquecido passaria a afirmar sobre um estado que a API não deixa criar.
+    """
+
+    class Meta:
+        model = Finding
+
+    account = factory.SubFactory(ClientFactory)
+    statement = "O fechamento do faturamento leva dois dias."
+    epistemic_status = Finding.EpistemicStatus.HYPOTHESIS

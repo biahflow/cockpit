@@ -163,6 +163,21 @@ Key cross-cutting patterns to preserve:
   (`ARTIFACT_TRANSITIONS` in `models.py`), linked to exactly one of opportunity/project. The four
   AI actions create it in `draft` via `_ai_run(..., artifact_kind=...)`; `Document` stays the file
   and the e-sign target. Analytics exposes `funnel.by_stage` — see FDD 016 / ADR 0008.
+- **Evidência e achado são duas coisas, e o `Discovery` diz de quando.** `Evidencia` (FDD 039)
+  guardava três coisas numa linha só — forma da fonte, afirmação interpretada e rótulo
+  epistemológico —, então a hipótese e o trecho que a sustenta eram o mesmo registro. Desde a
+  FDD 045 (ADR 0049) o par é `Evidence` (o bruto: `raw_excerpt` **ou** `reference`, mais o
+  `content_hash` que carimba o trecho) e `Finding` (a afirmação, com `epistemic_status` ∈
+  `fact`/`hypothesis`/`unknown` e M2M para as evidências). **`fact` exige revisor humano e ao menos
+  uma `Evidence` viva**: a metade do revisor está no `clean()`, a do M2M só cabe no serializer, e
+  arquivar a última evidência viva de um fato é 409. `Discovery`/`DiscoverySession`/
+  `ProcessObservation` dão tempo e autoria ao levantamento — é a `ProcessObservation` que desfaz a
+  proveniência única de `Processo.source_project`, permitindo o mesmo processo em dois Discoveries.
+  **O dual-write é obrigatório enquanto durar esta fase**: `MeetingViewSet.estruturar` grava
+  `Evidencia` **e** o par novo, porque `processos.custo_do_estado_atual` e `ProcessoDetailPage`
+  ainda leem o legado — há regressão afirmando que promover um `Finding` não move o custo. Campos
+  com nome canônico (`account`, `process`, `step`) apontam para os modelos legados; o renome físico
+  é fase posterior, e `legacy_evidencia` é o escape de mapeamento do backfill (migração `0054`).
 - **Pipeline invariants.** DB constraints enforce at most one "won" and one "lost"
   `PipelineStage`, and at most one active `Service` per product `tier`. DRF derives the
   serializer validation from these constraints — don't hand-roll a duplicate check.
@@ -257,6 +272,16 @@ do cliente reprovou 19 telas de uma vez ao chegar aqui.
 - Read `PRD.md`, the relevant FDD (`docs/fdd/`), and ADRs (`docs/adr/`) before changing
   behavior. Relevant features update their FDD; a durable technical decision needs an
   ADR; a cross-cutting or breaking change needs an RFC (`docs/rfcs/`).
+- **Read [`docs/ontology/language-map.md`](docs/ontology/language-map.md) before naming anything
+  new** — model, field, route, component, prop. It is normative: one concept, one name, four
+  surfaces. §5 lists the banned terms and §6 the invariants; the aliases still alive and the phase
+  each one dies in are in [`docs/ontology/aliases.md`](docs/ontology/aliases.md). The rule is
+  enforced, not just written: `backend/tests/test_vocabulario.py` (ADR 0049) fails on a **new**
+  declaration outside the canonical vocabulary, and the legacy debt it tolerates is listed line by
+  line in `docs/ontology/legacy-allowlist.txt` — a file that only shrinks. Precedence: the Notion
+  page wins on **meaning**, this mirror wins on the **label inside the repo**, and `CLAUDE.md` /
+  `AGENTS.md` may point at it but never weaken it. The mirror is a faithful copy and is not edited
+  here.
 - **Preserve the `/api/v1/` contract.** Any breaking change must be deliberate and
   documented. `backend/openapi.yaml` and drf-spectacular (`/api/docs/`) describe it.
 - Fix defects test-first: add a regression test in `backend/tests/regression/` (or the

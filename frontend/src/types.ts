@@ -100,6 +100,34 @@ export type EvidenciaForma = "entrevista" | "observacao" | "artefato" | "sistema
 // primeira classe — nomear o que ainda não se sabe é fazer o trabalho, não deixar de fazê-lo.
 export type EvidenciaRotulo = "fato" | "hipotese" | "desconhecido";
 export type Evidencia = { id: number; processo: number; etapa: number | null; forma: EvidenciaForma; forma_display: string; rotulo: EvidenciaRotulo; rotulo_display: string; content: string; source_meeting: number | null; registered_by: number | null };
+// O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). **Nenhuma tela consome estes tipos
+// ainda**, e isso é o recorte da fatia, não esquecimento: o dual-write mantém `ProcessoDetailPage`
+// e `ClientDetailPage` funcionando sobre `Evidencia`/`Processo`, e a interface nova (tela de
+// Discovery, painel de achados) exige Design Approval Package que não existe. Eles entram aqui
+// para que a próxima fatia não comece do zero — e para que a forma do contrato fique escrita do
+// lado do consumidor no mesmo commit em que ela nasce no servidor.
+//
+// A regra de nome da ontologia vale aqui igual: termo canônico em inglês nas quatro superfícies,
+// e o que aponta para modelo legado usa o nome canônico no campo (`account`, `process`, `step`).
+export type DiscoveryStatus = "planned" | "running" | "completed" | "cancelled";
+export type Discovery = { id: number; project: number; project_name: string; scope: string; status: DiscoveryStatus; status_display: string; started_at: string | null; completed_at: string | null; owner: number | null; created_at: string; updated_at: string };
+export type DiscoverySession = { id: number; discovery: number; meeting: number | null; happened_at: string; participants: string; source_artifact: number | null; transcript: string; created_at: string; updated_at: string };
+export type ProcessObservationKind = "initial" | "revisit" | "validation";
+export type ProcessObservation = { id: number; discovery: number; process: number; observed_at: string; observation_type: ProcessObservationKind; observation_type_display: string; source_session: number | null; created_at: string; updated_at: string };
+// As cinco formas de evidência, agora em inglês (espelho de `EvidenciaForma`). A tradução é a da
+// migração 0054, e ela é um-para-um de propósito: um sexto valor aqui seria um conceito novo.
+export type EvidenceKind = "interview" | "observation" | "artifact" | "system" | "data";
+// `raw_excerpt` é o trecho **como foi dito**, e `reference` é o localizador — um dos dois precisa
+// existir. A conclusão que a casa tirou dali mora em `Finding.statement`, nunca aqui: misturar as
+// duas refaria a fusão que este split desfaz. `content_hash` é o carimbo de integridade do trecho,
+// derivado e só de leitura.
+export type Evidence = { id: number; account: number; discovery: number | null; process: number | null; step: number | null; kind: EvidenceKind; kind_display: string; raw_excerpt: string; reference: string; source_session: number | null; source_meeting: number | null; captured_at: string; captured_by: number | null; content_hash: string; legacy_evidencia: number | null; created_at: string; updated_at: string };
+// FATO / HIPÓTESE / DESCONHECIDO com o nome canônico da ontologia (`language-map` §4). Vale aqui a
+// mesma proibição do `EvidenciaRotulo` acima e uma a mais: **um select não promove a `fact`
+// sozinho**. Promover exige revisor humano e evidência viva, e o backend responde 400 — a tela que
+// oferecer o valor sem pedir as duas coisas produz um erro que quem clica não entende.
+export type EpistemicStatus = "fact" | "hypothesis" | "unknown";
+export type Finding = { id: number; account: number; process: number | null; step: number | null; statement: string; epistemic_status: EpistemicStatus; epistemic_status_display: string; confidence: number | null; reviewed_by: number | null; reviewed_at: string | null; evidences: number[]; legacy_evidencia: number | null; created_at: string; updated_at: string };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 export type DocumentEntry = { id: number; client: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[] };
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";

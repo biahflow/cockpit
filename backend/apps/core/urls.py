@@ -23,11 +23,15 @@ from .views import (
     DecisaoViewSet,
     DigitalEmployeeBlueprintViewSet,
     DigitalEmployeeViewSet,
+    DiscoverySessionViewSet,
+    DiscoveryViewSet,
     DocumentViewSet,
     EngagementViewSet,
     EngineeringHandoffViewSet,
     EsignWebhookView,
+    EvidenceViewSet,
     EvidenciaViewSet,
+    FindingViewSet,
     GithubDeliveryProjectionViewSet,
     GithubDeliveryWebhookView,
     HealthView,
@@ -53,6 +57,7 @@ from .views import (
     PhaseDeliverableViewSet,
     PipelineStageViewSet,
     PortalProjectSnapshotView,
+    ProcessObservationViewSet,
     ProcessoEtapaViewSet,
     ProcessoViewSet,
     ProjectChecklistItemViewSet,
@@ -108,6 +113,16 @@ router.register("satisfacoes", SatisfacaoViewSet)
 router.register("processos", ProcessoViewSet)
 router.register("processo-etapas", ProcessoEtapaViewSet)
 router.register("evidencias", EvidenciaViewSet)
+# O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). As duas âncoras convivem e a rota
+# mostra isso: `discoveries` e o que pende dele são de **projeto**; `evidence` e `findings` são da
+# **conta**, como os processos logo acima. `evidence` no singular porque é substantivo incontável
+# em inglês — "evidences" é o verbo, e um plural inventado seria um sinônimo criado para soar
+# melhor, que é o que o language map proíbe.
+router.register("discoveries", DiscoveryViewSet)
+router.register("discovery-sessions", DiscoverySessionViewSet)
+router.register("process-observations", ProcessObservationViewSet)
+router.register("evidence", EvidenceViewSet, basename="evidence")
+router.register("findings", FindingViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)

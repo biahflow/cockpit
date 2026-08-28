@@ -26,6 +26,11 @@ class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ("core", "0052_backfill_qualification"),
+        # A fase 3 (`0053`/`0054`) foi escrita em paralelo a esta, e as duas saíram de `0050`.
+        # Depender das duas pontas aqui fecha as folhas sem migração de merge: nada nesta migração
+        # toca `Evidence`/`Finding`/`Discovery`, então a ordem entre elas é indiferente — o que não
+        # é indiferente é o `makemigrations --check` reprovando um grafo com duas cabeças.
+        ("core", "0054_backfill_evidence_finding"),
     ]
 
     operations = [

@@ -1,0 +1,129 @@
+# Allowlist do vocabulário legado — dívida declarada, não permissão
+# =============================================================================================
+# Formato: <caminho relativo ao repo>::<id-da-regra>::<identificador>::<contagem>
+# `#` comenta a linha inteira; linha vazia separa bloco.
+#
+# Cada linha aqui é um nome que o repositório ainda diz errado e que a guarda
+# `backend/tests/test_vocabulario.py` (ADR 0049) deixa passar **por ora**. A lista nasceu com o
+# estado de `main` @ 80da2a5 — exatamente as ocorrências que a guarda encontrava naquele commit,
+# nem uma a mais — e três testes a mantêm honesta:
+#
+#   * `test_nenhum_termo_banido_novo` reprova o que não está aqui — e também a ocorrência **a
+#     mais** numa chave que já está;
+#   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
+#     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 59), que conta **dívidas
+#     distintas** — linhas deste arquivo, não ocorrências no código. Os dois números não medem a
+#     mesma coisa.
+#
+# A entrada **não carrega número de linha**, de propósito: dívida declarada não pode ser reaberta
+# por alguém ter inserido um import acima dela. Ela carrega a **contagem**, que é a outra metade
+# da mesma decisão: sem o número, `models.py::client-como-organizacao::client` isentaria as doze
+# ocorrências de hoje **e a décima terceira** — e `models.py` é onde todo modelo novo nasce.
+# Medido por sabotagem (ADR 0027): um `client = models.ForeignKey(...)` acrescentado ao fim de
+# `models.py` passava em silêncio na primeira versão desta guarda.
+#
+# Pagar dívida em parte **abaixa o número da linha**; pagar inteira **remove a linha**. As duas
+# coisas são cobradas, e a mensagem do teste diz qual número escrever.
+#
+# Quem paga cada bloco está em `docs/ontology/aliases.md`. Resumo: renome físico é a Fase 6, a
+# remoção do alias de rota é a `/api/v2/`, e o split Evidence/Finding é a Fase 3.
+
+# ---------------------------------------------------------------------------------------------
+# `Opportunity` sem qualificador — Fase 6 (renome físico para `CommercialOpportunity`).
+# A rota `/api/v1/opportunities/` sobrevive ao renome como alias e só morre na `/api/v2/`.
+# `Project.ai_opportunity` é caso à parte: o papel de prioridade passa a `PriorityAssessment` na
+# Fase 4 (language-map §5), e o campo em si é renomeado com o resto na Fase 6.
+# ---------------------------------------------------------------------------------------------
+backend/apps/core/models.py::opportunity-sem-qualificador::Opportunity::1
+backend/apps/core/models.py::opportunity-sem-qualificador::ai_opportunity::1
+backend/apps/core/models.py::opportunity-sem-qualificador::opportunity::6
+backend/apps/core/serializers.py::opportunity-sem-qualificador::OpportunitySerializer::1
+backend/apps/core/urls.py::opportunity-sem-qualificador::opportunities::1
+backend/apps/core/views.py::opportunity-sem-qualificador::OpportunityViewSet::1
+frontend/src/types.ts::opportunity-sem-qualificador::Opportunity::1
+
+# ---------------------------------------------------------------------------------------------
+# `Client` como organização — Fase 6 (renome físico para `Account`).
+# A Fase 1 já escreve `Qualification.account` apontando para o modelo legado: campo novo usa o
+# nome canônico, e é por isso que a regra casa `client` e nunca `account`.
+# A rota `/api/v1/clients/` só morre na `/api/v2/`.
+# `client_consent` é consentimento da organização; vira `account_consent` no mesmo renome.
+# ---------------------------------------------------------------------------------------------
+backend/apps/core/models.py::client-como-organizacao::Client::1
+backend/apps/core/models.py::client-como-organizacao::client::11
+backend/apps/core/models.py::client-como-organizacao::client_consent::1
+backend/apps/core/serializers.py::client-como-organizacao::ClientSerializer::1
+backend/apps/core/urls.py::client-como-organizacao::clients::1
+backend/apps/core/views.py::client-como-organizacao::ClientViewSet::1
+frontend/src/types.ts::client-como-organizacao::Client::1
+frontend/src/types.ts::client-como-organizacao::ClientOverview::1
+frontend/src/types.ts::client-como-organizacao::ClientStatus::1
+
+# ---------------------------------------------------------------------------------------------
+# `GateOutcome` / `gate_outcome` — Fase 6 (renome para `GateDecision`, decisão D7 do language-map).
+# Esta é a única regra que casa **referência** e não declaração, porque o identificador inteiro
+# está errado: não existe uso legítimo do nome antigo. O preço é um bloco maior — um par de
+# entradas por arquivo que toca o enum — e o ganho é que arquivo novo não herda o nome.
+# ---------------------------------------------------------------------------------------------
+backend/apps/core/journey.py::outcome-como-decisao-de-gate::GateOutcome::7
+backend/apps/core/journey.py::outcome-como-decisao-de-gate::gate_outcome::13
+backend/apps/core/models.py::outcome-como-decisao-de-gate::GateOutcome::4
+backend/apps/core/models.py::outcome-como-decisao-de-gate::gate_outcome::8
+backend/apps/core/serializers.py::outcome-como-decisao-de-gate::gate_outcome::5
+backend/apps/core/views.py::outcome-como-decisao-de-gate::GateOutcome::2
+backend/apps/core/views.py::outcome-como-decisao-de-gate::gate_outcome::1
+frontend/src/pages/ProjectDetailPage.tsx::outcome-como-decisao-de-gate::GateOutcome::6
+frontend/src/pages/ProjectDetailPage.tsx::outcome-como-decisao-de-gate::gate_outcome::6
+frontend/src/types.ts::outcome-como-decisao-de-gate::GateOutcome::3
+frontend/src/types.ts::outcome-como-decisao-de-gate::gate_outcome::2
+
+# ---------------------------------------------------------------------------------------------
+# Nome de modelo em português.
+# Dois grupos com prazos diferentes:
+#   * `Processo`, `ProcessoEtapa` e `Evidencia` têm nome canônico definido (`Process`,
+#     `ProcessStep`, `Evidence`/`Finding`, tabela mestra §2). A Fase 3 divide `Evidencia` em
+#     Evidence + Finding; o renome físico dos três é a Fase 6.
+#   * `Pendencia`, `Decisao`, `Risco`, `Satisfacao` e a família `Cobranca*` **ainda não têm nome
+#     canônico** — a Ontology v1 não os cobre. Registrá-los aqui é o que impede que a ausência de
+#     decisão vire ausência de dívida. O nome entra primeiro no language-map (§8), depois no
+#     Pulse; até lá a linha fica.
+# ---------------------------------------------------------------------------------------------
+backend/apps/core/models.py::modelo-em-portugues::CobrancaContato::1
+backend/apps/core/models.py::modelo-em-portugues::CobrancaSinal::1
+backend/apps/core/models.py::modelo-em-portugues::CobrancaSuspensao::1
+backend/apps/core/models.py::modelo-em-portugues::Decisao::1
+backend/apps/core/models.py::modelo-em-portugues::Evidencia::1
+backend/apps/core/models.py::modelo-em-portugues::Pendencia::1
+backend/apps/core/models.py::modelo-em-portugues::Processo::1
+backend/apps/core/models.py::modelo-em-portugues::ProcessoEtapa::1
+backend/apps/core/models.py::modelo-em-portugues::Risco::1
+backend/apps/core/models.py::modelo-em-portugues::Satisfacao::1
+backend/apps/core/serializers.py::modelo-em-portugues::CobrancaContatoSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::CobrancaSuspensaoSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::DecisaoSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::EvidenciaSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::PendenciaSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::ProcessoEtapaSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::ProcessoSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::RiscoSerializer::1
+backend/apps/core/serializers.py::modelo-em-portugues::SatisfacaoSerializer::1
+backend/apps/core/views.py::modelo-em-portugues::CobrancaSuspensaoViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::CobrancaViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::DecisaoViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::EvidenciaViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::PendenciaViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::ProcessoEtapaViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::ProcessoViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::RiscoViewSet::1
+backend/apps/core/views.py::modelo-em-portugues::SatisfacaoViewSet::1
+
+# ---------------------------------------------------------------------------------------------
+# Legado congelado: as quatro classes que a §5 nomeia como banidas e que existem hoje.
+# Redundante com o bloco acima de propósito — `modelo-em-portugues` é heurística e pode ser
+# estreitada; esta regra é lista fechada e não pode. Fase 3 (split) + Fase 6 (renome).
+# ---------------------------------------------------------------------------------------------
+backend/apps/core/models.py::legado-congelado::Evidencia::1
+backend/apps/core/models.py::legado-congelado::GateOutcome::1
+backend/apps/core/models.py::legado-congelado::Processo::1
+backend/apps/core/models.py::legado-congelado::ProcessoEtapa::1

@@ -89,10 +89,14 @@ from .models import (
     Decisao,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
+    Discovery,
+    DiscoverySession,
     Document,
     Engagement,
     EngineeringHandoff,
+    Evidence,
     Evidencia,
+    Finding,
     GithubDeliveryProjection,
     Invitation,
     Invoice,
@@ -110,6 +114,7 @@ from .models import (
     PhaseEvent,
     PipelineStage,
     Processo,
+    ProcessObservation,
     ProcessoEtapa,
     Project,
     ProjectChecklistItem,
@@ -143,10 +148,14 @@ from .serializers import (
     DecisaoSerializer,
     DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
+    DiscoverySerializer,
+    DiscoverySessionSerializer,
     DocumentSerializer,
     EngagementSerializer,
     EngineeringHandoffSerializer,
+    EvidenceSerializer,
     EvidenciaSerializer,
+    FindingSerializer,
     GithubDeliveryProjectionSerializer,
     InvitationSerializer,
     InvoiceSerializer,
@@ -168,6 +177,7 @@ from .serializers import (
     PhaseDeliverableSerializer,
     PhaseEventSerializer,
     PipelineStageSerializer,
+    ProcessObservationSerializer,
     ProcessoEtapaSerializer,
     ProcessoSerializer,
     ProfileAvatarSerializer,
@@ -2392,6 +2402,13 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
         estado de rascunho — a segunda extração dobraria o mapa da operação do cliente **em
         silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
         e como sair dele, que é para o que o `StateConflict` existe.
+
+        **Desde a FDD 045 a gravação é dupla, e a forma da resposta não muda.** Além de
+        `Processo`/`ProcessoEtapa`/`Evidencia`, a mesma transação escreve o par do split: uma
+        `Evidence` por processo, que diz de onde o achado veio, e um `Finding` por achado, que diz
+        o que ele afirma — sempre em `hypothesis`, pela mesma razão que a `Evidencia` nasce
+        `hipotese`. O legado continua porque o custo do estado atual e a tela ainda leem dele; a
+        resposta segue `{"processos": [...]}` e nenhuma tela precisou mudar.
         """
         meeting = self.get_object()
         if not meeting.transcript.strip():
@@ -2432,18 +2449,46 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                     ProcessoEtapa(processo=processo, position=posicao, **etapa)
                     for posicao, etapa in enumerate(bruto["etapas"], start=1)
                 ])
-                Evidencia.objects.bulk_create([
-                    Evidencia(
-                        processo=processo,
-                        # Sem etapa de propósito: o modelo não distingue com confiança a qual delas
-                        # o achado pertence, e um vínculo errado é pior que vínculo nenhum.
-                        etapa=None,
-                        rotulo=Evidencia.Rotulo.HIPOTESE,
-                        forma=Evidencia.Forma.ENTREVISTA,
-                        content=achado, source_meeting=meeting, registered_by=request.user,
+                if bruto["achados"]:
+                    # **A fonte, uma por processo: a reunião.** `raw_excerpt` fica vazio de
+                    # propósito e o que sobra é o localizador — o modelo devolve o achado já
+                    # interpretado, nunca o trecho que o gerou, e gravar a conclusão aqui refaria
+                    # a fusão que o split desfaz (FDD 045). A linha por achado é o `Finding` logo
+                    # abaixo; a `Evidence` diz só de onde ele veio.
+                    evidence = Evidence.objects.create(
+                        account=client, process=processo, kind=Evidence.Kind.INTERVIEW,
+                        reference=(
+                            meeting.recording_url
+                            or f"Reunião #{meeting.pk} — {meeting.title}"
+                        )[:500],
+                        source_meeting=meeting, captured_by=request.user,
                     )
-                    for achado in bruto["achados"]
-                ])
+                    for achado in bruto["achados"]:
+                        # **Dual-write, e nenhuma das duas gravações é opcional** (FDD 045): a
+                        # `Evidencia` legada continua porque `processos.custo_do_estado_atual` e a
+                        # tela `ProcessoDetailPage` leem dela — desligá-la aqui derrubaria as
+                        # duas. O par novo nasce ao lado, e o `legacy_evidencia` do `Finding`
+                        # guarda de qual linha fundida ele saiu: é o vínculo que permite
+                        # descontinuar o legado depois sem perder o rastro.
+                        #
+                        # `create` no lugar do `bulk_create` de antes por causa desse ponteiro: o
+                        # `bulk_create` não devolve a chave em todo backend, e sem a chave o
+                        # mapeamento viraria adivinhação por posição.
+                        legado = Evidencia.objects.create(
+                            processo=processo,
+                            # Sem etapa de propósito: o modelo não distingue com confiança a qual
+                            # delas o achado pertence, e vínculo errado é pior que vínculo nenhum.
+                            etapa=None,
+                            rotulo=Evidencia.Rotulo.HIPOTESE,
+                            forma=Evidencia.Forma.ENTREVISTA,
+                            content=achado, source_meeting=meeting, registered_by=request.user,
+                        )
+                        achado_novo = Finding.objects.create(
+                            account=client, process=processo, statement=achado,
+                            epistemic_status=Finding.EpistemicStatus.HYPOTHESIS,
+                            legacy_evidencia=legado,
+                        )
+                        achado_novo.evidences.add(evidence)
                 criados.append(processo)
             return {"processos": ProcessoSerializer(criados, many=True).data}
 
@@ -2807,6 +2852,174 @@ STATUS_POR_OUTCOME = {
     Qualification.Outcome.NURTURE: Lead.Status.CONTACTED,
     Qualification.Outcome.DISQUALIFIED: Lead.Status.DISCARDED,
 }
+
+class DiscoveryViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """O Discovery como unidade de levantamento (FDD 045).
+
+    **Com `ProjectScopedMixin`**, ao contrário do `ProcessoViewSet` logo acima, e a diferença é a
+    âncora: o processo é do cliente e sobrevive à venda; o Discovery é o levantamento contratado,
+    e ele tem projeto. Quem participa do projeto vê e escreve o Discovery dele — leitura e escrita
+    pela mesma guarda, como em todo recurso de projeto.
+    """
+
+    resource = "discovery"
+    queryset = Discovery.objects.select_related("project", "project__client", "owner").all()
+    serializer_class = DiscoverySerializer
+    filter_fields = ("project", "owner")
+    filter_exact_fields = ("status",)
+
+
+class DiscoverySessionViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """As sessões de um Discovery (FDD 045)."""
+
+    resource = "discovery_session"
+    queryset = DiscoverySession.objects.select_related(
+        "discovery", "discovery__project", "meeting"
+    ).all()
+    serializer_class = DiscoverySessionSerializer
+    project_path = "discovery__project"  # a sessão não carrega o projeto direto
+    scope_payload_field = "discovery"
+    filter_fields = ("discovery", "meeting")
+
+    def scoped_project(self, validated_data: dict) -> Project | None:
+        discovery = validated_data.get("discovery")
+        return discovery.project if discovery else None
+
+
+class ProcessObservationViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """A observação de um processo dentro de um Discovery (FDD 045).
+
+    Duas fronteiras, e não uma: o Discovery traz a do **projeto** (é o `ProjectScopedMixin`), e o
+    processo traz a da **conta**. Sem a segunda, uma requisição bastaria para pendurar o processo
+    de outro cliente num Discovery próprio — o mesmo caminho que `_exige_cliente_no_escopo` fecha
+    nos três recursos da FDD 039.
+    """
+
+    resource = "process_observation"
+    queryset = ProcessObservation.objects.select_related(
+        "discovery", "discovery__project", "process", "process__client", "source_session"
+    ).all()
+    serializer_class = ProcessObservationSerializer
+    project_path = "discovery__project"
+    scope_payload_field = "discovery"
+    filter_fields = ("discovery", "process")
+    filter_exact_fields = ("observation_type",)
+
+    def scoped_project(self, validated_data: dict) -> Project | None:
+        discovery = validated_data.get("discovery")
+        return discovery.project if discovery else None
+
+    def perform_create(self, serializer: ProcessObservationSerializer) -> None:
+        self._exige_processo_no_escopo(serializer.validated_data)
+        # `super()` e não `serializer.save()`: quem checa o projeto é o mixin, e reimplementar o
+        # `perform_create` aqui era exatamente como a guarda de escopo passava despercebida.
+        super().perform_create(serializer)
+
+    def perform_update(self, serializer: ProcessObservationSerializer) -> None:
+        if "process" in serializer.validated_data:
+            self._exige_processo_no_escopo(serializer.validated_data)
+        super().perform_update(serializer)
+
+    def _exige_processo_no_escopo(self, validated_data: dict) -> None:
+        processo = validated_data.get("process")
+        _exige_cliente_no_escopo(self.request.user, processo.client if processo else None)
+
+
+class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O dado bruto que sustenta um achado (FDD 045).
+
+    **Sem `ProjectScopedMixin`**, como o `ProcessoViewSet`: a evidência é da conta, e o Discovery
+    dela é opcional — uma evidência levantada fora de um Discovery formal continua sendo
+    evidência. O recorte é o mesmo dos três recursos da FDD 039, com a conta alcançada pelo
+    `account` em vez de pelo processo pai.
+    """
+
+    resource = "evidence"
+    queryset = Evidence.objects.select_related(
+        "account", "discovery", "process", "step", "source_session", "source_meeting",
+        "captured_by",
+    ).all()
+    serializer_class = EvidenceSerializer
+    filter_fields = ("account", "discovery", "process", "step", "source_session")
+    # `kind` em `filter_exact_fields` pelo motivo do `rotulo` na `EvidenciaViewSet`: o teste de
+    # dígito de `filter_fields` derrubaria `?kind=interview` no chão sem erro nenhum, e a lista
+    # voltaria inteira.
+    filter_exact_fields = ("kind",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "account__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: EvidenceSerializer) -> None:
+        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        serializer.save(captured_by=self.request.user)
+
+    def perform_update(self, serializer: EvidenceSerializer) -> None:
+        if "account" in serializer.validated_data:
+            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance: Evidence) -> None:
+        """Recusa arquivar a **última** evidência viva de um achado que já é fato (FDD 045).
+
+        A invariante §6.9 da ontologia diz que um `Finding` em `fact` tem revisor humano e ao
+        menos uma `Evidence` viva. Arquivar a última sem olhar deixaria o fato de pé sem nada
+        embaixo — e nada ficaria vermelho: o achado continuaria dizendo "fato" na tela e na
+        proposta, com a evidência escondida. É o mesmo defeito que a FDD 025 chama de órfão
+        visível, aqui com uma agravante: o órfão é uma **afirmação** sobre a operação do cliente.
+
+        Recusar em vez de rebaixar o achado, pelo argumento da exclusão de etapa do pipeline:
+        rebaixar em silêncio desfaria uma promoção que uma pessoa fez, sem que ela pedisse. O 409
+        diz qual é o estado que impede e como sair dele — rebaixe o achado, ou registre outra
+        evidência.
+        """
+        presos = [
+            finding
+            for finding in instance.findings.filter(
+                epistemic_status=Finding.EpistemicStatus.FACT, archived_at__isnull=True
+            )
+            if not finding.evidences.filter(archived_at__isnull=True)
+            .exclude(pk=instance.pk)
+            .exists()
+        ]
+        if presos:
+            raise StateConflict(
+                f"Esta é a última evidência viva de {len(presos)} achado(s) registrado(s) como "
+                "fato. Rebaixe o achado para hipótese ou registre outra evidência antes de "
+                "arquivar esta."
+            )
+        instance.archive()
+
+
+class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
+
+    Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
+    transição vivem no serializer, que é onde o M2M já existe.
+    """
+
+    resource = "finding"
+    queryset = Finding.objects.select_related(
+        "account", "process", "step", "reviewed_by"
+    ).prefetch_related("evidences").all()
+    serializer_class = FindingSerializer
+    filter_fields = ("account", "process", "step")
+    filter_exact_fields = ("epistemic_status",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "account__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: FindingSerializer) -> None:
+        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        serializer.save()
+
+    def perform_update(self, serializer: FindingSerializer) -> None:
+        if "account" in serializer.validated_data:
+            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        super().perform_update(serializer)
 
 
 class LeadViewSet(ArchiveModelViewSet):
