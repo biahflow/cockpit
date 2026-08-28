@@ -52,28 +52,57 @@ responderam, com o mesmo payload — inclusive depois de o modelo Python trocar 
 comentário `# TODO(2026)` que sobrevive a três reorganizações do time. A ordem, não: a Fase 6 não
 começa antes da 5, e a v2 não nasce antes da 6.
 
-### 2b. O renome da Fase 6 é `RenameModel` — a pk de `Client` é identidade pública
+### 2b. Seis pks são identidade pública — e a Fase 6 tem de preservá-las
 
-**Normativo.** `Client → Account` se faz com `RenameModel`, que preserva tabela, linhas e **pk**.
-Nunca com um modelo novo mais migração de dados, ainda que a tabela nova ficasse mais limpa.
+**Normativo.** Todo renome de modelo desta migração se faz com `RenameModel`, que preserva tabela,
+linhas e **pk**. Nunca com modelo novo mais migração de dados, ainda que a tabela nova ficasse mais
+limpa.
 
-A proibição não é estética. **A pk de `Client` saiu deste repositório.** O One deriva dela o slug
-`biahflow-client-{id}` — a identidade da organização lá dentro — e o **persiste**: membership,
-projetos e documentos indexados já estão gravados contra ele. Um `Account` com pk nova faz o
-`select` por slug do outro lado não achar nada, e o sync **cria uma organização órfã ao lado** da
-que existe.
+A proibição não é estética. **Estas pks saíram deste repositório.** O snapshot do portal
+(`portal.build_snapshot`) emite onze ids, e o One deriva chave de identidade de seis deles e a
+**persiste** — medido no código de lá em 28/08/2026, não estimado:
 
-O modo de falha é o pior possível: não é erro, é silêncio. Nenhum dos dois lados levanta exceção,
-o cliente perde acesso ao próprio projeto, e a organização vazia parece só um cadastro novo.
+| pk daqui | o que o One persiste | o que quebra se ela mudar |
+| --- | --- | --- |
+| `Client` (→ `Account`) | `organization.slug` = `biahflow-client-{id}` | organização órfã: o cliente perde acesso ao projeto, em silêncio |
+| `Project` | `project.slug` = `biahflow-{id}` | o projeto inteiro é recriado ao lado, com membership, documentos indexados e histórico apontando para a linha velha |
+| `Engagement` | `engagement.slug` = `biahflow-engagement-{id}` | duplicata do programa; os projetos ficam apontando para o antigo |
+| `ProjectDeliverable` | `phase_deliverable.external_ref` | **o pior dos seis — ver abaixo** |
+| `Document` | `document.external_id` | documento duplicado e reindexado; citação já dada ao cliente passa a apontar para a linha antiga |
+| `Pendencia` | `pending_item.external_ref` | pendência duplicada, e o cliente recebe o aviso de novo |
+
+**O entregável é o pior, e vale saber por quê.** O `external_ref` dele é o caminho da rota de
+aceite do One (`/api/v1/me/deliverables/{external_ref}/acceptance`) e é por ele — **não por chave
+estrangeira** (ADR 0077 de lá) — que a tabela de aceites se liga ao entregável. Aquela tabela
+guarda a decisão do cliente: quem aprovou, quando, e o comentário de quem pediu ajuste. Se a pk
+mudar, o registro da aprovação não some: ele **desgruda**, e passa a ser o aceite de um entregável
+que ninguém mais acha. É o único dos seis em que o dado órfão é uma afirmação que o cliente fez.
+
+Duas notas que completam o inventário, e que existem para ninguém generalizar demais:
+
+- **`Meeting` não guarda id externo de propósito** — o One a recria por inteiro a cada sync. A pk
+  de reunião pode mudar à vontade.
+- **`notification.dedupe_key` congela alguns desses ids na linha** (`document:{external_id}`,
+  `pending:{external_ref}:opened`). A consequência ali é de outra natureza e menor: não há órfão,
+  há **reaviso** — o cliente recebe de novo um aviso que já tinha lido.
+
+Os cinco ids restantes que o snapshot emite (`ProjectPhase`, `Milestone`, `Decisao`,
+`DigitalEmployee`, `Meeting`) **não** são persistidos hoje do lado de lá. Isso é uma medição, não
+uma garantia: se o One passar a derivar chave de um deles, ele entra nesta tabela **antes** de
+entrar no código. A fronteira que importa é o snapshot — id que atravessa é id que alguém pode
+começar a guardar.
+
+O modo de falha, em todos os casos, é o pior possível: não é erro, é silêncio. Nenhum dos dois
+lados levanta exceção, e o registro duplicado parece apenas um cadastro novo.
+
 Enquanto isso, `project.account.id` e `project.client.id` continuam iguais na projeção — hoje por
 construção (`Project.clean()` amarra `engagement.account_id == client_id`), e há teste que compara
-os dois —, o que protege a invariante de **hoje** e não alcança a de amanhã, porque a migração
-ainda não existe.
+os dois. Isso protege a invariante de **hoje** e não alcança a de amanhã, porque a migração ainda
+não existe.
 
-**O mesmo vale para `engagement.id`**, que o One passa a derivar em `biahflow-engagement-{id}`:
-tem de ser a pk estável da linha, nunca um valor recalculável — slug, hash do nome, número de
-sequência por conta. Identificador que alguém pode recalcular é identificador que alguém vai
-recalcular diferente.
+**Identidade tem de ser a pk estável da linha**, nunca valor recalculável — slug, hash do nome,
+número de sequência por conta. Identificador que alguém pode recalcular é identificador que alguém
+vai recalcular diferente.
 
 Regra prática, para a fase que ainda não começou: **em toda travessia de nome, a linha e a pk
 sobrevivem; só o rótulo muda.** Uma migração que crie linha nova para o mesmo fato precisa dizer,
