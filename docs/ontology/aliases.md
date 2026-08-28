@@ -144,6 +144,32 @@ Regra prática, para a fase que ainda não começou: **em toda travessia de nome
 sobrevivem; só o rótulo muda.** Uma migração que crie linha nova para o mesmo fato precisa dizer,
 no próprio arquivo, como o consumidor externo continua achando o registro antigo.
 
+### 2c. Campo renomeia; **chave de payload** não
+
+A #67 renomeia o campo junto da classe — `Document.opportunity` vira
+`Document.commercial_opportunity`, `Contact.client` vira `Contact.account`. É `RenameField`, que
+renomeia coluna e preserva linha e pk.
+
+**O que não muda é o corpo da requisição.** Cada chave legada continua saindo no `GET` e continua
+sendo aceita no `POST`/`PATCH`, com um mecanismo só para todas elas, e não uma cópia por
+serializer:
+
+- **leitura** — a chave antiga é um campo declarado com `source=` apontando para o canônico,
+  `read_only=True`. As duas saem, com o mesmo valor.
+- **escrita** — um mixin de serializer normaliza a chave antiga para a canônica antes da
+  validação. Quando as duas vêm no mesmo corpo, **a canônica vence**: um corpo com as duas é
+  confusão do chamador, e resolver pela nova é o que não trava quem já migrou. É a mesma regra que
+  `apply-gate` usa desde a fatia 1.
+
+O mecanismo é um só porque a alternativa é `if` de compatibilidade espalhado por dezessete
+serializers, e o décimo oitavo esquece — que é a mesma razão de `StatusDot.tsx` guardar os mapas de
+estado num lugar em vez de um por tela (ADR 0026).
+
+Cada alias de escrita precisa de regressão. Sem ela, a linha do serializer não tem chamador
+**dentro** do repositório — a SPA escreve o nome canônico — e a próxima varredura atrás do último
+resquício do nome antigo a remove achando que está pagando dívida. Estaria quebrando a `/api/v1/`
+em silêncio, no único lugar onde nada aqui dentro fica vermelho.
+
 ### 3. `legacy_` é o escape reservado
 
 `legacy_opportunity` e `legacy_evidencia` são nomes **legítimos em código novo**, e a guarda os
