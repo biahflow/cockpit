@@ -4,8 +4,15 @@
 identificador novo contém `opportunity` sem qualificador", é escrever um `grep opportunity` e
 reprovar a linha. Isso reprovaria 460 ocorrências de código legítimo: um `self.opportunity`, um
 `opportunity_id` de filtro, um `from .models import Opportunity` são *usos* do modelo que existe
-hoje, e o modelo existe hoje porque o renome físico é a Fase 6. Uma guarda que reprova o que o
-repositório precisa fazer para funcionar é desligada na primeira semana, e aí não protege nada.
+hoje, e o modelo ainda existe sob o nome antigo enquanto a fatia da issue #67 que o renomeia não
+chegou. Uma guarda que reprova o que o repositório precisa fazer para funcionar é desligada na
+primeira semana, e aí não protege nada.
+
+"Renome físico" era um termo que significava duas coisas, e a **ADR 0052** o desfez em três, com
+prazos distintos: o nome da **classe** é a issue #67 (uma fatia por PR), o nome da **tabela** é a
+Fase 6, e a **rota** com a **chave de payload** é a `/api/v2/`. A primeira fatia já passou —
+`GateOutcome` virou `GateDecision` e o campo virou `gate_decision`, restando na allowlist só a
+chave de payload que a v1 promete.
 
 O que a invariante §6 proíbe é **batizar** coisa nova com o nome errado. Batizar tem forma
 sintática: `class X`, `campo = models.…`, `router.register(...)`, `path(...)`, `type X`,
@@ -23,7 +30,9 @@ Três exceções são deliberadas e as fases seguintes dependem delas (ver `docs
   `client`, nunca `account`.
 
 `GateOutcome`/`gate_outcome` é a única regra em que a **referência** é o problema: ali o
-identificador inteiro está errado, não o contexto — não existe uso legítimo do nome antigo.
+identificador inteiro está errado, não o contexto — não existe uso legítimo do nome antigo dentro
+do código. A exceção é a chave de payload que a `/api/v1/` promete, e ela está declarada na
+allowlist, sozinha, desde que a fatia 1 da #67 pagou o resto.
 
 A allowlist (`docs/ontology/legacy-allowlist.txt`) nasce com o estado de `main`, nem uma entrada a
 mais, e três testes a mantêm honesta: o que ela isenta precisa existir (senão a linha sai), e o
@@ -329,7 +338,7 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # onze delas abaixa a contagem daquela linha sem mexer neste teto. **Este número só desce.**
 # Baixá-lo é o trabalho das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada
 # linha aqui é um nome que o repositório ainda diz errado.
-TETO_DA_ALLOWLIST = 59
+TETO_DA_ALLOWLIST = 48
 
 
 def test_nenhum_termo_banido_novo() -> None:

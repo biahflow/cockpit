@@ -65,11 +65,12 @@ teste fixa os dois casos lado a lado justamente para que o próximo leitor não 
 gate e ninguém decidiu" de "não tem gate". Sem ele os dois casos são o mesmo `gate_decision`
 vazio, e a barra da jornada não teria como mostrar uma decisão pendente.
 
-**`gate_decision` é o nome do D7 apontando para o campo que a Fase 6 vai renomear.** O modelo ainda
-tem `gate_outcome`; `ProjectPhase.gate_decision` é a propriedade canônica, na forma que
-`docs/ontology/aliases.md` prescreve, e é por ela que a projeção lê. Custo assumido e escrito na
-PR: uma ocorrência a mais do nome legado em `models.py` (o corpo do alias), que é o que permite
-remover todas as outras na Fase 6.
+**`gate_decision` é o nome do D7.** Quando esta fatia foi escrita o modelo ainda tinha
+`gate_outcome`, e a projeção lia por uma **propriedade-alias** `ProjectPhase.gate_decision`, na
+forma que `docs/ontology/aliases.md` prescreve — custo assumido de uma ocorrência a mais do nome
+legado em `models.py` (o corpo do alias), que era o que permitia remover todas as outras. O campo
+foi renomeado depois, na issue #67 (ADR 0052, emenda abaixo): a propriedade sumiu e a projeção lê
+o campo. **A chave emitida nunca mudou**, que é a razão de o alias ter existido.
 
 **`situation` fica de fora.** Ela colapsa `waiting_party`, que é classificação interna de delivery
 ("estamos esperando engenharia") e não atravessa a fronteira do cliente (`language-map` §3).
@@ -145,7 +146,9 @@ dezenas de chaves e muda o que "chave nova" significa — e merece decisão pró
 ## Fora de escopo
 
 - Remover `project.client` do snapshot (é a `/api/v2/`, Fase 6).
-- Renomear `gate_outcome` no modelo (Fase 6). A propriedade `gate_decision` é alias, não renome.
+- Renomear `gate_outcome` no modelo. Era Fase 6 quando esta fatia foi escrita, e a propriedade
+  `gate_decision` era alias, não renome; a ADR 0052 antecipou o renome para a issue #67, e ele
+  aconteceu na fatia 1 dela (ver a emenda abaixo).
 - Expor `situation`, `waiting_party`, `blocker_note`, `gate_notes` ou `checklist_waiver`.
 - Criar schema de resposta para a rota do snapshot no `openapi.yaml` — ela segue sem corpo
   documentado, como antes.
@@ -157,3 +160,18 @@ dezenas de chaves e muda o que "chave nova" significa — e merece decisão pró
 - ADR 0003 (emenda de 28/08/2026) e ADR 0027 — a regra do emissor e a guarda derivada dela.
 - ADR 0076 do repo `one` — o leitor que existia antes do produtor.
 - `docs/ontology/language-map.md` §2, §3 e D7; `docs/ontology/aliases.md`.
+
+## Emenda (28/08/2026) — a propriedade-alias virou o próprio campo
+
+A issue #67, fatia 1, renomeou `ProjectPhase.gate_outcome` para `gate_decision` (decisão D7,
+autorizada pela ADR 0052, migração `0060`). Com isso a **propriedade-alias que esta fatia criou
+deixou de existir**, e não por remoção: o campo passou a ter o nome dela.
+
+**O snapshot não muda em nada.** `portal.build_snapshot` continua emitindo `gate_decision` com o
+mesmo valor; a única diferença é que ele lê o campo canônico direto em vez da propriedade. É o
+desfecho que o alias antecipava — ele existia justamente para o One nunca ver o nome antigo e não
+precisar renomear depois (`language-map` §3), e `apps/core/tests/test_portal.py` guarda a chave
+emitida, não o caminho de leitura.
+
+O que **continua** fora de escopo é o resto da lista acima: `project.client` só sai na `/api/v2/`,
+e a chave de payload `gate_outcome` sobrevive na `/api/v1/` como alias de leitura pelo mesmo prazo.

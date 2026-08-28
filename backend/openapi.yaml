@@ -10412,12 +10412,22 @@ components:
     ApplyGate:
       type: object
       properties:
+        decision:
+          $ref: '#/components/schemas/GateDecisionEnum'
         outcome:
-          $ref: '#/components/schemas/GateOutcomeEnum'
+          allOf:
+          - $ref: '#/components/schemas/GateDecisionEnum'
+          description: |-
+            Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na `/api/v1/` e sai na `/api/v2/`.
+
+            * `go` - GO
+            * `conditional_go` - CONDITIONAL GO
+            * `redesign` - REDESIGN
+            * `no_go` - NO-GO
         notes:
           type: string
       required:
-      - outcome
+      - decision
     AreaEnum:
       enum:
       - comercial
@@ -12118,7 +12128,7 @@ components:
         * `artefato` - Artefato (planilha, PDF, croqui)
         * `sistema` - Sistema (ERP, CRM, CAD, WhatsApp)
         * `dado` - Dado (volume, tempo, custo, erro)
-    GateOutcomeEnum:
+    GateDecisionEnum:
       enum:
       - go
       - conditional_go
@@ -15216,7 +15226,7 @@ components:
       description: |-
         Fase da jornada de um projeto (estado). A equipe edita `target_date` e a justificativa.
 
-        `gate_outcome`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
+        `gate_decision`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
         action `apply-gate`, que é onde moram as consequências de cada saída — concluir e avançar,
         reabrir a fase anterior, ou parar. Um PATCH direto gravaria "REDESIGN" sem nada acontecer, e
         o campo passaria a mentir sobre o estado da jornada.
@@ -15266,9 +15276,12 @@ components:
           type: string
           format: date
           nullable: true
-        gate_outcome:
+        gate_decision:
           allOf:
-          - $ref: '#/components/schemas/GateOutcomeEnum'
+          - $ref: '#/components/schemas/GateDecisionEnum'
+          readOnly: true
+        gate_outcome:
+          type: string
           readOnly: true
         gate_notes:
           type: string
@@ -15691,6 +15704,9 @@ components:
         to_status:
           type: string
           readOnly: true
+        gate_decision:
+          type: string
+          readOnly: true
         gate_outcome:
           type: string
           readOnly: true
@@ -15721,6 +15737,7 @@ components:
       - actor_name
       - created_at
       - from_status
+      - gate_decision
       - gate_outcome
       - id
       - kind
@@ -16259,7 +16276,7 @@ components:
       description: |-
         Fase da jornada de um projeto (estado). A equipe edita `target_date` e a justificativa.
 
-        `gate_outcome`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
+        `gate_decision`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
         action `apply-gate`, que é onde moram as consequências de cada saída — concluir e avançar,
         reabrir a fase anterior, ou parar. Um PATCH direto gravaria "REDESIGN" sem nada acontecer, e
         o campo passaria a mentir sobre o estado da jornada.
@@ -16309,9 +16326,12 @@ components:
           type: string
           format: date
           nullable: true
-        gate_outcome:
+        gate_decision:
           allOf:
-          - $ref: '#/components/schemas/GateOutcomeEnum'
+          - $ref: '#/components/schemas/GateDecisionEnum'
+          readOnly: true
+        gate_outcome:
+          type: string
           readOnly: true
         gate_notes:
           type: string
@@ -16341,6 +16361,7 @@ components:
       - checklist_items
       - completed_at
       - deliverables
+      - gate_decision
       - gate_notes
       - gate_outcome
       - id

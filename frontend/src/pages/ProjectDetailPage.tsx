@@ -8,7 +8,7 @@ import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
 import { CANONICAL_STAGE_LABEL, PHASE_EVENT_LABEL, SITUATION_LABEL, situationVariant, WAITING_PARTY_LABEL, WAITING_PARTY_OPTIONS } from "../journey";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateOutcome, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WaitingParty, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateDecision, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WaitingParty, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -17,11 +17,11 @@ const workStatusLabel: Record<WorkItemStatus, string> = { todo: "A fazer", in_pr
 const partyLabel: Record<Party, string> = { provider: "Fornecedor", client: "Cliente" };
 const blankMeeting = { title: "", date: "", meeting_url: "", recording_url: "", transcript: "" };
 const employeeStatusLabel: Record<DigitalEmployeeStatus, string> = { building: "Em construção", active: "Ativo", paused: "Pausado" };
-const gateLabel: Record<GateOutcome, string> = { go: "GO", conditional_go: "CONDITIONAL GO", redesign: "REDESIGN", no_go: "NO-GO" };
+const gateLabel: Record<GateDecision, string> = { go: "GO", conditional_go: "CONDITIONAL GO", redesign: "REDESIGN", no_go: "NO-GO" };
 // Variante, nunca a cor: uma segunda definição de "aprovado" diverge da primeira em silêncio
 // (ADR 0026). CONDITIONAL GO e REDESIGN dividem o âmbar porque os dois dizem a mesma coisa ao
 // olho — "seguiu, mas há dívida" —, e só o NO-GO é o vermelho de fato.
-const gateVariant: Record<GateOutcome, string> = { go: "state--1", conditional_go: "state--2", redesign: "state--2", no_go: "state--3" };
+const gateVariant: Record<GateDecision, string> = { go: "state--1", conditional_go: "state--2", redesign: "state--2", no_go: "state--3" };
 // Risk Register (FDD 034). "Aceito" é **neutro**, não verde: conviver com o risco é uma decisão
 // consciente, e não um problema resolvido — a mesma leitura que faz "Arquivado" usar `state--off`.
 const riscoNivelLabel: Record<RiscoNivel, { probabilidade: string; impacto: string }> = {
@@ -156,9 +156,9 @@ export function ProjectDetailPage({ id }: { id: number }) {
     try { const updated = await api<ProjectPhase[]>(`/projects/${id}/advance-phase/`, { method: "POST" }); setPhases(updated); await loadTimeline(); }
     catch (cause) { setError((cause as Error).message); }
   }
-  async function applyGate(outcome: GateOutcome, notes: string) {
+  async function applyGate(decision: GateDecision, notes: string) {
     setError("");
-    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/apply-gate/`, { method: "POST", body: JSON.stringify({ outcome, notes }) }); setPhases(updated); await loadTimeline(); }
+    try { const updated = await api<ProjectPhase[]>(`/projects/${id}/apply-gate/`, { method: "POST", body: JSON.stringify({ decision, notes }) }); setPhases(updated); await loadTimeline(); }
     catch (cause) { setError((cause as Error).message); }
   }
   // A espera é ação de detalhe do projeto (POST), como avançar fase: a Entrega alcança no projeto
@@ -493,7 +493,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
       onSetTarget={(phaseId, date) => void setPhaseTarget(phaseId, date)}
       onToggleChecklist={(itemId, checked) => void toggleChecklistItem(itemId, checked)}
       onSaveWaiver={(phaseId, waiver) => void saveChecklistWaiver(phaseId, waiver)}
-      onApplyGate={(outcome, notes) => void applyGate(outcome, notes)}
+      onApplyGate={(decision, notes) => void applyGate(decision, notes)}
     />
 
     {timeline && Array.isArray(timeline.events) && <DeliveryTimelinePanel timeline={timeline} canManage={canManageJourney} onSetWaiting={(party, note) => void setWaiting(party, note)} />}
@@ -746,13 +746,13 @@ type JourneySectionProps = {
   onSetTarget: (phaseId: number, date: string) => void;
   onToggleChecklist: (itemId: number, checked: boolean) => void;
   onSaveWaiver: (phaseId: number, waiver: string) => void;
-  onApplyGate: (outcome: GateOutcome, notes: string) => void;
+  onApplyGate: (decision: GateDecision, notes: string) => void;
 };
 
 function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onToggleChecklist, onSaveWaiver, onApplyGate }: JourneySectionProps) {
   const [gateNotes, setGateNotes] = useState("");
   const [waiverDraft, setWaiverDraft] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<GateOutcome | null>(null);
+  const [confirming, setConfirming] = useState<GateDecision | null>(null);
   if (!phases.length) return null;
   const done = phases.filter(phase => phase.status === "done").length;
   const active = phases.find(phase => phase.status === "active");
@@ -776,7 +776,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "state--1" : isActive ? "bg-ink text-white" : "state--off"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>
         {/* O selo do gate acompanha a fase e não some quando ela fecha: é o registro de *como* a
             jornada passou por ali — inclusive na fase que o REDESIGN trancou. */}
-        {phase.gate_outcome && <span className={`state ${gateVariant[phase.gate_outcome]}`} title={phase.gate_notes || undefined}>{gateLabel[phase.gate_outcome]}</span>}
+        {phase.gate_decision && <span className={`state ${gateVariant[phase.gate_decision]}`} title={phase.gate_notes || undefined}>{gateLabel[phase.gate_decision]}</span>}
       </span>;
     })}</div>
 
@@ -902,7 +902,7 @@ function DeliveryTimelinePanel({ timeline, canManage, onSetWaiting }: DeliveryTi
     <div>
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Histórico · {timeline.events.length} evento(s)</p>
       {timeline.events.length ? <ol className="divide-y">{timeline.events.map(event => <li className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5" key={event.id}>
-        <div className="min-w-0"><p className="text-sm font-medium text-ink">{PHASE_EVENT_LABEL[event.kind]}{event.phase_name ? ` · ${event.phase_name}` : ""}</p>{(event.note || event.gate_outcome || event.waiting_party) && <p className="mt-0.5 text-xs text-slate-600">{event.gate_outcome ? `${gateLabel[event.gate_outcome]}. ` : ""}{event.waiting_party ? `${WAITING_PARTY_LABEL[event.waiting_party as Exclude<WaitingParty, "">]}. ` : ""}{event.note}</p>}</div>
+        <div className="min-w-0"><p className="text-sm font-medium text-ink">{PHASE_EVENT_LABEL[event.kind]}{event.phase_name ? ` · ${event.phase_name}` : ""}</p>{(event.note || event.gate_decision || event.waiting_party) && <p className="mt-0.5 text-xs text-slate-600">{event.gate_decision ? `${gateLabel[event.gate_decision]}. ` : ""}{event.waiting_party ? `${WAITING_PARTY_LABEL[event.waiting_party as Exclude<WaitingParty, "">]}. ` : ""}{event.note}</p>}</div>
         <time className="shrink-0 text-xs text-slate-600">{eventTime(event.created_at)}{event.actor_name ? ` · ${event.actor_name}` : " · sistema"}</time>
       </li>)}</ol> : <p className="empty-state">Sem eventos ainda.</p>}
     </div>

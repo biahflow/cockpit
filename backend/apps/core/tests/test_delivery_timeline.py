@@ -68,19 +68,19 @@ def test_advance_logs_completed_and_started_with_actor() -> None:
 
 
 @pytest.mark.django_db
-def test_redesign_history_survives_even_after_the_outcome_is_cleared() -> None:
-    """REDESIGN apaga o `gate_outcome` da fase que reabre — mas o histórico continua lá (FDD 042)."""
+def test_redesign_history_survives_even_after_the_decision_is_cleared() -> None:
+    """REDESIGN apaga o `gate_decision` da fase que reabre — mas o histórico continua lá (FDD 042)."""
     project = ProjectFactory()
     actor = UserFactory(role=User.Role.DELIVERY)
     _requires_gate(project, 1)
     journey.advance_phase(project, actor=actor)  # fase 1 vira ativa, fase 0 concluída
 
-    journey.apply_gate(project, ProjectPhase.GateOutcome.REDESIGN, "abordagem mudou", actor=actor)
+    journey.apply_gate(project, ProjectPhase.GateDecision.REDESIGN, "abordagem mudou", actor=actor)
 
     reopened = _phase_at(project, 0)
     locked = _phase_at(project, 1)
     assert reopened.status == ProjectPhase.Status.ACTIVE
-    assert reopened.gate_outcome == ""  # o carimbo foi apagado no estado corrente
+    assert reopened.gate_decision == ""  # o carimbo foi apagado no estado corrente
     assert locked.status == ProjectPhase.Status.LOCKED
     # ...mas a auditoria sobrevive:
     kinds = set(
@@ -92,7 +92,7 @@ def test_redesign_history_survives_even_after_the_outcome_is_cleared() -> None:
     gate_event = PhaseEvent.objects.get(
         project=project, kind=PhaseEvent.Kind.GATE_RECORDED
     )
-    assert gate_event.gate_outcome == ProjectPhase.GateOutcome.REDESIGN
+    assert gate_event.gate_decision == ProjectPhase.GateDecision.REDESIGN
     assert gate_event.note == "abordagem mudou"
 
 
@@ -132,7 +132,7 @@ def test_situation_completed_cancelled_and_replanned() -> None:
     journey.advance_phase(project)
     assert _phase_at(project, 0).situation == "completed"
     # cancelled: NO-GO na fase de gate ativa
-    journey.apply_gate(project, ProjectPhase.GateOutcome.NO_GO, "risco alto")
+    journey.apply_gate(project, ProjectPhase.GateDecision.NO_GO, "risco alto")
     assert _phase_at(project, 1).situation == "cancelled"
 
 
@@ -141,8 +141,8 @@ def test_situation_replanned_after_redesign() -> None:
     project = ProjectFactory()
     _requires_gate(project, 1)
     journey.advance_phase(project)
-    journey.apply_gate(project, ProjectPhase.GateOutcome.REDESIGN, "voltar")
-    # a fase trancada guarda o outcome redesign -> "replanejada"
+    journey.apply_gate(project, ProjectPhase.GateDecision.REDESIGN, "voltar")
+    # a fase trancada guarda a decisão redesign -> "replanejada"
     assert _phase_at(project, 1).situation == "replanned"
 
 
@@ -188,7 +188,7 @@ def test_set_waiting_rejects_invalid_party() -> None:
 
 @pytest.mark.django_db
 def test_waiting_party_is_read_only_on_patch(client: APIClient) -> None:
-    """PATCH direto não grava a espera — como o `gate_outcome`, ela só entra pela action."""
+    """PATCH direto não grava a espera — como o `gate_decision`, ela só entra pela action."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
     ProjectMemberFactory(project=project, user=delivery)

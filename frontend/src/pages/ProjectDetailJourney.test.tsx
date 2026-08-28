@@ -9,13 +9,13 @@ vi.mock("../api", () => ({ api: mocks.api }));
 vi.mock("../auth", () => ({ useAuth: () => ({ aiEnabled: false, calendarEnabled: false, user: { role: "delivery" } }) }));
 
 const PHASES = [
-  { id: 10, project: 1, phase: 1, phase_name: "Welcome", phase_description: "Recepção", phase_position: 0, requires_gate: false, status: "done", started_at: "2026-08-01T00:00:00Z", completed_at: "2026-08-02T00:00:00Z", target_date: null, gate_outcome: "", gate_notes: "", checklist_waiver: "", deliverables: [], checklist_items: [] },
-  { id: 11, project: 1, phase: 2, phase_name: "Prove", phase_description: "Piloto", phase_position: 1, requires_gate: false, status: "active", started_at: "2026-08-02T00:00:00Z", completed_at: null, target_date: null, gate_outcome: "", gate_notes: "", checklist_waiver: "", deliverables: [{ id: 100, project_phase: 11, name: "Dashboard", status: "pending", document: null, position: 0, delivered_at: null }], checklist_items: [] },
-  { id: 12, project: 1, phase: 3, phase_name: "Scale", phase_description: "", phase_position: 2, requires_gate: false, status: "locked", started_at: null, completed_at: null, target_date: null, gate_outcome: "", gate_notes: "", checklist_waiver: "", deliverables: [], checklist_items: [] },
+  { id: 10, project: 1, phase: 1, phase_name: "Welcome", phase_description: "Recepção", phase_position: 0, requires_gate: false, status: "done", started_at: "2026-08-01T00:00:00Z", completed_at: "2026-08-02T00:00:00Z", target_date: null, gate_decision: "", gate_notes: "", checklist_waiver: "", deliverables: [], checklist_items: [] },
+  { id: 11, project: 1, phase: 2, phase_name: "Prove", phase_description: "Piloto", phase_position: 1, requires_gate: false, status: "active", started_at: "2026-08-02T00:00:00Z", completed_at: null, target_date: null, gate_decision: "", gate_notes: "", checklist_waiver: "", deliverables: [{ id: 100, project_phase: 11, name: "Dashboard", status: "pending", document: null, position: 0, delivered_at: null }], checklist_items: [] },
+  { id: 12, project: 1, phase: 3, phase_name: "Scale", phase_description: "", phase_position: 2, requires_gate: false, status: "locked", started_at: null, completed_at: null, target_date: null, gate_decision: "", gate_notes: "", checklist_waiver: "", deliverables: [], checklist_items: [] },
 ];
 // A mesma jornada com os dois gates ligados na fase ativa (FDD 033).
 const GATED = [
-  { ...PHASES[0], gate_outcome: "conditional_go", gate_notes: "Latência acima do alvo." },
+  { ...PHASES[0], gate_decision: "conditional_go", gate_notes: "Latência acima do alvo." },
   { ...PHASES[1], requires_gate: true, checklist_items: [{ id: 200, project_phase: 11, text: "Baseline registrado?", position: 0, checked: false, checked_at: null }] },
   PHASES[2],
 ];
@@ -97,7 +97,7 @@ test("aplica GO pelo painel do decision gate, com as notas", async () => {
   await user.type(screen.getByLabelText(/Ressalvas, motivo ou condições/), "Piloto sustentou o volume.");
   await user.click(screen.getByRole("button", { name: "GO" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/apply-gate/", expect.objectContaining({ method: "POST", body: expect.stringContaining("\"outcome\":\"go\"") })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/apply-gate/", expect.objectContaining({ method: "POST", body: expect.stringContaining("\"decision\":\"go\"") })));
 });
 
 test("REDESIGN e NO-GO pedem confirmação antes de registrar", async () => {

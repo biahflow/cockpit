@@ -2172,7 +2172,7 @@ class ProjectPhase(TimestampedModel):
         ACTIVE = "active", "Em andamento"
         DONE = "done", "Concluída"
 
-    class GateOutcome(models.TextChoices):
+    class GateDecision(models.TextChoices):
         """As quatro saídas do decision gate (FDD 033, `docs/metodologia-fde.md`).
 
         São exatamente quatro porque a metodologia diz quatro, e o valor delas está em *não*
@@ -2211,8 +2211,12 @@ class ProjectPhase(TimestampedModel):
     # `journey.advance_phase` recusa quando a fase do template exige gate. As notas não são
     # opcionais de fato em três das quatro saídas: as ressalvas do CONDITIONAL GO e o motivo do
     # REDESIGN/NO-GO são a única coisa que atravessa o tempo (FDD 033).
-    gate_outcome = models.CharField(
-        max_length=16, choices=GateOutcome.choices, blank=True, default=""
+    # O nome canônico do D7 é do próprio campo desde a ADR 0052 — a propriedade-alias que
+    # `aliases.md` prescrevia perdeu o objeto no momento em que o campo passou a se chamar como
+    # ela. O nome antigo sobrevive só como **chave de payload** no serializer, com data de morte
+    # na `/api/v2/`; nada no domínio o lê.
+    gate_decision = models.CharField(
+        max_length=16, choices=GateDecision.choices, blank=True, default=""
     )
     gate_notes = models.TextField(blank=True, default="")
     # Concluir com checklist incompleta é legítimo — o que não é legítimo é fazê-lo em silêncio.
@@ -2220,7 +2224,7 @@ class ProjectPhase(TimestampedModel):
     # quality gate e por quê.
     checklist_waiver = models.TextField(blank=True, default="")
     # Quem a fase ativa espera, e a nota do bloqueio/decisão pendente (FDD 042). Read-only no
-    # serializer e escrito só pela action `set-waiting`, pelo mesmo motivo do `gate_outcome`: a
+    # serializer e escrito só pela action `set-waiting`, pelo mesmo motivo do `gate_decision`: a
     # mudança precisa deixar rastro (um `PhaseEvent` com autor), e um PATCH direto gravaria o
     # estado sem o registro de quem e por quê.
     waiting_party = models.CharField(
@@ -2238,35 +2242,24 @@ class ProjectPhase(TimestampedModel):
         return f"{self.project_id} · {self.phase.name}"
 
     @property
-    def gate_decision(self) -> str:
-        """O nome canônico do D7, apontando para o campo que a Fase 6 vai renomear.
-
-        É o alias que `docs/ontology/aliases.md` prescreve — código novo escreve o nome canônico
-        e o schema acerta depois. Existe porque a projeção do portal **emite canônico** (o One
-        nunca renomeia, `language-map` §3) e lê daqui em vez de tocar o campo legado: assim o
-        nome antigo não se espalha para mais um arquivo, e a Fase 6 renomeia um lugar só.
-        """
-        return self.gate_outcome
-
-    @property
     def situation(self) -> str:
         """Estado semântico derivado, determinístico (FDD 042; FinOps: sem LLM).
 
-        Colapsa `status` + `gate_outcome` + `waiting_party` no vocabulário que a linha do tempo
+        Colapsa `status` + `gate_decision` + `waiting_party` no vocabulário que a linha do tempo
         pinta: `completed`, `cancelled`, `replanned`, `waiting_decision`, `blocked`, `active`,
         `pending`. É a fonte única da variante de selo — a tela mapeia *situação → variante*, nunca
         recalcula a regra. Puro: não toca no banco.
         """
-        if self.gate_outcome == self.GateOutcome.NO_GO:
+        if self.gate_decision == self.GateDecision.NO_GO:
             return "cancelled"
         if self.status == self.Status.DONE:
             return "completed"
         if self.status == self.Status.LOCKED:
-            # Trancada por um REDESIGN (guarda o outcome) é "replanejada"; trancada e ainda
+            # Trancada por um REDESIGN (guarda a decisão) é "replanejada"; trancada e ainda
             # intocada é só "pendente" — uma fase futura da jornada, não um alerta.
-            return "replanned" if self.gate_outcome == self.GateOutcome.REDESIGN else "pending"
+            return "replanned" if self.gate_decision == self.GateDecision.REDESIGN else "pending"
         # A partir daqui a fase está ativa.
-        awaiting_gate = self.phase.requires_gate and not self.gate_outcome
+        awaiting_gate = self.phase.requires_gate and not self.gate_decision
         if self.waiting_party == self.WaitingParty.HUMAN_GATE or awaiting_gate:
             return "waiting_decision"
         if self.waiting_party:
@@ -2341,7 +2334,7 @@ class PhaseEvent(models.Model):
     """Histórico **append-only** da jornada de um projeto (FDD 042, ADR 0047).
 
     O `ProjectPhase` carrega o **estado corrente**; ele não guarda a *sequência* de como se chegou
-    ali — e um REDESIGN chega a apagar `completed_at` e `gate_outcome` da fase que reabre (FDD
+    ali — e um REDESIGN chega a apagar `completed_at` e `gate_decision` da fase que reabre (FDD
     033), de propósito, porque "concluída em" é estado corrente. O que se perdia com isso era a
     auditoria: *por que* e *quando* a jornada voltou. Este modelo é o registro que sobrevive — uma
     linha por transição/decisão/bloqueio, com carimbo, autor e proveniência, nunca editada nem
@@ -2375,7 +2368,7 @@ class PhaseEvent(models.Model):
     kind = models.CharField(max_length=24, choices=Kind.choices)
     from_status = models.CharField(max_length=16, blank=True, default="")
     to_status = models.CharField(max_length=16, blank=True, default="")
-    gate_outcome = models.CharField(max_length=16, blank=True, default="")
+    gate_decision = models.CharField(max_length=16, blank=True, default="")
     waiting_party = models.CharField(max_length=16, blank=True, default="")
     note = models.TextField(blank=True, default="")
     actor = models.ForeignKey(

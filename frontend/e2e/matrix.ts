@@ -492,10 +492,10 @@ const FIXTURES: Record<string, unknown> = {
     status: index === 0 ? "done" : index === 1 ? "active" : "locked",
     started_at: null, completed_at: index === 0 ? `${HOJE}T08:00:00Z` : null, target_date: HOJE,
     deliverables: serie(2, d => ({ id: d, project_phase: index, name: `Entregável ${d}`, status: "pending", document: null, position: d, delivered_at: null })),
-    // FDD 033: a fase concluída carrega um outcome (o selo renderiza e o axe o mede) e a ativa
+    // FDD 033: a fase concluída carrega uma decisão (o selo renderiza e o axe o mede) e a ativa
     // termina em gate com checklist pendente — senão o e2e aprova superfícies que nunca abriu.
     requires_gate: index === 1,
-    gate_outcome: index === 0 ? "conditional_go" : "",
+    gate_decision: index === 0 ? "conditional_go" : "",
     gate_notes: index === 0 ? "Seguimos monitorando a acurácia do OCR." : "",
     checklist_waiver: "",
     checklist_items: index === 1

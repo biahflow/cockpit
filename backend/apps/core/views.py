@@ -1288,7 +1288,15 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         request=inline_serializer(
             "ApplyGate",
             {
-                "outcome": serializers.ChoiceField(choices=ProjectPhase.GateOutcome.choices),
+                "decision": serializers.ChoiceField(choices=ProjectPhase.GateDecision.choices),
+                "outcome": serializers.ChoiceField(
+                    choices=ProjectPhase.GateDecision.choices,
+                    required=False,
+                    help_text=(
+                        "Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na "
+                        "`/api/v1/` e sai na `/api/v2/`."
+                    ),
+                ),
                 "notes": serializers.CharField(required=False, allow_blank=True),
             },
         ),
@@ -1302,14 +1310,18 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         até duas fases, e a tela precisa da lista atualizada, não do que mudou.
         """
         project = self.get_object()
-        outcome = str(request.data.get("outcome", "")).strip()
-        if outcome not in ProjectPhase.GateOutcome.values:
+        # `decision` é a chave canônica (D7, ADR 0052); `outcome` continua aceita como alias da
+        # `/api/v1/` e sai na `/api/v2/`. A precedência é da canônica: um corpo com as duas é
+        # confusão do chamador, e resolver pela nova é o que não trava quem já migrou.
+        bruto = request.data.get("decision") or request.data.get("outcome", "")
+        decision = str(bruto).strip()
+        if decision not in ProjectPhase.GateDecision.values:
             return Response(
                 {"detail": "Informe uma das quatro saídas: go, conditional_go, redesign, no_go."},
                 status=400,
             )
         notes = str(request.data.get("notes", "") or "")
-        journey.apply_gate(project, outcome, notes, actor=request.user)
+        journey.apply_gate(project, decision, notes, actor=request.user)
         return Response(ProjectPhaseSerializer(_project_phases_qs(project), many=True).data)
 
     @extend_schema(
@@ -1429,13 +1441,13 @@ def _project_phases_qs(project: Project):  # type: ignore[no-untyped-def]
 def _next_gate_phase(phases: list[ProjectPhase]) -> ProjectPhase | None:
     """A próxima fase (na ordem) que termina em gate e ainda não decidiu — o "próximo gate".
 
-    Determinístico (FinOps): a fase ativa conta se ainda não gravou outcome; senão, a primeira
+    Determinístico (FinOps): a fase ativa conta se ainda não gravou a decisão; senão, a primeira
     trancada à frente que exige gate.
     """
     for phase in phases:
         if phase.status == ProjectPhase.Status.DONE:
             continue
-        if phase.phase.requires_gate and not phase.gate_outcome:
+        if phase.phase.requires_gate and not phase.gate_decision:
             return phase
     return None
 

@@ -2,6 +2,11 @@
 
 **Status:** aceita
 **Data:** 2026-08-28
+**Emendada por:** ADR 0052 (28/08/2026) — "renome físico" era um termo só para três coisas com
+prazos distintos. O nome da **classe** passa para a issue #67 (passo 5); o nome da **tabela**
+continua na Fase 6; rota e chave de payload continuam na `/api/v2/`. Onde esta ADR diz "o renome
+físico é a Fase 6" — em Contexto, em Consequências e em Alternativas consideradas — leia-se o nome
+da tabela.
 
 ## Contexto
 

@@ -12,7 +12,7 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 59), que conta **dívidas
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 48), que conta **dívidas
 #     distintas** — linhas deste arquivo, não ocorrências no código. Os dois números não medem a
 #     mesma coisa.
 #
@@ -26,8 +26,9 @@
 # Pagar dívida em parte **abaixa o número da linha**; pagar inteira **remove a linha**. As duas
 # coisas são cobradas, e a mensagem do teste diz qual número escrever.
 #
-# Quem paga cada bloco está em `docs/ontology/aliases.md`. Resumo: renome físico é a Fase 6, a
-# remoção do alias de rota é a `/api/v2/`, e o split Evidence/Finding é a Fase 3.
+# Quem paga cada bloco está em `docs/ontology/aliases.md`. Resumo, na forma que a ADR 0052 fixou:
+# o nome da **classe** é a issue #67, o da **tabela** é a Fase 6, a **rota** e a **chave de
+# payload** são a `/api/v2/`, e o split Evidence/Finding foi a Fase 3.
 
 # ---------------------------------------------------------------------------------------------
 # `Opportunity` sem qualificador — Fase 6 (renome físico para `CommercialOpportunity`).
@@ -61,29 +62,21 @@ frontend/src/types.ts::client-como-organizacao::ClientOverview::1
 frontend/src/types.ts::client-como-organizacao::ClientStatus::1
 
 # ---------------------------------------------------------------------------------------------
-# `GateOutcome` / `gate_outcome` — Fase 6 (renome para `GateDecision`, decisão D7 do language-map).
-# Esta é a única regra que casa **referência** e não declaração, porque o identificador inteiro
-# está errado: não existe uso legítimo do nome antigo. O preço é um bloco maior — um par de
-# entradas por arquivo que toca o enum — e o ganho é que arquivo novo não herda o nome.
+# `gate_outcome` — a chave de payload, e só ela. Morre na `/api/v2/`.
+# O bloco tinha onze linhas e ficou com uma. A decisão D7 renomeou `GateOutcome` para
+# `GateDecision`, e a ADR 0052 antecipou o renome de classe e de campo para a issue #67 em vez de
+# esperar a Fase 6: modelo, migração, `journey.py`, views, portal, tipo TS e tela já dizem
+# `gate_decision`. O que ficou é o alias de leitura do `ProjectPhaseSerializer` e do
+# `PhaseEventSerializer` — a mesma chave saindo com o mesmo valor, porque um consumidor da
+# `/api/v1/` não tem como saber que o nome mudou. Rota e chave de payload morrem na `/api/v2/`,
+# que é o prazo que a `aliases.md` sempre deu a elas.
 #
-# `models.py` subiu de 8 para 9 na Issue #71, e a ocorrência a mais é o que **permite** remover
-# as outras: o corpo da propriedade `ProjectPhase.gate_decision`, o alias canônico que
-# `aliases.md` prescreve (nome novo apontando para o campo legado). A projeção do portal lê por
-# ele em vez de tocar o nome antigo, então `portal.py` não entra neste bloco — o alias concentra
-# a dívida num lugar só, que é onde a Fase 6 vai renomear. Nenhuma entrada nova, e o
-# `TETO_DA_ALLOWLIST` não muda: ele conta dívidas distintas, e esta continua sendo uma.
+# Esta continua sendo a única regra que casa **referência** e não declaração, porque o
+# identificador inteiro está errado: não existe uso legítimo do nome antigo *dentro* do código.
+# A exceção é a chave de payload, e ela está declarada aqui — com a regressão que impede removê-la
+# antes da hora (`backend/tests/regression/test_o_alias_do_gate_sobrevive_na_v1.py`).
 # ---------------------------------------------------------------------------------------------
-backend/apps/core/journey.py::outcome-como-decisao-de-gate::GateOutcome::7
-backend/apps/core/journey.py::outcome-como-decisao-de-gate::gate_outcome::13
-backend/apps/core/models.py::outcome-como-decisao-de-gate::GateOutcome::4
-backend/apps/core/models.py::outcome-como-decisao-de-gate::gate_outcome::9
 backend/apps/core/serializers.py::outcome-como-decisao-de-gate::gate_outcome::5
-backend/apps/core/views.py::outcome-como-decisao-de-gate::GateOutcome::2
-backend/apps/core/views.py::outcome-como-decisao-de-gate::gate_outcome::1
-frontend/src/pages/ProjectDetailPage.tsx::outcome-como-decisao-de-gate::GateOutcome::6
-frontend/src/pages/ProjectDetailPage.tsx::outcome-como-decisao-de-gate::gate_outcome::6
-frontend/src/types.ts::outcome-como-decisao-de-gate::GateOutcome::3
-frontend/src/types.ts::outcome-como-decisao-de-gate::gate_outcome::2
 
 # ---------------------------------------------------------------------------------------------
 # Nome de modelo em português.
@@ -126,11 +119,12 @@ backend/apps/core/views.py::modelo-em-portugues::RiscoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::SatisfacaoViewSet::1
 
 # ---------------------------------------------------------------------------------------------
-# Legado congelado: as quatro classes que a §5 nomeia como banidas e que existem hoje.
+# Legado congelado: as classes que a §5 nomeia como banidas e que ainda existem hoje.
 # Redundante com o bloco acima de propósito — `modelo-em-portugues` é heurística e pode ser
-# estreitada; esta regra é lista fechada e não pode. Fase 3 (split) + Fase 6 (renome).
+# estreitada; esta regra é lista fechada e não pode. Fase 3 (split) + Fase 6 (renome). Eram
+# quatro: `GateOutcome` saiu na issue #67 (ADR 0052), e o nome **continua** no regex da regra —
+# lista fechada existe para barrar batismo novo, e o nome segue banido depois de pago.
 # ---------------------------------------------------------------------------------------------
 backend/apps/core/models.py::legado-congelado::Evidencia::1
-backend/apps/core/models.py::legado-congelado::GateOutcome::1
 backend/apps/core/models.py::legado-congelado::Processo::1
 backend/apps/core/models.py::legado-congelado::ProcessoEtapa::1

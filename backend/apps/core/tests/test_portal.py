@@ -812,11 +812,11 @@ def test_as_fases_levam_estagio_canonico_gate_e_exigencia_de_gate() -> None:
 
 @pytest.mark.django_db
 def test_gate_decision_devolve_o_que_o_gate_decidiu() -> None:
-    """O alias canônico aponta para o campo legado — mesmo valor, nome do D7.
+    """A chave que atravessa a fronteira é a do D7, com o valor que o gate decidiu.
 
-    A projeção lê `ProjectPhase.gate_decision` e não o campo antigo, o que mantém o nome legado
-    contido em `models.py` (uma ocorrência, a do próprio alias) em vez de espalhá-lo por
-    `portal.py`. O renome físico é a Fase 6; até lá, quem fala com o cliente já fala certo.
+    A projeção lia por uma propriedade-alias enquanto o campo tinha o nome antigo; desde a
+    ADR 0052 ela lê o campo canônico direto. **O que o teste guarda é a chave emitida**, que não
+    mudou em nenhum dos dois momentos — é dela que o One deriva, e ele nunca renomeia.
     """
     project = ProjectFactory()
     journey.materialize_journey(project)
@@ -826,14 +826,14 @@ def test_gate_decision_devolve_o_que_o_gate_decidiu() -> None:
     assert ativa_antes is not None
     JourneyPhase.objects.filter(pk=ativa_antes.phase_id).update(requires_gate=True)
 
-    ativa = journey.apply_gate(project, ProjectPhase.GateOutcome.CONDITIONAL_GO, notes="Ressalva.")
+    ativa = journey.apply_gate(project, ProjectPhase.GateDecision.CONDITIONAL_GO, notes="Ressalva.")
     assert ativa is not None
 
     decidida = ProjectPhase.objects.filter(
-        project=project, gate_outcome=ProjectPhase.GateOutcome.CONDITIONAL_GO
+        project=project, gate_decision=ProjectPhase.GateDecision.CONDITIONAL_GO
     ).first()
     assert decidida is not None
-    assert decidida.gate_decision == decidida.gate_outcome == "conditional_go"
+    assert decidida.gate_decision == "conditional_go"
 
     fases = {f["id"]: f for f in portal.build_snapshot(project)["journey"]["phases"]}
     assert fases[decidida.pk]["gate_decision"] == "conditional_go"

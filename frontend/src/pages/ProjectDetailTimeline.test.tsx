@@ -11,7 +11,7 @@ vi.mock("../auth", () => ({ useAuth: () => ({ aiEnabled: false, calendarEnabled:
 const CURRENT = {
   id: 11, project: 1, phase: 2, phase_name: "Prove", phase_description: "Piloto", phase_position: 1,
   requires_gate: false, canonical_stage: "prove", status: "active", situation: "blocked",
-  started_at: "2026-08-02T00:00:00Z", completed_at: null, target_date: null, gate_outcome: "",
+  started_at: "2026-08-02T00:00:00Z", completed_at: null, target_date: null, gate_decision: "",
   gate_notes: "", checklist_waiver: "", waiting_party: "client", blocker_note: "aguardando acesso ao ERP",
   deliverables: [], checklist_items: [],
 };
@@ -23,8 +23,8 @@ const TIMELINE = {
   next_gate: { phase_name: "Scale", canonical_stage: "scale" },
   blockers: [{ phase_name: "Prove", waiting_party: "client", blocker_note: "aguardando acesso ao ERP" }],
   events: [
-    { id: 2, project: 1, project_phase: 11, phase_name: "Prove", kind: "waiting_set", from_status: "", to_status: "", gate_outcome: "", waiting_party: "client", note: "aguardando acesso ao ERP", actor: 3, actor_name: "Ana Lima", source: "user", created_at: "2026-08-03T12:00:00Z" },
-    { id: 1, project: 1, project_phase: 10, phase_name: "Welcome", kind: "started", from_status: "", to_status: "active", gate_outcome: "", waiting_party: "", note: "", actor: null, actor_name: null, source: "system", created_at: "2026-08-01T09:00:00Z" },
+    { id: 2, project: 1, project_phase: 11, phase_name: "Prove", kind: "waiting_set", from_status: "", to_status: "", gate_decision: "", waiting_party: "client", note: "aguardando acesso ao ERP", actor: 3, actor_name: "Ana Lima", source: "user", created_at: "2026-08-03T12:00:00Z" },
+    { id: 1, project: 1, project_phase: 10, phase_name: "Welcome", kind: "started", from_status: "", to_status: "active", gate_decision: "", waiting_party: "", note: "", actor: null, actor_name: null, source: "system", created_at: "2026-08-01T09:00:00Z" },
   ],
 };
 

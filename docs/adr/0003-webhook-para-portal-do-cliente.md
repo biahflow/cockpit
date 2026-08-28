@@ -167,11 +167,15 @@ e `gate_decision`. Duas coisas ficam declaradas junto:
 - **`client` continua saindo, inalterado.** É alias com data, e a data é a `/api/v2/`
   (`docs/ontology/aliases.md`). Removê-lo antes disso quebraria o consumidor sem necessidade.
 
-**A projeção fala canônico enquanto o modelo não**, e isso é deliberado. O renome físico de
-`gate_outcome` para `GateDecision` (decisão D7) é a Fase 6; até lá, `ProjectPhase.gate_decision` é
-o alias — nome canônico apontando para o campo legado, na forma que `aliases.md` prescreve —, e é
-por ele que a projeção lê. O nome antigo fica contido em `models.py` em vez de se espalhar para
-mais um arquivo, e a Fase 6 renomeia um lugar só.
+**A projeção fala canônico enquanto o modelo não**, e isso é deliberado. Quando esta emenda foi
+escrita, `ProjectPhase.gate_decision` era uma **propriedade-alias** apontando para o campo
+`gate_outcome`, na forma que `aliases.md` prescreve, e era por ela que a projeção lia — o nome
+antigo ficava contido em `models.py` em vez de se espalhar para mais um arquivo.
+
+> **Nota de 28/08/2026, mesma data.** A fatia 1 da issue #67 renomeou o campo, sob a ADR 0052, e
+> com isso a propriedade perdeu o objeto: `gate_decision` é o **campo**, e a projeção lê dele
+> direto. A chave emitida nunca mudou — que era exatamente o ponto do alias — e o parágrafo acima
+> fica como registro de por que ela já saía com o nome certo antes de o modelo ter.
 
 **`situation` não atravessa.** Ela colapsa `waiting_party`, que é classificação interna de
 delivery ("estamos esperando engenharia") e não é conversa de cliente (`language-map` §3). O One
