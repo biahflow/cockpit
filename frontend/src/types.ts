@@ -9,7 +9,10 @@ export type EngagementStatus = "active" | "paused" | "closed";
 // preço, fatura ou catálogo o lê (FDD 046). Não atravessa para o One: é dado comercial
 // (`docs/ontology/language-map.md` §3).
 export type EngagementCommercialModel = "design_partner" | "paid";
-export type Engagement = { id: number; account: number; account_name: string; name: string; mandate: string; sponsor: number | null; owner: number; owner_name: string | null; status: EngagementStatus; status_display: string; commercial_model: EngagementCommercialModel; commercial_model_display: string; started_at: string | null; ended_at: string | null; success_definition: string; needs_review: boolean; archived_at: string | null; created_at: string; updated_at: string };
+// `projects_count` é **recortado pelo escopo de quem lê** (`project_scope_q`), não o total do
+// mandato: dois usuários veem números diferentes para a mesma linha, e cada um vê o que alcança.
+// É o mesmo comportamento de `/clients/overview/` (FDD 046, emenda de 28/08/2026).
+export type Engagement = { id: number; account: number; account_name: string; name: string; mandate: string; sponsor: number | null; sponsor_name: string | null; owner: number; owner_name: string | null; status: EngagementStatus; status_display: string; commercial_model: EngagementCommercialModel; commercial_model_display: string; started_at: string | null; ended_at: string | null; success_definition: string; projects_count: number; needs_review: boolean; archived_at: string | null; created_at: string; updated_at: string };
 // `opportunity` é **alias de leitura** de `originating_commercial_opportunity`, mantido para não
 // quebrar consumidor no meio do renome; sai na Fase 6 (`docs/ontology/language-map.md` §7).
 export type Project = { id: number; name: string; description: string; client: number; engagement: number; engagement_name: string; originating_commercial_opportunity: number | null; opportunity: number | null; owner: number; start_date: string; due_date: string; status: string; service: number | null; actual_value: string; cost: string; is_overdue: boolean; ai_maturity: number | null; ai_opportunity: number | null; ai_dimensions: AiScoreDimension[]; ai_score_summary: string; ai_scored_at: string | null; ai_score_reviewed: boolean; client_vertical: number | null; client_vertical_name: string };

@@ -72,6 +72,28 @@ function contato(overrides: Record<string, unknown> = {}) {
 
 let contacts: unknown[] = [contato()];
 
+/**
+ * Um mandato (ADR 0050, FDD 046), no formato que `EngagementSerializer` devolve.
+ *
+ * `projects_count` chega **recortado pelo escopo de quem lê** — a tela só o mostra, não o calcula.
+ */
+function mandato(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 5, account: 1, account_name: "Cliente A", name: "Transformação Financeira",
+    mandate: "", sponsor: null, sponsor_name: null, owner: 1, owner_name: "Ana Souza",
+    status: "active", status_display: "Ativo",
+    commercial_model: "paid", commercial_model_display: "Pago",
+    started_at: "2026-03-02", ended_at: null, success_definition: "",
+    projects_count: 3, needs_review: false, archived_at: null,
+    created_at: "2026-03-02T10:00:00Z", updated_at: "2026-03-02T10:00:00Z",
+    ...overrides,
+  };
+}
+
+// Vazia por padrão, pela razão das listas acima: os testes que não são sobre o mandato não devem
+// ganhar dois selos a mais na tela para colidir com o texto dos vizinhos.
+let engagements: unknown[] = [];
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, status: "active", vertical: null, vertical_name: "" });
@@ -82,6 +104,7 @@ function stub() {
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
     if (path.startsWith("/processos")) return Promise.resolve(processos);
+    if (path.startsWith("/engagements")) return Promise.resolve(engagements);
     return Promise.resolve([]);
   });
 }
@@ -94,6 +117,7 @@ beforeEach(() => {
   satisfacoes = [];
   processos = [];
   contacts = [contato()];
+  engagements = [];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -462,4 +486,163 @@ test("cliente sem processo mapeado mostra o estado vazio, não um painel em bran
   await screen.findByRole("heading", { name: "Cliente A" });
 
   expect(await screen.findByText("Nenhum processo mapeado para este cliente.")).toBeInTheDocument();
+});
+
+// --- Engagements (ADR 0050, FDD 046; DAP `docs/design/dap-engagement-r1/`, r1, A1 · B1) --------
+
+test("a seção lista os mandatos com status e as duas pílulas de modelo comercial", async () => {
+  engagements = [
+    mandato({ sponsor_name: "Marina Alencar" }),
+    mandato({
+      id: 6, name: "Discovery Cartas Vivas", sponsor_name: "Rafael Nôga",
+      commercial_model: "design_partner", commercial_model_display: "Design partner",
+      started_at: "2026-06-01", projects_count: 1,
+    }),
+  ];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  // Decisão A1: o termo canônico em inglês como título, a copy em volta em pt-BR.
+  expect(painel.getByRole("heading", { name: "Engagements" })).toBeInTheDocument();
+  expect(painel.getByText("2 engagements ativos nesta conta")).toBeInTheDocument();
+  expect(painel.getByText("Transformação Financeira")).toBeInTheDocument();
+  expect(painel.getByText("Patrocínio de Marina Alencar")).toBeInTheDocument();
+  // Precisão de mês (decisão 6), e o singular do projeto na segunda linha.
+  expect(painel.getByText("Desde 03/2026 · 3 projetos")).toBeInTheDocument();
+  expect(painel.getByText("Desde 06/2026 · 1 projeto")).toBeInTheDocument();
+
+  // **Decisão B1, e é por isso que "Pago" é asserção própria**: um teste que só verificasse
+  // "Design partner" passaria igual sob B2, que é justamente a alternativa recusada.
+  expect(painel.getByText("Pago")).toHaveClass("state--off");
+  expect(painel.getByText("Design partner")).toHaveClass("state--0");
+  expect(painel.getAllByText("Ativo")).toHaveLength(2);
+  expect(painel.getAllByText("Ativo")[0]).toHaveClass("state--1");
+});
+
+test("mandato encerrado é neutro, não vermelho, e mostra o período fechado", async () => {
+  engagements = [mandato({
+    name: "Piloto Atendimento 24h", status: "closed", status_display: "Encerrado",
+    started_at: "2026-02-10", ended_at: "2026-05-20", projects_count: 2,
+  })];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  // Decisão 2: "Arquivado"/"Encerrado" não são aviso — são a ausência de um estado. `state--3`
+  // faria a conta de melhor histórico parecer a mais problemática.
+  expect(painel.getByText("Encerrado")).toHaveClass("state--off");
+  expect(painel.getByText("02/2026 → 05/2026 · 2 projetos")).toBeInTheDocument();
+  // Nenhum mandato ativo, e a frase continua sendo a aprovada — sem improviso.
+  expect(painel.getByText("0 engagements ativos nesta conta")).toBeInTheDocument();
+});
+
+test("conta sem mandato mostra o estado vazio, não um painel em branco", async () => {
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.getByText("Nenhum engagement")).toBeInTheDocument();
+  // A copy diz o que fazer e por quê — "Nenhum engagement cadastrado." deixaria a pessoa
+  // exatamente onde estava.
+  expect(painel.getByText(/Crie o mandato antes de converter uma oportunidade/)).toBeInTheDocument();
+  // O vazio não esconde a saída.
+  expect(painel.getByRole("button", { name: "Novo engagement" })).toBeInTheDocument();
+});
+
+test("entrega vê a lista de mandatos e nenhuma ação sobre ela", async () => {
+  mocks.auth.user = { id: 3, is_admin: false, role: "delivery" };
+  engagements = [mandato({ sponsor_name: "Marina Alencar" })];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  // A lista, sim: quem entrega precisa saber a que mandato o projeto pertence.
+  expect(painel.getByText("Transformação Financeira")).toBeInTheDocument();
+  // O desenho não inventa permissão — ele deixa de mostrar o que a API recusaria (403).
+  expect(painel.queryByRole("button", { name: "Novo engagement" })).not.toBeInTheDocument();
+  expect(painel.queryByLabelText("Editar Transformação Financeira")).not.toBeInTheDocument();
+  expect(painel.queryByLabelText("Arquivar Transformação Financeira")).not.toBeInTheDocument();
+});
+
+test("o formulário embutido cria o mandato e não pede responsável", async () => {
+  const user = userEvent.setup();
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  // Sem modal (decisão 3): o formulário abre dentro do próprio painel.
+  await user.click(painel.getByRole("button", { name: "Novo engagement" }));
+  await user.type(painel.getByLabelText("Nome"), "Transformação Financeira");
+  await user.selectOptions(painel.getByLabelText("Modelo comercial"), "design_partner");
+  await user.click(painel.getByRole("button", { name: "Adicionar engagement" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/engagements/", expect.objectContaining({ method: "POST" })));
+  const corpo = JSON.parse(mocks.api.mock.calls.find(([rota]) => rota === "/engagements/")![1].body);
+  expect(corpo).toMatchObject({ account: 1, name: "Transformação Financeira", commercial_model: "design_partner" });
+  // `owner` não vai no payload: quem cria aqui é quem está logado, e é `perform_create` que grava.
+  expect(corpo).not.toHaveProperty("owner");
+  // Data vazia vai como `null`, e não como `""` — um `DateField` com string vazia volta 400.
+  expect(corpo.started_at).toBeNull();
+  expect(corpo.sponsor).toBeNull();
+});
+
+test("o lápis carrega o mandato no formulário e o título vira Editando", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByLabelText("Editar Transformação Financeira"));
+
+  expect(painel.getByRole("heading", { name: "Editando Transformação Financeira" })).toBeInTheDocument();
+  expect(painel.getByLabelText("Nome")).toHaveValue("Transformação Financeira");
+  expect(painel.getByLabelText("Início")).toHaveValue("2026-03-02");
+  // Os dois "Cancelar" são os que o board desenha: um no cabeçalho, que é o botão da faixa
+  // enquanto o formulário está aberto, e um ao lado de "Salvar alterações".
+  expect(painel.getAllByRole("button", { name: "Cancelar" })).toHaveLength(2);
+
+  await user.clear(painel.getByLabelText("Nome"));
+  await user.type(painel.getByLabelText("Nome"), "Transformação Financeira 2027");
+  await user.click(painel.getByRole("button", { name: "Salvar alterações" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/engagements/5/", expect.objectContaining({ method: "PATCH" })));
+});
+
+test("cancelar a edição volta ao modo de criação sem requisição", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByLabelText("Editar Transformação Financeira"));
+  await user.click(painel.getAllByRole("button", { name: "Cancelar" })[0]);
+
+  expect(painel.getByRole("heading", { name: "Engagements" })).toBeInTheDocument();
+  expect(painel.getByRole("button", { name: "Novo engagement" })).toBeInTheDocument();
+  expect(mocks.api).not.toHaveBeenCalledWith("/engagements/5/", expect.anything());
+});
+
+test("arquivar mandato com projeto vivo mostra a recusa do backend no topo da página", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<ClientDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByLabelText("Arquivar Transformação Financeira"));
+  mocks.api.mockImplementationOnce(() => Promise.reject(Object.assign(
+    new Error("Este engagement ainda tem 3 projeto(s) em aberto. Arquive esses projetos antes de arquivar o engagement."),
+    { status: 409 },
+  )));
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
+
+  // No `.alert--error` do **topo da página** (decisão 4), que é onde esta tela já põe o erro dela —
+  // e com o `detail` do backend inteiro, sem a orientação genérica de 409 colada atrás: nada
+  // mudou desde que a tela carregou, e recarregar não resolveria.
+  const alerta = await screen.findByRole("alert");
+  expect(alerta).toHaveTextContent("Este engagement ainda tem 3 projeto(s) em aberto. Arquive esses projetos antes de arquivar o engagement.");
+  expect(alerta).toHaveClass("alert--error");
 });

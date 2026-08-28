@@ -523,6 +523,38 @@ const FIXTURES: Record<string, unknown> = {
     // ele é a maioria dos contatos de verdade.
     receives_billing: index === 1,
   })),
+  // Os mandatos da conta (ADR 0050, FDD 046), na seção que o DAP `dap-engagement-r1` aprovou.
+  // **Um de cada combinação que a seção sabe desenhar**, e não três iguais: os três status
+  // (`state--1`, `state--2`, `state--off`), os dois modelos comerciais — que a decisão B1 manda
+  // mostrar **sempre**, e não só na exceção —, a linha com patrocínio e a sem, e as duas formas do
+  // período (aberto e fechado). Sem isso o axe mediria "Pago" cinza e nunca o "Design partner"
+  // azul, que é justamente o par que a tela não pode deixar parecer a mesma coisa.
+  //
+  // Sem esta chave a rota cairia no fallback de lista vazia e a matriz aprovaria o estado vazio no
+  // lugar da seção — o modo de falha que o comentário de `/api/v1/processos/` acima já registra.
+  "/api/v1/engagements/": [
+    { name: `Transformação do faturamento e do fiscal — ${NOME_LONGO}`,
+      status: "active", status_display: "Ativo",
+      commercial_model: "paid", commercial_model_display: "Pago",
+      sponsor: 1, sponsor_name: "Maria de Lourdes Albuquerque",
+      started_at: "2026-03-02", ended_at: null, projects_count: 3 },
+    { name: "Discovery Cartas Vivas", status: "paused", status_display: "Pausado",
+      commercial_model: "design_partner", commercial_model_display: "Design partner",
+      sponsor: null, sponsor_name: null,
+      started_at: "2026-06-01", ended_at: null, projects_count: 1 },
+    { name: "Piloto de atendimento 24h", status: "closed", status_display: "Encerrado",
+      commercial_model: "paid", commercial_model_display: "Pago",
+      sponsor: 2, sponsor_name: "Pessoa de contato 2",
+      started_at: "2026-02-10", ended_at: "2026-05-20", projects_count: 2 },
+  ].map((registro, indice) => ({
+    id: indice + 1, account: 1, account_name: NOME_LONGO,
+    mandate: "Reduzir o retrabalho do faturamento e fechar o mês sem conferência manual.",
+    owner: 1, owner_name: "Ana Souza",
+    success_definition: "Fechamento mensal sem reemissão de nota por erro de cadastro.",
+    needs_review: false, archived_at: null,
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+    ...registro,
+  })),
   "/api/v1/artifacts/": serie(4, index => ({
     id: index, kind: "proposal", kind_display: "Proposta", status: "draft",
     status_display: "Rascunho", title: `Proposta — ${NOME_LONGO}`,

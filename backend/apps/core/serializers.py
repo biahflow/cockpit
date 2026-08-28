@@ -466,25 +466,62 @@ class OpportunitySerializer(serializers.ModelSerializer[Opportunity]):
 class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     account_name = serializers.CharField(source="account.name", read_only=True)
     owner_name = serializers.SerializerMethodField()
+    sponsor_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     commercial_model_display = serializers.CharField(
         source="get_commercial_model_display", read_only=True
     )
+    projects_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Engagement
         fields = [
-            "id", "account", "account_name", "name", "mandate", "sponsor", "owner", "owner_name",
+            "id", "account", "account_name", "name", "mandate", "sponsor", "sponsor_name",
+            "owner", "owner_name",
             "status", "status_display", "commercial_model", "commercial_model_display",
-            "started_at", "ended_at", "success_definition",
+            "started_at", "ended_at", "success_definition", "projects_count",
             "needs_review", "archived_at", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "archived_at", "created_at", "updated_at"]
+        # `owner` deixa de ser obrigatório no POST, e quem o preenche é
+        # `EngagementViewSet.perform_create` — a seção do detalhe do cliente não pergunta quem é o
+        # responsável, porque quem cria o mandato é quem está logado (DAP `dap-engagement-r1`).
+        # Continua **gravável**: relaxar exigência não é tirar o campo, e o admin que cria mandato
+        # de outra pessoa segue dizendo de quem ele é.
+        extra_kwargs = {"owner": {"required": False}}
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_owner_name(self, obj: Engagement) -> str | None:
         owner = obj.owner
         return (owner.get_full_name() or owner.get_username()) if owner else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_sponsor_name(self, obj: Engagement) -> str | None:
+        """O nome de quem responde pelo mandato dentro da conta — **nulo quando não há**.
+
+        `sponsor` é opcional, e é por isso que isto é método e não `source="sponsor.full_name"`:
+        aquele estouraria com `AttributeError` no mandato sem patrocinador, que é o caso comum de
+        um mandato de escopo único nascido da conversão. Sem patrocinador a linha da tela
+        simplesmente não mostra a frase.
+
+        O `select_related("sponsor")` do `EngagementViewSet` é o que mantém isto sem N+1.
+        """
+        sponsor = obj.sponsor
+        return sponsor.full_name if sponsor else None
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_projects_count(self, obj: Engagement) -> int:
+        """Quantos projetos do mandato **quem está lendo alcança** — não o total do mandato.
+
+        A anotação vem de `EngagementViewSet.get_queryset`, recortada por `project_scope_q`, e a
+        consequência está registrada na FDD 046: dois usuários veem números diferentes para o
+        mesmo mandato. É o mesmo comportamento de `/clients/overview/`.
+
+        O `0` de fallback cobre um caso só e ele é verdadeiro: a resposta do `POST`, que serializa
+        a instância recém-criada em vez de uma linha do queryset — e um mandato que acabou de
+        nascer não tem projeto nenhum.
+        """
+        return getattr(obj, "projects_count", 0)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """As três regras do `clean()` do modelo, aqui, para virarem 400 em vez de 500.

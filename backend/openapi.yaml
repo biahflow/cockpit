@@ -11687,6 +11687,10 @@ components:
         sponsor:
           type: integer
           nullable: true
+        sponsor_name:
+          type: string
+          nullable: true
+          readOnly: true
         owner:
           type: integer
         owner_name:
@@ -11713,6 +11717,9 @@ components:
           nullable: true
         success_definition:
           type: string
+        projects_count:
+          type: integer
+          readOnly: true
         needs_review:
           type: boolean
         archived_at:
@@ -11736,8 +11743,9 @@ components:
       - created_at
       - id
       - name
-      - owner
       - owner_name
+      - projects_count
+      - sponsor_name
       - status_display
       - updated_at
     EngagementStatusEnum:
@@ -13874,6 +13882,10 @@ components:
         sponsor:
           type: integer
           nullable: true
+        sponsor_name:
+          type: string
+          nullable: true
+          readOnly: true
         owner:
           type: integer
         owner_name:
@@ -13900,6 +13912,9 @@ components:
           nullable: true
         success_definition:
           type: string
+        projects_count:
+          type: integer
+          readOnly: true
         needs_review:
           type: boolean
         archived_at:

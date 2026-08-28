@@ -232,3 +232,57 @@ campo novo — há regressão dedicada a isso.
 Partner é condição comercial de um degrau ou oferta própria?") continua aberta. Gravar o modo no
 mandato e decidir se existe um sétimo degrau no catálogo são coisas diferentes: nenhuma regra de
 preço, fatura ou catálogo lê este campo hoje.
+
+## Emenda (28/08/2026) — o mandato ganha superfície no detalhe do cliente
+
+A seção "Fora de escopo" acima dizia *"Tela de Engagement … Interface nova exige Design Approval
+Package, e não há um aprovado para esta superfície"*. **Agora há**:
+[`docs/design/dap-engagement-r1/`](../design/dap-engagement-r1/README.md), revisão 1, aprovado com
+as decisões **A1** e **B1**. O pacote é a especificação da superfície, e é ele que governa forma e
+copy — não esta FDD.
+
+O que entrou: uma `<section className="panel">` em `ClientDetailPage`, **entre "Saúde da relação" e
+"Satisfação"**, que lista os mandatos da conta com status, modelo comercial, patrocínio, período e
+contagem de projetos, e permite criar, editar e arquivar. É a primeira superfície do produto onde a
+espinha `Account → Engagement → Project` fica visível. O que **continua** fora: tela de lista no
+menu, os projetos de cada mandato expandidos na linha, mover projeto entre mandatos, encerrar em
+lote, `commercial_model` no portal do cliente, e superfície para o carimbo `needs_review`.
+
+### A contagem de projetos é recortada pelo escopo de quem lê
+
+`EngagementSerializer` passa a expor `projects_count`, anotado em `EngagementViewSet.get_queryset`
+com `Count("projects", filter=… & project_scope_q(user, "projects"), distinct=True)` sobre projetos
+vivos.
+
+**Ela não é o total do mandato.** O DAP deixou a escolha em aberto e registrou que os dois caminhos
+significam coisas diferentes na tela; a decisão é o recorte, por consistência com a regra do
+`CLAUDE.md` de que agregador que escapa do queryset é *narrowed by hand* e tem teste próprio. Um
+total cru contaria, para a Entrega, projetos que ela não pode ver — sinal fraco, mas ainda assim
+informação sobre o que está fora do recorte dela, e este repositório não abre essa exceção.
+
+**A consequência é assumida: dois usuários veem números diferentes para o mesmo mandato.** É
+honesto — cada um vê o que alcança — e é o mesmo comportamento que `/clients/overview/`, `/risk/` e
+`/health/` já têm. O aviso ao usuário Entrega de que a lista está recortada está **reservado** no
+DAP e fora desta aprovação. O `distinct=True` não é enfeite: o recorte atravessa `projects__members`
+e o filtro da Entrega atravessa `projects` de novo, e sem ele a repetição do join infla o número.
+
+### O que mais mudou no contrato
+
+- **`sponsor_name`**, read-only, nulo quando não há patrocinador — o board desenha "Patrocínio de
+  {nome}" e o payload não trazia o nome.
+- **`owner` deixa de ser obrigatório no `POST`.** `EngagementViewSet.perform_create` grava
+  `owner=request.user` quando o payload não o traz, no precedente da `convert-to-project`: o
+  formulário aprovado não pergunta quem é o responsável, porque quem cria o mandato dentro do
+  detalhe do cliente é quem está logado. O campo **continua gravável** — relaxar exigência não é
+  tirar o campo.
+- **Copy: "engajamento" vira "engagement"** na recusa de arquivar mandato com projeto vivo. É a
+  consequência que a decisão A1 arrasta e que o registro de aprovação do DAP anota: com o título em
+  inglês, a tela mostraria três palavras para o mesmo conceito — `Engagements` no cabeçalho,
+  "engagement" na copy corrente e "engajamento" vindo do servidor.
+
+A guarda de conta da `convert-to-project` também teve a string trocada, mas ela é **ramo
+inalcançável**: `ProjectSerializer.validate` recusa `engagement.account != client` antes, e a
+comparação de cliente da própria action fecha o resto. Quem responde de fato ali é o serializer, com
+uma mensagem que continua em português — é superfície de Projetos/Comercial, fora deste DAP, e
+trocá-la é varredura própria. `test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer`
+fixa o achado.

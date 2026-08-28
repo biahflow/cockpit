@@ -982,9 +982,14 @@ class OpportunityViewSet(ArchiveModelViewSet):
         if serializer.validated_data["client"].id != opportunity.client_id:
             return Response({"client": "O projeto deve usar o cliente da oportunidade."}, status=400)
         engagement = serializer.validated_data.get("engagement")
+        # Ramo **inalcançável**, mantido como cinto de segurança em vez de removido: quem chega
+        # aqui já passou por `ProjectSerializer.validate` (que recusa `engagement.account !=
+        # client`) e pela comparação de cliente logo acima, e as duas juntas já garantem esta
+        # terceira igualdade. `test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer`
+        # fixa quem de fato responde ali; remover a guarda é decisão de outra varredura.
         if engagement is not None and engagement.account_id != opportunity.client_id:
             return Response(
-                {"engagement": "O engajamento deve ser da mesma conta da oportunidade."}, status=400
+                {"engagement": "O engagement deve ser da mesma conta da oportunidade."}, status=400
             )
         # O nível de produto vendido segue para a entrega; o payload pode sobrescrever.
         service = serializer.validated_data.get("service") or opportunity.service
@@ -1105,6 +1110,29 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
         user = self.request.user
+        # A contagem de projetos que a seção do detalhe do cliente mostra na linha, e ela é
+        # **recortada pelo escopo de quem lê**, não o total do mandato. Um total cru contaria,
+        # para a Entrega, projetos fora do recorte dela — sinal fraco, mas ainda assim informação
+        # sobre o que ela não alcança, e este repositório não abre essa exceção. É a mesma regra
+        # dos outros agregadores narrowed by hand (`/clients/overview/`, `/risk/`, `/health/`),
+        # e como eles esta tem teste próprio.
+        #
+        # A consequência é deliberada e está escrita na FDD 046: **dois usuários veem números
+        # diferentes para o mesmo mandato**. Cada um vê o que alcança.
+        #
+        # `distinct=True` no `Count` não é enfeite, é a mesma armadilha do `.distinct()` abaixo em
+        # dobro: o filtro do recorte atravessa `projects__members` e o filtro da Entrega atravessa
+        # `projects` de novo, então a linha do projeto se repete e um `Count` cru somaria a
+        # repetição. A anotação vem **antes** do filtro da Entrega de propósito — anotar depois
+        # deixaria o join do recorte ao alcance do `Count`.
+        queryset = queryset.annotate(
+            projects_count=Count(
+                "projects",
+                filter=Q(projects__archived_at__isnull=True)
+                & project_scope_q(user, "projects"),
+                distinct=True,
+            )
+        )
         if user.is_admin_role or user.role != User.Role.DELIVERY:
             return queryset
         # Entrega vê o mandato **de que participa**, derivado de `visible_to` — a única expressão
@@ -1112,6 +1140,23 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         # atravessa o reverso `projects` e devolve uma linha por projeto casado, então sem ele o
         # mesmo engajamento aparece tantas vezes quantos projetos a pessoa tiver nele.
         return queryset.filter(projects__in=Project.objects.visible_to(user)).distinct()
+
+    def perform_create(self, serializer: EngagementSerializer) -> None:
+        """Grava `owner=request.user` quando o payload não o traz.
+
+        `Engagement.owner` é `PROTECT` não-nulo, e o formulário aprovado (DAP `dap-engagement-r1`)
+        não expõe "Responsável": a seção vive dentro do detalhe do cliente, onde quem cria é quem
+        está logado. O precedente é a própria `convert-to-project`, que cria o mandato de escopo
+        único com `owner=request.user`.
+
+        **Quando ausente, e não sempre**: `owner` continua gravável no contrato `/api/v1/` — um
+        admin que cria mandato de outra pessoa segue podendo dizer de quem ele é, e forçar aqui
+        tiraria em silêncio um campo que a API já aceitava.
+        """
+        if serializer.validated_data.get("owner") is None:
+            serializer.save(owner=self.request.user)
+        else:
+            serializer.save()
 
     def perform_destroy(self, instance: Engagement) -> None:
         """Recusa arquivar mandato com projeto vivo — a regra de órfão da FDD 025.
@@ -1123,8 +1168,8 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         vivos = instance.projects.filter(archived_at__isnull=True).count()
         if vivos:
             raise StateConflict(
-                f"Este engajamento ainda tem {vivos} projeto(s) em aberto. "
-                "Arquive esses projetos antes de arquivar o engajamento."
+                f"Este engagement ainda tem {vivos} projeto(s) em aberto. "
+                "Arquive esses projetos antes de arquivar o engagement."
             )
         instance.archive()
 
