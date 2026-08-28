@@ -2,7 +2,7 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Pending approval**
+Status: **Approved**
 Data: 2026-08-28
 Produzido por: harness (Claude Code), sob `workflows/design-approval.md`
 
@@ -243,11 +243,20 @@ discordarem, cede o tom.**
 | Campo | Valor |
 | --- | --- |
 | O que está sendo pedido | **visual** e **copy** da revisão 1 da seção, com as decisões **A** e **B** aprovadas explicitamente |
-| Aprovado por | — |
-| Data | — |
-| Revisão aprovada | — |
+| Aprovado por | Daniel Campos |
+| Data | 2026-08-28 |
+| Revisão aprovada | r1 |
+| Decisão **A** | **A1 — "Engagements"**, o termo canônico em inglês como título, com a copy em volta em pt-BR |
+| Decisão **B** | **B1 — as duas pílulas sempre visíveis**: "Pago" em `.state--off`, "Design partner" em `.state--0` |
 | Explicitamente **não** aprovado | o que está na seção "Explicitamente fora desta aprovação" |
 
-**Status: pendente.** A aprovação é ato humano e vem depois, numa revisão deste próprio arquivo.
+**Status: aprovado.** Visual e copy da revisão 1, com A1 e B1.
+
+**Consequência de A1, registrada na aprovação:** a mensagem de conflito que
+`EngagementViewSet.perform_destroy` levanta diz "engajamento" em português. Com o título em inglês,
+a tela mostraria **três** palavras para o mesmo conceito — `Engagements` no cabeçalho, "engagement"
+na copy corrente e "engajamento" vindo do servidor. A implementação troca essa string junto; é
+mudança de copy de backend que a decisão A arrasta, e ela não estava no board porque o board não
+traça consequências fora da tela.
 Aprovação da revisão 1 não é aprovação de uma revisão posterior: um pacote materialmente alterado é
 revisão nova e precisa do próprio registro.
