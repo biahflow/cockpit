@@ -26,6 +26,7 @@ from .views import (
     DiscoverySessionViewSet,
     DiscoveryViewSet,
     DocumentViewSet,
+    EngagementViewSet,
     EngineeringHandoffViewSet,
     EsignWebhookView,
     EvidenceViewSet,
@@ -64,6 +65,7 @@ from .views import (
     ProjectMemberViewSet,
     ProjectPhaseViewSet,
     ProjectViewSet,
+    QualificationViewSet,
     RecommendationsView,
     RiscoViewSet,
     RiskView,
@@ -83,6 +85,8 @@ router.register("contacts", ContactViewSet)
 router.register("activities", ActivityViewSet)
 router.register("pipeline-stages", PipelineStageViewSet)
 router.register("opportunities", OpportunityViewSet)
+# Entre a conta e o projeto (ADR 0050): o mandato que agrupa várias vendas e vários projetos.
+router.register("engagements", EngagementViewSet)
 router.register("projects", ProjectViewSet)
 router.register("journey-phases", JourneyPhaseViewSet)
 router.register("phase-deliverables", PhaseDeliverableViewSet)
@@ -132,6 +136,9 @@ router.register("cobranca", CobrancaViewSet, basename="cobranca")
 router.register("knowledge-areas", KnowledgeAreaViewSet)
 router.register("knowledge-pieces", KnowledgePieceViewSet)
 router.register("leads", LeadViewSet)
+# A avaliação do lead (ADR 0049, FDD 044). Fora de `/leads/` porque um lead tem **várias**: o
+# `nurture` de hoje vira `qualified` daqui a seis meses, e as duas são fatos distintos.
+router.register("qualifications", QualificationViewSet)
 router.register("notifications", NotificationViewSet, basename="notification")
 router.register("services", ServiceViewSet)
 router.register("verticals", VerticalViewSet)

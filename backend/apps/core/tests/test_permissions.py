@@ -58,7 +58,7 @@ def test_delivery_only_sees_won_opportunities_and_cannot_edit_crm(client: APICli
     """Ganha **e** convertida num projeto da equipe (RFC 0003) — antes bastava estar ganha."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     won = OpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
-    project = ProjectFactory(opportunity=won, client=won.client)
+    project = ProjectFactory(originating_commercial_opportunity=won, client=won.client)
     ProjectMemberFactory(project=project, user=delivery)
     OpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
     OpportunityFactory()

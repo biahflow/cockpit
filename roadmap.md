@@ -52,7 +52,9 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 038 | Camada 5 (entrega) e o leitor do sinal da IA | Entregue | 1 | `docs/fdd/038-os-dois-sinais-que-ninguem-lia.md` |
 | FDD 039 | Discovery estruturado (P-S-D-T-E-R, evidência e custo do estado atual) | Entregue (recorte) | 1 | `docs/fdd/039-o-achado-que-nao-sobrevivia-a-reuniao.md` |
 | FDD 043 | Perfil do próprio usuário (nome, senha e foto) | Entregue | — | `docs/fdd/043-perfil-do-proprio-usuario.md` |
+| FDD 044 | Qualification antes da CommercialOpportunity (fatia 1 da ontologia) | Entregue | — | `docs/fdd/044-a-qualificacao-que-virava-venda.md` |
 | FDD 045 | Split Evidence/Finding e Discovery (ontologia, fase 3) | Entregue | 1 | `docs/fdd/045-a-hipotese-e-a-prova-eram-a-mesma-linha.md` |
+| FDD 046 | Engagement entre a conta e o projeto (ontologia, fase 2) | Entregue | 1 | `docs/fdd/046-o-engajamento-entre-a-conta-e-o-projeto.md` |
 
 ## Base atual — entregue
 

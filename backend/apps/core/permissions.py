@@ -10,6 +10,7 @@ from .models import (
     Discovery,
     DiscoverySession,
     Document,
+    Engagement,
     EngineeringHandoff,
     Evidence,
     Evidencia,
@@ -116,16 +117,26 @@ class RolePermission(BasePermission):
             # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
             # continua levantando dentro do projeto —, e um registro que só metade da casa pode
             # fazer é um registro que não acontece.
+            # `qualification` (ADR 0049) entra ao lado de `lead`, e **não** aparece em
+            # nenhum conjunto da Entrega logo abaixo: a avaliação é ato comercial e não
+            # atravessa para o portal do cliente (mapa de linguagem §3). O 403 dela vem do
+            # `return False` do fim, sem regra nova — recurso novo nasce fechado.
+            # `engagement` (ADR 0050) é escrita de Vendas, ao lado de `opportunity`: o mandato é o
+            # que a casa vendeu, e quem o negocia é quem o descreve.
             # Os cinco recursos do split (FDD 045) entram pelo mesmo argumento dos três da
             # FDD 039 logo acima, e é o mesmo levantamento: o Discovery começa na venda e
             # continua na entrega, e um achado que só metade da casa registra não é registrado.
-            return resource in {"client", "contact", "opportunity", "document", "lead",
-                                "analytics", "artifact", "activity", "cobranca_suspensao",
-                                "satisfacao", "processo", "processo_etapa", "evidencia",
+            return resource in {"client", "contact", "opportunity", "engagement", "document",
+                                "lead", "analytics", "artifact", "activity",
+                                "cobranca_suspensao", "satisfacao", "processo", "processo_etapa",
+                                "evidencia", "qualification",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding"}
         if request.user.role == User.Role.DELIVERY:
-            if resource in {"client", "contact", "opportunity", "project_member",
+            # `engagement` entra aqui **só de leitura**, e a assimetria com Vendas é a decisão: o
+            # engajamento é o mandato comercial, e quem entrega precisa saber a que mandato o
+            # projeto pertence sem poder redefinir o que foi contratado (ADR 0050).
+            if resource in {"client", "contact", "opportunity", "engagement", "project_member",
                             "risk", "health", "case", "activity"}:
                 return request.method in SAFE_METHODS
             # Conhecimento: **todo mundo lê**, e o dono da área verifica. O dono pode ser de
@@ -216,6 +227,15 @@ class RolePermission(BasePermission):
                 else:
                     client = obj.processo.client
                 return Project.objects.visible_to(request.user).filter(client=client).exists()
+            if isinstance(obj, Engagement):
+                # **Fora de `PROJECT_OF`**, e não por esquecimento: o engajamento não pende de um
+                # projeto — são os projetos que pendem dele. A pergunta certa é a inversa, e ela
+                # sai de `visible_to` como todas as outras (ADR 0010): a pessoa vê algum projeto
+                # deste mandato? Ver um mandato **não** concede acesso a projeto nenhum dele; o
+                # recorte da Entrega continua sendo `ProjectMember` (ADR 0050).
+                return request.method in SAFE_METHODS and (
+                    Project.objects.visible_to(request.user).filter(engagement=obj).exists()
+                )
             if isinstance(obj, Opportunity):
                 return obj.is_won and request.method in SAFE_METHODS
             if isinstance(obj, ProjectMember):

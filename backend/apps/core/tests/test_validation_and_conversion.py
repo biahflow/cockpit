@@ -13,6 +13,7 @@ from apps.core.models import Document, Milestone, PipelineStage, Service, User
 
 from .factories import (
     ClientFactory,
+    EngagementFactory,
     OpportunityFactory,
     ProjectFactory,
     ServiceFactory,
@@ -53,11 +54,15 @@ def test_project_rejects_end_date_before_start() -> None:
     # validação de datas, então o caso de borda precisa de quem realmente cria projeto.
     admin = UserFactory(role=User.Role.ADMIN)
     project_client = ClientFactory()
+    # `engagement` é obrigatório desde a ADR 0050; sem ele o 400 seria do campo faltando e este
+    # teste passaria sem nunca exercitar a validação de datas que ele existe para cobrir.
+    engagement = EngagementFactory(account=project_client)
     client = APIClient()
     client.force_authenticate(admin)
 
     response = client.post(reverse("project-list"), {
         "client": project_client.id,
+        "engagement": engagement.id,
         "name": "Datas inválidas",
         "start_date": "2026-08-10",
         "due_date": "2026-08-09",
@@ -222,13 +227,18 @@ def test_conversion_returns_conflict_without_partial_project_on_integrity_error(
         )
 
     assert response.status_code == 409
-    assert not hasattr(opportunity, "project")
+    # A transação inteira desfeita: nem projeto parcial, nem o engajamento de escopo único que a
+    # conversão cria quando o payload não traz um (ADR 0050).
+    assert not opportunity.projects.exists()
+    assert not opportunity.client.engagements.exists()
 
 
 @pytest.mark.django_db
 def test_conversion_inherits_the_opportunity_product_tier() -> None:
+    """O primeiro degrau **vendável**, e não a Qualification Call: aquela é oferta de aquisição
+    desde a ADR 0049 e a conversão a recusa (invariante 6)."""
     sales = UserFactory(role=User.Role.SALES)
-    porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
+    porta = Service.objects.get(tier=Service.Tier.DISCOVERY_ASSESSMENT)
     opportunity = OpportunityFactory(
         stage=PipelineStage.objects.get(kind="won"), owner=sales, service=porta
     )
@@ -245,7 +255,7 @@ def test_conversion_inherits_the_opportunity_product_tier() -> None:
     assert response.status_code == 201
     assert response.json()["service"] == porta.pk
     # O cronograma segue o degrau, não o template genérico.
-    assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 1
+    assert Milestone.objects.filter(project_id=response.json()["id"]).count() == 2
 
 
 @pytest.mark.django_db

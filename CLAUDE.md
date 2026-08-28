@@ -65,9 +65,9 @@ source of truth for the complete CI suite is [`.github/workflows/quality.yml`](.
 views (viewsets), permissions, and URLs all live there. There is no service layer —
 business rules live in model `clean()`/`save()` methods and in viewset actions.
 
-Core domain flow (`apps/core/models.py`): `Client` → `Contact`, `Opportunity` (on a
-configurable `PipelineStage`) → converts into a `Project` → `Milestone`/`Task`
-(both subclass the abstract `WorkItem`) plus `Document`. `User` extends
+Core domain flow (`apps/core/models.py`): `Client` → `Contact`, `Lead` → `Qualification` →
+`Opportunity` (on a configurable `PipelineStage`) → converts into a `Project` →
+`Milestone`/`Task` (both subclass the abstract `WorkItem`) plus `Document`. `User` extends
 `AbstractUser` with a `role` (admin/sales/delivery). `Invitation` drives email-based
 onboarding.
 
@@ -99,12 +99,36 @@ Key cross-cutting patterns to preserve:
 - **Mixins on viewsets must not have docstrings.** drf-spectacular uses the class docstring
   as each endpoint's `description`, so a mixin at the top of the MRO leaks its own text into
   dozens of unrelated routes in `openapi.yaml`. Use a comment above the class instead.
+- **`Account → Engagement → Project` is the spine, and the Engagement is mandatory.** An
+  `Engagement` (ADR 0050, FDD 046) is the transformation mandate a client contracted: it groups
+  several sales and several projects that are the *same* work. `Project.engagement` is NOT NULL —
+  a one-off sale is **not** a special case, it gets a single-scope Engagement that
+  `convert-to-project` creates on its own. `Project.client` survives only as a **projection**
+  (canonical is `engagement.account`; removal is Phase 6), and the single thing keeping it honest
+  is `Project.clean()`: `engagement.account_id == client_id`. The Engagement is **not** an access
+  boundary — Delivery scope is still `ProjectMember`, and engagement visibility *derives* from
+  `Project.objects.visible_to(user)`, never the reverse. Sales writes it; Delivery only reads.
 - **Opportunity → Project conversion** is the central business action: the
-  `convert-to-project` `@action` on `OpportunityViewSet`. It requires the opportunity
-  be in the "won" stage, enforces sales/admin role, and uses a `OneToOneField`
-  (`Project.opportunity`) + `transaction.atomic` + `IntegrityError` handling to
-  guarantee a won opportunity converts exactly once without duplicating the client.
-  It also carries `Opportunity.service` over to `Project.service` (payload wins).
+  `convert-to-project` `@action` on `OpportunityViewSet`. It requires the opportunity be in the
+  "won" stage, enforces sales/admin role, and carries `Opportunity.service` over to
+  `Project.service` (payload wins).
+  **"Converts exactly once" is no longer a database guarantee — it moved into the action** (ADR
+  0050). `Project.opportunity` was a `OneToOneField` and became
+  `Project.originating_commercial_opportunity`, a 1-N FK, because a recurring sale (Transformation
+  Partnership) legitimately originates several projects. The old constraint forbade two things and
+  only one still deserved forbidding: a *second project from the same sale* is now allowed and is
+  created via `POST /projects/`; a *double-click duplicating a project* is not. So the action
+  keeps the 409 with an explicit guard (any **live** project with that origin) plus
+  `select_for_update()` on the opportunity inside the transaction — the lock is what the
+  `IntegrityError` used to provide for free, and without it two concurrent requests both create.
+  The surviving `except IntegrityError` carries **no** uniqueness anymore; it only turns a
+  residual integrity failure into a rolled-back 409 instead of a half-written 500. A guarantee
+  that leaves the schema only holds while it is tested:
+  `backend/tests/regression/test_conversion_is_single_use.py`. Consequence: an opportunity whose
+  only project is archived now reconverts (201) instead of 409 — the archived row no longer
+  occupies a slot, which closes the last dead end of FDD 025.
+  `OpportunitySerializer.project`/`project_archived` keep their old shape (one id or null, never a
+  list): the oldest live project, or the oldest archived one when no live project remains.
 - **Product tiers live on `Service`, and they are the FDE ladder.** A `Service` with a `tier`
   (`qualification_call`/`discovery_assessment`/`discovery_sprint`/`feasibility`/`prove`/`scale`/
   `transformation`) is one sellable step, seeded by migrations `0020` and `0050`; a blank `tier`
@@ -114,6 +138,23 @@ Key cross-cutting patterns to preserve:
   **Free is the step, not the zero price** (`frontend/src/tiers.ts`): only the Qualification Call
   is free; zero anywhere else means "price to be decided" — the Transformation Partnership is
   monthly recurring and the catalog still cannot represent recurrence.
+- **A qualificação vem antes da venda, e é entidade.** `POST /leads/{id}/convert/` criava, no mesmo
+  clique, um `Client` **e** uma `Opportunity` no degrau gratuito — uma conversa de trinta minutos
+  entrava no funil como venda registrada e podia virar `Project`. Desde a ADR 0049 ele registra uma
+  `Qualification` (autor, data, cinco eixos, `outcome` ∈ `qualified`·`nurture`·`disqualified`) e
+  **não cria oportunidade**; a venda nasce num ato explícito,
+  `POST /qualifications/{id}/open-opportunity/`, que recusa origem não-qualificada. Um lead tem
+  **várias** avaliações de propósito — o `nurture` de hoje vira `qualified` em seis meses, e
+  sobrescrever a primeira apagaria o histórico que a entidade existe para guardar; por isso
+  `nurture` **não arquiva o lead**, que é o único jeito de ele voltar ao radar. A IA é insumo:
+  `ai_suggested_outcome`/`ai_score_snapshot` guardam a sugestão e nada os copia para `outcome`. As
+  duas invariantes vivem no **modelo** e não só na view (`Opportunity.clean()`, `Project.clean()`),
+  porque shell, admin e migração não passam por rota. Ver FDD 044.
+- **`Service.category` separa a porta do degrau.** `acquisition` é oferta de aquisição — hoje só a
+  Qualification Call —, e ela nunca gera `Opportunity` nem `Project`; `commercial` é degrau
+  vendável e é o default. A distinção é por **categoria, não por preço**: o Discovery + Assessment
+  do founding client também é gratuito e é degrau. Restam seis degraus vendáveis na escada da FDD
+  015.
 - **Documents are single-linked.** A `Document` must reference exactly one of
   client/opportunity/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.

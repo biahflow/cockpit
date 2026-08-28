@@ -2974,6 +2974,211 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/engagements/:
+    get:
+      operationId: v1_engagements_list
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Engagement'
+          description: ''
+    post:
+      operationId: v1_engagements_create
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+  /api/v1/engagements/{id}/:
+    get:
+      operationId: v1_engagements_retrieve
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+    put:
+      operationId: v1_engagements_update
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Engagement'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+    patch:
+      operationId: v1_engagements_partial_update
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEngagement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEngagement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEngagement'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+    delete:
+      operationId: v1_engagements_destroy
+      description: |-
+        O mandato de transformação da conta (ADR 0050, FDD 046).
+
+        **Não é fronteira de acesso.** O recorte da Entrega continua sendo `ProjectMember`, e por isso
+        esta viewset **não** usa `ProjectScopedMixin`: enxergar um engajamento não dá acesso a nenhum
+        projeto dele. O `get_queryset` abaixo faz o caminho inverso — deriva a visibilidade do
+        engajamento a partir dos projetos que a pessoa já podia ver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/engagements/{id}/unarchive/:
+    post:
+      operationId: v1_engagements_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/engineering-handoffs/:
     get:
       operationId: v1_engineering_handoffs_list
@@ -5181,6 +5386,18 @@ paths:
   /api/v1/leads/{id}/convert/:
     post:
       operationId: v1_leads_convert_create
+      description: |-
+        Registra a **qualificação** do lead e resolve a conta — e não cria mais venda (ADR 0049).
+
+        Até aqui esta ação criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
+        gratuito da escada. Uma conversa de qualificação entrava no funil como venda registrada,
+        somava no pipeline e podia virar `Project`. A sequência normativa é
+        `Lead → Qualification → (qualified) → CommercialOpportunity`, e o passo comercial passou a
+        ter porta própria: `POST /qualifications/{id}/open-opportunity/`.
+
+        Some daqui, junto com a `Opportunity`, a busca por `PipelineStage` aberto e pelo `Service`
+        de entrada — e os dois 400 que elas produziam. Qualificar um lead não depende mais de o
+        pipeline estar configurado.
       parameters:
       - in: path
         name: id
@@ -5194,14 +5411,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Lead'
+              $ref: '#/components/schemas/LeadConvert'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Lead'
+              $ref: '#/components/schemas/LeadConvert'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Lead'
-        required: true
+              $ref: '#/components/schemas/LeadConvert'
       security:
       - cookieAuth: []
       responses:
@@ -5209,7 +5425,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Lead'
+                $ref: '#/components/schemas/LeadConverted'
           description: ''
   /api/v1/leads/{id}/unarchive/:
     post:
@@ -6114,6 +6330,25 @@ paths:
   /api/v1/opportunities/{id}/convert-to-project/:
     post:
       operationId: v1_opportunities_convert_to_project_create
+      description: |-
+        Converte a oportunidade ganha num projeto — **uma vez**, e a garantia mudou de lugar.
+
+        Até a ADR 0050 quem garantia "converte uma vez só" era o banco: `Project.opportunity` era
+        `OneToOneField`, e a segunda conversão morria num `IntegrityError` que virava 409. Essa
+        cardinalidade caiu porque ela também impedia o que a casa passou a vender — uma
+        Transformation Partnership origina vários projetos ao longo do mandato.
+
+        A invariante que importa não era a da tabela, era a do **botão**: duplo clique não pode
+        criar dois projetos. Ela continua aqui, e agora explicitamente:
+
+        - o guard olha projeto **vivo** com esta origem (arquivado não ocupa mais o lugar; a saída
+          da FDD 025 deixa de depender de restaurar);
+        - `select_for_update` na oportunidade serializa duas requisições simultâneas, que é o que
+          o `IntegrityError` fazia de graça e deixou de fazer. Sem ele, dois cliques concorrentes
+          leem "não há projeto" ao mesmo tempo e ambos criam — e nada acusa.
+
+        Projeto adicional com a mesma origem é legítimo e nasce por `POST /projects/`, com
+        `engagement` e `originating_commercial_opportunity` explícitos.
       parameters:
       - in: path
         name: id
@@ -8686,6 +8921,243 @@ paths:
                 items:
                   $ref: '#/components/schemas/DeliveryTimelineOverview'
           description: ''
+  /api/v1/qualifications/:
+    get:
+      operationId: v1_qualifications_list
+      description: |-
+        A avaliação que decide se um lead vira venda (ADR 0049, FDD 044).
+
+        Fechada para a Entrega, como `lead`: a qualificação é ato comercial e não atravessa para o
+        portal do cliente (mapa de linguagem §3). Quem produz o 403 é o `return False` do
+        `RolePermission` — recurso novo nasce fechado.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Qualification'
+          description: ''
+    post:
+      operationId: v1_qualifications_create
+      description: |-
+        A avaliação que decide se um lead vira venda (ADR 0049, FDD 044).
+
+        Fechada para a Entrega, como `lead`: a qualificação é ato comercial e não atravessa para o
+        portal do cliente (mapa de linguagem §3). Quem produz o 403 é o `return False` do
+        `RolePermission` — recurso novo nasce fechado.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Qualification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Qualification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Qualification'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Qualification'
+          description: ''
+  /api/v1/qualifications/{id}/:
+    get:
+      operationId: v1_qualifications_retrieve
+      description: |-
+        A avaliação que decide se um lead vira venda (ADR 0049, FDD 044).
+
+        Fechada para a Entrega, como `lead`: a qualificação é ato comercial e não atravessa para o
+        portal do cliente (mapa de linguagem §3). Quem produz o 403 é o `return False` do
+        `RolePermission` — recurso novo nasce fechado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este qualification.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Qualification'
+          description: ''
+    put:
+      operationId: v1_qualifications_update
+      description: |-
+        A avaliação que decide se um lead vira venda (ADR 0049, FDD 044).
+
+        Fechada para a Entrega, como `lead`: a qualificação é ato comercial e não atravessa para o
+        portal do cliente (mapa de linguagem §3). Quem produz o 403 é o `return False` do
+        `RolePermission` — recurso novo nasce fechado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este qualification.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Qualification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Qualification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Qualification'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Qualification'
+          description: ''
+    patch:
+      operationId: v1_qualifications_partial_update
+      description: |-
+        A avaliação que decide se um lead vira venda (ADR 0049, FDD 044).
+
+        Fechada para a Entrega, como `lead`: a qualificação é ato comercial e não atravessa para o
+        portal do cliente (mapa de linguagem §3). Quem produz o 403 é o `return False` do
+        `RolePermission` — recurso novo nasce fechado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este qualification.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedQualification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedQualification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedQualification'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Qualification'
+          description: ''
+    delete:
+      operationId: v1_qualifications_destroy
+      description: |-
+        A avaliação que decide se um lead vira venda (ADR 0049, FDD 044).
+
+        Fechada para a Entrega, como `lead`: a qualificação é ato comercial e não atravessa para o
+        portal do cliente (mapa de linguagem §3). Quem produz o 403 é o `return False` do
+        `RolePermission` — recurso novo nasce fechado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este qualification.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/qualifications/{id}/open-opportunity/:
+    post:
+      operationId: v1_qualifications_open_opportunity_create
+      description: |-
+        Abre a oportunidade comercial a partir de uma avaliação — o único caminho lead→venda.
+
+        É um **ato explícito**, e é essa a diferença para o que existia: antes a venda nascia de
+        graça junto com a conta, no mesmo clique que registrava a conversa. Aqui alguém decide
+        abrir, e o sistema recusa quando a avaliação não autoriza (invariante 5).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este qualification.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenCommercialOpportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpenCommercialOpportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpenCommercialOpportunity'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Opportunity'
+          description: ''
+  /api/v1/qualifications/{id}/unarchive/:
+    post:
+      operationId: v1_qualifications_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este qualification.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/recommendations/:
     get:
       operationId: v1_recommendations_retrieve
@@ -9891,16 +10363,6 @@ components:
       required:
       - interaction
       - rating
-    AiFitEnum:
-      enum:
-      - high
-      - medium
-      - low
-      type: string
-      description: |-
-        * `high` - Alto
-        * `medium` - Médio
-        * `low` - Baixo
     AiMetrics:
       type: object
       properties:
@@ -10280,6 +10742,14 @@ components:
         * `draft` - Rascunho
         * `review` - Em revisão
         * `published` - Publicado
+    CategoryEnum:
+      enum:
+      - acquisition
+      - commercial
+      type: string
+      description: |-
+        * `acquisition` - Aquisição
+        * `commercial` - Comercial
     ChangePassword:
       type: object
       description: Troca da própria senha, conferindo a senha atual.
@@ -11190,6 +11660,82 @@ components:
       - original_name
       - signature_requests
       - uploaded_by
+    Engagement:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        account_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        mandate:
+          type: string
+        sponsor:
+          type: integer
+          nullable: true
+        owner:
+          type: integer
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/EngagementStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        ended_at:
+          type: string
+          format: date
+          nullable: true
+        success_definition:
+          type: string
+        needs_review:
+          type: boolean
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - account_name
+      - archived_at
+      - created_at
+      - id
+      - name
+      - owner
+      - owner_name
+      - status_display
+      - updated_at
+    EngagementStatusEnum:
+      enum:
+      - active
+      - paused
+      - closed
+      type: string
+      description: |-
+        * `active` - Ativo
+        * `paused` - Pausado
+        * `closed` - Encerrado
     EngineeringHandoff:
       type: object
       description: |-
@@ -12179,7 +12725,7 @@ components:
           $ref: '#/components/schemas/LeadStatusEnum'
         ai_fit:
           allOf:
-          - $ref: '#/components/schemas/AiFitEnum'
+          - $ref: '#/components/schemas/QualificationLevelEnum'
           readOnly: true
         ai_score:
           type: integer
@@ -12206,6 +12752,13 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        qualification:
+          type: integer
+          nullable: true
+          readOnly: true
+        qualification_outcome:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -12226,9 +12779,76 @@ components:
       - id
       - name
       - opportunity
+      - qualification
+      - qualification_outcome
       - qualified_at
       - source
       - updated_at
+    LeadConvert:
+      type: object
+      description: |-
+        Corpo do `POST /leads/{id}/convert/` — a avaliação que a conversão registra.
+
+        Tudo é opcional, e `outcome` cai em `qualified` quando ausente: converter um lead sempre
+        significou "isto é real", e o botão que já existe na tela não manda corpo nenhum. Mudar o
+        default aqui trocaria uma decisão de produto por um efeito colateral de refatoração.
+      properties:
+        outcome:
+          allOf:
+          - $ref: '#/components/schemas/QualificationOutcomeEnum'
+          default: qualified
+        fit:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        need:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        urgency:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        authority:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        capacity:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        evidence:
+          type: string
+          default: ''
+        rationale:
+          type: string
+          default: ''
+        next_step:
+          type: string
+          default: ''
+          maxLength: 200
+        nurture_until:
+          type: string
+          format: date
+          nullable: true
+        account_id:
+          type: integer
+          nullable: true
+    LeadConverted:
+      type: object
+      properties:
+        lead:
+          $ref: '#/components/schemas/Lead'
+        qualification:
+          $ref: '#/components/schemas/Qualification'
+      required:
+      - lead
+      - qualification
     LeadIntake:
       type: object
       properties:
@@ -12484,6 +13104,37 @@ components:
         * `initial` - Primeira observação
         * `revisit` - Revisita
         * `validation` - Validação
+    OpenCommercialOpportunity:
+      type: object
+      description: |-
+        Corpo do `POST /qualifications/{id}/open-opportunity/` — o único caminho lead→venda.
+
+        Todos os campos são opcionais porque a ação existe para ser o passo seguinte de uma avaliação
+        já registrada: o que ela precisa saber (conta, origem, dono) vem da qualificação e da sessão.
+        O corpo serve para quem já sabe o que está vendendo.
+      properties:
+        title:
+          type: string
+          default: ''
+          maxLength: 255
+        scope:
+          type: string
+          default: ''
+        estimated_value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        service:
+          type: integer
+          nullable: true
+        expected_close_date:
+          type: string
+          format: date
+          nullable: true
+        contact:
+          type: integer
+          nullable: true
     Opportunity:
       type: object
       properties:
@@ -12531,6 +13182,10 @@ components:
         project_archived:
           type: boolean
           readOnly: true
+        origin_qualification:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -12545,6 +13200,7 @@ components:
       - estimated_value
       - expected_close_date
       - id
+      - origin_qualification
       - owner
       - project
       - project_archived
@@ -13184,6 +13840,61 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SignatureRequest'
+          readOnly: true
+    PatchedEngagement:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        account_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        mandate:
+          type: string
+        sponsor:
+          type: integer
+          nullable: true
+        owner:
+          type: integer
+        owner_name:
+          type: string
+          nullable: true
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/EngagementStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        ended_at:
+          type: string
+          format: date
+          nullable: true
+        success_definition:
+          type: string
+        needs_review:
+          type: boolean
+        archived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
           readOnly: true
     PatchedEngineeringHandoff:
       type: object
@@ -13833,7 +14544,7 @@ components:
           $ref: '#/components/schemas/LeadStatusEnum'
         ai_fit:
           allOf:
-          - $ref: '#/components/schemas/AiFitEnum'
+          - $ref: '#/components/schemas/QualificationLevelEnum'
           readOnly: true
         ai_score:
           type: integer
@@ -13860,6 +14571,13 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        qualification:
+          type: integer
+          nullable: true
+          readOnly: true
+        qualification_outcome:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -13996,6 +14714,10 @@ components:
         project_archived:
           type: boolean
           readOnly: true
+        origin_qualification:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -14282,10 +15004,18 @@ components:
           readOnly: true
         client:
           type: integer
+        engagement:
+          type: integer
+        engagement_name:
+          type: string
+          readOnly: true
+          default: ''
+        originating_commercial_opportunity:
+          type: integer
+          nullable: true
         opportunity:
           type: integer
           readOnly: true
-          nullable: true
         name:
           type: string
           maxLength: 255
@@ -14528,6 +15258,88 @@ components:
           items:
             $ref: '#/components/schemas/ProjectChecklistItem'
           readOnly: true
+    PatchedQualification:
+      type: object
+      description: A avaliação de um lead (ADR 0049). `outcome` é obrigatório e não
+        tem default.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        lead:
+          type: integer
+        lead_name:
+          type: string
+          readOnly: true
+        account:
+          type: integer
+          nullable: true
+        account_name:
+          type: string
+          readOnly: true
+          default: ''
+        happened_at:
+          type: string
+          format: date-time
+        assessor:
+          type: integer
+          nullable: true
+        fit:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        need:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        urgency:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        authority:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        capacity:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        evidence:
+          type: string
+        outcome:
+          $ref: '#/components/schemas/QualificationOutcomeEnum'
+        outcome_display:
+          type: string
+          readOnly: true
+        rationale:
+          type: string
+        next_step:
+          type: string
+          maxLength: 200
+        nurture_until:
+          type: string
+          format: date
+          nullable: true
+        ai_suggested_outcome:
+          allOf:
+          - $ref: '#/components/schemas/QualificationOutcomeEnum'
+          readOnly: true
+        ai_score_snapshot:
+          type: integer
+          readOnly: true
+          nullable: true
+        legacy_opportunity:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedRisco:
       type: object
       properties:
@@ -14632,6 +15444,11 @@ components:
           - $ref: '#/components/schemas/TierEnum'
           - $ref: '#/components/schemas/BlankEnum'
         tier_display:
+          type: string
+          readOnly: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        category_display:
           type: string
           readOnly: true
         list_price:
@@ -15181,10 +15998,18 @@ components:
           readOnly: true
         client:
           type: integer
+        engagement:
+          type: integer
+        engagement_name:
+          type: string
+          readOnly: true
+          default: ''
+        originating_commercial_opportunity:
+          type: integer
+          nullable: true
         opportunity:
           type: integer
           readOnly: true
-          nullable: true
         name:
           type: string
           maxLength: 255
@@ -15259,6 +16084,8 @@ components:
       - client_vertical_name
       - created_at
       - due_date
+      - engagement
+      - engagement_name
       - id
       - is_overdue
       - name
@@ -15566,6 +16393,120 @@ components:
         * `unavailable` - Indisponível
         * `permission_denied` - Sem permissão
         * `reference_missing` - Referência ausente
+    Qualification:
+      type: object
+      description: A avaliação de um lead (ADR 0049). `outcome` é obrigatório e não
+        tem default.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        lead:
+          type: integer
+        lead_name:
+          type: string
+          readOnly: true
+        account:
+          type: integer
+          nullable: true
+        account_name:
+          type: string
+          readOnly: true
+          default: ''
+        happened_at:
+          type: string
+          format: date-time
+        assessor:
+          type: integer
+          nullable: true
+        fit:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        need:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        urgency:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        authority:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        capacity:
+          oneOf:
+          - $ref: '#/components/schemas/QualificationLevelEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        evidence:
+          type: string
+        outcome:
+          $ref: '#/components/schemas/QualificationOutcomeEnum'
+        outcome_display:
+          type: string
+          readOnly: true
+        rationale:
+          type: string
+        next_step:
+          type: string
+          maxLength: 200
+        nurture_until:
+          type: string
+          format: date
+          nullable: true
+        ai_suggested_outcome:
+          allOf:
+          - $ref: '#/components/schemas/QualificationOutcomeEnum'
+          readOnly: true
+        ai_score_snapshot:
+          type: integer
+          readOnly: true
+          nullable: true
+        legacy_opportunity:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_name
+      - ai_score_snapshot
+      - ai_suggested_outcome
+      - created_at
+      - id
+      - lead
+      - lead_name
+      - legacy_opportunity
+      - outcome
+      - outcome_display
+      - updated_at
+    QualificationLevelEnum:
+      enum:
+      - high
+      - medium
+      - low
+      type: string
+      description: |-
+        * `high` - Alto
+        * `medium` - Médio
+        * `low` - Baixo
+    QualificationOutcomeEnum:
+      enum:
+      - qualified
+      - nurture
+      - disqualified
+      type: string
+      description: |-
+        * `qualified` - Qualificado
+        * `nurture` - Nutrir
+        * `disqualified` - Desqualificado
     RecommendationsResponse:
       type: object
       properties:
@@ -15751,6 +16692,11 @@ components:
         tier_display:
           type: string
           readOnly: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        category_display:
+          type: string
+          readOnly: true
         list_price:
           type: string
           format: decimal
@@ -15766,6 +16712,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - category_display
       - created_at
       - id
       - name

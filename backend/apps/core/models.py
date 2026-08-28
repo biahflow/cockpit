@@ -147,6 +147,73 @@ class Contact(TimestampedModel):
         return f"{self.first_name} {self.last_name}".strip()
 
 
+class Engagement(TimestampedModel):
+    """O mandato de transformação que a conta contratou — a espinha dorsal `Account → Project`.
+
+    Até aqui o projeto pendurava direto na conta e nascia de uma venda, numa relação 1-1 com ela.
+    Isso descreve bem a venda avulsa e descreve mal o que a casa passou a vender: uma
+    Transformation Partnership é recorrente, origina vários projetos ao longo de meses e não tem
+    onde ser representada — nem a oportunidade comporta os projetos (o `OneToOneField` só admitia
+    um), nem existia camada onde várias vendas e vários projetos se reconhecessem como o **mesmo**
+    trabalho. Sem ela, "como vai a transformação daquela conta?" só tem resposta somando projetos
+    a olho, e a resposta muda conforme quem soma.
+
+    `Engagement` é essa camada, e ela é **obrigatória** para todo projeto (D3 do mapa de
+    linguagem). A venda avulsa cria um engajamento de escopo único, criado sozinho pela
+    `convert-to-project` — dois caminhos no código custariam mais que uma linha a mais na tabela,
+    e o caminho raro é justamente o que ninguém testa.
+
+    Ele é do **comercial**: quem entrega lê, não escreve (`permissions.RolePermission`). E não é
+    fronteira de acesso — o recorte da Entrega continua sendo `ProjectMember`, e enxergar um
+    engajamento não dá acesso a projeto nenhum dele (ADR 0050, FDD 046).
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Ativo"
+        PAUSED = "paused", "Pausado"
+        CLOSED = "closed", "Encerrado"
+
+    # `account` e não `client`: é o termo canônico do mapa de linguagem, e o campo nasce com o
+    # nome certo mesmo enquanto o modelo ainda se chama `Client` (o renome físico é a Fase 6).
+    account = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="engagements")
+    name = models.CharField(max_length=255)
+    # O mandato em si: o que a casa foi contratada para transformar. Texto livre e opcional
+    # porque o engajamento de escopo único nasce da conversão, onde o que existe é o escopo da
+    # oportunidade — exigir redação nesse ponto travaria a conversão por um campo de prosa.
+    mandate = models.TextField(blank=True, default="")
+    sponsor = models.ForeignKey(
+        Contact, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="sponsored_engagements",
+    )
+    owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="owned_engagements")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    started_at = models.DateField(null=True, blank=True)
+    ended_at = models.DateField(null=True, blank=True)
+    success_definition = models.TextField(blank=True, default="")
+    # Carimbo do backfill da 0056, não campo de operação: marca a conta cujos projetos **talvez**
+    # sejam jornadas distintas agrupadas num engajamento só. A migração não separa sozinha — ela
+    # não tem como saber —, ela sinaliza para revisão humana. Ver a docstring da 0056.
+    needs_review = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-started_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def clean(self) -> None:
+        if self.started_at and self.ended_at and self.ended_at < self.started_at:
+            raise ValidationError({"ended_at": "A data final não pode ser anterior à inicial."})
+        if self.status == self.Status.CLOSED and self.ended_at is None:
+            raise ValidationError({"ended_at": "Um engajamento encerrado precisa de data final."})
+        # O patrocinador é quem responde pelo mandato **dentro da conta**. Um contato de outra
+        # organização aqui seria o mesmo defeito que `Activity.clean()` já fecha na oportunidade:
+        # a tela mostraria um nome que não pertence àquele cliente, e ninguém acusaria.
+        sponsor = self.sponsor if self.sponsor_id else None
+        if sponsor is not None and sponsor.client_id != self.account_id:
+            raise ValidationError({"sponsor": "O patrocinador deve ser contato da mesma conta."})
+
+
 class PipelineStage(models.Model):
     class Kind(models.TextChoices):
         OPEN = "open", "Aberta"
@@ -185,9 +252,44 @@ class Opportunity(TimestampedModel):
     service = models.ForeignKey(
         "Service", on_delete=models.SET_NULL, null=True, blank=True, related_name="opportunities"
     )
+    # A avaliação que autorizou esta venda (ADR 0049). Referência por string porque
+    # `Qualification` é declarada depois de `Lead`, bem abaixo daqui — e ela fica *depois* de
+    # propósito: a avaliação pende do lead, não da oportunidade.
+    #
+    # Nula no que já existia e no que nasce fora do funil de lead (indicação, conta que volta a
+    # comprar). Obrigá-la agora invalidaria a carteira inteira; o que a invariante 5 do mapa de
+    # linguagem exige é o inverso — quando ela existe, ela é `qualified`, e é o `clean()` abaixo
+    # que garante isso.
+    origin_qualification = models.ForeignKey(
+        "Qualification", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="commercial_opportunities",
+    )
+    # O mandato a que esta venda pertence (ADR 0050). **Opcional, e permanece opcional**: a
+    # oportunidade costuma nascer antes de haver mandato nenhum — é ela que o origina, quando é a
+    # primeira. Exigi-la aqui inverteria a ordem dos fatos. `SET_NULL` pelo mesmo motivo: apagar o
+    # engajamento não pode apagar a venda que já aconteceu.
+    engagement = models.ForeignKey(
+        "Engagement", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="commercial_opportunities",
+    )
 
     class Meta:
         ordering = ["expected_close_date", "id"]
+
+    def clean(self) -> None:
+        """Invariante 5 do mapa de linguagem, no modelo e não só na view.
+
+        `POST /qualifications/{id}/open-opportunity/` é o caminho previsto e já recusa com 409, mas
+        a regra não pode morar só lá: shell, admin e migração futura criam `Opportunity` sem passar
+        por view nenhuma, e uma venda apontando para uma avaliação `nurture` diria que a casa vendeu
+        para quem ela mesma decidiu não vender ainda.
+        """
+        origem = self.origin_qualification if self.origin_qualification_id else None
+        if origem is not None and origem.outcome != Qualification.Outcome.QUALIFIED:
+            raise ValidationError({
+                "origin_qualification":
+                    "Só uma qualificação com resultado Qualificado abre oportunidade comercial."
+            })
 
     @property
     def is_won(self) -> bool:
@@ -244,9 +346,24 @@ class Project(TimestampedModel):
         ON_HOLD = "on_hold", "Em espera"
         COMPLETED = "completed", "Concluído"
 
+    # **Projeção temporária.** A conta canônica do projeto é `engagement.account`; este campo
+    # sobrevive porque metade do produto (agregadores, permissões, portal) ainda pergunta pelo
+    # cliente direto, e removê-lo é a Fase 6. O que o mantém honesto é a validação em `clean()`
+    # abaixo — sem ela, a projeção divergiria da fonte em silêncio, que é exatamente o defeito
+    # que uma projeção introduz quando ninguém a amarra.
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="projects")
-    opportunity = models.OneToOneField(
-        Opportunity, on_delete=models.PROTECT, related_name="project", null=True, blank=True
+    # O mandato a que este projeto pertence — **obrigatório** (invariante 7 do mapa de linguagem).
+    # Nasceu nulo na 0055 e virou NOT NULL na 0057, com o backfill da 0056 no meio; ver a
+    # docstring da 0057 para por que os três passos são migrações separadas.
+    engagement = models.ForeignKey("Engagement", on_delete=models.PROTECT, related_name="projects")
+    # A venda que originou este projeto — **1-N e opcional**. Era `OneToOneField`, e a
+    # cardinalidade antiga é o que impedia uma venda recorrente de originar mais de um projeto.
+    # A garantia de "converte uma vez só" que o banco dava saiu daqui e virou ato explícito na
+    # `OpportunityViewSet.convert_to_project` (409 + `select_for_update`), porque o que se quer
+    # proteger é o **botão**, não a relação: um segundo projeto com a mesma origem é legítimo, e
+    # nasce por `POST /projects/`. Ver ADR 0050.
+    originating_commercial_opportunity = models.ForeignKey(
+        Opportunity, on_delete=models.PROTECT, related_name="projects", null=True, blank=True
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -281,6 +398,23 @@ class Project(TimestampedModel):
     def clean(self) -> None:
         if self.due_date < self.start_date:
             raise ValidationError({"due_date": "A data final não pode ser anterior à inicial."})
+        # Invariante 6 do mapa de linguagem: nenhum projeto nasce de oferta de aquisição (ADR 0049).
+        # A `convert-to-project` já recusa com 400, e a regra fica aqui pela razão da
+        # `Opportunity.clean()` logo acima — a via da view não é a única via.
+        service = self.service if self.service_id else None
+        if service is not None and service.category == Service.Category.ACQUISITION:
+            raise ValidationError({
+                "service": "Oferta de aquisição não gera projeto — escolha um degrau da escada."
+            })
+        # O que mantém a projeção `client` honesta (ADR 0050). Dois caminhos chegam ao dono do
+        # projeto — `project.client` e `project.engagement.account` — e nada além desta linha
+        # impede que eles digam coisas diferentes. Divergindo, o projeto aparece na carteira de
+        # uma conta e no mandato de outra, e nenhuma tela acusa.
+        engagement = self.engagement if self.engagement_id else None
+        if engagement is not None and engagement.account_id != self.client_id:
+            raise ValidationError({
+                "engagement": "O engajamento deve pertencer ao mesmo cliente do projeto."
+            })
 
     @property
     def current_phase(self) -> ProjectPhase | None:
@@ -895,6 +1029,99 @@ class Lead(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.name} <{self.email}>"
+
+
+class Qualification(TimestampedModel):
+    """A avaliação que decide se um `Lead` vira venda — e que até aqui não existia (ADR 0049).
+
+    O `POST /leads/{id}/convert/` criava, num ato só, um `Client` **e** uma `Opportunity` no degrau
+    gratuito da escada. Isso gravava uma conversa de qualificação como venda registrada: ela entrava
+    no funil, somava no pipeline e podia virar `Project`. A sequência normativa do Language Map é
+    `Lead → Qualification → (qualified) → CommercialOpportunity`, e o degrau do meio precisava de
+    linha própria para que a decisão tivesse autor, data e motivo (decisão D1).
+
+    **Um lead tem várias.** O `nurture` de hoje vira `qualified` daqui a seis meses, e as duas
+    avaliações são fatos distintos — não há constraint de unicidade por lead, de propósito.
+    Sobrescrever a avaliação anterior apagaria justamente o histórico que ela existe para guardar.
+
+    **A IA é insumo, nunca decisão** (Language Map §5). `ai_suggested_outcome` e `ai_score_snapshot`
+    guardam o que o modelo achou no momento da avaliação, e nada os copia para `outcome`: quem
+    qualifica é o `assessor`.
+    """
+
+    class Outcome(models.TextChoices):
+        QUALIFIED = "qualified", "Qualificado"
+        NURTURE = "nurture", "Nutrir"
+        DISQUALIFIED = "disqualified", "Desqualificado"
+
+    class Level(models.TextChoices):
+        HIGH = "high", "Alto"
+        MEDIUM = "medium", "Médio"
+        LOW = "low", "Baixo"
+
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="qualifications")
+    # `PROTECT` e não `CASCADE`: a conta sobrevive à avaliação, e apagar uma conta que já tem
+    # avaliação registrada é ato deliberado, não efeito colateral. Nula enquanto a conversão ainda
+    # não resolveu a organização (avaliação de lead desqualificado não precisa criar conta).
+    account = models.ForeignKey(
+        Client, on_delete=models.PROTECT, null=True, blank=True, related_name="qualifications"
+    )
+    happened_at = models.DateTimeField(default=timezone.now)
+    assessor = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="qualifications_assessed",
+    )
+    # Os cinco eixos do roteiro de qualificação. Todos opcionais: o registro tem de acontecer mesmo
+    # quando quem avaliou só sabe dizer o resultado, senão ele não acontece.
+    fit = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    need = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    urgency = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    authority = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    capacity = models.CharField(max_length=8, choices=Level.choices, blank=True, default="")
+    evidence = models.TextField(blank=True, default="")
+    # **Sem default**, e é a decisão central desta entidade: uma avaliação sem resultado é uma
+    # avaliação que não aconteceu, e um default faria o formulário meio-preenchido virar decisão.
+    outcome = models.CharField(max_length=16, choices=Outcome.choices)
+    rationale = models.TextField(blank=True, default="")
+    next_step = models.CharField(max_length=200, blank=True, default="")
+    nurture_until = models.DateField(null=True, blank=True)
+    ai_suggested_outcome = models.CharField(
+        max_length=16, choices=Outcome.choices, blank=True, default=""
+    )
+    ai_score_snapshot = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Mapeamento do backfill da migração 0052: a `Opportunity` de tier `qualification_call` que
+    # esta avaliação passou a representar. `legacy_` é o único prefixo que o mapa de linguagem
+    # aceita em `opportunity` sem qualificador — é ponte para o nome antigo, não conceito novo.
+    legacy_opportunity = models.OneToOneField(
+        Opportunity, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="backfilled_qualification",
+    )
+
+    class Meta:
+        ordering = ["-happened_at"]
+
+    def __str__(self) -> str:
+        return f"{self.lead_id} · {self.get_outcome_display()}"
+
+    def clean(self) -> None:
+        if self.outcome == self.Outcome.NURTURE and self.nurture_until is None:
+            raise ValidationError(
+                {"nurture_until": "Nutrir exige a data em que este lead volta ao radar."}
+            )
+        # O inverso também é erro, e não zelo excessivo: guardar data de retorno para quem foi
+        # qualificado ou descartado promete um follow-up que ninguém vai fazer, e a lista de
+        # nutrição passa a mostrar quem não está em nutrição.
+        if self.outcome != self.Outcome.NURTURE and self.nurture_until is not None:
+            raise ValidationError(
+                {"nurture_until": "Só faz sentido em uma avaliação com resultado Nutrir."}
+            )
+        # Fronteira de conta: sem isto, uma avaliação pode ficar pendurada na organização de
+        # **outro** lead — o mesmo vazamento por campo opcional que `Activity.clean()` fecha.
+        if self.account_id and self.lead_id and self.lead.client_id:
+            if self.lead.client_id != self.account_id:
+                raise ValidationError(
+                    {"account": "A conta deve ser a mesma já vinculada ao lead."}
+                )
 
 
 class Booking(TimestampedModel):
@@ -1687,6 +1914,18 @@ class Service(TimestampedModel):
     que nunca enche.
     """
 
+    class Category(models.TextChoices):
+        """O que a oferta faz pela casa — e é o que separa a escada comercial da porta (D4).
+
+        `acquisition` é oferta de **aquisição**: existe para descobrir se há venda, não para ser
+        vendida. A Qualification Call é a única hoje. Ela nunca gera `Opportunity` nem `Project`,
+        e é essa categoria — não o preço zero — que carrega a regra: gratuito também é o
+        Discovery + Assessment do programa de founding client, e aquele é degrau vendável.
+        """
+
+        ACQUISITION = "acquisition", "Aquisição"
+        COMMERCIAL = "commercial", "Comercial"
+
     class Tier(models.TextChoices):
         QUALIFICATION_CALL = "qualification_call", "Qualification Call"
         DISCOVERY_ASSESSMENT = "discovery_assessment", "Discovery Express + Assessment"
@@ -1699,6 +1938,10 @@ class Service(TimestampedModel):
     name = models.CharField(max_length=120)
     active = models.BooleanField(default=True)
     tier = models.CharField(max_length=32, choices=Tier.choices, blank=True, default="")
+    # `commercial` por padrão: serviço novo é para vender, e a exceção é a porta de aquisição.
+    category = models.CharField(
+        max_length=16, choices=Category.choices, default=Category.COMMERCIAL
+    )
     list_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     summary = models.TextField(blank=True, default="")
 

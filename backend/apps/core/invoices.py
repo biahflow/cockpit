@@ -115,7 +115,7 @@ def contracted_value(project: Project) -> Decimal:
     """
     if project.actual_value and project.actual_value > 0:
         return Decimal(project.actual_value)
-    opportunity = project.opportunity
+    opportunity = project.originating_commercial_opportunity
     if opportunity is not None and opportunity.estimated_value > 0:
         return Decimal(opportunity.estimated_value)
     if project.service is not None:

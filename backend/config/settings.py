@@ -268,6 +268,15 @@ SPECTACULAR_SETTINGS = {
         # os componentes — o de sincronia mantém o `SourceEnum` que já tinha.
         "SourceEnum": "apps.core.tasksync.SOURCES",
         "PhaseEventSourceEnum": "apps.core.models.PhaseEvent.Source",
+        # `Qualification.outcome` (ADR 0049) disputa o nome `OutcomeEnum` com o `outcome` do corpo
+        # da action `apply-gate`, e o desempate por sufixo numérico (`Outcome4e6Enum`) é o mesmo
+        # defeito do `SourceEnum` acima: instável entre gerações, faz o `openapi.yaml` divergir
+        # sem ninguém ter mudado nada. O override também recolhe o `ai_suggested_outcome`, que
+        # compartilha o conjunto.
+        "QualificationOutcomeEnum": "apps.core.models.Qualification.Outcome",
+        # Os cinco eixos da avaliação (fit/need/urgency/authority/capacity) são **um** conjunto de
+        # valores; sem o override, cada campo vira um componente próprio com a mesma definição.
+        "QualificationLevelEnum": "apps.core.models.Qualification.Level",
     },
 }
 SESSION_COOKIE_SECURE = not DEBUG

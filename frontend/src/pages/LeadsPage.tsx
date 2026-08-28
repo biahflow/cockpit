@@ -3,9 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { api } from "../api";
 import { ConfirmDialog } from "../components/Modal";
-import type { Lead, LeadFit, LeadStatus } from "../types";
+import type { Lead, LeadFit, LeadStatus, Qualification, QualificationOutcome } from "../types";
 
 const statusLabel: Record<LeadStatus, string> = { new: "Novo", contacted: "Contatado", qualified: "Qualificado", discarded: "Descartado" };
+// O resultado da avaliação (ADR 0049). Só "Qualificado" abre oportunidade comercial, e abrir é um
+// segundo ato — a tela do pipeline. Aqui a conversão promete a **qualificação**, não a venda.
+const outcomeLabel: Record<QualificationOutcome, string> = { qualified: "Qualificado", nurture: "Em nutrição", disqualified: "Desqualificado" };
+const outcomeCls: Record<QualificationOutcome, string> = { qualified: "state--1", nurture: "state--2", disqualified: "state--off" };
 const fitLabel: Record<Exclude<LeadFit, "">, string> = { high: "Fit alto", medium: "Fit médio", low: "Fit baixo" };
 // Variantes de `.state`, não as cores delas: um `bg-emerald-50` escrito aqui é uma segunda
 // definição de "concluído", e ela diverge da primeira sem nada ficar vermelho.
@@ -29,7 +33,9 @@ export function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filter, setFilter] = useState<Filtro>("all");
   const [restoring, setRestoring] = useState<number | null>(null);
+  const [qualifying, setQualifying] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
   const [archiving, setArchiving] = useState<Lead | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
 
@@ -43,9 +49,18 @@ export function LeadsPage() {
     try { await api(`/leads/${id}/`, { method: "PATCH", body: JSON.stringify({ status }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
-  async function convert(id: number) {
-    try { await api(`/leads/${id}/convert/`, { method: "POST" }); await load(); }
+  async function qualify(id: number) {
+    setError(""); setFeedback(""); setQualifying(id);
+    try {
+      // A resposta mudou de forma junto com o comportamento: era o lead, agora é o lead **mais** a
+      // avaliação criada. Ler `qualification` aqui é o que permite dizer o resultado na tela em
+      // vez de anunciar uma oportunidade que esta ação não cria mais.
+      const { qualification } = await api<{ lead: Lead; qualification: Qualification }>(`/leads/${id}/convert/`, { method: "POST" });
+      setFeedback(`Qualificação registrada: ${outcomeLabel[qualification.outcome]}. Abra a oportunidade pelo pipeline quando a venda começar.`);
+      await load();
+    }
     catch (cause) { setError((cause as Error).message); }
+    finally { setQualifying(null); }
   }
   async function restore(id: number) {
     setError(""); setRestoring(id);
@@ -71,8 +86,9 @@ export function LeadsPage() {
       confirmLabel="Arquivar" busy={archiveBusy}
       onCancel={() => setArchiving(null)} onConfirm={() => void archive()}
     />}
-    <header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">Comercial</p><h1>Leads</h1><p>Contatos recebidos pelo site. Triê e converta em oportunidades.</p></div><span className="self-start rounded-xl bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 sm:self-auto">{newCount} novos</span></header>
+    <header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">Comercial</p><h1>Leads</h1><p>Contatos recebidos pelo site. Triê e registre a qualificação.</p></div><span className="self-start rounded-xl bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 sm:self-auto">{newCount} novos</span></header>
     {error && <p role="alert" className="alert--error">{error}</p>}
+    {feedback && <p role="status" className="alert--ok">{feedback}</p>}
 
     <div className="filter-bar">{filters.map(value => <button key={value} className={`filter-chip${filter === value ? " filter-chip--on" : ""}`} onClick={() => setFilter(value)}>{value === "all" ? "Todos" : value === "archived" ? "Arquivados" : statusLabel[value]}</button>)}</div>
 
@@ -89,7 +105,8 @@ export function LeadsPage() {
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {filter === "archived" ? <button className="btn btn--secondary" disabled={restoring === lead.id} onClick={() => void restore(lead.id)}><RotateCcw className="size-4" />{restoring === lead.id ? "Restaurando…" : "Restaurar"}</button> : <>
         <select className="field w-40" value={lead.status} onChange={event => void changeStatus(lead.id, event.target.value as LeadStatus)} aria-label={`Status do lead ${lead.name}`}>{(Object.keys(statusLabel) as LeadStatus[]).map(value => <option key={value} value={value}>{statusLabel[value]}</option>)}</select>
-        {lead.opportunity ? <span className="state state--1">Convertido</span> : <button className="btn" onClick={() => void convert(lead.id)}>Converter em oportunidade <ArrowRight className="size-4" /></button>}
+        {lead.qualification_outcome ? <span className={`state ${outcomeCls[lead.qualification_outcome]}`}>{outcomeLabel[lead.qualification_outcome]}</span> : null}
+        {lead.qualification_outcome === "qualified" || lead.opportunity ? null : <button className="btn" disabled={qualifying === lead.id} onClick={() => void qualify(lead.id)}>{qualifying === lead.id ? "Registrando…" : "Registrar qualificação"} <ArrowRight className="size-4" /></button>}
         <button className="btn btn--icon-danger ml-auto" aria-label={`Arquivar lead ${lead.name}`} onClick={() => setArchiving(lead)}><Trash2 className="size-4" /></button>
         </>}
       </div>
