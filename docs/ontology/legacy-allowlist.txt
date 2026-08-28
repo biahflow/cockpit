@@ -65,11 +65,18 @@ frontend/src/types.ts::client-como-organizacao::ClientStatus::1
 # Esta é a única regra que casa **referência** e não declaração, porque o identificador inteiro
 # está errado: não existe uso legítimo do nome antigo. O preço é um bloco maior — um par de
 # entradas por arquivo que toca o enum — e o ganho é que arquivo novo não herda o nome.
+#
+# `models.py` subiu de 8 para 9 na Issue #71, e a ocorrência a mais é o que **permite** remover
+# as outras: o corpo da propriedade `ProjectPhase.gate_decision`, o alias canônico que
+# `aliases.md` prescreve (nome novo apontando para o campo legado). A projeção do portal lê por
+# ele em vez de tocar o nome antigo, então `portal.py` não entra neste bloco — o alias concentra
+# a dívida num lugar só, que é onde a Fase 6 vai renomear. Nenhuma entrada nova, e o
+# `TETO_DA_ALLOWLIST` não muda: ele conta dívidas distintas, e esta continua sendo uma.
 # ---------------------------------------------------------------------------------------------
 backend/apps/core/journey.py::outcome-como-decisao-de-gate::GateOutcome::7
 backend/apps/core/journey.py::outcome-como-decisao-de-gate::gate_outcome::13
 backend/apps/core/models.py::outcome-como-decisao-de-gate::GateOutcome::4
-backend/apps/core/models.py::outcome-como-decisao-de-gate::gate_outcome::8
+backend/apps/core/models.py::outcome-como-decisao-de-gate::gate_outcome::9
 backend/apps/core/serializers.py::outcome-como-decisao-de-gate::gate_outcome::5
 backend/apps/core/views.py::outcome-como-decisao-de-gate::GateOutcome::2
 backend/apps/core/views.py::outcome-como-decisao-de-gate::gate_outcome::1

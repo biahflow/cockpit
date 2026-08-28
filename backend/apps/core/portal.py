@@ -16,6 +16,10 @@ estado, e o `description` fica de fora. A assimetria tem motivo — uma pendênc
 acompanhamento, e uma decisão sem o porquê é um título. O porquê é justamente o que o cliente não
 consegue reconstituir sozinho, e é o que ele volta para consultar meses depois. O limite continua
 onde estava: sai o racional da decisão **publicada**, nunca o rascunho e nunca anotação interna.
+
+Desde a ADR 0051 este módulo também **escreve**, e num lugar só: `emit` carimba
+`projection_version`/`projection_observed_at` no projeto. É a inversão que o desenho exige —
+quem muda o estado carimba, quem lê não —, e ela está escrita em detalhe no próprio `emit`.
 """
 
 from __future__ import annotations
@@ -31,7 +35,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Min, Q
+from django.db.models import F, Min, Q
 from django.utils import timezone
 
 from . import flags, health, service_identity
@@ -105,6 +109,22 @@ def _journey(project: Project) -> list[dict[str, Any]]:
     O portal do cliente usa `status` (locked/active/done) para montar o "Você está aqui" e
     para "desbloquear" os entregáveis fase a fase. Só o vocabulário da metodologia e o estado
     cruzam — nada técnico (tasks/PRs) vai para o cliente.
+
+    Três chaves falam o vocabulário canônico (Issue #71, ADR 0051):
+
+    * `canonical_stage` classifica a fase configurável sobre a escada FDE, e **vazio é
+      legítimo** — é a fase operacional Biahflow sem equivalente (`Activation`), não dado
+      faltando. Nenhum default é inventado aqui.
+    * `requires_gate` vem do **template**, não da instância, e é ele que permite ao One
+      distinguir "exige gate e ninguém decidiu" de "não tem gate": sem ele os dois casos são o
+      mesmo `gate_decision` vazio.
+    * `gate_decision` é o nome do D7, lido da propriedade canônica de `ProjectPhase`. A
+      projeção emite canônico enquanto o modelo ainda não renomeou, porque *o One nunca
+      renomeia* (`language-map` §3).
+
+    **`situation` fica de fora, e isso é escolha.** Ela colapsa `waiting_party`, que é
+    classificação interna de delivery ("estamos esperando engenharia") e não atravessa a
+    fronteira do cliente (`language-map` §3). O One deriva o que precisa do par acima.
     """
     phases = (
         ProjectPhase.objects.filter(project=project, archived_at__isnull=True)
@@ -119,6 +139,9 @@ def _journey(project: Project) -> list[dict[str, Any]]:
             "description": phase.phase.description,
             "position": phase.phase.position,
             "status": phase.status,
+            "canonical_stage": phase.phase.canonical_stage,
+            "requires_gate": phase.phase.requires_gate,
+            "gate_decision": phase.gate_decision,
             "target_date": phase.target_date.isoformat() if phase.target_date else None,
             "started_at": phase.started_at.isoformat() if phase.started_at else None,
             "completed_at": phase.completed_at.isoformat() if phase.completed_at else None,
@@ -279,11 +302,42 @@ def build_snapshot(project: Project) -> dict[str, Any]:
             # indistinguível de "projeto inexistente", que é o que travava o read model dele no
             # último estado bom. `None` quando ativo, e o portal desfaz igual ao restaurar.
             "archived_at": project.archived_at.isoformat() if project.archived_at else None,
+            # **`client` é alias com data** e continua saindo inalterado: ele morre na
+            # `/api/v2/`, junto com a rota (`docs/ontology/aliases.md`). Quebrar o consumidor
+            # antes disso não é o que a fatia se propõe.
             "client": {"id": project.client_id, "name": project.client.name},
+            # A conta canônica sai do **engajamento**, não de `Project.client`. Os dois são
+            # iguais por construção — `Project.clean()` amarra `engagement.account_id ==
+            # client_id` —, e ainda assim a projeção lê a fonte e não o alias: `Project.client`
+            # é projeção temporária que a Fase 6 remove, e quem já lê pelo lado canônico não
+            # precisa mudar quando ela sair.
+            "account": {
+                "id": project.engagement.account_id,
+                "name": project.engagement.account.name,
+            },
+            # Sempre presente: `Project.engagement` é NOT NULL desde a migração `0057`.
+            "engagement": {
+                "id": project.engagement_id,
+                "name": project.engagement.name,
+                "status": project.engagement.status,
+            },
         },
         # A primeira aprovação deste cliente, e só o instante dela — o degrau que faltava no
         # funil de onboarding do portal. Ver `_artifact_accepted_at`.
         "artifact_accepted_at": _artifact_accepted_at(project),
+        # O carimbo da projeção (ADR 0051), **lido e nunca calculado aqui**. Quem carimba é
+        # `emit`, porque quem muda o estado é que sabe que ele mudou; esta rota é um `GET` e
+        # `timezone.now()` neste ponto seria a hora do *envio*, não a da observação.
+        #
+        # Duas leituras seguidas sem mudança devolvem a mesma versão, e isso é o caso comum
+        # deste desenho, não sintoma: a projeção não mudou. O `sync_snapshot` do lado de lá
+        # trata empate aplicando o snapshot, porque é idempotente por substituição.
+        "observed_at": (
+            project.projection_observed_at.isoformat()
+            if project.projection_observed_at
+            else None
+        ),
+        "projection_version": project.projection_version,
         "completion": completion,
         "health": {"label": health_label, "level": health_level},
         "digital_employees": digital_employees,
@@ -353,7 +407,29 @@ def emit(event: str, object_type: str, project_id: int | None) -> None:
     pelo próximo evento do mesmo projeto ou por backfill manual. Vale a pena emitir em todo caminho
     que muda o projeto, e não contar com reconciliação. Não faz nada quando a integração não está
     configurada nem quando o admin a desligou pela tela.
+
+    **Carimba a projeção antes de qualquer guarda** (ADR 0051). Este é o estrangulamento único
+    por onde passam os onze receivers `_emit_*`, e é o lugar certo de dizer "o estado mudou".
     """
+    # Três razões para o carimbo estar exatamente aqui:
+    #
+    # 1. `F(...) + 1` resolve a concorrência **no banco**. Ler em Python e somar perderia
+    #    incremento sob escrita simultânea — e versão que anda para trás é o pior defeito
+    #    possível para um comparador de obsolescência, que passaria a recusar estado novo.
+    #    Não há precedente de `F() + 1` no repositório; este é o primeiro.
+    # 2. **Antes da guarda de flag**, e não depois. A projeção mudou de fato mesmo com o webhook
+    #    desligado (ADR 0018): carimbar só quando o aviso sai faria o One, ao religar a flag,
+    #    receber estado novo com versão velha e **recusá-lo**.
+    # 3. `.update()` **não dispara signal**, então carimbar o `Project` de dentro do `post_save`
+    #    do próprio `Project` não recursa. É a primeira pergunta de quem revisa isto.
+    #
+    # `_emit_project_deleted` (`post_delete`) chega aqui com a pk de um projeto que já não
+    # existe: o filtro casa zero linhas e o `update` é inócuo. Não é caso especial.
+    if project_id:
+        Project.objects.filter(pk=project_id).update(
+            projection_version=F("projection_version") + 1,
+            projection_observed_at=timezone.now(),
+        )
     # A flag passou a ser alternável (ADR 0018) e este é o ponto que a aplica: ler as settings direto,
     # como antes, ignoraria o desligamento feito pela tela — e o portal continuaria recebendo evento
     # durante o incidente que motivou desligá-lo.

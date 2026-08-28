@@ -178,6 +178,17 @@ Key cross-cutting patterns to preserve:
   ainda leem o legado — há regressão afirmando que promover um `Finding` não move o custo. Campos
   com nome canônico (`account`, `process`, `step`) apontam para os modelos legados; o renome físico
   é fase posterior, e `legacy_evidencia` é o escape de mapeamento do backfill (migração `0054`).
+- **O snapshot do portal fala canônico, e quem carimba a projeção é quem muda o estado.**
+  `portal.build_snapshot` é projeção de leitura do One, e o One **nunca renomeia** (`language-map`
+  §3): por isso ele leva `account` (de `engagement.account`, a fonte — não de `Project.client`, que
+  é a projeção temporária), `engagement`, e `canonical_stage`/`requires_gate`/`gate_decision` em
+  cada fase, com `gate_decision` lido da **propriedade** de `ProjectPhase` para o nome legado não
+  se espalhar. `client` fica como alias até a `/api/v2/`; `situation` e `waiting_party` **não**
+  atravessam — são classificação interna de delivery. O carimbo `observed_at`/`projection_version`
+  é escrito em `portal.emit` (`F()+1`, **antes** da guarda de flag), nunca no `build_snapshot`:
+  a rota é um `GET`, e incrementar na leitura produziria versões fora de ordem — o sinal exato que
+  o comparador do outro lado usa para descartar o obsoleto. Duas leituras seguidas devolvendo a
+  mesma versão é o caso comum, não sintoma. Ver FDD 047, ADR 0051 e a emenda de 28/08 na ADR 0003.
 - **Pipeline invariants.** DB constraints enforce at most one "won" and one "lost"
   `PipelineStage`, and at most one active `Service` per product `tier`. DRF derives the
   serializer validation from these constraints — don't hand-roll a duplicate check.

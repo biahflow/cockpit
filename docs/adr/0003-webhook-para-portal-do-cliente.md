@@ -145,3 +145,45 @@ atravessar — o snapshot informa `has_transcript` e nada mais, como desde a FDD
 
 E a regra que abre esta ADR ganhou finalmente um portão derivado, em vez de seis asserções escritas
 à mão: ver a ADR 0027.
+
+## Emenda (Issue #71, 28/08/2026) — a projeção passa a falar o vocabulário canônico
+
+Quarta lacuna, e desta vez não é um dado que faltava: é o **nome** dele.
+
+O One é projeção de leitura do Pulse e, pela §3 do `docs/ontology/language-map.md`, **nunca
+renomeia**. O snapshot, porém, falava o vocabulário de 2025: mandava `client` e nada de conta nem
+de mandato, e a jornada saía sem a classificação canônica da fase nem a decisão do gate. O outro
+lado não tinha como dizer "Account" e "Engagement" sem inventar a tradução — que é exatamente o
+que a regra proíbe.
+
+**Quatro chaves entram.** No projeto, `account` (a conta, lida de `engagement.account`) e
+`engagement` (`id`, `name`, `status`). Em cada fase da jornada, `canonical_stage`, `requires_gate`
+e `gate_decision`. Duas coisas ficam declaradas junto:
+
+- **`account` sai do engajamento, não de `Project.client`.** Os dois são iguais por construção —
+  `Project.clean()` amarra `engagement.account_id == client_id` —, e ainda assim a projeção lê a
+  fonte e não o alias, porque `Project.client` é projeção temporária que a Fase 6 remove. Quem já
+  lê pelo lado canônico não muda quando ela sair.
+- **`client` continua saindo, inalterado.** É alias com data, e a data é a `/api/v2/`
+  (`docs/ontology/aliases.md`). Removê-lo antes disso quebraria o consumidor sem necessidade.
+
+**A projeção fala canônico enquanto o modelo não**, e isso é deliberado. O renome físico de
+`gate_outcome` para `GateDecision` (decisão D7) é a Fase 6; até lá, `ProjectPhase.gate_decision` é
+o alias — nome canônico apontando para o campo legado, na forma que `aliases.md` prescreve —, e é
+por ele que a projeção lê. O nome antigo fica contido em `models.py` em vez de se espalhar para
+mais um arquivo, e a Fase 6 renomeia um lugar só.
+
+**`situation` não atravessa.** Ela colapsa `waiting_party`, que é classificação interna de
+delivery ("estamos esperando engenharia") e não é conversa de cliente (`language-map` §3). O One
+deriva o que precisa do par `requires_gate`/`gate_decision`, e é por isso que `requires_gate` vem
+do **template**: sem ele, "exige gate e ninguém decidiu" e "não tem gate" seriam o mesmo
+`gate_decision` vazio.
+
+**Dois emissores novos, pela regra que abre esta ADR.** `_emit_engagement` (`post_save` de
+`Engagement`) avisa **todos** os projetos do mandato — fan-out deliberado, ao contrário do
+`_emit_artifact` da emenda de 07/08, que escolhe um projeto porque só um é afetado; aqui todos
+são. `_emit_journey_phase` (`post_save` de `JourneyPhase`) avisa os projetos que têm aquela fase
+materializada e viva, porque o template passou a atravessar. A guarda da ADR 0027 **não** pegaria
+nenhum dos dois: ela compara chaves de topo, e estas são aninhadas.
+
+O carimbo de versão e hora que entrou junto tem ADR própria: ver a **ADR 0051**.
