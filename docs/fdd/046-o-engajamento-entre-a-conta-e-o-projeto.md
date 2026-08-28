@@ -192,3 +192,43 @@ superfície. O frontend recebeu apenas os tipos.
 - FDD 025 — arquivamento sem beco sem saída
 - RFC 0003, ADR 0010 — o recorte de projeto da Entrega
 - `docs/ontology/language-map.md` — D3 e invariante 7
+
+## Emenda (28/08/2026) — o mandato passa a registrar a condição comercial
+
+`Engagement` ganha `commercial_model` (`design_partner` | `paid`, default `paid`). Hoje ele não
+dizia **em que condição** nasceu, e há dois modos reais: a conta que paga, e o **design partner** —
+que recebe Discovery sem cobrança em troca de servir de caso e de campo de prova. Sem o campo, os
+dois eram a mesma linha.
+
+**O schema nunca exigiu o caminho Won, então nada foi derrubado.** Não existe FK nem constraint de
+`Engagement` para `CommercialOpportunity` — a direção é a inversa (`Opportunity.engagement`,
+opcional, `SET_NULL`) —, e o `EngagementSerializer` sempre exigiu só `account`, `name` e `owner`.
+Um mandato de design partner já podia ser criado por `POST /engagements/` sem nenhuma oportunidade
+antes desta emenda, e continua podendo: a emenda acrescenta um rótulo a uma origem que já era
+livre, não abre um caminho novo. `convert-to-project` — o único lugar que cria `Engagement`
+automaticamente — passa a declarar `commercial_model=paid` **explicitamente** em vez de herdar o
+default em silêncio: ali é pago por construção, porque a action exige oportunidade em "Ganho".
+
+**A correção das linhas existentes não é migração, e não é comando de terminal.** `AddField` com
+`default=paid` carimba todo `Engagement` já existente como pago, e isso é inferência, não registro:
+as linhas vieram do backfill da `0056`, que criou um mandato por conta que **tinha projeto**, e
+projeto veio de venda — nenhuma foi observada como design partner. Uma lista de nome de cliente
+dentro de migração histórica envelhece na primeira renomeação e não roda em ambiente nenhum além
+daquele para o qual foi escrita — e um comando rodado por operador tem o problema oposto: a lista
+de contas de design partner cresce por venda, não por deploy, e reservar um script para cada conta
+nova é fricção que o negócio não tem por que carregar. A correção passou a ser **o admin do
+Django**: `Engagement` ganha `EngagementAdmin` (`backend/apps/core/admin.py`), com
+`commercial_model` visível e filtrável na lista. Não é a tela de Engagement — essa exige Design
+Approval Package, e não há um aprovado (ver "Fora de escopo") — é o único lugar onde quem não é
+engenharia consegue ler e mudar o campo sem depender de shell.
+
+**O campo não atravessa para o One.** `commercial_model` é dado comercial, e a §3 do
+`docs/ontology/language-map.md` é explícita: o One nunca vê dado comercial. Dizer ao cliente que
+ele é "design partner" ou "pago" é exatamente a classe de coisa que fica fora.
+`portal.build_snapshot` continua emitindo `project.engagement` como `{id, name, status}`, sem o
+campo novo — há regressão dedicada a isso.
+
+**O que esta emenda não decide.** A pendência A2 do `docs/ontology/language-map.md` §9 ("Design
+Partner é condição comercial de um degrau ou oferta própria?") continua aberta. Gravar o modo no
+mandato e decidir se existe um sétimo degrau no catálogo são coisas diferentes: nenhuma regra de
+preço, fatura ou catálogo lê este campo hoje.

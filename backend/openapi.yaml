@@ -11142,6 +11142,14 @@ components:
       - reason
       - until
       - updated_at
+    CommercialModelEnum:
+      enum:
+      - design_partner
+      - paid
+      type: string
+      description: |-
+        * `design_partner` - Design partner
+        * `paid` - Pago
     ConfigFlag:
       type: object
       properties:
@@ -11690,6 +11698,11 @@ components:
         status_display:
           type: string
           readOnly: true
+        commercial_model:
+          $ref: '#/components/schemas/CommercialModelEnum'
+        commercial_model_display:
+          type: string
+          readOnly: true
         started_at:
           type: string
           format: date
@@ -11719,6 +11732,7 @@ components:
       - account
       - account_name
       - archived_at
+      - commercial_model_display
       - created_at
       - id
       - name
@@ -13869,6 +13883,11 @@ components:
         status:
           $ref: '#/components/schemas/EngagementStatusEnum'
         status_display:
+          type: string
+          readOnly: true
+        commercial_model:
+          $ref: '#/components/schemas/CommercialModelEnum'
+        commercial_model_display:
           type: string
           readOnly: true
         started_at:

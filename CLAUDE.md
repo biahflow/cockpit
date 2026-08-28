@@ -108,6 +108,9 @@ Key cross-cutting patterns to preserve:
   is `Project.clean()`: `engagement.account_id == client_id`. The Engagement is **not** an access
   boundary — Delivery scope is still `ProjectMember`, and engagement visibility *derives* from
   `Project.objects.visible_to(user)`, never the reverse. Sales writes it; Delivery only reads.
+  The mandate also records `commercial_model` (`paid`/`design_partner`, default `paid`): a
+  design partner receives Discovery free of charge in exchange for serving as case and proving
+  ground, and it does **not** go through a sale — nothing in the schema ever required one.
 - **Opportunity → Project conversion** is the central business action: the
   `convert-to-project` `@action` on `OpportunityViewSet`. It requires the opportunity be in the
   "won" stage, enforces sales/admin role, and carries `Opportunity.service` over to
