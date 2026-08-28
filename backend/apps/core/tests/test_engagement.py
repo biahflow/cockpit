@@ -2,7 +2,8 @@
 
 O que este arquivo fixa é a espinha dorsal `Account → Engagement → Project`: o modelo e as suas
 três validações, a obrigatoriedade em `POST /projects/`, o mandato de escopo único que a conversão
-cria sozinha, e o recorte de `/engagements/` para cada papel.
+cria sozinha, o recorte de `/engagements/` para cada papel, e a condição comercial
+(`commercial_model`) que o mandato passou a registrar (emenda de 28/08/2026).
 
 As duas invariantes que **não** são sobre o engajamento em si, e que por isso moram em
 `tests/regression/`, são a conversão de uso único e o fato de o engajamento visível não conceder
@@ -17,7 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.models import Contact, Engagement, PipelineStage, Project, User
+from apps.core.models import Contact, Engagement, Opportunity, PipelineStage, Project, User
 
 from .factories import (
     ClientFactory,
@@ -110,6 +111,80 @@ def test_todo_projeto_de_fabrica_tem_engajamento_coerente() -> None:
 
     assert projeto.engagement_id is not None
     assert projeto.engagement.account_id == projeto.client_id
+
+
+# ------------------------------------------------------------- commercial_model (emenda)
+
+
+def test_engagement_nasce_pago_por_padrao() -> None:
+    engagement = EngagementFactory(account=ClientFactory(), owner=UserFactory())
+
+    assert engagement.commercial_model == Engagement.CommercialModel.PAID
+
+
+def test_design_partner_so_quando_explicito() -> None:
+    engagement = EngagementFactory(
+        account=ClientFactory(), owner=UserFactory(),
+        commercial_model=Engagement.CommercialModel.DESIGN_PARTNER,
+    )
+
+    assert engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER
+
+
+def test_post_engagement_aceita_e_devolve_commercial_model() -> None:
+    api, vendedora = _api(User.Role.SALES)
+    conta = ClientFactory()
+
+    resposta = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk, "name": "Discovery gratuito", "owner": vendedora.pk,
+            "commercial_model": "design_partner",
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["commercial_model"] == "design_partner"
+    assert resposta.data["commercial_model_display"] == "Design partner"
+
+
+def test_commercial_model_fora_do_enum_e_recusado() -> None:
+    api, vendedora = _api(User.Role.SALES)
+    conta = ClientFactory()
+
+    resposta = api.post(
+        reverse("engagement-list"),
+        {"account": conta.pk, "name": "X", "owner": vendedora.pk, "commercial_model": "gratis"},
+        format="json",
+    )
+
+    assert resposta.status_code == 400
+    assert "commercial_model" in resposta.data
+
+
+def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() -> None:
+    """A invariante que motivou a emenda: hoje não existe FK de `Engagement` para `Opportunity`
+    (a direção é a inversa), então um mandato de design partner já pode nascer — e um projeto
+    pendurar nele — sem nenhuma oportunidade no banco."""
+    api, vendedora = _api(User.Role.SALES)
+    conta = ClientFactory()
+
+    criado = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk, "name": "Cartas Vivas — Discovery", "owner": vendedora.pk,
+            "commercial_model": "design_partner",
+        },
+        format="json",
+    )
+    assert criado.status_code == 201
+    engagement = Engagement.objects.get(pk=criado.data["id"])
+    projeto = ProjectFactory(client=conta, engagement=engagement)
+
+    assert projeto.engagement_id is not None
+    assert projeto.engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER
+    assert not Opportunity.objects.exists()
 
 
 # ------------------------------------------------------------------- POST /projects/
@@ -232,6 +307,8 @@ def test_conversao_sem_engajamento_cria_um_de_escopo_unico() -> None:
     assert engagement.owner_id == user.pk
     assert engagement.started_at == timezone.localdate()
     assert engagement.status == Engagement.Status.ACTIVE
+    # Pago por construção: a action só converte oportunidade em "Ganho".
+    assert engagement.commercial_model == Engagement.CommercialModel.PAID
 
 
 def test_conversao_com_engajamento_no_payload_usa_o_informado() -> None:

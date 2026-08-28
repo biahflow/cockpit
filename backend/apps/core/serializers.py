@@ -467,12 +467,16 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     account_name = serializers.CharField(source="account.name", read_only=True)
     owner_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    commercial_model_display = serializers.CharField(
+        source="get_commercial_model_display", read_only=True
+    )
 
     class Meta:
         model = Engagement
         fields = [
             "id", "account", "account_name", "name", "mandate", "sponsor", "owner", "owner_name",
-            "status", "status_display", "started_at", "ended_at", "success_definition",
+            "status", "status_display", "commercial_model", "commercial_model_display",
+            "started_at", "ended_at", "success_definition",
             "needs_review", "archived_at", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "archived_at", "created_at", "updated_at"]
