@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — Engagements no detalhe do cliente · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-100:#fadfd4; --brand-200:#dd8b62; --brand-500:#bd4a30;
+  --brand-600:#a8412a; --brand-700:#9c3c26; --brand-900:#5c2317;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --info:#1d4ed8; --info-50:#eff6ff;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  --slate-600:#475569; --slate-700:#334155;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650;margin:28px 0 10px}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:var(--text-body)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface-subtle);font-weight:650}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.grid--2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.spec--pick{border-style:solid;border-color:var(--brand-200);box-shadow:0 0 0 3px rgba(221,139,98,.12)}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+
+/* ---- primitivas espelhadas de src/index.css ---- */
+/* `.panel` com o padding de `sm:p-6` (24px), que é o que as seções vizinhas usam nesta página. */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:24px;box-shadow:var(--shadow-card)}
+.panel-heading{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel-heading h2{margin:0;font-size:var(--text-title);line-height:var(--lh-title);font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);border:0;padding:0}
+.panel-rows>.row+.row{border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px 24px}
+.row-main{min-width:0;flex:1}
+.row-main strong{display:block;font-size:var(--text-body);font-weight:600;color:var(--ink)}
+.row-main span{display:block;margin-top:.125rem;font-size:var(--text-label);line-height:1.05rem;color:var(--muted)}
+.metric-icon{display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;
+  border-radius:var(--radius-control);background:var(--brand-50);color:var(--brand-500)}
+.state{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:4px 10px;
+  font-size:11px;line-height:1rem;font-weight:600;white-space:nowrap}
+.state--0{background:var(--info-50);color:var(--info)}
+.state--1{background:var(--success-50);color:var(--success)}
+.state--2{background:var(--warning-50);color:var(--warning)}
+.state--3{background:var(--danger-50);color:var(--danger)}
+.state--off{background:var(--slate-100);color:var(--slate-600)}
+.field{width:100%;border-radius:var(--radius-control);border:1px solid var(--line-strong);
+  background:#fff;padding:12px;font-size:var(--text-body);color:var(--slate-700);font-family:inherit}
+.field::placeholder{color:#a8a29e}
+.form-label{display:grid;gap:8px;font-size:var(--text-body);font-weight:500;color:var(--slate-700)}
+.form-grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit;white-space:nowrap}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn--secondary-danger{background:var(--surface);color:var(--muted);border-color:var(--line)}
+.btn--icon{width:44px;height:44px;min-height:0;padding:0;flex:0 0 auto}
+.btn--focus{outline:2px solid var(--brand-500);outline-offset:2px}
+.empty-state{border-radius:var(--radius-card);border:1px dashed var(--line);
+  background:rgba(248,250,252,.6);padding:24px 16px;text-align:center;
+  font-size:var(--text-body);color:var(--muted)}
+.alert--error{border-radius:var(--radius-card);border:1px solid var(--danger-50);
+  background:var(--danger-50);padding:16px;font-size:var(--text-body);color:var(--danger);margin:0 0 16px}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--18{width:18px;height:18px}
+.new{display:inline-block;background:var(--brand-50);color:var(--brand-700);border:1px solid var(--brand-100);
+  border-radius:9999px;padding:1px 8px;font-size:var(--text-meta);font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;vertical-align:middle;margin-left:6px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+.skeleton{background:var(--slate-200);border-radius:12px}
+.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
+.stack{display:grid;gap:16px}
+.actions{display:flex;gap:6px;flex:0 0 auto}
+.order{display:grid;gap:6px;max-width:460px;margin:14px 0}
+.order li{list-style:none}
+.order-item{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:var(--radius-control);
+  background:var(--surface);padding:10px 14px;font-size:var(--text-body)}
+.order-item b{font-weight:600}
+.order-item--new{border-color:var(--brand-200);background:var(--brand-50);color:var(--brand-700)}
+.order-item em{margin-left:auto;font-style:normal;color:var(--muted);font-size:var(--text-meta)}
+.order-item--new em{color:var(--brand-700)}
+.mobile{max-width:342px;margin:0 auto}
+.mobile .panel{padding:20px}
+.mobile .row{padding:16px 20px}
+.mobile .form-grid{grid-template-columns:1fr}
+.mobile .row .actions{width:100%}
+/* Nada rola na horizontal — a mesma regra que `e2e/responsive.spec.ts` cobra do produto.
+   Os `minmax` das grades e as tabelas de procedência são o que estoura em 390px. */
+@media (max-width:560px){
+  .wrap{padding:28px 16px 64px}
+  /* `minmax(0,1fr)` e não `1fr`: com `auto` de mínimo a coluna cresce até o min-content do
+     cartão (o botão de 180px ao lado do título) e volta a estourar a viewport. */
+  .grid,.grid--2{grid-template-columns:minmax(0,1fr)}
+  .grid>*,.spec,.stage{min-width:0}
+  .form-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{padding:10px}
+  .spec{padding:10px}
+  /* O cabeçalho quebra e a ação ocupa a faixa inteira — é exatamente o mobile desenhado na
+     seção 8, aplicado também aos quadros que a seção 5 e a 6 mostram em composição desktop. */
+  .panel-heading{flex-wrap:wrap}
+  .panel-heading>.btn{width:100%}
+  table{display:block;overflow-x:auto}
+  h1{font-size:1.5rem;line-height:1.875rem}
+}
+code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package</p>
+<h1>Engagements no detalhe do cliente</h1>
+<p class="lede">Classificação <code>INTERFACE_CHANGE</code> · <code>BROWSER_REQUIRED</code> ·
+Revisão <strong>1</strong> · Status <strong>Pendente de aprovação</strong> · 2026-08-28</p>
+<p class="note">Renderização auto-contida: abre sem build, sem toolchain e sem rede. Toda cor,
+corpo de texto, raio e sombra desta página é cópia literal dos tokens de
+<code>frontend/src/index.css</code> — a tabela de procedência da seção 9 cita a origem de cada
+valor, e a meta desta revisão é que a coluna "novo" fique inteiramente em "não". A fonte Inter
+não é embutida; sem ela a página cai no fallback declarado no próprio token
+<code>--font-sans</code>, e o que muda é o desenho da letra, não a decisão em aprovação.</p>
+
+<h2>1 · O que esta revisão decide</h2>
+<p class="note"><code>Engagement</code> (ADR 0050, FDD 046) é o mandato de transformação da conta:
+a camada que agrupa <strong>várias vendas e vários projetos que são o mesmo trabalho</strong>.
+<code>Project.engagement</code> é <code>NOT NULL</code> desde a migração <code>0057</code>, e a
+entidade governa permissão, arquivamento e conversão. <strong>E ela não tem nenhuma tela.</strong>
+A Fase 2 deixou a interface fora de propósito; hoje criar, editar ou encerrar um mandato é
+<code>curl</code> ou Django admin.</p>
+<p class="note">O peso da decisão está num segundo fato: <strong><code>ClientDetailPage</code> não
+lista projetos hoje</strong> — zero ocorrências de <code>projects</code> nas 375 linhas do
+arquivo. A tela do cliente mostra saúde, satisfação, processos, cadastro, contatos e interações, e
+em nenhum lugar diz o que a casa está entregando para aquela conta. Esta seção é <strong>o primeiro
+lugar do produto onde a espinha <code>Account → Engagement → Project</code> fica visível</strong>,
+e é isso que justifica a superfície que ela ocupa.</p>
+<table>
+<tr><th>Superfície</th><th>O que passa a existir</th></tr>
+<tr><td><strong>Detalhe do cliente</strong> (<code>/clientes/:id</code>)</td>
+<td>Uma seção <code>&lt;section class="panel"&gt;</code> nova, entre "Saúde da relação" e
+"Satisfação": lista os mandatos da conta, com status, modelo comercial, patrocínio, período e
+contagem de projetos, e permite criar, editar e arquivar.</td></tr>
+</table>
+
+<h3>Onde ela mora, e por quê</h3>
+<ol class="order">
+  <li><div class="order-item"><b>Saúde da relação</b><em>como estamos indo</em></div></li>
+  <li><div class="order-item order-item--new"><b>Engagements</b><em>o que estamos fazendo &nbsp;·&nbsp; NOVA</em></div></li>
+  <li><div class="order-item"><b>Satisfação</b><em>o que o cliente disse</em></div></li>
+  <li><div class="order-item"><b>Processos mapeados</b><em>como a operação dele funciona</em></div></li>
+  <li><div class="order-item"><b>Dados do cliente</b> · <b>Contatos</b><em>cadastro</em></div></li>
+  <li><div class="order-item"><b>Interações</b><em>histórico</em></div></li>
+</ol>
+<p class="note">A saúde é o relance de <em>como estamos indo</em>; o engajamento é <em>o que
+estamos fazendo</em>. <strong>Estrutura vem antes de histórico</strong>: quem abre a conta precisa
+saber qual é o mandato antes de ler o que aconteceu dentro dele. As seções seguintes não mudam de
+ordem e nenhuma delas é tocada por esta revisão.</p>
+
+<h2>2 · Estado padrão — a conta com dois engagements</h2>
+<div class="stage">
+  <section class="panel">
+    <div class="panel-heading">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div><h2>Engagements</h2>
+        <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 engagements ativos nesta conta</p></div>
+      </div>
+      <button class="btn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Novo engagement</button>
+    </div>
+    <div class="panel-rows">
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main">
+          <strong>Transformação Financeira</strong>
+          <span>Patrocínio de Marina Alencar</span>
+          <span>Desde 03/2026 · 3 projetos</span>
+        </div>
+        <span class="state state--1">Ativo</span>
+        <span class="state state--off">Pago</span>
+        <div class="actions">
+          <button class="btn btn--secondary btn--icon" aria-label="Editar Transformação Financeira">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+          <button class="btn btn--secondary btn--secondary-danger btn--icon" aria-label="Arquivar Transformação Financeira">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main">
+          <strong>Discovery Cartas Vivas</strong>
+          <span>Patrocínio de Rafael Nôga</span>
+          <span>Desde 06/2026 · 1 projeto</span>
+        </div>
+        <span class="state state--1">Ativo</span>
+        <span class="state state--0">Design partner</span>
+        <div class="actions">
+          <button class="btn btn--secondary btn--icon" aria-label="Editar Discovery Cartas Vivas">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+          <button class="btn btn--secondary btn--secondary-danger btn--icon" aria-label="Arquivar Discovery Cartas Vivas">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<p class="note"><strong>Nada aqui é forma nova.</strong> O cabeçalho é <code>.panel-heading</code>,
+o quadrado do ícone é <code>.metric-icon</code>, a lista é <code>.panel-rows</code> +
+<code>.row</code> + <code>.row-main</code>, as pílulas são <code>.state</code>, e o par de ações é
+o mesmo <code>.btn--icon</code> + <code>.btn--secondary</code> / <code>.btn--secondary-danger</code>
+que a seção Contatos usa 40 linhas abaixo, na mesma página
+(<code>ClientDetailPage.tsx:314-317</code>).</p>
+<p class="note"><strong>As duas pílulas são irmãs de <code>.row-main</code>, e isso não é
+arrumação.</strong> <code>.row-main span</code> declara <code>block text-xs text-muted</code>
+(<code>index.css:216</code>): um <code>.state</code> aninhado ali dentro perderia a própria pele
+sem nada ficar vermelho. A própria página já registra essa armadilha por escrito, nos blocos de
+Satisfação e Interações (<code>ClientDetailPage.tsx:234-237</code> e <code>350-351</code>) — o
+desenho a respeita em vez de redescobri-la.</p>
+<p class="note"><strong>O ícone é o <code>Target</code> do <code>lucide-react</code>, e não o
+<code>Handshake</code>.</strong> O aperto de mão já está na página: <code>HeartHandshake</code>
+desenha a seção Satisfação, que fica <strong>imediatamente abaixo</strong> desta. Dois glifos de
+mãos coladas um no outro é a diferença que ninguém enxerga. O alvo diz a outra metade do conceito
+— o mandato tem <code>success_definition</code>, isto é, um alvo declarado — e não é usado em
+nenhuma outra tela do produto.</p>
+<p class="note"><strong>A faixa herda o recuo duplo dos vizinhos</strong> (<code>.panel</code> com
+<code>sm:p-6</code> mais <code>.row</code> com <code>sm:px-6</code>). É exatamente o que Satisfação
+e Processos mapeados renderizam hoje; a seção nova não abre exceção.</p>
+
+<h2>3 · DECISÃO A — o título da seção, em inglês, numa interface em pt-BR</h2>
+<p class="note">O mapa de linguagem (<code>docs/ontology/language-map.md</code> §1) é explícito:
+termos canônicos <strong>em inglês nas quatro superfícies</strong>, <code>Title Case</code> em UI e
+prosa, e <em>"não se traduz o termo — traduz-se o texto em volta dele"</em>. O exemplo é da própria
+página: <em>"A Account tem três Engagements ativos"</em> está certo; <em>"A Conta tem três
+Compromissos ativos"</em> está errado. A §2 lista <code>Engagement</code> com "Nunca chamar de:
+Projeto, Conta, Contrato".</p>
+<p class="note">Mesmo assim isto é <strong>decisão a aprovar, não fato consumado</strong>: é a
+primeira vez que um termo canônico em inglês aparece como <strong>título de seção</strong> na
+interface do produto — hoje todos os títulos são pt-BR ("Saúde da relação", "Satisfação",
+"Processos mapeados", "Contatos", "Interações"). Escolha olhando:</p>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>A1 — recomendada · "Engagements"</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Engagements</h2>
+          <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 engagements ativos nesta conta</p></div>
+        </div>
+      </div>
+      <div class="panel-rows"><div class="row" style="padding-left:0;padding-right:0">
+        <div class="row-main"><strong>Transformação Financeira</strong>
+        <span>Desde 03/2026 · 3 projetos</span></div>
+        <span class="state state--1">Ativo</span></div></div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">O termo canônico como título; a copy em volta em
+    pt-BR, inclusive a contagem em caixa baixa ("2 engagements ativos nesta conta"). É a regra do
+    §1 aplicada ao pé da letra: o termo não se traduz, o texto em volta sim.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>A2 — alternativa · "Mandatos"</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Mandatos</h2>
+          <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 mandatos ativos nesta conta</p></div>
+        </div>
+      </div>
+      <div class="panel-rows"><div class="row" style="padding-left:0;padding-right:0">
+        <div class="row-main"><strong>Transformação Financeira</strong>
+        <span>Desde 03/2026 · 3 projetos</span></div>
+        <span class="state state--1">Ativo</span></div></div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">Lê mais liso em português e é o que a docstring do
+    modelo usa em prosa ("o mandato de transformação"). O custo é caro e não aparece na tela:
+    cria um <strong>quinto</strong> nome para o conceito — <code>Engagement</code> no modelo, na
+    API, no One e no Notion, "Mandato" só aqui —, que é exatamente o que a regra de ouro do mapa de
+    linguagem existe para impedir. Quem lê "Mandatos" na tela e <code>/engagements/</code> no log
+    não sabe que são a mesma coisa.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: A1.</strong> A forma visual das duas é idêntica — o que muda
+é só a palavra, e por isso ela é decisão de <strong>copy</strong>, aprovável em separado do visual.
+Se A2 for escolhida, a mesma troca vale para "Novo engagement", "Editando {nome}" e a copy do
+estado vazio; nenhum valor visual muda.</p>
+
+<h2>4 · DECISÃO B — como o modelo comercial aparece</h2>
+<p class="note"><code>commercial_model</code> (<code>design_partner</code> | <code>paid</code>) é o
+campo que diz se a conta paga pelo trabalho ou é parceira de desenho. Ele está entrando por
+<strong>outra PR, em paralelo</strong> — o board o desenha como se já existisse, e o README declara
+a dependência. As duas leituras possíveis, desenhadas:</p>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>B1 — recomendada · as duas pílulas, sempre</figcaption>
+    <div class="stage"><section class="panel" style="padding:8px 0">
+      <div class="panel-rows">
+        <div class="row">
+          <div class="row-main"><strong>Transformação Financeira</strong>
+          <span>Desde 03/2026 · 3 projetos</span></div>
+          <span class="state state--1">Ativo</span>
+          <span class="state state--off">Pago</span>
+        </div>
+        <div class="row">
+          <div class="row-main"><strong>Discovery Cartas Vivas</strong>
+          <span>Desde 06/2026 · 1 projeto</span></div>
+          <span class="state state--1">Ativo</span>
+          <span class="state state--0">Design partner</span>
+        </div>
+      </div>
+    </section></div>
+    <p class="note" style="margin-bottom:0"><code>paid</code> em <code>.state--off</code> — o
+    neutro cinza, "a ausência de um estado". <code>design_partner</code> em
+    <code>.state--0</code> — o azul de informação, o mesmo selo que <strong>esta mesma página já
+    usa</strong> em "Recebe cobrança" na linha do contato (<code>ClientDetailPage.tsx:309</code>),
+    e pelo mesmo motivo: é um fato sobre o registro, não um aviso nem uma falha.
+    <strong>A exceção fica com a tinta, a regra fica quieta</strong>, e nenhuma linha obriga a
+    inferir o modelo pela ausência de selo.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>B2 — alternativa · pílula só no design partner</figcaption>
+    <div class="stage"><section class="panel" style="padding:8px 0">
+      <div class="panel-rows">
+        <div class="row">
+          <div class="row-main"><strong>Transformação Financeira</strong>
+          <span>Desde 03/2026 · 3 projetos</span></div>
+          <span class="state state--1">Ativo</span>
+        </div>
+        <div class="row">
+          <div class="row-main"><strong>Discovery Cartas Vivas</strong>
+          <span>Desde 06/2026 · 1 projeto</span></div>
+          <span class="state state--1">Ativo</span>
+          <span class="state state--0">Design partner</span>
+        </div>
+      </div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">Mais limpo, e o custo é de leitura:
+    <strong>"sem selo" passa a significar duas coisas</strong> para quem olha — cliente pago, ou
+    campo que ninguém preencheu. A segunda leitura é impossível no banco (a coluna é
+    <code>NOT NULL</code>), mas quem lê a tela não sabe disso, e o produto inteiro tem campo
+    opcional que fica em branco. Uma tela que exige conhecer o schema para ser lida corretamente
+    está pedindo a coisa errada de quem a usa.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: B1.</strong></p>
+
+<h3>Status — sem alternativa a decidir</h3>
+<div class="stage" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+  <span class="state state--1">Ativo</span>
+  <span class="state state--2">Pausado</span>
+  <span class="state state--off">Encerrado</span>
+  <span class="type-meta" style="color:var(--muted)">&nbsp;·&nbsp; <code>active</code> · <code>paused</code> · <code>closed</code>, os três valores de <code>Engagement.Status</code></span>
+</div>
+<p class="note"><code>active</code> → <code>.state--1</code> (verde de sucesso, o trabalho está
+correndo). <code>paused</code> → <code>.state--2</code> (âmbar de aviso, é o único dos três que
+pede alguém). <code>closed</code> → <code>.state--off</code> (<strong>neutro, não vermelho</strong>).
+A última é a que costuma sair errada, e a regra está escrita no <code>CLAUDE.md</code>:
+<em>"Desligada" e "Arquivado" não são aviso</em> — são a ausência de um estado. Um mandato
+encerrado é um mandato que terminou, muitas vezes bem; pintá-lo de perigo faria a conta de melhor
+histórico parecer a mais problemática. <code>.state--3</code> (vermelho) <strong>não é usado nesta
+seção</strong>.</p>
+<div class="stage" style="margin-top:12px"><section class="panel" style="padding:8px 0"><div class="panel-rows">
+  <div class="row">
+    <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+    <div class="row-main"><strong>Piloto Atendimento 24h</strong>
+    <span>Patrocínio de Marina Alencar</span>
+    <span>02/2026 → 05/2026 · 2 projetos</span></div>
+    <span class="state state--off">Encerrado</span>
+    <span class="state state--off">Pago</span>
+    <div class="actions">
+      <button class="btn btn--secondary btn--icon" aria-label="Editar Piloto Atendimento 24h">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+      <button class="btn btn--secondary btn--secondary-danger btn--icon" aria-label="Arquivar Piloto Atendimento 24h">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+    </div>
+  </div>
+</div></section></div>
+<p class="note"><strong>As duas formas do período.</strong> Com <code>ended_at</code>:
+<em>"02/2026 → 05/2026"</em>. Sem: <em>"Desde 03/2026"</em> — nunca um travessão de preenchimento
+nem uma seta solta. O modelo garante o par (<code>Engagement.clean()</code> recusa encerrar sem
+data final e recusa fim anterior ao início), então a terceira combinação não chega à tela.
+<strong>Precisão de mês, e é decisão de copy:</strong> o mandato se mede em meses, e o dia exato
+vira ruído numa linha que já carrega quatro informações. As seções vizinhas usam data completa
+(<code>toLocaleDateString("pt-BR")</code>), então a alternativa — <em>"Desde 12/03/2026"</em> —
+está registrada na seção 12 para ser escolhida em vez desta.</p>
+
+<h2>5 · Vazio, e somente leitura</h2>
+<div class="grid grid--2">
+  <figure class="spec"><figcaption>Conta sem nenhum engagement</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Engagements</h2>
+          <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">Nenhum engagement</p></div>
+        </div>
+        <button class="btn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Novo engagement</button>
+      </div>
+      <p class="empty-state">Nenhum engagement nesta conta. Crie o mandato antes de converter uma
+      oportunidade — é ele que agrupa as vendas e os projetos que são o mesmo trabalho.</p>
+    </section></div>
+    <p class="note" style="margin-bottom:0"><code>.empty-state</code>, a mesma primitiva dos cinco
+    vazios que a página já tem. <strong>A copy diz o que fazer e por quê</strong>, não só que não
+    há nada — "Nenhum engagement cadastrado." seria a versão que deixa a pessoa exatamente onde
+    estava. O botão do cabeçalho continua ali: o vazio não esconde a saída.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Papel Entrega — a mesma lista, sem nenhuma ação</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Engagements</h2>
+          <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">1 engagement ativo nesta conta</p></div>
+        </div>
+      </div>
+      <div class="panel-rows"><div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main"><strong>Transformação Financeira</strong>
+        <span>Patrocínio de Marina Alencar</span>
+        <span>Desde 03/2026 · 3 projetos</span></div>
+        <span class="state state--1">Ativo</span>
+        <span class="state state--off">Pago</span>
+      </div></div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">Sem "Novo engagement", sem Editar, sem Arquivar. Não é
+    zelo: <code>permissions.py:136-140</code> põe <code>engagement</code> no conjunto de leitura da
+    Entrega, e <code>has_object_permission</code> exige <code>SAFE_METHODS</code>
+    (<code>permissions.py:230-238</code>). <strong>O desenho não inventa permissão — ele deixa de
+    mostrar o que a API recusaria.</strong> É o estado que se descobre tarde, e por isso está no
+    board.</p>
+  </figure>
+</div>
+
+<h2>6 · Formulário — criar e editar</h2>
+<div class="grid grid--2">
+  <figure class="spec"><figcaption>Criando — "Novo engagement" abriu o formulário</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Engagements</h2>
+          <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 engagements ativos nesta conta</p></div>
+        </div>
+        <button class="btn btn--secondary">Cancelar</button>
+      </div>
+      <div class="stack">
+        <label class="form-label">Nome<input class="field" placeholder="Como a casa chama este mandato"></label>
+        <div class="form-grid">
+          <label class="form-label">Modelo comercial<select class="field"><option>Pago</option><option>Design partner</option></select></label>
+          <label class="form-label">Status<select class="field"><option>Ativo</option><option>Pausado</option><option>Encerrado</option></select></label>
+          <label class="form-label">Patrocinador<select class="field"><option>Sem patrocinador definido</option><option>Marina Alencar</option><option>Rafael Nôga</option></select></label>
+          <label class="form-label">Início<input class="field" type="date" value="2026-03-02"></label>
+          <label class="form-label">Fim<input class="field" type="date" placeholder="dd/mm/aaaa"></label>
+        </div>
+        <label class="form-label">Mandato<textarea class="field" rows="2" placeholder="O que a casa foi contratada para transformar"></textarea></label>
+        <label class="form-label">Definição de sucesso<textarea class="field" rows="2" placeholder="Como saberemos que deu certo"></textarea></label>
+        <div style="display:flex;gap:8px">
+          <button class="btn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Adicionar engagement</button>
+        </div>
+      </div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">Sete campos, todos com <code>field</code> e
+    <code>.form-label</code>; o par de colunas é <code>.form-grid</code>, que já colapsa para uma
+    coluna abaixo de <code>sm</code>. Nome fica em linha inteira porque é o único obrigatório e o
+    mais longo; os dois <code>textarea</code> também, porque prosa em meia coluna é ilegível.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Editando — o cabeçalho troca de papel</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Editando Transformação Financeira</h2>
+          <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 engagements ativos nesta conta</p></div>
+        </div>
+        <button class="btn btn--secondary">Cancelar</button>
+      </div>
+      <div class="stack">
+        <label class="form-label">Nome<input class="field" value="Transformação Financeira"></label>
+        <div class="form-grid">
+          <label class="form-label">Modelo comercial<select class="field"><option>Pago</option></select></label>
+          <label class="form-label">Status<select class="field"><option>Ativo</option></select></label>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn"><svg class="ico" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>Salvar alterações</button>
+          <button class="btn btn--secondary">Cancelar</button>
+        </div>
+      </div>
+      <div class="panel-rows" style="opacity:.45;margin-top:8px"><div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main"><strong>Transformação Financeira</strong><span>em edição</span></div>
+      </div></div>
+    </section></div>
+    <p class="note" style="margin-bottom:0"><strong>Sem modal.</strong> É o padrão que Contatos já
+    usa nesta mesma página (<code>ClientDetailPage.tsx:288, 302-303</code>): o título vira
+    "Editando {nome}", o botão vira "Salvar alterações", aparece um "Cancelar", e a linha
+    correspondente esmaece para ligar o formulário ao registro. Reaproveitar o padrão do vizinho
+    custa zero superfície nova.</p>
+  </figure>
+</div>
+<p class="note"><strong>O select de patrocinador só lista contatos desta conta.</strong> Não é
+conveniência: <code>Engagement.clean()</code> e <code>EngagementSerializer.validate()</code>
+recusam patrocinador de outra organização ("O patrocinador deve ser contato da mesma conta"). Um
+select com o catálogo inteiro ofereceria à pessoa exatamente as opções que o backend vai devolver
+como 400.</p>
+
+<h2>7 · Erro, foco e carregamento</h2>
+<div class="grid">
+  <figure class="spec"><figcaption>Erro — arquivar mandato com projeto vivo</figcaption>
+    <div class="stage">
+      <p class="alert--error" role="alert">Este engajamento ainda tem 3 projeto(s) em aberto.
+      Arquive esses projetos antes de arquivar o engajamento.</p>
+      <section class="panel"><div class="panel-rows"><div class="row" style="padding-left:0;padding-right:0">
+        <div class="row-main"><strong>Transformação Financeira</strong>
+        <span>Desde 03/2026 · 3 projetos</span></div>
+        <span class="state state--1">Ativo</span>
+      </div></div></section>
+    </div>
+    <p class="note" style="margin-bottom:0"><code>.alert--error</code> com
+    <code>role="alert"</code>, <strong>no topo da página</strong> e não dentro do painel — é onde
+    esta tela já põe o erro dela (<code>ClientDetailPage.tsx:192</code>), e o desenho não abre uma
+    segunda convenção de erro na mesma página. A frase não é inventada: é literalmente a do
+    <code>StateConflict</code> que <code>EngagementViewSet.perform_destroy</code> levanta
+    (<code>views.py:1119-1122</code>). É o 409 mais provável desta seção, porque a linha que mais
+    convida a arquivar é justamente a que tem projetos.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Foco por teclado</figcaption>
+    <div class="stage" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn--focus"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Novo engagement</button>
+      <button class="btn btn--secondary btn--icon btn--focus" aria-label="Editar">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+    </div>
+    <p class="note" style="margin-bottom:0">Anel de 2px em <code>brand-500</code> com
+    <code>outline-offset:2px</code> — a regra global de <code>:focus-visible</code>
+    (<code>index.css:175-178</code>), herdada, não redeclarada. Os dois botões de ícone são
+    <code>.btn--icon</code> = <strong>44×44px</strong>, bem acima dos 24×24 que a WCAG 2.5.8 pede e
+    que <code>e2e/responsive.spec.ts</code> mede.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>Carregando — o que a página faz hoje</figcaption>
+    <div class="stage">
+      <div style="display:grid;gap:24px">
+        <div class="skeleton" style="height:40px;width:256px"></div>
+        <div style="height:224px;border-radius:16px;background:#fff"></div>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0"><strong>A seção não tem estado de carregamento
+    próprio, e isso foi verificado, não suposto.</strong> <code>ClientDetailPage</code> carrega
+    tudo num <code>Promise.all</code> e devolve <em>um</em> esqueleto de página inteira até o
+    cliente chegar (<code>ClientDetailPage.tsx:172</code>): <code>animate-pulse</code>, uma barra
+    de 40px e um bloco de 224px. Os engagements entram nessa mesma chamada; enquanto ela corre não
+    existe seção nenhuma na tela, e quando ela termina a seção já vem preenchida.
+    <strong>Um esqueleto próprio aqui seria valor visual novo para um estado que não acontece.</strong></p>
+  </figure>
+</div>
+
+<h2>8 · Mobile — 390px</h2>
+<div class="stage">
+  <div class="mobile">
+    <section class="panel">
+      <div class="panel-heading" style="flex-direction:column;align-items:stretch;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Engagements</h2>
+          <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 engagements ativos</p></div>
+        </div>
+        <button class="btn" style="width:100%"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Novo engagement</button>
+      </div>
+      <div class="panel-rows">
+        <div class="row" style="align-items:flex-start">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div class="row-main" style="flex-basis:180px">
+            <strong>Transformação Financeira</strong>
+            <span>Patrocínio de Marina Alencar</span>
+            <span>Desde 03/2026 · 3 projetos</span>
+          </div>
+          <span class="state state--1">Ativo</span>
+          <span class="state state--off">Pago</span>
+          <div class="actions" style="margin-left:auto">
+            <button class="btn btn--secondary btn--icon" aria-label="Editar Transformação Financeira">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></button>
+            <button class="btn btn--secondary btn--secondary-danger btn--icon" aria-label="Arquivar Transformação Financeira">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<p class="note"><strong>Nenhuma regra responsiva nova.</strong> <code>.row</code> já é
+<code>flex-wrap</code> (<code>index.css:213</code>): as pílulas e a faixa de ações descem para a
+segunda linha sozinhas quando não cabem, que é o mesmo comportamento das linhas de Satisfação e
+Processos hoje. O botão do cabeçalho ocupa a largura inteira, como nas outras telas estreitas do
+produto. <code>.form-grid</code> colapsa para uma coluna abaixo de <code>sm</code>, também sem
+regra nova.</p>
+
+<h2>9 · Procedência de cada valor visual</h2>
+<table>
+<tr><th>Valor</th><th>Token / primitiva</th><th>Origem</th><th>Novo?</th></tr>
+<tr><td>Cartão da seção</td><td><code>.panel</code> — raio 12px, borda <code>line</code>, <code>--shadow-card</code>, <code>p-5</code>/<code>sm:p-6</code></td><td><code>index.css:194-197</code></td><td>não</td></tr>
+<tr><td>Cabeçalho com ação à direita</td><td><code>.panel-heading</code> — <code>justify-between</code>, <code>h2</code> em papel <em>title</em></td><td><code>index.css:202, 207</code></td><td>não</td></tr>
+<tr><td>Quadrado do ícone</td><td><code>.metric-icon</code> — 36px, raio de controle 8px, <code>bg-brand-50</code> / <code>text-brand-500</code></td><td><code>index.css:257</code></td><td>não</td></tr>
+<tr><td>Lista dividida</td><td><code>.panel-rows</code> — <code>divide-y divide-line</code></td><td><code>index.css:210</code></td><td>não</td></tr>
+<tr><td>Linha do engagement</td><td><code>.row</code> — <code>flex-wrap</code>, gap 16px, <code>px-5</code>/<code>sm:px-6</code> <code>py-4</code></td><td><code>index.css:213</code></td><td>não</td></tr>
+<tr><td>Nome e linhas secundárias</td><td><code>.row-main</code> + <code>strong</code> (14/600 <code>ink</code>) + <code>span</code> (12 <code>muted</code>)</td><td><code>index.css:214-216</code></td><td>não</td></tr>
+<tr><td>Pílula "Ativo"</td><td><code>.state .state--1</code> — <code>success-50</code> / <code>success</code></td><td><code>index.css:368, 370</code></td><td>não</td></tr>
+<tr><td>Pílula "Pausado"</td><td><code>.state .state--2</code> — <code>warning-50</code> / <code>warning</code></td><td><code>index.css:371</code></td><td>não</td></tr>
+<tr><td>Pílula "Encerrado" e "Pago"</td><td><code>.state .state--off</code> — <code>slate-100</code> / <code>slate-600</code></td><td><code>index.css:377</code></td><td>não</td></tr>
+<tr><td>Pílula "Design partner"</td><td><code>.state .state--0</code> — <code>info-50</code> / <code>info</code></td><td><code>index.css:369</code></td><td>não</td></tr>
+<tr><td>Botão "Novo engagement" / "Salvar alterações"</td><td><code>.btn</code> — <code>min-h-11</code>, raio 8px, <code>bg-ink</code></td><td><code>index.css:267-271</code></td><td>não</td></tr>
+<tr><td>Botão "Cancelar"</td><td><code>.btn--secondary</code></td><td><code>index.css:272-275</code></td><td>não</td></tr>
+<tr><td>Ação "Editar"</td><td><code>.btn--icon</code> + <code>.btn--secondary</code> — 44×44px</td><td><code>index.css:292, 272</code></td><td>não</td></tr>
+<tr><td>Ação "Arquivar"</td><td><code>.btn--icon</code> + <code>.btn--secondary</code> + <code>.btn--secondary-danger</code></td><td><code>index.css:292, 289</code></td><td>não</td></tr>
+<tr><td>Estado vazio</td><td><code>.empty-state</code> — raio 12px, borda tracejada, <code>bg-slate-50/60</code></td><td><code>index.css:311-314</code></td><td>não</td></tr>
+<tr><td>Mensagem de falha</td><td><code>.alert--error</code> + <code>role="alert"</code></td><td><code>index.css:317-319</code></td><td>não</td></tr>
+<tr><td>Campo de formulário</td><td><code>field</code> — raio 8px, foco <code>brand-500</code> + anel 10%</td><td><code>index.css:553-555</code></td><td>não</td></tr>
+<tr><td>Rótulo de campo</td><td><code>.form-label</code></td><td><code>index.css:304</code></td><td>não</td></tr>
+<tr><td>Par de colunas</td><td><code>.form-grid</code></td><td><code>index.css:305</code></td><td>não</td></tr>
+<tr><td>Subtítulo da seção</td><td><code>text-sm text-slate-600</code> — o mesmo literal dos cabeçalhos vizinhos</td><td><code>ClientDetailPage.tsx:220, 256, 288</code></td><td>não</td></tr>
+<tr><td>Anel de foco</td><td><code>:focus-visible</code> — 2px <code>brand-500</code>, offset 2px</td><td><code>index.css:175-178</code></td><td>não</td></tr>
+<tr><td>Esqueleto de carregamento</td><td><code>animate-pulse</code>, <code>bg-slate-200</code> — o da página, herdado</td><td><code>ClientDetailPage.tsx:172</code></td><td>não</td></tr>
+<tr><td>Ícone da seção</td><td><code>Target</code> do <code>lucide-react</code> (já instalado), <code>size-4</code></td><td><code>lucide-react/icons/target</code></td><td>não</td></tr>
+</table>
+<p class="note"><strong>A coluna "novo" está inteiramente em "não", e essa era a meta.</strong>
+Nenhuma cor nova, nenhum corpo de texto fora dos papéis
+<code>display/title/body/label/meta</code>, nenhum raio fora do par 8px/12px das fundações r2 — com
+a exceção do <code>rounded-full</code> das pílulas, que o contrato r2 já reserva a status e avatar.
+Nenhuma sombra além de <code>--shadow-card</code>. Nenhuma classe nova em
+<code>index.css</code>.</p>
+<p class="note">Isso não é acaso nem sorte: a seção é uma <strong>lista com cabeçalho, selos e um
+par de ações</strong>, e é exatamente o que Satisfação, Processos mapeados e Contatos já são na
+mesma página. Uma seção nova que precisasse de um valor visual novo estaria dizendo que não é
+parecida com nada do produto — e essa afirmação, aqui, seria falsa.</p>
+
+<h2>10 · Contraste</h2>
+<table>
+<tr><th>Par</th><th>Onde aparece</th><th>Razão</th><th>AA texto normal</th><th>Origem</th></tr>
+<tr><td><code>ink</code> sobre <code>surface</code></td><td>nome do mandato, título, botão primário invertido</td><td>18,9:1</td><td>passa</td><td>medido — <code>index.css:31</code></td></tr>
+<tr><td><code>muted</code> sobre <code>surface</code></td><td>patrocínio, período, contagem, estado vazio</td><td>&gt; 7,4:1</td><td>passa</td><td>medido — <code>index.css:39-40</code> (7,4:1 sobre <code>canvas</code>, mais escuro que branco)</td></tr>
+<tr><td><code>brand-500</code> sobre <code>brand-50</code></td><td>glifo do <code>.metric-icon</code></td><td><strong>4,53:1</strong></td><td>passa (e 3:1 de não-texto com folga)</td><td><strong>calculado aqui</strong></td></tr>
+<tr><td><code>success</code> sobre <code>success-50</code></td><td><code>.state--1</code> "Ativo"</td><td><strong>5,21:1</strong></td><td>passa</td><td><strong>calculado aqui</strong></td></tr>
+<tr><td><code>warning</code> sobre <code>warning-50</code></td><td><code>.state--2</code> "Pausado"</td><td><strong>4,84:1</strong></td><td>passa</td><td><strong>calculado aqui</strong></td></tr>
+<tr><td><code>info</code> sobre <code>info-50</code></td><td><code>.state--0</code> "Design partner"</td><td><strong>6,16:1</strong></td><td>passa</td><td><strong>calculado aqui</strong></td></tr>
+<tr><td><code>slate-600</code> sobre <code>slate-100</code></td><td><code>.state--off</code> "Encerrado" / "Pago"</td><td><strong>6,91:1</strong></td><td>passa</td><td><strong>calculado aqui</strong></td></tr>
+<tr><td><code>danger</code> sobre <code>danger-50</code></td><td><code>.alert--error</code></td><td>5,6:1</td><td>passa</td><td>medido — <code>index.css:94-97</code></td></tr>
+<tr><td><code>brand-500</code> sobre <code>surface</code></td><td>anel de <code>:focus-visible</code></td><td>4,96:1</td><td>passa</td><td>medido — <code>index.css:31</code></td></tr>
+</table>
+<p class="note"><strong>Os cinco pares "calculado aqui" não são tinta nova.</strong> Todos são
+pares de <code>index.css</code> já em produção — o que não existia era a medição escrita, porque a
+tabela pré-calculada da paleta cobre a marca e não cobre a escala de selo. Nenhum <em>par novo</em>
+é introduzido por esta revisão. A pílula <code>.state</code> é 11px em peso 600: mede-se contra o
+mínimo de <strong>texto normal (4,5:1)</strong>, não contra os 3:1 de texto grande, e os quatro
+passam nessa régua.</p>
+<p class="note">Estes números não substituem <code>e2e/a11y.spec.ts</code>, que é o árbitro e roda
+o axe sobre 25 telas × 3 larguras com contraste AA incluído. <strong>A tela desta seção já está na
+matriz</strong> — <code>{ path: "/clientes/1", name: "Detalhe do cliente" }</code>,
+<code>e2e/matrix.ts:21</code> —, então a seção nova entra no gate sem uma linha nova.
+<strong>Quando o axe e o tom discordarem, cede o tom.</strong></p>
+
+<h2>11 · Entregue nesta revisão × reservado</h2>
+<table>
+<tr><th>Entregue</th><th>Reservado — não faz parte desta aprovação</th></tr>
+<tr><td>A seção no detalhe do cliente, entre Saúde e Satisfação</td><td>Tela de lista de Engagements no menu lateral</td></tr>
+<tr><td>Listar os mandatos da conta com status, modelo, patrocínio, período e contagem de projetos</td><td>Listar os <strong>projetos</strong> de cada mandato, expandidos na linha</td></tr>
+<tr><td>Criar, editar e arquivar um mandato pela seção</td><td>Mover um projeto de um mandato para outro; encerrar mandato em lote</td></tr>
+<tr><td>Ler e escrever <code>commercial_model</code> na seção</td><td>Expor <code>commercial_model</code> no portal do cliente (One)</td></tr>
+<tr><td>Somente leitura para o papel Entrega</td><td>Aviso ao usuário Entrega de que a lista está recortada pelos projetos dele</td></tr>
+<tr><td>Vazio, erro, formulário e o carregamento herdado da página</td><td>Esqueleto de carregamento próprio da seção</td></tr>
+<tr><td>Selo <code>needs_review</code> — <strong>não</strong>, veja abaixo</td><td>Superfície para o carimbo <code>needs_review</code> do backfill da migração <code>0056</code></td></tr>
+</table>
+<div class="panel reserved" style="margin-top:14px">
+  <p class="type-meta" style="margin:0;color:var(--brand-700);font-weight:700">HACHURADO = RESERVADO</p>
+  <p class="note" style="margin:6px 0 0">Nada nesta revisão está desenhado como reservado — o
+  hachurado registra a convenção. Tudo que aparece nos quadros acima é para construir.
+  <strong><code>needs_review</code> fica de fora de propósito</strong>: é carimbo de backfill, não
+  campo de operação, e dar-lhe um selo na linha transformaria um resíduo de migração em estado de
+  produto que ninguém sabe resolver pela tela.</p>
+</div>
+
+<h2>12 · Decisões que quero registradas</h2>
+<table>
+<tr><th>#</th><th>Decisão</th><th>Alternativa rejeitada</th></tr>
+<tr><td><strong>A</strong></td><td><strong>Título "Engagements", em inglês</strong>, com a copy em volta em pt-BR</td><td>"Mandatos" — lê melhor e cria um quinto nome para o conceito, contra a regra de ouro do mapa de linguagem §1. <strong>É a decisão pedida na seção 3.</strong></td></tr>
+<tr><td><strong>B</strong></td><td><strong>As duas pílulas de modelo comercial sempre visíveis</strong> (B1)</td><td>Pílula só no <code>design_partner</code> (B2) — mais limpo, e faz "sem selo" significar duas coisas. <strong>É a decisão pedida na seção 4.</strong></td></tr>
+<tr><td>1</td><td>A seção fica entre Saúde da relação e Satisfação</td><td>Depois de Contatos, junto do cadastro — enterraria a estrutura embaixo do histórico, e é a estrutura que responde "o que estamos fazendo por esta conta"</td></tr>
+<tr><td>2</td><td><code>closed</code> em <code>.state--off</code>, neutro</td><td><code>.state--3</code> vermelho — encerrado não é falha, e pintá-lo assim faz a conta de melhor histórico parecer a mais problemática</td></tr>
+<tr><td>3</td><td>Formulário embutido no painel, com "Editando {nome}"</td><td>Modal dedicado — superfície nova para o trabalho que o padrão de Contatos, na mesma página, já resolve</td></tr>
+<tr><td>4</td><td>Erro no topo da página, no <code>.alert--error</code> que a tela já tem</td><td>Alerta dentro do painel — abriria uma segunda convenção de erro na mesma página</td></tr>
+<tr><td>5</td><td>Ícone <code>Target</code></td><td><code>Handshake</code> — quase idêntico ao <code>HeartHandshake</code> da Satisfação, que fica logo abaixo</td></tr>
+<tr><td>6</td><td>Período com precisão de <strong>mês</strong> ("Desde 03/2026")</td><td>Data completa ("Desde 12/03/2026"), como Satisfação e Interações usam — mais consistente com os vizinhos, e mais ruído numa linha que já carrega quatro informações</td></tr>
+<tr><td>7</td><td>Cabeçalho consome <code>.panel-heading</code></td><td>Copiar o literal <code>flex items-center gap-3</code> dos vizinhos — é dívida existente que esta revisão não propaga, e a primitiva existe exatamente para "título à esquerda, ação à direita"</td></tr>
+<tr><td>8</td><td>Sem selo para <code>needs_review</code></td><td>Selo de revisão na linha — promoveria um carimbo de backfill a estado de produto sem ação que o resolva</td></tr>
+</table>
+
+<h2>13 · O que esta aprovação não é</h2>
+<p class="note">Aprovar a revisão 1 não aprova uma revisão posterior: um pacote materialmente
+alterado é revisão nova e precisa do próprio registro. Aprovar o <strong>visual</strong> não aprova
+a <strong>copy</strong> — as duas decisões são pedidas em separado, e as decisões A e B acima são
+justamente uma de cada. Esta aprovação também não é aprovação de implementação: as dependências de
+payload e as consequências de backend estão no <code>README.md</code> deste pacote, e nenhuma delas
+é decidida por um board.</p>
+<p class="note">As strings exatas em aprovação:</p>
+<table>
+<tr><th>Onde</th><th>Strings</th></tr>
+<tr><td>Cabeçalho</td><td><em>"Engagements"</em> · <em>"Editando {nome}"</em> ·
+<em>"2 engagements ativos nesta conta"</em> · <em>"Nenhum engagement"</em> ·
+<em>"Novo engagement"</em></td></tr>
+<tr><td>Linha</td><td><em>"Patrocínio de {nome}"</em> · <em>"Desde {MM/AAAA}"</em> ·
+<em>"{MM/AAAA} → {MM/AAAA}"</em> · <em>"{n} projetos"</em> / <em>"1 projeto"</em> ·
+<em>"Ativo"</em> · <em>"Pausado"</em> · <em>"Encerrado"</em> · <em>"Pago"</em> ·
+<em>"Design partner"</em></td></tr>
+<tr><td>Ações</td><td><em>"Editar {nome}"</em> e <em>"Arquivar {nome}"</em> (só
+<code>aria-label</code>; os botões são de ícone) · <em>"Adicionar engagement"</em> ·
+<em>"Salvar alterações"</em> · <em>"Cancelar"</em></td></tr>
+<tr><td>Formulário</td><td><em>"Nome"</em> · <em>"Modelo comercial"</em> · <em>"Status"</em> ·
+<em>"Patrocinador"</em> · <em>"Sem patrocinador definido"</em> · <em>"Início"</em> ·
+<em>"Fim"</em> · <em>"Mandato"</em> · <em>"Definição de sucesso"</em> ·
+<em>"Como a casa chama este mandato"</em> ·
+<em>"O que a casa foi contratada para transformar"</em> ·
+<em>"Como saberemos que deu certo"</em></td></tr>
+<tr><td>Vazio</td><td><em>"Nenhum engagement nesta conta. Crie o mandato antes de converter uma
+oportunidade — é ele que agrupa as vendas e os projetos que são o mesmo trabalho."</em></td></tr>
+<tr><td>Erro</td><td>Vem do backend, não da tela: <em>"Este engajamento ainda tem {n} projeto(s)
+em aberto. Arquive esses projetos antes de arquivar o engajamento."</em></td></tr>
+</table>
+<p class="note"><strong>"engagement" em caixa baixa no meio da frase, e "Engagements" em
+<code>Title Case</code> no título.</strong> É o que o mapa de linguagem §1 pede: <code>Title
+Case</code> em UI, e o texto em volta em português corrente. Se a decisão A cair em "Mandatos",
+todas as ocorrências desta tabela trocam juntas.</p>
+
+</div>
+</body>
+</html>
