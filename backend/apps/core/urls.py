@@ -31,7 +31,6 @@ from .views import (
     EngineeringHandoffViewSet,
     EsignWebhookView,
     EvidenceViewSet,
-    EvidenciaViewSet,
     FeasibilityAssessmentViewSet,
     FindingViewSet,
     GithubDeliveryProjectionViewSet,
@@ -124,8 +123,9 @@ router.register("riscos", RiscoViewSet)
 router.register("engineering-handoffs", EngineeringHandoffViewSet)
 router.register("github-projections", GithubDeliveryProjectionViewSet)
 router.register("satisfacoes", SatisfacaoViewSet)
-# O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as três
-# rotas ficam fora de `/projects/`. Etapa e evidência pendem do processo, não do projeto.
+# O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as rotas
+# ficam fora de `/projects/`. A etapa pende do processo, não do projeto; o achado agora vive no
+# split `evidence`/`findings` logo abaixo (a `Evidencia` legada saiu na Fase 6, ADR 0052).
 #
 # **As rotas ficam, e os `basename` viraram explícitos.** A fatia 4 da issue #67 renomeou as
 # classes para `Process`/`ProcessStep` (ADR 0052); o `basename` derivado do queryset passaria a
@@ -134,7 +134,6 @@ router.register("satisfacoes", SatisfacaoViewSet)
 # deu à rota.
 router.register("processos", ProcessViewSet, basename="processo")
 router.register("processo-etapas", ProcessStepViewSet, basename="processoetapa")
-router.register("evidencias", EvidenciaViewSet)
 # O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). As duas âncoras convivem e a rota
 # mostra isso: `discoveries` e o que pende dele são de **projeto**; `evidence` e `findings` são da
 # **conta**, como os processos logo acima. `evidence` no singular porque é substantivo incontável

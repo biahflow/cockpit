@@ -2,11 +2,12 @@ import { ArrowLeft, BadgeCheck, Coins, Flame, Plus, Quote, Trash2, Workflow } fr
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api, createPainPoint, listImprovementOpportunities, listPainPointsByProcess, updatePainPoint } from "../api";
+import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
 import { SUSTENTACAO_LABEL, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Evidencia, EvidenciaForma, EvidenciaRotulo, ImprovementOpportunity, PainPoint, PainPointImpactType, Process, ProcessStep } from "../types";
+import type { Evidence, EvidenceKind, EpistemicStatus, Finding, ImprovementOpportunity, PainPoint, PainPointImpactType, Process, ProcessStep } from "../types";
 
 /**
  * As seis letras do P-S-D-T-E-R (`docs/metodologia-fde.md:106-110`), **rotuladas pela pergunta**.
@@ -63,46 +64,49 @@ const blankEtapa: { name: string } & CamposPsdter = {
 };
 
 /**
- * O rascunho da evidência — e os dois vazios são a decisão inteira do formulário.
+ * O rascunho do achado — o `Finding` do split (FDD 045) e a `Evidence` que o sustenta, num
+ * formulário só, e os vazios são a decisão inteira dele.
  *
- * `rotulo` e `forma` **não têm default no banco** (ADR 0034) e não podem ganhar um aqui. Um select
- * que já abre em "Hipótese" reintroduz na tela exatamente o default que a ADR recusou no modelo: a
- * casa escolhendo por quem não escolheu, sempre para o mesmo lado. E o lado errado é caro — é o que
- * faz suposição virar fato, que é a única coisa que a metodologia proíbe nominalmente
- * (`docs/metodologia-fde.md:117`). Escolher "desconhecido" é um ato; recebê-lo por omissão não diz
- * nada sobre o achado.
+ * `epistemic_status` e `kind` **não têm default no banco** (ADR 0034) e não podem ganhar um aqui.
+ * Um select que já abre em "Hipótese" reintroduz na tela o default que a ADR recusou no modelo: a
+ * casa escolhendo por quem não escolheu, sempre para o mesmo lado.
+ *
+ * **`fato` não é opção de criação** — é o que a promoção faz, com revisor e evidência viva (§6.9).
+ * Oferecê-lo aqui produziria o 400 que quem clica não entende: criar já como fato exigiria as duas
+ * coisas que só a promoção reúne. O achado nasce hipótese ou desconhecido, e sobe por ato de gente.
  */
-const blankEvidencia: {
-  rotulo: EvidenciaRotulo | ""; forma: EvidenciaForma | ""; content: string; step: string;
+const blankFinding: {
+  epistemic_status: Exclude<EpistemicStatus, "fact"> | "";
+  kind: EvidenceKind | ""; raw_excerpt: string; statement: string; step: string;
 } = {
-  rotulo: "", forma: "", content: "", step: "",
+  epistemic_status: "", kind: "", raw_excerpt: "", statement: "", step: "",
 };
 
-const rotuloLabels: Record<EvidenciaRotulo, string> = {
-  fato: "Fato", hipotese: "Hipótese", desconhecido: "Desconhecido",
+const STATUS_LABEL: Record<EpistemicStatus, string> = {
+  fact: "Fato", hypothesis: "Hipótese", unknown: "Desconhecido",
 };
 // As cinco formas, com o exemplo junto (`docs/metodologia-fde.md:112-115`). O parêntese não é
 // decoração: "nunca só entrevista" é a regra, e ela só se cumpre se quem registra enxergar as
 // outras quatro como opções concretas em vez de sinônimos abstratos de "fonte".
-const formaLabels: Record<EvidenciaForma, string> = {
-  entrevista: "Entrevista (o que dizem)",
-  observacao: "Observação (o que fazem)",
-  artefato: "Artefato (planilha, PDF, croqui)",
-  sistema: "Sistema (ERP, CRM, CAD, WhatsApp)",
-  dado: "Dado (volume, tempo, custo, erro)",
+const KIND_LABEL: Record<EvidenceKind, string> = {
+  interview: "Entrevista (o que dizem)",
+  observation: "Observação (o que fazem)",
+  artifact: "Artefato (planilha, PDF, croqui)",
+  system: "Sistema (ERP, CRM, CAD, WhatsApp)",
+  data: "Dado (volume, tempo, custo, erro)",
 };
 // Variante, nunca a cor (ADR 0026): um `bg-emerald-50` escrito aqui é a segunda definição de
-// "fato", e ela diverge da primeira sem nada ficar vermelho. `desconhecido` é `state--off` — o
-// neutro de "Desligada"/"Arquivado" —, porque nomear o que ainda não se sabe **não é falha**: é o
-// Discovery fazendo o trabalho. Pintá-lo de vermelho mandaria apagar a linha mais honesta do mapa.
-const ROTULO_BADGE: Record<EvidenciaRotulo, string> = {
-  fato: "state--1", hipotese: "state--2", desconhecido: "state--off",
+// "fato", e ela diverge da primeira sem nada ficar vermelho. `unknown` é `state--off` — o neutro de
+// "Desligada"/"Arquivado" —, porque nomear o que ainda não se sabe **não é falha**: é o Discovery
+// fazendo o trabalho. Pintá-lo de vermelho mandaria apagar a linha mais honesta do mapa.
+const STATUS_BADGE: Record<EpistemicStatus, string> = {
+  fact: "state--1", hypothesis: "state--2", unknown: "state--off",
 };
 
 /**
  * O rascunho do pain point (FDD 048, DAP priorização r1 — decisão **E1**).
  *
- * `impact_type` abre **sem escolha feita**, pela razão que `blankEvidencia` já escreve acima: o
+ * `impact_type` abre **sem escolha feita**, pela razão que `blankFinding` já escreve acima: o
  * campo não tem default no modelo, e um select que já abre em "Financeiro" é a casa escolhendo por
  * quem não escolheu — sempre para o mesmo lado. Aqui o lado errado classifica como custo o que era
  * risco, e o tipo é o que separa as dores quando alguém for agrupá-las.
@@ -115,13 +119,17 @@ const impactoLabels: Record<PainPointImpactType, string> = {
 };
 
 export function ProcessDetailPage({ clientId, id }: { clientId: number; id: number }) {
+  const { user } = useAuth();
   const [processo, setProcesso] = useState<Process>();
   const [etapas, setEtapas] = useState<ProcessStep[]>([]);
-  const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  // As evidências ficam à parte, indexadas por id: o `Finding` guarda só as chaves em `evidences`,
+  // e é aqui que a linha do achado descobre de que **forma** ele veio para exibir na tela.
+  const [evidencePorId, setEvidencePorId] = useState<Map<number, Evidence>>(new Map());
   const [dores, setDores] = useState<PainPoint[]>([]);
   const [oportunidades, setOportunidades] = useState<ImprovementOpportunity[]>([]);
   const [etapaDraft, setEtapaDraft] = useState(blankEtapa);
-  const [evidenciaDraft, setEvidenciaDraft] = useState(blankEvidencia);
+  const [findingDraft, setFindingDraft] = useState(blankFinding);
   const [painPointDraft, setPainPointDraft] = useState(blankPainPoint);
   const [error, setError] = useState("");
   const [isArchiving, setArchiving] = useState(false);
@@ -134,19 +142,22 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
   const [salvandoInsumos, setSalvandoInsumos] = useState(false);
 
   const load = useCallback(() => Promise.all([
-    // A **rota** continua sendo `/processos/` e `/processo-etapas/` — ela morre na `/api/v2/`
-    // (`docs/ontology/aliases.md`). O **query param** e as chaves de corpo aqui já são os
-    // canônicos: a chave antiga fica na v1 para quem integrou de fora, não para a SPA.
+    // A **rota** de processo e etapa continua sendo `/processos/` e `/processo-etapas/` — ela morre
+    // na `/api/v2/` (`docs/ontology/aliases.md`). O achado é o split `Evidence`/`Finding` (FDD 045),
+    // que nasceu já com a rota canônica: `/findings/` e `/evidence/`. As chaves de corpo aqui já são
+    // as canônicas.
     api<Process>(`/processos/${id}/`),
     api<ProcessStep[]>(`/processo-etapas/?process=${id}`),
-    api<Evidencia[]>(`/evidencias/?process=${id}`),
+    api<Finding[]>(`/findings/?process=${id}`),
+    api<Evidence[]>(`/evidence/?process=${id}`),
     listPainPointsByProcess(id),
     // As oportunidades da conta entram só para o selo "Agrupado": é a outra ponta da decisão E1 —
     // quem registra a dor aqui vê, na mesma tela, se ela já virou trabalho de priorização, sem
     // precisar abrir a outra tela para descobrir.
     listImprovementOpportunities(clientId),
-  ]).then(([loadedProcesso, loadedEtapas, loadedEvidencias, loadedDores, loadedOportunidades]) => {
-    setProcesso(loadedProcesso); setEtapas(loadedEtapas); setEvidencias(loadedEvidencias);
+  ]).then(([loadedProcesso, loadedEtapas, loadedFindings, loadedEvidence, loadedDores, loadedOportunidades]) => {
+    setProcesso(loadedProcesso); setEtapas(loadedEtapas); setFindings(loadedFindings);
+    setEvidencePorId(new Map(loadedEvidence.map(e => [e.id, e])));
     setDores(loadedDores); setOportunidades(loadedOportunidades);
     setInsumoDraft(Object.fromEntries(
       INSUMOS.map(([campo]) => [campo, loadedProcesso[campo] === null ? "" : String(loadedProcesso[campo])])
@@ -159,14 +170,31 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
     try { await api("/processo-etapas/", { method: "POST", body: JSON.stringify({ process: id, ...etapaDraft }) }); setEtapaDraft(blankEtapa); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
-  async function createEvidencia(event: FormEvent<HTMLFormElement>) {
+  /**
+   * Registra o achado como o par do split: uma `Evidence` (de onde veio) e um `Finding` (o que
+   * afirma), ligados (FDD 045). São duas gravações porque são dois fatos — o trecho bruto e a
+   * conclusão que a casa tirou dele —, e é justamente a fusão dos dois numa linha só que o split
+   * desfaz. A `Evidence` vem primeiro porque o `Finding` precisa da chave dela para nascer ligado:
+   * é essa evidência viva que uma promoção futura vai exigir (§6.9).
+   *
+   * `step` vazio vira `null`, e não fica de fora do corpo: o vínculo é opcional por decisão da
+   * FDD 039 — vínculo errado é pior que vínculo nenhum, e quem sabe é quem estava na reunião.
+   */
+  async function createFinding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
-    // `step` vazio vira `null`, e não fica de fora do corpo: o vínculo é opcional por decisão da
-    // FDD 039 — o modelo não sabe a qual etapa um achado pertence, e vínculo errado é pior que
-    // vínculo nenhum. Quem sabe é quem estava na reunião, e é aqui que ele diz.
-    const corpo = { process: id, ...evidenciaDraft, step: evidenciaDraft.step || null };
-    try { await api("/evidencias/", { method: "POST", body: JSON.stringify(corpo) }); setEvidenciaDraft(blankEvidencia); await load(); }
-    catch (cause) { setError(mensagemDeFalha(cause)); }
+    if (!processo) return;
+    const step = findingDraft.step ? Number(findingDraft.step) : null;
+    try {
+      const evidence = await api<Evidence>("/evidence/", { method: "POST", body: JSON.stringify({
+        account: processo.account, process: id, step, kind: findingDraft.kind,
+        raw_excerpt: findingDraft.raw_excerpt,
+      }) });
+      await api("/findings/", { method: "POST", body: JSON.stringify({
+        account: processo.account, process: id, step, statement: findingDraft.statement,
+        epistemic_status: findingDraft.epistemic_status, evidences: [evidence.id],
+      }) });
+      setFindingDraft(blankFinding); await load();
+    } catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   /**
    * Registra a dor **onde ela foi observada** — decisão **E1** do DAP priorização r1.
@@ -196,7 +224,7 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
    * **`confirmed` não é oferecido**, e a ausência é a decisão: confirmar exige ao menos um
    * `Finding` vivo ligado à dor (FDD 048), o produto ainda não tem tela de achados, e um select
    * que oferecesse o valor produziria um 400 que quem clicou não entende. É o mesmo cuidado que
-   * fez `blankEvidencia` abrir sem escolha feita.
+   * fez `blankFinding` abrir sem escolha feita.
    */
   async function mudarSituacaoDaDor(dor: PainPoint) {
     setError("");
@@ -205,16 +233,18 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   /**
-   * Promove o achado a fato — e é **ato humano por decisão** (ADR 0034).
+   * Promove o achado a fato — e é **ato humano por decisão** (ADR 0034, §6.9).
    *
-   * Tudo que a extração de reunião cria nasce como hipótese vinda de entrevista, porque um modelo
-   * lendo transcrição produz *o que foi dito*, não prova. Só o fato sustenta número: é esta
-   * chamada que faz o custo do estado atual deixar de ser hipótese da casa. Não há caminho
-   * automático para cá, pela mesma razão que a ADR 0032 recusou à IA gravar satisfação.
+   * Tudo que a extração de reunião cria nasce como hipótese, porque um modelo lendo transcrição
+   * produz *o que foi dito*, não prova. Só o fato sustenta número: é esta chamada que faz o custo
+   * do estado atual deixar de ser hipótese da casa. O backend exige quem revisou — vai o usuário
+   * autenticado, `reviewed_by` — e ao menos uma evidência viva ligada, que o achado já tem desde a
+   * criação. Sem uma das duas, o servidor recusa com 400, e a mensagem sobe para a tela.
    */
-  async function promover(evidencia: Evidencia) {
-    setError(""); setPromovendo(evidencia.id);
-    try { await api(`/evidencias/${evidencia.id}/`, { method: "PATCH", body: JSON.stringify({ rotulo: "fato" }) }); await load(); }
+  async function promover(finding: Finding) {
+    if (!user) return;
+    setError(""); setPromovendo(finding.id);
+    try { await api(`/findings/${finding.id}/`, { method: "PATCH", body: JSON.stringify({ epistemic_status: "fact", reviewed_by: user.id }) }); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
     finally { setPromovendo(null); }
   }
@@ -256,10 +286,10 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
     <a href={`/contas/${clientId}`} className="back-link"><ArrowLeft className="size-4" />Voltar para o cliente</a>
     {isArchiving && <ConfirmDialog
       title="Arquivar processo"
-      // A mensagem diz o que `Process.archive()` faz de verdade: arquivar **leva junto** etapas e
-      // evidências, no mesmo instante. Um mapa de processo se guarda inteiro — mas quem clica
-      // precisa saber que não está guardando só o cabeçalho.
-      message={<>O processo <strong className="text-ink">{processo.name}</strong> sai das listagens ativas <strong className="text-ink">levando junto as {etapas.length} etapa(s) e as {evidencias.length} evidência(s) dele</strong>. Nada é apagado: restaurar depois traz de volta exatamente o que este arquivamento levou.</>}
+      // A mensagem diz o que `Process.archive()` faz de verdade: arquivar **leva junto** as etapas,
+      // no mesmo instante. Os achados não vão junto — são da conta, não do processo (Fase 6), e
+      // seguem listáveis por ela. Quem clica precisa saber o que está guardando e o que fica.
+      message={<>O processo <strong className="text-ink">{processo.name}</strong> sai das listagens ativas <strong className="text-ink">levando junto as {etapas.length} etapa(s) dele</strong>. Os achados ficam com a conta. Nada é apagado: restaurar depois traz de volta exatamente o que este arquivamento levou.</>}
       confirmLabel="Arquivar" busy={busy}
       onCancel={() => setArchiving(false)} onConfirm={() => void archiveProcesso()}
     />}
@@ -345,41 +375,49 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
       </div>)}</div> : <p className="empty-state">Nenhuma etapa mapeada ainda.</p>}
     </section>
 
-    {/* As evidências, e é aqui que o rótulo governa (ADR 0034): **só o fato sustenta número**.
-        A lista não é um histórico — é a razão pela qual o custo acima vale ou não vale. */}
+    {/* Os achados, e é aqui que a classificação governa (ADR 0034): **só o fato sustenta número**.
+        A lista não é um histórico — é a razão pela qual o custo acima vale ou não vale. Cada achado
+        é um `Finding` (o que se afirma) apoiado na `Evidence` que diz de onde veio (FDD 045). */}
     <section className="panel space-y-4 sm:p-6">
-      <div className="flex items-center gap-3"><span className="metric-icon"><Quote className="size-4" /></span><div><h2 className="font-semibold text-ink">Evidências</h2><p className="text-sm text-slate-600">{evidencias.length} {evidencias.length === 1 ? "achado" : "achados"} · nunca só entrevista, e nunca hipótese apresentada como fato</p></div></div>
-      <form className="form-grid" data-testid="evidencia-form" onSubmit={event => void createEvidencia(event)}>
-        {/* Os dois selects abrem **sem escolha feita** de propósito — ver `blankEvidencia`. */}
-        <label className="form-label">Rótulo<select className="field" value={evidenciaDraft.rotulo} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, rotulo: event.target.value as EvidenciaRotulo })} required><option value="" disabled>Selecione…</option>{Object.entries(rotuloLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label className="form-label">Forma<select className="field" value={evidenciaDraft.forma} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, forma: event.target.value as EvidenciaForma })} required><option value="" disabled>Selecione…</option>{Object.entries(formaLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        {/* O vínculo com a etapa, que a extração deixa sempre vazio de propósito. Sem este campo
-            a `Evidencia.step` seria coluna sem caminho de preenchimento — a FDD 039 diz que ela
-            existe "para ser preenchida por gente depois", e "depois" precisa de um lugar. */}
+      <div className="flex items-center gap-3"><span className="metric-icon"><Quote className="size-4" /></span><div><h2 className="font-semibold text-ink">Achados</h2><p className="text-sm text-slate-600">{findings.length} {findings.length === 1 ? "achado" : "achados"} · nunca só entrevista, e nunca hipótese apresentada como fato</p></div></div>
+      <form className="form-grid" data-testid="finding-form" onSubmit={event => void createFinding(event)}>
+        {/* Os selects abrem **sem escolha feita** de propósito — ver `blankFinding`. A classificação
+            não oferece "Fato": ele é o que a promoção faz, com revisor e evidência viva. */}
+        <label className="form-label">Classificação<select className="field" value={findingDraft.epistemic_status} onChange={event => setFindingDraft({ ...findingDraft, epistemic_status: event.target.value as Exclude<EpistemicStatus, "fact"> })} required><option value="" disabled>Selecione…</option><option value="hypothesis">{STATUS_LABEL.hypothesis}</option><option value="unknown">{STATUS_LABEL.unknown}</option></select></label>
+        <label className="form-label">Forma da fonte<select className="field" value={findingDraft.kind} onChange={event => setFindingDraft({ ...findingDraft, kind: event.target.value as EvidenceKind })} required><option value="" disabled>Selecione…</option>{Object.entries(KIND_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        {/* O vínculo com a etapa, que a extração deixa sempre vazio de propósito. A FDD 039 diz que
+            `step` existe "para ser preenchida por gente depois", e "depois" precisa de um lugar. */}
         <label className="form-label sm:col-span-2">
           Etapa (opcional)
-          <select className="field" value={evidenciaDraft.step} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, step: event.target.value })} disabled={!etapas.length}>
+          <select className="field" value={findingDraft.step} onChange={event => setFindingDraft({ ...findingDraft, step: event.target.value })} disabled={!etapas.length}>
             <option value="">{etapas.length ? "O achado é do processo inteiro" : "Nenhuma etapa mapeada ainda"}</option>
             {etapas.map(etapa => <option key={etapa.id} value={etapa.id}>{etapa.name}</option>)}
           </select>
         </label>
-        <label className="form-label sm:col-span-2">Achado<textarea className="field min-h-20" value={evidenciaDraft.content} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, content: event.target.value })} placeholder="O que foi levantado, na frase de quem levantou" required /></label>
-        <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Registrar evidência</button>
+        {/* Dois campos porque são dois fatos: o **trecho** como foi dito ou observado (a `Evidence`)
+            e a **conclusão** que a casa tirou dele (o `Finding`). Juntá-los numa caixa só refaria a
+            fusão que o split desfaz — editar a redação do achado apagaria a prova que o sustenta. */}
+        <label className="form-label sm:col-span-2">Trecho da fonte<textarea className="field min-h-16" value={findingDraft.raw_excerpt} onChange={event => setFindingDraft({ ...findingDraft, raw_excerpt: event.target.value })} placeholder="O que foi dito ou observado, com as palavras da fonte" required /></label>
+        <label className="form-label sm:col-span-2">Achado<textarea className="field min-h-20" value={findingDraft.statement} onChange={event => setFindingDraft({ ...findingDraft, statement: event.target.value })} placeholder="A conclusão que a casa tirou disso, na frase de quem levantou" required /></label>
+        <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Registrar achado</button>
       </form>
-      {evidencias.length ? <div className="panel-rows">{evidencias.map(evidencia => <div className="row" key={evidencia.id}>
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><Quote className="size-4" /></span>
-        <div className="row-main">
-          <strong>{evidencia.content}</strong>
-          <span>{evidencia.forma_display}</span>
-        </div>
-        {/* Fora de `.row-main`: `.row-main span`/`strong` sobrescrevem display e cor de qualquer
-            primitiva aninhada ali dentro, e o `.state` perderia a própria pele em silêncio. */}
-        <span className={`state ${ROTULO_BADGE[evidencia.rotulo]} shrink-0`}>{evidencia.rotulo_display}</span>
-        {/* Some quando já é fato: não há para onde promover, e um botão inerte na linha diria que
-            existe um grau acima. O `aria-label` nomeia o achado porque a tela tem um botão destes
-            por linha, e "Promover a fato" repetido cinco vezes não localiza nenhum deles. */}
-        {evidencia.rotulo !== "fato" && <button type="button" className="btn btn--secondary shrink-0" disabled={promovendo === evidencia.id} aria-label={`Promover a fato: ${evidencia.content}`} onClick={() => void promover(evidencia)}><BadgeCheck className="size-4" />Promover a fato</button>}
-      </div>)}</div> : <p className="empty-state">Nenhuma evidência registrada — sem achado rotulado, o custo acima é hipótese da casa.</p>}
+      {findings.length ? <div className="panel-rows">{findings.map(finding => {
+        const fonte = finding.evidences.map(eid => evidencePorId.get(eid)).find(Boolean);
+        return <div className="row" key={finding.id}>
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><Quote className="size-4" /></span>
+          <div className="row-main">
+            <strong>{finding.statement}</strong>
+            {fonte && <span>{fonte.kind_display}</span>}
+          </div>
+          {/* Fora de `.row-main`: `.row-main span`/`strong` sobrescrevem display e cor de qualquer
+              primitiva aninhada ali dentro, e o `.state` perderia a própria pele em silêncio. */}
+          <span className={`state ${STATUS_BADGE[finding.epistemic_status]} shrink-0`}>{finding.epistemic_status_display}</span>
+          {/* Some quando já é fato: não há para onde promover, e um botão inerte na linha diria que
+              existe um grau acima. O `aria-label` nomeia o achado porque a tela tem um botão destes
+              por linha, e "Promover a fato" repetido cinco vezes não localiza nenhum deles. */}
+          {finding.epistemic_status !== "fact" && <button type="button" className="btn btn--secondary shrink-0" disabled={promovendo === finding.id} aria-label={`Promover a fato: ${finding.statement}`} onClick={() => void promover(finding)}><BadgeCheck className="size-4" />Promover a fato</button>}
+        </div>;
+      })}</div> : <p className="empty-state">Nenhum achado registrado — sem achado classificado, o custo acima é hipótese da casa.</p>}
     </section>
 
     {/* Os pain points, **abaixo das evidências e de propósito** (DAP priorização r1, decisão E1):

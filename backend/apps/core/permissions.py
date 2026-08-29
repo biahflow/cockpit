@@ -15,7 +15,6 @@ from .models import (
     Engagement,
     EngineeringHandoff,
     Evidence,
-    Evidencia,
     FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
@@ -141,11 +140,12 @@ class RolePermission(BasePermission):
             # os dois vizinhos: `risco` é só de Entrega e `activity` é escrita por Vendas e só
             # lida por Entrega. Quem conversa com o cliente é de ambas as áreas, e um registro
             # que só metade da casa pode fazer é um registro que não acontece.
-            # `process`, `process_step` e `evidencia` (FDD 039) são escritos pelos **dois**
-            # papéis, pelo argumento que a FDD 037 usou para `satisfacao` logo acima: quem conduz
-            # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
-            # continua levantando dentro do projeto —, e um registro que só metade da casa pode
-            # fazer é um registro que não acontece.
+            # `process` e `process_step` (FDD 039) são escritos pelos **dois** papéis, pelo
+            # argumento que a FDD 037 usou para `satisfacao` logo acima: quem conduz Discovery é de
+            # ambas as áreas — o comercial levanta a operação na venda, a entrega continua
+            # levantando dentro do projeto —, e um registro que só metade da casa pode fazer é um
+            # registro que não acontece. O achado, que era `evidencia`, virou o par `evidence`/
+            # `finding` do split e entra logo abaixo (a `Evidencia` legada saiu na Fase 6, ADR 0052).
             # `qualification` (ADR 0049) entra ao lado de `lead`, e **não** aparece em
             # nenhum conjunto da Entrega logo abaixo: a avaliação é ato comercial e não
             # atravessa para o portal do cliente (mapa de linguagem §3). O 403 dela vem do
@@ -159,7 +159,7 @@ class RolePermission(BasePermission):
             return resource in {"account", "contact", "commercial_opportunity", "engagement",
                                 "document", "lead", "analytics", "artifact", "activity",
                                 "cobranca_suspensao", "satisfacao", "process", "process_step",
-                                "evidencia", "qualification",
+                                "qualification",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding",
                                 "pain_point", "improvement_opportunity",
@@ -206,7 +206,7 @@ class RolePermission(BasePermission):
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
                                 "digital_employee", "artifact", "satisfacao",
-                                "process", "process_step", "evidencia",
+                                "process", "process_step",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding",
                                 "pain_point", "improvement_opportunity",
@@ -247,13 +247,13 @@ class RolePermission(BasePermission):
                 return Project.objects.visible_to(request.user).filter(client=obj.account).exists()
             if isinstance(
                 obj,
-                Process | ProcessStep | Evidencia | Evidence | Finding | PainPoint
+                Process | ProcessStep | Evidence | Finding | PainPoint
                 | ImprovementOpportunity | PriorityAssessment | SolutionHypothesis,
             ):
                 # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui
                 # não por o projeto ser opcional, mas por não existir: o processo mapeado é do
-                # cliente e sobrevive à venda que o descobriu (FDD 039). A etapa e a evidência
-                # chegam ao cliente pelo processo pai, que é o mesmo caminho da queryset delas.
+                # cliente e sobrevive à venda que o descobriu (FDD 039). A etapa chega ao cliente
+                # pelo processo pai, que é o mesmo caminho da queryset dela.
                 #
                 # `Evidence` e `Finding` (FDD 045) entram no mesmo ramo com um caminho a menos: a
                 # conta é campo deles (`account`), e não algo a resolver pelo pai. O `process` é

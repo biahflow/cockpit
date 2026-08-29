@@ -1498,20 +1498,23 @@ class Process(TimestampedModel):
         return self.name
 
     def archive(self) -> None:
-        """Arquiva o processo **e o que pendura nele**, no mesmo instante.
+        """Arquiva o processo **e as etapas que pendem dele**, no mesmo instante.
 
         A regra transversal da FDD 025 é que arquivar não cascateia — e que, quando os filhos
         são listáveis por conta própria, quem os tem precisa escolher: recusar com 409 ou arquivar
-        junto. Etapa e evidência são listáveis (`/processo-etapas/?process=`,
-        `/evidencias/?process=`), então sem escolha ficariam visíveis apontando para um pai
-        oculto — e, pior aqui do que no caso geral, uma evidência órfã continua sendo uma
-        afirmação sobre a operação de um cliente, sem o processo que lhe dava contexto.
+        junto. A etapa é listável (`/processo-etapas/?process=`), então sem escolha ficaria visível
+        apontando para um pai oculto. Arquivar junto, e não recusar: um mapa de processo se guarda
+        inteiro, e obrigar a apagar vinte etapas antes de guardar o processo transformaria
+        "arquivar" em trabalho manual — e o que não se consegue guardar acaba apagado de verdade.
 
-        Arquivar junto, e não recusar: um mapa de processo se guarda inteiro. Obrigar a apagar
-        vinte etapas antes de guardar o processo transformaria "arquivar" em trabalho manual, e o
-        que não se consegue guardar acaba sendo apagado de verdade.
+        **`Finding` e `Evidence` não entram no cascade**, e a diferença é de ancoragem: a
+        `Evidencia` legada (removida na Fase 6, ADR 0052) era filha do processo (`CASCADE`), mas o
+        par do split é ancorado na **conta**, com `process` opcional (`SET_NULL`). Um achado é uma
+        afirmação sobre a operação do cliente e sobrevive ao arquivamento do mapa que o citava —
+        ele continua listável pela conta, não pelo processo. O que some é a sustentação **deste**
+        processo, que `custo_do_estado_atual` recalcula a partir dos achados vivos.
 
-        **O carimbo é o mesmo nos três**, e não é detalhe de implementação: é ele que o
+        **O carimbo é o mesmo nos dois**, e não é detalhe de implementação: é ele que o
         `unarchive` lê para devolver exatamente o que esta chamada levou, sem ressuscitar o que
         alguém tinha arquivado de propósito antes.
         """
@@ -1519,10 +1522,9 @@ class Process(TimestampedModel):
         self.archived_at = momento
         self.save(update_fields=["archived_at", "updated_at"])
         self.steps.filter(archived_at__isnull=True).update(archived_at=momento)
-        self.evidencias.filter(archived_at__isnull=True).update(archived_at=momento)
 
     def unarchive(self) -> None:
-        """Restaura o processo e **só** os filhos que este arquivamento levou.
+        """Restaura o processo e **só** as etapas que este arquivamento levou.
 
         A metade simétrica, e a armadilha mora nela: restaurar tudo o que está arquivado traria
         de volta a etapa que alguém removeu na semana passada, desfazendo uma decisão que ninguém
@@ -1535,7 +1537,6 @@ class Process(TimestampedModel):
         if momento is None:
             return
         self.steps.filter(archived_at=momento).update(archived_at=None)
-        self.evidencias.filter(archived_at=momento).update(archived_at=None)
 
 
 class ProcessStep(TimestampedModel):
@@ -1564,73 +1565,6 @@ class ProcessStep(TimestampedModel):
 
     def __str__(self) -> str:
         return self.name
-
-
-class Evidencia(TimestampedModel):
-    """O que sustenta (ou não sustenta) cada achado do Discovery — a distinção central da FDD 039.
-
-    A metodologia exige duas coisas que a prosa de uma ata não guarda: que o achado venha de uma
-    das cinco formas de evidência, "nunca só entrevista" (`docs/metodologia-fde.md:112-115`), e que
-    todo achado seja rotulado FATO / HIPÓTESE / DESCONHECIDO, porque **"nunca se apresenta
-    hipótese como fato"** (`:117`). Guardar isso como campo é o que permite responder, depois da
-    reunião, quanto do mapa é observação e quanto é suposição da casa.
-    """
-
-    class Forma(models.TextChoices):
-        """As cinco formas de evidência (`docs/metodologia-fde.md:112-115`)."""
-
-        ENTREVISTA = "entrevista", "Entrevista (o que dizem)"
-        OBSERVACAO = "observacao", "Observação (o que fazem)"
-        ARTEFATO = "artefato", "Artefato (planilha, PDF, croqui)"
-        SISTEMA = "sistema", "Sistema (ERP, CRM, CAD, WhatsApp)"
-        DADO = "dado", "Dado (volume, tempo, custo, erro)"
-
-    class Rotulo(models.TextChoices):
-        """Os três rótulos (`docs/metodologia-fde.md:117`).
-
-        `DESCONHECIDO` é valor de primeira classe, e não ausência de valor: um Discovery que
-        nomeia o que ainda não sabe está fazendo o trabalho, não deixando de fazê-lo — é a postura
-        que o material pede ao sair da reunião (`:128-129`). Por isso ele é uma opção a escolher, e
-        não o que sobra quando ninguém escolheu.
-        """
-
-        FATO = "fato", "Fato"
-        HIPOTESE = "hipotese", "Hipótese"
-        DESCONHECIDO = "desconhecido", "Desconhecido"
-
-    process = models.ForeignKey(Process, on_delete=models.CASCADE, related_name="evidencias")
-    # A etapa é opcional: nem todo achado é de uma etapa — "o volume é de 400 pedidos/mês" é do
-    # processo inteiro. Quando vier preenchida, o `clean()` abaixo exige que seja deste processo.
-    step = models.ForeignKey(
-        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
-    )
-    # **Sem default nos dois**, no precedente literal de `Satisfacao.fonte`: um default faria a
-    # casa escolher por quem não escolheu, e o erro cairia sempre para o mesmo lado — chamar
-    # suposição de fato, que é exatamente o que a metodologia proíbe. Escolher "desconhecido" é um
-    # ato; recebê-lo por omissão não diz nada sobre o achado.
-    forma = models.CharField(max_length=16, choices=Forma.choices)
-    rotulo = models.CharField(max_length=16, choices=Rotulo.choices)
-    content = models.TextField()
-    source_meeting = models.ForeignKey(
-        Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
-    )
-    registered_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="evidencias"
-    )
-
-    class Meta:
-        ordering = ["-created_at", "-id"]
-
-    def __str__(self) -> str:
-        return f"{self.get_rotulo_display()} — {self.content[:60]}"
-
-    def clean(self) -> None:
-        # Mesma checagem da `Satisfacao.clean()`, e aqui ela é fronteira de conta: sem a guarda,
-        # uma evidência pode apontar para a etapa de um processo de **outro cliente** — vazamento
-        # entre contas por um campo opcional, que é a pior forma de vazar porque ninguém preenche
-        # o campo pensando nisso.
-        if self.step_id and self.step and self.step.process_id != self.process_id:
-            raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
 
 
 class Discovery(TimestampedModel):
@@ -1842,13 +1776,6 @@ class Evidence(TimestampedModel):
     # depois, se o que sustenta o fato continua sendo o mesmo texto — a mesma ideia do
     # `Case` congelado (FDD 027), no tamanho de um campo.
     content_hash = models.CharField(max_length=64, blank=True, default="")
-    # O ponteiro para a linha fundida de onde esta evidência veio no backfill (migração `0054`).
-    # Preenchido **só** no dado migrado, e é a marca de "veio do modelo fundido": ali o
-    # `raw_excerpt` pode carregar conclusão interpretada, porque era tudo o que existia.
-    # `legacy_` é o prefixo de escape previsto pela ADR 0049 para mapeamento de backfill.
-    legacy_evidencia = models.ForeignKey(
-        Evidencia, on_delete=models.SET_NULL, null=True, blank=True, related_name="split_evidence"
-    )
 
     class Meta:
         ordering = ["-captured_at", "-id"]
@@ -1953,9 +1880,6 @@ class Finding(TimestampedModel):
     # entrevista" do material (`docs/metodologia-fde.md:112-115`) que só se consegue verificar
     # quando as fontes são contáveis.
     evidences = models.ManyToManyField(Evidence, blank=True, related_name="findings")
-    legacy_evidencia = models.ForeignKey(
-        Evidencia, on_delete=models.SET_NULL, null=True, blank=True, related_name="split_finding"
-    )
 
     class Meta:
         ordering = ["-created_at", "-id"]

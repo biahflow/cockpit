@@ -145,18 +145,32 @@ const processoEtapas = serie(3, index => ({
   retrabalho: index === 3 ? "" : "Cancelar a nota e reemitir no dia seguinte, com novo aceite",
 }));
 
-// **Uma evidência de cada rótulo**, e não é completude: são três selos diferentes (`state--1`,
-// `state--2`, `state--off`) e o botão "Promover a fato", que só existe nas duas que ainda não são
+// **Um achado de cada classificação**, e não é completude: são três selos diferentes (`state--1`,
+// `state--2`, `state--off`) e o botão "Promover a fato", que só existe nos dois que ainda não são
 // fato. Sem os três, o axe mediria a tela sem o par que ela não pode deixar parecer a mesma coisa.
-const evidencias = [
-  { rotulo: "fato", rotulo_display: "Fato", forma: "dado", forma_display: "Dado (volume, tempo, custo, erro)",
-    content: "O ERP registrou 412 notas emitidas no mês passado, com 37 canceladas e reemitidas." },
-  { rotulo: "hipotese", rotulo_display: "Hipótese", forma: "entrevista", forma_display: "Entrevista (o que dizem)",
-    content: "A equipe acredita que metade do retrabalho vem de cadastro de cliente desatualizado." },
-  { rotulo: "desconhecido", rotulo_display: "Desconhecido", forma: "observacao", forma_display: "Observação (o que fazem)",
-    content: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
+// Cada `Finding` (o split, Fase 6) aponta para a `Evidence` de mesmo id, que diz de onde veio.
+const findings = [
+  { epistemic_status: "fact", epistemic_status_display: "Fato",
+    statement: "O ERP registrou 412 notas emitidas no mês passado, com 37 canceladas e reemitidas." },
+  { epistemic_status: "hypothesis", epistemic_status_display: "Hipótese",
+    statement: "A equipe acredita que metade do retrabalho vem de cadastro de cliente desatualizado." },
+  { epistemic_status: "unknown", epistemic_status_display: "Desconhecido",
+    statement: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
 ].map((registro, indice) => ({
-  id: indice + 1, process: 1, processo: 1, step: null, etapa: null, source_meeting: 1, registered_by: 1, ...registro,
+  id: indice + 1, account: 1, process: 1, step: null, confidence: null,
+  reviewed_by: registro.epistemic_status === "fact" ? 1 : null,
+  reviewed_at: registro.epistemic_status === "fact" ? `${HOJE}T09:00:00Z` : null,
+  evidences: [indice + 1], created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+}));
+const evidence = [
+  { kind: "data", kind_display: "Dado (volume, tempo, custo, erro)" },
+  { kind: "interview", kind_display: "Entrevista (o que dizem)" },
+  { kind: "observation", kind_display: "Observação (o que fazem)" },
+].map((registro, indice) => ({
+  id: indice + 1, account: 1, discovery: null, process: 1, step: null, raw_excerpt: "Trecho da fonte.",
+  reference: "", source_session: null, source_meeting: 1, captured_at: `${HOJE}T09:00:00Z`,
+  captured_by: 1, content_hash: "abc", created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  ...registro,
 }));
 
 const saude = serie(8, index => ({
@@ -544,7 +558,8 @@ const FIXTURES: Record<string, unknown> = {
   })),
   "/api/v1/processos/1/": processos[0],
   "/api/v1/processo-etapas/": processoEtapas,
-  "/api/v1/evidencias/": evidencias,
+  "/api/v1/findings/": findings,
+  "/api/v1/evidence/": evidence,
   "/api/v1/knowledge-pieces/": serie(5, index => ({
     id: index, area: 1, area_name: "Operação",
     owner_name: index === 5 ? "" : "Maria de Lourdes Albuquerque",

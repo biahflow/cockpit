@@ -1,22 +1,20 @@
-"""Regressão: o split entra ao lado do legado, e o custo do estado atual continua idêntico (FDD 045).
+"""Regressão: a extração grava só o split, e é o `Finding` fato que sustenta o custo (Fase 6).
 
 `process.custo_do_estado_atual` decide se o número mais persuasivo de um Discovery entra na
-proposta que o cliente lê (`ai._processo_lines`, FDD 039), e ele decide isso perguntando por
-`Evidencia` viva com `rotulo=fato`. A fatia do split **não** troca essa fonte: o dual-write existe
-justamente para que a tela `ProcessDetailPage` e essa conta continuem funcionando sem tocar em
-nada enquanto o modelo novo cresce ao lado.
+proposta que o cliente lê (`ai._processo_lines`, FDD 039), e ele decide isso perguntando por um
+achado vivo com `fato` por trás. Até a Fase 6 (ADR 0052) esse achado era a `Evidencia` fundida, e a
+extração gravava as duas formas (dual-write). Com o legado removido, sobra o par do split (FDD 045)
+e a fonte da sustentação passou a ser o `Finding(epistemic_status=fact)`.
 
 Duas coisas quebrariam em silêncio se ninguém as afirmasse aqui:
 
-1. **A gravação legada some da extração.** Alguém "termina" a migração desligando a `Evidencia` no
-   coletor. O custo passa a nunca ser sustentado, `test_hipotese_nao_sustenta_numero.py` continua
-   verde (ele nunca sustenta o número, e passar a nunca sustentar é o que ele afirma quando não há
-   fato) e a proposta perde o argumento sem que nada fique vermelho.
-2. **A fonte da sustentação muda cedo demais.** Alguém aponta o cálculo para `Finding` antes de a
-   base estar convertida, e o número desaparece para todo cliente cujo Discovery é anterior ao
-   split. O teste abaixo trava a fonte no lugar: promover o `Finding` **não** move o custo; quem o
-   move ainda é a `Evidencia`. No dia em que a troca for deliberada, este é o teste que precisa
-   mudar junto — e é essa a diferença entre uma migração e um acidente.
+1. **A extração volta a gravar o legado.** Alguém ressuscita a `Evidencia` no coletor, e o produto
+   passa a manter duas verdades do mesmo achado — a que a última gravação vence. O teste abaixo
+   trava a extração no split: uma `Evidence` e um `Finding`, e nada mais.
+2. **A sustentação para de seguir o `Finding`.** Alguém reponta o cálculo para outro lugar, e
+   promover o achado deixa de mover o número que a proposta usa. O teste abaixo trava a fonte: o
+   custo é `hipotese` na extração e vira `sustentado` quando o `Finding` é promovido a fato — que é
+   o mesmo achado que a tela `ProcessDetailPage` promove.
 """
 
 import json
@@ -29,7 +27,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai, process
-from apps.core.models import Evidence, Evidencia, Finding, Meeting, Process, User
+from apps.core.models import Evidence, Finding, Meeting, Process, User
 from apps.core.tests.factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 RESPOSTA = json.dumps([{
@@ -66,23 +64,21 @@ def api(db: None, reuniao: Meeting, monkeypatch: pytest.MonkeyPatch) -> APIClien
 
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
-def test_a_extracao_grava_os_dois_lados(api: APIClient, reuniao: Meeting) -> None:
+def test_a_extracao_grava_so_o_split(api: APIClient, reuniao: Meeting) -> None:
     resposta = api.post(reverse("meeting-estruturar", args=[reuniao.pk]))
 
     assert resposta.status_code == 200, resposta.data
-    assert Evidencia.objects.count() == 1
-    assert Finding.objects.count() == 1
+    # Uma `Evidence` (de onde veio) e um `Finding` (o que afirma) — e nenhuma linha legada.
     assert Evidence.objects.count() == 1
+    assert Finding.objects.count() == 1
     # A resposta do coletor não mudou de forma — nenhuma tela precisou mudar, e nada do modelo
-    # novo atravessou para o corpo.
+    # do split atravessou para o corpo.
     assert [p["name"] for p in resposta.data["processos"]] == ["Faturamento mensal"]
     assert not {"findings", "evidence"} & set(resposta.data)
 
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
-def test_quem_sustenta_o_custo_continua_sendo_a_evidencia_legada(
-    api: APIClient, reuniao: Meeting
-) -> None:
+def test_promover_o_finding_a_fato_sustenta_o_custo(api: APIClient, reuniao: Meeting) -> None:
     api.post(reverse("meeting-estruturar", args=[reuniao.pk]))
     processo = Process.objects.get()
     Process.objects.filter(pk=processo.pk).update(**NUCLEO)
@@ -93,19 +89,15 @@ def test_quem_sustenta_o_custo_continua_sendo_a_evidencia_legada(
     assert antes["sustentacao"] == process.HIPOTESE
     assert antes["total"] == Decimal("20000.00")
 
-    # Promover o **achado novo** não move o cálculo: ele ainda lê o legado, e é isso que o
-    # dual-write garante enquanto a conversão não termina.
+    # Promover o achado do split move o cálculo: é o mesmo `Finding` que a tela promove e que o
+    # custo consulta desde a Fase 6.
     achado = Finding.objects.get()
     achado.reviewed_by = revisor
     achado.epistemic_status = Finding.EpistemicStatus.FACT
     achado.save()
-    assert process.custo_do_estado_atual(processo)["sustentacao"] == process.HIPOTESE
 
-    # Promover a **evidência legada** move — a conta continua exatamente onde estava.
-    legada = Evidencia.objects.get()
-    legada.rotulo = Evidencia.Rotulo.FATO
-    legada.save(update_fields=["rotulo", "updated_at"])
     depois = process.custo_do_estado_atual(processo)
     assert depois["sustentacao"] == process.SUSTENTADO
+    # O número não muda ao ser sustentado — a conta é dos nove insumos, não do rótulo do achado.
     assert depois["total"] == antes["total"]
     assert depois["parcelas"] == antes["parcelas"]

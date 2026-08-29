@@ -16,7 +16,7 @@ que este arquivo mede. O que ele fixa é estrutural, e por isso não envelhece c
 
 import pytest
 
-from apps.core.models import Evidencia, Process, ProcessStep, Project
+from apps.core.models import Process, ProcessStep, Project
 from apps.core.tests.factories import AccountFactory, ProcessFactory, ProjectFactory
 
 pytestmark = pytest.mark.django_db
@@ -49,16 +49,18 @@ def test_o_processo_nao_ganhou_vinculo_com_engajamento() -> None:
     assert "engagement" not in campos
 
 
-def test_etapa_e_evidencia_chegam_a_conta_pelo_processo_e_nao_pelo_projeto() -> None:
-    for modelo in (ProcessStep, Evidencia):
-        relacoes = {
-            campo.name
-            for campo in modelo._meta.get_fields()
-            if campo.is_relation and not campo.auto_created
-        }
-        assert "process" in relacoes, modelo.__name__
-        assert "project" not in relacoes, modelo.__name__
-        assert "engagement" not in relacoes, modelo.__name__
+def test_a_etapa_chega_a_conta_pelo_processo_e_nao_pelo_projeto() -> None:
+    # A etapa é filha do processo e chega à conta por ele — não pelo projeto nem pelo engajamento.
+    # O achado deixou de ser filho do processo na Fase 6 (ADR 0052): `Evidence`/`Finding` são
+    # ancorados na **conta** diretamente, e a suíte do split é quem fixa a âncora deles.
+    relacoes = {
+        campo.name
+        for campo in ProcessStep._meta.get_fields()
+        if campo.is_relation and not campo.auto_created
+    }
+    assert "process" in relacoes
+    assert "project" not in relacoes
+    assert "engagement" not in relacoes
 
 
 def test_o_processo_sobrevive_ao_projeto_que_o_descobriu() -> None:

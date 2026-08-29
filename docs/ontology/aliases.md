@@ -30,8 +30,11 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chave de payload `gate_outcome` | `gate_decision` | `serializers.py` | `/api/v2/` |
 | tabelas `core_processo` / `core_processoetapa` | `core_process` / `core_processstep` | `Meta.db_table` | Fase 6 |
 | rotas `/processos/` e `/processo-etapas/` | `/processes/` e `/process-steps/` | `urls.py` | `/api/v2/` |
-| classe `Evidencia` (o dual-write) | `Evidence` + `Finding` | `backend/apps/core/models.py` | Fase 6 |
 | chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
+
+> A classe `Evidencia` (a metade legada do split) **saiu** na Fase 6 (issue #70, migração `0068`),
+> junto com o dual-write — ver a nota de Fase 6 mais abaixo. Ela não era alias de rota nem de
+> payload; era legado a remover, e por isso deixa a tabela sem deixar chave viva atrás.
 
 ### Já pagos pela #67 — 28/08/2026
 
@@ -39,12 +42,12 @@ Quatro renomes de classe saíram da tabela porque deixaram de ser alias: o nome 
 mais em código. **Sair daqui não é o fim da dívida** — é o fim de *uma* das três, e as outras duas
 continuam listadas acima.
 
-**A #67 fechou com a fatia 4.** O que ela deixa para trás está inteiro nas linhas de cima, e são
-duas coisas: as **tabelas** (`core_client`, `core_opportunity`, `core_processo`,
-`core_processoetapa`) e a classe `Evidencia`, que a Fase 6 remove junto com o dual-write, mais
-`Project.client`, que é projeção e não alias. As **rotas** (`/clients/`, `/opportunities/`,
-`/processos/`, `/processo-etapas/`) e as **chaves de payload** (`client`, `status`, `opportunity`,
-`gate_outcome`, `processo`, `etapa`) morrem na `/api/v2/`, e a v2 não nasce antes da Fase 6.
+**A #67 fechou com a fatia 4.** O que ela deixa para trás está nas linhas de cima: as **tabelas**
+(`core_client`, `core_opportunity`, `core_processo`, `core_processoetapa`), mais `Project.client`,
+que é projeção e não alias. A classe `Evidencia` **já saiu** — a Fase 6 a removeu com o dual-write
+(nota abaixo). As **rotas** (`/clients/`, `/opportunities/`, `/processos/`, `/processo-etapas/`) e
+as **chaves de payload** (`client`, `status`, `opportunity`, `gate_outcome`, `processo`, `etapa`)
+morrem na `/api/v2/`, e a v2 não nasce antes de a Fase 6 concluir as tabelas.
 
 | Foi | É | Fatia |
 | --- | --- | --- |
@@ -59,17 +62,34 @@ duas coisas: as **tabelas** (`core_client`, `core_opportunity`, `core_processo`,
 objeto — `project.account` e `project.engagement.account` — que podem divergir, e aí o nome
 canônico deixaria de identificar a fonte. Quem o remove é a Fase 6.
 
-`Evidencia` é o único que não é só renome, e por isso é o único que **não** entra na #67: a Fase 3
-a **dividiu** em `Evidence` (o registro bruto) e `Finding` (a conclusão, com `epistemic_status`),
-conforme a decisão D6. Trocar o nome sem dividir resolveria o idioma e preservaria o defeito de
-linguagem que a divisão existe para corrigir. A classe legada segue de pé porque ainda tem leitor
-vivo (`process.custo_do_estado_atual` e `ProcessDetailPage`), e quem a remove é a Fase 6, junto
-com o dual-write. Os **campos** dela, esses sim, passaram a `process` e `step` na fatia 4 — renome
-de campo é `RenameField`, e ele preserva linha e pk.
+`Evidencia` era o único que não é só renome, e por isso foi o único que **não** entrou na #67: a
+Fase 3 a **dividiu** em `Evidence` (o registro bruto) e `Finding` (a conclusão, com
+`epistemic_status`), conforme a decisão D6. Trocar o nome sem dividir resolveria o idioma e
+preservaria o defeito de linguagem que a divisão existe para corrigir. A classe legada ficou de pé
+enquanto teve leitor vivo (`process.custo_do_estado_atual` e `ProcessDetailPage`); a **Fase 6
+(issue #70, migração `0068`) a removeu** quando o custo passou a ler o `Finding(fact)` e a tela
+migrou para o split — ver a nota de Fase 6 abaixo. Os **campos** dela já haviam passado a `process`
+e `step` na fatia 4 — renome de campo é `RenameField`, e ele preserva linha e pk.
 
 Depois da #67 sobra uma dívida com forma nova e nome antigo: a tabela `core_processo` guardando
 linhas de uma classe chamada `Process`. É desconfortável no `dbshell` e é de propósito — o risco
 que a espera protegia é o da **pk**, e pk é o que a §2b trata.
+
+### Fase 6 (issue #70) — o dual-write e a `Evidencia` saíram
+
+A Fase 6 fecha a migração, e a primeira fatia dela removeu o dual-write e a `Evidencia` legada
+(migração `0068`). O gatilho era ter um leitor: enquanto `process.custo_do_estado_atual` e
+`ProcessDetailPage` liam o modelo fundido, ele não podia sair. A fatia repontou o custo para o
+`Finding(epistemic_status=fact)` vivo do processo e migrou a tela para o split; sem leitor, a classe
+foi apagada. **Não houve perda de dado**: o backfill da `0054` já traduzira cada `Evidencia` para o
+par `Evidence`/`Finding`, e `legacy_evidencia` era só o ponteiro de reconciliação — removido junto,
+com o comando `reconciliar_evidence_finding` que o lia. O gate operacional é rodar esse comando na
+base alvo **antes** do deploy (`"Split reconciliado: todo legado tem par"`) e conferir backup
+restaurável, na ordem que a issue #70 fixa. Consequência da ancoragem na conta: arquivar o processo
+deixou de arquivar os achados — `Evidence`/`Finding` têm `process` `SET_NULL`, não são filhos do
+processo, e uma afirmação sobre a operação do cliente sobrevive ao arquivamento do mapa que a citava.
+As **tabelas** dos quatro renomes e as **rotas**/**chaves de payload** seguem como acima: Fase 6 e
+`/api/v2/`, respectivamente.
 
 ## As três regras
 

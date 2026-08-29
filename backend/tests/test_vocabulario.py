@@ -225,10 +225,10 @@ REGRAS: tuple[Regra, ...] = (
     ),
     Regra(
         id="legado-congelado",
-        # Os quatro nomes banidos pela §5. Três já foram pagos (`GateOutcome` na fatia 1 da #67,
-        # `Processo`/`ProcessoEtapa` na fatia 4) e **continuam** no regex: lista fechada existe
-        # para barrar batismo novo, e nome pago segue banido. `Evidencia` é a única ainda de pé,
-        # declarada na allowlist até a Fase 6 remover o dual-write.
+        # Os quatro nomes banidos pela §5, e os quatro já pagos: `GateOutcome` na fatia 1 da #67,
+        # `Processo`/`ProcessoEtapa` na fatia 4, e `Evidencia` na Fase 6 (#70), com o dual-write.
+        # Todos **continuam** no regex: lista fechada existe para barrar batismo novo, e nome pago
+        # segue banido — só que agora nenhum tem ocorrência, então nenhum aparece na allowlist.
         padrao=re.compile(r"^\s*class\s+(ProcessoEtapa|Processo|Evidencia|GateOutcome)\b"),
         arquivos=ESCOPO_BACKEND,
         mensagem="use Evidence / Process / ProcessStep / GateDecision (language-map §5)",
@@ -346,15 +346,18 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # Baixá-lo é o trabalho das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada
 # linha aqui é um nome que o repositório ainda diz errado.
 #
-# Justificativa da subida para 30 (fechamento da issue #67): `openapi_aliases.py` precisa conter
-# o nome literal `gate_outcome` para marcar o alias como `deprecated` no `openapi.yaml` — é a
-# mesma exceção que já valia para `serializers.py`, aplicada a um arquivo novo. **É dívida com
-# prazo, e o prazo é o mesmo do alias que ela anuncia**: quando a `/api/v2/` parar de emitir
-# `gate_outcome`, a entrada sai do mapa e as duas linhas saem daqui juntas — a de `serializers.py`
-# e a de `openapi_aliases.py` —, e o teto volta para 28. Um mecanismo de depreciação não sobrevive
-# ao que ele deprecia; ler esta linha como permanente transformaria em dívida eterna a única
-# dívida deste arquivo que já tem data marcada.
-TETO_DA_ALLOWLIST = 30
+# A subida para 30 (fechamento da issue #67) pagou-se em parte na Fase 6 (issue #70): a remoção da
+# `Evidencia` e do dual-write apagou as quatro linhas dela — `modelo-em-portugues` no modelo, no
+# serializer e no viewset, mais `legado-congelado` no modelo —, e o teto desceu de 30 para 26.
+#
+# A exceção que resta com prazo é o `gate_outcome` de `openapi_aliases.py`: o mapa precisa conter o
+# nome literal para marcar o alias como `deprecated` no `openapi.yaml` — a mesma exceção que já
+# valia para `serializers.py`, aplicada a um arquivo novo. **É dívida com prazo, e o prazo é o
+# mesmo do alias que ela anuncia**: quando a `/api/v2/` parar de emitir `gate_outcome`, a entrada
+# sai do mapa e as duas linhas saem daqui juntas. Um mecanismo de depreciação não sobrevive ao que
+# ele deprecia; ler esta linha como permanente transformaria em dívida eterna a única dívida deste
+# arquivo que já tem data marcada.
+TETO_DA_ALLOWLIST = 26
 
 
 def test_nenhum_termo_banido_novo() -> None:

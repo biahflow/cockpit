@@ -62,7 +62,6 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     "CommercialOpportunity": ("client",),
     "Contact": ("client",),
     "Document": ("client", "opportunity"),
-    "Evidencia": ("processo", "etapa"),
     "Invoice": ("client",),
     "Lead": ("client", "opportunity"),
     "PhaseEvent": _CHAVE_LEGADA_DO_GATE,

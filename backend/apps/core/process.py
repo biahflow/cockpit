@@ -74,12 +74,18 @@ def custo_do_estado_atual(processo: Process) -> dict[str, Any]:
     "custo zero" seria a casa afirmando ao cliente o oposto do que ela sabe.
 
     `sustentacao` responde à outra metade da metodologia: o número vale mais ou menos conforme
-    exista evidência rotulada como **fato** por trás dele (`docs/metodologia-fde.md:117`). É
-    `"sustentado"` quando há pelo menos uma evidência viva com `rotulo=fato` no processo, e
+    exista achado classificado como **fato** por trás dele (`docs/metodologia-fde.md:117`). É
+    `"sustentado"` quando há pelo menos um `Finding` vivo com `epistemic_status=fact` no processo, e
     `"hipotese"` caso contrário — inclusive quando o único fato registrado foi arquivado, porque
     registro desfeito não sustenta número.
+
+    **A fonte é o `Finding`, e não mais a `Evidencia` legada (Fase 6, ADR 0052).** Enquanto o
+    dual-write durou, este cálculo lia o modelo fundido; com o legado removido, ele lê o achado
+    canônico do split (FDD 045). A consequência é a que o split existe para produzir: promover um
+    `Finding` a fato — ato que exige revisor e evidência viva (§6.9) — passa a mover a sustentação,
+    porque agora é o mesmo registro que a tela promove e que o custo consulta.
     """
-    from .models import Evidencia
+    from .models import Finding
 
     parcelas: list[dict[str, Any]] = []
     nao_apurado: list[str] = []
@@ -114,9 +120,9 @@ def custo_do_estado_atual(processo: Process) -> dict[str, Any]:
 
     # `processo.pk` primeiro porque o gerente reverso recusa instância não salva: quem quiser a
     # conta antes de gravar (uma prévia na tela, um rascunho vindo de extração) recebe o cálculo e
-    # `"hipotese"` — que é a resposta certa, já que evidência nenhuma foi registrada ainda.
-    sustentado = bool(processo.pk) and processo.evidencias.filter(
-        archived_at__isnull=True, rotulo=Evidencia.Rotulo.FATO
+    # `"hipotese"` — que é a resposta certa, já que achado nenhum foi registrado ainda.
+    sustentado = bool(processo.pk) and processo.findings.filter(
+        archived_at__isnull=True, epistemic_status=Finding.EpistemicStatus.FACT
     ).exists()
 
     return {

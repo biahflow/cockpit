@@ -232,12 +232,18 @@ Key cross-cutting patterns to preserve:
   arquivar a última evidência viva de um fato é 409. `Discovery`/`DiscoverySession`/
   `ProcessObservation` dão tempo e autoria ao levantamento — é a `ProcessObservation` que desfaz a
   proveniência única de `Process.source_project`, permitindo o mesmo processo em dois Discoveries.
-  **O dual-write é obrigatório enquanto durar esta fase**: `MeetingViewSet.estruturar` grava
-  `Evidencia` **e** o par novo, porque `process.custo_do_estado_atual` e `ProcessDetailPage`
-  ainda leem o legado — há regressão afirmando que promover um `Finding` não move o custo. Os campos
-  com nome canônico (`account`, `process`, `step`) já apontam para as classes de nome certo desde a
-  #67; o que sobra do legado é a própria `Evidencia`, que a Fase 6 remove com o dual-write, e
-  `legacy_evidencia` é o escape de mapeamento do backfill (migração `0054`).
+  **O dual-write acabou na Fase 6 (ADR 0052, issue #70), e a `Evidencia` legada foi removida**:
+  `MeetingViewSet.estruturar` grava só o par do split, `process.custo_do_estado_atual` lê o
+  `Finding(fact)` vivo do processo (não mais `Evidencia(rotulo=fato)`), e `ProcessDetailPage` lista
+  e promove pelo split. A consequência é a que o split existe para produzir: promover um `Finding` a
+  fato — ato que exige revisor e evidência viva — passa a mover a sustentação, porque agora é o mesmo
+  registro que a tela promove e que o custo consulta (regressão em
+  `test_o_fato_do_split_sustenta_o_custo.py`). Como `Evidence`/`Finding` são ancorados na **conta**
+  (`process` é `SET_NULL`, não filho como a `Evidencia` `CASCADE` era), **arquivar o processo não
+  arquiva os achados** — eles seguem listáveis pela conta. `legacy_evidencia` e o comando
+  `reconciliar_evidence_finding` saíram junto; a reconciliação (`manage.py reconciliar_evidence_finding`,
+  "todo legado tem par") é o gate de pré-deploy que a migração `0068` registra, não código que
+  sobrevive ao corte.
 - **O snapshot do portal fala canônico, e quem carimba a projeção é quem muda o estado.**
   `portal.build_snapshot` é projeção de leitura do One, e o One **nunca renomeia** (`language-map`
   §3): por isso ele leva `account` (de `engagement.account`, a fonte — não de `Project.client`, que
@@ -309,11 +315,13 @@ Key cross-cutting patterns to preserve:
   campos FK virando `account` e `Client.status` virando `Account.lifecycle_status`) e
   `Processo`/`ProcessoEtapa`→`Process`/`ProcessStep` (fatia 4, migração `0063`, com
   `ProcessStep.processo` e `Evidencia.processo`/`etapa` virando `process`/`step`, e o módulo
-  `processos.py` virando `process.py`). `Evidencia` **não** foi renomeada: ela é a metade legada do
-  split e sai na Fase 6, com o dual-write. Sobram as **tabelas** (Fase 6) e as rotas e chaves de
-  payload (`/api/v2/`). O que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt`
-  (teto 29), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo
-  vs. chave).
+  `processos.py` virando `process.py`). `Evidencia` **não** foi renomeada: ela era a metade legada do
+  split, e a **Fase 6 (issue #70, migração `0068`) a removeu** com o dual-write, em vez de renomeá-la
+  — trocar o nome sem dividir preservaria o defeito de linguagem que a divisão corrige. Sobram as
+  **tabelas** dos renomes (Fase 6) e as rotas e chaves de payload (`/api/v2/`). O que a guarda ainda
+  tolera está em `docs/ontology/legacy-allowlist.txt` (teto **26**, depois que as quatro linhas da
+  `Evidencia` saíram), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c
+  campo vs. chave).
 - **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
   `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
   `docs/design/dap-engagement-r1/`, r1, decisões **A1** (título em inglês, copy em volta em pt-BR)

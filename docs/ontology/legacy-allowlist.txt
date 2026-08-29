@@ -12,9 +12,9 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 30), que conta **dívidas
-#     distintas** — linhas deste arquivo, não ocorrências no código. Os dois números não medem a
-#     mesma coisa.
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 26, depois que a Fase 6
+#     removeu as quatro linhas da `Evidencia`), que conta **dívidas distintas** — linhas deste
+#     arquivo, não ocorrências no código. Os dois números não medem a mesma coisa.
 #
 # A entrada **não carrega número de linha**, de propósito: dívida declarada não pode ser reaberta
 # por alguém ter inserido um import acima dela. Ela carrega a **contagem**, que é a outra metade
@@ -126,12 +126,13 @@ backend/apps/core/openapi_aliases.py::outcome-como-decisao-de-gate::gate_outcome
 # tipos TS e a tela já dizem o nome certo. As tabelas continuam `core_processo` e
 # `core_processoetapa` (`Meta.db_table`), porque é a linha e a pk que a `aliases.md` §2b protege.
 #
-# Restam dois grupos, com prazos diferentes:
-#   * `Evidencia` tem nome canônico definido (`Evidence` + `Finding`, tabela mestra §2) e é o
-#     único dos quatro que **não** é só renome: a Fase 3 a dividiu, e trocar o nome sem dividir
-#     preservaria o defeito de linguagem que a divisão existe para corrigir. A classe legada segue
-#     de pé porque tem leitor vivo (`process.custo_do_estado_atual` e a tela do processo), e quem
-#     a remove é a Fase 6, junto com o dual-write. Os **campos** dela já dizem `process` e `step`.
+# Restou um grupo:
+#   * `Evidencia` **foi removida na Fase 6** (ADR 0052, issue #70), junto com o dual-write: o
+#     custo do estado atual passou a ler `Finding(fact)` e a tela migrou para o split, então a
+#     classe legada perdeu o último leitor. Ela era o único dos quatro que **não** era só renome —
+#     a Fase 3 a dividiu em `Evidence` + `Finding`, e trocar o nome sem dividir preservaria o
+#     defeito de linguagem que a divisão existe para corrigir. Por isso não há linha a estreitar
+#     aqui: pagar a dívida foi apagar a classe, não renomeá-la.
 #   * `Pendencia`, `Decisao`, `Risco`, `Satisfacao` e a família `Cobranca*` **ainda não têm nome
 #     canônico** — a Ontology v1 não os cobre. Registrá-los aqui é o que impede que a ausência de
 #     decisão vire ausência de dívida. O nome entra primeiro no language-map (§8), depois no
@@ -146,21 +147,18 @@ backend/apps/core/models.py::modelo-em-portugues::CobrancaContato::1
 backend/apps/core/models.py::modelo-em-portugues::CobrancaSinal::1
 backend/apps/core/models.py::modelo-em-portugues::CobrancaSuspensao::1
 backend/apps/core/models.py::modelo-em-portugues::Decisao::1
-backend/apps/core/models.py::modelo-em-portugues::Evidencia::1
 backend/apps/core/models.py::modelo-em-portugues::Pendencia::1
 backend/apps/core/models.py::modelo-em-portugues::Risco::1
 backend/apps/core/models.py::modelo-em-portugues::Satisfacao::1
 backend/apps/core/serializers.py::modelo-em-portugues::CobrancaContatoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::CobrancaSuspensaoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::DecisaoSerializer::1
-backend/apps/core/serializers.py::modelo-em-portugues::EvidenciaSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::PendenciaSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::RiscoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::SatisfacaoSerializer::1
 backend/apps/core/views.py::modelo-em-portugues::CobrancaSuspensaoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::CobrancaViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::DecisaoViewSet::1
-backend/apps/core/views.py::modelo-em-portugues::EvidenciaViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::PendenciaViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::RiscoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::SatisfacaoViewSet::1
@@ -168,9 +166,9 @@ backend/apps/core/views.py::modelo-em-portugues::SatisfacaoViewSet::1
 # ---------------------------------------------------------------------------------------------
 # Legado congelado: a classe que a §5 nomeia como banida e que ainda existe hoje.
 # Redundante com o bloco acima de propósito — `modelo-em-portugues` é heurística e pode ser
-# estreitada; esta regra é lista fechada e não pode. Eram quatro e sobrou uma: `GateOutcome` saiu
-# na fatia 1 da issue #67 e `Processo`/`ProcessoEtapa` na fatia 4 (ADR 0052). Os três nomes
-# **continuam** no regex da regra — lista fechada existe para barrar batismo novo, e o nome segue
-# banido depois de pago. `Evidencia` fica: quem a remove é a Fase 6, com o dual-write.
+# estreitada; esta regra é lista fechada e não pode. Eram quatro e **não sobrou nenhuma**:
+# `GateOutcome` saiu na fatia 1 da issue #67, `Processo`/`ProcessoEtapa` na fatia 4 (ADR 0052) e
+# `Evidencia` na Fase 6 (issue #70), com o dual-write. Os quatro nomes **continuam** no regex da
+# regra — lista fechada existe para barrar batismo novo, e o nome segue banido depois de pago —,
+# mas nenhum tem mais ocorrência no código, então não há linha a isentar aqui.
 # ---------------------------------------------------------------------------------------------
-backend/apps/core/models.py::legado-congelado::Evidencia::1

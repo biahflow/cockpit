@@ -3,14 +3,17 @@
 A metodologia exige que todo achado seja rotulado FATO / HIPÓTESE / DESCONHECIDO e que **nunca se
 apresente hipótese como fato** (`docs/metodologia-fde.md:117`). Um modelo lendo transcrição produz
 *o que foi dito* — entrevista, uma das cinco formas de evidência (`:112-115`) — e nunca observação,
-artefato, sistema ou dado. Por isso a extração estruturada atribui `hipotese` e `entrevista` como
+artefato, sistema ou dado. Por isso a extração estruturada atribui `hypothesis` e `interview` como
 constantes, e promover a fato continua sendo ato de gente, pela mesma razão que a ADR 0032 recusou
 à IA gravar satisfação e a ADR 0033 manteve o registro na mão.
 
+Desde a Fase 6 (ADR 0052) o achado é o par do split (`Evidence`/`Finding`, FDD 045) — a `Evidencia`
+fundida saiu com o dual-write —, e promover exige revisor humano e evidência viva (§6.9).
+
 O arquivo tem duas camadas porque a decisão pode ser desfeita de duas maneiras diferentes:
 
-1. **Comportamental** — alguém passa a ler `rotulo`/`forma` do JSON do modelo. O sintoma é uma
-   evidência dizendo `fato` sobre algo que ninguém observou, e a partir daí
+1. **Comportamental** — alguém passa a ler `epistemic_status`/`kind` do JSON do modelo. O sintoma é
+   um achado dizendo `fact` sobre algo que ninguém observou, e a partir daí
    `process.custo_do_estado_atual` devolve `sustentacao="sustentado"` e o número entra na
    proposta que o cliente lê. Nada fica vermelho: o custo continua somando, a tela continua
    desenhando, e o que muda é só o significado.
@@ -33,7 +36,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai, views
-from apps.core.models import Evidencia, Meeting, Process, User
+from apps.core.models import Finding, Meeting, Process, User
 from apps.core.tests.factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 #: O modelo dizendo o contrário do que a casa impõe: rotulando como fato e alegando ter lido dado.
@@ -101,11 +104,10 @@ def test_o_que_o_modelo_manda_sobre_o_achado_nao_alcanca_o_banco(
     resposta = api.post(reverse("meeting-estruturar", args=[reuniao.pk]))
 
     assert resposta.status_code == 200, resposta.data
-    achados = list(Evidencia.objects.all())
+    achados = list(Finding.objects.all())
     assert len(achados) == 2
-    assert {a.rotulo for a in achados} == {Evidencia.Rotulo.HIPOTESE}
-    assert {a.forma for a in achados} == {Evidencia.Forma.ENTREVISTA}
-    assert not Evidencia.objects.filter(rotulo=Evidencia.Rotulo.FATO).exists()
+    assert {a.epistemic_status for a in achados} == {Finding.EpistemicStatus.HYPOTHESIS}
+    assert not Finding.objects.filter(epistemic_status=Finding.EpistemicStatus.FACT).exists()
 
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
@@ -126,24 +128,34 @@ def test_o_custo_extraido_nao_nasce_sustentado(api: APIClient, reuniao: Meeting)
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
 def test_promover_a_fato_continua_sendo_ato_de_gente(api: APIClient, reuniao: Meeting) -> None:
-    """A metade complementar: sem ela, as duas acima passariam por ninguém conseguir gravar `fato`.
+    """A metade complementar: sem ela, as duas acima passariam por ninguém conseguir gravar `fact`.
 
-    Quem afirma tem nome — e o nome é o da sessão, não o do modelo.
+    Quem afirma tem nome — o revisor vem no corpo (§6.9), e a evidência que sustenta o fato é a
+    `Evidence` que a extração já ligou ao achado. Sem revisor, é 400: promoção sem autor não vale.
     """
+    revisor = UserFactory(role=User.Role.DELIVERY)
     api.post(reverse("meeting-estruturar", args=[reuniao.pk]))
-    achado = Evidencia.objects.first()
+    achado = Finding.objects.first()
     assert achado is not None
 
+    # Sem revisor: a promoção não passa — o fato precisa de autor.
+    sem_autor = api.patch(
+        reverse("finding-detail", args=[achado.pk]),
+        {"epistemic_status": Finding.EpistemicStatus.FACT},
+        format="json",
+    )
+    assert sem_autor.status_code == 400, sem_autor.data
+
     resposta = api.patch(
-        f"/api/v1/evidencias/{achado.pk}/",
-        {"rotulo": Evidencia.Rotulo.FATO, "forma": Evidencia.Forma.DADO},
+        reverse("finding-detail", args=[achado.pk]),
+        {"epistemic_status": Finding.EpistemicStatus.FACT, "reviewed_by": revisor.pk},
         format="json",
     )
 
     assert resposta.status_code == 200, resposta.data
     achado.refresh_from_db()
-    assert achado.rotulo == Evidencia.Rotulo.FATO
-    assert achado.registered_by is not None
+    assert achado.epistemic_status == Finding.EpistemicStatus.FACT
+    assert achado.reviewed_by_id == revisor.pk
 
 
 # --------------------------------------------------------------------------------------------
@@ -162,14 +174,14 @@ def test_o_parser_nao_le_rotulo_nem_forma_da_resposta() -> None:
         assert PEDIDO_AO_MODELO.search(_codigo_sem_docstring(funcao)) is None, funcao.__name__
 
 
-def test_a_guarda_acha_as_palavras_onde_elas_devem_estar() -> None:
-    """Controle positivo, sem o qual os dois testes acima passariam por a busca não achar nada.
+def test_o_coletor_impoe_a_classificacao_como_constante() -> None:
+    """Controle positivo: o coletor **atribui** o estado e a forma, em vez de lê-los do modelo.
 
-    No coletor as duas palavras **precisam** aparecer: é lá que a casa as atribui como constantes,
-    e é essa a única linha do fluxo que decide o que o achado vale.
+    É a única linha do fluxo que decide o que o achado vale, e ela o decide como constante — o
+    `Finding` nasce `HYPOTHESIS` e a `Evidence` nasce `INTERVIEW`. Sem esta asserção, os dois testes
+    negativos acima passariam mesmo que o coletor tivesse parado de impor coisa nenhuma.
     """
     coletor = _codigo_sem_docstring(views.MeetingViewSet.estruturar)
 
-    assert "Evidencia.Rotulo.HIPOTESE" in coletor
-    assert "Evidencia.Forma.ENTREVISTA" in coletor
-    assert PEDIDO_AO_MODELO.search(coletor) is not None
+    assert "Finding.EpistemicStatus.HYPOTHESIS" in coletor
+    assert "Evidence.Kind.INTERVIEW" in coletor
