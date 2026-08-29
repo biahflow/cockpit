@@ -469,6 +469,13 @@ export function AccountDetailPage({ id }: { id: number }) {
       </div>)}</div> : <p className="empty-state">Nenhum processo mapeado para este cliente.</p>}
     </section>
 
+    {/* A porta da priorização (DAP priorização r1, decisão **A1**) — logo depois dos processos,
+        que é de onde as dores vêm. Fica **fora** de qualquer painel de propósito: as oito seções
+        desta página não são tocadas por esta entrega, e o pacote é explícito quanto a isso. E não
+        entra no menu lateral: a priorização é sempre de uma conta, e um item de menu que abre
+        pedindo "qual conta?" é um beco. */}
+    <a className="btn btn--secondary" href={`/contas/${id}/priorizacao`}><Target className="size-4" />Abrir a priorização</a>
+
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
       <form className="panel space-y-4 sm:p-6" onSubmit={event => void saveClient(event)} data-testid="client-form">
         <h2 className="font-semibold text-ink">Dados do cliente</h2>

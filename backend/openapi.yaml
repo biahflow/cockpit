@@ -17029,6 +17029,12 @@ components:
         A imutabilidade não mora aqui — mora na rota, que não expõe `PUT` nem `PATCH`. Um serializer
         que recusasse toda atualização ainda deixaria `PUT` responder 400 em vez de 405, e 400 diz
         "corrija o corpo" sobre uma operação que não existe.
+
+        **`assessed_by_name` existe porque a tela precisa dizer quem avaliou, e o id não diz.** O board
+        aprovado (`docs/design/dap-priorizacao-r1/`) mostra "Avaliado por {nome} em {data}", e resolver
+        o nome pelo cliente exigiria `/users/`, que é fechada à Entrega — metade de quem lê a tela
+        veria um número. É o mesmo `source="…get_full_name"` de `owner_name` em `KnowledgeArea` e
+        `user_name` em `ProjectMember`: campo derivado, só de leitura, aditivo à `/api/v1/`.
       properties:
         id:
           type: integer
@@ -17074,6 +17080,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        assessed_by_name:
+          type: string
+          readOnly: true
+          default: ''
         created_at:
           type: string
           format: date-time
@@ -17084,6 +17094,7 @@ components:
           readOnly: true
       required:
       - assessed_by
+      - assessed_by_name
       - created_at
       - economics
       - evidence_strength

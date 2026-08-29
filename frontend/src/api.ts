@@ -1,5 +1,5 @@
 import { reportError, setLastRequestId } from "./observability";
-import type { AgentReply, AppConfig, IntegrationFlag, Invitation, Notification, SessionUser } from "./types";
+import type { AgentReply, AppConfig, ImprovementOpportunity, IntegrationFlag, Invitation, Notification, PainPoint, PriorityAssessment, SessionUser, SolutionHypothesis } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
 
@@ -155,4 +155,105 @@ export function avatarUrl(user: SessionUser): string {
 
 export function acceptInvitation(payload: { token: string; username: string; password: string; first_name?: string; last_name?: string }): Promise<SessionUser> {
   return api<SessionUser>("/invitations/accept/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+// ---------- A cadeia do PRIORITIZE (FDD 048, ADR 0054) ----------
+// Dor → oportunidade de melhoria → avaliação → hipótese, consumidas pela tela
+// `/contas/:id/priorizacao` e pela seção de pain points do processo (DAP priorização r1).
+//
+// As rotas ficam **qualificadas** — `improvement-opportunities`, nunca `opportunities`: a rota da
+// venda é `/opportunities/`, e o mapa de linguagem §5 bane `Opportunity` sem qualificador
+// exatamente porque as duas colidiam. Uma chamada trocada aqui não estoura, ela lê o funil
+// comercial e o mostra como backlog de melhoria.
+
+export type PainPointPayload = {
+  account: number;
+  title: string;
+  impact_type: PainPoint["impact_type"];
+  process: number | null;
+  step: number | null;
+};
+
+/** As dores da conta — inclusive as que não têm processo nenhum, que é o caso do vínculo opcional. */
+export function listPainPointsByAccount(account: number): Promise<PainPoint[]> {
+  return api<PainPoint[]>(`/pain-points/?account=${account}`);
+}
+
+/** As dores observadas **naquele** processo, que é onde a decisão E1 manda registrá-las. */
+export function listPainPointsByProcess(process: number): Promise<PainPoint[]> {
+  return api<PainPoint[]>(`/pain-points/?process=${process}`);
+}
+
+export function createPainPoint(payload: PainPointPayload): Promise<PainPoint> {
+  return api<PainPoint>("/pain-points/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+/**
+ * Edita a dor. **`status: "confirmed"` não sai daqui de graça**: o backend exige ao menos um
+ * `Finding` vivo ligado e responde 400 sem ele (FDD 048), e o produto ainda não tem tela de
+ * achados — por isso a superfície só oferece observado ↔ descartado.
+ */
+export function updatePainPoint(id: number, payload: Partial<PainPointPayload> & { status?: PainPoint["status"] }): Promise<PainPoint> {
+  return api<PainPoint>(`/pain-points/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export type ImprovementOpportunityPayload = {
+  account: number;
+  title: string;
+  pain_points: number[];
+};
+
+export function listImprovementOpportunities(account: number): Promise<ImprovementOpportunity[]> {
+  return api<ImprovementOpportunity[]>(`/improvement-opportunities/?account=${account}`);
+}
+
+export function createImprovementOpportunity(payload: ImprovementOpportunityPayload): Promise<ImprovementOpportunity> {
+  return api<ImprovementOpportunity>("/improvement-opportunities/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateImprovementOpportunity(id: number, payload: Partial<ImprovementOpportunityPayload> & { status?: ImprovementOpportunity["status"] }): Promise<ImprovementOpportunity> {
+  return api<ImprovementOpportunity>(`/improvement-opportunities/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export type PriorityAssessmentPayload = {
+  improvement_opportunity: number;
+  impact: number;
+  evidence_strength: number;
+  feasibility: number;
+  time_to_value: number;
+  economics: number;
+  rationale: string;
+};
+
+/**
+ * O histórico completo de uma oportunidade — a vigente **e** as substituídas (decisão C1).
+ *
+ * Não existe `updatePriorityAssessment`, e a ausência é a decisão: a rota não expõe `PUT` nem
+ * `PATCH` (405). Repriorizar é criar a versão seguinte, e é `createPriorityAssessment` que faz
+ * isso — a anterior fica de pé, que é a razão de o modelo ser versionado.
+ */
+export function listPriorityAssessments(improvementOpportunity: number): Promise<PriorityAssessment[]> {
+  return api<PriorityAssessment[]>(`/priority-assessments/?improvement_opportunity=${improvementOpportunity}`);
+}
+
+export function createPriorityAssessment(payload: PriorityAssessmentPayload): Promise<PriorityAssessment> {
+  return api<PriorityAssessment>("/priority-assessments/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export type SolutionHypothesisPayload = {
+  improvement_opportunity: number;
+  statement: string;
+};
+
+export function listSolutionHypotheses(improvementOpportunity: number): Promise<SolutionHypothesis[]> {
+  return api<SolutionHypothesis[]>(`/solution-hypotheses/?improvement_opportunity=${improvementOpportunity}`);
+}
+
+export function createSolutionHypothesis(payload: SolutionHypothesisPayload): Promise<SolutionHypothesis> {
+  return api<SolutionHypothesis>("/solution-hypotheses/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+/** Trocar para `chosen` com outra já escolhida viva é 400, não 500: a checagem mora no serializer. */
+export function updateSolutionHypothesis(id: number, payload: Partial<SolutionHypothesisPayload> & { status?: SolutionHypothesis["status"] }): Promise<SolutionHypothesis> {
+  return api<SolutionHypothesis>(`/solution-hypotheses/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
 }

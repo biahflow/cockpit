@@ -213,8 +213,9 @@ ela está escrita no lugar em que se lê, e não escondida num filtro.
 
 ## Fora deste recorte
 
-- **Tela.** Nenhuma. A superfície tem DAP aprovado (`docs/design/dap-priorizacao-r1/`, decisões
-  A1 · B1 · C1 · D1 · E1 mais a primitiva `.row-meta`) e vem na fatia seguinte. Entraram só os
+- **Tela.** Nenhuma **nesta fatia** — ela veio na seguinte, e a emenda de 29/08 abaixo registra o
+  que foi construído. A superfície tem DAP aprovado (`docs/design/dap-priorizacao-r1/`, decisões
+  A1 · B1 · C1 · D1 · E1 mais a primitiva `.row-meta`). No recorte do backend entraram só os
   tipos em `frontend/src/types.ts`, sem consumidor, para a próxima não começar do zero — como a
   Fase 3 fez.
 - **A primitiva `.row-meta`.** Nasce em `index.css` com consumidor no mesmo commit, e o consumidor
@@ -229,3 +230,38 @@ ela está escrita no lugar em que se lê, e não escondida num filtro.
   aparecem lá pelo `language-map` §3, e isso é decisão do repo `one`.
 - **Renomear tabela.** Não se aplica: os quatro nascem com o nome canônico, e por isso nenhum leva
   `Meta.db_table` — esse é o instrumento de quem renomeia modelo existente (ADR 0052).
+
+## Emenda (29/08/2026) — a cadeia ganha superfície
+
+A fatia seguinte construiu a tela que o DAP `docs/design/dap-priorizacao-r1/` (r1,
+**A1 · B1 · C1 · D1 · E1**) aprovou, e com ela a primitiva `.row-meta`. O que existe agora:
+
+- **`/contas/:id/priorizacao`** (`frontend/src/pages/PriorizacaoPage.tsx`) — o painel das dores
+  ainda não agrupadas, o backlog ranqueado, e o detalhe inline com as cinco dimensões, o histórico
+  de versões num `<details>` fechado, as dores vinculadas e as hipóteses. A entrada é um link no
+  detalhe da conta; **nada entra no menu lateral**, porque a priorização é sempre de uma conta.
+- **A seção "Pain points" em `ProcessDetailPage`**, abaixo de "Evidências" — decisão E1: a dor se
+  registra onde é observada. O selo "Agrupado" é a outra ponta dela: quem registra vê, na mesma
+  tela, se aquilo já virou trabalho de priorização.
+- **`.row-meta` em `index.css`**, com consumidor no mesmo commit. As telas que já compõem
+  `.row` + `.state` **não** a adotam: o defeito é o mesmo lá, e a correção é a issue #91.
+
+Três coisas que a tela **não** faz, e cada uma tem motivo:
+
+- **Não mostra quem avaliou.** `PriorityAssessmentSerializer` publica `assessed_by` como id e não
+  expõe nome; `/users/` é fechada à Entrega, então a tela não teria como resolvê-lo para metade de
+  quem a usa. O board desenha "Avaliado por Fulano em DD/MM"; a tela mostra só a data. Acrescentar
+  `assessed_by_name` é mudança de contrato, e contrato se decide, não se conserta de passagem.
+- **Não oferece `PainPoint.status = confirmed`.** Confirmar exige ao menos um `Finding` vivo, e o
+  produto ainda não tem tela de achados: um select que oferecesse o valor produziria um 400 que
+  quem clicou não entende. O que a tela do processo oferece é observado ↔ descartado.
+- **Não inventa rank.** A oportunidade sem avaliação sai com `score`, `assessment_version` e `rank`
+  nulos, e a linha mostra `—` nos três lugares — inclusive onde o board desenhou `#4`. Escrever a
+  posição da linha ali afirmaria uma ordem que nenhuma avaliação sustenta, que é exatamente o que
+  o nulo existe para impedir.
+
+**Testes da fatia da tela:** `frontend/src/pages/PriorizacaoPage.test.tsx` (o `—` do sem-avaliação,
+a ordem do ranking com a não-avaliada no fim, o histórico colapsado, o vazio dos dois painéis, o
+agrupamento, a avaliação sem nota pré-escolhida e o recorte da Entrega) e os quatro casos novos de
+`frontend/src/pages/ProcessDetailPage.test.tsx`. A tela entra na matriz da FDD 022 por uma linha em
+`e2e/matrix.ts` — 25 telas × 3 larguras, axe e rolagem horizontal incluídos.

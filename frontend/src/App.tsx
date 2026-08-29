@@ -20,6 +20,7 @@ import { JourneyConfigPage } from "./pages/JourneyConfigPage";
 import { LeadsPage } from "./pages/LeadsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PipelinePage } from "./pages/PipelinePage";
+import { PriorizacaoPage } from "./pages/PriorizacaoPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { ProcessDetailPage } from "./pages/ProcessDetailPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
@@ -60,6 +61,11 @@ function resolvePage(path: string): ReactNode {
   // mesmo defeito que o redirecionamento `/clientes*` → `/contas*` existe para evitar.
   const processoDetail = path.match(/^\/contas\/(\d+)\/processos\/(\d+)$/);
   if (processoDetail) return <ProcessDetailPage clientId={Number(processoDetail[1])} id={Number(processoDetail[2])} />;
+  // A priorização é sempre **de uma conta**, e por isso pende dela em vez de virar item de menu:
+  // um item que abre pedindo "qual conta?" é um beco (DAP priorização r1, decisão A1). A rota fica
+  // acima da da conta pela razão escrita no bloco do processo — ordem por especificidade.
+  const priorizacao = path.match(/^\/contas\/(\d+)\/priorizacao$/);
+  if (priorizacao) return <PriorizacaoPage accountId={Number(priorizacao[1])} />;
   const accountDetail = path.match(/^\/contas\/(\d+)$/);
   if (accountDetail) return <AccountDetailPage id={Number(accountDetail[1])} />;
   if (path === "/contas") return <AccountsPage />;

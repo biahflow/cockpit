@@ -1386,15 +1386,25 @@ class PriorityAssessmentSerializer(serializers.ModelSerializer[PriorityAssessmen
     A imutabilidade não mora aqui — mora na rota, que não expõe `PUT` nem `PATCH`. Um serializer
     que recusasse toda atualização ainda deixaria `PUT` responder 400 em vez de 405, e 400 diz
     "corrija o corpo" sobre uma operação que não existe.
+
+    **`assessed_by_name` existe porque a tela precisa dizer quem avaliou, e o id não diz.** O board
+    aprovado (`docs/design/dap-priorizacao-r1/`) mostra "Avaliado por {nome} em {data}", e resolver
+    o nome pelo cliente exigiria `/users/`, que é fechada à Entrega — metade de quem lê a tela
+    veria um número. É o mesmo `source="…get_full_name"` de `owner_name` em `KnowledgeArea` e
+    `user_name` em `ProjectMember`: campo derivado, só de leitura, aditivo à `/api/v1/`.
     """
+
+    assessed_by_name = serializers.CharField(
+        source="assessed_by.get_full_name", read_only=True, default=""
+    )
 
     class Meta:
         model = PriorityAssessment
         fields = ["id", "improvement_opportunity", "version", "impact", "evidence_strength",
                   "feasibility", "time_to_value", "economics", "formula_key", "weights", "score",
-                  "rationale", "assessed_by", "created_at", "updated_at"]
-        read_only_fields = ["id", "version", "weights", "score", "assessed_by", "created_at",
-                            "updated_at"]
+                  "rationale", "assessed_by", "assessed_by_name", "created_at", "updated_at"]
+        read_only_fields = ["id", "version", "weights", "score", "assessed_by",
+                            "assessed_by_name", "created_at", "updated_at"]
 
     def validate_formula_key(self, value: str) -> str:
         if value not in FORMULAS:

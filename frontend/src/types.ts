@@ -166,7 +166,7 @@ export type ImprovementOpportunity = { id: number; account: number; engagement: 
 // **A avaliação é imutável**: repriorizar é um `POST` de versão nova, e `PUT`/`PATCH` respondem
 // 405. `version`, `weights` e `score` saem do servidor; `weights` é a cópia congelada dos pesos
 // que produziram aquele score, para que mudar a fórmula amanhã não reescreva o número de ontem.
-export type PriorityAssessment = { id: number; improvement_opportunity: number; version: number; impact: number; evidence_strength: number; feasibility: number; time_to_value: number; economics: number; formula_key: string; weights: Record<string, string>; score: string; rationale: string; assessed_by: number | null; created_at: string; updated_at: string };
+export type PriorityAssessment = { id: number; improvement_opportunity: number; version: number; impact: number; evidence_strength: number; feasibility: number; time_to_value: number; economics: number; formula_key: string; weights: Record<string, string>; score: string; rationale: string; assessed_by: number | null; assessed_by_name: string; created_at: string; updated_at: string };
 // Hipóteses concorrentes são o estado normal; **uma só `chosen` viva por oportunidade**.
 export type SolutionHypothesisStatus = "proposed" | "chosen" | "discarded";
 export type SolutionHypothesis = { id: number; improvement_opportunity: number; statement: string; intervention: string; assumptions: string; expected_effect: string; status: SolutionHypothesisStatus; status_display: string; created_at: string; updated_at: string };

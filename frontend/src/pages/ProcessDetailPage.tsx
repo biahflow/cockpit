@@ -1,12 +1,12 @@
-import { ArrowLeft, BadgeCheck, Coins, Plus, Quote, Trash2, Workflow } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Coins, Flame, Plus, Quote, Trash2, Workflow } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
-import { api } from "../api";
+import { api, createPainPoint, listImprovementOpportunities, listPainPointsByProcess, updatePainPoint } from "../api";
 import { ConfirmDialog } from "../components/Modal";
 import { SUSTENTACAO_LABEL, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Evidencia, EvidenciaForma, EvidenciaRotulo, Process, ProcessStep } from "../types";
+import type { Evidencia, EvidenciaForma, EvidenciaRotulo, ImprovementOpportunity, PainPoint, PainPointImpactType, Process, ProcessStep } from "../types";
 
 /**
  * As seis letras do P-S-D-T-E-R (`docs/metodologia-fde.md:106-110`), **rotuladas pela pergunta**.
@@ -99,12 +99,30 @@ const ROTULO_BADGE: Record<EvidenciaRotulo, string> = {
   fato: "state--1", hipotese: "state--2", desconhecido: "state--off",
 };
 
+/**
+ * O rascunho do pain point (FDD 048, DAP priorização r1 — decisão **E1**).
+ *
+ * `impact_type` abre **sem escolha feita**, pela razão que `blankEvidencia` já escreve acima: o
+ * campo não tem default no modelo, e um select que já abre em "Financeiro" é a casa escolhendo por
+ * quem não escolheu — sempre para o mesmo lado. Aqui o lado errado classifica como custo o que era
+ * risco, e o tipo é o que separa as dores quando alguém for agrupá-las.
+ */
+const blankPainPoint: { title: string; impact_type: PainPointImpactType | ""; step: string } = {
+  title: "", impact_type: "", step: "",
+};
+const impactoLabels: Record<PainPointImpactType, string> = {
+  financial: "Financeiro", operational: "Operacional", experience: "Experiência", risk: "Risco",
+};
+
 export function ProcessDetailPage({ clientId, id }: { clientId: number; id: number }) {
   const [processo, setProcesso] = useState<Process>();
   const [etapas, setEtapas] = useState<ProcessStep[]>([]);
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
+  const [dores, setDores] = useState<PainPoint[]>([]);
+  const [oportunidades, setOportunidades] = useState<ImprovementOpportunity[]>([]);
   const [etapaDraft, setEtapaDraft] = useState(blankEtapa);
   const [evidenciaDraft, setEvidenciaDraft] = useState(blankEvidencia);
+  const [painPointDraft, setPainPointDraft] = useState(blankPainPoint);
   const [error, setError] = useState("");
   const [isArchiving, setArchiving] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -122,12 +140,18 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
     api<Process>(`/processos/${id}/`),
     api<ProcessStep[]>(`/processo-etapas/?process=${id}`),
     api<Evidencia[]>(`/evidencias/?process=${id}`),
-  ]).then(([loadedProcesso, loadedEtapas, loadedEvidencias]) => {
+    listPainPointsByProcess(id),
+    // As oportunidades da conta entram só para o selo "Agrupado": é a outra ponta da decisão E1 —
+    // quem registra a dor aqui vê, na mesma tela, se ela já virou trabalho de priorização, sem
+    // precisar abrir a outra tela para descobrir.
+    listImprovementOpportunities(clientId),
+  ]).then(([loadedProcesso, loadedEtapas, loadedEvidencias, loadedDores, loadedOportunidades]) => {
     setProcesso(loadedProcesso); setEtapas(loadedEtapas); setEvidencias(loadedEvidencias);
+    setDores(loadedDores); setOportunidades(loadedOportunidades);
     setInsumoDraft(Object.fromEntries(
       INSUMOS.map(([campo]) => [campo, loadedProcesso[campo] === null ? "" : String(loadedProcesso[campo])])
     ));
-  }).catch((cause: unknown) => setError(mensagemDeFalha(cause))), [id]);
+  }).catch((cause: unknown) => setError(mensagemDeFalha(cause))), [clientId, id]);
   useEffect(() => { void load(); }, [load]);
 
   async function createEtapa(event: FormEvent<HTMLFormElement>) {
@@ -142,6 +166,42 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
     // vínculo nenhum. Quem sabe é quem estava na reunião, e é aqui que ele diz.
     const corpo = { process: id, ...evidenciaDraft, step: evidenciaDraft.step || null };
     try { await api("/evidencias/", { method: "POST", body: JSON.stringify(corpo) }); setEvidenciaDraft(blankEvidencia); await load(); }
+    catch (cause) { setError(mensagemDeFalha(cause)); }
+  }
+  /**
+   * Registra a dor **onde ela foi observada** — decisão **E1** do DAP priorização r1.
+   *
+   * A dor é vista no processo, junto do trecho que a sustenta e do custo do estado atual. Obrigar
+   * quem está lendo a evidência a trocar de tela para registrá-la é a fricção que faz o registro
+   * não acontecer — e um pain point que não é registrado no instante em que é visto vira memória
+   * de reunião, que é o defeito que a FDD 039 existe para corrigir.
+   *
+   * A **conta** vem do processo e não do formulário: a dor ancora na conta (como `Process`,
+   * `Evidence` e `Finding`), e quem a resolve é o registro que já está na tela.
+   */
+  async function createPainPointDaqui(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError("");
+    if (!processo) return;
+    const corpo = {
+      account: processo.account, title: painPointDraft.title,
+      impact_type: painPointDraft.impact_type as PainPointImpactType,
+      process: id, step: painPointDraft.step ? Number(painPointDraft.step) : null,
+    };
+    try { await createPainPoint(corpo); setPainPointDraft(blankPainPoint); await load(); }
+    catch (cause) { setError(mensagemDeFalha(cause)); }
+  }
+  /**
+   * Descarta a dor, ou a traz de volta a observada.
+   *
+   * **`confirmed` não é oferecido**, e a ausência é a decisão: confirmar exige ao menos um
+   * `Finding` vivo ligado à dor (FDD 048), o produto ainda não tem tela de achados, e um select
+   * que oferecesse o valor produziria um 400 que quem clicou não entende. É o mesmo cuidado que
+   * fez `blankEvidencia` abrir sem escolha feita.
+   */
+  async function mudarSituacaoDaDor(dor: PainPoint) {
+    setError("");
+    const status = dor.status === "discarded" ? "observed" : "discarded";
+    try { await updatePainPoint(dor.id, { status }); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   /**
@@ -289,7 +349,7 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
         A lista não é um histórico — é a razão pela qual o custo acima vale ou não vale. */}
     <section className="panel space-y-4 sm:p-6">
       <div className="flex items-center gap-3"><span className="metric-icon"><Quote className="size-4" /></span><div><h2 className="font-semibold text-ink">Evidências</h2><p className="text-sm text-slate-600">{evidencias.length} {evidencias.length === 1 ? "achado" : "achados"} · nunca só entrevista, e nunca hipótese apresentada como fato</p></div></div>
-      <form className="form-grid" onSubmit={event => void createEvidencia(event)}>
+      <form className="form-grid" data-testid="evidencia-form" onSubmit={event => void createEvidencia(event)}>
         {/* Os dois selects abrem **sem escolha feita** de propósito — ver `blankEvidencia`. */}
         <label className="form-label">Rótulo<select className="field" value={evidenciaDraft.rotulo} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, rotulo: event.target.value as EvidenciaRotulo })} required><option value="" disabled>Selecione…</option>{Object.entries(rotuloLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="form-label">Forma<select className="field" value={evidenciaDraft.forma} onChange={event => setEvidenciaDraft({ ...evidenciaDraft, forma: event.target.value as EvidenciaForma })} required><option value="" disabled>Selecione…</option>{Object.entries(formaLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -320,6 +380,43 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
             por linha, e "Promover a fato" repetido cinco vezes não localiza nenhum deles. */}
         {evidencia.rotulo !== "fato" && <button type="button" className="btn btn--secondary shrink-0" disabled={promovendo === evidencia.id} aria-label={`Promover a fato: ${evidencia.content}`} onClick={() => void promover(evidencia)}><BadgeCheck className="size-4" />Promover a fato</button>}
       </div>)}</div> : <p className="empty-state">Nenhuma evidência registrada — sem achado rotulado, o custo acima é hipótese da casa.</p>}
+    </section>
+
+    {/* Os pain points, **abaixo das evidências e de propósito** (DAP priorização r1, decisão E1):
+        a dor se registra ao lado do trecho que a sustenta. Aqui é o registro; o agrupamento em
+        Improvement Opportunity e o ranking moram em `/contas/:id/priorizacao`. */}
+    <section className="panel space-y-4 sm:p-6">
+      <div className="flex items-center gap-3"><span className="metric-icon"><Flame className="size-4" /></span><div><h2 className="font-semibold text-ink">Pain points</h2><p className="text-sm text-slate-600">{dores.length ? `${dores.length} ${dores.length === 1 ? "dor observada" : "dores observadas"} neste processo` : "Nenhum pain point"}</p></div></div>
+      <form className="form-grid" data-testid="pain-point-form" onSubmit={event => void createPainPointDaqui(event)}>
+        <label className="form-label sm:col-span-2">Descrição<textarea className="field min-h-16" maxLength={200} value={painPointDraft.title} onChange={event => setPainPointDraft({ ...painPointDraft, title: event.target.value })} placeholder="A dor, na frase de quem observou" required /></label>
+        {/* Abre **sem escolha feita** — ver `blankPainPoint`. */}
+        <label className="form-label">Tipo de impacto<select className="field" value={painPointDraft.impact_type} onChange={event => setPainPointDraft({ ...painPointDraft, impact_type: event.target.value as PainPointImpactType })} required><option value="" disabled>Selecione…</option>{Object.entries(impactoLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="form-label">
+          Etapa (opcional)
+          <select className="field" value={painPointDraft.step} onChange={event => setPainPointDraft({ ...painPointDraft, step: event.target.value })} disabled={!etapas.length}>
+            <option value="">{etapas.length ? "O pain point é do processo inteiro" : "Nenhuma etapa mapeada ainda"}</option>
+            {etapas.map(etapa => <option key={etapa.id} value={etapa.id}>{etapa.name}</option>)}
+          </select>
+        </label>
+        <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Registrar pain point</button>
+      </form>
+      {dores.length ? <div className="panel-rows">{dores.map(dor => {
+        const oportunidade = oportunidades.find(candidata => candidata.pain_points.includes(dor.id));
+        return <div className="row" key={dor.id}>
+          <span className="metric-icon"><Flame className="size-4" /></span>
+          <div className="row-main">
+            <strong>{dor.title}</strong>
+            <span>Impacto: {dor.impact_type_display}{oportunidade ? ` · agrupado em "${oportunidade.title}"` : ""}</span>
+          </div>
+          {/* `.row-meta` e não irmãos soltos: `.row-main` é `flex-basis:0`, e sem isto um título
+              longo sem hífen vaza por cima do selo em 390px (DAP priorização r1). O selo diz se a
+              dor já virou trabalho de priorização; "sem oportunidade" é o neutro, não um aviso. */}
+          <div className="row-meta">
+            <span className={`state ${dor.status === "discarded" ? "state--3" : oportunidade ? "state--1" : "state--off"}`}>{dor.status === "discarded" ? dor.status_display : oportunidade ? "Agrupado" : "Sem oportunidade"}</span>
+            <button type="button" className="btn btn--secondary ml-auto" aria-label={`${dor.status === "discarded" ? "Reabrir" : "Descartar"} pain point: ${dor.title}`} onClick={() => void mudarSituacaoDaDor(dor)}>{dor.status === "discarded" ? "Reabrir" : "Descartar"}</button>
+          </div>
+        </div>;
+      })}</div> : <p className="empty-state">Nenhum pain point registrado. A dor entra pela tela do processo, ao lado da evidência que a sustenta.</p>}
     </section>
   </section>;
 }

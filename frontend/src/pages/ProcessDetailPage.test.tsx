@@ -4,8 +4,20 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { ProcessDetailPage } from "./ProcessDetailPage";
 
-const mocks = vi.hoisted(() => ({ api: vi.fn() }));
-vi.mock("../api", () => ({ api: mocks.api }));
+const mocks = vi.hoisted(() => ({
+  api: vi.fn(),
+  listPainPointsByProcess: vi.fn(),
+  listImprovementOpportunities: vi.fn(),
+  createPainPoint: vi.fn(),
+  updatePainPoint: vi.fn(),
+}));
+vi.mock("../api", () => ({
+  api: mocks.api,
+  listPainPointsByProcess: mocks.listPainPointsByProcess,
+  listImprovementOpportunities: mocks.listImprovementOpportunities,
+  createPainPoint: mocks.createPainPoint,
+  updatePainPoint: mocks.updatePainPoint,
+}));
 
 /**
  * A conta do custo do estado atual (FDD 039). **Nasce parcial**, que é o caso que importa: três
@@ -27,7 +39,7 @@ function custo(overrides: Record<string, unknown> = {}) {
 
 function processoMapeado(overrides: Record<string, unknown> = {}) {
   return {
-    id: 1, client: 4, client_name: "Cliente A", name: "Faturamento manual de notas",
+    id: 1, account: 4, client: 4, client_name: "Cliente A", name: "Faturamento manual de notas",
     position: 1, source_project: 2, source_meeting: 3, registered_by: 1,
     volume_mes: 400, tempo_horas: "0.50", pessoas: 2, custo_hora: "80.00",
     retrabalho_mes: "3200.00", erros_mes: null, perdas_mes: null, espera_mes: null, risco_mes: null,
@@ -47,9 +59,23 @@ function evidencia(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** A dor observada no processo (FDD 048, DAP priorização r1 — decisão E1). */
+function painPoint(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 11, account: 4, process: 1, step: null,
+    title: "Retrabalho na conciliação de pagamentos de convênio", description: "",
+    impact_type: "financial", impact_type_display: "Financeiro", impact_estimate: null,
+    findings: [], status: "observed", status_display: "Observado",
+    created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
+    ...overrides,
+  };
+}
+
 let processo: unknown = processoMapeado();
 let etapas: unknown[] = [];
 let evidencias: unknown[] = [];
+let dores: unknown[] = [];
+let oportunidades: unknown[] = [];
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
@@ -58,6 +84,10 @@ function stub() {
     if (path.startsWith("/evidencias")) return Promise.resolve(evidencias);
     return Promise.resolve([]);
   });
+  mocks.listPainPointsByProcess.mockImplementation(() => Promise.resolve(dores));
+  mocks.listImprovementOpportunities.mockImplementation(() => Promise.resolve(oportunidades));
+  mocks.createPainPoint.mockResolvedValue(painPoint());
+  mocks.updatePainPoint.mockResolvedValue(painPoint({ status: "discarded", status_display: "Descartado" }));
 }
 
 /** A linha de lista que contém aquele texto — o selo e o botão são irmãos do `.row-main`.
@@ -73,6 +103,12 @@ function linhaDe(texto: string): HTMLElement {
 
 beforeEach(() => {
   mocks.api.mockReset();
+  mocks.listPainPointsByProcess.mockReset();
+  mocks.listImprovementOpportunities.mockReset();
+  mocks.createPainPoint.mockReset();
+  mocks.updatePainPoint.mockReset();
+  dores = [];
+  oportunidades = [];
   processo = processoMapeado();
   etapas = [{ id: 5, process: 1, processo: 1, name: "Conferência da nota no ERP", position: 1, pessoas: "Analista de faturamento", sistema: "ERP Protheus", dados: "Entra o pedido; sai a nota", tempo: "30 minutos por nota", erro: "", retrabalho: "" }];
   evidencias = [evidencia()];
@@ -340,7 +376,10 @@ test("escolher a etapa manda o id dela no achado", async () => {
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
-  await user.selectOptions(screen.getByLabelText("Etapa (opcional)"), "5");
+  // Escopado ao formulário da evidência: "Etapa (opcional)" é o rótulo dos **dois** vínculos
+  // opcionais desta tela — o do achado e o da dor (DAP priorização r1, decisão E1) —, e a consulta
+  // solta passou a casar com dois campos.
+  await user.selectOptions(within(screen.getByTestId("evidencia-form")).getByLabelText("Etapa (opcional)"), "5");
   await user.selectOptions(screen.getByLabelText("Rótulo"), "fato");
   await user.selectOptions(screen.getByLabelText("Forma"), "dado");
   await user.type(screen.getByLabelText("Achado"), "São 400 notas por mês.");
@@ -351,4 +390,75 @@ test("escolher a etapa manda o id dela no achado", async () => {
     (mocks.api.mock.calls.find(([path, init]) => path === "/evidencias/" && init?.method === "POST")![1] as RequestInit).body as string
   );
   expect(corpo.step).toBe("5");
+});
+
+// --- a dor se registra onde é observada (DAP priorização r1, decisão E1) ------------------------
+
+test("sem pain point, a seção diz por onde a dor entra", async () => {
+  render(<ProcessDetailPage clientId={4} id={1} />);
+  await screen.findByRole("heading", { name: "Faturamento manual de notas" });
+
+  expect(screen.getByRole("heading", { name: "Pain points" })).toBeInTheDocument();
+  expect(screen.getByText(/Nenhum pain point registrado/)).toHaveTextContent(
+    /ao lado da evidência que a sustenta/,
+  );
+});
+
+test("registra o pain point com o tipo de impacto escolhido, e a conta vem do processo", async () => {
+  const user = userEvent.setup();
+  render(<ProcessDetailPage clientId={4} id={1} />);
+  await screen.findByRole("heading", { name: "Faturamento manual de notas" });
+
+  // O select abre sem escolha feita: `impact_type` não tem default no modelo, e um formulário que
+  // já abrisse em "Financeiro" classificaria como custo o que era risco.
+  const impacto = screen.getByLabelText("Tipo de impacto") as HTMLSelectElement;
+  expect(impacto.value).toBe("");
+  expect(within(impacto).getByRole("option", { name: "Selecione…" })).toBeDisabled();
+
+  await user.type(screen.getByPlaceholderText("A dor, na frase de quem observou"), "Glosas recorrentes por documentação incompleta");
+  await user.selectOptions(impacto, "financial");
+  await user.click(screen.getByRole("button", { name: "Registrar pain point" }));
+
+  await waitFor(() => expect(mocks.createPainPoint).toHaveBeenCalledWith({
+    account: 4, title: "Glosas recorrentes por documentação incompleta",
+    impact_type: "financial", process: 1, step: null,
+  }));
+});
+
+test("o selo diz se a dor já virou trabalho de priorização", async () => {
+  dores = [painPoint(), painPoint({ id: 12, title: "Agenda dupla entre unidades" })];
+  oportunidades = [{
+    id: 3, account: 4, engagement: null, title: "Padronizar checklist de documentação",
+    desired_change: "", impact_hypothesis: "", pain_points: [11], status: "open",
+    status_display: "Aberta", score: null, assessment_version: null, rank: null,
+    created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
+  }];
+  render(<ProcessDetailPage clientId={4} id={1} />);
+  await screen.findByRole("heading", { name: "Faturamento manual de notas" });
+
+  const agrupada = within(linhaDe("Retrabalho na conciliação de pagamentos de convênio"));
+  expect(agrupada.getByText("Agrupado")).toBeInTheDocument();
+  expect(agrupada.getByText(/agrupado em "Padronizar checklist de documentação"/)).toBeInTheDocument();
+
+  // "Sem oportunidade" é o neutro e aparece sempre: um selo ausente significaria duas coisas
+  // para quem lê — dor solta, ou linha que a tela não soube classificar.
+  expect(within(linhaDe("Agenda dupla entre unidades")).getByText("Sem oportunidade")).toBeInTheDocument();
+});
+
+test("descartar a dor manda o PATCH — e confirmar não é oferecido aqui", async () => {
+  const user = userEvent.setup();
+  dores = [painPoint()];
+  render(<ProcessDetailPage clientId={4} id={1} />);
+  await screen.findByRole("heading", { name: "Faturamento manual de notas" });
+
+  // Confirmar exige achado vivo (FDD 048) e o produto não tem tela de achados: oferecer o valor
+  // produziria um 400 que quem clicou não entende.
+  expect(screen.queryByRole("button", { name: /Confirmar pain point/ })).not.toBeInTheDocument();
+
+  dores = [painPoint({ status: "discarded", status_display: "Descartado" })];
+  await user.click(screen.getByLabelText("Descartar pain point: Retrabalho na conciliação de pagamentos de convênio"));
+
+  await waitFor(() => expect(mocks.updatePainPoint).toHaveBeenCalledWith(11, { status: "discarded" }));
+  await waitFor(() => expect(screen.getByText("Descartado")).toBeInTheDocument());
+  expect(screen.getByLabelText(/^Reabrir pain point:/)).toBeInTheDocument();
 });

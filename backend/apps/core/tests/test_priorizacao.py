@@ -832,3 +832,39 @@ def test_as_listas_filtram_por_conta_e_por_estado(api: APIClient) -> None:
     assert len(por_estado.data) == 1
     assert len(priorizadas.data) == 1
     assert len(por_oportunidade.data) == 1
+
+
+def test_a_avaliacao_publica_o_nome_de_quem_avaliou(api: APIClient) -> None:
+    """`assessed_by` é id, e id não diz quem é.
+
+    O board aprovado (`docs/design/dap-priorizacao-r1/`) escreve "Avaliado por {nome} em {data}",
+    e a tela não tem como resolver o nome sozinha: `/users/` é fechada à Entrega, então metade de
+    quem lê veria um número. `assessed_by_name` é campo derivado e só de leitura, no molde de
+    `owner_name` (`KnowledgeArea`) e `user_name` (`ProjectMember`) — aditivo à `/api/v1/`.
+    """
+    oportunidade = ImprovementOpportunityFactory()
+
+    criada = api.post(
+        reverse("priorityassessment-list"), _payload_avaliacao(oportunidade.pk), format="json"
+    )
+
+    assert criada.status_code == 201, criada.data
+    autor = User.objects.get(pk=criada.data["assessed_by"])
+    assert criada.data["assessed_by_name"] == autor.get_full_name()
+    # E o campo é derivado: o corpo não o escreve.
+    assert "assessed_by_name" not in _payload_avaliacao(oportunidade.pk)
+
+
+def test_a_avaliacao_sem_avaliador_devolve_nome_vazio_e_nao_quebra(api: APIClient) -> None:
+    """Avaliação de shell, de migração ou de usuário removido tem `assessed_by` nulo.
+
+    O `default=""` do serializer é o que impede o `source="assessed_by.get_full_name"` de estourar
+    no nulo — e a tela degrada para "Avaliado em {data}" em vez de escrever "Avaliado por  em".
+    """
+    avaliacao = PriorityAssessmentFactory(assessed_by=None)
+
+    lida = api.get(reverse("priorityassessment-detail", args=[avaliacao.pk]))
+
+    assert lida.status_code == 200, lida.data
+    assert lida.data["assessed_by"] is None
+    assert lida.data["assessed_by_name"] == ""

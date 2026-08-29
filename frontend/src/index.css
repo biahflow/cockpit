@@ -214,6 +214,22 @@
   .row-main { @apply min-w-0 flex-1; }
   .row-main strong { @apply block text-sm font-semibold text-ink; }
   .row-main span { @apply mt-0.5 block text-xs text-muted; }
+  /* O cluster de selos de uma linha — score, versão, estado —, **sempre numa linha própria dentro
+     da mesma `.row`** (DAP priorização r1, a sexta decisão, aprovada explicitamente).
+
+     Existe por medição, não por completude. `.row-main` é `flex-1`, isto é `flex-basis: 0`: uma
+     `.state` irmã não encolhe, o título fica com a sobra, e num título longo sem hífen, em 390px,
+     a palavra vaza por cima do selo. `flex: 1 1 100%` força a quebra no `.row`, que já é
+     `flex-wrap`, independente da largura do contêiner — e é escrito à mão porque `flex-1` do
+     Tailwind traria `flex-basis: 0` de volta junto.
+
+     **Posicionamento puro**: sem cor, sem raio, sem corpo de texto próprio. O selo continua fora
+     de `.row-main` pela razão de sempre — `.row-main span`/`strong` sobrescreveriam display e cor
+     de qualquer primitiva aninhada ali dentro.
+
+     As telas que já compõem `.row` + `.state` **não** a adotam nesta entrega: o defeito é o mesmo
+     lá, e consertá-las aqui seria ampliar escopo por conta própria — é a issue #91. */
+  .row-meta { @apply mt-0.5 flex flex-wrap items-center gap-2; flex: 1 1 100%; }
 
   /* O rótulo acima do título. É o principal lugar onde o laranja aparece como texto, e o
      `tracking` largo é o que o mantém legível em caixa alta e corpo pequeno. */

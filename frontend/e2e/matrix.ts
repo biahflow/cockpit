@@ -20,6 +20,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/contas", name: "Contas", role: "admin" },
   { path: "/contas/1", name: "Detalhe da conta", role: "admin" },
   { path: "/contas/1/processos/1", name: "Processo mapeado", role: "admin" },
+  { path: "/contas/1/priorizacao", name: "Priorização", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
@@ -111,7 +112,7 @@ const riscos = serie(8, index => ({
 // aprovaria três larguras sem que ele tivesse renderizado uma vez. Um processo sustentado e dois em
 // hipótese, para os dois selos aparecerem na lista do detalhe do cliente.
 const processos = serie(3, index => ({
-  id: index, client: 1, client_name: NOME_LONGO,
+  id: index, account: 1, client: 1, client_name: NOME_LONGO,
   name: `Faturamento manual de notas de serviço — frente ${index}`,
   position: index, source_project: 1, source_meeting: 1, registered_by: 1,
   volume_mes: 400, tempo_horas: "0.50", pessoas: 2, custo_hora: "80.00",
@@ -408,6 +409,60 @@ const FIXTURES: Record<string, unknown> = {
   // não mapeada cai no fallback de lista vazia, nunca em 404, então uma chave errada aqui passa em
   // silêncio e a matriz aprova uma tela que renderizou só o estado vazio.
   "/api/v1/processos/": processos,
+  // A cadeia do PRIORITIZE (FDD 048), na tela que o DAP `dap-priorizacao-r1` aprovou.
+  // **Uma linha de cada combinação que a tela sabe desenhar**, e não quatro iguais: a dor solta e
+  // a já agrupada, a oportunidade ranqueada com versão e a **sem avaliação nenhuma** — que é a que
+  // rende o `—` e a linha sem pílula de versão. Sem ela, o axe mediria a tela sem o par que ela
+  // não pode deixar parecer a mesma coisa: "avaliada e vale zero" e "ninguém avaliou".
+  //
+  // Sem estas chaves as rotas cairiam no fallback de lista vazia e a matriz aprovaria o estado
+  // vazio no lugar da tela — o modo de falha que o comentário de `/api/v1/processos/` registra.
+  "/api/v1/pain-points/": [
+    { id: 1, title: "Retrabalho na conciliação de pagamentos de convênio dos três maiores planos",
+      impact_type: "financial", impact_type_display: "Financeiro", findings: [1, 2] },
+    { id: 2, title: "Agenda dupla por falha de sincronização entre as unidades da rede",
+      impact_type: "operational", impact_type_display: "Operacional", findings: [] },
+    { id: 3, title: "Tempo de espera na recepção acima de quarenta minutos em dia de pico",
+      impact_type: "experience", impact_type_display: "Experiência", findings: [3] },
+  ].map(registro => ({
+    account: 1, process: 1, step: null, description: "", impact_estimate: null,
+    status: "observed", status_display: "Observado",
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  })),
+  "/api/v1/improvement-opportunities/": [
+    { id: 1, title: "Padronizar o checklist de documentação exigida para faturamento TISS",
+      pain_points: [1], status: "prioritized", status_display: "Priorizada",
+      score: "78.00", assessment_version: 2, rank: 1 },
+    { id: 2, title: "Automatizar a confirmação de agendamento por WhatsApp em todas as unidades",
+      pain_points: [], status: "assessing", status_display: "Em avaliação",
+      score: "64.00", assessment_version: 1, rank: 2 },
+    // A que ninguém avaliou: score, versão e rank saem **nulos juntos**, e é o `—` do desenho.
+    { id: 3, title: "Consolidar o prontuário eletrônico entre as unidades da rede",
+      pain_points: [], status: "open", status_display: "Aberta",
+      score: null, assessment_version: null, rank: null },
+  ].map(registro => ({
+    account: 1, engagement: null, desired_change: "", impact_hypothesis: "",
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  })),
+  "/api/v1/priority-assessments/": [
+    { id: 2, version: 2, impact: 4, evidence_strength: 5, feasibility: 3, time_to_value: 4,
+      economics: 3, score: "78.00", created_at: `${HOJE}T09:00:00Z`,
+      rationale: "As glosas de TISS são o maior item do custo do estado atual do faturamento." },
+    { id: 1, version: 1, impact: 3, evidence_strength: 3, feasibility: 3, time_to_value: 3,
+      economics: 2, score: "56.00", created_at: "2026-07-02T09:00:00Z", rationale: "" },
+  ].map(registro => ({
+    improvement_opportunity: 1, formula_key: "v1", weights: {}, assessed_by: 1,
+    updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  })),
+  // As três situações da hipótese, para os três selos passarem pelo axe (decisão D1).
+  "/api/v1/solution-hypotheses/": [
+    { id: 1, statement: "Padronizar um checklist único de documentos por convênio", status: "chosen", status_display: "Escolhida" },
+    { id: 2, statement: "Implementar OCR na entrada de guias para conferência automática", status: "proposed", status_display: "Proposta" },
+    { id: 3, statement: "Terceirizar a auditoria de glosas para escritório especializado", status: "discarded", status_display: "Descartada" },
+  ].map(registro => ({
+    improvement_opportunity: 1, intervention: "", assumptions: "", expected_effect: "",
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  })),
   "/api/v1/processos/1/": processos[0],
   "/api/v1/processo-etapas/": processoEtapas,
   "/api/v1/evidencias/": evidencias,
