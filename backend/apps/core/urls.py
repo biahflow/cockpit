@@ -36,6 +36,7 @@ from .views import (
     GithubDeliveryProjectionViewSet,
     GithubDeliveryWebhookView,
     HealthView,
+    ImprovementOpportunityViewSet,
     InvitationView,
     InvoiceViewSet,
     JourneyPhaseViewSet,
@@ -51,12 +52,14 @@ from .views import (
     MeView,
     MilestoneViewSet,
     NotificationViewSet,
+    PainPointViewSet,
     PaymentsWebhookView,
     PendenciaViewSet,
     PhaseChecklistItemViewSet,
     PhaseDeliverableViewSet,
     PipelineStageViewSet,
     PortalProjectSnapshotView,
+    PriorityAssessmentViewSet,
     ProcessObservationViewSet,
     ProcessStepViewSet,
     ProcessViewSet,
@@ -71,6 +74,7 @@ from .views import (
     RiskView,
     SatisfacaoViewSet,
     ServiceViewSet,
+    SolutionHypothesisViewSet,
     TaskSyncIntakeView,
     TaskViewSet,
     UserAvatarView,
@@ -136,6 +140,17 @@ router.register("discovery-sessions", DiscoverySessionViewSet)
 router.register("process-observations", ProcessObservationViewSet)
 router.register("evidence", EvidenceViewSet, basename="evidence")
 router.register("findings", FindingViewSet)
+# A cadeia do PRIORITIZE (FDD 048, ADR 0054): dor → oportunidade de melhoria → avaliação →
+# hipótese. **Nomes canônicos e nenhum alias**, ao contrário dos vizinhos de cima: alias existe
+# para não quebrar chave que a `/api/v1/` já prometeu, e aqui não há chave antiga nenhuma — estes
+# quatro modelos nascem com o nome do mapa de linguagem.
+#
+# `improvement-opportunities` no plural qualificado, e nunca `opportunities`: a rota de venda é
+# `/commercial-opportunities/`, e as duas não se encostam (language-map §5).
+router.register("pain-points", PainPointViewSet)
+router.register("improvement-opportunities", ImprovementOpportunityViewSet)
+router.register("priority-assessments", PriorityAssessmentViewSet)
+router.register("solution-hypotheses", SolutionHypothesisViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)

@@ -17,10 +17,13 @@ from apps.core.models import (
     Evidencia,
     Finding,
     GithubDeliveryProjection,
+    ImprovementOpportunity,
     Invoice,
     Lead,
     Meeting,
+    PainPoint,
     PipelineStage,
+    PriorityAssessment,
     Process,
     ProcessObservation,
     ProcessStep,
@@ -28,6 +31,7 @@ from apps.core.models import (
     ProjectMember,
     Qualification,
     Service,
+    SolutionHypothesis,
     User,
 )
 
@@ -324,6 +328,60 @@ class EvidenceFactory(factory.django.DjangoModelFactory):
     account = factory.SubFactory(AccountFactory)
     kind = Evidence.Kind.INTERVIEW
     raw_excerpt = "A gente confere nota por nota, e no fim do mês são umas quatrocentas."
+
+
+class PainPointFactory(factory.django.DjangoModelFactory):
+    """Dor **observada**, o estado menos afirmativo dos três (FDD 048).
+
+    Nunca `confirmed` por padrão, no espírito da `FindingFactory` logo abaixo: confirmar exige
+    achado vivo, e uma fábrica que entregasse dores confirmadas de graça faria todo teste da
+    invariante começar desfazendo o que ela fez.
+
+    `impact_estimate` fica **ausente** de propósito — a fábrica não inventa um número que ninguém
+    estimou, e é essa a distinção que o campo nulável existe para guardar.
+    """
+
+    class Meta:
+        model = PainPoint
+
+    account = factory.SubFactory(AccountFactory)
+    title = "Conferência manual de nota trava o fechamento"
+    impact_type = PainPoint.ImpactType.OPERATIONAL
+    status = PainPoint.Status.OBSERVED
+
+
+class ImprovementOpportunityFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ImprovementOpportunity
+
+    account = factory.SubFactory(AccountFactory)
+    title = "Automatizar a conferência de notas"
+    status = ImprovementOpportunity.Status.OPEN
+
+
+class PriorityAssessmentFactory(factory.django.DjangoModelFactory):
+    """As cinco dimensões no meio da escala. `version`, `weights` e `score` **não** são passados:
+    os três saem do `save()` do modelo, e informá-los aqui esconderia justamente o que os testes
+    desta suíte medem."""
+
+    class Meta:
+        model = PriorityAssessment
+
+    improvement_opportunity = factory.SubFactory(ImprovementOpportunityFactory)
+    impact = 3
+    evidence_strength = 3
+    feasibility = 3
+    time_to_value = 3
+    economics = 3
+
+
+class SolutionHypothesisFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = SolutionHypothesis
+
+    improvement_opportunity = factory.SubFactory(ImprovementOpportunityFactory)
+    statement = "Um leitor de nota fiscal reduz a conferência a uma revisão por exceção."
+    status = SolutionHypothesis.Status.PROPOSED
 
 
 class FindingFactory(factory.django.DjangoModelFactory):

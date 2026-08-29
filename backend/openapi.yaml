@@ -4225,6 +4225,217 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
           description: ''
+  /api/v1/improvement-opportunities/:
+    get:
+      operationId: v1_improvement_opportunities_list
+      description: |-
+        A oportunidade de melhoria — **e ela não é venda** (FDD 048).
+
+        Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
+        bane `Opportunity` sem qualificador justamente porque as duas colidiam. O funil comercial vive
+        na `CommercialOpportunityViewSet`, e as duas rotas não se encostam.
+
+        Mesmo recorte de conta da `PainPointViewSet`.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImprovementOpportunity'
+          description: ''
+    post:
+      operationId: v1_improvement_opportunities_create
+      description: |-
+        A oportunidade de melhoria — **e ela não é venda** (FDD 048).
+
+        Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
+        bane `Opportunity` sem qualificador justamente porque as duas colidiam. O funil comercial vive
+        na `CommercialOpportunityViewSet`, e as duas rotas não se encostam.
+
+        Mesmo recorte de conta da `PainPointViewSet`.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImprovementOpportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImprovementOpportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImprovementOpportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImprovementOpportunity'
+          description: ''
+  /api/v1/improvement-opportunities/{id}/:
+    get:
+      operationId: v1_improvement_opportunities_retrieve
+      description: |-
+        A oportunidade de melhoria — **e ela não é venda** (FDD 048).
+
+        Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
+        bane `Opportunity` sem qualificador justamente porque as duas colidiam. O funil comercial vive
+        na `CommercialOpportunityViewSet`, e as duas rotas não se encostam.
+
+        Mesmo recorte de conta da `PainPointViewSet`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este improvement opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImprovementOpportunity'
+          description: ''
+    put:
+      operationId: v1_improvement_opportunities_update
+      description: |-
+        A oportunidade de melhoria — **e ela não é venda** (FDD 048).
+
+        Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
+        bane `Opportunity` sem qualificador justamente porque as duas colidiam. O funil comercial vive
+        na `CommercialOpportunityViewSet`, e as duas rotas não se encostam.
+
+        Mesmo recorte de conta da `PainPointViewSet`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este improvement opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImprovementOpportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ImprovementOpportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImprovementOpportunity'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImprovementOpportunity'
+          description: ''
+    patch:
+      operationId: v1_improvement_opportunities_partial_update
+      description: |-
+        A oportunidade de melhoria — **e ela não é venda** (FDD 048).
+
+        Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
+        bane `Opportunity` sem qualificador justamente porque as duas colidiam. O funil comercial vive
+        na `CommercialOpportunityViewSet`, e as duas rotas não se encostam.
+
+        Mesmo recorte de conta da `PainPointViewSet`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este improvement opportunity.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedImprovementOpportunity'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedImprovementOpportunity'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedImprovementOpportunity'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImprovementOpportunity'
+          description: ''
+    delete:
+      operationId: v1_improvement_opportunities_destroy
+      description: |-
+        A oportunidade de melhoria — **e ela não é venda** (FDD 048).
+
+        Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
+        bane `Opportunity` sem qualificador justamente porque as duas colidiam. O funil comercial vive
+        na `CommercialOpportunityViewSet`, e as duas rotas não se encostam.
+
+        Mesmo recorte de conta da `PainPointViewSet`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este improvement opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/improvement-opportunities/{id}/unarchive/:
+    post:
+      operationId: v1_improvement_opportunities_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este improvement opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/invitations/:
     get:
       operationId: v1_invitations_list
@@ -6469,6 +6680,205 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/pain-points/:
+    get:
+      operationId: v1_pain_points_list
+      description: |-
+        A dor observada na operação do cliente (FDD 048).
+
+        **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
+        conta, e o processo dela é opcional. O recorte da Entrega é o mesmo dos dois — a conta
+        alcançada pelo campo `account`, e não por um pai a resolver.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PainPoint'
+          description: ''
+    post:
+      operationId: v1_pain_points_create
+      description: |-
+        A dor observada na operação do cliente (FDD 048).
+
+        **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
+        conta, e o processo dela é opcional. O recorte da Entrega é o mesmo dos dois — a conta
+        alcançada pelo campo `account`, e não por um pai a resolver.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PainPoint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PainPoint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PainPoint'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PainPoint'
+          description: ''
+  /api/v1/pain-points/{id}/:
+    get:
+      operationId: v1_pain_points_retrieve
+      description: |-
+        A dor observada na operação do cliente (FDD 048).
+
+        **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
+        conta, e o processo dela é opcional. O recorte da Entrega é o mesmo dos dois — a conta
+        alcançada pelo campo `account`, e não por um pai a resolver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pain point.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PainPoint'
+          description: ''
+    put:
+      operationId: v1_pain_points_update
+      description: |-
+        A dor observada na operação do cliente (FDD 048).
+
+        **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
+        conta, e o processo dela é opcional. O recorte da Entrega é o mesmo dos dois — a conta
+        alcançada pelo campo `account`, e não por um pai a resolver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pain point.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PainPoint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PainPoint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PainPoint'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PainPoint'
+          description: ''
+    patch:
+      operationId: v1_pain_points_partial_update
+      description: |-
+        A dor observada na operação do cliente (FDD 048).
+
+        **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
+        conta, e o processo dela é opcional. O recorte da Entrega é o mesmo dos dois — a conta
+        alcançada pelo campo `account`, e não por um pai a resolver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pain point.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPainPoint'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPainPoint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPainPoint'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PainPoint'
+          description: ''
+    delete:
+      operationId: v1_pain_points_destroy
+      description: |-
+        A dor observada na operação do cliente (FDD 048).
+
+        **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
+        conta, e o processo dela é opcional. O recorte da Entrega é o mesmo dos dois — a conta
+        alcançada pelo campo `account`, e não por um pai a resolver.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pain point.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/pain-points/{id}/unarchive/:
+    post:
+      operationId: v1_pain_points_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pain point.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/payments/webhook/:
     post:
       operationId: v1_payments_webhook_create
@@ -7122,6 +7532,142 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/priority-assessments/:
+    get:
+      operationId: v1_priority_assessments_list
+      description: |-
+        A avaliação de prioridade — **criada, nunca editada** (FDD 048, ADR 0054).
+
+        `http_method_names` não inclui `put` nem `patch`, e é isso que faz a imutabilidade ser um 405
+        ("este método não existe aqui") em vez de um 400 ("corrija o corpo"). Repriorizar é `POST` de
+        uma versão nova; a anterior fica de pé, que é a razão de o modelo ser versionado.
+
+        `DELETE` continua sendo o arquivamento da FDD 025: uma avaliação registrada por engano sai da
+        listagem sem sumir do histórico — e o número de versão dela **não** é reaproveitado.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriorityAssessment'
+          description: ''
+    post:
+      operationId: v1_priority_assessments_create
+      description: |-
+        A avaliação de prioridade — **criada, nunca editada** (FDD 048, ADR 0054).
+
+        `http_method_names` não inclui `put` nem `patch`, e é isso que faz a imutabilidade ser um 405
+        ("este método não existe aqui") em vez de um 400 ("corrija o corpo"). Repriorizar é `POST` de
+        uma versão nova; a anterior fica de pé, que é a razão de o modelo ser versionado.
+
+        `DELETE` continua sendo o arquivamento da FDD 025: uma avaliação registrada por engano sai da
+        listagem sem sumir do histórico — e o número de versão dela **não** é reaproveitado.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriorityAssessment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PriorityAssessment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PriorityAssessment'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriorityAssessment'
+          description: ''
+  /api/v1/priority-assessments/{id}/:
+    get:
+      operationId: v1_priority_assessments_retrieve
+      description: |-
+        A avaliação de prioridade — **criada, nunca editada** (FDD 048, ADR 0054).
+
+        `http_method_names` não inclui `put` nem `patch`, e é isso que faz a imutabilidade ser um 405
+        ("este método não existe aqui") em vez de um 400 ("corrija o corpo"). Repriorizar é `POST` de
+        uma versão nova; a anterior fica de pé, que é a razão de o modelo ser versionado.
+
+        `DELETE` continua sendo o arquivamento da FDD 025: uma avaliação registrada por engano sai da
+        listagem sem sumir do histórico — e o número de versão dela **não** é reaproveitado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este priority assessment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriorityAssessment'
+          description: ''
+    delete:
+      operationId: v1_priority_assessments_destroy
+      description: |-
+        A avaliação de prioridade — **criada, nunca editada** (FDD 048, ADR 0054).
+
+        `http_method_names` não inclui `put` nem `patch`, e é isso que faz a imutabilidade ser um 405
+        ("este método não existe aqui") em vez de um 400 ("corrija o corpo"). Repriorizar é `POST` de
+        uma versão nova; a anterior fica de pé, que é a razão de o modelo ser versionado.
+
+        `DELETE` continua sendo o arquivamento da FDD 025: uma avaliação registrada por engano sai da
+        listagem sem sumir do histórico — e o número de versão dela **não** é reaproveitado.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este priority assessment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/priority-assessments/{id}/unarchive/:
+    post:
+      operationId: v1_priority_assessments_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este priority assessment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/process-observations/:
     get:
       operationId: v1_process_observations_list
@@ -9717,6 +10263,193 @@ paths:
         schema:
           type: integer
         description: Um valor inteiro único que identifica este service.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/solution-hypotheses/:
+    get:
+      operationId: v1_solution_hypotheses_list
+      description: |-
+        As hipóteses concorrentes de solução (FDD 048).
+
+        Mesmo recorte, um hop a mais: a conta chega pela oportunidade.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SolutionHypothesis'
+          description: ''
+    post:
+      operationId: v1_solution_hypotheses_create
+      description: |-
+        As hipóteses concorrentes de solução (FDD 048).
+
+        Mesmo recorte, um hop a mais: a conta chega pela oportunidade.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolutionHypothesis'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SolutionHypothesis'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SolutionHypothesis'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionHypothesis'
+          description: ''
+  /api/v1/solution-hypotheses/{id}/:
+    get:
+      operationId: v1_solution_hypotheses_retrieve
+      description: |-
+        As hipóteses concorrentes de solução (FDD 048).
+
+        Mesmo recorte, um hop a mais: a conta chega pela oportunidade.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este solution hypothesis.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionHypothesis'
+          description: ''
+    put:
+      operationId: v1_solution_hypotheses_update
+      description: |-
+        As hipóteses concorrentes de solução (FDD 048).
+
+        Mesmo recorte, um hop a mais: a conta chega pela oportunidade.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este solution hypothesis.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolutionHypothesis'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SolutionHypothesis'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SolutionHypothesis'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionHypothesis'
+          description: ''
+    patch:
+      operationId: v1_solution_hypotheses_partial_update
+      description: |-
+        As hipóteses concorrentes de solução (FDD 048).
+
+        Mesmo recorte, um hop a mais: a conta chega pela oportunidade.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este solution hypothesis.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSolutionHypothesis'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSolutionHypothesis'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSolutionHypothesis'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolutionHypothesis'
+          description: ''
+    delete:
+      operationId: v1_solution_hypotheses_destroy
+      description: |-
+        As hipóteses concorrentes de solução (FDD 048).
+
+        Mesmo recorte, um hop a mais: a conta chega pela oportunidade.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este solution hypothesis.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/solution-hypotheses/{id}/unarchive/:
+    post:
+      operationId: v1_solution_hypotheses_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este solution hypothesis.
         required: true
       tags:
       - v1
@@ -12439,6 +13172,99 @@ components:
         * `low` - Baixo
         * `medium` - Médio
         * `high` - Alto
+    ImpactTypeEnum:
+      enum:
+      - financial
+      - operational
+      - experience
+      - risk
+      type: string
+      description: |-
+        * `financial` - Financeiro
+        * `operational` - Operacional
+        * `experience` - Experiência
+        * `risk` - Risco
+    ImprovementOpportunity:
+      type: object
+      description: |-
+        A oportunidade de melhoria, com o score e o **rank derivado** (FDD 048).
+
+        `score`, `assessment_version` e `rank` são campos calculados e só de leitura. O rank não é
+        coluna: um `rank` gravado que precisa concordar com a ordenação por score é uma segunda
+        definição da mesma coisa, e ela diverge da primeira em silêncio. Quem o produz é
+        `priority.ranking_da_conta`, num lugar só.
+
+        **Sem avaliação, os três saem `null`** — nunca zero. Zero afirma que a oportunidade foi
+        avaliada e vale zero; o nulo diz que ninguém avaliou, e é o `—` que o DAP desenhou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        engagement:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 200
+        desired_change:
+          type: string
+        impact_hypothesis:
+          type: string
+        pain_points:
+          type: array
+          items:
+            type: integer
+        status:
+          $ref: '#/components/schemas/ImprovementOpportunityStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
+        assessment_version:
+          type: integer
+          nullable: true
+          readOnly: true
+        rank:
+          type: integer
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - assessment_version
+      - created_at
+      - id
+      - rank
+      - score
+      - status_display
+      - title
+      - updated_at
+    ImprovementOpportunityStatusEnum:
+      enum:
+      - open
+      - assessing
+      - prioritized
+      - discarded
+      type: string
+      description: |-
+        * `open` - Aberta
+        * `assessing` - Em avaliação
+        * `prioritized` - Priorizada
+        * `discarded` - Descartada
     Invitation:
       type: object
       properties:
@@ -13345,6 +14171,83 @@ components:
         contact:
           type: integer
           nullable: true
+    PainPoint:
+      type: object
+      description: |-
+        A dor observada, com a invariante de `confirmed` (FDD 048).
+
+        **`confirmed` exige ao menos um `Finding` vivo por baixo**, e a checagem mora aqui inteira —
+        não por preferência, mas porque ela pergunta pelo M2M, que só existe depois do save. É a mesma
+        razão pela qual a metade "evidência viva" da invariante §6.9 está no `FindingSerializer` e não
+        no `clean()` do `Finding`. A terceira metade da mesma regra está no arquivamento
+        (`FindingViewSet.perform_destroy`): sem ela, a invariante vazaria pelo `DELETE`, que foi como
+        a Fase 3 a perdeu da primeira vez.
+
+        `impact_estimate` ausente fica **nulo**, e o serializer não o converte em zero em lugar
+        nenhum: zero afirma que a dor não custa nada, e nulo diz que ninguém estimou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        process:
+          type: integer
+          nullable: true
+        step:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        impact_type:
+          $ref: '#/components/schemas/ImpactTypeEnum'
+        impact_type_display:
+          type: string
+          readOnly: true
+        impact_estimate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        findings:
+          type: array
+          items:
+            type: integer
+        status:
+          $ref: '#/components/schemas/PainPointStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - created_at
+      - id
+      - impact_type
+      - impact_type_display
+      - status_display
+      - title
+      - updated_at
+    PainPointStatusEnum:
+      enum:
+      - observed
+      - confirmed
+      - discarded
+      type: string
+      description: |-
+        * `observed` - Observado
+        * `confirmed` - Confirmado
+        * `discarded` - Descartado
     PartyEnum:
       enum:
       - provider
@@ -14505,6 +15408,65 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedImprovementOpportunity:
+      type: object
+      description: |-
+        A oportunidade de melhoria, com o score e o **rank derivado** (FDD 048).
+
+        `score`, `assessment_version` e `rank` são campos calculados e só de leitura. O rank não é
+        coluna: um `rank` gravado que precisa concordar com a ordenação por score é uma segunda
+        definição da mesma coisa, e ela diverge da primeira em silêncio. Quem o produz é
+        `priority.ranking_da_conta`, num lugar só.
+
+        **Sem avaliação, os três saem `null`** — nunca zero. Zero afirma que a oportunidade foi
+        avaliada e vale zero; o nulo diz que ninguém avaliou, e é o `—` que o DAP desenhou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        engagement:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 200
+        desired_change:
+          type: string
+        impact_hypothesis:
+          type: string
+        pain_points:
+          type: array
+          items:
+            type: integer
+        status:
+          $ref: '#/components/schemas/ImprovementOpportunityStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
+        assessment_version:
+          type: integer
+          nullable: true
+          readOnly: true
+        rank:
+          type: integer
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedInvoice:
       type: object
       description: |-
@@ -14921,6 +15883,64 @@ components:
           type: string
           readOnly: true
           default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedPainPoint:
+      type: object
+      description: |-
+        A dor observada, com a invariante de `confirmed` (FDD 048).
+
+        **`confirmed` exige ao menos um `Finding` vivo por baixo**, e a checagem mora aqui inteira —
+        não por preferência, mas porque ela pergunta pelo M2M, que só existe depois do save. É a mesma
+        razão pela qual a metade "evidência viva" da invariante §6.9 está no `FindingSerializer` e não
+        no `clean()` do `Finding`. A terceira metade da mesma regra está no arquivamento
+        (`FindingViewSet.perform_destroy`): sem ela, a invariante vazaria pelo `DELETE`, que foi como
+        a Fase 3 a perdeu da primeira vez.
+
+        `impact_estimate` ausente fica **nulo**, e o serializer não o converte em zero em lugar
+        nenhum: zero afirma que a dor não custa nada, e nulo diz que ninguém estimou.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        account:
+          type: integer
+        process:
+          type: integer
+          nullable: true
+        step:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        impact_type:
+          $ref: '#/components/schemas/ImpactTypeEnum'
+        impact_type_display:
+          type: string
+          readOnly: true
+        impact_estimate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        findings:
+          type: array
+          items:
+            type: integer
+        status:
+          $ref: '#/components/schemas/PainPointStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -15685,6 +16705,45 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedSolutionHypothesis:
+      type: object
+      description: |-
+        A hipótese de solução, com a unicidade da **escolhida** (FDD 048).
+
+        A checagem de "já existe uma escolhida" é escrita à mão, ao contrário do que o `CLAUDE.md`
+        pede para as constraints do pipeline, e a exceção tem motivo verificado: o DRF só deriva o
+        validador de uma `UniqueConstraint` condicional quando **todos** os campos da condição são
+        campos do serializer (`ModelSerializer.get_unique_together_validators`, DRF 3.16). A condição
+        aqui cita `archived_at`, que nenhum serializer da casa expõe — então o validador é descartado
+        em silêncio e o `IntegrityError` subiria como 500. A constraint continua sendo a garantia; o
+        que esta validação faz é transformar a recusa num 400 legível.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        improvement_opportunity:
+          type: integer
+        statement:
+          type: string
+        intervention:
+          type: string
+        assumptions:
+          type: string
+        expected_effect:
+          type: string
+        status:
+          $ref: '#/components/schemas/SolutionHypothesisStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedTask:
       type: object
       properties:
@@ -15993,6 +17052,96 @@ components:
         * `open` - Aberto
         * `closed` - Fechado
         * `merged` - Mesclado
+    PriorityAssessment:
+      type: object
+      description: |-
+        A avaliação que produz o Opportunity Score (FDD 048, ADR 0054).
+
+        `version`, `weights` e `score` são **só de leitura**: os três saem do `save()` do modelo. Um
+        score que o corpo pudesse informar não seria a fórmula, seria uma opinião com aparência de
+        cálculo; e uma versão escolhida por quem escreve deixaria de ser uma sequência.
+
+        A imutabilidade não mora aqui — mora na rota, que não expõe `PUT` nem `PATCH`. Um serializer
+        que recusasse toda atualização ainda deixaria `PUT` responder 400 em vez de 405, e 400 diz
+        "corrija o corpo" sobre uma operação que não existe.
+
+        **`assessed_by_name` existe porque a tela precisa dizer quem avaliou, e o id não diz.** O board
+        aprovado (`docs/design/dap-priorizacao-r1/`) mostra "Avaliado por {nome} em {data}", e resolver
+        o nome pelo cliente exigiria `/users/`, que é fechada à Entrega — metade de quem lê a tela
+        veria um número. É o mesmo `source="…get_full_name"` de `owner_name` em `KnowledgeArea` e
+        `user_name` em `ProjectMember`: campo derivado, só de leitura, aditivo à `/api/v1/`.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        improvement_opportunity:
+          type: integer
+        version:
+          type: integer
+          readOnly: true
+        impact:
+          type: integer
+          maximum: 5
+          minimum: 1
+        evidence_strength:
+          type: integer
+          maximum: 5
+          minimum: 1
+        feasibility:
+          type: integer
+          maximum: 5
+          minimum: 1
+        time_to_value:
+          type: integer
+          maximum: 5
+          minimum: 1
+        economics:
+          type: integer
+          maximum: 5
+          minimum: 1
+        formula_key:
+          type: string
+          maxLength: 24
+        weights:
+          readOnly: true
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          readOnly: true
+        rationale:
+          type: string
+        assessed_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        assessed_by_name:
+          type: string
+          readOnly: true
+          default: ''
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assessed_by
+      - assessed_by_name
+      - created_at
+      - economics
+      - evidence_strength
+      - feasibility
+      - id
+      - impact
+      - improvement_opportunity
+      - score
+      - time_to_value
+      - updated_at
+      - version
+      - weights
     ProbabilityEnum:
       enum:
       - low
@@ -17025,6 +18174,62 @@ components:
         * `pending` - Pendente
         * `signed` - Assinado
         * `declined` - Recusado
+    SolutionHypothesis:
+      type: object
+      description: |-
+        A hipótese de solução, com a unicidade da **escolhida** (FDD 048).
+
+        A checagem de "já existe uma escolhida" é escrita à mão, ao contrário do que o `CLAUDE.md`
+        pede para as constraints do pipeline, e a exceção tem motivo verificado: o DRF só deriva o
+        validador de uma `UniqueConstraint` condicional quando **todos** os campos da condição são
+        campos do serializer (`ModelSerializer.get_unique_together_validators`, DRF 3.16). A condição
+        aqui cita `archived_at`, que nenhum serializer da casa expõe — então o validador é descartado
+        em silêncio e o `IntegrityError` subiria como 500. A constraint continua sendo a garantia; o
+        que esta validação faz é transformar a recusa num 400 legível.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        improvement_opportunity:
+          type: integer
+        statement:
+          type: string
+        intervention:
+          type: string
+        assumptions:
+          type: string
+        expected_effect:
+          type: string
+        status:
+          $ref: '#/components/schemas/SolutionHypothesisStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - improvement_opportunity
+      - statement
+      - status_display
+      - updated_at
+    SolutionHypothesisStatusEnum:
+      enum:
+      - proposed
+      - chosen
+      - discarded
+      type: string
+      description: |-
+        * `proposed` - Proposta
+        * `chosen` - Escolhida
+        * `discarded` - Descartada
     SourceEnum:
       enum:
       - linear

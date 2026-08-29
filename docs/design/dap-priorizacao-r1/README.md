@@ -208,6 +208,31 @@ hipóteses), a seção de pain points em `ProcessDetailPage`, e os seis estados 
 - Qualquer alteração nas oito seções existentes de `AccountDetailPage` e nas quatro de
   `ProcessDetailPage`, que **não** são tocadas.
 
+## Errata de 29/08/2026 — o board contradiz o README, e o README vence
+
+Descoberta ao implementar, e registrada aqui em vez de corrigida no board: um pacote aprovado é
+**congelado**, e reescrevê-lo para acompanhar o código transformaria evidência de gate em
+documentação viva. É a mesma regra que a nota do DAP engagement r1 aplica às referências de
+arquivo que envelheceram.
+
+**O board desenha `#4` na oportunidade sem avaliação. A tela mostra `—`.** A tabela de estados
+deste README diz, e é o que vale: *"oportunidade sem avaliação: `—` no lugar do número, **nunca
+zero**"*, e `score`/`rank`/`assessment_version` saem `null` juntos da API. Escrever `#4` daria à
+linha uma posição na ordem — e a ordem é justamente o que o nulo existe para não afirmar: sem
+avaliação não há por onde ordenar, e `priority.ranking_da_conta` recusa produzir posição para quem
+não tem avaliação vigente. O board errou o próprio critério que a prosa ao lado dele fixa.
+
+**Uma segunda diferença, e esta é adição, não contradição.** O board é estático — todo botão nele
+está `disabled` — e desenha só "Agrupar em oportunidade" e "Registrar pain point". A implementação
+precisou dos controles de escrita que a issue pede (criar avaliação, mudar situação, registrar
+hipótese, descartar dor). Todos usam primitiva existente, sem nenhum valor visual novo, e o
+próprio pacote prevê o caso: *"Rótulo de botão e texto de ajuda que não estão no board seguem a
+copy vigente do produto"*.
+
+**`PainPoint.status = confirmed` não é oferecido na tela.** Confirmar exige achado vivo vinculado,
+e o produto ainda não tem superfície de `Finding` — um select que oferecesse o valor produziria um
+400 que quem clica não entende. É a mesma proibição que `types.ts` já escreve para `EpistemicStatus`.
+
 ## Registro de aprovação
 
 | Campo | Valor |
