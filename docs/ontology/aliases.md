@@ -196,6 +196,17 @@ Cada alias de escrita precisa de regressão. Sem ela, a linha do serializer não
 resquício do nome antigo a remove achando que está pagando dívida. Estaria quebrando a `/api/v1/`
 em silêncio, no único lugar onde nada aqui dentro fica vermelho.
 
+**A depreciação, desde a issue #67, é visível no próprio contrato — não só nesta página.** Até
+aqui, quem lia `openapi.yaml` ou o Swagger de `/api/docs/` não tinha como distinguir `client` de
+`account`: as duas chaves apareciam como campo comum, sem nenhum sinal de que uma delas morre na
+`/api/v2/`. `backend/apps/core/openapi_aliases.py` declara `ALIASES_DEPRECIADOS`, o espelho manual
+desta seção para o vocabulário do OpenAPI (componente do schema → propriedades-alias), e um
+`POSTPROCESSING_HOOKS` em `SPECTACULAR_SETTINGS` (`backend/config/settings.py`) marca
+`deprecated: true` em cada uma na geração do esquema. É manual e não inferido de `source=` por
+regex, de propósito: a maioria dos `source=` do repositório é projeção legítima, não alias — marcar
+os dois igual mentiria sobre o que vai morrer. Um teste (`backend/tests/test_openapi_aliases.py`) garante que
+o mapa não fica atrás do código nem apodrece com entrada morta.
+
 ### 3. `legacy_` é o escape reservado
 
 `legacy_opportunity` e `legacy_evidencia` são nomes **legítimos em código novo**, e a guarda os

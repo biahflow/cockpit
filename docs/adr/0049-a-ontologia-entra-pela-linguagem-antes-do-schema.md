@@ -180,6 +180,24 @@ edição.
   vezes. Regra duplicada diverge, e a divergência entre elas não deixaria nada vermelho — que é
   exatamente o modo de falha que a ADR 0026 descreve para as primitivas de UI.
 
+## Emenda (issue #67, fatia 1 — 28/08/2026) — `GateOutcome` virou `GateDecision`
+
+Onde o texto acima cita `GateOutcome`/`gate_outcome` em tom de presente (`:57`, `:109`, `:112`,
+`:154`), o nome pago é `GateDecision`/`gate_decision` (decisão D7 do `language-map`, ADR 0052). O
+exemplo sintético de `OpportunityScore` que abre a seção — a declaração de campo que a guarda pega
+sozinha, por ser referência e não declaração — continua ilustrando o mesmo mecanismo; só o nome do
+campo mudou. A dívida que ele descrevia foi paga: o bloco `outcome-como-decisao-de-gate` da
+allowlist caiu de onze linhas para uma — a chave de payload `gate_outcome`, a única ocorrência que
+sobrevive fora de código morto, com data de morte na `/api/v2/` — e o `TETO_DA_ALLOWLIST` desceu de
+59 para 48.
+
+**A regra que casa referência, e não declaração, não muda de forma.**
+`GateOutcome`/`gate_outcome` continua sendo a única em que o identificador inteiro está errado em
+qualquer posição — antes porque não havia uso legítimo do nome antigo, agora porque o nome foi pago
+e a guarda existe para impedir que ele volte: `GateOutcome` segue no regex de `legado-congelado`,
+do mesmo jeito que `Processo`/`ProcessoEtapa` passaram a seguir depois da fatia 4. Lista fechada
+barra batismo novo; nome pago segue banido.
+
 ## Emenda (issue #67, fatia 2 — 28/08/2026) — `Client` virou `Account`
 
 O exemplo desta ADR usa `client = models.ForeignKey(Client, …)` para descrever a dívida que a

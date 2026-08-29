@@ -345,7 +345,16 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # onze delas abaixa a contagem daquela linha sem mexer neste teto. **Este número só desce.**
 # Baixá-lo é o trabalho das fases 1–6; subi-lo exige justificativa escrita na PR, porque cada
 # linha aqui é um nome que o repositório ainda diz errado.
-TETO_DA_ALLOWLIST = 29
+#
+# Justificativa da subida para 30 (fechamento da issue #67): `openapi_aliases.py` precisa conter
+# o nome literal `gate_outcome` para marcar o alias como `deprecated` no `openapi.yaml` — é a
+# mesma exceção que já valia para `serializers.py`, aplicada a um arquivo novo. **É dívida com
+# prazo, e o prazo é o mesmo do alias que ela anuncia**: quando a `/api/v2/` parar de emitir
+# `gate_outcome`, a entrada sai do mapa e as duas linhas saem daqui juntas — a de `serializers.py`
+# e a de `openapi_aliases.py` —, e o teto volta para 28. Um mecanismo de depreciação não sobrevive
+# ao que ele deprecia; ler esta linha como permanente transformaria em dívida eterna a única
+# dívida deste arquivo que já tem data marcada.
+TETO_DA_ALLOWLIST = 30
 
 
 def test_nenhum_termo_banido_novo() -> None:
