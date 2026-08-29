@@ -12095,6 +12095,7 @@ components:
         status:
           type: string
           readOnly: true
+          deprecated: true
         vertical:
           type: integer
           nullable: true
@@ -12137,12 +12138,14 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         commercial_opportunity:
           type: integer
           nullable: true
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         invoice:
           type: integer
           nullable: true
@@ -12351,6 +12354,7 @@ components:
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true
@@ -12700,6 +12704,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         client_name:
           type: string
           readOnly: true
@@ -12939,6 +12944,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         client_name:
           type: string
           readOnly: true
@@ -13007,6 +13013,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         contact:
           type: integer
           nullable: true
@@ -13129,6 +13136,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         first_name:
           type: string
           maxLength: 128
@@ -13581,12 +13589,14 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         commercial_opportunity:
           type: integer
           nullable: true
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true
@@ -13936,12 +13946,14 @@ components:
         processo:
           type: integer
           readOnly: true
+          deprecated: true
         step:
           type: integer
           nullable: true
         etapa:
           type: integer
           readOnly: true
+          deprecated: true
         forma:
           $ref: '#/components/schemas/FormaEnum'
         forma_display:
@@ -14489,6 +14501,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         client_name:
           type: string
           readOnly: true
@@ -14999,6 +15012,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         commercial_opportunity:
           type: integer
           readOnly: true
@@ -15006,6 +15020,7 @@ components:
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         qualification:
           type: integer
           nullable: true
@@ -15590,6 +15605,7 @@ components:
         status:
           type: string
           readOnly: true
+          deprecated: true
         vertical:
           type: integer
           nullable: true
@@ -15616,12 +15632,14 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         commercial_opportunity:
           type: integer
           nullable: true
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         invoice:
           type: integer
           nullable: true
@@ -15684,6 +15702,7 @@ components:
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true
@@ -15854,6 +15873,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         client_name:
           type: string
           readOnly: true
@@ -15900,6 +15920,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         contact:
           type: integer
           nullable: true
@@ -15969,6 +15990,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         first_name:
           type: string
           maxLength: 128
@@ -16264,12 +16286,14 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         commercial_opportunity:
           type: integer
           nullable: true
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true
@@ -16525,12 +16549,14 @@ components:
         processo:
           type: integer
           readOnly: true
+          deprecated: true
         step:
           type: integer
           nullable: true
         etapa:
           type: integer
           readOnly: true
+          deprecated: true
         forma:
           $ref: '#/components/schemas/FormaEnum'
         forma_display:
@@ -16872,6 +16898,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         client_name:
           type: string
           readOnly: true
@@ -17223,6 +17250,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         commercial_opportunity:
           type: integer
           readOnly: true
@@ -17230,6 +17258,7 @@ components:
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         qualification:
           type: integer
           nullable: true
@@ -17550,6 +17579,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         client_name:
           type: string
           readOnly: true
@@ -17681,6 +17711,7 @@ components:
         processo:
           type: integer
           readOnly: true
+          deprecated: true
         name:
           type: string
           maxLength: 255
@@ -17741,6 +17772,7 @@ components:
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         name:
           type: string
           maxLength: 255
@@ -17964,6 +17996,7 @@ components:
         gate_outcome:
           type: string
           readOnly: true
+          deprecated: true
         gate_notes:
           type: string
           readOnly: true
@@ -18198,6 +18231,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true
@@ -18576,6 +18610,7 @@ components:
         gate_outcome:
           type: string
           readOnly: true
+          deprecated: true
         waiting_party:
           type: string
           readOnly: true
@@ -18805,6 +18840,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         client_name:
           type: string
           readOnly: true
@@ -18954,6 +18990,7 @@ components:
         processo:
           type: integer
           readOnly: true
+          deprecated: true
         name:
           type: string
           maxLength: 255
@@ -19025,6 +19062,7 @@ components:
         opportunity:
           type: integer
           readOnly: true
+          deprecated: true
         name:
           type: string
           maxLength: 255
@@ -19297,6 +19335,7 @@ components:
         gate_outcome:
           type: string
           readOnly: true
+          deprecated: true
         gate_notes:
           type: string
           readOnly: true
@@ -19754,6 +19793,7 @@ components:
         client:
           type: integer
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true

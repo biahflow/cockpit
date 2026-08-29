@@ -56,6 +56,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 045 | Split Evidence/Finding e Discovery (ontologia, fase 3) | Entregue | 1 | `docs/fdd/045-a-hipotese-e-a-prova-eram-a-mesma-linha.md` |
 | FDD 046 | Engagement entre a conta e o projeto (ontologia, fase 2) | Entregue | 1 | `docs/fdd/046-o-engajamento-entre-a-conta-e-o-projeto.md` |
 | FDD 047 | Snapshot do portal no vocabulário canônico e carimbo da projeção | Entregue | 1 | `docs/fdd/047-o-snapshot-que-falava-o-vocabulario-antigo.md` |
+| ADR 0052 | Renome de classe da ontologia — `GateOutcome`→`GateDecision`, `Opportunity`→`CommercialOpportunity`, `Client`→`Account`, `Processo`/`ProcessoEtapa`→`Process`/`ProcessStep` (issue #67) | Entregue | 1 | `docs/adr/0052-o-renome-de-classe-vem-antes-da-fase-6-a-tabela-e-a-rota-ficam.md` |
 | FDD 048 | Cadeia do PRIORITIZE: PainPoint, ImprovementOpportunity, PriorityAssessment e SolutionHypothesis (ontologia, fase 4) | Entregue (backend) | 1 | `docs/fdd/048-onde-atuar-nao-tinha-onde-morar.md` |
 | FDD 049 | Feasibility, PROVE, KPI/Measurement e Value Ledger (ontologia, fase 5) | Entregue (backend) | 1 | `docs/fdd/049-a-medicao-morava-dentro-do-ativo-de-solucao.md` |
 
@@ -289,7 +290,7 @@ cobre ~70% da visão; abaixo o que falta construir aqui. Prioridade em ordem.
       (FDD 014).
 - [x] **3 níveis de produto — Fase 4.** Estruturados sobre `Service` (`tier`, `list_price`,
       `summary`, um ativo por nível): Discovery Express (grátis), Discovery + Assessment (pago) e
-      Implantação, semeados pela migração `0020`. `Opportunity.service` leva o nível no pipeline
+      Implantação, semeados pela migração `0020`. `CommercialOpportunity.service` leva o nível no pipeline
       (selo no card e funil `by_tier` em Indicadores), a conversão de lead entra pelo nível
       gratuito, `convert-to-project` herda o nível para o projeto, o kickoff usa um cronograma por
       nível (`kickoff.KICKOFF_TEMPLATES`) e a proposta por IA respeita escopo e preço de tabela.
@@ -488,7 +489,7 @@ um radar que ele respeita.
       silenciosas: o lead convertido é **arquivado** por `LeadViewSet.convert`, então o
       filtro `active` que é o reflexo do resto de `AnalyticsView` apagaria da conta
       exatamente quem fechou, deixando uma origem com mais ganhos que leads; e
-      `Opportunity.leads` é reverso de FK, então agrupar pelo `join` multiplicaria o projeto
+      `CommercialOpportunity.leads` é reverso de FK, então agrupar pelo `join` multiplicaria o projeto
       por lead e **dobraria a receita** — a origem sai de `Subquery`, e o dinheiro não pode
       dobrar numa tela cujo propósito é decidir onde investir. Oportunidade sem lead ganha
       origem própria (`direto`) para os totais reconciliarem com `funnel.opportunities.won`:
