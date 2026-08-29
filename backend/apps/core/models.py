@@ -104,10 +104,11 @@ class Account(TimestampedModel):
     """A organização com quem a casa se relaciona — desde antes de ela comprar.
 
     O nome canônico é `Account` (`docs/ontology/language-map.md` §2), e "cliente" deixa de ser o
-    nome da entidade para virar o **rótulo** de um dos estados dela. A ADR 0052 é o que autoriza
-    renomear a classe agora, na issue #67, em vez de esperar a Fase 6: a **tabela** continua
-    `core_client` (ver `Meta` abaixo), e é a tabela — a linha e a pk — que a `aliases.md` §2b
-    protege, porque o One deriva `organization.slug = biahflow-client-{id}` e a persiste.
+    nome da entidade para virar o **rótulo** de um dos estados dela. A ADR 0052 renomeou a classe na
+    issue #67 e, na Fase 6, renomeou a **tabela** de `core_client` para `core_account` (ver `Meta`
+    abaixo). O `AlterModelTable` renomeia em lugar: a linha e a **pk** sobrevivem — que é o que a
+    `aliases.md` §2b protege, porque o One deriva `organization.slug = biahflow-client-{id}` e a
+    persiste (o `{id}` é a pk, intocada pelo renome da tabela).
     """
 
     class LifecycleStatus(models.TextChoices):
@@ -157,11 +158,10 @@ class Account(TimestampedModel):
 
     class Meta:
         ordering = ["name"]
-        # **A tabela não se move** (ADR 0052). Fixá-la aqui é o que torna o `RenameModel` da
-        # migração `0062` um no-op no banco: `alter_db_table` abre com
-        # `if old_db_table == new_db_table: return`. O nome da tabela é a Fase 6; o que sai agora
-        # é só o nome da classe.
-        db_table = "core_client"
+        # A tabela passou a `core_account` na Fase 6 (ADR 0052, issue #70): o `db_table` fixado no
+        # nome legado saiu, e o `AlterModelTable` da migração renomeou `core_client` → `core_account`
+        # em lugar. `AlterModelTable` preserva linha e **pk** (só o nome da tabela muda), que é o que
+        # a `aliases.md` §2b protege — os ids atravessam para o portal.
 
     def __str__(self) -> str:
         return self.name
@@ -339,11 +339,9 @@ class CommercialOpportunity(TimestampedModel):
     )
 
     class Meta:
-        # A classe renomeou na issue #67 e a **tabela fica** (ADR 0052): `db_table` fixa aqui o
-        # nome que ela já tem, para o `RenameModel` da migração não emitir `ALTER TABLE`. O nome
-        # da tabela é a Fase 6, e o que a `aliases.md` §2b protege é a pk — que só se move se a
-        # linha se mover.
-        db_table = "core_opportunity"
+        # A tabela passou a `core_commercialopportunity` na Fase 6 (ADR 0052, issue #70): o
+        # `db_table` legado saiu e o `AlterModelTable` renomeou `core_opportunity` em lugar,
+        # preservando linha e pk (`aliases.md` §2b).
         ordering = ["expected_close_date", "id"]
 
     def clean(self) -> None:
@@ -1488,10 +1486,9 @@ class Process(TimestampedModel):
     risco_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
-        # A tabela **não** se move (ADR 0052): `RenameModel` com o `db_table` já fixado no nome
-        # legado não emite SQL nenhum, e é a pk que a `docs/ontology/aliases.md` §2b protege. O
-        # renome da tabela é a Fase 6.
-        db_table = "core_processo"
+        # A tabela passou a `core_process` na Fase 6 (ADR 0052, issue #70): o `db_table` legado saiu
+        # e o `AlterModelTable` renomeou `core_processo` em lugar, preservando linha e pk
+        # (`docs/ontology/aliases.md` §2b).
         ordering = ["position", "id"]
 
     def __str__(self) -> str:
@@ -1559,8 +1556,8 @@ class ProcessStep(TimestampedModel):
     retrabalho = models.TextField(blank=True, default="")  # R — o que acontece quando dá errado
 
     class Meta:
-        # Mesma razão do `Process` acima: a classe troca de nome, a tabela fica (ADR 0052).
-        db_table = "core_processoetapa"
+        # Mesma travessia do `Process` acima: a tabela passou a `core_processstep` na Fase 6, com
+        # `AlterModelTable` renomeando `core_processoetapa` em lugar (ADR 0052, `aliases.md` §2b).
         ordering = ["position", "id"]
 
     def __str__(self) -> str:

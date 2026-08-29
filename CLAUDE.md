@@ -300,11 +300,13 @@ Key cross-cutting patterns to preserve:
   reservados no pacote: gráfico de série do KPI, `Case` derivado de Outcomes e ledger consolidado.
 - **Os renomes da ontologia estão em curso, e "renome" são três coisas com prazos distintos**
   (ADR 0052, issue #67). O nome da **classe** — e de tudo que a nomeia: serializer, viewset,
-  `resource`, campo FK, tipo TS — muda **agora**, uma fatia por PR. O nome da **tabela** fica para
-  a Fase 6: cada renome carrega `Meta.db_table` fixado no nome legado, e a migração é
-  `AlterModelTable` **antes** de `RenameModel`, nessa ordem, para as duas serem no-op no banco —
-  `alter_db_table` abre com `if old_db_table == new_db_table: return`, e inverter faz o banco
-  renomear a tabela e renomeá-la de volta. A **rota** e a **chave de payload** ficam para a
+  `resource`, campo FK, tipo TS — mudou na #67, uma fatia por PR. O nome da **tabela** ficou para
+  a Fase 6: na #67 cada renome carregava `Meta.db_table` fixado no nome legado, e a migração era
+  `AlterModelTable` **antes** de `RenameModel`, nessa ordem, para as duas serem no-op no banco
+  (`alter_db_table` abre com `if old_db_table == new_db_table: return`). A **Fase 6 pagou as
+  tabelas** (migração `0069`): os pins saíram do `Meta`, e `AlterModelTable(table=None)` renomeou
+  cada uma em lugar (`core_client`→`core_account`, etc.), preservando linha e pk. A **rota** e a
+  **chave de payload** ficam para a
   `/api/v2/`: a chave legada continua saindo no `GET` (campo com `source=`, `read_only`) e sendo
   aceita no `POST`/`PATCH` (`AliasDeEntradaMixin`, um mecanismo para todas), e **a canônica vence
   quando as duas vêm no mesmo corpo**. Todo alias de escrita precisa de regressão, porque a SPA
@@ -317,8 +319,10 @@ Key cross-cutting patterns to preserve:
   `ProcessStep.processo` e `Evidencia.processo`/`etapa` virando `process`/`step`, e o módulo
   `processos.py` virando `process.py`). `Evidencia` **não** foi renomeada: ela era a metade legada do
   split, e a **Fase 6 (issue #70, migração `0068`) a removeu** com o dual-write, em vez de renomeá-la
-  — trocar o nome sem dividir preservaria o defeito de linguagem que a divisão corrige. Sobram as
-  **tabelas** dos renomes (Fase 6) e as rotas e chaves de payload (`/api/v2/`). O que a guarda ainda
+  — trocar o nome sem dividir preservaria o defeito de linguagem que a divisão corrige. As
+  **tabelas** dos quatro renomes saíram na Fase 6 (migração `0069`, renome em lugar); sobram
+  `Project.client` (a projeção, Fase 6) e as rotas e chaves de payload (`/api/v2/`, que agora pode
+  nascer). O que a guarda ainda
   tolera está em `docs/ontology/legacy-allowlist.txt` (teto **26**, depois que as quatro linhas da
   `Evidencia` saíram), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c
   campo vs. chave).

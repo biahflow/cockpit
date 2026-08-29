@@ -121,3 +121,16 @@ como alias de leitura.
   o diff das fatias 2 e 4 com uma decisão que a Ontology v1 não tomou: `language-map` §2 nomeia
   `Process` e `ProcessStep` e não diz nada sobre os campos deles. Termo sem nome canônico entra
   primeiro no mapa (§8), depois aqui.
+
+## Emenda — Fase 6 (issue #70): as tabelas foram renomeadas
+
+A decisão desta ADR era antecipar o renome de **classe** para a #67 e deixar a **tabela** para a
+Fase 6, com `Meta.db_table` fixado no nome legado. A Fase 6 pagou essa dívida na migração `0069`:
+os pins saíram do `Meta` e `AlterModelTable(table=None)` renomeou cada tabela em lugar —
+`core_client`→`core_account`, `core_opportunity`→`core_commercialopportunity`,
+`core_processo`→`core_process`, `core_processoetapa`→`core_processstep`. É um `ALTER TABLE ...
+RENAME TO` por tabela, que **preserva linha e pk** — a garantia que a `aliases.md` §2b exige,
+porque o One deriva chave de identidade de seis dessas pks e a persiste, e o renome da tabela não
+toca o `id`. A reversa reaplica o `db_table` legado. Resta da Fase 6 só `Project.client`, a
+projeção; a `/api/v2/`, onde morrem rotas e chaves de payload, pode nascer agora que as tabelas
+foram concluídas.
