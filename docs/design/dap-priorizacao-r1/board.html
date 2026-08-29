@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — Priorização (PainPoint → ImprovementOpportunity) · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-100:#fadfd4; --brand-200:#dd8b62; --brand-500:#bd4a30;
+  --brand-600:#a8412a; --brand-700:#9c3c26; --brand-900:#5c2317;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --info:#1d4ed8; --info-50:#eff6ff;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  --slate-600:#475569; --slate-700:#334155;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650;margin:28px 0 10px}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:var(--text-body)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface-subtle);font-weight:650}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.grid--2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.spec--pick{border-style:solid;border-color:var(--brand-200);box-shadow:0 0 0 3px rgba(221,139,98,.12)}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+
+/* ---- primitivas espelhadas de src/index.css (mesmo subconjunto do molde dap-engagement-r1) ---- */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:24px;box-shadow:var(--shadow-card)}
+/* `.panel--flush` real não redeclara borda/fundo — combina com `.panel` no markup (index.css:201). */
+.panel--flush{overflow:hidden;padding:0}
+.panel-heading{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel-heading h2{margin:0;font-size:var(--text-title);line-height:var(--lh-title);font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);border:0;padding:0}
+.panel-rows>.row+.row{border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px 24px}
+.row-main{min-width:0;flex:1}
+.row-main strong{display:block;font-size:var(--text-body);font-weight:600;color:var(--ink)}
+.row-main span{display:block;margin-top:.125rem;font-size:var(--text-label);line-height:1.05rem;color:var(--muted)}
+/* Agrupa score + versão + status como bloco próprio, sempre numa linha abaixo do título
+   (`flex:1 1 100%` força a quebra num `.row` `flex-wrap`, independente da largura do
+   contêiner). Sem isto, um título longo (`row-main` com `flex:1 1 0`) encolhe a ponto de
+   deixar uma palavra sem hífen — "documentação" — vazar por cima do selo vizinho. */
+.row-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1 1 100%;margin-top:2px}
+.metric-icon{display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;
+  border-radius:var(--radius-control);background:var(--brand-50);color:var(--brand-500)}
+.metric-card{display:grid;gap:8px;border-radius:var(--radius-card);border:1px solid var(--line);
+  background:var(--surface);padding:16px;box-shadow:var(--shadow-card)}
+.metric-card span{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500;color:var(--muted)}
+.metric-card strong{font-size:1.75rem;line-height:2rem;font-weight:650;letter-spacing:-.03em;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.state{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:4px 10px;
+  font-size:11px;line-height:1rem;font-weight:600;white-space:nowrap}
+.state--0{background:var(--info-50);color:var(--info)}
+.state--1{background:var(--success-50);color:var(--success)}
+.state--2{background:var(--warning-50);color:var(--warning)}
+.state--3{background:var(--danger-50);color:var(--danger)}
+.state--off{background:var(--slate-100);color:var(--slate-600)}
+.field{width:100%;border-radius:var(--radius-control);border:1px solid var(--line-strong);
+  background:#fff;padding:12px;font-size:var(--text-body);color:var(--slate-700);font-family:inherit}
+.field::placeholder{color:#a8a29e}
+.form-label{display:grid;gap:8px;font-size:var(--text-body);font-weight:500;color:var(--slate-700)}
+.form-grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit;white-space:nowrap}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn--icon{width:44px;height:44px;min-height:0;padding:0;flex:0 0 auto}
+.btn[disabled],.btn--secondary[disabled]{opacity:.5}
+.empty-state{border-radius:var(--radius-card);border:1px dashed var(--line);
+  background:rgba(248,250,252,.6);padding:24px 16px;text-align:center;
+  font-size:var(--text-body);color:var(--muted)}
+.alert--error{border-radius:var(--radius-card);border:1px solid var(--danger-50);
+  background:var(--danger-50);padding:16px;font-size:var(--text-body);color:var(--danger);margin:0 0 16px}
+.type-title{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650}
+.type-label{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--18{width:18px;height:18px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+.skeleton{background:var(--slate-200);border-radius:12px}
+.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
+.stack{display:grid;gap:16px}
+.actions{display:flex;gap:6px;flex:0 0 auto}
+.back-link{display:inline-flex;align-items:center;gap:8px;font-size:var(--text-body);font-weight:600;
+  color:var(--brand-600);text-decoration:none}
+.page-head{margin-bottom:24px;display:grid;gap:6px}
+.page-head p{margin:0;max-width:60ch;color:var(--slate-600);font-size:var(--text-body)}
+/* Detalhe da versão vigente do bloco "Avaliações" (decisão C) — mesma tinta do item de menu
+   ativo (`brand-50`/`brand-700`), não uma cor nova: index.css:356. */
+.row--current{background:var(--brand-50)}
+.row--current .row-main strong,.row--current .row-main span{color:var(--brand-900)}
+/* `<details>` nativo: sem JS, sem primitiva própria — só herda os papéis de texto já em uso. */
+details>summary{cursor:pointer;padding:14px 24px;font-size:var(--text-label);font-weight:600;
+  color:var(--muted);list-style:revert}
+details[open]>summary{border-bottom:1px solid var(--line)}
+.mobile{max-width:342px;margin:0 auto}
+.mobile .panel{padding:20px}
+.mobile .row{padding:16px 20px}
+.mobile .form-grid{grid-template-columns:1fr}
+.mobile .row .actions{width:100%}
+@media (max-width:560px){
+  .wrap{padding:28px 16px 64px}
+  .grid,.grid--2{grid-template-columns:minmax(0,1fr)}
+  .grid>*,.spec,.stage{min-width:0}
+  .form-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{padding:10px}
+  .spec{padding:10px}
+  .panel-heading{flex-wrap:wrap}
+  .panel-heading>.btn{width:100%}
+  table{display:block;overflow-x:auto}
+  h1{font-size:1.5rem;line-height:1.875rem}
+}
+code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package</p>
+<h1>Priorização — PainPoint → ImprovementOpportunity → Priority → Hypothesis</h1>
+<p class="lede">Classificação <code>INTERFACE_CHANGE</code> · <code>BROWSER_REQUIRED</code> ·
+Revisão <strong>1</strong> · Status <strong>Aguardando aprovação</strong> · 2026-08-28 · Issue
+<code>#68</code></p>
+<p class="note">Renderização auto-contida: abre sem build, sem toolchain e sem rede — sem
+<code>&lt;script&gt;</code> nenhum. Toda cor, corpo de texto, raio e sombra desta página é cópia
+literal dos tokens de <code>frontend/src/index.css</code> — a seção 6 cita a origem de cada valor.
+A fonte Inter não é embutida; sem ela a página cai no fallback declarado no próprio token
+<code>--font-sans</code>, e o que muda é o desenho da letra, não a decisão em aprovação.</p>
+<p class="note"><strong>Este artefato é evidência para um gate humano.</strong> Não é
+implementação: nenhuma linha de <code>frontend/src/</code> ou <code>backend/</code> muda com esta
+entrega — as duas capturas (<code>board-desktop.png</code>, <code>board-mobile.png</code>) são o
+que a aprovação de fato referencia, porque um HTML depende de fonte, navegador e plataforma para
+renderizar.</p>
+
+<h2>1 · A tela <code>/contas/:id/priorizacao</code>, por inteiro</h2>
+<p class="note">Sob as cinco recomendações (A1 · B1 · C1 · D1 · E1). Dados de exemplo: Clínica Vale
+Verde, uma operação de rede de clínicas — nenhum dado real, nenhum "Lorem ipsum".</p>
+
+<div class="stage">
+<a class="back-link"><svg class="ico" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Voltar para a conta</a>
+<header class="page-head" style="margin-top:12px">
+  <p class="eyebrow">PRIORITIZE</p>
+  <h1 style="font-size:1.75rem;line-height:2.125rem">Priorização — Clínica Vale Verde</h1>
+  <p>3 pain points sem oportunidade · 4 Improvement Opportunities</p>
+</header>
+
+<section class="panel" style="margin-bottom:24px">
+  <div class="panel-heading">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+      <div><h2>Pain points sem oportunidade</h2>
+      <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">3 dores observadas, ainda não agrupadas em nenhuma oportunidade</p></div>
+    </div>
+    <button class="btn btn--secondary" disabled>Agrupar em oportunidade</button>
+  </div>
+  <div class="panel-rows">
+    <div class="row">
+      <input type="checkbox" style="width:16px;height:16px;flex:0 0 auto;accent-color:var(--brand-500)" checked aria-label="Selecionar Retrabalho na conciliação de pagamentos de convênio">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+      <div class="row-main">
+        <strong>Retrabalho na conciliação de pagamentos de convênio</strong>
+        <span>Observado em: Faturamento TISS · Impacto financeiro</span>
+        <span>2 achados de sustentação</span>
+      </div>
+    </div>
+    <div class="row">
+      <input type="checkbox" style="width:16px;height:16px;flex:0 0 auto;accent-color:var(--brand-500)" checked aria-label="Selecionar Agenda dupla por falha de sincronização entre unidades">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+      <div class="row-main">
+        <strong>Agenda dupla por falha de sincronização entre unidades</strong>
+        <span>Observado em: Agendamento de consultas · Impacto operacional</span>
+        <span>3 achados de sustentação</span>
+      </div>
+    </div>
+    <div class="row">
+      <input type="checkbox" style="width:16px;height:16px;flex:0 0 auto;accent-color:var(--brand-500)" aria-label="Selecionar Tempo de espera na recepção acima de 40 minutos">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+      <div class="row-main">
+        <strong>Tempo de espera na recepção acima de 40 minutos</strong>
+        <span>Observado em: Recepção e triagem · Impacto na experiência do paciente</span>
+        <span>1 achado de sustentação</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+      <div><h2>Improvement Opportunities</h2>
+      <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">4 oportunidades, ranqueadas por Opportunity Score</p></div>
+    </div>
+  </div>
+  <div class="panel-rows">
+    <div class="row" style="background:var(--surface-subtle)">
+      <div class="row-main"><strong>#1 · Padronizar checklist de documentação para faturamento TISS</strong></div>
+      <div class="row-meta">
+        <span class="type-label" style="color:var(--ink)">Opportunity Score <strong style="font-variant-numeric:tabular-nums">78</strong></span>
+        <span class="state state--off">v2</span>
+        <span class="state state--1">Priorizada</span>
+        <button class="btn btn--secondary btn--icon" aria-label="Recolher detalhe" style="margin-left:auto"><svg class="ico" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg></button>
+      </div>
+    </div>
+    <!-- Detalhe da oportunidade #1, aberto, dentro do mesmo painel. -->
+    <div style="padding:24px;border-top:1px dashed var(--line);background:var(--canvas)">
+      <p class="type-label" style="color:var(--muted);margin:0 0 12px">Opportunity Score — versão 2</p>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px">
+        <div class="metric-card"><span>Impact</span><strong>4/5</strong></div>
+        <div class="metric-card"><span>Evidence strength</span><strong>5/5</strong></div>
+        <div class="metric-card"><span>Feasibility</span><strong>3/5</strong></div>
+        <div class="metric-card"><span>Time to value</span><strong>4/5</strong></div>
+        <div class="metric-card"><span>Economics</span><strong>3/5</strong></div>
+      </div>
+      <p style="margin:0 0 4px;font-size:var(--text-body)"><strong>Rationale:</strong> as glosas de TISS são o maior item do custo do estado atual do processo de faturamento, e há evidência de fato — não só relato — em quatro achados registrados. A viabilidade caiu para 3 porque o checklist depende de acordo entre três convênios diferentes.</p>
+      <p class="type-meta" style="color:var(--muted);margin:0 0 20px">Avaliado por Marina Kobayashi em 18/08/2026</p>
+
+      <h3 style="margin-top:0">Avaliações</h3>
+      <div class="panel panel--flush">
+        <div class="panel-rows">
+          <div class="row row--current">
+            <div class="row-main">
+              <strong>Versão 2 — vigente</strong>
+              <span>Impact 4 · Evidence 5 · Feasibility 3 · Time to value 4 · Economics 3 → Score 78</span>
+              <span>Marina Kobayashi · 18/08/2026</span>
+            </div>
+            <div class="row-meta"><span class="state state--1">Vigente</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>Ver 1 avaliação anterior</summary>
+          <div class="panel-rows">
+            <div class="row">
+              <div class="row-main">
+                <strong>Versão 1</strong>
+                <span>Impact 3 · Evidence 3 · Feasibility 3 · Time to value 3 · Economics 2 → Score 56</span>
+                <span>Marina Kobayashi · 02/07/2026</span>
+              </div>
+              <div class="row-meta"><span class="state state--off">Substituída</span></div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <h3>Pain points vinculados</h3>
+      <div class="panel panel--flush">
+        <div class="panel-rows">
+          <div class="row">
+            <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+            <div class="row-main"><strong>Glosas recorrentes por documentação incompleta</strong><span>Faturamento TISS</span></div>
+          </div>
+          <div class="row">
+            <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+            <div class="row-main"><strong>Divergência de tabela de procedimentos entre convênios</strong><span>Faturamento TISS</span></div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Hipóteses</h3>
+      <div class="panel panel--flush">
+        <div class="panel-rows">
+          <div class="row">
+            <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg></span>
+            <div class="row-main"><strong>Padronizar checklist único de documentos por convênio</strong></div>
+            <div class="row-meta"><span class="state state--1">Escolhida</span></div>
+          </div>
+          <div class="row">
+            <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg></span>
+            <div class="row-main"><strong>Implementar OCR na entrada de guias</strong></div>
+            <div class="row-meta"><span class="state state--off">Proposta</span></div>
+          </div>
+          <div class="row">
+            <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg></span>
+            <div class="row-main"><strong>Terceirizar auditoria de glosas para escritório especializado</strong></div>
+            <div class="row-meta"><span class="state state--3">Descartada</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="row-main"><strong>#2 · Automatizar confirmação de agendamento via WhatsApp</strong></div>
+      <div class="row-meta">
+        <span class="type-label">Opportunity Score <strong>64</strong></span>
+        <span class="state state--off">v1</span>
+        <span class="state state--0">Em avaliação</span>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row-main"><strong>#3 · Redesenhar fluxo de triagem na recepção</strong></div>
+      <div class="row-meta">
+        <span class="type-label">Opportunity Score <strong>51</strong></span>
+        <span class="state state--off">v1</span>
+        <span class="state state--2">Aguardando dados</span>
+      </div>
+    </div>
+    <div class="row">
+      <div class="row-main"><strong>#4 · Consolidar prontuário eletrônico entre unidades</strong></div>
+      <div class="row-meta">
+        <span class="type-label">Opportunity Score <strong>—</strong></span>
+        <span class="state state--off">Nova</span>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<p class="note"><strong>A lacuna do #4 é <code>—</code>, nunca <code>0</code>.</strong> Zero afirma
+que a oportunidade foi avaliada e vale zero; o traço diz que ninguém avaliou — a mesma regra que
+<code>Process.custo_do_estado_atual</code> já aplica com <code>nao_apurado</code>
+(<code>backend/apps/core/process.py:71-74</code>). Por isso o #4 também não tem pílula de versão:
+não existe avaliação nenhuma para versionar.</p>
+<p class="note"><strong>Nada aqui é forma nova.</strong> O painel é <code>.panel</code>, a lista é
+<code>.panel-rows</code> + <code>.row</code> + <code>.row-main</code>, as pílulas são
+<code>.state</code>, e as dimensões do <code>PriorityAssessment</code> são <code>.metric-card</code>
+— o mesmo cartão que <code>ProcessDetailPage.tsx:222</code> já usa para "Por mês, com o processo
+como ele é hoje". O selo e a contagem de "Opportunity Score" ficam <strong>fora</strong> de
+<code>.row-main</code> de propósito: <code>.row-main span</code> declara
+<code>block text-xs text-muted</code> (<code>index.css:216</code>) e um <code>.state</code> aninhado
+ali dentro perderia a própria pele, a mesma armadilha registrada no DAP de Engagements.</p>
+
+<h2>2 · As cinco decisões</h2>
+<p class="note">Desenhadas lado a lado. A recomendação do harness está marcada; é proposta, não
+decisão tomada.</p>
+
+<h3>Decisão A — tela própria, ou nona seção do detalhe da conta</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>A1 — recomendada · tela própria</figcaption>
+    <div class="stage">
+      <div style="max-width:280px;margin:0 auto">
+        <p class="type-meta" style="color:var(--muted);margin:0 0 8px">/contas/482/priorizacao</p>
+        <a class="back-link" style="font-size:11px">← Voltar para a conta</a>
+        <div class="page-head" style="margin:8px 0 10px;gap:2px">
+          <p class="eyebrow" style="font-size:9px">PRIORITIZE</p>
+          <h1 style="font-size:1rem;line-height:1.25rem;margin:0">Priorização</h1>
+        </div>
+        <div class="panel" style="padding:10px;margin-bottom:8px"><strong style="font-size:12px">Pain points sem oportunidade</strong></div>
+        <div class="panel" style="padding:10px"><strong style="font-size:12px">Improvement Opportunities</strong></div>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Página inteira, lida do topo — a lista ranqueada é
+    justamente a que precisa ser lida primeiro, porque a ordem <em>é</em> o conteúdo. O detalhe da
+    oportunidade (dimensões, histórico, hipóteses) cabe sem disputar espaço com mais oito seções.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>A2 — alternativa · nona seção em <code>AccountDetailPage</code></figcaption>
+    <div class="stage">
+      <div style="max-width:280px;margin:0 auto">
+        <p class="type-meta" style="color:var(--muted);margin:0 0 8px">/contas/482</p>
+        <div class="panel--flush" style="border:1px solid var(--line);border-radius:var(--radius-card)">
+          <div class="row" style="padding:8px 12px"><span style="font-size:11px">Saúde da relação</span></div>
+          <div class="row" style="padding:8px 12px"><span style="font-size:11px">Engagements</span></div>
+          <div class="row" style="padding:8px 12px"><span style="font-size:11px">Satisfação</span></div>
+          <div class="row" style="padding:8px 12px"><span style="font-size:11px">Processos mapeados</span></div>
+          <div class="row" style="padding:8px 12px"><span style="font-size:11px">Dados do cliente</span></div>
+          <div class="row" style="padding:8px 12px"><span style="font-size:11px">Contatos</span></div>
+          <div class="row" style="padding:8px 12px"><span style="font-size:11px">Interações</span></div>
+          <div class="row" style="padding:8px 12px;background:var(--brand-50);border-top:2px dashed var(--brand-200)"><strong style="font-size:11px;color:var(--brand-700)">9ª · Priorização — NOVA</strong></div>
+        </div>
+        <p class="type-meta" style="color:var(--danger);margin-top:8px;text-align:center">↑ rolagem longa até chegar aqui</p>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Mantém a espinha <code>Account → Engagement →
+    Project</code> visível num lugar só — o mesmo argumento do DAP de Engagements. O custo: o
+    backlog ranqueado, que se percorre e não se consulta, cai no rodapé de uma página de rolagem
+    longa.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: A1.</strong> O mandato é cadastro que se consulta; o backlog
+é lista de trabalho que se percorre — volume e uso diferentes justificam superfície diferente.</p>
+
+<h3>Decisão B — a linha da oportunidade mostra o score, ou só o rank</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>B1 — recomendada · score e versão sempre visíveis</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row">
+        <div class="row-main"><strong>#1 · Padronizar checklist de documentação para faturamento TISS</strong></div>
+        <div class="row-meta">
+          <span class="type-label">Opportunity Score <strong>78</strong></span>
+          <span class="state state--off">v2</span>
+          <span class="state state--1">Priorizada</span>
+        </div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0"><code>PriorityAssessment</code> é versionado de
+    propósito: guarda a fórmula, as dimensões e a versão usadas (issue #68). Um score sem a versão
+    ao lado é um número que não se pode comparar com o da semana passada.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>B2 — alternativa · só o rank; score aparece ao abrir</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row">
+        <div class="row-main"><strong>#1 · Padronizar checklist de documentação para faturamento TISS</strong></div>
+        <div class="row-meta"><span class="state state--1">Priorizada</span></div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">Linha mais limpa, e o custo é silencioso: a tela
+    <em>parece</em> mostrar um rank fixo, quando na verdade é um score recalculável que muda de
+    versão — a leitura desfaz, sem avisar, a decisão que o modelo tomou na escrita.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: B1.</strong> "Opportunity Score" fica em inglês — o mapa de
+linguagem §5 nomeia os três rótulos de entregável que sobrevivem como exceção, e isso não é decisão
+deste pacote.</p>
+
+<h3>Decisão C — repriorizar mostra histórico, ou só a vigente</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>C1 — recomendada · bloco "Avaliações" com histórico</figcaption>
+    <div class="stage"><div class="panel panel--flush">
+      <div class="panel-rows">
+        <div class="row row--current">
+          <div class="row-main"><strong>Versão 2 — vigente</strong><span>Score 78 · 18/08/2026</span></div>
+          <div class="row-meta"><span class="state state--1">Vigente</span></div>
+        </div>
+      </div>
+      <details open>
+        <summary>1 avaliação anterior</summary>
+        <div class="panel-rows"><div class="row">
+          <div class="row-main"><strong>Versão 1</strong><span>Score 56 · 02/07/2026</span></div>
+          <div class="row-meta"><span class="state state--off">Substituída</span></div>
+        </div></div>
+      </details>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Repriorizar cria uma versão nova, não sobrescreve — a
+    primeira armadilha que a issue lista. Custa um <code>&lt;details&gt;</code>.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>C2 — alternativa · só a avaliação vigente</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row row--current">
+        <div class="row-main"><strong>Versão 2</strong><span>Score 78 · 18/08/2026</span></div>
+        <div class="row-meta"><span class="state state--1">Vigente</span></div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">O histórico existe na API e não na tela. Faz o produto
+    <em>parecer</em> que sobrescreve: quem reprioriza não tem como ver que o critério mudou entre a
+    v1 e a v2.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: C1.</strong></p>
+
+<h3>Decisão D — hipóteses em lista com pílula, ou em colunas lado a lado</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>D1 — recomendada · lista vertical</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row"><div class="row-main"><strong>Padronizar checklist único de documentos por convênio</strong></div><div class="row-meta"><span class="state state--1">Escolhida</span></div></div>
+      <div class="row"><div class="row-main"><strong>Implementar OCR na entrada de guias</strong></div><div class="row-meta"><span class="state state--off">Proposta</span></div></div>
+      <div class="row"><div class="row-main"><strong>Terceirizar auditoria de glosas para escritório especializado</strong></div><div class="row-meta"><span class="state state--3">Descartada</span></div></div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">A competição fica legível pela pílula e pela ordem, e
+    sobrevive ao celular sem um segundo layout.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>D2 — alternativa · colunas lado a lado</figcaption>
+    <div class="stage">
+      <div style="display:grid;grid-template-columns:repeat(3,220px);gap:12px;overflow-x:auto;padding-bottom:4px">
+        <div class="panel" style="padding:14px"><span class="state state--1" style="margin-bottom:8px;display:inline-flex">Escolhida</span><p style="margin:0;font-size:var(--text-body);font-weight:600">Padronizar checklist único de documentos por convênio</p></div>
+        <div class="panel" style="padding:14px"><span class="state state--off" style="margin-bottom:8px;display:inline-flex">Proposta</span><p style="margin:0;font-size:var(--text-body);font-weight:600">Implementar OCR na entrada de guias</p></div>
+        <div class="panel" style="padding:14px"><span class="state state--3" style="margin-bottom:8px;display:inline-flex">Descartada</span><p style="margin:0;font-size:var(--text-body);font-weight:600">Terceirizar auditoria de glosas para escritório especializado</p></div>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Mais fiel à ideia de "hipóteses concorrentes" — e é
+    pior no produto: três colunas de 220px somam 660px de conteúdo que não colapsa em coluna única
+    sem virar outro layout. <strong>É a versão que estoura 390px</strong> e obrigaria a rolagem
+    horizontal que <code>e2e/responsive.spec.ts</code> proíbe (ver seção 4, onde D1 é o que aparece
+    em mobile).</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: D1.</strong></p>
+
+<h3>Decisão E — o Pain Point nasce no processo, ou na priorização</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>E1 — recomendada · registra-se no processo, agrupa-se na priorização</figcaption>
+    <div class="stage">
+      <section class="panel" style="padding:16px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+          <div><h2 style="font-size:.9rem">Pain points</h2><p style="margin:2px 0 0;font-size:12px;color:var(--slate-600)">na tela do processo, ao lado da evidência</p></div>
+        </div>
+        <div class="panel-rows"><div class="row" style="padding:10px 0"><div class="row-main"><strong style="font-size:13px">Glosas recorrentes por documentação incompleta</strong></div></div></div>
+      </section>
+    </div>
+    <p class="note" style="margin-bottom:0">A dor é observada <strong>no processo</strong>, junto
+    do trecho que a sustenta e do custo do estado atual. Obrigar a trocar de tela para registrar é
+    a fricção que faz o registro não acontecer.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>E2 — alternativa · tudo na priorização, inclusive o registro</figcaption>
+    <div class="stage">
+      <section class="panel" style="padding:16px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+          <div><h2 style="font-size:.9rem">Registrar pain point</h2></div>
+        </div>
+        <div class="form-grid">
+          <label class="form-label" style="grid-column:1/-1">Descrição<textarea class="field" rows="2" placeholder="A dor, na frase de quem observou" disabled></textarea></label>
+          <label class="form-label">Processo de origem<select class="field" disabled><option>Faturamento TISS</option></select></label>
+          <label class="form-label">Tipo de impacto<select class="field" disabled><option>Financeiro</option></select></label>
+        </div>
+      </section>
+    </div>
+    <p class="note" style="margin-bottom:0">Concentra tudo numa tela — e afasta o registro do
+    momento em que a evidência que o sustenta está na tela do processo, sob os olhos de quem
+    levanta o dado.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: E1.</strong> A tela de priorização mostra, no topo, só os
+pain points ainda não agrupados (seção 1): é ali que "o que ainda não foi olhado" fica visível.</p>
+
+<h2>3 · A seção nova em <code>ProcessDetailPage</code></h2>
+<p class="note">Abaixo de "Evidências" (<code>frontend/src/pages/ProcessDetailPage.tsx:290</code>),
+no mesmo molde de painel — cabeçalho com <code>.metric-icon</code>, formulário curto de registro,
+lista dividida.</p>
+<div class="stage">
+<section class="panel">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+    <div><h2>Pain points</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 dores observadas neste processo</p></div>
+  </div>
+  <div class="form-grid" style="margin-bottom:16px">
+    <label class="form-label" style="grid-column:1/-1">Descrição<textarea class="field" rows="2" placeholder="A dor, na frase de quem observou" disabled></textarea></label>
+    <label class="form-label">Tipo de impacto<select class="field" disabled><option>Financeiro</option></select></label>
+    <label class="form-label">Etapa (opcional)<select class="field" disabled><option>O pain point é do processo inteiro</option></select></label>
+    <button class="btn" disabled style="grid-column:1/-1"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Registrar pain point</button>
+  </div>
+  <div class="panel-rows">
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+      <div class="row-main"><strong>Glosas recorrentes por documentação incompleta</strong><span>Impacto financeiro · agrupado em "Padronizar checklist de documentação para faturamento TISS"</span></div>
+      <div class="row-meta"><span class="state state--1">Agrupado</span></div>
+    </div>
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+      <div class="row-main"><strong>Divergência de tabela de procedimentos entre convênios</strong><span>Impacto financeiro · agrupado em "Padronizar checklist de documentação para faturamento TISS"</span></div>
+      <div class="row-meta"><span class="state state--1">Agrupado</span></div>
+    </div>
+  </div>
+</section>
+</div>
+<p class="note"><strong>O selo "Agrupado" é a outra ponta da decisão E.</strong> Quem registra a
+dor no processo vê, na mesma tela, se ela já virou trabalho de priorização — sem precisar abrir a
+outra tela para descobrir.</p>
+
+<h2>4 · Os seis estados</h2>
+
+<h3>Carregando</h3>
+<div class="stage">
+  <div style="display:grid;gap:24px">
+    <div class="skeleton" style="height:40px;width:280px"></div>
+    <div style="height:224px;border-radius:16px;background:#fff"></div>
+  </div>
+</div>
+<p class="note" style="margin-bottom:0">Mesmo esqueleto de <code>ProcessDetailPage.tsx:196</code> —
+não um estado de carregamento novo.</p>
+
+<h3>Vazio — sem pain point</h3>
+<div class="grid grid--2">
+  <figure class="spec"><figcaption>Na tela de priorização</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+          <div><h2>Pain points sem oportunidade</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">Nenhum pain point</p></div>
+        </div>
+      </div>
+      <p class="empty-state">Nenhum pain point registrado. A dor entra pela tela do processo, ao lado da evidência que a sustenta.</p>
+    </section></div>
+  </figure>
+  <figure class="spec"><figcaption>Na seção do processo</figcaption>
+    <div class="stage"><section class="panel">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+        <div><h2>Pain points</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">Nenhum pain point</p></div>
+      </div>
+      <p class="empty-state">Nenhum pain point registrado. A dor entra pela tela do processo, ao lado da evidência que a sustenta.</p>
+    </section></div>
+  </figure>
+</div>
+
+<h3>Vazio — sem oportunidade</h3>
+<div class="stage"><section class="panel">
+  <div class="panel-heading">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+      <div><h2>Improvement Opportunities</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">Nenhuma oportunidade</p></div>
+    </div>
+  </div>
+  <p class="empty-state">Nenhuma Improvement Opportunity. Agrupe pain points para abrir a primeira.</p>
+</section></div>
+
+<h3>Vazio — oportunidade sem avaliação</h3>
+<div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+  <div class="row">
+    <div class="row-main"><strong>#1 · Consolidar prontuário eletrônico entre unidades</strong></div>
+    <div class="row-meta">
+      <span class="type-label">Opportunity Score <strong>—</strong></span>
+      <span class="state state--off">Nova</span>
+    </div>
+  </div>
+  <div style="padding:24px;border-top:1px dashed var(--line);background:var(--canvas)">
+    <p class="empty-state">Sem Opportunity Score. Avaliar registra a versão 1 do critério.</p>
+  </div>
+</div></div></div>
+
+<h3>Erro</h3>
+<div class="stage">
+  <p class="alert--error" role="alert">Não foi possível carregar a priorização desta conta. Tente novamente em instantes.</p>
+</div>
+
+<h3>Não autorizado</h3>
+<div class="stage">
+  <section class="panel"><p class="empty-state">Você não participa de nenhum projeto desta conta.</p></section>
+</div>
+<p class="note">O recorte de Entrega é o mesmo de <code>Evidence</code>/<code>Finding</code>
+(<code>permissions.py:213-232</code>).</p>
+
+<h2>5 · Mobile — 390px</h2>
+<div class="stage">
+  <div class="mobile">
+    <section class="panel" style="margin-bottom:16px">
+      <div class="panel-heading" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+          <div><h2>Improvement Opportunities</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">4 oportunidades</p></div>
+        </div>
+      </div>
+      <div class="panel-rows">
+        <div class="row" style="align-items:flex-start">
+          <div class="row-main">
+            <strong>#1 · Padronizar checklist de documentação para faturamento TISS</strong>
+          </div>
+          <div class="row-meta">
+            <span class="type-label">Score <strong>78</strong></span>
+            <span class="state state--off">v2</span>
+            <span class="state state--1">Priorizada</span>
+          </div>
+        </div>
+        <div style="padding:20px;border-top:1px dashed var(--line);background:var(--canvas)">
+          <p class="type-label" style="color:var(--muted);margin:0 0 10px">Opportunity Score — versão 2</p>
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <div class="metric-card" style="padding:10px"><span>Impact</span><strong style="font-size:1.25rem">4/5</strong></div>
+            <div class="metric-card" style="padding:10px"><span>Evidence</span><strong style="font-size:1.25rem">5/5</strong></div>
+            <div class="metric-card" style="padding:10px"><span>Feasibility</span><strong style="font-size:1.25rem">3/5</strong></div>
+            <div class="metric-card" style="padding:10px"><span>Time to value</span><strong style="font-size:1.25rem">4/5</strong></div>
+          </div>
+          <h3 style="margin-top:0">Hipóteses</h3>
+          <div class="panel panel--flush"><div class="panel-rows">
+            <div class="row" style="padding:12px 16px"><div class="row-main"><strong style="font-size:13px">Padronizar checklist único de documentos por convênio</strong></div><div class="row-meta"><span class="state state--1">Escolhida</span></div></div>
+            <div class="row" style="padding:12px 16px"><div class="row-main"><strong style="font-size:13px">Implementar OCR na entrada de guias</strong></div><div class="row-meta"><span class="state state--off">Proposta</span></div></div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<p class="note"><strong>Nada rola na horizontal.</strong> <code>.row</code> já é
+<code>flex-wrap</code> (<code>index.css:213</code>) e a grade de dimensões colapsa para duas
+colunas de 130px mínimos; é exatamente por isso que D1 (lista vertical) foi a recomendação da
+decisão D, e D2 (colunas de 220px lado a lado) não aparece aqui — ela é a que estouraria.</p>
+
+<h2>6 · Procedência de cada valor visual</h2>
+<table>
+<tr><th>Valor</th><th>Token / primitiva</th><th>Origem</th><th>Novo?</th></tr>
+<tr><td>Cartão da seção</td><td><code>.panel</code> — raio 12px, borda <code>line</code>, <code>--shadow-card</code></td><td><code>index.css:194-197</code></td><td>não</td></tr>
+<tr><td>Cabeçalho com ação à direita</td><td><code>.panel-heading</code></td><td><code>index.css:202, 207</code></td><td>não</td></tr>
+<tr><td>Cartão sem padding próprio (usado nas sub-listas do detalhe)</td><td><code>.panel--flush</code></td><td><code>index.css:201</code></td><td>não</td></tr>
+<tr><td>Quadrado do ícone</td><td><code>.metric-icon</code> — 36px, raio de controle 8px, <code>bg-brand-50</code> / <code>text-brand-500</code></td><td><code>index.css:257</code></td><td>não</td></tr>
+<tr><td>Lista dividida</td><td><code>.panel-rows</code></td><td><code>index.css:210</code></td><td>não</td></tr>
+<tr><td>Linha (pain point, oportunidade, avaliação, hipótese)</td><td><code>.row</code> / <code>.row-main</code></td><td><code>index.css:213-216</code></td><td>não</td></tr>
+<tr><td><strong>Cluster de pílulas dentro da linha</strong></td><td><code>.row-meta</code> — <code>display:flex;gap:8px;flex-wrap:wrap;flex:1 1 100%</code>. Sem cor, sem raio, sem corpo próprio: só posicionamento</td><td><strong>não existe em <code>index.css</code></strong></td><td><strong>sim — e é parte do que está sendo aprovado</strong></td></tr>
+<tr><td>Cartão de dimensão do <code>PriorityAssessment</code></td><td><code>.metric-card</code> — o mesmo de "Por mês, com o processo como ele é hoje"</td><td><code>index.css:235-239</code>, uso em <code>ProcessDetailPage.tsx:222</code></td><td>não</td></tr>
+<tr><td>Pílula "Priorizada" / "Escolhida" / "Vigente" / "Agrupado"</td><td><code>.state .state--1</code></td><td><code>index.css:370</code></td><td>não</td></tr>
+<tr><td>Pílula "Em avaliação"</td><td><code>.state .state--0</code></td><td><code>index.css:369</code></td><td>não</td></tr>
+<tr><td>Pílula "Aguardando dados"</td><td><code>.state .state--2</code></td><td><code>index.css:371</code></td><td>não</td></tr>
+<tr><td>Pílula "Descartada"</td><td><code>.state .state--3</code></td><td><code>index.css:372</code></td><td>não</td></tr>
+<tr><td>Pílula "v2" / "Nova" / "Substituída" / "Proposta"</td><td><code>.state .state--off</code> — o neutro; nenhuma delas é aviso</td><td><code>index.css:377</code></td><td>não</td></tr>
+<tr><td>Destaque da avaliação vigente</td><td><code>bg-brand-50</code> — a mesma tinta do item de menu ativo</td><td><code>index.css:356</code></td><td>não</td></tr>
+<tr><td>Caixa de seleção do pain point</td><td>16px, <code>accent-color: brand-500</code> — espelho de <code>size-4 rounded border-slate-300 text-brand-500</code></td><td><code>JourneyConfigPage.tsx:88-89</code></td><td>não</td></tr>
+<tr><td>Botão "Agrupar em oportunidade" / "Registrar pain point"</td><td><code>.btn</code> / <code>.btn--secondary</code></td><td><code>index.css:267-275</code></td><td>não</td></tr>
+<tr><td>Estado vazio (6 variações)</td><td><code>.empty-state</code></td><td><code>index.css:311-314</code></td><td>não</td></tr>
+<tr><td>Mensagem de erro</td><td><code>.alert--error</code> + <code>role="alert"</code></td><td><code>index.css:317-319</code></td><td>não</td></tr>
+<tr><td>Campo de formulário</td><td><code>field</code> / <code>.form-label</code> / <code>.form-grid</code></td><td><code>index.css:304-305, 553-555</code></td><td>não</td></tr>
+<tr><td>Histórico de versões</td><td><code>&lt;details&gt;</code>/<code>&lt;summary&gt;</code> nativo — sem JS, cor herdada de <code>muted</code></td><td>HTML padrão + <code>index.css:41</code></td><td>não</td></tr>
+<tr><td>Esqueleto de carregamento</td><td><code>animate-pulse</code>, <code>bg-slate-200</code></td><td><code>ProcessDetailPage.tsx:190</code></td><td>não</td></tr>
+<tr><td>Ícone de oportunidade</td><td><code>Target</code> do <code>lucide-react</code></td><td><code>lucide-react/icons/target</code></td><td>não</td></tr>
+<tr><td>Ícone de pain point</td><td><code>Flame</code> do <code>lucide-react</code></td><td><code>lucide-react/icons/flame</code></td><td>não</td></tr>
+<tr><td>Ícone de hipótese</td><td><code>FlaskConical</code> do <code>lucide-react</code></td><td><code>lucide-react/icons/flask-conical</code></td><td>não</td></tr>
+<tr><td>Ícone de score (usado na tabela e na copy, não desenhado à parte)</td><td><code>Gauge</code> do <code>lucide-react</code></td><td><code>lucide-react/icons/gauge</code></td><td>não</td></tr>
+</table>
+<p class="note"><strong>Uma linha da coluna "novo" está em "sim", e ela é uma decisão.</strong>
+Nenhuma cor nova, nenhum corpo de texto fora dos papéis <code>display/title/body/label/meta</code>,
+nenhum raio fora do par 8px/12px das fundações r2 — mas <code>.row-meta</code> é primitiva que hoje
+não existe.</p>
+
+<p class="note"><strong>Por que ela apareceu.</strong> <code>.row-main</code> é
+<code>@apply min-w-0 flex-1</code> (<code>index.css:214</code>), e <code>flex-1</code> traz
+<code>flex-basis:0</code>. Uma pílula <code>.state</code> irmã dentro da mesma <code>.row</code>
+não encolhe, então o título fica com a sobra — e num título longo sem hífen, em 390px, a palavra
+vaza sobre a pílula. <code>.row-meta</code> empurra o cluster de pílulas para a própria linha
+dentro da mesma <code>.row</code>, e não introduz nenhum valor visual: é posicionamento puro.</p>
+
+<p class="note"><strong>Isto não é só do board.</strong> A composição
+<code>.row</code> + <code>.row-main</code> + <code>.state</code> já existe em produção — as
+evidências de <code>ProcessDetailPage</code> são exatamente ela. O defeito não aparece lá hoje
+porque nenhum achado ficou longo o bastante, e não porque a composição esteja certa. Se
+<code>.row-meta</code> for aprovada, ela nasce em <code>index.css</code> com consumidor no mesmo
+commit, como a invariante de <code>src/test/primitivas.test.ts</code> exige; se for recusada, a
+tela precisa de outra solução e isto vira revisão r2 deste pacote.</p>
+
+<p class="note">Se a implementação precisar de <em>outra</em> primitiva que não existe, isso
+é revisão deste pacote — a invariante de <code>src/test/primitivas.test.ts</code> (ADR 0026)
+proíbe o literal escrito à mão onde há primitiva.</p>
+
+<h2>7 · Entregue nesta feature × reservado</h2>
+<table>
+<tr><th>Entregue</th><th>Reservado — não faz parte desta aprovação</th></tr>
+<tr><td>A tela <code>/contas/:id/priorizacao</code> — lista, detalhe, avaliação, histórico, hipóteses</td><td>"Gerar Opportunity Map" — vira real quando houver <code>Artifact(kind=...)</code> próprio</td></tr>
+<tr><td>A seção de pain points em <code>ProcessDetailPage</code></td><td>"Sugerir score com IA" — a sugestão é insumo, nunca decisão, no molde de <code>Qualification.ai_suggested_outcome</code></td></tr>
+<tr><td>Os seis estados desenhados na seção 4</td><td>Vínculo com <code>Engagement</code> — coluna reservada até haver mais de um mandato vivo na conta</td></tr>
+</table>
+<div class="stage" style="margin-top:14px">
+  <div class="panel reserved">
+    <div class="panel-heading">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div><h2>Improvement Opportunities</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">4 oportunidades, ranqueadas por Opportunity Score</p></div>
+      </div>
+      <button class="btn btn--secondary" disabled>Gerar Opportunity Map</button>
+    </div>
+    <div class="panel-rows">
+      <div class="row">
+        <div class="row-main"><strong>#1 · Padronizar checklist de documentação para faturamento TISS</strong></div>
+        <div class="row-meta">
+          <span class="type-label">Opportunity Score <strong>78</strong></span>
+          <span class="state state--off">v2</span>
+          <span class="state state--off">Engagement — sem mandato adicional</span>
+        </div>
+      </div>
+    </div>
+    <div style="padding:24px;border-top:1px dashed var(--line)">
+      <button class="btn btn--secondary" disabled><svg class="ico" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>Sugerir score com IA</button>
+    </div>
+  </div>
+  <p class="type-meta" style="margin:6px 0 0;color:var(--brand-700);font-weight:700">HACHURADO = RESERVADO</p>
+  <p class="note" style="margin:6px 0 0">"Gerar Opportunity Map" e "Sugerir score com IA" ficam
+  desabilitados até a Fase 4 ter <code>Artifact(kind=...)</code> e prompt/contexto próprios. A
+  coluna de <code>Engagement</code> fica vazia até haver mais de um mandato vivo na conta — hoje a
+  Clínica Vale Verde tem só um.</p>
+</div>
+
+</div>
+</body>
+</html>
