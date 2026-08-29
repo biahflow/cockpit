@@ -17,9 +17,12 @@ from .models import (
     Evidencia,
     Finding,
     GithubDeliveryProjection,
+    ImprovementOpportunity,
     Meeting,
     Milestone,
+    PainPoint,
     Pendencia,
+    PriorityAssessment,
     Process,
     ProcessObservation,
     ProcessStep,
@@ -30,6 +33,7 @@ from .models import (
     ProjectPhase,
     Risco,
     Satisfacao,
+    SolutionHypothesis,
     Task,
     User,
     can_access_project,
@@ -132,7 +136,9 @@ class RolePermission(BasePermission):
                                 "cobranca_suspensao", "satisfacao", "process", "process_step",
                                 "evidencia", "qualification",
                                 "discovery", "discovery_session", "process_observation",
-                                "evidence", "finding"}
+                                "evidence", "finding",
+                                "pain_point", "improvement_opportunity",
+                                "priority_assessment", "solution_hypothesis"}
         if request.user.role == User.Role.DELIVERY:
             # `engagement` entra aqui **só de leitura**, e a assimetria com Vendas é a decisão: o
             # engajamento é o mandato comercial, e quem entrega precisa saber a que mandato o
@@ -178,6 +184,8 @@ class RolePermission(BasePermission):
                                 "process", "process_step", "evidencia",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding",
+                                "pain_point", "improvement_opportunity",
+                                "priority_assessment", "solution_hypothesis",
                                 "engineering_handoff", "github_projection"}
         return False
 
@@ -210,7 +218,11 @@ class RolePermission(BasePermission):
                 # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
                 # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
                 return Project.objects.visible_to(request.user).filter(client=obj.account).exists()
-            if isinstance(obj, Process | ProcessStep | Evidencia | Evidence | Finding):
+            if isinstance(
+                obj,
+                Process | ProcessStep | Evidencia | Evidence | Finding | PainPoint
+                | ImprovementOpportunity | PriorityAssessment | SolutionHypothesis,
+            ):
                 # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui
                 # não por o projeto ser opcional, mas por não existir: o processo mapeado é do
                 # cliente e sobrevive à venda que o descobriu (FDD 039). A etapa e a evidência
@@ -221,8 +233,16 @@ class RolePermission(BasePermission):
                 # opcional nos dois, então resolvê-la por ele devolveria `None` justamente no
                 # achado solto — 403 no detalhe de um registro que a listagem mostra, que é o
                 # defeito que a `Satisfacao` já previu.
-                if isinstance(obj, Evidence | Finding):
+                #
+                # Os quatro da Fase 4 (FDD 048) entram no mesmo ramo: `PainPoint` e
+                # `ImprovementOpportunity` têm a conta como campo próprio, e `PriorityAssessment`
+                # e `SolutionHypothesis` chegam a ela pela oportunidade — um hop, como a etapa
+                # chega pelo processo. Nenhum deles pende de projeto, então nenhum entra em
+                # `PROJECT_OF`.
+                if isinstance(obj, Evidence | Finding | PainPoint | ImprovementOpportunity):
                     account = obj.account
+                elif isinstance(obj, PriorityAssessment | SolutionHypothesis):
+                    account = obj.improvement_opportunity.account
                 elif isinstance(obj, Process):
                     account = obj.account
                 else:

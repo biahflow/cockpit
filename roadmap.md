@@ -56,6 +56,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 045 | Split Evidence/Finding e Discovery (ontologia, fase 3) | Entregue | 1 | `docs/fdd/045-a-hipotese-e-a-prova-eram-a-mesma-linha.md` |
 | FDD 046 | Engagement entre a conta e o projeto (ontologia, fase 2) | Entregue | 1 | `docs/fdd/046-o-engajamento-entre-a-conta-e-o-projeto.md` |
 | FDD 047 | Snapshot do portal no vocabulário canônico e carimbo da projeção | Entregue | 1 | `docs/fdd/047-o-snapshot-que-falava-o-vocabulario-antigo.md` |
+| FDD 048 | Cadeia do PRIORITIZE: PainPoint, ImprovementOpportunity, PriorityAssessment e SolutionHypothesis (ontologia, fase 4) | Entregue (backend) | 1 | `docs/fdd/048-onde-atuar-nao-tinha-onde-morar.md` |
 
 ## Base atual — entregue
 

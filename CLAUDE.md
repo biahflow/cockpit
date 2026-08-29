@@ -198,6 +198,22 @@ Key cross-cutting patterns to preserve:
   Discovery, gate e PROVE sem cobrar (ADR 0053) e aqueles continuam degraus vendáveis. Restam
   **cinco** degraus vendáveis na escada da FDD 015, depois que a ADR 0053 tirou o
   `discovery_assessment`.
+- **A cadeia do PRIORITIZE tem entidade, e a avaliação é imutável.** `PainPoint` (a dor, ancorada
+  na **conta** como `Process`/`Evidence`/`Finding`) → `ImprovementOpportunity` (o agrupamento) →
+  `PriorityAssessment` (o Opportunity Score) → `SolutionHypothesis` (as apostas concorrentes). Ver
+  FDD 048 e ADR 0054. **`ImprovementOpportunity` não referencia `PipelineStage` em campo nenhum** —
+  ela não é venda, e é por isso que o `language-map` §5 bane `Opportunity` sem qualificador; há
+  teste sobre o `_meta` do modelo afirmando isso. Repriorizar **cria versão nova**: o viewset da
+  avaliação não expõe `PUT`/`PATCH` (405, não 400), `version` sai do `save()` sob
+  `select_for_update` da oportunidade (o motivo do `convert-to-project`), e os pesos são
+  **copiados** de `priority.FORMULAS` para a linha — referenciar o catálogo faria uma edição de
+  peso amanhã reescrever o score de ontem. **`rank` não é campo**: sai de
+  `priority.ranking_da_conta`, um lugar só, porque um rank gravado que precisa concordar com a
+  ordenação por score é uma segunda definição do mesmo fato. Sem avaliação, `score`/`rank`/
+  `assessment_version` vêm `null` — nunca zero, pela regra do `nao_apurado`. `PainPoint` em
+  `confirmed` exige achado vivo, e a invariante tem **três** metades: criação e `PATCH` no
+  serializer (o M2M não existe no `clean()`), mais o 409 de `FindingViewSet.perform_destroy` ao
+  arquivar o último achado — sem essa terceira ela vaza pelo `DELETE`.
 - **Documents are single-linked.** A `Document` must reference exactly one of
   `account`/`commercial_opportunity`/project (enforced in `Document.clean()`); access is gated —
   never expose files to unauthorized users.

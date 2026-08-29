@@ -42,6 +42,7 @@ from .models import (
     Evidencia,
     Finding,
     GithubDeliveryProjection,
+    ImprovementOpportunity,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -51,11 +52,13 @@ from .models import (
     Meeting,
     Milestone,
     Notification,
+    PainPoint,
     Pendencia,
     PhaseChecklistItem,
     PhaseDeliverable,
     PhaseEvent,
     PipelineStage,
+    PriorityAssessment,
     Process,
     ProcessObservation,
     ProcessStep,
@@ -69,10 +72,12 @@ from .models import (
     Satisfacao,
     Service,
     SignatureRequest,
+    SolutionHypothesis,
     Task,
     User,
     Vertical,
 )
+from .priority import FORMULAS, ranking_da_conta
 
 logger = logging.getLogger(__name__)
 
@@ -1227,6 +1232,223 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
                 raise serializers.ValidationError(
                     {"evidences": "Um fato precisa de ao menos uma evidência viva que o sustente."}
                 )
+        return attrs
+
+
+class PainPointSerializer(serializers.ModelSerializer[PainPoint]):
+    """A dor observada, com a invariante de `confirmed` (FDD 048).
+
+    **`confirmed` exige ao menos um `Finding` vivo por baixo**, e a checagem mora aqui inteira —
+    não por preferência, mas porque ela pergunta pelo M2M, que só existe depois do save. É a mesma
+    razão pela qual a metade "evidência viva" da invariante §6.9 está no `FindingSerializer` e não
+    no `clean()` do `Finding`. A terceira metade da mesma regra está no arquivamento
+    (`FindingViewSet.perform_destroy`): sem ela, a invariante vazaria pelo `DELETE`, que foi como
+    a Fase 3 a perdeu da primeira vez.
+
+    `impact_estimate` ausente fica **nulo**, e o serializer não o converte em zero em lugar
+    nenhum: zero afirma que a dor não custa nada, e nulo diz que ninguém estimou.
+    """
+
+    impact_type_display = serializers.CharField(source="get_impact_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = PainPoint
+        fields = ["id", "account", "process", "step", "title", "description", "impact_type",
+                  "impact_type_display", "impact_estimate", "findings", "status",
+                  "status_display", "created_at", "updated_at"]
+        read_only_fields = ["id", "impact_type_display", "status_display", "created_at",
+                            "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """As mesmas regras do `clean()` — o `save()` do DRF não chama `full_clean` —, mais o M2M."""
+        account = cast(
+            Account | None, attrs.get("account", getattr(self.instance, "account", None))
+        )
+        process = cast(
+            Process | None, attrs.get("process", getattr(self.instance, "process", None))
+        )
+        step = cast(ProcessStep | None, attrs.get("step", getattr(self.instance, "step", None)))
+        if process and account and process.account_id != account.pk:
+            raise serializers.ValidationError(
+                {"process": "O processo deve pertencer à mesma conta."}
+            )
+        if step and account and step.process.account_id != account.pk:
+            raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        if step and process and step.process_id != process.pk:
+            raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+
+        # No PATCH que não mexe no M2M, `findings` não vem no corpo — a pergunta é sobre o que já
+        # está ligado. Na criação, sobre o que veio. Mesma forma do `FindingSerializer`.
+        achados = attrs.get("findings")
+        if achados is None:
+            achados = list(self.instance.findings.all()) if self.instance else []
+        achados = cast(list[Finding], achados)
+        # A fronteira de conta também vale pelo M2M, e vale aqui pela razão que a FDD 045 deu para
+        # validar os quatro vínculos opcionais da `Evidence` em vez de só os dois caros: é a mesma
+        # classe de vínculo cruzado, e deixar um solto faria quem lesse isto depois concluir que
+        # existe uma razão para a exceção.
+        if account and any(achado.account_id != account.pk for achado in achados):
+            raise serializers.ValidationError(
+                {"findings": "O achado deve pertencer à mesma conta da dor."}
+            )
+
+        estado = attrs.get("status", getattr(self.instance, "status", PainPoint.Status.OBSERVED))
+        if estado == PainPoint.Status.CONFIRMED and not any(
+            achado.archived_at is None for achado in achados
+        ):
+            raise serializers.ValidationError(
+                {"findings": "Confirmar uma dor exige ao menos um achado vivo que a sustente."}
+            )
+        return attrs
+
+
+class ImprovementOpportunitySerializer(serializers.ModelSerializer[ImprovementOpportunity]):
+    """A oportunidade de melhoria, com o score e o **rank derivado** (FDD 048).
+
+    `score`, `assessment_version` e `rank` são campos calculados e só de leitura. O rank não é
+    coluna: um `rank` gravado que precisa concordar com a ordenação por score é uma segunda
+    definição da mesma coisa, e ela diverge da primeira em silêncio. Quem o produz é
+    `priority.ranking_da_conta`, num lugar só.
+
+    **Sem avaliação, os três saem `null`** — nunca zero. Zero afirma que a oportunidade foi
+    avaliada e vale zero; o nulo diz que ninguém avaliou, e é o `—` que o DAP desenhou.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    score = serializers.SerializerMethodField()
+    assessment_version = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
+    # `conta -> {id da oportunidade: posição}`, memorizado por serialização.
+    _ranking_cache: dict[int, dict[int, int]] | None = None
+
+    class Meta:
+        model = ImprovementOpportunity
+        fields = ["id", "account", "engagement", "title", "desired_change", "impact_hypothesis",
+                  "pain_points", "status", "status_display", "score", "assessment_version",
+                  "rank", "created_at", "updated_at"]
+        read_only_fields = ["id", "status_display", "score", "assessment_version", "rank",
+                            "created_at", "updated_at"]
+
+    @extend_schema_field(serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True))
+    def get_score(self, obj: ImprovementOpportunity) -> str | None:
+        vigente = obj.current_assessment
+        return str(vigente.score) if vigente else None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_assessment_version(self, obj: ImprovementOpportunity) -> int | None:
+        """A versão da avaliação vigente. Vai junto do score de propósito (DAP, decisão B1): um
+        número sem a versão ao lado é um número que não se pode comparar com o da semana
+        passada."""
+        vigente = obj.current_assessment
+        return vigente.version if vigente else None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_rank(self, obj: ImprovementOpportunity) -> int | None:
+        return self._ranking(obj.account_id).get(obj.pk)
+
+    def _ranking(self, account_id: int) -> dict[int, int]:
+        """Um ranking por conta e por serialização. O `ListSerializer` reusa **um** filho para
+        todos os itens, então o cache de instância cobre a lista inteira sem recalcular por
+        linha."""
+        if self._ranking_cache is None:
+            self._ranking_cache = {}
+        if account_id not in self._ranking_cache:
+            self._ranking_cache[account_id] = ranking_da_conta(account_id)
+        return self._ranking_cache[account_id]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        account = cast(
+            Account | None, attrs.get("account", getattr(self.instance, "account", None))
+        )
+        engagement = cast(
+            Engagement | None, attrs.get("engagement", getattr(self.instance, "engagement", None))
+        )
+        if engagement and account and engagement.account_id != account.pk:
+            raise serializers.ValidationError(
+                {"engagement": "O engajamento deve pertencer à mesma conta da oportunidade."}
+            )
+        dores = cast(list[PainPoint] | None, attrs.get("pain_points"))
+        if account and dores and any(dor.account_id != account.pk for dor in dores):
+            raise serializers.ValidationError(
+                {"pain_points": "A dor deve pertencer à mesma conta da oportunidade."}
+            )
+        return attrs
+
+
+class PriorityAssessmentSerializer(serializers.ModelSerializer[PriorityAssessment]):
+    """A avaliação que produz o Opportunity Score (FDD 048, ADR 0054).
+
+    `version`, `weights` e `score` são **só de leitura**: os três saem do `save()` do modelo. Um
+    score que o corpo pudesse informar não seria a fórmula, seria uma opinião com aparência de
+    cálculo; e uma versão escolhida por quem escreve deixaria de ser uma sequência.
+
+    A imutabilidade não mora aqui — mora na rota, que não expõe `PUT` nem `PATCH`. Um serializer
+    que recusasse toda atualização ainda deixaria `PUT` responder 400 em vez de 405, e 400 diz
+    "corrija o corpo" sobre uma operação que não existe.
+    """
+
+    class Meta:
+        model = PriorityAssessment
+        fields = ["id", "improvement_opportunity", "version", "impact", "evidence_strength",
+                  "feasibility", "time_to_value", "economics", "formula_key", "weights", "score",
+                  "rationale", "assessed_by", "created_at", "updated_at"]
+        read_only_fields = ["id", "version", "weights", "score", "assessed_by", "created_at",
+                            "updated_at"]
+
+    def validate_formula_key(self, value: str) -> str:
+        if value not in FORMULAS:
+            raise serializers.ValidationError(
+                f"Fórmula desconhecida. As disponíveis são: {', '.join(sorted(FORMULAS))}."
+            )
+        return value
+
+
+class SolutionHypothesisSerializer(serializers.ModelSerializer[SolutionHypothesis]):
+    """A hipótese de solução, com a unicidade da **escolhida** (FDD 048).
+
+    A checagem de "já existe uma escolhida" é escrita à mão, ao contrário do que o `CLAUDE.md`
+    pede para as constraints do pipeline, e a exceção tem motivo verificado: o DRF só deriva o
+    validador de uma `UniqueConstraint` condicional quando **todos** os campos da condição são
+    campos do serializer (`ModelSerializer.get_unique_together_validators`, DRF 3.16). A condição
+    aqui cita `archived_at`, que nenhum serializer da casa expõe — então o validador é descartado
+    em silêncio e o `IntegrityError` subiria como 500. A constraint continua sendo a garantia; o
+    que esta validação faz é transformar a recusa num 400 legível.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = SolutionHypothesis
+        fields = ["id", "improvement_opportunity", "statement", "intervention", "assumptions",
+                  "expected_effect", "status", "status_display", "created_at", "updated_at"]
+        read_only_fields = ["id", "status_display", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        oportunidade = cast(
+            ImprovementOpportunity | None,
+            attrs.get(
+                "improvement_opportunity",
+                getattr(self.instance, "improvement_opportunity", None),
+            ),
+        )
+        estado = attrs.get(
+            "status", getattr(self.instance, "status", SolutionHypothesis.Status.PROPOSED)
+        )
+        if estado != SolutionHypothesis.Status.CHOSEN or oportunidade is None:
+            return attrs
+        concorrentes = SolutionHypothesis.objects.filter(
+            improvement_opportunity=oportunidade,
+            status=SolutionHypothesis.Status.CHOSEN,
+            archived_at__isnull=True,
+        )
+        if self.instance is not None:
+            concorrentes = concorrentes.exclude(pk=self.instance.pk)
+        if concorrentes.exists():
+            raise serializers.ValidationError(
+                {"status": "Esta oportunidade já tem uma hipótese escolhida. Descarte a atual "
+                           "antes de escolher outra."}
+            )
         return attrs
 
 

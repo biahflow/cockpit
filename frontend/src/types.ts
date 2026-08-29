@@ -145,6 +145,31 @@ export type Evidence = { id: number; account: number; discovery: number | null; 
 // oferecer o valor sem pedir as duas coisas produz um erro que quem clica não entende.
 export type EpistemicStatus = "fact" | "hypothesis" | "unknown";
 export type Finding = { id: number; account: number; process: number | null; step: number | null; statement: string; epistemic_status: EpistemicStatus; epistemic_status_display: string; confidence: number | null; reviewed_by: number | null; reviewed_at: string | null; evidences: number[]; legacy_evidencia: number | null; created_at: string; updated_at: string };
+// A cadeia do PRIORITIZE (FDD 048, ADR 0054): dor → oportunidade de melhoria → avaliação →
+// hipótese. **Nenhuma tela consome estes tipos ainda**, exatamente como os do split da Fase 3
+// logo acima, e pelo mesmo motivo: é o recorte da fatia, não esquecimento — a superfície tem DAP
+// aprovado (`docs/design/dap-priorizacao-r1/`) e vem na tarefa seguinte. Eles entram aqui para
+// que a forma do contrato fique escrita do lado do consumidor no mesmo commit em que ela nasce no
+// servidor.
+export type PainPointImpactType = "financial" | "operational" | "experience" | "risk";
+export type PainPointStatus = "observed" | "confirmed" | "discarded";
+// `impact_estimate` **nulo é "não estimado"**, e nunca zero: zero afirma que a dor não custa
+// nada. A tela mostra `—` no nulo, como `Process.custo_do_estado_atual` já faz com `nao_apurado`.
+// `confirmed` exige ao menos um achado vivo em `findings`, e o backend responde 400 — um select
+// que ofereça o valor sem exigir o vínculo produz um erro que quem clica não entende.
+export type PainPoint = { id: number; account: number; process: number | null; step: number | null; title: string; description: string; impact_type: PainPointImpactType; impact_type_display: string; impact_estimate: string | null; findings: number[]; status: PainPointStatus; status_display: string; created_at: string; updated_at: string };
+export type ImprovementOpportunityStatus = "open" | "assessing" | "prioritized" | "discarded";
+// `score`, `assessment_version` e `rank` são **derivados e só de leitura**: saem da avaliação
+// vigente (a de maior versão não arquivada) e da ordenação por score dentro da conta. Os três
+// vêm `null` juntos quando ninguém avaliou — é o `—` do desenho, e nunca `0`.
+export type ImprovementOpportunity = { id: number; account: number; engagement: number | null; title: string; desired_change: string; impact_hypothesis: string; pain_points: number[]; status: ImprovementOpportunityStatus; status_display: string; score: string | null; assessment_version: number | null; rank: number | null; created_at: string; updated_at: string };
+// **A avaliação é imutável**: repriorizar é um `POST` de versão nova, e `PUT`/`PATCH` respondem
+// 405. `version`, `weights` e `score` saem do servidor; `weights` é a cópia congelada dos pesos
+// que produziram aquele score, para que mudar a fórmula amanhã não reescreva o número de ontem.
+export type PriorityAssessment = { id: number; improvement_opportunity: number; version: number; impact: number; evidence_strength: number; feasibility: number; time_to_value: number; economics: number; formula_key: string; weights: Record<string, string>; score: string; rationale: string; assessed_by: number | null; created_at: string; updated_at: string };
+// Hipóteses concorrentes são o estado normal; **uma só `chosen` viva por oportunidade**.
+export type SolutionHypothesisStatus = "proposed" | "chosen" | "discarded";
+export type SolutionHypothesis = { id: number; improvement_opportunity: number; statement: string; intervention: string; assumptions: string; expected_effect: string; status: SolutionHypothesisStatus; status_display: string; created_at: string; updated_at: string };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 // `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
 // (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.

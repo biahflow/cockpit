@@ -4,15 +4,26 @@ import hashlib
 import os
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from pgvector.django import VectorField
 
 from . import knowledge
+from .priority import (
+    DIMENSOES,
+    FORMULA_PADRAO,
+    FORMULAS,
+    MAIOR_NOTA,
+    MENOR_NOTA,
+    calcular_score,
+    pesos_da_formula,
+)
 
 
 class TimestampedModel(models.Model):
@@ -1977,6 +1988,293 @@ class Finding(TimestampedModel):
         if self.epistemic_status == self.EpistemicStatus.FACT and self.reviewed_at is None:
             self.reviewed_at = timezone.now()
         super().save(*args, **kwargs)
+
+
+class PainPoint(TimestampedModel):
+    """A dor observada na operação do cliente — o primeiro elo do PRIORITIZE (FDD 048).
+
+    A Fase 3 deu ao levantamento o par `Evidence`/`Finding`: o trecho bruto e a afirmação que a
+    casa extraiu dele. O que faltava é o passo seguinte da metodologia, que não é nem um nem
+    outro: **onde dói**. Um achado ("o fechamento leva dois dias") não é uma dor; a dor é o custo
+    que aquilo impõe, e é ela que se agrupa em oportunidade de melhoria.
+
+    Ancora na **conta**, como `Process`, `Evidence` e `Finding`, e pelo mesmo motivo: o que se
+    observou sobre a operação de uma empresa sobrevive à venda que a descobriu. `process` e `step`
+    são opcionais porque nem toda dor cabe num processo mapeado — mas quando vierem, respondem à
+    fronteira de conta como os vínculos opcionais da `Evidence`.
+    """
+
+    class ImpactType(models.TextChoices):
+        FINANCIAL = "financial", "Financeiro"
+        OPERATIONAL = "operational", "Operacional"
+        EXPERIENCE = "experience", "Experiência"
+        RISK = "risk", "Risco"
+
+    class Status(models.TextChoices):
+        OBSERVED = "observed", "Observado"
+        CONFIRMED = "confirmed", "Confirmado"
+        DISCARDED = "discarded", "Descartado"
+
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="pain_points")
+    process = models.ForeignKey(
+        Process, on_delete=models.SET_NULL, null=True, blank=True, related_name="pain_points"
+    )
+    step = models.ForeignKey(
+        ProcessStep, on_delete=models.SET_NULL, null=True, blank=True, related_name="pain_points"
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    impact_type = models.CharField(max_length=16, choices=ImpactType.choices)
+    # **Nulo é "não estimado", e zero é "estimamos e não custa nada".** A distinção é a razão de o
+    # campo ser nulável em vez de `default=0`, e é a mesma de `DigitalEmployee.kpi_baseline` e do
+    # `nao_apurado` de `process.custo_do_estado_atual`: um total exibido sem ela vira "custo zero"
+    # na leitura rápida, e a casa passa a afirmar ao cliente o oposto do que sabe.
+    impact_estimate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # M2M para o que sustenta a dor. É o mesmo desenho de `Finding.evidences`, um nível acima: a
+    # dor confirmada aponta para os achados que a sustentam, e "confirmado sem achado vivo" é
+    # recusado — a invariante mora no serializer porque o M2M só existe depois do save.
+    findings = models.ManyToManyField(Finding, blank=True, related_name="pain_points")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OBSERVED)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.get_impact_type_display()} — {self.title[:60]}"
+
+    def clean(self) -> None:
+        etapa = self.step if self.step_id else None
+        processo = self.process if self.process_id else None
+        if processo is not None and processo.account_id != self.account_id:
+            raise ValidationError({"process": "O processo deve pertencer à mesma conta."})
+        if etapa is not None and etapa.process.account_id != self.account_id:
+            raise ValidationError({"step": "A etapa deve pertencer à mesma conta."})
+        if etapa is not None and self.process_id and etapa.process_id != self.process_id:
+            raise ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+        # A invariante de `confirmed` **não cabe aqui**, e é a mesma razão do `Finding`: ela
+        # pergunta pelo M2M, que só existe depois do save — um `clean()` que o consultasse
+        # recusaria toda criação. A metade que dá para cobrar sem o M2M é zero, então ela vive
+        # inteira no serializer, mais a terceira metade no arquivamento do achado (FDD 048).
+
+
+class ImprovementOpportunity(TimestampedModel):
+    """O agrupamento de dores em algo sobre o que se pode decidir — o Opportunity Map (FDD 048).
+
+    **Não é venda, e não referencia `PipelineStage` em campo nenhum.** O mapa de linguagem §2
+    manda nunca chamá-la de Commercial Opportunity nem de Projeto, e a §5 bane `Opportunity` sem
+    qualificador exatamente porque as duas coisas colidiam: uma é receita a fechar, a outra é
+    melhoria operacional a priorizar. Um campo de etapa de pipeline aqui traria a primeira para
+    dentro da segunda, e o funil da casa passaria a somar melhorias que ninguém vendeu.
+
+    `engagement` é opcional porque a oportunidade nasce do levantamento, que é da **conta** — e
+    nem toda conta tem mais de um mandato vivo para escolher. Quando vier preenchido, precisa ser
+    mandato da mesma conta, pela regra que `Project.clean()` já aplica sobre a mesma dupla.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Aberta"
+        ASSESSING = "assessing", "Em avaliação"
+        PRIORITIZED = "prioritized", "Priorizada"
+        DISCARDED = "discarded", "Descartada"
+
+    account = models.ForeignKey(
+        Account, on_delete=models.CASCADE, related_name="improvement_opportunities"
+    )
+    engagement = models.ForeignKey(
+        Engagement, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="improvement_opportunities",
+    )
+    title = models.CharField(max_length=200)
+    desired_change = models.TextField(blank=True, default="")
+    impact_hypothesis = models.TextField(blank=True, default="")
+    pain_points = models.ManyToManyField(
+        PainPoint, blank=True, related_name="improvement_opportunities"
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def clean(self) -> None:
+        # A mesma linha que mantém `Project.client` honesto contra `engagement.account`: dois
+        # caminhos chegam ao dono, e nada além desta guarda impede que digam coisas diferentes.
+        engagement = self.engagement if self.engagement_id else None
+        if engagement is not None and engagement.account_id != self.account_id:
+            raise ValidationError(
+                {"engagement": "O engajamento deve pertencer à mesma conta da oportunidade."}
+            )
+
+    @property
+    def current_assessment(self) -> PriorityAssessment | None:
+        """A avaliação **vigente**: a de maior `version` que não foi arquivada.
+
+        Um lugar só, no espírito de `Project.current_phase` e de `visible_to` (ADR 0010).
+        Reexpressar "vigente" numa segunda query é o começo de duas definições do mesmo fato — e
+        elas divergem em silêncio, porque nada fica vermelho quando a tela mostra a v2 e o
+        recomendador continua lendo a v1.
+
+        **O recorte é em Python, e não num `.filter()`, de propósito.** Um `.filter()` no manager
+        emite consulta nova toda vez e **ignora** o `prefetch_related("assessments")` de quem
+        chamou — o prefetch fica lá parecendo que resolve e não resolvendo nada, que é a pior das
+        duas opções: custo de N+1 com aparência de custo resolvido. Com `.all()`, quem prefetchou
+        paga uma consulta para a lista inteira (é o caso de `priority.ranking_da_conta`) e quem
+        não prefetchou paga a mesma consulta que pagaria antes. A definição de "vigente" continua
+        aqui, e só aqui.
+        """
+        vivas = [
+            avaliacao for avaliacao in self.assessments.all() if avaliacao.archived_at is None
+        ]
+        return max(vivas, key=lambda avaliacao: (avaliacao.version, avaliacao.pk), default=None)
+
+
+class PriorityAssessment(TimestampedModel):
+    """A avaliação que produz o Opportunity Score — **imutável, e versionada** (FDD 048, ADR 0054).
+
+    Cinco dimensões de 1 a 5, os pesos que foram usados, a fórmula que os nomeia e o score que
+    saiu dali. Repriorizar **cria a versão seguinte**; não existe editar. Uma avaliação que se
+    reescreve apaga o critério anterior, e com ele a única resposta possível para "por que este
+    item subiu?" — que é a pergunta que a versão existe para responder.
+
+    A imutabilidade é cobrada na **rota** (`PriorityAssessmentViewSet` não expõe `PUT`/`PATCH`) e
+    não no `save()`, porque arquivar e restaurar são gravações legítimas desta mesma linha
+    (`TimestampedModel.archive()`), e um `save()` que recusasse toda atualização recusaria as
+    duas junto.
+
+    `weights` guarda a **cópia** dos pesos, não uma referência a `priority.FORMULAS`: mudar o
+    catálogo amanhã não pode alterar o score de uma avaliação de ontem. Ver a docstring de
+    `apps/core/priority.py`.
+    """
+
+    improvement_opportunity = models.ForeignKey(
+        ImprovementOpportunity, on_delete=models.CASCADE, related_name="assessments"
+    )
+    # Atribuída pelo `save()`, nunca pelo corpo da requisição — ver a docstring dele.
+    version = models.PositiveIntegerField()
+    impact = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(MENOR_NOTA), MaxValueValidator(MAIOR_NOTA)]
+    )
+    evidence_strength = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(MENOR_NOTA), MaxValueValidator(MAIOR_NOTA)]
+    )
+    feasibility = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(MENOR_NOTA), MaxValueValidator(MAIOR_NOTA)]
+    )
+    time_to_value = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(MENOR_NOTA), MaxValueValidator(MAIOR_NOTA)]
+    )
+    economics = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(MENOR_NOTA), MaxValueValidator(MAIOR_NOTA)]
+    )
+    formula_key = models.CharField(max_length=24, default=FORMULA_PADRAO)
+    weights = models.JSONField(default=dict, blank=True)
+    # Derivado das cinco dimensões pelos pesos acima; escrito pelo `save()` e nunca recebido do
+    # cliente. Um score que o corpo pudesse informar não seria a fórmula — seria uma opinião com
+    # aparência de cálculo.
+    score = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"))
+    rationale = models.TextField(blank=True, default="")
+    assessed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="priority_assessments"
+    )
+
+    class Meta:
+        ordering = ["-version", "-id"]
+        constraints = [
+            # Sem condição de arquivamento, de propósito: a versão arquivada **continua ocupando**
+            # o seu número. Reaproveitá-lo faria duas avaliações diferentes se chamarem "v2", e a
+            # comparação com a semana passada passaria a depender de qual delas alguém abriu.
+            models.UniqueConstraint(
+                fields=["improvement_opportunity", "version"],
+                name="unique_priority_assessment_version",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"v{self.version} — {self.score}"
+
+    def clean(self) -> None:
+        if self.formula_key not in FORMULAS:
+            raise ValidationError({"formula_key": "Fórmula desconhecida."})
+        for dimensao in DIMENSOES:
+            nota = getattr(self, dimensao)
+            if nota is not None and not MENOR_NOTA <= nota <= MAIOR_NOTA:
+                raise ValidationError({dimensao: f"A nota vai de {MENOR_NOTA} a {MAIOR_NOTA}."})
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        """Carimba `version`, `weights` e `score` na criação — e só nela.
+
+        **`select_for_update` sobre a oportunidade**, pela razão exata do `convert-to-project`
+        (ADR 0050): sem a trava, duas requisições concorrentes leem `max(version)` ao mesmo tempo,
+        escrevem a mesma versão e a constraint estoura como 500 — um erro de servidor no lugar de
+        uma sequência. A trava serializa as duas, e a segunda lê a versão que a primeira gravou.
+
+        Os pesos são copiados aqui, e não no serializer, pelo motivo de `CommercialOpportunity.clean()`
+        e `Project.clean()`: shell, admin e migração não passam por rota, e um score gravado sem
+        pesos é um número que ninguém consegue reproduzir.
+        """
+        if self._state.adding:
+            if not self.weights:
+                self.weights = pesos_da_formula(self.formula_key)
+            with transaction.atomic():
+                ImprovementOpportunity.objects.select_for_update().get(
+                    pk=self.improvement_opportunity_id
+                )
+                if not self.version:
+                    ultima = PriorityAssessment.objects.filter(
+                        improvement_opportunity_id=self.improvement_opportunity_id
+                    ).aggregate(models.Max("version"))["version__max"]
+                    self.version = (ultima or 0) + 1
+                self.score = calcular_score(
+                    {dimensao: getattr(self, dimensao) for dimensao in DIMENSOES}, self.weights
+                )
+                super().save(*args, **kwargs)
+            return
+        super().save(*args, **kwargs)
+
+
+class SolutionHypothesis(TimestampedModel):
+    """A hipótese de solução para uma oportunidade priorizada (FDD 048).
+
+    **Hipóteses concorrentes são o estado normal**: a mesma dor costuma admitir automação,
+    redesenho de processo e mudança de política, e escolher antes de escrever as três é decidir
+    sem alternativa. O que não pode haver é **duas escolhidas ao mesmo tempo** — isso não é
+    concorrência, é contradição —, e a constraint parcial abaixo é o que impede.
+
+    Não é `DigitalEmployee` nem `SolutionHypothesis` virando escopo: o mapa de linguagem §2 manda
+    nunca chamá-la de Solução, Proposta ou Escopo. Ela é a aposta que ainda vai ao gate de
+    viabilidade, que é a Fase 5.
+    """
+
+    class Status(models.TextChoices):
+        PROPOSED = "proposed", "Proposta"
+        CHOSEN = "chosen", "Escolhida"
+        DISCARDED = "discarded", "Descartada"
+
+    improvement_opportunity = models.ForeignKey(
+        ImprovementOpportunity, on_delete=models.CASCADE, related_name="hypotheses"
+    )
+    statement = models.TextField()
+    intervention = models.TextField(blank=True, default="")
+    assumptions = models.TextField(blank=True, default="")
+    expected_effect = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PROPOSED)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            # Condicional ao arquivamento, como `unique_active_project_member`: uma escolha
+            # desfeita e arquivada não pode travar a escolha seguinte.
+            models.UniqueConstraint(
+                fields=["improvement_opportunity"],
+                condition=Q(status="chosen", archived_at__isnull=True),
+                name="unique_chosen_solution_hypothesis",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_status_display()} — {self.statement[:60]}"
 
 
 class Service(TimestampedModel):

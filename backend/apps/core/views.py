@@ -99,6 +99,7 @@ from .models import (
     Evidencia,
     Finding,
     GithubDeliveryProjection,
+    ImprovementOpportunity,
     Invitation,
     Invoice,
     JourneyPhase,
@@ -108,11 +109,13 @@ from .models import (
     Meeting,
     Milestone,
     Notification,
+    PainPoint,
     Pendencia,
     PhaseChecklistItem,
     PhaseDeliverable,
     PhaseEvent,
     PipelineStage,
+    PriorityAssessment,
     Process,
     ProcessObservation,
     ProcessStep,
@@ -126,6 +129,7 @@ from .models import (
     Satisfacao,
     Service,
     SignatureRequest,
+    SolutionHypothesis,
     Task,
     User,
     Vertical,
@@ -158,6 +162,7 @@ from .serializers import (
     EvidenciaSerializer,
     FindingSerializer,
     GithubDeliveryProjectionSerializer,
+    ImprovementOpportunitySerializer,
     InvitationSerializer,
     InvoiceSerializer,
     JourneyPhaseSerializer,
@@ -172,11 +177,13 @@ from .serializers import (
     MilestoneSerializer,
     NotificationSerializer,
     OpenCommercialOpportunitySerializer,
+    PainPointSerializer,
     PendenciaSerializer,
     PhaseChecklistItemSerializer,
     PhaseDeliverableSerializer,
     PhaseEventSerializer,
     PipelineStageSerializer,
+    PriorityAssessmentSerializer,
     ProcessObservationSerializer,
     ProcessSerializer,
     ProcessStepSerializer,
@@ -192,6 +199,7 @@ from .serializers import (
     SatisfacaoSerializer,
     ServiceSerializer,
     SignatureRequestSerializer,
+    SolutionHypothesisSerializer,
     TaskSerializer,
     TaskSyncSerializer,
     UserSerializer,
@@ -3129,6 +3137,175 @@ class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def perform_update(self, serializer: FindingSerializer) -> None:
         if "account" in serializer.validated_data:
             _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        super().perform_update(serializer)
+
+    def perform_destroy(self, instance: Finding) -> None:
+        """Recusa arquivar o **último** achado vivo de uma dor confirmada (FDD 048).
+
+        A terceira metade da invariante de `PainPoint.status=confirmed`, e a razão de ela existir
+        é a mesma que fez a `EvidenceViewSet` ganhar esta guarda logo acima: sem ela a invariante
+        vaza pelo `DELETE`. Uma dor confirmada sem achado vivo continua dizendo "confirmado" na
+        tela e na priorização, com o que a sustentava escondido — e nada fica vermelho.
+
+        Recusar em vez de rebaixar a dor, pelo argumento da FDD 045: desfazer em silêncio uma
+        confirmação que uma pessoa fez, sem que ela peça, é pior que o 409 que diz qual é o estado
+        que impede e como sair dele.
+        """
+        presas = [
+            dor
+            for dor in instance.pain_points.filter(
+                status=PainPoint.Status.CONFIRMED, archived_at__isnull=True
+            )
+            if not dor.findings.filter(archived_at__isnull=True)
+            .exclude(pk=instance.pk)
+            .exists()
+        ]
+        if presas:
+            raise StateConflict(
+                f"Este é o último achado vivo de {len(presas)} dor(es) confirmada(s). Volte a dor "
+                "para observada ou registre outro achado antes de arquivar este."
+            )
+        instance.archive()
+
+
+class PainPointViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """A dor observada na operação do cliente (FDD 048).
+
+    **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
+    conta, e o processo dela é opcional. O recorte da Entrega é o mesmo dos dois — a conta
+    alcançada pelo campo `account`, e não por um pai a resolver.
+    """
+
+    resource = "pain_point"
+    queryset = PainPoint.objects.select_related("account", "process", "step").prefetch_related(
+        "findings"
+    ).all()
+    serializer_class = PainPointSerializer
+    filter_fields = ("account", "process", "step")
+    # `status` e `impact_type` em `filter_exact_fields` pelo motivo do `kind` da `Evidence`: o
+    # teste de dígito de `filter_fields` derrubaria `?status=confirmed` no chão sem erro nenhum.
+    filter_exact_fields = ("status", "impact_type")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "account__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: PainPointSerializer) -> None:
+        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        serializer.save()
+
+    def perform_update(self, serializer: PainPointSerializer) -> None:
+        if "account" in serializer.validated_data:
+            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        super().perform_update(serializer)
+
+
+class ImprovementOpportunityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """A oportunidade de melhoria — **e ela não é venda** (FDD 048).
+
+    Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
+    bane `Opportunity` sem qualificador justamente porque as duas colidiam. O funil comercial vive
+    na `CommercialOpportunityViewSet`, e as duas rotas não se encostam.
+
+    Mesmo recorte de conta da `PainPointViewSet`.
+    """
+
+    resource = "improvement_opportunity"
+    queryset = ImprovementOpportunity.objects.select_related(
+        "account", "engagement"
+    ).prefetch_related("pain_points", "assessments").all()
+    serializer_class = ImprovementOpportunitySerializer
+    filter_fields = ("account", "engagement")
+    filter_exact_fields = ("status",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(self.request.user, "account__projects")
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: ImprovementOpportunitySerializer) -> None:
+        _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        serializer.save()
+
+    def perform_update(self, serializer: ImprovementOpportunitySerializer) -> None:
+        if "account" in serializer.validated_data:
+            _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
+        super().perform_update(serializer)
+
+
+class PriorityAssessmentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """A avaliação de prioridade — **criada, nunca editada** (FDD 048, ADR 0054).
+
+    `http_method_names` não inclui `put` nem `patch`, e é isso que faz a imutabilidade ser um 405
+    ("este método não existe aqui") em vez de um 400 ("corrija o corpo"). Repriorizar é `POST` de
+    uma versão nova; a anterior fica de pé, que é a razão de o modelo ser versionado.
+
+    `DELETE` continua sendo o arquivamento da FDD 025: uma avaliação registrada por engano sai da
+    listagem sem sumir do histórico — e o número de versão dela **não** é reaproveitado.
+    """
+
+    resource = "priority_assessment"
+    queryset = PriorityAssessment.objects.select_related(
+        "improvement_opportunity", "improvement_opportunity__account", "assessed_by"
+    ).all()
+    serializer_class = PriorityAssessmentSerializer
+    filter_fields = ("improvement_opportunity",)
+    filter_exact_fields = ("formula_key",)
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(
+            self.request.user, "improvement_opportunity__account__projects"
+        )
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: PriorityAssessmentSerializer) -> None:
+        oportunidade = serializer.validated_data.get("improvement_opportunity")
+        _exige_cliente_no_escopo(
+            self.request.user, oportunidade.account if oportunidade else None
+        )
+        # `assessed_by` sai da sessão, como `captured_by` na `Evidence`: quem avaliou tem nome, e
+        # o nome é o de quem está autenticado. Não é o `reviewed_by` do `Finding`, que vem do
+        # corpo porque responde "quem confirmou" e pode não ser quem digita.
+        serializer.save(assessed_by=self.request.user)
+
+
+class SolutionHypothesisViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """As hipóteses concorrentes de solução (FDD 048).
+
+    Mesmo recorte, um hop a mais: a conta chega pela oportunidade.
+    """
+
+    resource = "solution_hypothesis"
+    queryset = SolutionHypothesis.objects.select_related(
+        "improvement_opportunity", "improvement_opportunity__account"
+    ).all()
+    serializer_class = SolutionHypothesisSerializer
+    filter_fields = ("improvement_opportunity",)
+    filter_exact_fields = ("status",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        scope = project_scope_q(
+            self.request.user, "improvement_opportunity__account__projects"
+        )
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: SolutionHypothesisSerializer) -> None:
+        oportunidade = serializer.validated_data.get("improvement_opportunity")
+        _exige_cliente_no_escopo(
+            self.request.user, oportunidade.account if oportunidade else None
+        )
+        serializer.save()
+
+    def perform_update(self, serializer: SolutionHypothesisSerializer) -> None:
+        if "improvement_opportunity" in serializer.validated_data:
+            oportunidade = serializer.validated_data.get("improvement_opportunity")
+            _exige_cliente_no_escopo(
+                self.request.user, oportunidade.account if oportunidade else None
+            )
         super().perform_update(serializer)
 
 
