@@ -32,6 +32,7 @@ from .views import (
     EsignWebhookView,
     EvidenceViewSet,
     EvidenciaViewSet,
+    FeasibilityAssessmentViewSet,
     FindingViewSet,
     GithubDeliveryProjectionViewSet,
     GithubDeliveryWebhookView,
@@ -42,10 +43,12 @@ from .views import (
     JourneyPhaseViewSet,
     KnowledgeAreaViewSet,
     KnowledgePieceViewSet,
+    KPIViewSet,
     LeadIntakeView,
     LeadViewSet,
     LoginView,
     LogoutView,
+    MeasurementViewSet,
     MeAvatarView,
     MeetingViewSet,
     MePasswordView,
@@ -68,6 +71,7 @@ from .views import (
     ProjectMemberViewSet,
     ProjectPhaseViewSet,
     ProjectViewSet,
+    ProveExperimentViewSet,
     QualificationViewSet,
     RecommendationsView,
     RiscoViewSet,
@@ -79,6 +83,7 @@ from .views import (
     TaskViewSet,
     UserAvatarView,
     UserViewSet,
+    ValueLedgerEntryViewSet,
     VerticalViewSet,
     csrf,
 )
@@ -151,6 +156,16 @@ router.register("pain-points", PainPointViewSet)
 router.register("improvement-opportunities", ImprovementOpportunityViewSet)
 router.register("priority-assessments", PriorityAssessmentViewSet)
 router.register("solution-hypotheses", SolutionHypothesisViewSet)
+# Feasibility, PROVE, KPI/Measurement e Value Ledger (FDD 049, ADR 0055). **Nomes canônicos e
+# nenhum alias**, como os quatro da Fase 4 e pelo mesmo motivo: alias existe para não quebrar chave
+# que a `/api/v1/` já prometeu, e estes cinco modelos nascem com o nome do mapa de linguagem.
+#
+# `kpis` e não `indicadores`: o termo canônico é KPI nas quatro superfícies (`language-map` §2).
+router.register("feasibility-assessments", FeasibilityAssessmentViewSet)
+router.register("prove-experiments", ProveExperimentViewSet)
+router.register("kpis", KPIViewSet)
+router.register("measurements", MeasurementViewSet)
+router.register("value-ledger-entries", ValueLedgerEntryViewSet)
 router.register("documents", DocumentViewSet)
 router.register("artifacts", ArtifactViewSet)
 router.register("cases", CaseViewSet)

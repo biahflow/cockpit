@@ -1,14 +1,14 @@
-import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, Gauge, History, Hourglass, Inbox, ListTodo, Lock, MapPin, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, Workflow, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, FlaskConical, Gauge, History, Hourglass, Inbox, ListTodo, Lock, MapPin, Microscope, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, Workflow, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
-import { api, listUsers } from "../api";
+import { api, listFeasibilityAssessments, listKpis, listMeasurements, listProveExperiments, listUsers, registerProveGapWaiver, startProveExperiment } from "../api";
 import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
 import { CANONICAL_STAGE_LABEL, GATE_DECISION_LABEL, GATE_EFFECT, gateDecisionByEffect, gateDecisions, PHASE_EVENT_LABEL, SITUATION_LABEL, situationVariant, WAITING_PARTY_LABEL, WAITING_PARTY_OPTIONS } from "../journey";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, GateDecision, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KpiDirection, KpiUnit, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, Task, WaitingParty, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, FeasibilityAssessment, FeasibilityVerdict, GateDecision, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KPI, KpiDirection, KpiUnit, Measurement, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, ProveExperiment, ProveExperimentStatus, ProveMissingRequirement, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, SolutionHypothesis, Task, WaitingParty, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -46,7 +46,12 @@ const issueStateLabel: Record<GithubIssueState, string> = { unknown: "—", open
 const pullStateLabel: Record<GithubPullState, string> = { unknown: "—", none: "Sem PR", draft: "Rascunho", open: "Aberto", closed: "Fechado", merged: "Mesclado" };
 const reviewStateLabel: Record<GithubReviewState, string> = { unknown: "—", pending: "Em revisão", approved: "Aprovada", changes_requested: "Mudanças pedidas" };
 const ciStateLabel: Record<GithubCiState, string> = { unknown: "—", pending: "Em execução", success: "Verde", failure: "Vermelho" };
-const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", kpi_unit: "" as KpiUnit, kpi_direction: "up" as KpiDirection, kpi_baseline: "", kpi_current: "", hours_saved_month: "", roi_month: "" };
+// **Sem `kpi_baseline`/`kpi_current` desde a decisão C1** do DAP `dap-prove-e-valor-r1`: a medição
+// saiu do ativo de solução e virou `Measurement` de um `KPI` (ADR 0055). Enquanto os dois campos
+// ficassem aqui, existiriam **dois lugares escrevendo o mesmo número** e valeria o último salvo —
+// que é o defeito que a fase inteira desfaz. As duas chaves continuam **saindo** no `GET`
+// (derivadas), e é por isso que o painel abaixo as lê; o que sai é a escrita.
+const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", kpi_unit: "" as KpiUnit, kpi_direction: "up" as KpiDirection, hours_saved_month: "", roi_month: "" };
 const kpiUnits: { value: KpiUnit; label: string }[] = [
   { value: "", label: "Sem unidade" }, { value: "percent", label: "Percentual (%)" },
   { value: "hours", label: "Horas" }, { value: "minutes", label: "Minutos" },
@@ -96,7 +101,6 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [employeeDraft, setEmployeeDraft] = useState({ name: "", area: "", status: "building" as DigitalEmployeeStatus });
   const [catalog, setCatalog] = useState<DigitalEmployeeBlueprint[]>([]);
   const [blueprintDraft, setBlueprintDraft] = useState("");
-  const [baselineDraft, setBaselineDraft] = useState("");
   const [showArchivedEmployees, setShowArchivedEmployees] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<DigitalEmployee | null>(null);
   const [employeeEdit, setEmployeeEdit] = useState(blankEmployeeEdit);
@@ -104,6 +108,20 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [employeeBusy, setEmployeeBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState({ name: "", description: "", status: "", start_date: "", due_date: "", service: "", actual_value: "", cost: "" });
+  // ---- Feasibility, PROVE, KPI e medições (FDD 049, DAP `dap-prove-e-valor-r1`) ----
+  // Carga própria, como a do roster e a das projeções do GitHub: um tropeço aqui não pode derrubar
+  // o resto do detalhe do projeto, e o erro destes painéis é o deles — o board o desenha dentro do
+  // painel, com o texto do backend.
+  const [laudos, setLaudos] = useState<FeasibilityAssessment[]>([]);
+  const [experimentos, setExperimentos] = useState<ProveExperiment[]>([]);
+  const [kpis, setKpis] = useState<KPI[]>([]);
+  const [medicoes, setMedicoes] = useState<Record<number, Measurement[]>>({});
+  const [hipoteses, setHipoteses] = useState<Record<number, SolutionHypothesis>>({});
+  const [proveErro, setProveErro] = useState("");
+  const [proveCarregadoEm, setProveCarregadoEm] = useState("");
+  const [proveBusy, setProveBusy] = useState(false);
+  const [lacunaDe, setLacunaDe] = useState<ProveExperiment | null>(null);
+  const [lacunaDraft, setLacunaDraft] = useState({ gap_waiver: "", gap_waiver_by: "" });
 
   const load = useCallback(() => Promise.all([
     api<Project>(`/projects/${id}/`),
@@ -133,6 +151,75 @@ export function ProjectDetailPage({ id }: { id: number }) {
   // mapeamento e a reconciliação (503 fail-closed); vazio quando não há referência.
   const loadProjections = useCallback(() => api<GithubDeliveryProjection[]>(`/github-projections/?project=${id}`).then(setProjections).catch(() => setProjections([])), [id]);
   useEffect(() => { void loadProjections(); }, [loadProjections]);
+
+  /**
+   * Os dois painéis da Fase 5, e **o que decide se eles existem é a jornada**.
+   *
+   * Decisão **A1** do DAP: visíveis só quando o projeto tem a fase canônica correspondente
+   * (`JourneyPhase.canonical_stage` ∈ `feasibility`/`prove`) — um projeto de Discovery Sprint não
+   * mostra painel de PROVE, e a página só cresce onde a fase existe. A condição também evita a
+   * requisição: não há por que buscar laudo de um projeto que não tem gate de Feasibility.
+   *
+   * Os KPIs, esses, são buscados **sempre**: o painel do Time Digital precisa deles para nomear o
+   * indicador que o ativo referencia (decisão C1), e o KPI migrado da era anterior pende do
+   * projeto sem experimento nenhum (ADR 0055).
+   */
+  const temFaseFeasibility = phases.some(phase => phase.canonical_stage === "feasibility");
+  const temFaseProve = phases.some(phase => phase.canonical_stage === "prove");
+  /**
+   * "Carregando" é **derivado**, e não um `setState(true)` no começo da carga: ligar a bandeira
+   * sincronicamente de dentro do efeito é renderização em cascata, que é o que o
+   * `react-hooks/set-state-in-effect` cobra. A chave é a combinação que decide *o que* buscar —
+   * quando ela muda (as fases chegam depois do primeiro `load`), a tela volta ao esqueleto em vez
+   * de piscar o estado vazio de dados que ainda não foram pedidos.
+   *
+   * Recarga disparada por ação (iniciar, registrar lacuna) **não** volta ao esqueleto: a chave não
+   * mudou, e trocar a lista por barras cinzentas a cada clique esconderia o que acabou de mudar.
+   */
+  const chaveDaCargaProve = `${id}:${temFaseFeasibility}:${temFaseProve}`;
+  const proveCarregando = proveCarregadoEm !== chaveDaCargaProve && !proveErro;
+  const carregarProve = useCallback(() => Promise.all([
+    listKpis(id),
+    temFaseFeasibility ? listFeasibilityAssessments(id) : Promise.resolve([]),
+    temFaseProve ? listProveExperiments(id) : Promise.resolve([]),
+  ]).then(async ([loadedKpis, loadedLaudos, loadedExperimentos]) => {
+    // A hipótese avaliada chega por id nos dois recursos, e é o texto dela que o board mostra
+    // ("Hipótese de solução avaliada: …"). Buscar uma por id, deduplicado, custa menos que varrer
+    // as oportunidades da conta — e o laudo sem a aposta que ele avalia é um veredito sobre coisa
+    // nenhuma.
+    const idsDeHipoteses = [...new Set([...loadedLaudos, ...loadedExperimentos].map(item => item.solution_hypothesis))];
+    const [carregadas, leituras] = await Promise.all([
+      Promise.all(idsDeHipoteses.map(hipoteseId => api<SolutionHypothesis>(`/solution-hypotheses/${hipoteseId}/`))),
+      Promise.all(loadedKpis.map(kpi => listMeasurements(kpi.id))),
+    ]);
+    setProveErro("");
+    setKpis(loadedKpis); setLaudos(loadedLaudos); setExperimentos(loadedExperimentos);
+    setHipoteses(Object.fromEntries(carregadas.map(hipotese => [hipotese.id, hipotese])));
+    setMedicoes(Object.fromEntries(loadedKpis.map((kpi, indice) => [kpi.id, leituras[indice]])));
+    setProveCarregadoEm(`${id}:${temFaseFeasibility}:${temFaseProve}`);
+  }).catch((cause: unknown) => setProveErro(mensagemDeFalha(cause))),
+  [id, temFaseFeasibility, temFaseProve]);
+  useEffect(() => { void carregarProve(); }, [carregarProve]);
+
+  async function iniciarProve(experimento: ProveExperiment) {
+    setProveErro(""); setProveBusy(true);
+    try { await startProveExperiment(experimento.id); await carregarProve(); }
+    catch (cause) { setProveErro(mensagemDeFalha(cause)); }
+    finally { setProveBusy(false); }
+  }
+  async function registrarLacuna(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!lacunaDe) return;
+    setProveErro(""); setProveBusy(true);
+    try {
+      await registerProveGapWaiver(lacunaDe.id, {
+        gap_waiver: lacunaDraft.gap_waiver, gap_waiver_by: Number(lacunaDraft.gap_waiver_by),
+      });
+      setLacunaDe(null); setLacunaDraft({ gap_waiver: "", gap_waiver_by: "" });
+      await carregarProve();
+    } catch (cause) { setProveErro(mensagemDeFalha(cause)); }
+    finally { setProveBusy(false); }
+  }
 
   // O roster tem carga própria porque o alternador de arquivados muda só a lista dele: pendurá-lo
   // no `load` faria cada clique refazer as dez chamadas da página inteira.
@@ -305,9 +392,10 @@ export function ProjectDetailPage({ id }: { id: number }) {
   async function createEmployeeFromBlueprint(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!blueprintDraft) return;
-    // Em branco vira `null`, não zero: sem base medida, o case declara a lacuna em vez de
-    // afirmar um "antes" que ninguém apurou (FDD 027).
-    try { await api(`/projects/${id}/digital-employees/from-blueprint/`, { method: "POST", body: JSON.stringify({ blueprint: Number(blueprintDraft), kpi_baseline: baselineDraft || null }) }); setBlueprintDraft(""); setBaselineDraft(""); await loadEmployees(); }
+    // **Sem `kpi_baseline`** (ADR 0055): o backend deixou de aceitá-lo, e o "antes" passou a ser
+    // uma `Measurement(kind=baseline)` registrada no PROVE. O ativo nasce sem KPI e depois
+    // referencia um.
+    try { await api(`/projects/${id}/digital-employees/from-blueprint/`, { method: "POST", body: JSON.stringify({ blueprint: Number(blueprintDraft) }) }); setBlueprintDraft(""); await loadEmployees(); }
     catch (cause) { setError((cause as Error).message); }
   }
   function openEmployeeEdit(employee: DigitalEmployee) {
@@ -315,7 +403,6 @@ export function ProjectDetailPage({ id }: { id: number }) {
       name: employee.name, area: employee.area, status: employee.status, description: employee.description,
       kpi_label: employee.kpi_label, kpi_value: employee.kpi_value,
       kpi_unit: employee.kpi_unit, kpi_direction: employee.kpi_direction,
-      kpi_baseline: employee.kpi_baseline ?? "", kpi_current: employee.kpi_current ?? "",
       hours_saved_month: employee.hours_saved_month, roi_month: employee.roi_month,
     });
     setEditingEmployee(employee);
@@ -325,16 +412,17 @@ export function ProjectDetailPage({ id }: { id: number }) {
     if (!editingEmployee) return;
     setEmployeeBusy(true);
     try {
-      // Os seis campos que nenhuma tela alcançava — e que o snapshot leva à tela do cliente.
+      // Os campos que nenhuma tela alcançava — e que o snapshot leva à tela do cliente.
       // Vazio vira "0" nos decimais porque o serializer os recusa em branco.
+      //
+      // **`kpi_baseline`/`kpi_current` não vão mais no corpo** (decisão C1). O servidor já os
+      // ignora desde a ADR 0055, então continuar enviando-os não quebraria nada — e é exatamente
+      // por isso que a linha precisa sair aqui: campo morto que o servidor aceita em silêncio é o
+      // que faz a próxima pessoa acreditar que a tela ainda escreve a medição.
       await api(`/digital-employees/${editingEmployee.id}/`, { method: "PATCH", body: JSON.stringify({
         ...employeeEdit,
         hours_saved_month: employeeEdit.hours_saved_month || "0",
         roi_month: employeeEdit.roi_month || "0",
-        // Aqui o vazio é `null` e **não** "0": base e valor atual medem, e um zero inventado
-        // vira número no case (FDD 027).
-        kpi_baseline: employeeEdit.kpi_baseline || null,
-        kpi_current: employeeEdit.kpi_current || null,
       }) });
       setEditingEmployee(null); await loadEmployees();
     } catch (cause) { setError((cause as Error).message); }
@@ -419,10 +507,25 @@ export function ProjectDetailPage({ id }: { id: number }) {
   if (error && !project) return <div role="alert" className="alert--error">{error}</div>;
   if (!project) return <div className="animate-pulse space-y-6"><div className="h-10 w-64 rounded-xl bg-slate-200" /><div className="h-56 rounded-2xl bg-white" /></div>;
 
+  /**
+   * Quem pode assinar uma lacuna aprovada.
+   *
+   * `/users/` é fechado a admin (RFC 0003), então a Entrega — que é quem toca o PROVE — não tem a
+   * lista completa. A equipe do projeto é a lista que ela **já** tem carregada, e é a resposta
+   * certa para a pergunta na prática: quem aprova uma lacuna de um experimento participa dele.
+   * Admin, que tem as duas, usa a lista cheia.
+   */
+  const aprovadores = people.length
+    ? people.map(person => ({ id: person.id, nome: person.first_name || person.username }))
+    : members.map(member => ({ id: member.user, nome: member.user_name || member.user_username }));
+  const nomeDoAprovador = (userId: number | null) =>
+    aprovadores.find(pessoa => pessoa.id === userId)?.nome ?? "alguém não identificado";
+
   return <section className="space-y-7">
     {editingEmployee && <Modal title={`Editar ${editingEmployee.name}`} onClose={() => setEditingEmployee(null)}>
-      {/* Os oito campos, e não os dois do formulário rápido: seis deles cruzam ao painel "Seu Time
-          Digital" do cliente pelo snapshot (ADR 0003) e nenhuma tela os alcançava. */}
+      {/* Os seis campos, e não os dois do formulário rápido: eles cruzam ao painel "Seu Time
+          Digital" do cliente pelo snapshot (ADR 0003) e nenhuma tela os alcançava. Eram oito até a
+          decisão C1 — o par medido saiu, e agora ele se lê no painel, vindo do PROVE. */}
       <form className="grid gap-4" onSubmit={event => void saveEmployee(event)}>
         <label className="form-label">Nome<input className="field" value={employeeEdit.name} onChange={event => setEmployeeEdit({ ...employeeEdit, name: event.target.value })} required /></label>
         <div className="form-grid">
@@ -434,14 +537,15 @@ export function ProjectDetailPage({ id }: { id: number }) {
           <label className="form-label">Rótulo do KPI<input className="field" placeholder="Notas conciliadas/mês" value={employeeEdit.kpi_label} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_label: event.target.value })} /></label>
           <label className="form-label">Valor do KPI (texto livre)<input className="field" placeholder="312" value={employeeEdit.kpi_value} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_value: event.target.value })} /></label>
         </div>
-        {/* O par medido (FDD 027). É ele que vira o antes/depois do case quando o projeto for
-            concluído — o campo de texto acima descreve, este mede. Deixar a base em branco é
-            legítimo e diferente de zero: o case dirá que não houve base registrada. */}
+        {/* **"Antes (base)" e "Depois (atual)" saíram daqui** (decisão C1 do DAP
+            `dap-prove-e-valor-r1`). Quem media pelo formulário passa a medir pelo PROVE: o antes e
+            o depois são o *mesmo* KPI em momentos diferentes, e enquanto o ativo os possuísse eles
+            seriam duas colunas afirmando ser dois fatos. Unidade e direção também são do `KPI`
+            agora — os campos abaixo sobrevivem porque o One ainda os lê do ativo
+            (`portal.build_snapshot`), e mexer nisso é outro gate. */}
         <div className="form-grid">
           <label className="form-label">Unidade do KPI<select className="field" value={employeeEdit.kpi_unit} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_unit: event.target.value as KpiUnit })}>{kpiUnits.map(unit => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select></label>
           <label className="form-label">Direção<select className="field" value={employeeEdit.kpi_direction} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_direction: event.target.value as KpiDirection })}><option value="up">Maior é melhor</option><option value="down">Menor é melhor</option></select></label>
-          <label className="form-label">Antes (base)<input className="field" type="number" step="0.01" placeholder="Em branco = sem base medida" value={employeeEdit.kpi_baseline} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_baseline: event.target.value })} /></label>
-          <label className="form-label">Depois (atual)<input className="field" type="number" step="0.01" value={employeeEdit.kpi_current} onChange={event => setEmployeeEdit({ ...employeeEdit, kpi_current: event.target.value })} /></label>
         </div>
         <div className="form-grid">
           <label className="form-label">Horas poupadas/mês<input className="field" type="number" min="0" step="0.1" value={employeeEdit.hours_saved_month} onChange={event => setEmployeeEdit({ ...employeeEdit, hours_saved_month: event.target.value })} /></label>
@@ -465,6 +569,27 @@ export function ProjectDetailPage({ id }: { id: number }) {
       confirmLabel="Arquivar"
       onCancel={() => setArchivingRisco(null)} onConfirm={() => void archiveRisco()}
     />}
+    {/* A saída explícita da decisão **E1**: "registrar lacuna aprovada" pede **quem aprovou e por
+        quê**. É um ato assinado — o servidor recusa `gap_waiver` sem `gap_waiver_by` com 400 —, e
+        o autor vem do corpo e não da sessão porque quem aprova pode não ser quem digita. */}
+    {lacunaDe && <Modal title="Registrar lacuna aprovada" onClose={() => setLacunaDe(null)}>
+      <form className="grid gap-4" onSubmit={event => void registrarLacuna(event)}>
+        <p className="text-sm text-slate-600">O PROVE começa sem um dos três requisitos, e o registro fica com nome e motivo. Sem isso, a invariante viraria sugestão.</p>
+        <label className="form-label">Quem aprovou
+          <select className="field" value={lacunaDraft.gap_waiver_by} onChange={event => setLacunaDraft({ ...lacunaDraft, gap_waiver_by: event.target.value })} required>
+            <option value="">Selecione uma pessoa</option>
+            {aprovadores.map(pessoa => <option key={pessoa.id} value={pessoa.id}>{pessoa.nome}</option>)}
+          </select>
+        </label>
+        <label className="form-label">Por quê
+          <textarea className="field min-h-20" value={lacunaDraft.gap_waiver} onChange={event => setLacunaDraft({ ...lacunaDraft, gap_waiver: event.target.value })} placeholder="O que falta, e por que começar assim mesmo é a decisão certa" required />
+        </label>
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" className="btn btn--secondary" onClick={() => setLacunaDe(null)}>Cancelar</button>
+          <button type="submit" className="btn" disabled={proveBusy}><Save className="size-4" />{proveBusy ? "Registrando…" : "Registrar lacuna"}</button>
+        </div>
+      </form>
+    </Modal>}
     {archivingProject && <ConfirmDialog
       title="Arquivar projeto"
       message={<>O projeto <strong className="text-ink">{project.name}</strong> sai das listagens ativas, junto com o que pende dele. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
@@ -500,6 +625,19 @@ export function ProjectDetailPage({ id }: { id: number }) {
       onApplyGate={(decision, notes) => void applyGate(decision, notes)}
     />
 
+    {/* Os dois painéis da Fase 5, **logo abaixo da Jornada** (decisão A1 do DAP
+        `dap-prove-e-valor-r1`): a decisão que eles sustentam é a decisão de gate da fase, e ela
+        mora ali em cima. Visíveis só quando a fase canônica correspondente existe — um projeto de
+        Discovery Sprint não mostra painel de PROVE. */}
+    {temFaseFeasibility && <PainelDeFeasibility laudos={laudos} hipoteses={hipoteses} carregando={proveCarregando} erro={proveErro} />}
+    {temFaseProve && <PainelDeProve
+      experimentos={experimentos} kpis={kpis} medicoes={medicoes} hipoteses={hipoteses}
+      carregando={proveCarregando} erro={proveErro} canManage={canManageJourney} busy={proveBusy}
+      nomeDe={nomeDoAprovador}
+      onIniciar={experimento => void iniciarProve(experimento)}
+      onLacuna={experimento => { setLacunaDe(experimento); setLacunaDraft({ gap_waiver: experimento.gap_waiver, gap_waiver_by: experimento.gap_waiver_by ? String(experimento.gap_waiver_by) : "" }); }}
+    />}
+
     {timeline && Array.isArray(timeline.events) && <DeliveryTimelinePanel timeline={timeline} canManage={canManageJourney} onSetWaiting={(party, note) => void setWaiting(party, note)} />}
 
     {health &&<div className="flex items-center gap-2 text-sm"><span className="font-medium text-slate-600">Saúde do projeto:</span><HealthBadge level={health.level} score={health.score} />{health.signals.length === 0 && <span className="text-slate-600">sem sinais de alerta</span>}</div>}
@@ -532,6 +670,18 @@ export function ProjectDetailPage({ id }: { id: number }) {
         {employee.area && <p className="mt-0.5 text-xs text-accent">{employee.area}</p>}
         {employee.description && <p className="mt-1 text-xs text-slate-600">{employee.description}</p>}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{employee.kpi_label && <span><strong className="text-ink">{employee.kpi_label}:</strong> {employee.kpi_value}</span>}{Number(employee.hours_saved_month) > 0 && <span>{Number(employee.hours_saved_month)}h/mês</span>}{Number(employee.roi_month) > 0 && <span>ROI {money.format(Number(employee.roi_month))}/mês</span>}</div>
+        {/* **Decisão C1**: o ativo *referencia* o KPI, não o possui. O que aparece aqui é
+            leitura — `kpi_baseline` e `kpi_current` continuam saindo no `GET`, derivados da
+            baseline viva e do Outcome mais recente (ADR 0055) —, e a escrita mora no PROVE. */}
+        {employee.kpi !== null && (() => {
+          const kpiDoAtivo = kpis.find(kpi => kpi.id === employee.kpi);
+          return <div className="mt-3 border-t border-dashed border-line pt-3">
+            <p className="text-xs font-semibold text-ink">KPI referenciado</p>
+            <p className="mt-0.5 text-xs text-slate-600">{kpiDoAtivo?.name || employee.kpi_label || "Indicador"}{kpiDoAtivo?.prove_experiment != null ? " · medido no PROVE" : " · sem experimento"}</p>
+            <ParDeMedicao antes={employee.kpi_baseline} depois={employee.kpi_current} direcao={kpiDoAtivo?.direction ?? employee.kpi_direction} />
+            {temFaseProve && kpiDoAtivo?.prove_experiment != null && <a className="back-link mt-1 text-xs" href="#prove">Ver no PROVE<ChevronRight className="size-3.5" /></a>}
+          </div>;
+        })()}
         {canManageJourney && <div className="mt-3 flex flex-wrap justify-end gap-2">{showArchivedEmployees
           ? <button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-accent hover:border-accent" onClick={() => void restoreEmployee(employee.id)}>Restaurar</button>
           : <><button className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent" aria-label={`Editar ${employee.name}`} onClick={() => openEmployeeEdit(employee)}><Pencil className="size-3.5 text-accent" />Editar</button>
@@ -548,10 +698,6 @@ export function ProjectDetailPage({ id }: { id: number }) {
             <option value="">Escolha um bloco do catálogo…</option>
             {catalog.map(blueprint => <option key={blueprint.id} value={blueprint.id}>{blueprint.name} — {blueprint.area_display}{blueprint.has_variant ? ` (ajustado a ${project.client_vertical_name})` : ""}</option>)}
           </select></label>
-          {/* O "antes" é pedido **aqui**, na instanciação, e não na hora de montar o case: este é
-              o único momento em que ele ainda é medição. Preenchido meses depois, na conclusão,
-              seria memória — e é exatamente isso que destrói a credibilidade de uma prova (FDD 027). */}
-          <label className="form-label">Base do KPI hoje<input className="field w-40" type="number" step="0.01" placeholder="Opcional" value={baselineDraft} onChange={event => setBaselineDraft(event.target.value)} /></label>
           <button className="btn shrink-0" type="submit"><Plus className="size-4" />Instanciar</button>
         </form>}
         <form className="mt-4 flex flex-wrap gap-2" onSubmit={event => void createEmployee(event)}>
@@ -941,4 +1087,319 @@ function WorkList({ items, onToggle, onCalendar, emptyLabel }: { items: (Milesto
       <span className={`state shrink-0 ${done ? "state--1" : item.status === "in_progress" ? "state--2" : "state--off"}`}>{workStatusLabel[item.status]}</span>
     </div>;
   })}</div>;
+}
+
+// -----------------------------------------------------------------------------------------------
+// Feasibility, PROVE e a linha do KPI — FDD 049, ADR 0055
+//
+// Governados pelo DAP `docs/design/dap-prove-e-valor-r1/`, revisão 1, decisões
+// **A1 · B1 · C1 · D1 · E1**. Mudar a superfície exige revisão nova do pacote, não julgamento na
+// hora.
+//
+// **A1 — painéis do projeto, e não tela própria.** O laudo de Feasibility existe para sustentar um
+// `GO`/`CONDITIONAL GO`/`REDESIGN`/`NO-GO` e o PROVE um `SCALE`/`ITERATE`/`STOP` (ADR 0053).
+// Separar o conteúdo da decisão em outra tela faria a pessoa decidir num lugar e ler a prova em
+// outro — que é como se decide sem ler. O custo (esta é a tela mais longa do produto) é pago pela
+// visibilidade condicional: a fase canônica é que diz se o painel existe.
+//
+// **A decisão de gate nunca aparece rotulada como resultado** (`language-map` §6.3). Ela é a
+// mesma pílula que a Jornada já desenha, com o mesmo `gateVariant` e o mesmo
+// `GATE_DECISION_LABEL` de `journey.ts` — um segundo mapa aqui divergiria do primeiro em silêncio.
+// -----------------------------------------------------------------------------------------------
+
+/**
+ * O símbolo da unidade é **copy da tela**, não dado da API: o servidor publica a chave (`hours`) e
+ * o rótulo (`Horas`), e é a superfície que decide escrever "h" ao lado do número. É a mesma razão
+ * de `prove.o_que_falta_para_iniciar` devolver chaves em vez de frases.
+ */
+const KPI_UNIT_SYMBOL: Record<KpiUnit, string> = { "": "", percent: "%", hours: "h", minutes: "min", currency: "R$", count: "un" };
+
+// Variante, nunca a cor (ADR 0026). Os três rótulos são os do board — que abrevia "Com ressalva"
+// para "Ressalva", porque a pílula divide a linha com o texto do eixo.
+const VERDICT_VARIANT: Record<FeasibilityVerdict, string> = { favorable: "state--1", caveat: "state--2", unfavorable: "state--3" };
+const VERDICT_LABEL: Record<FeasibilityVerdict, string> = { favorable: "Favorável", caveat: "Ressalva", unfavorable: "Desfavorável" };
+
+// `planned` é o **neutro**: um experimento que ainda não começou não é aviso, no molde de
+// "Arquivado" e da fase `pending` da jornada.
+const PROVE_STATUS_VARIANT: Record<ProveExperimentStatus, string> = { planned: "state--off", running: "state--0", concluded: "state--1" };
+
+/**
+ * Os três requisitos da invariante, **na ordem de `prove.REQUISITOS`** — e os rótulos são daqui.
+ *
+ * A tela desenha as pastilhas a partir de `missing_to_start`, que o servidor deriva da mesma
+ * função que a action `start/` usa para recusar. Recalcular a regra aqui habilitaria o botão de um
+ * `POST` que o servidor nega, e nada ficaria vermelho (decisão E1).
+ */
+const REQUISITOS_DO_PROVE: ReadonlyArray<readonly [ProveMissingRequirement, string]> = [
+  ["kpi", "KPI definido"],
+  ["success_criteria", "Critério de sucesso"],
+  ["baseline", "Baseline medida"],
+];
+
+const dataCurta = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
+
+/**
+ * O número de uma medição. **`null` é "não medido", e sai como `—` — nunca `0`.**
+ *
+ * Zero afirmaria que o processo não custava nada antes; a lacuna admitida é sempre melhor que a
+ * lacuna disfarçada de medição. É a mesma regra de `Process.custo_do_estado_atual` com
+ * `nao_apurado`, e a razão de ser do pacote inteiro.
+ */
+const numeroDoKpi = (valor: string | null | undefined) =>
+  valor === null || valor === undefined || valor === ""
+    ? "—"
+    : Number(valor).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+
+/**
+ * A variação entre baseline e outcome, ou `null` quando ela **não existe**.
+ *
+ * Não existe em três casos, e os três viram "variação —" na tela: falta a baseline, falta o
+ * outcome, ou a baseline é zero — de zero não se calcula variação percentual, e um `∞` ali seria
+ * pior que a lacuna. O sinal do bem e do mal sai da **direção do KPI**: cair 74% é sucesso quando
+ * menor é melhor e é o contrário quando não é.
+ */
+function variacaoDoKpi(antes: string | null, depois: string | null, direcao: KpiDirection): { texto: string; variante: string } | null {
+  if (antes === null || depois === null) return null;
+  const base = Number(antes); const atual = Number(depois);
+  if (!Number.isFinite(base) || !Number.isFinite(atual) || base === 0) return null;
+  const percentual = Math.round(((atual - base) / Math.abs(base)) * 100);
+  if (percentual === 0) return { texto: "0%", variante: "state--off" };
+  const melhorou = direcao === "up" ? percentual > 0 : percentual < 0;
+  // O sinal de menos é o tipográfico (U+2212), como no board: o hífen do teclado quebra a linha
+  // em coluna estreita, e a tabela de números do `.metric-card` já usa `tabular-nums` por isso.
+  return { texto: `${percentual > 0 ? "+" : "−"}${Math.abs(percentual)}%`, variante: melhorou ? "state--1" : "state--3" };
+}
+
+/**
+ * `Baseline → Outcome · variação` — a decisão **B1**, num componente só.
+ *
+ * Baseline e outcome **são o mesmo KPI em momentos diferentes**, e é essa a frase central da
+ * fatia: mostrar só a leitura vigente reintroduziria na leitura a fusão que o modelo desfaz na
+ * escrita — sem o par, "1h05" não diz se melhorou.
+ *
+ * Mora em `.row-meta` e não em irmãos soltos dentro do `.row-main`: a primitiva sobrescreve
+ * `display` e cor de qualquer `span`/`strong` aninhado, e o cluster viraria três linhas empilhadas
+ * em cinza. `.row-meta` é posicionamento puro e força a própria linha dentro da mesma `.row`, que
+ * é justamente o que a linha do KPI precisa em 390px.
+ */
+function ParDeMedicao({ antes, depois, direcao }: { antes: string | null; depois: string | null; direcao: KpiDirection }) {
+  const variacao = variacaoDoKpi(antes, depois, direcao);
+  return <div className="row-meta tabular-nums">
+    <span className="sr-only">Baseline:</span>
+    <span className="type-body text-muted">{numeroDoKpi(antes)}</span>
+    <span aria-hidden="true" className="text-muted">→</span>
+    <span className="sr-only">atual:</span>
+    <span className="type-title text-ink">{numeroDoKpi(depois)}</span>
+    {variacao
+      ? <span className={`state ${variacao.variante}`}>{variacao.texto}</span>
+      : <span className="type-body text-muted">variação —</span>}
+  </div>;
+}
+
+/**
+ * O histórico completo de leituras, colapsado (decisão **B1**).
+ *
+ * As medições vêm do servidor em ordem decrescente (`-measured_at`) e aqui sobem em ordem
+ * cronológica: o histórico é uma série, e ler uma série de trás para a frente esconde justamente o
+ * movimento que ela existe para mostrar. A baseline e a leitura mais recente ganham sufixo — são
+ * os dois números que a linha acima compara.
+ */
+function HistoricoDeMedicoes({ medicoes }: { medicoes: Measurement[] }) {
+  if (!medicoes.length) return null;
+  const emOrdem = [...medicoes].sort((a, b) => a.measured_at.localeCompare(b.measured_at) || a.id - b.id);
+  const ultimoOutcome = [...emOrdem].reverse().find(medicao => medicao.kind === "outcome");
+  return <details className="basis-full">
+    <summary className="type-meta cursor-pointer text-brand-600">Ver histórico de medições ({emOrdem.length})</summary>
+    <ul className="mt-2 grid gap-1">{emOrdem.map(medicao => <li className="flex justify-between gap-3 border-t border-line pt-1 first:border-t-0 first:pt-0" key={medicao.id}>
+      <span className="type-meta text-muted">{dataCurta(medicao.measured_at)}{medicao.kind === "baseline" ? " · baseline" : medicao.id === ultimoOutcome?.id ? " · atual" : ""}</span>
+      <span className="type-meta tabular-nums text-muted">{numeroDoKpi(medicao.value)}</span>
+    </li>)}</ul>
+  </details>;
+}
+
+/** O mesmo esqueleto de `animate-pulse`/`bg-slate-200` que a página já usa — não um terceiro. */
+function EsqueletoDoPainel() {
+  return <div className="animate-pulse space-y-3"><div className="h-5 w-2/3 rounded-xl bg-slate-200" /><div className="h-16 rounded-xl bg-slate-200" /></div>;
+}
+
+function CabecalhoVazio({ icone, titulo, apoio, children }: { icone: ReactNode; titulo: string; apoio: string; children: ReactNode }) {
+  return <section className="panel space-y-4 sm:p-6">
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="metric-icon">{icone}</span>
+      <div><h2 className="font-semibold text-ink">{titulo}</h2><p className="text-sm text-slate-600">{apoio}</p></div>
+    </div>
+    {children}
+  </section>;
+}
+
+type PainelDeFeasibilityProps = {
+  laudos: FeasibilityAssessment[];
+  hipoteses: Record<number, SolutionHypothesis>;
+  carregando: boolean;
+  erro: string;
+};
+
+/**
+ * O laudo de Feasibility — os três eixos, a amostra, as classes de erro e a decisão.
+ *
+ * **Os três eixos não colapsam num veredito só**: "funciona, mas o time não opera" e "funciona e
+ * não fecha a conta" acabam no mesmo `CONDITIONAL GO`, e é a diferença entre os dois que a próxima
+ * conversa precisa. A amostra e as classes de erro ficam visíveis mesmo vazias, com `—`: um laudo
+ * sem amostra não é reproduzível, e esconder a linha esconderia exatamente essa lacuna.
+ */
+function PainelDeFeasibility({ laudos, hipoteses, carregando, erro }: PainelDeFeasibilityProps) {
+  if (carregando || erro || !laudos.length) return <CabecalhoVazio
+    icone={<Microscope className="size-4" />} titulo="Technical Feasibility"
+    apoio="O laudo que sustenta a decisão de gate desta fase."
+  >
+    {carregando ? <EsqueletoDoPainel />
+      : erro ? <p role="alert" className="alert--error">{erro}</p>
+      : <p className="empty-state">Nenhum laudo. A Feasibility responde se a tecnologia consegue fazer a tarefa.</p>}
+  </CabecalhoVazio>;
+
+  return <>{laudos.map(laudo => {
+    const eixos = [
+      ["Eixo técnico", laudo.technical_verdict, laudo.technical_note],
+      ["Eixo operacional", laudo.operational_verdict, laudo.operational_note],
+      ["Eixo econômico", laudo.economic_verdict, laudo.economic_note],
+    ] as const;
+    const hipotese = hipoteses[laudo.solution_hypothesis];
+    return <section className="panel panel--flush" key={laudo.id}>
+      <div className="panel-heading flex-wrap">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="metric-icon"><Microscope className="size-4" /></span>
+          <div className="min-w-0"><h2>Technical Feasibility</h2><p className="text-sm text-slate-600">Laudo avaliado em {dataCurta(laudo.created_at)}</p></div>
+        </div>
+        {/* A decisão fica **ao lado** do laudo, nunca no lugar dele: é a mesma pílula da Jornada,
+            com o mesmo mapa de `journey.ts`. Ela não se grava aqui — o gate é da fase. */}
+        {laudo.gate_decision && <span className={`state ${gateVariant[laudo.gate_decision]} shrink-0`}>{GATE_DECISION_LABEL[laudo.gate_decision]}</span>}
+      </div>
+      <div className="border-b border-line px-5 py-4 sm:px-6">
+        <p className="type-body text-slate-700"><strong className="text-ink">Hipótese de solução avaliada:</strong> {hipotese ? hipotese.statement : "—"}</p>
+      </div>
+      <div className="panel-rows">
+        {eixos.map(([rotulo, veredito, nota]) => <div className="row" key={rotulo}>
+          <div className="row-main"><strong>{rotulo}</strong><span>{nota || "Sem nota registrada."}</span></div>
+          <span className={`state ${VERDICT_VARIANT[veredito]} shrink-0`}>{VERDICT_LABEL[veredito]}</span>
+        </div>)}
+        <div className="row"><div className="row-main"><strong>Amostra usada</strong><span>{laudo.sample || "—"}</span></div></div>
+        <div className="row"><div className="row-main"><strong>Classes de erro observadas</strong><span>{laudo.error_classes || "—"}</span></div></div>
+        <div className="row"><div className="row-main">
+          <strong>Evidência</strong>
+          <span>{laudo.evidence.length
+            ? `${laudo.evidence.length} ${laudo.evidence.length === 1 ? "Evidence vinculada" : "Evidence vinculadas"}`
+            : "Nenhuma Evidence vinculada."}</span>
+        </div></div>
+      </div>
+    </section>;
+  })}</>;
+}
+
+type PainelDeProveProps = {
+  experimentos: ProveExperiment[];
+  kpis: KPI[];
+  medicoes: Record<number, Measurement[]>;
+  hipoteses: Record<number, SolutionHypothesis>;
+  carregando: boolean;
+  erro: string;
+  canManage: boolean;
+  busy: boolean;
+  nomeDe: (userId: number | null) => string;
+  onIniciar: (experimento: ProveExperiment) => void;
+  onLacuna: (experimento: ProveExperiment) => void;
+};
+
+/** `Medido em horas · h`. Sem unidade, a ausência é dita — não se inventa símbolo. */
+const medidoEm = (kpi: KPI) => kpi.unit ? `Medido em ${kpi.unit_display.toLowerCase()} · ${KPI_UNIT_SYMBOL[kpi.unit]}` : "Sem unidade definida";
+
+/** A leitura viva de um `kind`. **Medição sem valor e ausência de medição são a mesma coisa: `—`.** */
+function valorDe(leituras: Measurement[], kind: Measurement["kind"]): string | null {
+  const doTipo = leituras.filter(medicao => medicao.kind === kind);
+  if (!doTipo.length) return null;
+  // "Mais recente" é por `measured_at`, como no servidor: quem digita a leitura de outubro em
+  // novembro está registrando outubro. O id desempata para a ordem ser estável.
+  return doTipo.reduce((maior, atual) =>
+    atual.measured_at > maior.measured_at || (atual.measured_at === maior.measured_at && atual.id > maior.id) ? atual : maior).value;
+}
+
+/**
+ * O experimento do PROVE, seus KPIs e a invariante de início (decisões **B1** e **E1**).
+ *
+ * **A lista do que falta vem do servidor** (`missing_to_start`), e não de uma segunda expressão da
+ * regra aqui: as três pastilhas e a recusa da action `start/` saem da mesma função pura
+ * (`prove.o_que_falta_para_iniciar`). Duas expressões divergiriam, e a tela habilitaria o botão
+ * que o servidor nega — sem nada ficar vermelho.
+ */
+function PainelDeProve({ experimentos, kpis, medicoes, hipoteses, carregando, erro, canManage, busy, nomeDe, onIniciar, onLacuna }: PainelDeProveProps) {
+  if (carregando || erro || !experimentos.length) return <CabecalhoVazio
+    icone={<FlaskConical className="size-4" />} titulo="PROVE"
+    apoio="O experimento em produção controlada, com critério de sucesso prévio."
+  >
+    {carregando ? <EsqueletoDoPainel />
+      : erro ? <p role="alert" className="alert--error">{erro}</p>
+      : <p className="empty-state">Nenhum experimento. O PROVE responde se funcionou em produção controlada.</p>}
+  </CabecalhoVazio>;
+
+  return <>{experimentos.map((experimento, indice) => {
+    const doExperimento = kpis.filter(kpi => kpi.prove_experiment === experimento.id);
+    const hipotese = hipoteses[experimento.solution_hypothesis];
+    const janela = experimento.started_at
+      ? `${formatDate(experimento.started_at)} → ${experimento.ended_at ? formatDate(experimento.ended_at) : "em aberto"}`
+      : "janela ainda não definida";
+    const lacuna = experimento.gap_waiver.trim();
+    // O espelho exato das três recusas da action, e nada além: a lista do que falta é do servidor,
+    // e as duas condições da lacuna aprovada são as mesmas que ele confere antes de gravar.
+    const podeIniciar = experimento.missing_to_start.length === 0
+      || (lacuna !== "" && experimento.gap_waiver_by !== null);
+    return <section className="panel panel--flush" id={indice === 0 ? "prove" : undefined} key={experimento.id}>
+      <div className="panel-heading flex-wrap">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="metric-icon"><FlaskConical className="size-4" /></span>
+          <div className="min-w-0"><h2>PROVE</h2><p className="text-sm text-slate-600">Experimento em produção controlada · {janela}</p></div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className={`state ${PROVE_STATUS_VARIANT[experimento.status]}`}>{experimento.status_display}</span>
+          {/* A decisão do PROVE fala o vocabulário dele — `SCALE`/`ITERATE`/`STOP` (ADR 0053) —,
+              e aparece **ao lado** do resultado, nunca no lugar dele. */}
+          {experimento.gate_decision && <span className={`state ${gateVariant[experimento.gate_decision]}`}>{GATE_DECISION_LABEL[experimento.gate_decision]}</span>}
+        </div>
+      </div>
+      <div className="grid gap-2 border-b border-line px-5 py-4 sm:px-6">
+        <p className="type-body text-slate-700"><strong className="text-ink">Hipótese avaliada:</strong> {hipotese ? hipotese.statement : "—"}</p>
+        <p className="type-body text-slate-700"><strong className="text-ink">Escopo controlado:</strong> {experimento.controlled_scope || "—"}</p>
+        {/* O critério é **prévio**, e é metade da invariante de início: um experimento que define o
+            que é sucesso depois de ver o resultado não prova nada. */}
+        <p className="type-body text-slate-700"><strong className="text-ink">Critério de sucesso:</strong> {experimento.success_criteria || "—"}</p>
+      </div>
+
+      {doExperimento.length ? <div className="panel-rows">{doExperimento.map(kpi => {
+        const leituras = medicoes[kpi.id] ?? [];
+        return <div className="row" key={kpi.id}>
+          <span className="metric-icon"><Gauge className="size-4" /></span>
+          <div className="row-main"><strong>{kpi.name}</strong><span>{medidoEm(kpi)}</span></div>
+          <ParDeMedicao antes={valorDe(leituras, "baseline")} depois={valorDe(leituras, "outcome")} direcao={kpi.direction} />
+          <HistoricoDeMedicoes medicoes={leituras} />
+        </div>;
+      })}</div> : <div className="px-5 py-4 sm:px-6"><p className="empty-state">Sem KPI definido. O PROVE não começa sem indicador, critério e baseline.</p></div>}
+
+      {/* Decisão **E1**: bloqueia, com a lista do que falta e uma saída que custa um nome e uma
+          justificativa. Uma tela que só avisasse transformaria a invariante em sugestão, e a
+          "lacuna aprovada" deixaria de ser um ato registrado para virar um clique que ninguém
+          assina. As pastilhas aparecem para quem só lê; os botões, não. */}
+      {experimento.status === "planned" && <div className="border-t border-line px-5 py-4 sm:px-6">
+        <p className="type-label text-muted">Falta para iniciar o PROVE:</p>
+        <ul className="mt-2 grid gap-1.5">{REQUISITOS_DO_PROVE.map(([chave, rotulo]) => {
+          const falta = experimento.missing_to_start.includes(chave);
+          return <li className="flex items-center gap-2 text-sm text-slate-700" key={chave}>
+            <span className={`state ${falta ? "state--2" : "state--1"}`}>{falta ? "Falta" : "Pronto"}</span>{rotulo}
+          </li>;
+        })}</ul>
+        {lacuna && <p className="mt-3 text-sm text-slate-600"><strong className="text-ink">Lacuna aprovada por {nomeDe(experimento.gap_waiver_by)}:</strong> {lacuna}</p>}
+        {canManage && <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className="btn" disabled={!podeIniciar || busy} onClick={() => onIniciar(experimento)}>{busy ? "Iniciando…" : "Iniciar PROVE"}</button>
+          <button type="button" className="btn btn--secondary" onClick={() => onLacuna(experimento)}>Registrar lacuna aprovada</button>
+        </div>}
+      </div>}
+    </section>;
+  })}</>;
 }

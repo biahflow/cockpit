@@ -5,7 +5,19 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ProjectDetailPage } from "./ProjectDetailPage";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
-vi.mock("../api", () => ({ api: mocks.api }));
+// A carga da Fase 5 (FDD 049) roda em paralelo ao detalhe do projeto e não é o assunto deste
+// arquivo: listas vazias mantêm os dois painéis fora do caminho. Quem os exercita é
+// `ProjectDetailProve.test.tsx`. Em `vi.hoisted` porque a fábrica do `vi.mock` roda **antes** do
+// corpo do módulo.
+const semFase5 = vi.hoisted(() => ({
+  listKpis: () => Promise.resolve([]),
+  listFeasibilityAssessments: () => Promise.resolve([]),
+  listProveExperiments: () => Promise.resolve([]),
+  listMeasurements: () => Promise.resolve([]),
+  startProveExperiment: () => Promise.resolve({}),
+  registerProveGapWaiver: () => Promise.resolve({}),
+}));
+vi.mock("../api", () => ({ api: mocks.api, ...semFase5 }));
 vi.mock("../auth", () => ({ useAuth: () => ({ aiEnabled: false, calendarEnabled: false, user: { role: "delivery" } }) }));
 
 const PHASES = [

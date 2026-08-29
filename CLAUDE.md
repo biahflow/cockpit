@@ -250,6 +250,48 @@ Key cross-cutting patterns to preserve:
   a rota é um `GET`, e incrementar na leitura produziria versões fora de ordem — o sinal exato que
   o comparador do outro lado usa para descartar o obsoleto. Duas leituras seguidas devolvendo a
   mesma versão é o caso comum, não sintoma. Ver FDD 047, ADR 0051 e a emenda de 28/08 na ADR 0003.
+- **A medição saiu do ativo de solução, e "antes" e "depois" são o mesmo KPI em dois momentos.**
+  `kpi_baseline` e `kpi_current` eram colunas de `DigitalEmployee`; desde a ADR 0055 (FDD 049) o
+  indicador é `KPI` — do **projeto**, com `prove_experiment` opcional porque o KPI migrado não
+  nasceu de experimento nenhum e inventar um seria histórico fabricado — e cada leitura é uma
+  `Measurement` (`baseline`/`outcome`/`monitoring`). **`value` nulo é "não medido", nunca zero**, e
+  a `Measurement` **não** tem `unit`: a ausência é a garantia de que o par comparado usa o mesmo
+  KPI, a mesma unidade e o mesmo método (`language-map` §6.11) — acrescentá-la deixaria duas
+  leituras divergirem em silêncio. `DigitalEmployee.kpi` **referencia**, não possui. As duas chaves
+  continuam **saindo** na `/api/v1/`, derivadas (`prove.baseline_de`/`outcome_mais_recente_de`, um
+  lugar só, lido também por `cases._metric`), e a **escrita** por elas parou — quebra deliberada
+  aprovada pela decisão C1 do DAP `docs/design/dap-prove-e-valor-r1/`, registrada em
+  `docs/ontology/aliases.md` §2d, com regressão afirmando a leitura.
+- **O PROVE não começa sem KPI, critério de sucesso e Baseline — ou lacuna aprovada, assinada.**
+  A invariante mora na action `POST /prove-experiments/{id}/start/` e **não** num `PATCH` de
+  `status`, pela razão exata de `journey.apply_gate`: o que vale depende do estado corrente, e só
+  ali ele é conhecido — 400 via `InvalidInput` listando **o que** falta, 409 via `StateConflict`
+  para o que já começou. `gap_waiver` sem `gap_waiver_by` é 400: lacuna aprovada é ato com autor,
+  como o trio de consentimento do `Case`. Quem diz o que falta é `prove.o_que_falta_para_iniciar`,
+  função pura no molde de `priority.py`, que devolve **chaves e nunca frases** — os rótulos são da
+  superfície — e é publicada em `missing_to_start` para a tela desenhar as pastilhas a partir dela.
+  `FeasibilityAssessment` e `ProveExperiment` **reusam** `ProjectPhase.GateDecision` e
+  `ProjectPhase.ProveDecision` (ADR 0053); redefinir as saídas seria a segunda definição do mesmo
+  vocabulário. `ValueLedgerEntry` aponta para um `Measurement(kind=outcome)` com `PROTECT`, exige
+  `attribution_method` não-vazio e carimba `approved_at` como o `published_at` do `Case` — são as
+  invariantes §6.11 e §6.12, testáveis pela primeira vez. Ela pende de `Engagement` e **fica fora
+  de `PROJECT_OF`** (o `project` é opcional, e o mandato não é fronteira de acesso): a visibilidade
+  deriva de `Project.objects.visible_to`, como a do próprio `Engagement`.
+- **A superfície da Fase 5 é governada pelo DAP `docs/design/dap-prove-e-valor-r1/`**, r1, decisões
+  **A1 · B1 · C1 · D1 · E1** — mudar exige revisão nova do pacote, não julgamento na hora. Os dois
+  painéis (**Technical Feasibility** e **PROVE**) ficam em `ProjectDetailPage`, logo abaixo da
+  Jornada, e existem **só onde a fase canônica existe**: um projeto de Discovery Sprint não mostra
+  painel de PROVE. A linha do KPI é `Baseline → Outcome · variação`, com o histórico num
+  `<details>`, e **a lacuna é `—`, nunca `0`** — inclusive quando a baseline é zero, de onde não se
+  calcula variação. As três pastilhas `Pronto`/`Falta` saem de `missing_to_start`, e **a tela nunca
+  reexpressa a invariante**: recalculá-la habilitaria o botão de um `POST` que o servidor nega, sem
+  nada ficar vermelho. A decisão de gate aparece **como decisão, ao lado do resultado**
+  (`language-map` §6.3), com o `GATE_DECISION_LABEL`/`gateVariant` que a Jornada já usa — nunca um
+  mapa novo. O formulário do Time Digital **perdeu** "Antes (base)" e "Depois (atual)" (C1) e o
+  painel passou a só ler o KPI referenciado. O Value Ledger é a tela `/contas/:id/valor`, simétrica
+  a `/contas/:id/priorizacao`, **fora do menu lateral** e lida **por mandato** (uma chamada por
+  `Engagement`; sem filtro, a rota traria o consolidado entre contas que o DAP reservou). Ficam
+  reservados no pacote: gráfico de série do KPI, `Case` derivado de Outcomes e ledger consolidado.
 - **Os renomes da ontologia estão em curso, e "renome" são três coisas com prazos distintos**
   (ADR 0052, issue #67). O nome da **classe** — e de tudo que a nomeia: serializer, viewset,
   `resource`, campo FK, tipo TS — muda **agora**, uma fatia por PR. O nome da **tabela** fica para

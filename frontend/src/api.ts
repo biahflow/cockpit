@@ -1,5 +1,5 @@
 import { reportError, setLastRequestId } from "./observability";
-import type { AgentReply, AppConfig, ImprovementOpportunity, IntegrationFlag, Invitation, Notification, PainPoint, PriorityAssessment, SessionUser, SolutionHypothesis } from "./types";
+import type { AgentReply, AppConfig, FeasibilityAssessment, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
 
@@ -256,4 +256,65 @@ export function createSolutionHypothesis(payload: SolutionHypothesisPayload): Pr
 /** Trocar para `chosen` com outra já escolhida viva é 400, não 500: a checagem mora no serializer. */
 export function updateSolutionHypothesis(id: number, payload: Partial<SolutionHypothesisPayload> & { status?: SolutionHypothesis["status"] }): Promise<SolutionHypothesis> {
   return api<SolutionHypothesis>(`/solution-hypotheses/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+// ---------- Feasibility, PROVE, KPI/Measurement e Value Ledger (FDD 049, ADR 0055) ----------
+// Os cinco recursos da Fase 5, consumidos pelos dois painéis de `ProjectDetailPage` e pela tela
+// `/contas/:id/valor` (DAP `dap-prove-e-valor-r1`, decisões A1 · B1 · C1 · D1 · E1).
+//
+// **Nomes canônicos e nenhum alias**: estes cinco nascem com o nome do mapa de linguagem, então
+// aqui não há a assimetria de `/clients/` — a rota é a mesma palavra do modelo.
+
+export function listFeasibilityAssessments(project: number): Promise<FeasibilityAssessment[]> {
+  return api<FeasibilityAssessment[]>(`/feasibility-assessments/?project=${project}`);
+}
+
+export function listProveExperiments(project: number): Promise<ProveExperiment[]> {
+  return api<ProveExperiment[]>(`/prove-experiments/?project=${project}`);
+}
+
+/**
+ * Inicia o PROVE. **A tela nunca decide sozinha que pode iniciar**: quem diz o que falta é
+ * `missing_to_start`, que o servidor deriva da mesma função que esta action usa para recusar
+ * (`prove.o_que_falta_para_iniciar`). Reexpressar a invariante aqui habilitaria o botão de um
+ * `POST` que o servidor nega, e nada ficaria vermelho.
+ */
+export function startProveExperiment(id: number): Promise<ProveExperiment> {
+  return api<ProveExperiment>(`/prove-experiments/${id}/start/`, { method: "POST" });
+}
+
+/**
+ * Registra a lacuna aprovada — a saída explícita da decisão **E1**, e ela custa um nome e uma
+ * justificativa. `gap_waiver` sem `gap_waiver_by` é 400 no servidor: aprovação sem autor é
+ * alegação de ninguém. `gap_waiver_at` é carimbado por `start/` e não se envia daqui.
+ */
+export function registerProveGapWaiver(id: number, payload: { gap_waiver: string; gap_waiver_by: number }): Promise<ProveExperiment> {
+  return api<ProveExperiment>(`/prove-experiments/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export function listKpis(project: number): Promise<KPI[]> {
+  return api<KPI[]>(`/kpis/?project=${project}`);
+}
+
+export function getKpi(id: number): Promise<KPI> {
+  return api<KPI>(`/kpis/${id}/`);
+}
+
+/** As leituras de um KPI — baseline, outcome e monitoramento —, que a linha B1 compara. */
+export function listMeasurements(kpi: number): Promise<Measurement[]> {
+  return api<Measurement[]>(`/measurements/?kpi=${kpi}`);
+}
+
+export function getMeasurement(id: number): Promise<Measurement> {
+  return api<Measurement>(`/measurements/${id}/`);
+}
+
+/**
+ * O Value Ledger é **por engajamento**, e é por isso que a tela da conta faz uma chamada por
+ * mandato em vez de uma só: a entrada pende do `Engagement` (valor é do mandato, não do projeto),
+ * e a rota não expõe filtro por conta. Um `GET` sem filtro traria o ledger inteiro que a pessoa
+ * alcança, de todas as contas — que é justamente o consolidado **reservado** no DAP.
+ */
+export function listValueLedgerEntries(engagement: number): Promise<ValueLedgerEntry[]> {
+  return api<ValueLedgerEntry[]>(`/value-ledger-entries/?engagement=${engagement}`);
 }

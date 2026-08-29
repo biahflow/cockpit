@@ -5,21 +5,25 @@ import factory
 from django.utils import timezone
 
 from apps.core.models import (
+    KPI,
     Account,
     Activity,
     Artifact,
     CommercialOpportunity,
+    DigitalEmployee,
     Discovery,
     DiscoverySession,
     Engagement,
     EngineeringHandoff,
     Evidence,
     Evidencia,
+    FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
     ImprovementOpportunity,
     Invoice,
     Lead,
+    Measurement,
     Meeting,
     PainPoint,
     PipelineStage,
@@ -29,10 +33,12 @@ from apps.core.models import (
     ProcessStep,
     Project,
     ProjectMember,
+    ProveExperiment,
     Qualification,
     Service,
     SolutionHypothesis,
     User,
+    ValueLedgerEntry,
 )
 
 
@@ -398,3 +404,134 @@ class FindingFactory(factory.django.DjangoModelFactory):
     account = factory.SubFactory(AccountFactory)
     statement = "O fechamento do faturamento leva dois dias."
     epistemic_status = Finding.EpistemicStatus.HYPOTHESIS
+
+
+class FeasibilityAssessmentFactory(factory.django.DjangoModelFactory):
+    """Laudo **sem decisão de gate** por padrão (FDD 049).
+
+    Em branco é o estado em que todo laudo nasce — o gate é ato posterior —, e uma fábrica que já
+    entregasse `GO` faria todo teste do vocabulário começar desfazendo o que ela fez. A hipótese e
+    o projeto nascem na **mesma conta**, senão o `clean()` recusaria toda criação de fábrica.
+    """
+
+    class Meta:
+        model = FeasibilityAssessment
+
+    project = factory.SubFactory(ProjectFactory)
+    # `LazyAttribute` e não `SubFactory`: a hipótese precisa nascer na **conta do projeto**, e a
+    # conta está dois níveis abaixo (hipótese → oportunidade → conta). Um `SubFactory` cru criaria
+    # uma segunda `Account`, e o `clean()` recusaria toda criação de fábrica — é o mesmo cuidado
+    # que `ProjectFactory` tem com o `engagement`.
+    solution_hypothesis = factory.LazyAttribute(
+        lambda obj: SolutionHypothesisFactory(
+            improvement_opportunity=ImprovementOpportunityFactory(account=obj.project.client)
+        )
+    )
+    technical_verdict = FeasibilityAssessment.Verdict.FAVORABLE
+    operational_verdict = FeasibilityAssessment.Verdict.FAVORABLE
+    economic_verdict = FeasibilityAssessment.Verdict.FAVORABLE
+
+
+class ProveExperimentFactory(factory.django.DjangoModelFactory):
+    """Experimento **planejado e sem critério de sucesso** (FDD 049).
+
+    Os dois padrões são o caso que a invariante de início existe para recusar: `planned` porque é
+    de onde `start/` parte, e `success_criteria` em branco porque preenchê-lo de graça faria a
+    metade mais barata da invariante nunca ser exercida sem alguém desfazer a fábrica antes.
+    """
+
+    class Meta:
+        model = ProveExperiment
+
+    project = factory.SubFactory(ProjectFactory)
+    # `LazyAttribute` e não `SubFactory`: a hipótese precisa nascer na **conta do projeto**, e a
+    # conta está dois níveis abaixo (hipótese → oportunidade → conta). Um `SubFactory` cru criaria
+    # uma segunda `Account`, e o `clean()` recusaria toda criação de fábrica — é o mesmo cuidado
+    # que `ProjectFactory` tem com o `engagement`.
+    solution_hypothesis = factory.LazyAttribute(
+        lambda obj: SolutionHypothesisFactory(
+            improvement_opportunity=ImprovementOpportunityFactory(account=obj.project.client)
+        )
+    )
+    controlled_scope = "Uma filial, por quatro semanas."
+    status = ProveExperiment.Status.PLANNED
+
+
+class KPIFactory(factory.django.DjangoModelFactory):
+    """KPI do projeto, **sem experimento** — o formato do KPI migrado (ADR 0055)."""
+
+    class Meta:
+        model = KPI
+
+    project = factory.SubFactory(ProjectFactory)
+    name = "Tempo de resposta"
+    unit = "hours"
+    direction = "down"
+
+
+class MeasurementFactory(factory.django.DjangoModelFactory):
+    """Baseline com valor. `value` é explícito porque a ausência dele **é** o caso interessante:
+    nulo é "não medido" e nunca zero, e quem testa a lacuna monta a linha sem o campo."""
+
+    class Meta:
+        model = Measurement
+
+    kpi = factory.SubFactory(KPIFactory)
+    kind = Measurement.Kind.BASELINE
+    value = Decimal("4.20")
+    period_start = factory.LazyFunction(lambda: timezone.localdate() - timedelta(days=30))
+    period_end = factory.LazyFunction(timezone.localdate)
+    measured_at = factory.LazyFunction(timezone.now)
+
+
+class ValueLedgerEntryFactory(factory.django.DjangoModelFactory):
+    """Entrada em rascunho apontando para um `Outcome` — o único `kind` que ela aceita (§6.12).
+
+    `attribution_method` vem preenchido porque vazio é recusado, e o teste que mede a recusa monta
+    o payload à mão, no molde da `QualificationFactory`.
+    """
+
+    class Meta:
+        model = ValueLedgerEntry
+
+    engagement = factory.SubFactory(EngagementFactory)
+    outcome_measurement = factory.SubFactory(MeasurementFactory, kind=Measurement.Kind.OUTCOME)
+    value_type = ValueLedgerEntry.ValueType.COST_SAVING
+    amount = Decimal("12000.00")
+    period_start = factory.LazyFunction(lambda: timezone.localdate() - timedelta(days=30))
+    period_end = factory.LazyFunction(timezone.localdate)
+    attribution_method = "Diferença entre baseline e outcome do KPI, descontada a sazonalidade."
+    status = ValueLedgerEntry.Status.DRAFT
+
+
+def digital_employee_medido(
+    project,
+    baseline: Decimal | None = None,
+    current: Decimal | None = None,
+    **campos,
+):
+    """Um Funcionário Digital com o KPI que ele **referencia** e as medições dele (ADR 0055).
+
+    Ajudante e não fábrica porque o par baseline/atual deixou de ser dois campos do ativo e virou
+    duas linhas de outra tabela: `KPI` + `Measurement`. Existe num lugar só pelo motivo de sempre —
+    três cópias em três suítes divergiriam na primeira correção —, e preserva os dois nomes na
+    assinatura de propósito: o que as suítes do case afirmam é a **forma** do congelamento, que não
+    mudou; mudou de onde ela lê.
+
+    `None` continua sendo "não medido" e **não vira medição nenhuma**, que é o caso da lacuna.
+    """
+    kpi = KPI.objects.create(
+        project=project,
+        name=campos.get("kpi_label") or campos.get("name") or "KPI",
+        unit=campos.get("kpi_unit", ""),
+        direction=campos.get("kpi_direction", "up"),
+    )
+    agora = timezone.now()
+    hoje = timezone.localdate()
+    for kind, valor in ((Measurement.Kind.BASELINE, baseline), (Measurement.Kind.OUTCOME, current)):
+        if valor is not None:
+            Measurement.objects.create(
+                kpi=kpi, kind=kind, value=valor,
+                period_start=hoje, period_end=hoje, measured_at=agora,
+            )
+    return DigitalEmployee.objects.create(project=project, kpi=kpi, **campos)

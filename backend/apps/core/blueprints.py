@@ -97,7 +97,6 @@ def instantiate(
     project: Project,
     blueprint: DigitalEmployeeBlueprint,
     vertical: Vertical | None = None,
-    kpi_baseline: Decimal | None = None,
 ) -> DigitalEmployee:
     """Cria o `DigitalEmployee` do projeto **copiando** os valores resolvidos do catálogo.
 
@@ -107,10 +106,11 @@ def instantiate(
 
     O `blueprint` fica gravado como procedência. Ele não é lido depois: o que vale é a cópia.
 
-    O `kpi_baseline` entra aqui, e não numa tela de case lá na frente, porque é este o instante em
-    que ele ainda é **medição**: perguntado na conclusão do projeto, o "antes" seria digitado de
-    memória meses depois do fato (FDD 027). Continua opcional — `None` é "não medido", e o case
-    declara a lacuna em vez de inventar um zero.
+    **`kpi_baseline` saiu daqui** (ADR 0055, decisão C1 do DAP `dap-prove-e-valor-r1`). A FDD 027
+    tinha razão sobre o *momento* — o "antes" perguntado na conclusão é memória, não medição —, e o
+    que mudou é **onde** ele mora: o baseline é uma `Measurement(kind=baseline)` de um `KPI`, e
+    aceitá-lo aqui manteria um segundo lugar escrevendo a mesma medição, que é exatamente o que a
+    decisão C1 remove. O ativo instanciado nasce sem KPI e passa a **referenciar** um.
     """
     from .models import DigitalEmployee
 
@@ -124,7 +124,6 @@ def instantiate(
         kpi_label=valores["kpi_label"],
         kpi_unit=valores["kpi_unit"],
         kpi_direction=valores["kpi_direction"],
-        kpi_baseline=kpi_baseline,
         hours_saved_month=valores["hours_saved_month"],
         roi_month=valores["roi_month"],
         status=DigitalEmployee.Status.BUILDING,

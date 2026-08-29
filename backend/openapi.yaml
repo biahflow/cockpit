@@ -3776,6 +3776,211 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v1/feasibility-assessments/:
+    get:
+      operationId: v1_feasibility_assessments_list
+      description: |-
+        O laudo que sustenta o gate de Feasibility (FDD 049).
+
+        **Com `ProjectScopedMixin`**, ao contrário dos quatro da Fase 4: o laudo pende de um projeto —
+        é *neste* trabalho que a avaliação aconteceu —, e o recorte da Entrega é o de sempre
+        (`ProjectMember`). A hipótese é da conta e chega junto, mas quem responde pela fronteira é o
+        projeto; validar as duas pontas é o que o `clean()`/`validate` fazem.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeasibilityAssessment'
+          description: ''
+    post:
+      operationId: v1_feasibility_assessments_create
+      description: |-
+        O laudo que sustenta o gate de Feasibility (FDD 049).
+
+        **Com `ProjectScopedMixin`**, ao contrário dos quatro da Fase 4: o laudo pende de um projeto —
+        é *neste* trabalho que a avaliação aconteceu —, e o recorte da Entrega é o de sempre
+        (`ProjectMember`). A hipótese é da conta e chega junto, mas quem responde pela fronteira é o
+        projeto; validar as duas pontas é o que o `clean()`/`validate` fazem.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeasibilityAssessment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeasibilityAssessment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeasibilityAssessment'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeasibilityAssessment'
+          description: ''
+  /api/v1/feasibility-assessments/{id}/:
+    get:
+      operationId: v1_feasibility_assessments_retrieve
+      description: |-
+        O laudo que sustenta o gate de Feasibility (FDD 049).
+
+        **Com `ProjectScopedMixin`**, ao contrário dos quatro da Fase 4: o laudo pende de um projeto —
+        é *neste* trabalho que a avaliação aconteceu —, e o recorte da Entrega é o de sempre
+        (`ProjectMember`). A hipótese é da conta e chega junto, mas quem responde pela fronteira é o
+        projeto; validar as duas pontas é o que o `clean()`/`validate` fazem.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este feasibility assessment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeasibilityAssessment'
+          description: ''
+    put:
+      operationId: v1_feasibility_assessments_update
+      description: |-
+        O laudo que sustenta o gate de Feasibility (FDD 049).
+
+        **Com `ProjectScopedMixin`**, ao contrário dos quatro da Fase 4: o laudo pende de um projeto —
+        é *neste* trabalho que a avaliação aconteceu —, e o recorte da Entrega é o de sempre
+        (`ProjectMember`). A hipótese é da conta e chega junto, mas quem responde pela fronteira é o
+        projeto; validar as duas pontas é o que o `clean()`/`validate` fazem.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este feasibility assessment.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeasibilityAssessment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FeasibilityAssessment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FeasibilityAssessment'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeasibilityAssessment'
+          description: ''
+    patch:
+      operationId: v1_feasibility_assessments_partial_update
+      description: |-
+        O laudo que sustenta o gate de Feasibility (FDD 049).
+
+        **Com `ProjectScopedMixin`**, ao contrário dos quatro da Fase 4: o laudo pende de um projeto —
+        é *neste* trabalho que a avaliação aconteceu —, e o recorte da Entrega é o de sempre
+        (`ProjectMember`). A hipótese é da conta e chega junto, mas quem responde pela fronteira é o
+        projeto; validar as duas pontas é o que o `clean()`/`validate` fazem.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este feasibility assessment.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFeasibilityAssessment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFeasibilityAssessment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFeasibilityAssessment'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeasibilityAssessment'
+          description: ''
+    delete:
+      operationId: v1_feasibility_assessments_destroy
+      description: |-
+        O laudo que sustenta o gate de Feasibility (FDD 049).
+
+        **Com `ProjectScopedMixin`**, ao contrário dos quatro da Fase 4: o laudo pende de um projeto —
+        é *neste* trabalho que a avaliação aconteceu —, e o recorte da Entrega é o de sempre
+        (`ProjectMember`). A hipótese é da conta e chega junto, mas quem responde pela fronteira é o
+        projeto; validar as duas pontas é o que o `clean()`/`validate` fazem.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este feasibility assessment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/feasibility-assessments/{id}/unarchive/:
+    post:
+      operationId: v1_feasibility_assessments_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este feasibility assessment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/findings/:
     get:
       operationId: v1_findings_list
@@ -5454,6 +5659,205 @@ paths:
               schema:
                 $ref: '#/components/schemas/KnowledgeSummary'
           description: ''
+  /api/v1/kpis/:
+    get:
+      operationId: v1_kpis_list
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        O recorte é pelo **projeto**, que é a âncora obrigatória do KPI. `prove_experiment` é opcional
+        e por isso não serve de caminho para o escopo: um `project_path` que passasse por ele deixaria
+        de fora exatamente o KPI migrado, que não tem experimento nenhum.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KPI'
+          description: ''
+    post:
+      operationId: v1_kpis_create
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        O recorte é pelo **projeto**, que é a âncora obrigatória do KPI. `prove_experiment` é opcional
+        e por isso não serve de caminho para o escopo: um `project_path` que passasse por ele deixaria
+        de fora exatamente o KPI migrado, que não tem experimento nenhum.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KPI'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KPI'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KPI'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KPI'
+          description: ''
+  /api/v1/kpis/{id}/:
+    get:
+      operationId: v1_kpis_retrieve
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        O recorte é pelo **projeto**, que é a âncora obrigatória do KPI. `prove_experiment` é opcional
+        e por isso não serve de caminho para o escopo: um `project_path` que passasse por ele deixaria
+        de fora exatamente o KPI migrado, que não tem experimento nenhum.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este KPI.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KPI'
+          description: ''
+    put:
+      operationId: v1_kpis_update
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        O recorte é pelo **projeto**, que é a âncora obrigatória do KPI. `prove_experiment` é opcional
+        e por isso não serve de caminho para o escopo: um `project_path` que passasse por ele deixaria
+        de fora exatamente o KPI migrado, que não tem experimento nenhum.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este KPI.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KPI'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/KPI'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KPI'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KPI'
+          description: ''
+    patch:
+      operationId: v1_kpis_partial_update
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        O recorte é pelo **projeto**, que é a âncora obrigatória do KPI. `prove_experiment` é opcional
+        e por isso não serve de caminho para o escopo: um `project_path` que passasse por ele deixaria
+        de fora exatamente o KPI migrado, que não tem experimento nenhum.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este KPI.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedKPI'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedKPI'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedKPI'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KPI'
+          description: ''
+    delete:
+      operationId: v1_kpis_destroy
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        O recorte é pelo **projeto**, que é a âncora obrigatória do KPI. `prove_experiment` é opcional
+        e por isso não serve de caminho para o escopo: um `project_path` que passasse por ele deixaria
+        de fora exatamente o KPI migrado, que não tem experimento nenhum.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este KPI.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/kpis/{id}/unarchive/:
+    post:
+      operationId: v1_kpis_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este KPI.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/leads/:
     get:
       operationId: v1_leads_list
@@ -5691,6 +6095,205 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LeadIntakeResponse'
+          description: ''
+  /api/v1/measurements/:
+    get:
+      operationId: v1_measurements_list
+      description: |-
+        As leituras de um KPI — baseline, outcome e monitoramento (FDD 049).
+
+        O projeto chega pelo KPI, um hop a mais; `scope_payload_field = "kpi"` é o que faz a guarda de
+        escrita do mixin olhar a chave certa — sem ela, registrar uma medição num KPI alheio seria
+        escrita fora do escopo passando pelo `perform_create`.
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Measurement'
+          description: ''
+    post:
+      operationId: v1_measurements_create
+      description: |-
+        As leituras de um KPI — baseline, outcome e monitoramento (FDD 049).
+
+        O projeto chega pelo KPI, um hop a mais; `scope_payload_field = "kpi"` é o que faz a guarda de
+        escrita do mixin olhar a chave certa — sem ela, registrar uma medição num KPI alheio seria
+        escrita fora do escopo passando pelo `perform_create`.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Measurement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Measurement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Measurement'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+          description: ''
+  /api/v1/measurements/{id}/:
+    get:
+      operationId: v1_measurements_retrieve
+      description: |-
+        As leituras de um KPI — baseline, outcome e monitoramento (FDD 049).
+
+        O projeto chega pelo KPI, um hop a mais; `scope_payload_field = "kpi"` é o que faz a guarda de
+        escrita do mixin olhar a chave certa — sem ela, registrar uma medição num KPI alheio seria
+        escrita fora do escopo passando pelo `perform_create`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este measurement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+          description: ''
+    put:
+      operationId: v1_measurements_update
+      description: |-
+        As leituras de um KPI — baseline, outcome e monitoramento (FDD 049).
+
+        O projeto chega pelo KPI, um hop a mais; `scope_payload_field = "kpi"` é o que faz a guarda de
+        escrita do mixin olhar a chave certa — sem ela, registrar uma medição num KPI alheio seria
+        escrita fora do escopo passando pelo `perform_create`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este measurement.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Measurement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Measurement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Measurement'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+          description: ''
+    patch:
+      operationId: v1_measurements_partial_update
+      description: |-
+        As leituras de um KPI — baseline, outcome e monitoramento (FDD 049).
+
+        O projeto chega pelo KPI, um hop a mais; `scope_payload_field = "kpi"` é o que faz a guarda de
+        escrita do mixin olhar a chave certa — sem ela, registrar uma medição num KPI alheio seria
+        escrita fora do escopo passando pelo `perform_create`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este measurement.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMeasurement'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMeasurement'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMeasurement'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+          description: ''
+    delete:
+      operationId: v1_measurements_destroy
+      description: |-
+        As leituras de um KPI — baseline, outcome e monitoramento (FDD 049).
+
+        O projeto chega pelo KPI, um hop a mais; `scope_payload_field = "kpi"` é o que faz a guarda de
+        escrita do mixin olhar a chave certa — sem ela, registrar uma medição num KPI alheio seria
+        escrita fora do escopo passando pelo `perform_create`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este measurement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/measurements/{id}/unarchive/:
+    post:
+      operationId: v1_measurements_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este measurement.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
           description: ''
   /api/v1/meetings/:
     get:
@@ -9221,8 +9824,13 @@ paths:
         `_participates`, e Vendas — que tem `project` só-leitura — é barrada. É a regra do recurso:
         Vendas lê o roster e não mexe.
 
-        `kpi_baseline` é opcional e entra aqui porque este é o momento em que o "antes" ainda é
-        medição (FDD 027): perguntado na conclusão do projeto, ele seria digitado de memória.
+        **`kpi_baseline` deixou de ser aceito aqui** (ADR 0055, decisão C1 do DAP
+        `dap-prove-e-valor-r1`). A FDD 027 tinha razão sobre o *momento* — o "antes" perguntado na
+        conclusão é memória, não medição —, e o que mudou foi **onde** ele mora: o baseline é uma
+        `Measurement(kind=baseline)` de um `KPI`, e continuar aceitando-o aqui manteria dois
+        lugares escrevendo a mesma medição, que é o defeito que a fase inteira desfaz. Quebra
+        deliberada e documentada da `/api/v1/`, registrada em `docs/ontology/aliases.md`: a chave
+        no corpo passa a ser ignorada, e o ativo nasce sem KPI para depois referenciar um.
       parameters:
       - in: path
         name: id
@@ -9472,6 +10080,224 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DeliveryTimelineOverview'
+          description: ''
+  /api/v1/prove-experiments/:
+    get:
+      operationId: v1_prove_experiments_list
+      description: O experimento do PROVE, e a invariante de início (FDD 049, decisão
+        E1 do DAP).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProveExperiment'
+          description: ''
+    post:
+      operationId: v1_prove_experiments_create
+      description: O experimento do PROVE, e a invariante de início (FDD 049, decisão
+        E1 do DAP).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProveExperiment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProveExperiment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProveExperiment'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveExperiment'
+          description: ''
+  /api/v1/prove-experiments/{id}/:
+    get:
+      operationId: v1_prove_experiments_retrieve
+      description: O experimento do PROVE, e a invariante de início (FDD 049, decisão
+        E1 do DAP).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este prove experiment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveExperiment'
+          description: ''
+    put:
+      operationId: v1_prove_experiments_update
+      description: O experimento do PROVE, e a invariante de início (FDD 049, decisão
+        E1 do DAP).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este prove experiment.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProveExperiment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProveExperiment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProveExperiment'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveExperiment'
+          description: ''
+    patch:
+      operationId: v1_prove_experiments_partial_update
+      description: O experimento do PROVE, e a invariante de início (FDD 049, decisão
+        E1 do DAP).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este prove experiment.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProveExperiment'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProveExperiment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProveExperiment'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveExperiment'
+          description: ''
+    delete:
+      operationId: v1_prove_experiments_destroy
+      description: O experimento do PROVE, e a invariante de início (FDD 049, decisão
+        E1 do DAP).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este prove experiment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/prove-experiments/{id}/start/:
+    post:
+      operationId: v1_prove_experiments_start_create
+      description: |-
+        Inicia o PROVE, conferindo KPI, critério de sucesso e baseline (FDD 049).
+
+        **Uma action, e não um `PATCH` de `status`**, pela razão exata de `journey.apply_gate`
+        (ADR 0053): a validação depende do **estado corrente** — quais KPIs pendem deste
+        experimento e quais deles já têm baseline viva —, e só quem conhece esse estado pode fazer
+        a pergunta. Um `PATCH` gravaria `running` sem ela, e a invariante viraria sugestão.
+
+        Três recusas, com o status que cada uma merece:
+
+        - **409** se o experimento já está em execução ou concluído: o pedido está bem formado, o
+          que impede é o estado (`StateConflict`);
+        - **400** listando **o que falta**, quando não há lacuna aprovada: aqui é o estado do
+          experimento que precisa mudar, mas a recusa é sobre o pedido de *iniciar agora* — é a
+          mesma escolha de `apply_gate`, que devolve 400 para a decisão fora do vocabulário;
+        - **400** quando há `gap_waiver` sem `gap_waiver_by`: lacuna aprovada é ato assinado, e sem
+          autor "alguém aprovou" é alegação de ninguém — a mesma regra do trio de consentimento do
+          `Case`.
+
+        A lacuna se registra no próprio experimento (`PATCH` com `gap_waiver` e `gap_waiver_by`) e
+        esta ação **lê** o estado, como `apply_gate` lê a fase ativa. `gap_waiver_at` é carimbado
+        aqui: é o instante em que a lacuna passou a valer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este prove experiment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProveExperiment'
+          description: ''
+  /api/v1/prove-experiments/{id}/unarchive/:
+    post:
+      operationId: v1_prove_experiments_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este prove experiment.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
           description: ''
   /api/v1/qualifications/:
     get:
@@ -10828,6 +11654,247 @@ paths:
           description: No response body
         '404':
           description: No response body
+  /api/v1/value-ledger-entries/:
+    get:
+      operationId: v1_value_ledger_entries_list
+      description: |-
+        O Value Ledger da conta (FDD 049, `language-map` §6.11 e §6.12).
+
+        **Sem `ProjectScopedMixin`, e é o desvio consciente desta fatia.** A entrada pende de um
+        `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
+        Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
+        objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
+        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+
+        **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
+        `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
+        entrada sem projeto é vista por quem alcança algum projeto daquele mandato — a mesma pergunta
+        inversa que `EngagementViewSet.get_queryset` faz, e a única expressão da regra (ADR 0010).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ValueLedgerEntry'
+          description: ''
+    post:
+      operationId: v1_value_ledger_entries_create
+      description: |-
+        O Value Ledger da conta (FDD 049, `language-map` §6.11 e §6.12).
+
+        **Sem `ProjectScopedMixin`, e é o desvio consciente desta fatia.** A entrada pende de um
+        `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
+        Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
+        objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
+        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+
+        **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
+        `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
+        entrada sem projeto é vista por quem alcança algum projeto daquele mandato — a mesma pergunta
+        inversa que `EngagementViewSet.get_queryset` faz, e a única expressão da regra (ADR 0010).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValueLedgerEntry'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ValueLedgerEntry'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ValueLedgerEntry'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueLedgerEntry'
+          description: ''
+  /api/v1/value-ledger-entries/{id}/:
+    get:
+      operationId: v1_value_ledger_entries_retrieve
+      description: |-
+        O Value Ledger da conta (FDD 049, `language-map` §6.11 e §6.12).
+
+        **Sem `ProjectScopedMixin`, e é o desvio consciente desta fatia.** A entrada pende de um
+        `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
+        Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
+        objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
+        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+
+        **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
+        `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
+        entrada sem projeto é vista por quem alcança algum projeto daquele mandato — a mesma pergunta
+        inversa que `EngagementViewSet.get_queryset` faz, e a única expressão da regra (ADR 0010).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este value ledger entry.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueLedgerEntry'
+          description: ''
+    put:
+      operationId: v1_value_ledger_entries_update
+      description: |-
+        O Value Ledger da conta (FDD 049, `language-map` §6.11 e §6.12).
+
+        **Sem `ProjectScopedMixin`, e é o desvio consciente desta fatia.** A entrada pende de um
+        `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
+        Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
+        objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
+        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+
+        **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
+        `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
+        entrada sem projeto é vista por quem alcança algum projeto daquele mandato — a mesma pergunta
+        inversa que `EngagementViewSet.get_queryset` faz, e a única expressão da regra (ADR 0010).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este value ledger entry.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValueLedgerEntry'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ValueLedgerEntry'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ValueLedgerEntry'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueLedgerEntry'
+          description: ''
+    patch:
+      operationId: v1_value_ledger_entries_partial_update
+      description: |-
+        O Value Ledger da conta (FDD 049, `language-map` §6.11 e §6.12).
+
+        **Sem `ProjectScopedMixin`, e é o desvio consciente desta fatia.** A entrada pende de um
+        `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
+        Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
+        objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
+        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+
+        **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
+        `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
+        entrada sem projeto é vista por quem alcança algum projeto daquele mandato — a mesma pergunta
+        inversa que `EngagementViewSet.get_queryset` faz, e a única expressão da regra (ADR 0010).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este value ledger entry.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedValueLedgerEntry'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedValueLedgerEntry'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedValueLedgerEntry'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueLedgerEntry'
+          description: ''
+    delete:
+      operationId: v1_value_ledger_entries_destroy
+      description: |-
+        O Value Ledger da conta (FDD 049, `language-map` §6.11 e §6.12).
+
+        **Sem `ProjectScopedMixin`, e é o desvio consciente desta fatia.** A entrada pende de um
+        `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
+        Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
+        objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
+        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+
+        **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
+        `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
+        entrada sem projeto é vista por quem alcança algum projeto daquele mandato — a mesma pergunta
+        inversa que `EngagementViewSet.get_queryset` faz, e a única expressão da regra (ADR 0010).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este value ledger entry.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/value-ledger-entries/{id}/unarchive/:
+    post:
+      operationId: v1_value_ledger_entries_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este value ledger entry.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/verticals/:
     get:
       operationId: v1_verticals_list
@@ -12238,6 +13305,20 @@ components:
       - waiting_party
     DigitalEmployee:
       type: object
+      description: |-
+        O Funcionário Digital, que agora **referencia** um KPI em vez de possuí-lo (ADR 0055).
+
+        `kpi_baseline` e `kpi_current` continuam saindo na `/api/v1/`, agora derivados das
+        `Measurement` do KPI referenciado — a baseline viva e o `Outcome` mais recente. `null`
+        continua sendo "não medido", nunca zero.
+
+        **As duas chaves são só de leitura.** Enviá-las no corpo é aceito e ignorado; para registrar
+        medição, use `/measurements/`. As duas chaves morrem na `/api/v2/`, com o resto dos aliases.
+
+        O porquê de ignorar em vez de recusar, e o que isso custa, estão na FDD 049 — e não aqui,
+        porque esta docstring é a descrição do componente no `openapi.yaml` e quem a lê é quem
+        consome a API, não quem mantém o repositório. Regressão do contrato em
+        `tests/regression/test_a_medicao_do_ativo_sobrevive_na_v1.py`.
       properties:
         id:
           type: integer
@@ -12247,6 +13328,9 @@ components:
         blueprint:
           type: integer
           readOnly: true
+          nullable: true
+        kpi:
+          type: integer
           nullable: true
         name:
           type: string
@@ -12273,13 +13357,15 @@ components:
         kpi_baseline:
           type: string
           format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
+          readOnly: true
         kpi_current:
           type: string
           format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
+          readOnly: true
         hours_saved_month:
           type: string
           format: decimal
@@ -12300,6 +13386,8 @@ components:
       - blueprint
       - created_at
       - id
+      - kpi_baseline
+      - kpi_current
       - name
       - project
       - updated_at
@@ -12379,11 +13467,6 @@ components:
           type: integer
         vertical:
           type: integer
-        kpi_baseline:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
-          nullable: true
       required:
       - blueprint
     DigitalEmployeeStatusEnum:
@@ -12911,6 +13994,102 @@ components:
       - rotulo
       - rotulo_display
       - updated_at
+    FeasibilityAssessment:
+      type: object
+      description: |-
+        O laudo de Feasibility (FDD 049).
+
+        `gate_decision` publica as **quatro** saídas da Feasibility, e não as sete do campo da fase:
+        aqui não há ambiguidade sobre de que gate se trata, então a `ChoiceField` derivada do campo já
+        recusa `scale` com 400 — a validação que `journey.apply_gate` precisa fazer à mão porque lá o
+        vocabulário depende da fase ativa.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        solution_hypothesis:
+          type: integer
+        project:
+          type: integer
+        technical_verdict:
+          $ref: '#/components/schemas/FeasibilityVerdictEnum'
+        technical_verdict_display:
+          type: string
+          readOnly: true
+        technical_note:
+          type: string
+        operational_verdict:
+          $ref: '#/components/schemas/FeasibilityVerdictEnum'
+        operational_verdict_display:
+          type: string
+          readOnly: true
+        operational_note:
+          type: string
+        economic_verdict:
+          $ref: '#/components/schemas/FeasibilityVerdictEnum'
+        economic_verdict_display:
+          type: string
+          readOnly: true
+        economic_note:
+          type: string
+        sample:
+          type: string
+        error_classes:
+          type: string
+        evidence:
+          type: array
+          items:
+            type: integer
+        gate_decision:
+          oneOf:
+          - $ref: '#/components/schemas/FeasibilityAssessmentGateDecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        gate_decision_display:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - economic_verdict
+      - economic_verdict_display
+      - gate_decision_display
+      - id
+      - operational_verdict
+      - operational_verdict_display
+      - project
+      - solution_hypothesis
+      - technical_verdict
+      - technical_verdict_display
+      - updated_at
+    FeasibilityAssessmentGateDecisionEnum:
+      enum:
+      - go
+      - conditional_go
+      - redesign
+      - no_go
+      type: string
+      description: |-
+        * `go` - GO
+        * `conditional_go` - CONDITIONAL GO
+        * `redesign` - REDESIGN
+        * `no_go` - NO-GO
+    FeasibilityVerdictEnum:
+      enum:
+      - favorable
+      - caveat
+      - unfavorable
+      type: string
+      description: |-
+        * `favorable` - Favorável
+        * `caveat` - Com ressalva
+        * `unfavorable` - Desfavorável
     Finding:
       type: object
       description: |-
@@ -13536,6 +14715,72 @@ components:
       - deliverables
       - id
       - name
+    KPI:
+      type: object
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        `project` é a âncora obrigatória e `prove_experiment` é opcional — **desvio deliberado** da
+        lista de campos da issue #69, cuja razão é a migração e está na docstring do modelo. Quando o
+        experimento vier, ele tem de ser do mesmo projeto.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        prove_experiment:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          maxLength: 120
+        definition:
+          type: string
+        formula:
+          type: string
+        unit:
+          oneOf:
+          - $ref: '#/components/schemas/KpiUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        unit_display:
+          type: string
+          readOnly: true
+        direction:
+          $ref: '#/components/schemas/KpiDirectionEnum'
+        direction_display:
+          type: string
+          readOnly: true
+        data_source:
+          type: string
+          maxLength: 120
+        cadence:
+          type: string
+          maxLength: 60
+        owner:
+          type: integer
+          nullable: true
+        target:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - direction_display
+      - id
+      - name
+      - project
+      - unit_display
+      - updated_at
     KnowledgeArea:
       type: object
       properties:
@@ -13967,6 +15212,87 @@ components:
       required:
       - password
       - username
+    Measurement:
+      type: object
+      description: |-
+        Uma leitura do KPI — baseline, outcome ou monitoramento (FDD 049).
+
+        **`value` ausente fica nulo, e o serializer não o converte em zero em lugar nenhum**: zero
+        afirma que o processo não custava nada antes, e nulo diz que ninguém mediu. É a mesma
+        distinção de `PainPoint.impact_estimate` e do `nao_apurado` de `process.custo_do_estado_atual`.
+
+        A checagem de "já existe baseline viva" é escrita à mão, ao contrário do que o `CLAUDE.md`
+        pede para as constraints do pipeline, e a exceção tem o mesmo motivo verificado da
+        `SolutionHypothesisSerializer`: o DRF só deriva o validador de uma `UniqueConstraint`
+        condicional quando **todos** os campos da condição são campos do serializer
+        (`ModelSerializer.get_unique_together_validators`, DRF 3.16). A condição cita `archived_at`,
+        que nenhum serializer da casa expõe — então o validador é descartado em silêncio e o
+        `IntegrityError` subiria como 500. A constraint continua sendo a garantia; isto transforma a
+        recusa num 400 legível.
+
+        **Não há `unit` aqui, e a ausência é a garantia.** Ver a docstring de `Measurement`.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        kpi:
+          type: integer
+        kind:
+          $ref: '#/components/schemas/MeasurementKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        measured_at:
+          type: string
+          format: date-time
+        source_evidence:
+          type: array
+          items:
+            type: integer
+        confidence:
+          type: integer
+          maximum: 100
+          minimum: 0
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - kind
+      - kind_display
+      - kpi
+      - measured_at
+      - period_end
+      - period_start
+      - updated_at
+    MeasurementKindEnum:
+      enum:
+      - baseline
+      - outcome
+      - monitoring
+      type: string
+      description: |-
+        * `baseline` - Baseline
+        * `outcome` - Outcome
+        * `monitoring` - Monitoramento
     Meeting:
       type: object
       properties:
@@ -14737,6 +16063,20 @@ components:
           readOnly: true
     PatchedDigitalEmployee:
       type: object
+      description: |-
+        O Funcionário Digital, que agora **referencia** um KPI em vez de possuí-lo (ADR 0055).
+
+        `kpi_baseline` e `kpi_current` continuam saindo na `/api/v1/`, agora derivados das
+        `Measurement` do KPI referenciado — a baseline viva e o `Outcome` mais recente. `null`
+        continua sendo "não medido", nunca zero.
+
+        **As duas chaves são só de leitura.** Enviá-las no corpo é aceito e ignorado; para registrar
+        medição, use `/measurements/`. As duas chaves morrem na `/api/v2/`, com o resto dos aliases.
+
+        O porquê de ignorar em vez de recusar, e o que isso custa, estão na FDD 049 — e não aqui,
+        porque esta docstring é a descrição do componente no `openapi.yaml` e quem a lê é quem
+        consome a API, não quem mantém o repositório. Regressão do contrato em
+        `tests/regression/test_a_medicao_do_ativo_sobrevive_na_v1.py`.
       properties:
         id:
           type: integer
@@ -14746,6 +16086,9 @@ components:
         blueprint:
           type: integer
           readOnly: true
+          nullable: true
+        kpi:
+          type: integer
           nullable: true
         name:
           type: string
@@ -14772,13 +16115,15 @@ components:
         kpi_baseline:
           type: string
           format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
+          readOnly: true
         kpi_current:
           type: string
           format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
+          readOnly: true
         hours_saved_month:
           type: string
           format: decimal
@@ -15239,6 +16584,67 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedFeasibilityAssessment:
+      type: object
+      description: |-
+        O laudo de Feasibility (FDD 049).
+
+        `gate_decision` publica as **quatro** saídas da Feasibility, e não as sete do campo da fase:
+        aqui não há ambiguidade sobre de que gate se trata, então a `ChoiceField` derivada do campo já
+        recusa `scale` com 400 — a validação que `journey.apply_gate` precisa fazer à mão porque lá o
+        vocabulário depende da fase ativa.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        solution_hypothesis:
+          type: integer
+        project:
+          type: integer
+        technical_verdict:
+          $ref: '#/components/schemas/FeasibilityVerdictEnum'
+        technical_verdict_display:
+          type: string
+          readOnly: true
+        technical_note:
+          type: string
+        operational_verdict:
+          $ref: '#/components/schemas/FeasibilityVerdictEnum'
+        operational_verdict_display:
+          type: string
+          readOnly: true
+        operational_note:
+          type: string
+        economic_verdict:
+          $ref: '#/components/schemas/FeasibilityVerdictEnum'
+        economic_verdict_display:
+          type: string
+          readOnly: true
+        economic_note:
+          type: string
+        sample:
+          type: string
+        error_classes:
+          type: string
+        evidence:
+          type: array
+          items:
+            type: integer
+        gate_decision:
+          oneOf:
+          - $ref: '#/components/schemas/FeasibilityAssessmentGateDecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        gate_decision_display:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedFinding:
       type: object
       description: |-
@@ -15622,6 +17028,64 @@ components:
           items:
             $ref: '#/components/schemas/PhaseChecklistItem'
           readOnly: true
+    PatchedKPI:
+      type: object
+      description: |-
+        O indicador (FDD 049, ADR 0055).
+
+        `project` é a âncora obrigatória e `prove_experiment` é opcional — **desvio deliberado** da
+        lista de campos da issue #69, cuja razão é a migração e está na docstring do modelo. Quando o
+        experimento vier, ele tem de ser do mesmo projeto.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        project:
+          type: integer
+        prove_experiment:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          maxLength: 120
+        definition:
+          type: string
+        formula:
+          type: string
+        unit:
+          oneOf:
+          - $ref: '#/components/schemas/KpiUnitEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        unit_display:
+          type: string
+          readOnly: true
+        direction:
+          $ref: '#/components/schemas/KpiDirectionEnum'
+        direction_display:
+          type: string
+          readOnly: true
+        data_source:
+          type: string
+          maxLength: 120
+        cadence:
+          type: string
+          maxLength: 60
+        owner:
+          type: integer
+          nullable: true
+        target:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedKnowledgeArea:
       type: object
       properties:
@@ -15802,6 +17266,67 @@ components:
         qualification_outcome:
           type: string
           readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedMeasurement:
+      type: object
+      description: |-
+        Uma leitura do KPI — baseline, outcome ou monitoramento (FDD 049).
+
+        **`value` ausente fica nulo, e o serializer não o converte em zero em lugar nenhum**: zero
+        afirma que o processo não custava nada antes, e nulo diz que ninguém mediu. É a mesma
+        distinção de `PainPoint.impact_estimate` e do `nao_apurado` de `process.custo_do_estado_atual`.
+
+        A checagem de "já existe baseline viva" é escrita à mão, ao contrário do que o `CLAUDE.md`
+        pede para as constraints do pipeline, e a exceção tem o mesmo motivo verificado da
+        `SolutionHypothesisSerializer`: o DRF só deriva o validador de uma `UniqueConstraint`
+        condicional quando **todos** os campos da condição são campos do serializer
+        (`ModelSerializer.get_unique_together_validators`, DRF 3.16). A condição cita `archived_at`,
+        que nenhum serializer da casa expõe — então o validador é descartado em silêncio e o
+        `IntegrityError` subiria como 500. A constraint continua sendo a garantia; isto transforma a
+        recusa num 400 legível.
+
+        **Não há `unit` aqui, e a ausência é a garantia.** Ver a docstring de `Measurement`.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        kpi:
+          type: integer
+        kind:
+          $ref: '#/components/schemas/MeasurementKindEnum'
+        kind_display:
+          type: string
+          readOnly: true
+        value:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        measured_at:
+          type: string
+          format: date-time
+        source_evidence:
+          type: array
+          items:
+            type: integer
+        confidence:
+          type: integer
+          maximum: 100
+          minimum: 0
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -16494,6 +18019,81 @@ components:
           items:
             $ref: '#/components/schemas/ProjectChecklistItem'
           readOnly: true
+    PatchedProveExperiment:
+      type: object
+      description: |-
+        O experimento do PROVE, com a lista do que falta para ele começar (FDD 049).
+
+        **`status` não recebe `running` por `PATCH`**, e é o que impede a invariante de vazar pela
+        porta do formulário: iniciar é a action `start/`, que confere KPI, critério e baseline e
+        carimba a lacuna aprovada. Um campo gravável aqui seria um segundo caminho para o mesmo estado
+        — o defeito que a decisão C1 do DAP remove do `DigitalEmployee` sendo reintroduzido ao lado.
+        Os demais valores continuam graváveis: `planned → concluded` é registro, não início.
+
+        `missing_to_start` é derivado e só de leitura, de `prove.o_que_falta_para_iniciar`. É a mesma
+        lista que a action usa para recusar, e é por isso que ela sai daqui em vez de a tela
+        recalculá-la: duas expressões da invariante divergiriam, e a tela habilitaria o botão que o
+        servidor nega.
+
+        `gap_waiver_at` é **só de leitura**: o carimbo é consequência do ato, e preenchê-lo à mão
+        permitiria uma data de aprovação anterior à aprovação (mesma forma do `published_at` do
+        `Case`). `gap_waiver_by` vem do corpo, e não da sessão, pelo motivo do `reviewed_by` do
+        `Finding`: ele responde "quem aprovou", que pode não ser quem digita.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        solution_hypothesis:
+          type: integer
+        project:
+          type: integer
+        controlled_scope:
+          type: string
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        ended_at:
+          type: string
+          format: date
+          nullable: true
+        success_criteria:
+          type: string
+        status:
+          $ref: '#/components/schemas/ProveExperimentStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        gate_decision:
+          oneOf:
+          - $ref: '#/components/schemas/ProveExperimentGateDecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        gate_decision_display:
+          type: string
+          readOnly: true
+        gap_waiver:
+          type: string
+        gap_waiver_by:
+          type: integer
+          nullable: true
+        gap_waiver_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        missing_to_start:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedQualification:
       type: object
       description: A avaliação de um lead (ADR 0049). `outcome` é obrigatório e não
@@ -16794,6 +18394,74 @@ components:
         milestone:
           type: integer
           nullable: true
+    PatchedValueLedgerEntry:
+      type: object
+      description: |-
+        A entrada do Value Ledger (FDD 049, `language-map` §6.11 e §6.12).
+
+        Três recusas, e nenhuma é decorativa:
+
+        - **a medição apontada tem de ser um `outcome`** — uma entrada que apontasse para o baseline
+          afirmaria resultado onde há ponto de partida, e a leitura da tela não denunciaria nada;
+        - **`attribution_method` não pode ser vazio** — é ele que separa valor medido de número
+          escrito à mão, e "ROI" como resultado é termo banido (§5) por causa disso;
+        - **`approved` exige `approved_by`** — aprovar é ato com autor, e o carimbo `approved_at` sai
+          do `save()` do modelo, como o `published_at` do `Case`.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        engagement:
+          type: integer
+        project:
+          type: integer
+          nullable: true
+        outcome_measurement:
+          type: integer
+        value_type:
+          $ref: '#/components/schemas/ValueTypeEnum'
+        value_type_display:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        attribution_method:
+          type: string
+        status:
+          $ref: '#/components/schemas/ValueLedgerEntryStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        approved_by:
+          type: integer
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedVertical:
       type: object
       description: Setor do cliente (config admin, vocabulário editável — FDD 026).
@@ -17783,6 +19451,111 @@ components:
         * `unavailable` - Indisponível
         * `permission_denied` - Sem permissão
         * `reference_missing` - Referência ausente
+    ProveExperiment:
+      type: object
+      description: |-
+        O experimento do PROVE, com a lista do que falta para ele começar (FDD 049).
+
+        **`status` não recebe `running` por `PATCH`**, e é o que impede a invariante de vazar pela
+        porta do formulário: iniciar é a action `start/`, que confere KPI, critério e baseline e
+        carimba a lacuna aprovada. Um campo gravável aqui seria um segundo caminho para o mesmo estado
+        — o defeito que a decisão C1 do DAP remove do `DigitalEmployee` sendo reintroduzido ao lado.
+        Os demais valores continuam graváveis: `planned → concluded` é registro, não início.
+
+        `missing_to_start` é derivado e só de leitura, de `prove.o_que_falta_para_iniciar`. É a mesma
+        lista que a action usa para recusar, e é por isso que ela sai daqui em vez de a tela
+        recalculá-la: duas expressões da invariante divergiriam, e a tela habilitaria o botão que o
+        servidor nega.
+
+        `gap_waiver_at` é **só de leitura**: o carimbo é consequência do ato, e preenchê-lo à mão
+        permitiria uma data de aprovação anterior à aprovação (mesma forma do `published_at` do
+        `Case`). `gap_waiver_by` vem do corpo, e não da sessão, pelo motivo do `reviewed_by` do
+        `Finding`: ele responde "quem aprovou", que pode não ser quem digita.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        solution_hypothesis:
+          type: integer
+        project:
+          type: integer
+        controlled_scope:
+          type: string
+        started_at:
+          type: string
+          format: date
+          nullable: true
+        ended_at:
+          type: string
+          format: date
+          nullable: true
+        success_criteria:
+          type: string
+        status:
+          $ref: '#/components/schemas/ProveExperimentStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        gate_decision:
+          oneOf:
+          - $ref: '#/components/schemas/ProveExperimentGateDecisionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        gate_decision_display:
+          type: string
+          readOnly: true
+        gap_waiver:
+          type: string
+        gap_waiver_by:
+          type: integer
+          nullable: true
+        gap_waiver_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        missing_to_start:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - gap_waiver_at
+      - gate_decision_display
+      - id
+      - missing_to_start
+      - project
+      - solution_hypothesis
+      - status_display
+      - updated_at
+    ProveExperimentGateDecisionEnum:
+      enum:
+      - scale
+      - iterate
+      - stop
+      type: string
+      description: |-
+        * `scale` - SCALE
+        * `iterate` - ITERATE
+        * `stop` - STOP
+    ProveExperimentStatusEnum:
+      enum:
+      - planned
+      - running
+      - concluded
+      type: string
+      description: |-
+        * `planned` - Planejado
+        * `running` - Em execução
+        * `concluded` - Concluído
     Qualification:
       type: object
       description: A avaliação de um lead (ADR 0049). `outcome` é obrigatório e não
@@ -18417,6 +20190,109 @@ components:
       - id
       - is_admin
       - username
+    ValueLedgerEntry:
+      type: object
+      description: |-
+        A entrada do Value Ledger (FDD 049, `language-map` §6.11 e §6.12).
+
+        Três recusas, e nenhuma é decorativa:
+
+        - **a medição apontada tem de ser um `outcome`** — uma entrada que apontasse para o baseline
+          afirmaria resultado onde há ponto de partida, e a leitura da tela não denunciaria nada;
+        - **`attribution_method` não pode ser vazio** — é ele que separa valor medido de número
+          escrito à mão, e "ROI" como resultado é termo banido (§5) por causa disso;
+        - **`approved` exige `approved_by`** — aprovar é ato com autor, e o carimbo `approved_at` sai
+          do `save()` do modelo, como o `published_at` do `Case`.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        engagement:
+          type: integer
+        project:
+          type: integer
+          nullable: true
+        outcome_measurement:
+          type: integer
+        value_type:
+          $ref: '#/components/schemas/ValueTypeEnum'
+        value_type_display:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+          nullable: true
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type: string
+          format: date
+        attribution_method:
+          type: string
+        status:
+          $ref: '#/components/schemas/ValueLedgerEntryStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        approved_by:
+          type: integer
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approved_at
+      - attribution_method
+      - created_at
+      - engagement
+      - id
+      - outcome_measurement
+      - period_end
+      - period_start
+      - status_display
+      - updated_at
+      - value_type
+      - value_type_display
+    ValueLedgerEntryStatusEnum:
+      enum:
+      - draft
+      - pending
+      - approved
+      type: string
+      description: |-
+        * `draft` - Rascunho
+        * `pending` - Pendente
+        * `approved` - Aprovado
+    ValueTypeEnum:
+      enum:
+      - cost_saving
+      - revenue
+      - risk_reduction
+      - capacity
+      type: string
+      description: |-
+        * `cost_saving` - Redução de custo
+        * `revenue` - Receita
+        * `risk_reduction` - Redução de risco
+        * `capacity` - Capacidade
     Vertical:
       type: object
       description: Setor do cliente (config admin, vocabulário editável — FDD 026).

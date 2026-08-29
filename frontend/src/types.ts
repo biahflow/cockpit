@@ -170,6 +170,42 @@ export type PriorityAssessment = { id: number; improvement_opportunity: number; 
 // Hipóteses concorrentes são o estado normal; **uma só `chosen` viva por oportunidade**.
 export type SolutionHypothesisStatus = "proposed" | "chosen" | "discarded";
 export type SolutionHypothesis = { id: number; improvement_opportunity: number; statement: string; intervention: string; assumptions: string; expected_effect: string; status: SolutionHypothesisStatus; status_display: string; created_at: string; updated_at: string };
+// Feasibility, PROVE, KPI/Measurement e Value Ledger (FDD 049, ADR 0055). **Nenhuma tela consome
+// estes tipos ainda**, exatamente como os da Fase 4 logo acima e pelo mesmo motivo: é o recorte da
+// fatia, não esquecimento — a superfície tem DAP aprovado (`docs/design/dap-prove-e-valor-r1/`,
+// decisões A1 · B1 · C1 · D1 · E1) e vem na tarefa seguinte. Eles entram aqui para que a forma do
+// contrato fique escrita do lado do consumidor no mesmo commit em que ela nasce no servidor.
+export type FeasibilityVerdict = "favorable" | "caveat" | "unfavorable";
+// `gate_decision` do laudo usa **as quatro** saídas da Feasibility, e o do PROVE **as três** dele
+// (ADR 0053): a pergunta é outra e as saídas são outras. `""` é "ainda não decidido", como no
+// campo da fase. Os rótulos moram em `journey.ts`, o único mapa — não se traduzem.
+export type FeasibilityGateDecision = "" | "go" | "conditional_go" | "redesign" | "no_go";
+export type FeasibilityAssessment = { id: number; solution_hypothesis: number; project: number; technical_verdict: FeasibilityVerdict; technical_verdict_display: string; technical_note: string; operational_verdict: FeasibilityVerdict; operational_verdict_display: string; operational_note: string; economic_verdict: FeasibilityVerdict; economic_verdict_display: string; economic_note: string; sample: string; error_classes: string; evidence: number[]; gate_decision: FeasibilityGateDecision; gate_decision_display: string; created_at: string; updated_at: string };
+export type ProveGateDecision = "" | "scale" | "iterate" | "stop";
+export type ProveExperimentStatus = "planned" | "running" | "concluded";
+// **`missing_to_start` é derivado e só de leitura**, e é a mesma lista que a action `start/` usa
+// para recusar: KPI, critério de sucesso e baseline. A tela desenha as três pastilhas a partir
+// **dela**, e nunca recalculando a regra — duas expressões divergiriam, e o botão ficaria
+// habilitado para um POST que o servidor nega. `status` não vai a `running` por `PATCH`: iniciar é
+// `POST /prove-experiments/{id}/start/`. Lacuna aprovada exige `gap_waiver` **e** `gap_waiver_by`;
+// `gap_waiver_at` é carimbado pelo servidor.
+export type ProveMissingRequirement = "kpi" | "success_criteria" | "baseline";
+export type ProveExperiment = { id: number; solution_hypothesis: number; project: number; controlled_scope: string; started_at: string | null; ended_at: string | null; success_criteria: string; status: ProveExperimentStatus; status_display: string; gate_decision: ProveGateDecision; gate_decision_display: string; gap_waiver: string; gap_waiver_by: number | null; gap_waiver_at: string | null; missing_to_start: ProveMissingRequirement[]; created_at: string; updated_at: string };
+// `prove_experiment` é **opcional** e `project` é a âncora obrigatória: o KPI migrado da era
+// anterior pende do projeto e não nasceu de experimento nenhum (ADR 0055).
+export type KPI = { id: number; project: number; prove_experiment: number | null; name: string; definition: string; formula: string; unit: KpiUnit; unit_display: string; direction: KpiDirection; direction_display: string; data_source: string; cadence: string; owner: number | null; target: string | null; created_at: string; updated_at: string };
+export type MeasurementKind = "baseline" | "outcome" | "monitoring";
+// **`value` nulo é "não medido", nunca zero** — a tela mostra `— → 1h05` e deixa a variação vazia.
+// Unidade e método **não** estão aqui de propósito: são do KPI, e é isso que torna baseline e
+// outcome comparáveis (`language-map` §6.11). No máximo uma `baseline` viva por KPI.
+export type Measurement = { id: number; kpi: number; kind: MeasurementKind; kind_display: string; value: string | null; period_start: string; period_end: string; measured_at: string; source_evidence: number[]; confidence: number | null; created_at: string; updated_at: string };
+export type ValueType = "cost_saving" | "revenue" | "risk_reduction" | "capacity";
+export type ValueLedgerStatus = "draft" | "pending" | "approved";
+// `outcome_measurement` só aceita uma medição `kind=outcome`, `attribution_method` não pode ser
+// vazio, e `approved` exige `approved_by` — as invariantes §6.11 e §6.12 do `language-map`.
+// `approved_at` é carimbado pelo servidor. `project` é opcional: valor é do mandato, e a fatia por
+// projeto existe quando alguém consegue atribuí-la.
+export type ValueLedgerEntry = { id: number; engagement: number; project: number | null; outcome_measurement: number; value_type: ValueType; value_type_display: string; amount: string | null; quantity: string | null; period_start: string; period_end: string; attribution_method: string; status: ValueLedgerStatus; status_display: string; approved_by: number | null; approved_at: string | null; created_at: string; updated_at: string };
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 // `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
 // (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.
@@ -226,7 +262,15 @@ export type DigitalEmployeeStatus = "building" | "active" | "paused";
 // um "antes".
 export type KpiUnit = "" | "percent" | "hours" | "minutes" | "currency" | "count";
 export type KpiDirection = "up" | "down";
-export type DigitalEmployee = { id: number; project: number; blueprint: number | null; name: string; area: string; description: string; status: DigitalEmployeeStatus; kpi_label: string; kpi_value: string; kpi_unit: KpiUnit; kpi_direction: KpiDirection; kpi_baseline: string | null; kpi_current: string | null; hours_saved_month: string; roi_month: string };
+// **`kpi_baseline` e `kpi_current` são derivados e só de leitura desde a ADR 0055.** As colunas
+// saíram do ativo: o KPI vive em `KPI`, é medido em `Measurement`, e `kpi` é o ponteiro para qual
+// indicador este funcionário digital move. As duas chaves continuam saindo na `/api/v1/` (a
+// promessa do contrato morre na `/api/v2/`, não antes), com o valor da baseline viva e do
+// `Outcome` mais recente — e `null` continua sendo "não medido", nunca zero.
+// **Escrever por elas deixou de ter efeito** (decisão C1 do DAP `dap-prove-e-valor-r1`): quem
+// media pelo formulário do Time Digital passa a medir pelo PROVE. `ProjectDetailPage` ainda as
+// envia no `PATCH`, e é o que a fatia seguinte remove.
+export type DigitalEmployee = { id: number; project: number; blueprint: number | null; kpi: number | null; name: string; area: string; description: string; status: DigitalEmployeeStatus; kpi_label: string; kpi_value: string; kpi_unit: KpiUnit; kpi_direction: KpiDirection; kpi_baseline: string | null; kpi_current: string | null; hours_saved_month: string; roi_month: string };
 // A biblioteca de Funcionários Digitais (FDD 026): catálogo global + parametrização por vertical.
 // Mesmo par que `JourneyPhaseTemplate`/`ProjectPhase`, um nível acima: o que a entrega instancia
 // é uma **cópia**, e por isso `DigitalEmployee` não referencia nada aqui além da procedência.

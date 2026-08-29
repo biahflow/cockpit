@@ -3,6 +3,7 @@ from typing import Any
 from rest_framework.permissions import BasePermission
 
 from .models import (
+    KPI,
     Artifact,
     Case,
     CommercialOpportunity,
@@ -15,9 +16,11 @@ from .models import (
     EngineeringHandoff,
     Evidence,
     Evidencia,
+    FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
     ImprovementOpportunity,
+    Measurement,
     Meeting,
     Milestone,
     PainPoint,
@@ -31,11 +34,13 @@ from .models import (
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    ProveExperiment,
     Risco,
     Satisfacao,
     SolutionHypothesis,
     Task,
     User,
+    ValueLedgerEntry,
     can_access_project,
 )
 
@@ -73,6 +78,19 @@ PROJECT_OF = {
     Discovery: lambda obj: obj.project,
     DiscoverySession: lambda obj: obj.discovery.project,
     ProcessObservation: lambda obj: obj.discovery.project,
+    # Os quatro da Fase 5 (FDD 049) pendem de **projeto**, ao contrário dos quatro da Fase 4, que
+    # ancoram na conta: o laudo e o experimento existem dentro de um trabalho, e o KPI é do
+    # projeto que o promete. A medição chega pelo KPI, um hop, como a etapa chega pelo processo.
+    #
+    # `ValueLedgerEntry` **não entra aqui**, e não por esquecimento: ela pende de `Engagement` e o
+    # `project` dela é opcional — um mapa que resolvesse `obj.project` devolveria `None` para a
+    # entrada de mandato sem projeto, e a Entrega tomaria 403 no detalhe de uma linha que a
+    # listagem dela mostra. É o defeito que a `Satisfacao` já previu, e a pergunta certa está no
+    # ramo próprio dela, abaixo.
+    FeasibilityAssessment: lambda obj: obj.project,
+    ProveExperiment: lambda obj: obj.project,
+    KPI: lambda obj: obj.project,
+    Measurement: lambda obj: obj.kpi.project,
 }
 
 
@@ -103,9 +121,16 @@ class RolePermission(BasePermission):
             # acompanha o que a casa disse ao cliente dele, mas mandar cobrança é ato de admin.
             # As rotas de rascunhar e enviar ficam na `InvoiceViewSet`, e por isso já caem no
             # `invoice` acima — o 403 de Vendas no envio vem de graça, sem regra nova.
+            # Os cinco da Fase 5 (FDD 049) entram aqui, **só de leitura**, ao lado de
+            # `digital_employee` e pela mesma razão: o laudo de Feasibility, o experimento, o KPI,
+            # a medição e a entrada de valor são produzidos por quem executa o trabalho. O
+            # comercial lê o que a casa provou — é dele a proposta que cita o resultado —, e não
+            # escreve a medição que sustenta a afirmação.
             if resource in {"project", "project_phase", "project_deliverable",
                             "project_checklist_item", "digital_employee", "project_member",
-                            "risk", "health", "case", "invoice", "cobranca"}:
+                            "risk", "health", "case", "invoice", "cobranca",
+                            "feasibility_assessment", "prove_experiment", "kpi", "measurement",
+                            "value_ledger_entry"}:
                 return request.method in SAFE_METHODS
             if resource == "knowledge":
                 return request.method in SAFE_METHODS or getattr(view, "action", None) == "verify"
@@ -186,6 +211,8 @@ class RolePermission(BasePermission):
                                 "evidence", "finding",
                                 "pain_point", "improvement_opportunity",
                                 "priority_assessment", "solution_hypothesis",
+                                "feasibility_assessment", "prove_experiment", "kpi",
+                                "measurement", "value_ledger_entry",
                                 "engineering_handoff", "github_projection"}
         return False
 
@@ -250,6 +277,16 @@ class RolePermission(BasePermission):
                 # `filter(client=…)` e não `account=`: `Project.client` é a projeção que a
                 # Fase 6 remove, e é o único campo que a fatia 2 da #67 não renomeou.
                 return Project.objects.visible_to(request.user).filter(client=account).exists()
+            if isinstance(obj, ValueLedgerEntry):
+                # **Fora de `PROJECT_OF`** pelo motivo escrito lá em cima: `project` é opcional.
+                # A pergunta é a mesma do `Engagement` logo abaixo — a pessoa alcança algum
+                # projeto deste mandato? —, com um atalho quando a entrada já diz de qual projeto
+                # ela é. As duas metades saem de `visible_to`, a única expressão da regra
+                # (ADR 0010); o engajamento continua **não** sendo fronteira de acesso.
+                visiveis = Project.objects.visible_to(request.user)
+                if obj.project_id:
+                    return visiveis.filter(pk=obj.project_id).exists()
+                return visiveis.filter(engagement=obj.engagement).exists()
             if isinstance(obj, Engagement):
                 # **Fora de `PROJECT_OF`**, e não por esquecimento: o engajamento não pende de um
                 # projeto — são os projetos que pendem dele. A pergunta certa é a inversa, e ela

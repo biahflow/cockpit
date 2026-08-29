@@ -31,6 +31,7 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | tabelas `core_processo` / `core_processoetapa` | `core_process` / `core_processstep` | `Meta.db_table` | Fase 6 |
 | rotas `/processos/` e `/processo-etapas/` | `/processes/` e `/process-steps/` | `urls.py` | `/api/v2/` |
 | classe `Evidencia` (o dual-write) | `Evidence` + `Finding` | `backend/apps/core/models.py` | Fase 6 |
+| chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
 
 ### Já pagos pela #67 — 28/08/2026
 
@@ -206,6 +207,32 @@ desta seção para o vocabulário do OpenAPI (componente do schema → proprieda
 regex, de propósito: a maioria dos `source=` do repositório é projeção legítima, não alias — marcar
 os dois igual mentiria sobre o que vai morrer. Um teste (`backend/tests/test_openapi_aliases.py`) garante que
 o mapa não fica atrás do código nem apodrece com entrada morta.
+
+### 2d. A exceção da regra 2: `kpi_baseline` e `kpi_current` pararam de **aceitar** escrita
+
+A regra 2 diz que a `/api/v1/` não quebra. Esta é a única exceção viva, e ela é **deliberada,
+aprovada num gate humano e datada**: a decisão **C1** do DAP `docs/design/dap-prove-e-valor-r1/`
+(28/08/2026), implementada pela ADR 0055 e pela FDD 049.
+
+O que aconteceu: `DigitalEmployee.kpi_baseline` e `kpi_current` eram colunas do ativo de solução e
+viraram `Measurement` de um `KPI`. Se as duas chaves continuassem **graváveis**, passariam a existir
+dois lugares escrevendo a mesma medição, e a que valeria seria a última salva — a fonte da verdade
+voltaria a ser o ativo de solução, que é precisamente o que a extração desfaz.
+
+| Verbo | Antes | Agora | Por quê |
+| --- | --- | --- | --- |
+| `PATCH /digital-employees/{id}/` com `kpi_baseline`/`kpi_current` | gravava as colunas | aceito com 200 e **ignorado** | campos derivados, só de leitura — a forma dos três snapshots congelados do `Case` (ADR 0020) |
+| `POST /projects/{id}/digital-employees/from-blueprint/` com `kpi_baseline` | gravava a coluna | chave fora do corpo aceito e do esquema | `blueprints.instantiate` perdeu o parâmetro |
+
+**A leitura não quebrou, e não vai quebrar antes da hora.** As duas chaves continuam saindo no
+`GET`, derivadas da baseline viva e do `Outcome` mais recente do KPI referenciado — `null` quando
+não há, nunca zero. Elas morrem na `/api/v2/`, como toda chave de payload (§2c e ADR 0052), e é por
+isso que entram na tabela de aliases vivos acima.
+
+Como todo alias, a leitura precisa de regressão, e pelo motivo da §2c: um campo derivado sem
+chamador **dentro** do repositório — a SPA lê, o backend não — é o que a próxima varredura atrás de
+campo morto remove achando que paga dívida. Ela está em
+`backend/tests/regression/test_a_medicao_do_ativo_sobrevive_na_v1.py`.
 
 ### 3. `legacy_` é o escape reservado
 

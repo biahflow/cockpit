@@ -9,7 +9,19 @@ const mocks = vi.hoisted(() => ({
   auth: { aiEnabled: true } as { aiEnabled: boolean; user?: { role: string; is_admin?: boolean } },
   people: [] as { id: number; username: string; first_name: string; role: string }[],
 }));
-vi.mock("../api", () => ({ api: mocks.api, listUsers: () => Promise.resolve(mocks.people) }));
+// A carga da Fase 5 (FDD 049) roda em paralelo ao detalhe do projeto e não é o assunto deste
+// arquivo: listas vazias mantêm os dois painéis fora do caminho. Quem os exercita é
+// `ProjectDetailProve.test.tsx`. Em `vi.hoisted` porque a fábrica do `vi.mock` roda **antes** do
+// corpo do módulo.
+const semFase5 = vi.hoisted(() => ({
+  listKpis: () => Promise.resolve([]),
+  listFeasibilityAssessments: () => Promise.resolve([]),
+  listProveExperiments: () => Promise.resolve([]),
+  listMeasurements: () => Promise.resolve([]),
+  startProveExperiment: () => Promise.resolve({}),
+  registerProveGapWaiver: () => Promise.resolve({}),
+}));
+vi.mock("../api", () => ({ api: mocks.api, listUsers: () => Promise.resolve(mocks.people), ...semFase5 }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 const artifact = () => ({
@@ -301,8 +313,6 @@ test("preenche pela tela os campos que só a API alcançava", async () => {
   await user.type(screen.getByLabelText("Rótulo do KPI"), "Notas/mês");
   await user.type(screen.getByLabelText("Valor do KPI (texto livre)"), "312");
   await user.selectOptions(screen.getByLabelText("Unidade do KPI"), "count");
-  await user.type(screen.getByLabelText("Antes (base)"), "120");
-  await user.type(screen.getByLabelText("Depois (atual)"), "312");
   await user.clear(screen.getByLabelText("Horas poupadas/mês"));
   await user.type(screen.getByLabelText("Horas poupadas/mês"), "40");
   await user.clear(screen.getByLabelText("ROI/mês (R$)"));
@@ -314,10 +324,37 @@ test("preenche pela tela os campos que só a API alcançava", async () => {
     body: JSON.stringify({
       name: "Agente Financeiro", area: "Financeiro", status: "active",
       description: "Concilia notas fiscais.", kpi_label: "Notas/mês", kpi_value: "312",
-      kpi_unit: "count", kpi_direction: "up", kpi_baseline: "120", kpi_current: "312",
+      kpi_unit: "count", kpi_direction: "up",
       hours_saved_month: "40", roi_month: "8000",
     }),
   })));
+});
+
+/**
+ * A metade de **cliente** da decisão C1 do DAP `dap-prove-e-valor-r1`.
+ *
+ * O servidor já ignora `kpi_baseline`/`kpi_current` desde a ADR 0055 — quem escrevesse por ali
+ * receberia 200 sem efeito. É justamente por isso que este teste existe: um campo morto que o
+ * servidor aceita em silêncio não deixa nada vermelho, e a próxima pessoa a ler a tela concluiria
+ * que ela ainda escreve a medição. A medição mora no PROVE, e o ativo apenas a referencia.
+ */
+test("o formulário do Time Digital não escreve mais a medição do KPI", async () => {
+  const user = userEvent.setup();
+  mocks.auth = { aiEnabled: true, user: { role: "delivery" } };
+  comRoster(employee({ kpi_baseline: "260.00", kpi_current: "65.00" }));
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Agente Financeiro");
+
+  await user.click(screen.getByLabelText("Editar Agente Financeiro"));
+  expect(screen.queryByLabelText("Antes (base)")).toBeNull();
+  expect(screen.queryByLabelText("Depois (atual)")).toBeNull();
+
+  await user.click(screen.getByRole("button", { name: "Salvar" }));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employees/4/", expect.anything()));
+  const corpo = mocks.api.mock.calls.find(([rota, opcoes]) =>
+    rota === "/digital-employees/4/" && opcoes?.method === "PATCH")![1].body as string;
+  expect(corpo).not.toContain("kpi_baseline");
+  expect(corpo).not.toContain("kpi_current");
 });
 
 test("decimal em branco vira zero em vez de 400", async () => {
@@ -421,8 +458,10 @@ test("instancia um Funcionário Digital a partir do catálogo", async () => {
   await user.selectOptions(await screen.findByLabelText("Adicionar da biblioteca"), "3");
   await user.click(screen.getByRole("button", { name: "Instanciar" }));
 
+  // **Sem `kpi_baseline`** (decisão C1): o backend deixou de aceitá-lo, e o "antes" virou uma
+  // `Measurement(kind=baseline)` registrada no PROVE.
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/projects/1/digital-employees/from-blueprint/", expect.objectContaining({
-    method: "POST", body: JSON.stringify({ blueprint: 3, kpi_baseline: null }),
+    method: "POST", body: JSON.stringify({ blueprint: 3 }),
   })));
 });
 

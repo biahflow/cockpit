@@ -14,12 +14,13 @@ from decimal import Decimal
 import pytest
 
 from apps.core import ai, cases
-from apps.core.models import Case, DigitalEmployee, KpiDirection, KpiUnit, Project, Vertical
+from apps.core.models import Case, KpiDirection, KpiUnit, Project, Vertical
 from apps.core.tests.factories import (
     AccountFactory,
     CommercialOpportunityFactory,
     ProjectFactory,
     UserFactory,
+    digital_employee_medido,
 )
 
 RECEITA = "487500.00"
@@ -35,10 +36,10 @@ def _case_entregue(vertical: Vertical) -> Case:
         client=AccountFactory(name="Cliente antigo", vertical=vertical),
         actual_value=Decimal(RECEITA), cost=Decimal(CUSTO),
     )
-    DigitalEmployee.objects.create(
-        project=project, name="SDR", kpi_label="Leads qualificados/mês",
+    digital_employee_medido(
+        project, baseline=Decimal("12.00"), current=Decimal("48.00"),
+        name="SDR", kpi_label="Leads qualificados/mês",
         kpi_unit=KpiUnit.COUNT, kpi_direction=KpiDirection.UP,
-        kpi_baseline=Decimal("12.00"), kpi_current=Decimal("48.00"),
         roi_month=Decimal("8000.00"),
     )
     project.status = Project.Status.COMPLETED
@@ -98,9 +99,10 @@ def test_case_arquivado_nao_entra_na_proposta() -> None:
 def test_metrica_sem_base_registrada_diz_a_lacuna_em_vez_de_um_zero() -> None:
     vertical = _vertical()
     project = ProjectFactory(client=AccountFactory(vertical=vertical))
-    DigitalEmployee.objects.create(
-        project=project, name="Cobrador", kpi_label="Dias de atraso",
-        kpi_unit=KpiUnit.HOURS, kpi_direction=KpiDirection.DOWN, kpi_current=Decimal("12.00"),
+    digital_employee_medido(
+        project, baseline=None, current=Decimal("12.00"),
+        name="Cobrador", kpi_label="Dias de atraso",
+        kpi_unit=KpiUnit.HOURS, kpi_direction=KpiDirection.DOWN,
     )
     project.status = Project.Status.COMPLETED
     project.save()

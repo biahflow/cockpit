@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.utils import timezone
 
+from . import prove
 from .health import assess_project_health
 
 if TYPE_CHECKING:
@@ -36,7 +37,15 @@ def _metric(employee: DigitalEmployee) -> dict[str, Any]:
     `has_baseline` é campo próprio e não uma inferência sobre `baseline is None` do outro lado:
     quem consome o case (tela e prompt) precisa dizer "sem base registrada" em voz alta, e a
     ausência de base **é informação** — preenchê-la com zero seria inventar o "antes" (FDD 027).
+
+    **A forma desta linha não mudou com a ADR 0055; a origem dos dois números, sim.** `baseline` e
+    `current` saíam de colunas do próprio ativo e agora saem das `Measurement` do KPI que ele
+    referencia (`prove.baseline_de` / `prove.outcome_mais_recente_de`). `CasesPage` e
+    `ai._case_lines` leem este JSON e não são tocados — o case continua sendo fotografia, e o que a
+    fotografia retrata continua sendo o mesmo par.
     """
+    baseline = prove.baseline_de(employee.kpi)
+    current = prove.outcome_mais_recente_de(employee.kpi)
     return {
         "employee_id": employee.pk,
         # Procedência do bloco, e o que permite filtrar cases por blueprint na tela sem que ela
@@ -47,9 +56,9 @@ def _metric(employee: DigitalEmployee) -> dict[str, Any]:
         "kpi_label": employee.kpi_label,
         "kpi_unit": employee.kpi_unit,
         "kpi_direction": employee.kpi_direction,
-        "baseline": _decimal(employee.kpi_baseline),
-        "current": _decimal(employee.kpi_current),
-        "has_baseline": employee.kpi_baseline is not None,
+        "baseline": _decimal(baseline),
+        "current": _decimal(current),
+        "has_baseline": baseline is not None,
         # A frase livre da era anterior à FDD 027. Vai junto porque é o único "depois" que existe
         # nos Funcionários Digitais entregues antes desta entrega.
         "kpi_value": employee.kpi_value,
@@ -81,9 +90,12 @@ def freeze(project: Project) -> Case:
     """
     from .models import Case, DigitalEmployee
 
-    employees = DigitalEmployee.objects.filter(
-        project=project, archived_at__isnull=True
-    ).order_by("name", "id")
+    employees = (
+        DigitalEmployee.objects.filter(project=project, archived_at__isnull=True)
+        .select_related("kpi")
+        .prefetch_related("kpi__measurements")
+        .order_by("name", "id")
+    )
     account = project.client
     return Case.objects.create(
         project=project,

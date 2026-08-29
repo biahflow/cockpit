@@ -28,6 +28,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { ServicesPage } from "./pages/ServicesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TeamPage } from "./pages/TeamPage";
+import { ValorPage } from "./pages/ValorPage";
 
 function resolvePage(path: string): ReactNode {
   if (path === "/comercial") return <CommercialPage />;
@@ -66,6 +67,10 @@ function resolvePage(path: string): ReactNode {
   // acima da da conta pela razão escrita no bloco do processo — ordem por especificidade.
   const priorizacao = path.match(/^\/contas\/(\d+)\/priorizacao$/);
   if (priorizacao) return <PriorizacaoPage accountId={Number(priorizacao[1])} />;
+  // O Value Ledger é simétrico à priorização, e pela mesma razão: valor é sempre **de uma conta**,
+  // então a tela pende dela em vez de virar item de menu (DAP `dap-prove-e-valor-r1`, decisão D1).
+  const valor = path.match(/^\/contas\/(\d+)\/valor$/);
+  if (valor) return <ValorPage accountId={Number(valor[1])} />;
   const accountDetail = path.match(/^\/contas\/(\d+)$/);
   if (accountDetail) return <AccountDetailPage id={Number(accountDetail[1])} />;
   if (path === "/contas") return <AccountsPage />;

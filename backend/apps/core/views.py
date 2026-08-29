@@ -9,7 +9,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, cast
 
 from django.conf import settings
@@ -61,6 +61,7 @@ from . import (
     knowledge,
     payments,
     portal,
+    prove,
     qualification,
     recommendations,
     risk,
@@ -72,10 +73,12 @@ from .exceptions import (
     DriveUnavailable,
     EmailUndeliverable,
     EsignUnavailable,
+    InvalidInput,
     PaymentsUnavailable,
     StateConflict,
 )
 from .models import (
+    KPI,
     Account,
     Activity,
     AiInteraction,
@@ -97,6 +100,7 @@ from .models import (
     EngineeringHandoff,
     Evidence,
     Evidencia,
+    FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
     ImprovementOpportunity,
@@ -106,6 +110,7 @@ from .models import (
     KnowledgeArea,
     KnowledgePiece,
     Lead,
+    Measurement,
     Meeting,
     Milestone,
     Notification,
@@ -124,6 +129,7 @@ from .models import (
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    ProveExperiment,
     Qualification,
     Risco,
     Satisfacao,
@@ -132,6 +138,7 @@ from .models import (
     SolutionHypothesis,
     Task,
     User,
+    ValueLedgerEntry,
     Vertical,
     project_scope_q,
 )
@@ -160,6 +167,7 @@ from .serializers import (
     EngineeringHandoffSerializer,
     EvidenceSerializer,
     EvidenciaSerializer,
+    FeasibilityAssessmentSerializer,
     FindingSerializer,
     GithubDeliveryProjectionSerializer,
     ImprovementOpportunitySerializer,
@@ -168,11 +176,13 @@ from .serializers import (
     JourneyPhaseSerializer,
     KnowledgeAreaSerializer,
     KnowledgePieceSerializer,
+    KPISerializer,
     LeadConvertSerializer,
     LeadIntakeSerializer,
     LeadSerializer,
     LinkExternalSerializer,
     LoginSerializer,
+    MeasurementSerializer,
     MeetingSerializer,
     MilestoneSerializer,
     NotificationSerializer,
@@ -194,6 +204,7 @@ from .serializers import (
     ProjectMemberSerializer,
     ProjectPhaseSerializer,
     ProjectSerializer,
+    ProveExperimentSerializer,
     QualificationSerializer,
     RiscoSerializer,
     SatisfacaoSerializer,
@@ -203,6 +214,7 @@ from .serializers import (
     TaskSerializer,
     TaskSyncSerializer,
     UserSerializer,
+    ValueLedgerEntrySerializer,
     VerticalSerializer,
 )
 
@@ -1230,9 +1242,7 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         request=inline_serializer(
             "DigitalEmployeeFromBlueprint",
             {"blueprint": serializers.IntegerField(),
-             "vertical": serializers.IntegerField(required=False),
-             "kpi_baseline": serializers.DecimalField(
-                 max_digits=12, decimal_places=2, required=False, allow_null=True)},
+             "vertical": serializers.IntegerField(required=False)},
         ),
         responses=DigitalEmployeeSerializer,
     )
@@ -1248,8 +1258,13 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         `_participates`, e Vendas — que tem `project` só-leitura — é barrada. É a regra do recurso:
         Vendas lê o roster e não mexe.
 
-        `kpi_baseline` é opcional e entra aqui porque este é o momento em que o "antes" ainda é
-        medição (FDD 027): perguntado na conclusão do projeto, ele seria digitado de memória.
+        **`kpi_baseline` deixou de ser aceito aqui** (ADR 0055, decisão C1 do DAP
+        `dap-prove-e-valor-r1`). A FDD 027 tinha razão sobre o *momento* — o "antes" perguntado na
+        conclusão é memória, não medição —, e o que mudou foi **onde** ele mora: o baseline é uma
+        `Measurement(kind=baseline)` de um `KPI`, e continuar aceitando-o aqui manteria dois
+        lugares escrevendo a mesma medição, que é o defeito que a fase inteira desfaz. Quebra
+        deliberada e documentada da `/api/v1/`, registrada em `docs/ontology/aliases.md`: a chave
+        no corpo passa a ser ignorada, e o ativo nasce sem KPI para depois referenciar um.
         """
         project = self.get_object()
         blueprint = get_object_or_404(
@@ -1266,16 +1281,7 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
             if vertical_id
             else project.client.vertical
         )
-        # Vazio e ausente são a mesma coisa — "não medido" —, e valem `None`, não zero.
-        baseline_raw = request.data.get("kpi_baseline")
-        try:
-            baseline = None if baseline_raw in (None, "") else Decimal(str(baseline_raw))
-        except InvalidOperation:
-            return Response(
-                {"kpi_baseline": "Informe um número ou deixe em branco."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        employee = blueprints.instantiate(project, blueprint, vertical, kpi_baseline=baseline)
+        employee = blueprints.instantiate(project, blueprint, vertical)
         return Response(DigitalEmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
@@ -1773,9 +1779,15 @@ class TaskViewSet(ProjectScopedMixin, CalendarActionMixin, QueryParamFilterMixin
 
 class DigitalEmployeeViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "digital_employee"
-    queryset = DigitalEmployee.objects.select_related("project").all()
+    # `kpi__measurements` prefetchado porque `kpi_baseline`/`kpi_current` deixaram de ser colunas e
+    # passaram a ser derivados das medições (ADR 0055). Sem ele, a listagem do roster faria duas
+    # consultas por linha — e o `.all()` de `prove.baseline_de` existe justamente para consumir
+    # este prefetch em vez de furá-lo com um `.filter()`.
+    queryset = DigitalEmployee.objects.select_related("project", "kpi").prefetch_related(
+        "kpi__measurements"
+    ).all()
     serializer_class = DigitalEmployeeSerializer
-    filter_fields = ("project",)
+    filter_fields = ("project", "kpi")
 
 
 class CaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
@@ -3306,6 +3318,242 @@ class SolutionHypothesisViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             _exige_cliente_no_escopo(
                 self.request.user, oportunidade.account if oportunidade else None
             )
+        super().perform_update(serializer)
+
+
+class FeasibilityAssessmentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """O laudo que sustenta o gate de Feasibility (FDD 049).
+
+    **Com `ProjectScopedMixin`**, ao contrário dos quatro da Fase 4: o laudo pende de um projeto —
+    é *neste* trabalho que a avaliação aconteceu —, e o recorte da Entrega é o de sempre
+    (`ProjectMember`). A hipótese é da conta e chega junto, mas quem responde pela fronteira é o
+    projeto; validar as duas pontas é o que o `clean()`/`validate` fazem.
+    """
+
+    resource = "feasibility_assessment"
+    queryset = FeasibilityAssessment.objects.select_related(
+        "solution_hypothesis", "solution_hypothesis__improvement_opportunity", "project"
+    ).prefetch_related("evidence").all()
+    serializer_class = FeasibilityAssessmentSerializer
+    filter_fields = ("project", "solution_hypothesis")
+    # `gate_decision` em `filter_exact_fields` pelo motivo do `kind` da `Evidence`: o teste de
+    # dígito de `filter_fields` derrubaria `?gate_decision=go` no chão sem erro nenhum, e a lista
+    # voltaria inteira.
+    filter_exact_fields = ("gate_decision",)
+
+
+class ProveExperimentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """O experimento do PROVE, e a invariante de início (FDD 049, decisão E1 do DAP)."""
+
+    resource = "prove_experiment"
+    queryset = ProveExperiment.objects.select_related(
+        "solution_hypothesis", "solution_hypothesis__improvement_opportunity", "project",
+        "gap_waiver_by",
+    ).prefetch_related("kpis__measurements").all()
+    serializer_class = ProveExperimentSerializer
+    filter_fields = ("project", "solution_hypothesis")
+    filter_exact_fields = ("status", "gate_decision")
+
+    @extend_schema(responses=ProveExperimentSerializer, request=None)
+    @action(detail=True, methods=["post"])
+    def start(self, request: Request, pk: str | None = None) -> Response:
+        """Inicia o PROVE, conferindo KPI, critério de sucesso e baseline (FDD 049).
+
+        **Uma action, e não um `PATCH` de `status`**, pela razão exata de `journey.apply_gate`
+        (ADR 0053): a validação depende do **estado corrente** — quais KPIs pendem deste
+        experimento e quais deles já têm baseline viva —, e só quem conhece esse estado pode fazer
+        a pergunta. Um `PATCH` gravaria `running` sem ela, e a invariante viraria sugestão.
+
+        Três recusas, com o status que cada uma merece:
+
+        - **409** se o experimento já está em execução ou concluído: o pedido está bem formado, o
+          que impede é o estado (`StateConflict`);
+        - **400** listando **o que falta**, quando não há lacuna aprovada: aqui é o estado do
+          experimento que precisa mudar, mas a recusa é sobre o pedido de *iniciar agora* — é a
+          mesma escolha de `apply_gate`, que devolve 400 para a decisão fora do vocabulário;
+        - **400** quando há `gap_waiver` sem `gap_waiver_by`: lacuna aprovada é ato assinado, e sem
+          autor "alguém aprovou" é alegação de ninguém — a mesma regra do trio de consentimento do
+          `Case`.
+
+        A lacuna se registra no próprio experimento (`PATCH` com `gap_waiver` e `gap_waiver_by`) e
+        esta ação **lê** o estado, como `apply_gate` lê a fase ativa. `gap_waiver_at` é carimbado
+        aqui: é o instante em que a lacuna passou a valer.
+        """
+        experimento = self.get_object()
+        if experimento.status != ProveExperiment.Status.PLANNED:
+            raise StateConflict(
+                f"Este PROVE já está em {experimento.get_status_display().lower()}. "
+                "Só um experimento planejado pode ser iniciado."
+            )
+        lacuna = (experimento.gap_waiver or "").strip()
+        if lacuna and experimento.gap_waiver_by_id is None:
+            raise InvalidInput(
+                "Lacuna aprovada é ato assinado: informe em `gap_waiver_by` quem a aprovou."
+            )
+        faltas = prove.o_que_falta_para_iniciar(experimento)
+        if faltas and not lacuna:
+            raise InvalidInput(
+                f"O PROVE não começa sem {prove.frase_do_que_falta(faltas)}. Registre o que falta "
+                "ou uma lacuna aprovada (`gap_waiver` e `gap_waiver_by`)."
+            )
+        experimento.status = ProveExperiment.Status.RUNNING
+        campos = ["status", "updated_at"]
+        if experimento.started_at is None:
+            experimento.started_at = timezone.localdate()
+            campos.append("started_at")
+        if lacuna and experimento.gap_waiver_at is None:
+            experimento.gap_waiver_at = timezone.now()
+            campos.append("gap_waiver_at")
+        experimento.save(update_fields=campos)
+        return Response(ProveExperimentSerializer(experimento).data)
+
+
+class KPIViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """O indicador (FDD 049, ADR 0055).
+
+    O recorte é pelo **projeto**, que é a âncora obrigatória do KPI. `prove_experiment` é opcional
+    e por isso não serve de caminho para o escopo: um `project_path` que passasse por ele deixaria
+    de fora exatamente o KPI migrado, que não tem experimento nenhum.
+    """
+
+    resource = "kpi"
+    queryset = KPI.objects.select_related("project", "prove_experiment", "owner").all()
+    serializer_class = KPISerializer
+    filter_fields = ("project", "prove_experiment")
+    filter_exact_fields = ("unit", "direction")
+
+    def perform_destroy(self, instance: KPI) -> None:
+        """Arquiva o KPI **e as medições dele**, ou recusa — nunca deixa órfão (FDD 025).
+
+        As medições são listadas por conta própria (`/measurements/?kpi=`), então arquivar só o pai
+        deixaria linhas visíveis apontando para um KPI que a interface esconde. A regra do
+        `CLAUDE.md` dá duas saídas legítimas, e as duas se aplicam aqui em ordem:
+
+        - **recusar** quando uma `ValueLedgerEntry` viva pende de alguma medição deste KPI. Arquivar
+          ali esvaziaria por baixo uma afirmação de valor que alguém pode ter aprovado — é o mesmo
+          argumento do último achado de uma dor confirmada (FDD 048), com dinheiro em cima;
+        - **arquivar junto, na mesma transação**, no caso normal: uma leitura não tem vida fora do
+          indicador que a define.
+        """
+        vivas = instance.measurements.filter(archived_at__isnull=True)
+        presas = ValueLedgerEntry.objects.filter(
+            outcome_measurement__in=vivas, archived_at__isnull=True
+        ).count()
+        if presas:
+            raise StateConflict(
+                f"{presas} entrada(s) de valor ainda pendem das medições deste KPI. Arquive as "
+                "entradas antes de arquivar o indicador que as sustenta."
+            )
+        with transaction.atomic():
+            agora = timezone.now()
+            vivas.update(archived_at=agora, updated_at=agora)
+            instance.archive()
+
+
+class MeasurementViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
+    """As leituras de um KPI — baseline, outcome e monitoramento (FDD 049).
+
+    O projeto chega pelo KPI, um hop a mais; `scope_payload_field = "kpi"` é o que faz a guarda de
+    escrita do mixin olhar a chave certa — sem ela, registrar uma medição num KPI alheio seria
+    escrita fora do escopo passando pelo `perform_create`.
+    """
+
+    resource = "measurement"
+    project_path = "kpi__project"
+    scope_payload_field = "kpi"
+    queryset = Measurement.objects.select_related("kpi", "kpi__project").prefetch_related(
+        "source_evidence"
+    ).all()
+    serializer_class = MeasurementSerializer
+    filter_fields = ("kpi",)
+    filter_exact_fields = ("kind",)
+
+    def scoped_project(self, validated_data: dict) -> Project | None:
+        kpi = validated_data.get("kpi")
+        return kpi.project if kpi else None
+
+    def perform_destroy(self, instance: Measurement) -> None:
+        """Recusa arquivar a medição de que uma entrada de valor viva ainda depende (FDD 025).
+
+        O `PROTECT` do modelo impede o apagamento **real**, e o `api_exception_handler` o traduz em
+        409 se algum caminho chegar lá. Mas a API não apaga: ela arquiva — e sem esta guarda a
+        entrada de valor continuaria de pé, na listagem, apontando para uma medição que a interface
+        esconde. É o órfão visível da FDD 025, aqui sustentando um número que a casa afirma ao
+        cliente.
+        """
+        presas = instance.value_entries.filter(archived_at__isnull=True).count()
+        if presas:
+            raise StateConflict(
+                f"{presas} entrada(s) de valor apontam para esta medição. Arquive as entradas "
+                "antes de arquivar o Outcome que as sustenta."
+            )
+        instance.archive()
+
+
+class ValueLedgerEntryViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """O Value Ledger da conta (FDD 049, `language-map` §6.11 e §6.12).
+
+    **Sem `ProjectScopedMixin`, e é o desvio consciente desta fatia.** A entrada pende de um
+    `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
+    Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
+    objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
+    `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+
+    **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
+    `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
+    entrada sem projeto é vista por quem alcança algum projeto daquele mandato — a mesma pergunta
+    inversa que `EngagementViewSet.get_queryset` faz, e a única expressão da regra (ADR 0010).
+    """
+
+    resource = "value_ledger_entry"
+    queryset = ValueLedgerEntry.objects.select_related(
+        "engagement", "engagement__account", "project", "outcome_measurement",
+        "outcome_measurement__kpi", "approved_by",
+    ).all()
+    serializer_class = ValueLedgerEntrySerializer
+    filter_fields = ("engagement", "project", "outcome_measurement")
+    filter_exact_fields = ("status", "value_type")
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_admin_role or user.role != User.Role.DELIVERY:
+            return queryset
+        visiveis = Project.objects.visible_to(user)
+        return queryset.filter(
+            Q(project__in=visiveis) | Q(project__isnull=True, engagement__projects__in=visiveis)
+        ).distinct()
+
+    def _exige_escopo(self, validated_data: dict) -> None:
+        """A metade de **escrita** do mesmo recorte.
+
+        Só a leitura seria contornável em uma requisição: sem esta guarda, criar a entrada de valor
+        de um mandato alheio bastaria para escrever dentro do que a listagem esconde — o argumento
+        de `_exige_cliente_no_escopo` e do `ProjectScopedMixin`.
+        """
+        user = self.request.user
+        if user.is_admin_role or user.role != User.Role.DELIVERY:
+            return
+        visiveis = Project.objects.visible_to(user)
+        projeto = validated_data.get("project")
+        engagement = validated_data.get("engagement")
+        if projeto is not None:
+            if visiveis.filter(pk=projeto.pk).exists():
+                return
+        elif engagement is not None and visiveis.filter(engagement=engagement).exists():
+            return
+        raise PermissionDenied("Você não participa de nenhum projeto deste engagement.")
+
+    def perform_create(self, serializer: ValueLedgerEntrySerializer) -> None:
+        self._exige_escopo(serializer.validated_data)
+        serializer.save()
+
+    def perform_update(self, serializer: ValueLedgerEntrySerializer) -> None:
+        if {"engagement", "project"} & set(serializer.validated_data):
+            dados = dict(serializer.validated_data)
+            dados.setdefault("engagement", serializer.instance.engagement)
+            dados.setdefault("project", serializer.instance.project)
+            self._exige_escopo(dados)
         super().perform_update(serializer)
 
 
