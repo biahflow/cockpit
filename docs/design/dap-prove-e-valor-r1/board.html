@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — Feasibility, PROVE, KPI e Value Ledger · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-100:#fadfd4; --brand-200:#dd8b62; --brand-500:#bd4a30;
+  --brand-600:#a8412a; --brand-700:#9c3c26; --brand-900:#5c2317;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --info:#1d4ed8; --info-50:#eff6ff;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  --slate-600:#475569; --slate-700:#334155;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650;margin:28px 0 10px}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:var(--text-body)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface-subtle);font-weight:650}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.grid--2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.grid--3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.spec--pick{border-style:solid;border-color:var(--brand-200);box-shadow:0 0 0 3px rgba(221,139,98,.12)}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+
+/* ---- primitivas espelhadas de src/index.css ---- */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:24px;box-shadow:var(--shadow-card)}
+.panel--sm{padding:16px}
+.panel-heading{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel-heading h2{margin:0;font-size:var(--text-title);line-height:var(--lh-title);font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);border:0;padding:0}
+.panel-rows>.row+.row{border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px 24px}
+.row-main{min-width:0;flex:1}
+.row-main strong{display:block;font-size:var(--text-body);font-weight:600;color:var(--ink)}
+.row-main span{display:block;margin-top:.125rem;font-size:var(--text-label);line-height:1.05rem;color:var(--muted)}
+.metric-icon{display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;
+  border-radius:var(--radius-control);background:var(--brand-50);color:var(--brand-500)}
+.metric-icon--info{background:var(--info-50);color:var(--info)}
+.metric-card{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:16px;box-shadow:var(--shadow-card);display:grid;gap:8px}
+.metric-card strong{font-size:1.75rem;line-height:2rem;font-weight:650;letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums}
+.metric-card span{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500;color:var(--muted)}
+.state{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:4px 10px;
+  font-size:11px;line-height:1rem;font-weight:600;white-space:nowrap}
+.state--0{background:var(--info-50);color:var(--info)}
+.state--1{background:var(--success-50);color:var(--success)}
+.state--2{background:var(--warning-50);color:var(--warning)}
+.state--3{background:var(--danger-50);color:var(--danger)}
+.state--off{background:var(--slate-100);color:var(--slate-600)}
+.field{width:100%;border-radius:var(--radius-control);border:1px solid var(--line-strong);
+  background:#fff;padding:12px;font-size:var(--text-body);color:var(--slate-700);font-family:inherit}
+.field::placeholder{color:#a8a29e}
+.field:disabled{background:var(--surface-subtle);color:var(--muted)}
+.form-label{display:grid;gap:8px;font-size:var(--text-body);font-weight:500;color:var(--slate-700)}
+.form-grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit;white-space:nowrap}
+.btn:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn--secondary-danger{background:var(--surface);color:var(--muted);border-color:var(--line)}
+.btn--icon{width:44px;height:44px;min-height:0;padding:0;flex:0 0 auto}
+.btn--focus{outline:2px solid var(--brand-500);outline-offset:2px}
+.empty-state{border-radius:var(--radius-card);border:1px dashed var(--line);
+  background:rgba(248,250,252,.6);padding:24px 16px;text-align:center;
+  font-size:var(--text-body);color:var(--muted)}
+.alert--error{border-radius:var(--radius-card);border:1px solid var(--danger-50);
+  background:var(--danger-50);padding:16px;font-size:var(--text-body);color:var(--danger);margin:0 0 16px}
+.type-title{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650}
+.type-body{font-size:var(--text-body);line-height:var(--lh-body);font-weight:400}
+.type-label{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--18{width:18px;height:18px}
+.new{display:inline-block;background:var(--brand-50);color:var(--brand-700);border:1px solid var(--brand-100);
+  border-radius:9999px;padding:1px 8px;font-size:var(--text-meta);font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;vertical-align:middle;margin-left:6px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+.skeleton{background:var(--slate-200);border-radius:12px}
+.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
+.stack{display:grid;gap:16px}
+.actions{display:flex;gap:6px;flex:0 0 auto}
+.back-link{display:inline-flex;align-items:center;gap:8px;font-size:var(--text-body);font-weight:600;
+  color:var(--brand-600);text-decoration:none}
+.page-head{margin-bottom:24px;display:grid;gap:6px}
+.page-head h1{margin:0;font-size:1.5rem;font-weight:650;letter-spacing:-.03em;color:var(--ink)}
+.page-head p{margin:0;max-width:64ch;font-size:var(--text-body);color:var(--muted)}
+.kpi-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;font-variant-numeric:tabular-nums}
+.kpi-row .before{color:var(--muted);font-size:var(--text-body)}
+.kpi-row .arrow{color:var(--muted)}
+.kpi-row .after{font-size:var(--text-title);font-weight:650;color:var(--ink)}
+.kpi-row .gap{color:var(--muted);font-size:var(--text-body)}
+details.hist summary{cursor:default;color:var(--brand-600);font-weight:600;font-size:var(--text-meta);
+  list-style:none}
+details.hist summary::-webkit-details-marker{display:none}
+details.hist summary::before{content:"▸ ";color:var(--brand-500)}
+details.hist[open] summary::before{content:"▾ "}
+details.hist ul{margin:8px 0 0;padding:0;list-style:none;display:grid;gap:4px}
+details.hist li{display:flex;justify-content:space-between;gap:12px;font-size:var(--text-meta);color:var(--muted);
+  border-top:1px solid var(--line);padding-top:4px}
+details.hist li:first-child{border-top:0;padding-top:0}
+.mobile{max-width:342px;margin:0 auto}
+.mobile .panel{padding:20px}
+.mobile .row{padding:16px 20px}
+.mobile .form-grid{grid-template-columns:1fr}
+.mobile .row .actions{width:100%}
+.mobile .kpi-row{flex-direction:column;align-items:flex-start;gap:4px}
+@media (max-width:560px){
+  .wrap{padding:28px 16px 64px}
+  .grid,.grid--2,.grid--3{grid-template-columns:minmax(0,1fr)}
+  .grid>*,.spec,.stage{min-width:0}
+  .form-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{padding:10px}
+  .spec{padding:10px}
+  .panel-heading{flex-wrap:wrap}
+  .panel-heading>.btn{width:100%}
+  table{display:block;overflow-x:auto}
+  h1{font-size:1.5rem;line-height:1.875rem}
+  .kpi-row{flex-direction:column;align-items:flex-start;gap:4px}
+  .row{padding:14px 16px}
+  /* Um `.back-link` como segundo filho de `.row` tem `flex-basis:auto` contra o
+     `flex:1;min-width:0` de `.row-main` — em container estreito o cálculo de espaço livre dá
+     quase tudo ao `.row-main` (basis 0%) e nada ao link, mas o link não é espremido: ele mantém
+     o próprio min-content e sobra pouquíssimo para o texto ao lado, que passa a quebrar palavra a
+     palavra. `flex-basis:100%` força o link para a própria linha, cheio, abaixo do conteúdo. */
+  .row>a.back-link{flex:1 1 100%}
+}
+code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package</p>
+<h1>Feasibility, PROVE, KPI e Value Ledger</h1>
+<p class="lede">Classificação <code>INTERFACE_CHANGE</code> · <code>BROWSER_REQUIRED</code> ·
+Revisão <strong>1</strong> · Status <strong>Aguardando aprovação</strong> · 2026-08-28 · Issue
+<a href="#" style="color:var(--brand-600)">#69</a></p>
+<p class="note">Renderização auto-contida: abre sem build, sem toolchain e sem rede. Toda cor,
+corpo de texto, raio e sombra desta página é cópia literal dos tokens de
+<code>frontend/src/index.css</code> — a tabela de procedência na seção 8 cita a origem de cada
+valor. Este artefato é <strong>evidência para um gate humano</strong>, não implementação: nenhuma
+linha de <code>frontend/src/</code> ou <code>backend/</code> muda por esta entrega, e nada aqui
+deve ser copiado para dentro do código de aplicação.</p>
+
+<h2>1 · Os dois painéis novos — Technical Feasibility e PROVE</h2>
+<p class="note">Ambos pendem de <code>SolutionHypothesis</code> <strong>e</strong> de
+<code>Project</code>, e ficam em <code>ProjectDetailPage</code>, logo abaixo da Jornada — a
+decisão que sustentam é a decisão de gate da fase, que já mora ali. O laudo de Feasibility
+sustenta <code>GO</code>/<code>CONDITIONAL GO</code>/<code>REDESIGN</code>/<code>NO-GO</code>; o
+PROVE sustenta <code>SCALE</code>/<code>ITERATE</code>/<code>STOP</code> (ADR 0053). A decisão de
+gate <strong>nunca</strong> aparece rotulada como resultado neste painel — ela fica onde já está,
+na Jornada, e aqui aparece só como referência, ao lado do Outcome.</p>
+
+<div class="stage">
+  <section class="panel">
+    <div class="panel-heading">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></svg></span>
+        <div><h2 style="margin:0;border:0;padding:0;font-size:var(--text-title)">Technical Feasibility</h2>
+        <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">Laudo avaliado em 15/06/2026</p></div>
+      </div>
+      <span class="state state--2">CONDITIONAL GO</span>
+    </div>
+    <div class="stack" style="padding:0 24px 20px">
+      <p class="type-body" style="margin:0"><strong>Hipótese de solução avaliada:</strong> um
+      agente de IA consegue classificar e rotear 80% dos tickets recebidos ao suporte N1 sem
+      intervenção humana, mantendo o tempo de primeira resposta abaixo de 2 horas.</p>
+    </div>
+    <div class="panel-rows">
+      <div class="row">
+        <div class="row-main"><strong>Eixo técnico</strong>
+        <span>A integração com o CRM sustenta o volume de pico sem timeout em 93% das chamadas simuladas.</span></div>
+        <span class="state state--1">Favorável</span>
+      </div>
+      <div class="row">
+        <div class="row-main"><strong>Eixo operacional</strong>
+        <span>Time N1 precisa de um fallback humano para tickets ambíguos — sem ele, a fila trava.</span></div>
+        <span class="state state--2">Ressalva</span>
+      </div>
+      <div class="row">
+        <div class="row-main"><strong>Eixo econômico</strong>
+        <span>Custo de inferência por ticket é 6% do custo humano equivalente na mesma tarefa.</span></div>
+        <span class="state state--1">Favorável</span>
+      </div>
+      <div class="row">
+        <div class="row-main"><strong>Amostra usada</strong>
+        <span>312 tickets analisados na simulação de 15 dias corridos (03/06 a 17/06/2026).</span></div>
+      </div>
+      <div class="row">
+        <div class="row-main"><strong>Classes de erro observadas</strong>
+        <span>Classificação incorreta em tickets ambíguos (7%) · timeout de integração com o CRM em picos de tráfego (3%).</span></div>
+      </div>
+      <div class="row">
+        <div class="row-main"><strong>Evidência</strong>
+        <span>3 <code>Evidence</code> vinculadas — planilha de simulação, log de timeout e transcrição de validação com o time N1.</span></div>
+        <a href="#" class="back-link" style="font-size:var(--text-label)">Ver evidências <svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a>
+      </div>
+    </div>
+  </section>
+</div>
+<p class="note"><strong>A decisão fica ao lado do resultado, nunca no lugar dele.</strong> A
+pílula <code>CONDITIONAL GO</code> no cabeçalho é a mesma variante que a Jornada já usa
+(<code>gateVariant</code>, <code>ProjectDetailPage.tsx</code>) — <code>state--2</code>, o âmbar de
+"seguiu, mas há dívida" (ADR 0053) — e não duplica a fonte: ela é lida da fase de gate, não
+gravada de novo aqui.</p>
+
+<div class="stage" style="margin-top:24px">
+  <section class="panel">
+    <div class="panel-heading">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>
+        <div><h2 style="margin:0;border:0;padding:0;font-size:var(--text-title)">PROVE</h2>
+        <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">Experimento em produção controlada · 03/07 → 31/07/2026</p></div>
+      </div>
+      <span class="state state--0">Em andamento</span>
+    </div>
+    <div class="stack" style="padding:0 24px 20px">
+      <p class="type-body" style="margin:0"><strong>Escopo controlado:</strong> rotear tickets do
+      time de Suporte N1 durante o expediente comercial, com fallback humano automático para
+      tickets classificados como ambíguos.</p>
+      <p class="type-body" style="margin:0"><strong>Critério de sucesso:</strong> reduzir o tempo
+      médio de primeira resposta em pelo menos 50%, sem aumento na taxa de reabertura de
+      chamados.</p>
+    </div>
+    <div class="panel-rows">
+      <div class="row" style="align-items:flex-start">
+        <div class="row-main">
+          <strong>Tempo de resposta</strong>
+          <span>Medido em horas · h</span>
+          <div class="kpi-row" style="margin-top:8px">
+            <span class="before">4h20</span><span class="arrow">→</span><span class="after">1h05</span>
+            <span class="state state--1">−74%</span>
+          </div>
+          <details class="hist" style="margin-top:8px">
+            <summary>Ver histórico de medições (4)</summary>
+            <ul>
+              <li><span>03/07/2026 · baseline</span><span>4h20</span></li>
+              <li><span>10/07/2026</span><span>2h40</span></li>
+              <li><span>17/07/2026</span><span>1h32</span></li>
+              <li><span>24/07/2026 · atual</span><span>1h05</span></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <div class="row-main">
+          <strong>Taxa de resolução no primeiro contato</strong>
+          <span>Medido em percentual · %</span>
+          <div class="kpi-row" style="margin-top:8px">
+            <span class="before">—</span><span class="arrow">→</span><span class="after">68</span>
+            <span class="gap">variação —</span>
+          </div>
+          <details class="hist" style="margin-top:8px">
+            <summary>Ver histórico de medições (1)</summary>
+            <ul>
+              <li><span>24/07/2026 · atual</span><span>68</span></li>
+            </ul>
+          </details>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<p class="note"><strong>Mais de um KPI no mesmo PROVE</strong> — o experimento acima sustenta dois,
+porque suportar vários é requisito da issue #69: um KPI não sobrevive mais à troca do ativo que o
+mede, e um experimento legitimamente move mais de um indicador ao mesmo tempo.
+<strong>A segunda linha é o KPI sem baseline</strong>: mostra <code>— → 68</code>, e a variação
+sai como o texto neutro "variação —", nunca <code>0%</code> — zerar afirmaria que o processo não
+existia antes, que é falso; simplesmente não foi medido. É a mesma regra que
+<code>Process.custo_do_estado_atual</code> já aplica com <code>nao_apurado</code>
+(<code>backend/apps/core/process.py:71-74</code>).</p>
+
+<h2>2 · Painel "Time Digital" — antes e depois</h2>
+<p class="note">Hoje o formulário de edição do <code>DigitalEmployee</code> escreve
+<code>kpi_baseline</code>/<code>kpi_current</code> direto no ativo
+(<code>ProjectDetailPage.tsx:443-444</code>, dentro do modal "Editar {nome}"). A decisão
+<strong>C</strong> deste pacote remove os dois campos: o painel passa a mostrar, só-leitura, o KPI
+que o ativo <em>referencia</em> e a última medição, com link para o PROVE onde ela foi tomada. É a
+decisão mais cara do pacote — a única que remove algo que existe hoje.</p>
+<div class="grid grid--2">
+  <figure class="spec"><figcaption>Antes — formulário escreve o KPI (hoje)</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading"><h2 style="margin:0;border:0;padding:0;font-size:var(--text-title)">Editar Agente de Atendimento N1</h2></div>
+      <div class="stack">
+        <div class="form-grid">
+          <label class="form-label">Rótulo do KPI<input class="field" value="Tempo de resposta"></label>
+          <label class="form-label">Valor do KPI (texto livre)<input class="field" value="1h05"></label>
+        </div>
+        <div class="form-grid">
+          <label class="form-label">Unidade do KPI<select class="field"><option>Horas</option></select></label>
+          <label class="form-label">Direção<select class="field"><option>Menor é melhor</option></select></label>
+          <label class="form-label">Antes (base)<input class="field" type="number" value="260"></label>
+          <label class="form-label">Depois (atual)<input class="field" type="number" value="65"></label>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn"><svg class="ico" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>Salvar</button>
+        </div>
+      </div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">Dois campos de número, digitados por quem edita o
+    ativo — a mesma medição que o PROVE acima também escreve. <strong>Dois lugares escrevendo o
+    mesmo número, e vale o último salvo</strong>: é o defeito que a decisão C existe para
+    fechar.</p>
+  </figure>
+
+  <figure class="spec spec--pick"><figcaption>Depois — painel referencia o KPI (C1, recomendada)</figcaption>
+    <div class="stage"><section class="panel">
+      <div class="panel-heading"><h2 style="margin:0;border:0;padding:0;font-size:var(--text-title)">Agente de Atendimento N1</h2>
+      <span class="state state--1">Ativo</span></div>
+      <div class="panel-rows">
+        <div class="row" style="align-items:flex-start">
+          <div class="row-main">
+            <strong>KPI referenciado</strong>
+            <span>Tempo de resposta · medido no PROVE "Triagem de Tickets N1"</span>
+            <div class="kpi-row" style="margin-top:8px">
+              <span class="before">4h20</span><span class="arrow">→</span><span class="after">1h05</span>
+              <span class="state state--1">−74%</span>
+            </div>
+          </div>
+          <a href="#" class="back-link" style="font-size:var(--text-label)">Ver no PROVE <svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a>
+        </div>
+      </div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">Sem campo de número: quem media pelo formulário passa
+    a medir pelo PROVE. É a única leitura compatível com "o <code>DigitalEmployee</code> passa a
+    <strong>referenciar</strong> KPIs, não a possuí-los". <code>kpi_value</code> (o campo de texto
+    livre, obsoleto desde a FDD 027) não é tocado aqui — ele segue alimentando o painel "Seu Time
+    Digital" do One (<code>backend/apps/core/portal.py:270-283</code>), e mexer nele é outro
+    gate.</p>
+  </figure>
+</div>
+
+<h2>3 · Tela <code>/contas/:id/valor</code> — Value Ledger</h2>
+<div class="stage">
+  <div style="max-width:820px;margin:0 auto">
+    <a href="#" class="back-link"><svg class="ico" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Voltar para Nord Logística</a>
+    <header class="page-head" style="margin-top:16px">
+      <p class="eyebrow">VALUE</p>
+      <h1>Valor gerado</h1>
+      <p>Cada entrada aponta para um Outcome medido no PROVE. Pendente não conta para o total —
+      só valor aprovado é valor.</p>
+    </header>
+    <div class="metric-card" style="max-width:280px;margin-bottom:20px">
+      <span>Total aprovado no período</span>
+      <strong>R$ 18.400</strong>
+      <span>1 entrada pendente de R$ 6.200 não somada acima</span>
+    </div>
+    <section class="panel panel--sm" style="padding:0">
+      <div class="panel-rows">
+        <div class="row" style="align-items:flex-start">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M13.744 17.736a6 6 0 1 1-7.48-7.48"/><path d="M15 6h1v4"/><path d="m6.134 14.768.866-.5 2 3.464"/><circle cx="16" cy="8" r="6"/></svg></span>
+          <div class="row-main">
+            <strong>Economia operacional</strong>
+            <span>R$ 18.400 · julho/2026 · atribuição direta (medição do PROVE)</span>
+            <span>Outcome de origem: Tempo de resposta — PROVE "Triagem de Tickets N1"</span>
+          </div>
+          <span class="state state--1">Aprovado</span>
+        </div>
+        <div class="row" style="align-items:flex-start">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M13.744 17.736a6 6 0 1 1-7.48-7.48"/><path d="M15 6h1v4"/><path d="m6.134 14.768.866-.5 2 3.464"/><circle cx="16" cy="8" r="6"/></svg></span>
+          <div class="row-main">
+            <strong>Produtividade</strong>
+            <span>R$ 6.200 · agosto/2026 · atribuição estimada (projeção linear)</span>
+            <span>Outcome de origem: Taxa de resolução no primeiro contato — PROVE "Triagem de Tickets N1"</span>
+          </div>
+          <span class="state state--2">Pendente</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<p class="note"><strong>Tela própria, simétrica a <code>/contas/:id/priorizacao</code></strong>
+(decisão D). O ledger é uma lista financeira com fluxo de aprovação
+(<code>status</code>/<code>approved_by</code>/<code>attribution_method</code>) — auditável demais
+para uma nona seção dentro de uma página de cadastro. O <code>.back-link</code> volta para a
+conta, no mesmo padrão de <code>PipelinePage.tsx:48</code>; o eyebrow é o termo canônico
+<code>VALUE</code>, em inglês, com o texto ao redor em pt-BR — a mesma regra do mapa de linguagem
+§1 que a Decisão A do DAP de Engagements já registrou.</p>
+
+<h2>4 · As cinco decisões</h2>
+
+<h3>Decisão A — Feasibility/PROVE são painéis do projeto, ou tela própria</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>A1 — recomendada · painéis em <code>ProjectDetailPage</code></figcaption>
+    <div class="stage" style="padding:10px">
+      <div style="border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:10px;font-size:11px;color:var(--muted)">
+        <div style="font-weight:700;color:var(--ink);margin-bottom:6px">Projeto · Piloto Triagem de Tickets</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px">Jornada · 5 fases</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px;margin-top:6px;background:var(--brand-50);border-radius:6px;padding:6px 8px">Technical Feasibility <span class="new" style="margin-left:4px">novo</span></div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px;margin-top:6px;background:var(--brand-50);border-radius:6px;padding:6px 8px">PROVE <span class="new" style="margin-left:4px">novo</span></div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px;margin-top:6px">Equipe do projeto</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px;margin-top:6px">Funcionários Digitais</div>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Visível só quando a fase canônica correspondente
+    existe na Jornada (<code>JourneyPhase.canonical_stage</code> ∈
+    <code>feasibility</code>/<code>prove</code>) — um projeto de Discovery Sprint não mostra
+    painel de PROVE. Quem decide lê a prova no mesmo lugar em que decide.</p>
+  </figure>
+  <figure class="spec"><figcaption>A2 — alternativa · tela própria <code>/projetos/:id/prove</code></figcaption>
+    <div class="stage" style="padding:10px">
+      <div style="border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:10px;font-size:11px;color:var(--muted)">
+        <div style="display:flex;gap:6px;align-items:center;color:var(--brand-600);font-weight:700;margin-bottom:6px">Projeto <svg class="ico" style="width:11px;height:11px" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg> PROVE</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px">Escopo · janela · critério de sucesso</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px;margin-top:6px">KPIs e medições</div>
+      </div>
+      <div style="margin-top:8px;text-align:center;color:var(--brand-500)">↑ outra rota, outro carregamento</div>
+    </div>
+    <p class="note" style="margin-bottom:0">A fase é progresso; o agregado que sustenta a decisão
+    fica noutra tela. Quem decide lê num lugar e a prova mora em outro — que é como se decide sem
+    ler. Custo real de A1 (<code>ProjectDetailPage</code> já é a tela mais longa do produto) fica
+    mitigado pela visibilidade condicional.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: A1.</strong></p>
+
+<h3>Decisão B — a linha do KPI mostra Baseline → Outcome, ou só a leitura vigente</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>B1 — recomendada · Baseline → Outcome · variação</figcaption>
+    <div class="stage"><div class="row" style="background:var(--surface);border:1px solid var(--line);border-radius:8px">
+      <div class="row-main">
+        <strong>Tempo de resposta</strong>
+        <div class="kpi-row" style="margin-top:6px"><span class="before">4h20</span><span class="arrow">→</span><span class="after">1h05</span><span class="state state--1">−74%</span></div>
+      </div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Baseline e Outcome são o mesmo KPI em momentos
+    diferentes — a frase central da issue #69. A unidade fica na linha, não no cabeçalho, porque a
+    comparação só é legítima com mesma unidade e mesmo método.</p>
+  </figure>
+  <figure class="spec"><figcaption>B2 — alternativa · só a leitura mais recente</figcaption>
+    <div class="stage"><div class="row" style="background:var(--surface);border:1px solid var(--line);border-radius:8px">
+      <div class="row-main">
+        <strong>Tempo de resposta</strong>
+        <div class="kpi-row" style="margin-top:6px"><span class="after">1h05</span></div>
+      </div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Mais limpo, e reintroduz na leitura a fusão que o
+    modelo desfaz na escrita: sem o par, <em>1h05</em> não diz se melhorou. O histórico existiria
+    na API e não na tela.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: B1.</strong> A lacuna é <code>—</code>, nunca <code>0</code>
+— ver o KPI sem baseline na seção 1.</p>
+
+<h3>Decisão C — o formulário do Time Digital perde os dois campos de KPI</h3>
+<div class="grid grid--2">
+  <figure class="spec"><figcaption>C2 — alternativa · campos ficam, escrevem <code>Measurement</code></figcaption>
+    <div class="stage"><div class="form-grid" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px">
+      <label class="form-label">Antes (base)<input class="field" value="260"></label>
+      <label class="form-label">Depois (atual)<input class="field" value="65"></label>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Mais suave para quem já usa a tela — e desfaz a fase
+    inteira: dois lugares escrevendo a mesma medição fazem a fonte da verdade voltar a ser o ativo
+    de solução, não o PROVE.</p>
+  </figure>
+  <figure class="spec spec--pick"><figcaption>C1 — recomendada · painel só-leitura, referencia o KPI</figcaption>
+    <div class="stage"><div class="row" style="background:var(--surface);border:1px solid var(--line);border-radius:8px;align-items:flex-start">
+      <div class="row-main">
+        <span>Tempo de resposta · medido no PROVE</span>
+        <div class="kpi-row" style="margin-top:6px"><span class="before">4h20</span><span class="arrow">→</span><span class="after">1h05</span><span class="state state--1">−74%</span></div>
+      </div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Assume o custo — quem media pelo formulário passa a
+    medir pelo PROVE. É a única leitura compatível com "o <code>DigitalEmployee</code> referencia
+    KPIs, não os possui". Ver a versão em tamanho real na seção 2.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: C1.</strong> Esta é a decisão mais cara do pacote, porque é
+a única que remove algo que existe hoje e que alguém pode estar usando.</p>
+
+<h3>Decisão D — o Value Ledger é tela própria, ou seção da conta</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>D1 — recomendada · tela própria <code>/contas/:id/valor</code></figcaption>
+    <div class="stage" style="padding:10px">
+      <div style="border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:10px;font-size:11px;color:var(--muted)">
+        <div style="display:flex;gap:6px;align-items:center;color:var(--brand-600);font-weight:700;margin-bottom:6px">Nord Logística <svg class="ico" style="width:11px;height:11px" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg> Valor</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px">Total aprovado</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px;margin-top:6px">Lista com aprovação</div>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Simétrica a <code>/contas/:id/priorizacao</code>. Uma
+    lista financeira com <code>status</code>/<code>approved_by</code> é auditável demais para
+    caber dentro de uma página de cadastro.</p>
+  </figure>
+  <figure class="spec"><figcaption>D2 — alternativa · nona seção do <code>AccountDetailPage</code></figcaption>
+    <div class="stage" style="padding:10px">
+      <div style="border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:10px;font-size:11px;color:var(--muted)">
+        <div style="font-weight:700;color:var(--ink);margin-bottom:6px">Nord Logística</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px">1 · Saúde da relação</div>
+        <div>2 · Engagements</div><div>3 · Satisfação</div><div>4 · Processos</div>
+        <div>5 · Dados</div><div>6 · Contatos</div><div>7 · Interações</div><div>8 · Priorização</div>
+        <div style="border-top:1px dashed var(--line);padding-top:6px;margin-top:6px;background:var(--brand-50);border-radius:6px;padding:6px 8px">9 · Valor <span class="new" style="margin-left:4px">novo</span></div>
+      </div>
+    </div>
+    <p class="note" style="margin-bottom:0">Empilha mais uma seção numa página que já soma oito.
+    O fluxo de aprovação de uma entrada de valor fica pequeno demais para ser conferido dentro de
+    uma tela de cadastro.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: D1.</strong> Nenhum link novo no menu lateral — valor é
+sempre <em>de uma conta</em>, e um item de menu que abre pedindo "qual conta?" é um beco.</p>
+
+<h3>Decisão E — PROVE sem baseline: bloqueia ou avisa</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>E1 — recomendada · botão desabilitado + lacuna aprovada</figcaption>
+    <div class="stage"><section class="panel panel--sm">
+      <p class="type-body" style="margin:0 0 10px"><strong>Falta para iniciar o PROVE:</strong></p>
+      <ul style="margin:0 0 12px;padding-left:0;list-style:none;display:grid;gap:6px;font-size:var(--text-body)">
+        <li style="display:flex;align-items:center;gap:8px"><span class="state state--1">Pronto</span> KPI definido</li>
+        <li style="display:flex;align-items:center;gap:8px"><span class="state state--2">Falta</span> Critério de sucesso</li>
+        <li style="display:flex;align-items:center;gap:8px"><span class="state state--2">Falta</span> Baseline medida</li>
+      </ul>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="btn" disabled>Iniciar PROVE</button>
+        <button class="btn btn--secondary">Registrar lacuna aprovada</button>
+      </div>
+    </section></div>
+    <p class="note" style="margin-bottom:0">A saída existe, mas custa um nome e uma justificativa
+    — "registrar lacuna aprovada" pede quem aprovou e por quê. Um ato registrado, não um clique
+    que ninguém assina.</p>
+  </figure>
+  <figure class="spec"><figcaption>E2 — alternativa · avisa e deixa começar</figcaption>
+    <div class="stage"><section class="panel panel--sm">
+      <p class="alert--error" style="margin:0 0 12px">Este PROVE não tem baseline definida para
+      "Tempo de resposta".</p>
+      <button class="btn">Iniciar PROVE</button>
+    </section></div>
+    <p class="note" style="margin-bottom:0">Transforma a invariante da issue em sugestão — "PROVE
+    não começa sem KPI, critério de sucesso e baseline definidos, ou lacuna aprovada
+    explicitamente" deixa de ser regra e vira aviso que qualquer um ignora.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: E1.</strong></p>
+
+<h2>5 · Os dez estados</h2>
+<div class="grid grid--3">
+  <figure class="spec"><figcaption>1 · Carregando</figcaption>
+    <div class="stage"><div style="display:grid;gap:10px">
+      <div class="skeleton" style="height:20px;width:70%"></div>
+      <div class="skeleton" style="height:60px"></div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Painéis do projeto e tela de valor, no molde vigente
+    de <code>animate-pulse</code>/<code>bg-slate-200</code> que <code>ProjectDetailPage.tsx</code>
+    já usa.</p>
+  </figure>
+  <figure class="spec"><figcaption>2 · Vazio — sem Feasibility</figcaption>
+    <div class="stage"><p class="empty-state">Nenhum laudo. A Feasibility responde se a tecnologia
+    consegue fazer a tarefa.</p></div>
+  </figure>
+  <figure class="spec"><figcaption>3 · Vazio — sem PROVE</figcaption>
+    <div class="stage"><p class="empty-state">Nenhum experimento. O PROVE responde se funcionou em
+    produção controlada.</p></div>
+  </figure>
+  <figure class="spec"><figcaption>4 · Vazio — sem KPI</figcaption>
+    <div class="stage"><p class="empty-state">Sem KPI definido. O PROVE não começa sem indicador,
+    critério e baseline.</p></div>
+  </figure>
+  <figure class="spec"><figcaption>5 · Bloqueado — falta baseline</figcaption>
+    <div class="stage"><section class="panel panel--sm">
+      <p class="type-label" style="margin:0 0 8px;color:var(--muted)">Falta para iniciar o PROVE:</p>
+      <ul style="margin:0 0 10px;padding-left:0;list-style:none;display:grid;gap:6px;font-size:var(--text-body)">
+        <li style="display:flex;align-items:center;gap:8px"><span class="state state--1">Pronto</span> KPI definido</li>
+        <li style="display:flex;align-items:center;gap:8px"><span class="state state--2">Falta</span> Critério de sucesso</li>
+        <li style="display:flex;align-items:center;gap:8px"><span class="state state--2">Falta</span> Baseline medida</li>
+      </ul>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="btn" disabled>Iniciar PROVE</button>
+        <button class="btn btn--secondary">Registrar lacuna aprovada</button>
+      </div>
+    </section></div>
+  </figure>
+  <figure class="spec"><figcaption>6 · Sem medição</figcaption>
+    <div class="stage"><div class="row" style="background:var(--surface);border:1px solid var(--line);border-radius:8px">
+      <div class="row-main"><strong>Taxa de resolução no primeiro contato</strong>
+      <div class="kpi-row" style="margin-top:6px"><span class="before">—</span><span class="arrow">→</span><span class="after">—</span><span class="gap">variação —</span></div></div>
+    </div></div>
+    <p class="note" style="margin-bottom:0"><code>— → —</code>. Nunca <code>0</code>.</p>
+  </figure>
+  <figure class="spec"><figcaption>7 · Vazio — ledger</figcaption>
+    <div class="stage"><p class="empty-state">Nenhum valor registrado. Uma entrada de valor aponta
+    para um Outcome medido.</p></div>
+  </figure>
+  <figure class="spec"><figcaption>8 · Pendente de aprovação</figcaption>
+    <div class="stage"><div class="row" style="background:var(--surface);border:1px solid var(--line);border-radius:8px">
+      <div class="row-main"><strong>Produtividade</strong><span>R$ 6.200 · agosto/2026</span></div>
+      <span class="state state--2">Pendente</span>
+    </div></div>
+  </figure>
+  <figure class="spec"><figcaption>9 · Erro</figcaption>
+    <div class="stage"><p class="alert--error" role="alert">Não foi possível carregar o PROVE
+    deste projeto. Tente novamente.</p></div>
+  </figure>
+  <figure class="spec"><figcaption>10 · Não autorizado</figcaption>
+    <div class="stage"><div class="row" style="background:var(--surface);border:1px solid var(--line);border-radius:8px">
+      <div class="row-main"><strong>Tempo de resposta</strong>
+      <div class="kpi-row" style="margin-top:6px"><span class="before">4h20</span><span class="arrow">→</span><span class="after">1h05</span><span class="state state--1">−74%</span></div></div>
+    </div></div>
+    <p class="note" style="margin-bottom:0">Mesmo recorte de Entrega por <code>ProjectMember</code>
+    que o resto de <code>ProjectDetailPage</code> já aplica: sem botão de "Registrar decisão" nem
+    de "Registrar lacuna aprovada", a leitura continua.</p>
+  </figure>
+</div>
+
+<h2>6 · Comportamento em 390px</h2>
+<div class="stage">
+  <div class="mobile">
+    <section class="panel">
+      <div class="panel-heading" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></svg></span>
+          <div><h2 style="margin:0;border:0;padding:0;font-size:var(--text-title)">PROVE</h2></div>
+        </div>
+      </div>
+      <div class="panel-rows">
+        <div class="row" style="align-items:flex-start">
+          <div class="row-main">
+            <strong>Tempo de resposta</strong>
+            <span>Medido em horas · h</span>
+            <div class="kpi-row" style="margin-top:8px">
+              <span class="before">4h20</span><span class="arrow">→</span><span class="after">1h05</span>
+              <span class="state state--1">−74%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="panel" style="margin-top:16px">
+      <p class="eyebrow" style="margin-bottom:2px">VALUE</p>
+      <h1 style="font-size:1.15rem">Valor gerado</h1>
+      <div class="metric-card" style="margin:12px 0">
+        <span>Total aprovado</span><strong>R$ 18.400</strong>
+      </div>
+      <div class="panel-rows" style="margin:0 -20px">
+        <div class="row" style="align-items:flex-start">
+          <div class="row-main"><strong>Economia operacional</strong>
+          <span>R$ 18.400 · julho/2026</span></div>
+          <span class="state state--1">Aprovado</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<p class="note"><strong>A linha do KPI é a de maior risco</strong> — rótulo, dois números,
+variação e unidade. Em 390px, <code>.kpi-row</code> empilha em coluna
+(<code>flex-direction:column</code> abaixo de 560px), e <code>.row</code> já é
+<code>flex-wrap</code> herdado de <code>index.css</code>: nada precisa rolar. A linha do ledger
+segue o mesmo <code>.row</code>, com a pílula de status descendo para a segunda linha sozinha.
+Nenhuma regra responsiva nova além do empilhamento de <code>.kpi-row</code>.</p>
+
+<h2>7 · Procedência de cada valor visual</h2>
+<table>
+<tr><th>Valor</th><th>Token / primitiva</th><th>Origem</th></tr>
+<tr><td>Cores <code>ink</code>, <code>canvas</code>, <code>line</code>, <code>muted</code>, <code>brand-*</code>, <code>danger</code>, <code>success</code>, <code>warning</code>, <code>info</code></td><td><code>@theme</code></td><td><code>frontend/src/index.css:37-100</code></td></tr>
+<tr><td>Cartão de painel</td><td><code>.panel</code> — raio 12px, <code>--shadow-card</code></td><td><code>index.css:194-197</code></td></tr>
+<tr><td>Cabeçalho do painel</td><td><code>.panel-heading</code></td><td><code>index.css:202</code></td></tr>
+<tr><td>Quadrado do ícone</td><td><code>.metric-icon</code> — raio de controle 8px</td><td><code>index.css:257</code></td></tr>
+<tr><td>Lista dividida e linha</td><td><code>.panel-rows</code> + <code>.row</code> + <code>.row-main</code></td><td><code>index.css:210, 213-216</code></td></tr>
+<tr><td>Pílula "−74%" / "Aprovado" / "Favorável"</td><td><code>.state .state--1</code></td><td><code>index.css:368, 370</code></td></tr>
+<tr><td>Pílula "CONDITIONAL GO" / "Ressalva" / "Pendente"</td><td><code>.state .state--2</code></td><td><code>index.css:371</code></td></tr>
+<tr><td>Pílula "Em andamento"</td><td><code>.state .state--0</code></td><td><code>index.css:369</code></td></tr>
+<tr><td>Cartão de total</td><td><code>.metric-card</code></td><td><code>index.css:235-240</code></td></tr>
+<tr><td>Botão "Iniciar PROVE" / "Salvar"</td><td><code>.btn</code>, incl. <code>disabled</code></td><td><code>index.css:267-271</code></td></tr>
+<tr><td>Botão "Registrar lacuna aprovada" / "Cancelar"</td><td><code>.btn--secondary</code></td><td><code>index.css:272-275</code></td></tr>
+<tr><td>Estado vazio</td><td><code>.empty-state</code></td><td><code>index.css:311-314</code></td></tr>
+<tr><td>Mensagem de falha</td><td><code>.alert--error</code> + <code>role="alert"</code></td><td><code>index.css:317-319</code></td></tr>
+<tr><td>Campo de formulário</td><td><code>.field</code></td><td><code>index.css:553-555</code></td></tr>
+<tr><td>Rótulo e par de colunas do formulário</td><td><code>.form-label</code>, <code>.form-grid</code></td><td><code>index.css:304-305</code></td></tr>
+<tr><td>Link "Voltar para…" / "Ver no PROVE"</td><td><code>.back-link</code></td><td><code>index.css:336-339</code></td></tr>
+<tr><td>Cabeçalho de tela (eyebrow + h1 + lede)</td><td><code>.page-head</code>, <code>.eyebrow</code></td><td><code>index.css:220-229</code></td></tr>
+<tr><td>Números da linha do KPI (antes/depois)</td><td><code>type-title</code>/<code>type-body</code>, <code>font-variant-numeric: tabular-nums</code> — o mesmo papel do <code>.metric-card strong</code></td><td><code>index.css:230-233, 239</code></td></tr>
+<tr><td>Esqueleto de carregamento</td><td><code>animate-pulse</code>, <code>bg-slate-200</code></td><td><code>ProjectDetailPage.tsx</code> (herdado da página)</td></tr>
+<tr><td>Ícones</td><td><code>lucide-react</code> — <code>Microscope</code> (Feasibility), <code>FlaskConical</code> (PROVE), <code>Gauge</code> (KPI, seção 5 "Sem medição"), <code>Coins</code> (Value)</td><td><code>lucide-react</code>, já instalado</td></tr>
+<tr><td>Raio 8px / 12px</td><td>fundações r2</td><td><code>index.css:257</code> (controle) / <code>index.css:194</code> (card)</td></tr>
+</table>
+<p class="note"><strong>Um valor sem primitiva equivalente: a variação vazia ("variação —").</strong>
+Não existe hoje uma primitiva para "métrica sem dado" — o produto usa travessão solto
+(<code>process.py:71-74</code>, na prosa do backend) mas não tem um componente de tela para isso.
+Aqui ela é só texto em <code>.type-body</code> na cor <code>muted</code>, sem pílula: nenhuma cor
+nova, mas também nenhuma primitiva existente cobre exatamente este caso. <strong>Isto é revisão
+deste pacote</strong> (<code>src/test/primitivas.test.ts</code>, ADR 0026), não julgamento de quem
+implementar.</p>
+
+<h2>8 · Entregue nesta revisão × reservado</h2>
+<table>
+<tr><th>Entregue</th><th>Reservado — não faz parte desta aprovação</th></tr>
+<tr><td>Os painéis Technical Feasibility e PROVE em <code>ProjectDetailPage</code></td><td>Gráfico de série do KPI</td></tr>
+<tr><td>A mudança do painel Time Digital (decisão C)</td><td><code>Case</code> derivado de Outcomes aprovados</td></tr>
+<tr><td>A tela <code>/contas/:id/valor</code> e o Value Ledger por conta</td><td>Value Ledger consolidado entre contas</td></tr>
+<tr><td>Os dez estados da seção 5</td><td>—</td></tr>
+</table>
+<div class="grid grid--3" style="margin-top:14px">
+  <div class="panel reserved">
+    <p class="type-meta" style="margin:0;color:var(--brand-700);font-weight:700">RESERVADO — Case derivado de Outcomes</p>
+    <p class="note" style="margin:6px 0 0">A tela do Case (<code>CasesPage.tsx:140-144</code>) lê
+    hoje o snapshot congelado e não muda nesta entrega. Vira real quando houver Outcome aprovado
+    suficiente para derivar dele — revisão deste pacote ou pacote novo.</p>
+  </div>
+  <div class="panel reserved">
+    <p class="type-meta" style="margin:0;color:var(--brand-700);font-weight:700">RESERVADO — gráfico de série do KPI</p>
+    <p class="note" style="margin:6px 0 0">As medições formam série temporal e o produto não tem
+    nenhum gráfico hoje. Fica reservado: um primeiro gráfico é decisão de sistema de design, não
+    de tela.</p>
+  </div>
+  <div class="panel reserved">
+    <p class="type-meta" style="margin:0;color:var(--brand-700);font-weight:700">RESERVADO — ledger consolidado</p>
+    <p class="note" style="margin:6px 0 0">O ledger é por conta nesta revisão. O total da casa é
+    tela de Indicadores, e tem dono diferente.</p>
+  </div>
+</div>
+<p class="note">Aprovar a revisão 1 não aprova uma revisão posterior: um pacote materialmente
+alterado é revisão nova. Esta aprovação também não cobre o backend da Fase 5 (modelos, migração de
+<code>kpi_baseline</code>/<code>kpi_current</code> para <code>Measurement</code>, rotas,
+permissões), a migração de dado, o One, as telas da Fase 4 (#68, pacote próprio), nem copy final
+fora dos dez estados listados.</p>
+
+</div>
+</body>
+</html>
