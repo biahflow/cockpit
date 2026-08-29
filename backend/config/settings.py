@@ -283,6 +283,17 @@ SPECTACULAR_SETTINGS = {
         # Os cinco eixos da avaliação (fit/need/urgency/authority/capacity) são **um** conjunto de
         # valores; sem o override, cada campo vira um componente próprio com a mesma definição.
         "QualificationLevelEnum": "apps.core.models.Qualification.Level",
+        # Os três eixos do laudo de Feasibility (FDD 049) são **um** conjunto de valores; sem o
+        # override, `technical_verdict`, `operational_verdict` e `economic_verdict` viram três
+        # componentes com a mesma definição — e o desempate por sufixo numérico é instável entre
+        # gerações, o mesmo defeito do `SourceEnum`.
+        "FeasibilityVerdictEnum": "apps.core.models.FeasibilityAssessment.Verdict",
+        # `KpiUnit`/`KpiDirection` passaram a aparecer com **dois** nomes de campo: `kpi_unit` em
+        # `DigitalEmployee` e `DigitalEmployeeBlueprint`, e `unit` no `KPI` que a ADR 0055 extraiu.
+        # O override aponta para o `TextChoices` em vez de para um dos campos, que é o que fixa o
+        # componente independentemente de qual serializer o esquema encontrar primeiro.
+        "KpiUnitEnum": "apps.core.models.KpiUnit",
+        "KpiDirectionEnum": "apps.core.models.KpiDirection",
     },
 }
 SESSION_COOKIE_SECURE = not DEBUG

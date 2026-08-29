@@ -57,6 +57,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 046 | Engagement entre a conta e o projeto (ontologia, fase 2) | Entregue | 1 | `docs/fdd/046-o-engajamento-entre-a-conta-e-o-projeto.md` |
 | FDD 047 | Snapshot do portal no vocabulário canônico e carimbo da projeção | Entregue | 1 | `docs/fdd/047-o-snapshot-que-falava-o-vocabulario-antigo.md` |
 | FDD 048 | Cadeia do PRIORITIZE: PainPoint, ImprovementOpportunity, PriorityAssessment e SolutionHypothesis (ontologia, fase 4) | Entregue (backend) | 1 | `docs/fdd/048-onde-atuar-nao-tinha-onde-morar.md` |
+| FDD 049 | Feasibility, PROVE, KPI/Measurement e Value Ledger (ontologia, fase 5) | Entregue (backend) | 1 | `docs/fdd/049-a-medicao-morava-dentro-do-ativo-de-solucao.md` |
 
 ## Base atual — entregue
 

@@ -20,7 +20,13 @@ from apps.core.models import (
     WorkItem,
 )
 
-from .factories import AccountFactory, ProjectFactory, ProjectMemberFactory, UserFactory
+from .factories import (
+    AccountFactory,
+    ProjectFactory,
+    ProjectMemberFactory,
+    UserFactory,
+    digital_employee_medido,
+)
 
 
 def _api(role: str = "admin") -> APIClient:
@@ -33,17 +39,27 @@ def _vertical(name: str = "Igrejas", slug: str = "igrejas") -> Vertical:
     return Vertical.objects.create(name=name, slug=slug)
 
 
-def _employee(project: Project, **overrides) -> DigitalEmployee:
+def _employee(
+    project: Project,
+    kpi_baseline: Decimal | None = Decimal("12.00"),
+    kpi_current: Decimal | None = Decimal("48.00"),
+    **overrides,
+) -> DigitalEmployee:
+    """O ativo com o KPI que ele referencia e as medições dele (ADR 0055).
+
+    Delega ao ajudante compartilhado: o par baseline/atual deixou de ser coluna do ativo e virou
+    duas `Measurement` do mesmo KPI, e três suítes reescrevendo essa montagem divergiriam.
+    """
     campos = {
         "name": "SDR",
         "area": "Comercial",
         "kpi_label": "Leads qualificados/mês",
         "kpi_unit": KpiUnit.COUNT,
         "kpi_direction": KpiDirection.UP,
-        "kpi_baseline": Decimal("12.00"),
-        "kpi_current": Decimal("48.00"),
     }
-    return DigitalEmployee.objects.create(project=project, **{**campos, **overrides})
+    return digital_employee_medido(
+        project, baseline=kpi_baseline, current=kpi_current, **{**campos, **overrides}
+    )
 
 
 def _completed_project(**overrides) -> Project:
@@ -335,16 +351,40 @@ def test_health_congelado_reflete_o_estado_no_encerramento():
     }
 
 
-# --- a instanciação a partir do catálogo carrega a tipagem e a base -----------------------------
+# --- a instanciação a partir do catálogo carrega a tipagem, e não mais a base -------------------
 
 
 @pytest.mark.django_db
-def test_instanciar_do_catalogo_copia_unidade_direcao_e_grava_a_base():
+def test_instanciar_do_catalogo_copia_unidade_e_direcao():
     blueprint = DigitalEmployeeBlueprint.objects.create(
         name="Cobrador", area=DigitalEmployeeBlueprint.Area.FINANCE,
         kpi_label="Dias médios de atraso", kpi_unit=KpiUnit.HOURS,
         kpi_direction=KpiDirection.DOWN,
     )
+    project = ProjectFactory()
+
+    resposta = _api().post(
+        f"/api/v1/projects/{project.pk}/digital-employees/from-blueprint/",
+        {"blueprint": blueprint.pk},
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    employee = DigitalEmployee.objects.get(pk=resposta.data["id"])
+    assert employee.kpi_unit == KpiUnit.HOURS
+    assert employee.kpi_direction == KpiDirection.DOWN
+
+
+@pytest.mark.django_db
+def test_instanciar_nao_grava_mais_baseline_e_o_ativo_nasce_sem_kpi():
+    """A quebra deliberada da decisão C1 (ADR 0055): `kpi_baseline` deixou de ser aceito aqui.
+
+    O que a substitui é o par `KPI`/`Measurement` — dois lugares escrevendo a mesma medição é o
+    defeito que a fase inteira desfaz. A chave no corpo é **ignorada**, no molde dos três
+    snapshots congelados do `Case`: não há caminho de escrita, em vez de haver um caminho que se
+    combina não usar.
+    """
+    blueprint = DigitalEmployeeBlueprint.objects.create(name="SDR", kpi_unit=KpiUnit.COUNT)
     project = ProjectFactory()
 
     resposta = _api().post(
@@ -355,35 +395,7 @@ def test_instanciar_do_catalogo_copia_unidade_direcao_e_grava_a_base():
 
     assert resposta.status_code == 201
     employee = DigitalEmployee.objects.get(pk=resposta.data["id"])
-    assert employee.kpi_unit == KpiUnit.HOURS
-    assert employee.kpi_direction == KpiDirection.DOWN
-    assert employee.kpi_baseline == Decimal("40.00")
-
-
-@pytest.mark.django_db
-def test_instanciar_sem_base_deixa_o_campo_nulo_e_nao_zero():
-    blueprint = DigitalEmployeeBlueprint.objects.create(name="SDR", kpi_unit=KpiUnit.COUNT)
-    project = ProjectFactory()
-
-    resposta = _api().post(
-        f"/api/v1/projects/{project.pk}/digital-employees/from-blueprint/",
-        {"blueprint": blueprint.pk},
-        format="json",
-    )
-
-    assert DigitalEmployee.objects.get(pk=resposta.data["id"]).kpi_baseline is None
-
-
-@pytest.mark.django_db
-def test_base_nao_numerica_e_recusada_com_400():
-    blueprint = DigitalEmployeeBlueprint.objects.create(name="SDR")
-    project = ProjectFactory()
-
-    resposta = _api().post(
-        f"/api/v1/projects/{project.pk}/digital-employees/from-blueprint/",
-        {"blueprint": blueprint.pk, "kpi_baseline": "quarenta"},
-        format="json",
-    )
-
-    assert resposta.status_code == 400
-    assert not DigitalEmployee.objects.exists()
+    assert employee.kpi_id is None
+    # A chave continua saindo na `/api/v1/`, derivada — e sem KPI ela é `None`, nunca zero.
+    assert resposta.data["kpi_baseline"] is None
+    assert resposta.data["kpi_current"] is None

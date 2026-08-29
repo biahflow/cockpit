@@ -21,6 +21,7 @@ from .models import (
     CASE_TRANSITIONS,
     FINDING_TRANSITIONS,
     INVOICE_TRANSITIONS,
+    KPI,
     Account,
     Activity,
     Artifact,
@@ -40,6 +41,7 @@ from .models import (
     EngineeringHandoff,
     Evidence,
     Evidencia,
+    FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
     ImprovementOpportunity,
@@ -49,6 +51,7 @@ from .models import (
     KnowledgeArea,
     KnowledgePiece,
     Lead,
+    Measurement,
     Meeting,
     Milestone,
     Notification,
@@ -67,6 +70,7 @@ from .models import (
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    ProveExperiment,
     Qualification,
     Risco,
     Satisfacao,
@@ -75,9 +79,11 @@ from .models import (
     SolutionHypothesis,
     Task,
     User,
+    ValueLedgerEntry,
     Vertical,
 )
 from .priority import FORMULAS, ranking_da_conta
+from .prove import baseline_de, o_que_falta_para_iniciar, outcome_mais_recente_de
 
 logger = logging.getLogger(__name__)
 
@@ -1462,6 +1468,305 @@ class SolutionHypothesisSerializer(serializers.ModelSerializer[SolutionHypothesi
         return attrs
 
 
+class FeasibilityAssessmentSerializer(serializers.ModelSerializer[FeasibilityAssessment]):
+    """O laudo de Feasibility (FDD 049).
+
+    `gate_decision` publica as **quatro** saídas da Feasibility, e não as sete do campo da fase:
+    aqui não há ambiguidade sobre de que gate se trata, então a `ChoiceField` derivada do campo já
+    recusa `scale` com 400 — a validação que `journey.apply_gate` precisa fazer à mão porque lá o
+    vocabulário depende da fase ativa.
+    """
+
+    technical_verdict_display = serializers.CharField(
+        source="get_technical_verdict_display", read_only=True
+    )
+    operational_verdict_display = serializers.CharField(
+        source="get_operational_verdict_display", read_only=True
+    )
+    economic_verdict_display = serializers.CharField(
+        source="get_economic_verdict_display", read_only=True
+    )
+    gate_decision_display = serializers.CharField(
+        source="get_gate_decision_display", read_only=True
+    )
+
+    class Meta:
+        model = FeasibilityAssessment
+        fields = ["id", "solution_hypothesis", "project",
+                  "technical_verdict", "technical_verdict_display", "technical_note",
+                  "operational_verdict", "operational_verdict_display", "operational_note",
+                  "economic_verdict", "economic_verdict_display", "economic_note",
+                  "sample", "error_classes", "evidence",
+                  "gate_decision", "gate_decision_display", "created_at", "updated_at"]
+        read_only_fields = ["id", "technical_verdict_display", "operational_verdict_display",
+                            "economic_verdict_display", "gate_decision_display",
+                            "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """As mesmas regras do `clean()` — o `save()` do DRF não chama `full_clean` —, mais o M2M."""
+        hipotese = cast(
+            SolutionHypothesis | None,
+            attrs.get(
+                "solution_hypothesis", getattr(self.instance, "solution_hypothesis", None)
+            ),
+        )
+        projeto = cast(
+            Project | None, attrs.get("project", getattr(self.instance, "project", None))
+        )
+        if hipotese and projeto:
+            conta_id = hipotese.improvement_opportunity.account_id
+            if conta_id != projeto.client_id:
+                raise serializers.ValidationError(
+                    {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
+                )
+            # A fronteira de conta vale pelo M2M também, pela razão que a FDD 048 deu para validar
+            # `PainPoint.findings`: é a mesma classe de vínculo cruzado, e deixar um solto faria
+            # quem lesse isto depois concluir que existe uma razão para a exceção.
+            evidencias = cast(list[Evidence] | None, attrs.get("evidence"))
+            if evidencias and any(item.account_id != conta_id for item in evidencias):
+                raise serializers.ValidationError(
+                    {"evidence": "A evidência deve pertencer à mesma conta do laudo."}
+                )
+        return attrs
+
+
+class ProveExperimentSerializer(serializers.ModelSerializer[ProveExperiment]):
+    """O experimento do PROVE, com a lista do que falta para ele começar (FDD 049).
+
+    **`status` não recebe `running` por `PATCH`**, e é o que impede a invariante de vazar pela
+    porta do formulário: iniciar é a action `start/`, que confere KPI, critério e baseline e
+    carimba a lacuna aprovada. Um campo gravável aqui seria um segundo caminho para o mesmo estado
+    — o defeito que a decisão C1 do DAP remove do `DigitalEmployee` sendo reintroduzido ao lado.
+    Os demais valores continuam graváveis: `planned → concluded` é registro, não início.
+
+    `missing_to_start` é derivado e só de leitura, de `prove.o_que_falta_para_iniciar`. É a mesma
+    lista que a action usa para recusar, e é por isso que ela sai daqui em vez de a tela
+    recalculá-la: duas expressões da invariante divergiriam, e a tela habilitaria o botão que o
+    servidor nega.
+
+    `gap_waiver_at` é **só de leitura**: o carimbo é consequência do ato, e preenchê-lo à mão
+    permitiria uma data de aprovação anterior à aprovação (mesma forma do `published_at` do
+    `Case`). `gap_waiver_by` vem do corpo, e não da sessão, pelo motivo do `reviewed_by` do
+    `Finding`: ele responde "quem aprovou", que pode não ser quem digita.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    gate_decision_display = serializers.CharField(
+        source="get_gate_decision_display", read_only=True
+    )
+    missing_to_start = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProveExperiment
+        fields = ["id", "solution_hypothesis", "project", "controlled_scope", "started_at",
+                  "ended_at", "success_criteria", "status", "status_display",
+                  "gate_decision", "gate_decision_display", "gap_waiver", "gap_waiver_by",
+                  "gap_waiver_at", "missing_to_start", "created_at", "updated_at"]
+        read_only_fields = ["id", "status_display", "gate_decision_display", "gap_waiver_at",
+                            "missing_to_start", "created_at", "updated_at"]
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_missing_to_start(self, obj: ProveExperiment) -> list[str]:
+        return o_que_falta_para_iniciar(obj)
+
+    def validate_status(self, value: str) -> str:
+        se_ja_esta = getattr(self.instance, "status", None)
+        if value == ProveExperiment.Status.RUNNING and value != se_ja_esta:
+            raise serializers.ValidationError(
+                "Iniciar o PROVE é a ação `start/`, que confere KPI, critério de sucesso e "
+                "baseline — ou registra a lacuna aprovada."
+            )
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        hipotese = cast(
+            SolutionHypothesis | None,
+            attrs.get(
+                "solution_hypothesis", getattr(self.instance, "solution_hypothesis", None)
+            ),
+        )
+        projeto = cast(
+            Project | None, attrs.get("project", getattr(self.instance, "project", None))
+        )
+        if hipotese and projeto and hipotese.improvement_opportunity.account_id != projeto.client_id:
+            raise serializers.ValidationError(
+                {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
+            )
+        inicio = cast(
+            date | None, attrs.get("started_at", getattr(self.instance, "started_at", None))
+        )
+        fim = cast(date | None, attrs.get("ended_at", getattr(self.instance, "ended_at", None)))
+        if inicio and fim and fim < inicio:
+            raise serializers.ValidationError(
+                {"ended_at": "O fim não pode ser anterior ao início."}
+            )
+        return attrs
+
+
+class KPISerializer(serializers.ModelSerializer[KPI]):
+    """O indicador (FDD 049, ADR 0055).
+
+    `project` é a âncora obrigatória e `prove_experiment` é opcional — **desvio deliberado** da
+    lista de campos da issue #69, cuja razão é a migração e está na docstring do modelo. Quando o
+    experimento vier, ele tem de ser do mesmo projeto.
+    """
+
+    unit_display = serializers.CharField(source="get_unit_display", read_only=True)
+    direction_display = serializers.CharField(source="get_direction_display", read_only=True)
+
+    class Meta:
+        model = KPI
+        fields = ["id", "project", "prove_experiment", "name", "definition", "formula",
+                  "unit", "unit_display", "direction", "direction_display", "data_source",
+                  "cadence", "owner", "target", "created_at", "updated_at"]
+        read_only_fields = ["id", "unit_display", "direction_display", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        projeto = cast(
+            Project | None, attrs.get("project", getattr(self.instance, "project", None))
+        )
+        experimento = cast(
+            ProveExperiment | None,
+            attrs.get("prove_experiment", getattr(self.instance, "prove_experiment", None)),
+        )
+        if experimento and projeto and experimento.project_id != projeto.pk:
+            raise serializers.ValidationError(
+                {"prove_experiment": "O experimento deve pertencer ao mesmo projeto do KPI."}
+            )
+        return attrs
+
+
+class MeasurementSerializer(serializers.ModelSerializer[Measurement]):
+    """Uma leitura do KPI — baseline, outcome ou monitoramento (FDD 049).
+
+    **`value` ausente fica nulo, e o serializer não o converte em zero em lugar nenhum**: zero
+    afirma que o processo não custava nada antes, e nulo diz que ninguém mediu. É a mesma
+    distinção de `PainPoint.impact_estimate` e do `nao_apurado` de `process.custo_do_estado_atual`.
+
+    A checagem de "já existe baseline viva" é escrita à mão, ao contrário do que o `CLAUDE.md`
+    pede para as constraints do pipeline, e a exceção tem o mesmo motivo verificado da
+    `SolutionHypothesisSerializer`: o DRF só deriva o validador de uma `UniqueConstraint`
+    condicional quando **todos** os campos da condição são campos do serializer
+    (`ModelSerializer.get_unique_together_validators`, DRF 3.16). A condição cita `archived_at`,
+    que nenhum serializer da casa expõe — então o validador é descartado em silêncio e o
+    `IntegrityError` subiria como 500. A constraint continua sendo a garantia; isto transforma a
+    recusa num 400 legível.
+
+    **Não há `unit` aqui, e a ausência é a garantia.** Ver a docstring de `Measurement`.
+    """
+
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = Measurement
+        fields = ["id", "kpi", "kind", "kind_display", "value", "period_start", "period_end",
+                  "measured_at", "source_evidence", "confidence", "created_at", "updated_at"]
+        read_only_fields = ["id", "kind_display", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        inicio = cast(
+            date | None, attrs.get("period_start", getattr(self.instance, "period_start", None))
+        )
+        fim = cast(
+            date | None, attrs.get("period_end", getattr(self.instance, "period_end", None))
+        )
+        if inicio and fim and fim < inicio:
+            raise serializers.ValidationError(
+                {"period_end": "O fim da janela não pode ser anterior ao início."}
+            )
+        kpi = cast(KPI | None, attrs.get("kpi", getattr(self.instance, "kpi", None)))
+        kind = attrs.get("kind", getattr(self.instance, "kind", None))
+        if kind != Measurement.Kind.BASELINE or kpi is None:
+            return attrs
+        concorrentes = Measurement.objects.filter(
+            kpi=kpi, kind=Measurement.Kind.BASELINE, archived_at__isnull=True
+        )
+        if self.instance is not None:
+            concorrentes = concorrentes.exclude(pk=self.instance.pk)
+        if concorrentes.exists():
+            raise serializers.ValidationError(
+                {"kind": "Este KPI já tem uma baseline viva. Arquive a atual antes de registrar "
+                         "outra — duas bases fariam a comparação depender de qual foi aberta."}
+            )
+        return attrs
+
+
+class ValueLedgerEntrySerializer(serializers.ModelSerializer[ValueLedgerEntry]):
+    """A entrada do Value Ledger (FDD 049, `language-map` §6.11 e §6.12).
+
+    Três recusas, e nenhuma é decorativa:
+
+    - **a medição apontada tem de ser um `outcome`** — uma entrada que apontasse para o baseline
+      afirmaria resultado onde há ponto de partida, e a leitura da tela não denunciaria nada;
+    - **`attribution_method` não pode ser vazio** — é ele que separa valor medido de número
+      escrito à mão, e "ROI" como resultado é termo banido (§5) por causa disso;
+    - **`approved` exige `approved_by`** — aprovar é ato com autor, e o carimbo `approved_at` sai
+      do `save()` do modelo, como o `published_at` do `Case`.
+    """
+
+    value_type_display = serializers.CharField(source="get_value_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = ValueLedgerEntry
+        fields = ["id", "engagement", "project", "outcome_measurement", "value_type",
+                  "value_type_display", "amount", "quantity", "period_start", "period_end",
+                  "attribution_method", "status", "status_display", "approved_by", "approved_at",
+                  "created_at", "updated_at"]
+        read_only_fields = ["id", "value_type_display", "status_display", "approved_at",
+                            "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        medicao = cast(
+            Measurement | None,
+            attrs.get("outcome_measurement", getattr(self.instance, "outcome_measurement", None)),
+        )
+        if medicao is not None and medicao.kind != Measurement.Kind.OUTCOME:
+            raise serializers.ValidationError(
+                {"outcome_measurement": "A entrada de valor aponta para uma medição do tipo "
+                                        "Outcome; baseline e monitoramento não afirmam resultado."}
+            )
+        metodo = cast(
+            str,
+            attrs.get(
+                "attribution_method", getattr(self.instance, "attribution_method", "")
+            ),
+        )
+        if not (metodo or "").strip():
+            raise serializers.ValidationError(
+                {"attribution_method": "Descreva o método de atribuição — é ele que separa valor "
+                                       "medido de número escrito à mão."}
+            )
+        engagement = cast(
+            Engagement | None,
+            attrs.get("engagement", getattr(self.instance, "engagement", None)),
+        )
+        projeto = cast(
+            Project | None, attrs.get("project", getattr(self.instance, "project", None))
+        )
+        if projeto is not None and engagement is not None and projeto.engagement_id != engagement.pk:
+            raise serializers.ValidationError(
+                {"project": "O projeto deve pertencer ao mesmo engajamento da entrada."}
+            )
+        inicio = cast(
+            date | None, attrs.get("period_start", getattr(self.instance, "period_start", None))
+        )
+        fim = cast(
+            date | None, attrs.get("period_end", getattr(self.instance, "period_end", None))
+        )
+        if inicio and fim and fim < inicio:
+            raise serializers.ValidationError(
+                {"period_end": "O fim da janela não pode ser anterior ao início."}
+            )
+        estado = attrs.get("status", getattr(self.instance, "status", ValueLedgerEntry.Status.DRAFT))
+        autor = attrs.get("approved_by", getattr(self.instance, "approved_by", None))
+        if estado == ValueLedgerEntry.Status.APPROVED and autor is None:
+            raise serializers.ValidationError(
+                {"approved_by": "Aprovar é ato com autor: informe quem aprovou."}
+            )
+        return attrs
+
+
 class TaskSerializer(WorkItemSerializer):
     class Meta(WorkItemSerializer.Meta):
         model = Task
@@ -1828,9 +2133,27 @@ class DigitalEmployeeBlueprintSerializer(serializers.ModelSerializer[DigitalEmpl
 
 
 class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
+    """O Funcionário Digital, que agora **referencia** um KPI em vez de possuí-lo (ADR 0055).
+
+    `kpi_baseline` e `kpi_current` continuam saindo na `/api/v1/`, agora derivados das
+    `Measurement` do KPI referenciado — a baseline viva e o `Outcome` mais recente. `null`
+    continua sendo "não medido", nunca zero.
+
+    **As duas chaves são só de leitura.** Enviá-las no corpo é aceito e ignorado; para registrar
+    medição, use `/measurements/`. As duas chaves morrem na `/api/v2/`, com o resto dos aliases.
+
+    O porquê de ignorar em vez de recusar, e o que isso custa, estão na FDD 049 — e não aqui,
+    porque esta docstring é a descrição do componente no `openapi.yaml` e quem a lê é quem
+    consome a API, não quem mantém o repositório. Regressão do contrato em
+    `tests/regression/test_a_medicao_do_ativo_sobrevive_na_v1.py`.
+    """
+
+    kpi_baseline = serializers.SerializerMethodField()
+    kpi_current = serializers.SerializerMethodField()
+
     class Meta:
         model = DigitalEmployee
-        fields = ["id", "project", "blueprint", "name", "area", "description", "status",
+        fields = ["id", "project", "blueprint", "kpi", "name", "area", "description", "status",
                   "kpi_label", "kpi_value", "kpi_unit", "kpi_direction",
                   "kpi_baseline", "kpi_current", "hours_saved_month", "roi_month",
                   "created_at", "updated_at"]
@@ -1838,6 +2161,33 @@ class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
         # abriria um segundo caminho que aponta para o template **sem copiar** — exatamente o que
         # a cópia por instância existe para impedir.
         read_only_fields = ["id", "blueprint", "created_at", "updated_at"]
+
+    @extend_schema_field(serializers.DecimalField(max_digits=14, decimal_places=2, allow_null=True))
+    def get_kpi_baseline(self, obj: DigitalEmployee) -> str | None:
+        valor = baseline_de(obj.kpi)
+        return None if valor is None else str(valor)
+
+    @extend_schema_field(serializers.DecimalField(max_digits=14, decimal_places=2, allow_null=True))
+    def get_kpi_current(self, obj: DigitalEmployee) -> str | None:
+        valor = outcome_mais_recente_de(obj.kpi)
+        return None if valor is None else str(valor)
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        """O KPI referenciado tem de ser do mesmo projeto do ativo.
+
+        A mesma classe de vínculo cruzado que a FDD 048 valida em `PainPoint.findings`: sem isto, o
+        `ProjectScopedMixin` — que olha a chave `project` — deixaria passar um `PATCH` que aponta
+        para o indicador de um projeto que quem escreve não alcança.
+        """
+        projeto = cast(
+            Project | None, attrs.get("project", getattr(self.instance, "project", None))
+        )
+        kpi = cast(KPI | None, attrs.get("kpi", getattr(self.instance, "kpi", None)))
+        if kpi is not None and projeto is not None and kpi.project_id != projeto.pk:
+            raise serializers.ValidationError(
+                {"kpi": "O KPI deve pertencer ao mesmo projeto do funcionário digital."}
+            )
+        return attrs
 
 
 class ArtifactSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Artifact]):

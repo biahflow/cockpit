@@ -2845,6 +2845,391 @@ class KpiDirection(models.TextChoices):
     DOWN = "down", "Menor é melhor"
 
 
+class FeasibilityAssessment(TimestampedModel):
+    """O laudo que sustenta o gate de Feasibility — *"a tecnologia consegue fazer a tarefa?"*.
+
+    Quinta fatia da ontologia (FDD 049, issue #69). A fase já existia (`JourneyPhase` com
+    `canonical_stage="feasibility"`) e a decisão dela também (`ProjectPhase.gate_decision`); o que
+    não existia era **o conteúdo da decisão**. Um `GO` gravado sem amostra, sem classes de erro e
+    sem os três vereditos é uma decisão sem laudo — e seis meses depois ninguém sabe dizer o que
+    foi testado nem o que ficou de ressalva.
+
+    Pende de **dois** lados de propósito: da `SolutionHypothesis` (é *aquela* aposta que está
+    sendo avaliada) e do `Project` (é *neste* trabalho que a avaliação aconteceu). A hipótese é da
+    conta, o projeto também — e `clean()` é o que impede um laudo de casar a hipótese de um
+    cliente com o projeto de outro.
+
+    **Os três eixos não colapsam num veredito só.** "Funciona, mas o time não opera" e "funciona e
+    não fecha a conta" acabam no mesmo `CONDITIONAL GO`, e é justamente a diferença entre os dois
+    que a próxima conversa precisa — pelo mesmo motivo que GO e CONDITIONAL GO não colapsam (ADR
+    0053).
+
+    `gate_decision` reusa **`ProjectPhase.GateDecision`** e não redefine as quatro saídas: duas
+    definições do mesmo vocabulário divergem em silêncio, e a ADR 0053 já pagou esse preço uma vez
+    quando o template do PROVE mandava registrar SCALE numa fase que só aceitava GO. Em branco é
+    "ainda não decidido", como no campo da fase.
+    """
+
+    class Verdict(models.TextChoices):
+        """O veredito de **um** eixo. Três valores, no espírito das quatro saídas do gate.
+
+        `caveat` é o que impede o laudo de virar um booleano: "dá, com ressalva" é o resultado mais
+        comum de uma avaliação honesta, e é ele que carrega a dívida nomeada para o PROVE.
+        """
+
+        FAVORABLE = "favorable", "Favorável"
+        CAVEAT = "caveat", "Com ressalva"
+        UNFAVORABLE = "unfavorable", "Desfavorável"
+
+    solution_hypothesis = models.ForeignKey(
+        SolutionHypothesis, on_delete=models.CASCADE, related_name="feasibility_assessments"
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="feasibility_assessments"
+    )
+    # Os três eixos, cada um com veredito e nota. A nota não é opcional de fato num `caveat` ou num
+    # `unfavorable` — é ela que diz qual é a ressalva —, mas é `blank` no schema pelo motivo do
+    # `gate_notes`: obrigar texto no favorável produziria linha preenchida com "ok".
+    technical_verdict = models.CharField(max_length=16, choices=Verdict.choices)
+    technical_note = models.TextField(blank=True, default="")
+    operational_verdict = models.CharField(max_length=16, choices=Verdict.choices)
+    operational_note = models.TextField(blank=True, default="")
+    economic_verdict = models.CharField(max_length=16, choices=Verdict.choices)
+    economic_note = models.TextField(blank=True, default="")
+    # O que foi testado, e o que deu errado. São os dois campos que fazem o laudo ser reproduzível:
+    # sem a amostra, "funcionou em 87% dos casos" não diz de quantos; sem as classes de erro, o
+    # que sobra do PROVE seguinte é descobrir de novo o que já se sabia.
+    sample = models.TextField(blank=True, default="")
+    error_classes = models.TextField(blank=True, default="")
+    evidence = models.ManyToManyField(Evidence, blank=True, related_name="feasibility_assessments")
+    gate_decision = models.CharField(
+        max_length=16, choices=ProjectPhase.GateDecision.choices, blank=True, default=""
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"Feasibility — {self.solution_hypothesis_id} @ {self.project_id}"
+
+    def clean(self) -> None:
+        # `filter(client=…)` continua sendo a projeção que a Fase 6 remove; a fonte canônica é
+        # `engagement.account` e `Project.clean()` mantém as duas honestas.
+        hipotese = self.solution_hypothesis if self.solution_hypothesis_id else None
+        projeto = self.project if self.project_id else None
+        if hipotese is None or projeto is None:
+            return
+        if hipotese.improvement_opportunity.account_id != projeto.client_id:
+            raise ValidationError(
+                {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
+            )
+
+
+class ProveExperiment(TimestampedModel):
+    """O experimento do PROVE — *"funcionou em produção controlada?"* (FDD 049).
+
+    Não é piloto nem POC, e o `language-map` §5 bane as duas palavras aqui: o PROVE é produção
+    controlada **com critério prévio**, e é o critério prévio que faz a diferença. Um experimento
+    que define o que é sucesso depois de ver o resultado não prova nada.
+
+    **A invariante desta fatia:** o PROVE não começa sem KPI, critério de sucesso e Baseline
+    definidos — ou lacuna aprovada explicitamente. Ela mora na action `start/`, e não num `PATCH`
+    de `status`, pela razão exata de `journey.apply_gate`: a validação depende do **estado
+    corrente** (quais KPIs pendem deste experimento, e quais deles já têm baseline viva), e só o
+    ponto que conhece esse estado pode fazer a pergunta. O que falta sai de
+    `prove.o_que_falta_para_iniciar`, num lugar só — a tela desenha a mesma lista que a action
+    recusa, e duas expressões dela divergiriam.
+
+    A lacuna aprovada é **um ato assinado**: `gap_waiver` diz por quê, `gap_waiver_by` diz quem, e
+    `gap_waiver_at` é carimbado pela action. Sem autor não é aprovação, é um campo de texto — e o
+    board desenha exatamente isso ("pede quem aprovou e por quê").
+
+    `gate_decision` reusa **`ProjectPhase.ProveDecision`** (SCALE / ITERATE / STOP): a pergunta é
+    outra e as saídas são outras (ADR 0053). Reusar em vez de redefinir é a mesma decisão da
+    `FeasibilityAssessment` acima.
+    """
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planejado"
+        RUNNING = "running", "Em execução"
+        CONCLUDED = "concluded", "Concluído"
+
+    solution_hypothesis = models.ForeignKey(
+        SolutionHypothesis, on_delete=models.CASCADE, related_name="prove_experiments"
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="prove_experiments"
+    )
+    controlled_scope = models.TextField(blank=True, default="")
+    started_at = models.DateField(null=True, blank=True)
+    ended_at = models.DateField(null=True, blank=True)
+    # O critério **prévio**. É metade da invariante de início, e é a metade que não depende de
+    # nenhuma outra linha do banco: sem ele, "deu certo" é decidido depois do fato.
+    success_criteria = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PLANNED)
+    gate_decision = models.CharField(
+        max_length=16, choices=ProjectPhase.ProveDecision.choices, blank=True, default=""
+    )
+    # A saída explícita da invariante (decisão E1 do DAP). Os três campos são um ato só, e por isso
+    # `gap_waiver_at` é carimbado por `start/` e não editável: é a mesma forma do trio de
+    # consentimento do `Case` — sem autor e carimbo, "alguém aprovou" é alegação de ninguém.
+    gap_waiver = models.TextField(blank=True, default="")
+    gap_waiver_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="prove_gap_waivers"
+    )
+    gap_waiver_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"PROVE — {self.solution_hypothesis_id} @ {self.project_id}"
+
+    def clean(self) -> None:
+        hipotese = self.solution_hypothesis if self.solution_hypothesis_id else None
+        projeto = self.project if self.project_id else None
+        if hipotese is not None and projeto is not None:
+            if hipotese.improvement_opportunity.account_id != projeto.client_id:
+                raise ValidationError(
+                    {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
+                )
+        if self.started_at and self.ended_at and self.ended_at < self.started_at:
+            raise ValidationError({"ended_at": "O fim não pode ser anterior ao início."})
+
+
+class KPI(TimestampedModel):
+    """O indicador que o trabalho promete mover — extraído de `DigitalEmployee` (FDD 049).
+
+    Até aqui o KPI era **coluna do ativo de solução**: `kpi_label`, `kpi_unit`, `kpi_direction`,
+    `kpi_baseline` e `kpi_current` viviam em `DigitalEmployee`. Três consequências saíam daí, e a
+    ADR 0055 existe para desfazê-las: um KPI não sobrevivia à troca do ativo que o mede; um PROVE
+    não podia ter mais de um KPI; e "antes" e "depois" eram **duas colunas** em vez de duas
+    medições do mesmo indicador em momentos diferentes.
+
+    **`project` é a âncora obrigatória e `prove_experiment` é opcional — desvio deliberado da
+    issue #69**, que lista o experimento como se fosse obrigatório. A razão é a migração: os
+    `kpi_baseline` que existem hoje pendem de `DigitalEmployee`, e não houve PROVE nenhum.
+    Torná-lo obrigatório forçaria a `0067` a **inventar um `ProveExperiment` que nunca aconteceu**
+    — dado fabricado com aparência de histórico, que é pior que a lacuna. Com o campo nulável, o
+    KPI migrado diz a verdade: existe, pende do projeto, e não nasceu de um experimento. "Vários
+    KPIs por PROVE" continua valendo: é 1-N pelo `prove_experiment`.
+
+    Unidade e direção moram **aqui**, e é o que torna baseline e outcome comparáveis: eles são o
+    mesmo KPI em momentos diferentes, e é o KPI que fixa a unidade e o método (`definition` e
+    `formula`). Ver a docstring de `Measurement`.
+    """
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="kpis")
+    prove_experiment = models.ForeignKey(
+        ProveExperiment, on_delete=models.CASCADE, null=True, blank=True, related_name="kpis"
+    )
+    name = models.CharField(max_length=120)
+    # O que o número quer dizer, e como ele é apurado. São o **método**, e é por eles serem do KPI
+    # — e não da medição — que duas leituras do mesmo indicador se comparam.
+    definition = models.TextField(blank=True, default="")
+    formula = models.TextField(blank=True, default="")
+    unit = models.CharField(max_length=16, choices=KpiUnit.choices, blank=True, default="")
+    direction = models.CharField(
+        max_length=8, choices=KpiDirection.choices, default=KpiDirection.UP
+    )
+    data_source = models.CharField(max_length=120, blank=True, default="")
+    cadence = models.CharField(max_length=60, blank=True, default="")
+    owner = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_kpis"
+    )
+    # A meta, quando existir. Nulo é "sem meta definida" e nunca zero — a mesma distinção de
+    # `PainPoint.impact_estimate` e do `nao_apurado` de `process.custo_do_estado_atual`.
+    target = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        verbose_name = "KPI"
+        verbose_name_plural = "KPIs"
+
+    def __str__(self) -> str:
+        return self.name
+
+    def clean(self) -> None:
+        experimento = self.prove_experiment if self.prove_experiment_id else None
+        if experimento is not None and experimento.project_id != self.project_id:
+            raise ValidationError(
+                {"prove_experiment": "O experimento deve pertencer ao mesmo projeto do KPI."}
+            )
+
+
+class Measurement(TimestampedModel):
+    """Uma leitura do KPI — **baseline e outcome são o mesmo KPI em momentos diferentes**.
+
+    É a frase central da fatia (FDD 049, ADR 0055). Duas colunas `kpi_baseline`/`kpi_current` no
+    ativo de solução afirmavam que "antes" e "depois" eram dois fatos de naturezas distintas; são
+    o mesmo fato, lido em duas janelas, e é por isso que `kind` é um campo desta linha e não o
+    nome de duas colunas.
+
+    **Unidade e método não se repetem aqui, e a ausência é a garantia.** O que torna um baseline
+    comparável a um outcome é serem leituras do *mesmo* KPI, com a *mesma* unidade e o *mesmo*
+    método (`KPI.unit`, `KPI.definition`, `KPI.formula`) — invariante §6.11 do `language-map`.
+    Acrescentar `unit` a esta linha pareceria conveniente e destruiria exatamente isso: duas
+    leituras poderiam divergir de unidade e continuar sendo comparadas na tela, sem nada ficar
+    vermelho. Se um dia a unidade mudar, o que nasce é **outro KPI**, não outra medição.
+
+    **`value` nulo é "não medido", nunca zero.** É a mesma distinção de
+    `DigitalEmployee.kpi_baseline` (o campo que esta classe substitui) e do `nao_apurado` de
+    `process.custo_do_estado_atual`: zero afirma que o processo não custava nada antes, e a lacuna
+    admitida é sempre melhor que a lacuna disfarçada de medição. O DAP a repete no desenho: KPI sem
+    baseline mostra `— → 1h05`, e a variação fica vazia.
+    """
+
+    class Kind(models.TextChoices):
+        BASELINE = "baseline", "Baseline"
+        OUTCOME = "outcome", "Outcome"
+        MONITORING = "monitoring", "Monitoramento"
+
+    kpi = models.ForeignKey(KPI, on_delete=models.CASCADE, related_name="measurements")
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    value = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    # A janela a que a leitura se refere, que não é o instante em que ela foi tomada: "outubro"
+    # medido em novembro é uma coisa só, e sem as três datas não dá para dizer isso.
+    period_start = models.DateField()
+    period_end = models.DateField()
+    measured_at = models.DateTimeField()
+    source_evidence = models.ManyToManyField(Evidence, blank=True, related_name="measurements")
+    confidence = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+
+    class Meta:
+        ordering = ["-measured_at", "-id"]
+        constraints = [
+            # **No máximo uma baseline viva por KPI.** A issue pede "por KPI e janela
+            # experimental"; como o KPI é que pertence ao experimento, o KPI **é** a janela — uma
+            # segunda chave aqui seria uma segunda definição de "de quando é este antes".
+            #
+            # Condicional ao arquivamento, no molde de `unique_chosen_solution_hypothesis`: uma
+            # baseline registrada por engano e arquivada não pode travar a próxima.
+            models.UniqueConstraint(
+                fields=["kpi"],
+                condition=Q(kind="baseline", archived_at__isnull=True),
+                name="unique_live_baseline_measurement",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        valor = "—" if self.value is None else str(self.value)
+        return f"{self.get_kind_display()} — {valor}"
+
+    def clean(self) -> None:
+        if self.period_start and self.period_end and self.period_end < self.period_start:
+            raise ValidationError(
+                {"period_end": "O fim da janela não pode ser anterior ao início."}
+            )
+
+
+class ValueLedgerEntry(TimestampedModel):
+    """O valor atribuído a um resultado medido — o Value Ledger (FDD 049).
+
+    As invariantes §6.11 e §6.12 do `language-map` viram testáveis aqui pela primeira vez, e as
+    duas são a mesma preocupação vista de dois lados:
+
+    - **`outcome_measurement.kind` tem de ser `outcome`.** Uma entrada de valor apontando para um
+      baseline afirmaria resultado onde há ponto de partida — e a leitura da tela não denunciaria
+      nada, porque os dois são números do mesmo KPI.
+    - **`attribution_method` é obrigatório e não-vazio.** É o que separa valor medido de número
+      que alguém escreveu. "ROI" como resultado é termo banido (§5) exatamente por isto: sem o
+      método de atribuição, o que sobra é uma promessa com casas decimais.
+
+    `outcome_measurement` é **`PROTECT`**, como `Case.project` e pelo mesmo motivo: a entrada de
+    valor existe para sobreviver ao que acontece em volta. Apagar a medição que a sustenta é o que
+    não pode — e o `ProtectedError` vira 409 no `api_exception_handler` (FDD 025).
+
+    Pende do **`Engagement`**, porque valor é do mandato e não de um projeto: um resultado que
+    atravessa dois projetos do mesmo programa é uma entrada só. `project` fica opcional para quem
+    consegue atribuir a fatia. **O engajamento não é fronteira de acesso** (ADR 0050): a
+    visibilidade deriva de `Project.objects.visible_to`, nunca o contrário.
+    """
+
+    class ValueType(models.TextChoices):
+        COST_SAVING = "cost_saving", "Redução de custo"
+        REVENUE = "revenue", "Receita"
+        RISK_REDUCTION = "risk_reduction", "Redução de risco"
+        CAPACITY = "capacity", "Capacidade"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        PENDING = "pending", "Pendente"
+        APPROVED = "approved", "Aprovado"
+
+    engagement = models.ForeignKey(
+        Engagement, on_delete=models.CASCADE, related_name="value_entries"
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="value_entries"
+    )
+    outcome_measurement = models.ForeignKey(
+        Measurement, on_delete=models.PROTECT, related_name="value_entries"
+    )
+    value_type = models.CharField(max_length=16, choices=ValueType.choices)
+    # Dinheiro e quantidade são nuláveis pela razão de `PainPoint.impact_estimate`: nulo é "não
+    # apurado" e zero é "apuramos e deu zero". Um total somado sem a distinção vira "valor zero" na
+    # leitura rápida.
+    amount = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    attribution_method = models.TextField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="value_approvals"
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-period_end", "-id"]
+        verbose_name_plural = "value ledger entries"
+
+    def __str__(self) -> str:
+        return f"{self.get_value_type_display()} — {self.amount if self.amount is not None else '—'}"
+
+    def clean(self) -> None:
+        medicao = self.outcome_measurement if self.outcome_measurement_id else None
+        if medicao is not None and medicao.kind != Measurement.Kind.OUTCOME:
+            raise ValidationError(
+                {"outcome_measurement": "A entrada de valor aponta para uma medição do tipo "
+                                        "Outcome; baseline e monitoramento não afirmam resultado."}
+            )
+        if not (self.attribution_method or "").strip():
+            raise ValidationError(
+                {"attribution_method": "Descreva o método de atribuição — é ele que separa valor "
+                                       "medido de número escrito à mão."}
+            )
+        # A mesma classe de vínculo cruzado que a FDD 048 valida em `PainPoint.findings` e em
+        # `ImprovementOpportunity.engagement`: deixar um solto faria quem lesse isto depois
+        # concluir que existe uma razão para a exceção. Não há.
+        projeto = self.project if self.project_id else None
+        if projeto is not None and projeto.engagement_id != self.engagement_id:
+            raise ValidationError(
+                {"project": "O projeto deve pertencer ao mesmo engajamento da entrada."}
+            )
+        if self.period_start and self.period_end and self.period_end < self.period_start:
+            raise ValidationError(
+                {"period_end": "O fim da janela não pode ser anterior ao início."}
+            )
+        if self.status == self.Status.APPROVED and self.approved_by_id is None:
+            raise ValidationError(
+                {"approved_by": "Aprovar é ato com autor: informe quem aprovou."}
+            )
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        """Carimba `approved_at` na primeira vez que a entrada chega em `approved`.
+
+        Mesma forma do `published_at` de `Case.save()`: o carimbo é consequência do estado, não um
+        campo que alguém preenche — e preenchê-lo à mão permitiria uma data de aprovação anterior à
+        aprovação.
+        """
+        if self.status == self.Status.APPROVED and self.approved_at is None:
+            self.approved_at = timezone.now()
+        super().save(*args, **kwargs)
+
+
 class DigitalEmployeeBlueprint(models.Model):
     """O catálogo de Funcionários Digitais — o bloco produtizado (FDD 026).
 
@@ -2945,6 +3330,13 @@ class DigitalEmployee(TimestampedModel):
         DigitalEmployeeBlueprint, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="instances",
     )
+    # **Referência, não posse** (ADR 0055, decisão C1 do DAP `dap-prove-e-valor-r1`). O ativo de
+    # solução deixou de ser dono da medição: o KPI vive em `KPI`, é medido em `Measurement`, e aqui
+    # fica só o ponteiro para qual indicador este funcionário digital move. `SET_NULL` pelo motivo
+    # do `blueprint` logo acima — saber qual KPI ele move não pode impedir o KPI de ser arquivado.
+    kpi = models.ForeignKey(
+        "KPI", on_delete=models.SET_NULL, null=True, blank=True, related_name="digital_employees"
+    )
     name = models.CharField(max_length=120)
     area = models.CharField(max_length=80, blank=True, default="")  # Financeiro, Atendimento…
     description = models.TextField(blank=True, default="")  # o que o funcionário digital faz
@@ -2960,11 +3352,10 @@ class DigitalEmployee(TimestampedModel):
     kpi_direction = models.CharField(
         max_length=8, choices=KpiDirection.choices, default=KpiDirection.UP
     )
-    # Nulo é **"não medido"**, e zero é "medido e era zero" — a distinção é a razão de o campo ser
-    # nulável em vez de `default=0`. Sem ela, um case de projeto sem baseline inventaria um "antes"
-    # igual a zero, que é precisamente o que destrói a credibilidade de prova social (FDD 027).
-    kpi_baseline = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    kpi_current = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # `kpi_baseline` e `kpi_current` **saíram daqui** na migração `0067` (ADR 0055, decisão C1):
+    # "antes" e "depois" não eram dois campos, eram duas `Measurement` do mesmo KPI. As duas
+    # **chaves** continuam saindo na `/api/v1/`, agora derivadas do KPI referenciado acima
+    # (`DigitalEmployeeSerializer`); o que parou de existir é a escrita por elas.
     hours_saved_month = models.DecimalField(max_digits=10, decimal_places=1, default=0)
     roi_month = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 

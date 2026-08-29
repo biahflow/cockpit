@@ -15,29 +15,30 @@ from datetime import timedelta
 from decimal import Decimal
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.models import (
     Case,
-    DigitalEmployee,
     KpiDirection,
     KpiUnit,
+    Measurement,
     Pendencia,
     Project,
     Task,
     WorkItem,
 )
-from apps.core.tests.factories import ProjectFactory, UserFactory
+from apps.core.tests.factories import ProjectFactory, UserFactory, digital_employee_medido
 
 
 @pytest.mark.django_db
 def test_alterar_o_projeto_depois_nao_altera_o_case() -> None:
     project = ProjectFactory(actual_value=Decimal("180000.00"), cost=Decimal("90000.00"))
     dono = project.owner
-    DigitalEmployee.objects.create(
-        project=project, name="SDR", kpi_label="Leads/mês", kpi_unit=KpiUnit.COUNT,
-        kpi_direction=KpiDirection.UP, kpi_baseline=Decimal("12.00"),
-        kpi_current=Decimal("48.00"),
+    ativo = digital_employee_medido(
+        project, baseline=Decimal("12.00"), current=Decimal("48.00"),
+        name="SDR", kpi_label="Leads/mês", kpi_unit=KpiUnit.COUNT,
+        kpi_direction=KpiDirection.UP,
     )
     Task.objects.create(
         project=project, title="Tarefa vencida", owner=dono,
@@ -54,7 +55,12 @@ def test_alterar_o_projeto_depois_nao_altera_o_case() -> None:
     Pendencia.objects.create(
         project=project, title="Decisão nova", owner=dono, party=WorkItem.Party.CLIENT,
     )
-    DigitalEmployee.objects.filter(project=project).update(kpi_current=Decimal("999.00"))
+    # O "depois" mudou de lugar com a ADR 0055: medir de novo é criar outra `Measurement`, e é
+    # exatamente essa a escrita que não pode alcançar a fotografia já tirada.
+    Measurement.objects.create(
+        kpi=ativo.kpi, kind=Measurement.Kind.OUTCOME, value=Decimal("999.00"),
+        period_start=project.start_date, period_end=project.start_date, measured_at=timezone.now(),
+    )
     project.actual_value = Decimal("10.00")
     project.cost = Decimal("500000.00")
     project.save()
