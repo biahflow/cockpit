@@ -284,6 +284,17 @@ SPECTACULAR_SETTINGS = {
         # valores; sem o override, cada campo vira um componente próprio com a mesma definição.
         "QualificationLevelEnum": "apps.core.models.Qualification.Level",
     },
+    # A issue #67 fecha com dois critérios de aceite que ainda faltavam, e este é o segundo:
+    # anunciar no próprio contrato quais chaves de payload são o alias legado da `/api/v1/`
+    # (`docs/ontology/aliases.md` §2c) — hoje elas saem indistinguíveis de campo normal. O mapa e
+    # o hook moram em `apps.core.openapi_aliases`. A entrada de `drf_spectacular` **precisa**
+    # continuar aqui, explícita: é o default do pacote (deduplica enum que se repete entre
+    # serializers, como `GateDecisionEnum`), e declarar `POSTPROCESSING_HOOKS` sem ela desligaria
+    # a deduplicação em vez de só acrescentar a nossa.
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "apps.core.openapi_aliases.marcar_aliases_depreciados",
+    ],
 }
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
