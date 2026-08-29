@@ -18,6 +18,10 @@ vi.mock("../api", () => ({
   createPainPoint: mocks.createPainPoint,
   updatePainPoint: mocks.updatePainPoint,
 }));
+// A promoção a fato carimba `reviewed_by` com o usuário autenticado (§6.9): a tela lê `useAuth`.
+vi.mock("../auth", () => ({
+  useAuth: () => ({ user: { id: 99, username: "ana", first_name: "Ana", last_name: "Sá", email: "ana@x.co", role: "delivery", is_admin: false, has_avatar: false, avatar_updated_at: null } }),
+}));
 
 /**
  * A conta do custo do estado atual (FDD 039). **Nasce parcial**, que é o caso que importa: três
@@ -48,14 +52,26 @@ function processoMapeado(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function evidencia(overrides: Record<string, unknown> = {}) {
+/** A `Evidence` do split: o dado bruto, com a forma de onde veio (FDD 045). */
+function evidence(overrides: Record<string, unknown> = {}) {
   return {
-    id: 7, process: 1, processo: 1, step: null, etapa: null,
-    forma: "entrevista", forma_display: "Entrevista (o que dizem)",
-    rotulo: "hipotese", rotulo_display: "Hipótese",
-    content: "A equipe acredita que metade do retrabalho vem de cadastro desatualizado.",
-    source_meeting: 3, registered_by: 1,
-    ...overrides,
+    id: 7, account: 4, discovery: null, process: 1, step: null,
+    kind: "interview", kind_display: "Entrevista (o que dizem)",
+    raw_excerpt: "A gente refaz a conferência inteira quando a nota volta.", reference: "",
+    source_session: null, source_meeting: 3, captured_at: "2026-08-10T10:00:00Z",
+    captured_by: 1, content_hash: "abc", created_at: "2026-08-10T10:00:00Z",
+    updated_at: "2026-08-10T10:00:00Z", ...overrides,
+  };
+}
+
+/** O `Finding` do split: a afirmação, ligada à `Evidence` que a sustenta. */
+function finding(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 20, account: 4, process: 1, step: null,
+    statement: "A equipe acredita que metade do retrabalho vem de cadastro desatualizado.",
+    epistemic_status: "hypothesis", epistemic_status_display: "Hipótese",
+    confidence: null, reviewed_by: null, reviewed_at: null, evidences: [7],
+    created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z", ...overrides,
   };
 }
 
@@ -73,15 +89,22 @@ function painPoint(overrides: Record<string, unknown> = {}) {
 
 let processo: unknown = processoMapeado();
 let etapas: unknown[] = [];
+let findings: unknown[] = [];
 let evidencias: unknown[] = [];
 let dores: unknown[] = [];
 let oportunidades: unknown[] = [];
 
 function stub() {
-  mocks.api.mockImplementation((path: string) => {
+  mocks.api.mockImplementation((path: string, init?: RequestInit) => {
     if (path === "/processos/1/") return Promise.resolve(processo);
     if (path.startsWith("/processo-etapas")) return Promise.resolve(etapas);
-    if (path.startsWith("/evidencias")) return Promise.resolve(evidencias);
+    if (path.startsWith("/findings")) return Promise.resolve(findings);
+    if (path.startsWith("/evidence")) {
+      // O POST de `Evidence` devolve a linha criada: o `Finding` precisa da chave dela para nascer
+      // ligado. Só o `?process=` de leitura devolve a lista.
+      if (init?.method === "POST") return Promise.resolve({ ...evidence(), id: 501 });
+      return Promise.resolve(evidencias);
+    }
     return Promise.resolve([]);
   });
   mocks.listPainPointsByProcess.mockImplementation(() => Promise.resolve(dores));
@@ -93,7 +116,7 @@ function stub() {
 /** A linha de lista que contém aquele texto — o selo e o botão são irmãos do `.row-main`.
  *
  * `getAllByText` e não `getByText`: o nome de uma etapa aparece **duas** vezes na tela, na linha
- * dela e na opção do seletor de vínculo do formulário de evidência. Consultar o primeiro que tem
+ * dela e na opção do seletor de vínculo do formulário do achado. Consultar o primeiro que tem
  * `.row` acima é o que distingue os dois sem depender da ordem do DOM. */
 function linhaDe(texto: string): HTMLElement {
   const linha = screen.getAllByText(texto).map(no => no.closest(".row")).find(Boolean);
@@ -111,7 +134,8 @@ beforeEach(() => {
   oportunidades = [];
   processo = processoMapeado();
   etapas = [{ id: 5, process: 1, processo: 1, name: "Conferência da nota no ERP", position: 1, pessoas: "Analista de faturamento", sistema: "ERP Protheus", dados: "Entra o pedido; sai a nota", tempo: "30 minutos por nota", erro: "", retrabalho: "" }];
-  evidencias = [evidencia()];
+  findings = [finding()];
+  evidencias = [evidence()];
   stub();
 });
 afterEach(cleanup);
@@ -199,13 +223,14 @@ test("cria a etapa com as seis perguntas na ordem em que se pergunta", async () 
   }));
 });
 
-// --- o rótulo governa (ADR 0034) -----------------------------------------------------------------
+// --- a classificação governa (ADR 0034) ----------------------------------------------------------
 
-test("a evidência mostra a forma, o rótulo e o achado", async () => {
-  evidencias = [
-    evidencia(),
-    evidencia({ id: 8, rotulo: "desconhecido", rotulo_display: "Desconhecido", forma: "observacao", forma_display: "Observação (o que fazem)", content: "Ninguém soube dizer quanto a nota espera na fila." }),
+test("o achado mostra a forma da fonte, a classificação e o que afirma", async () => {
+  findings = [
+    finding(),
+    finding({ id: 21, epistemic_status: "unknown", epistemic_status_display: "Desconhecido", statement: "Ninguém soube dizer quanto a nota espera na fila.", evidences: [8] }),
   ];
+  evidencias = [evidence(), evidence({ id: 8, kind: "observation", kind_display: "Observação (o que fazem)" })];
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
@@ -213,12 +238,12 @@ test("a evidência mostra a forma, o rótulo e o achado", async () => {
   expect(suposicao.getByText("Hipótese")).toBeInTheDocument();
   expect(suposicao.getByText("Entrevista (o que dizem)")).toBeInTheDocument();
 
-  // `desconhecido` é valor de primeira classe: nomear o que ainda não se sabe é fazer o trabalho.
+  // `unknown` é valor de primeira classe: nomear o que ainda não se sabe é fazer o trabalho.
   const lacuna = within(linhaDe("Ninguém soube dizer quanto a nota espera na fila."));
   expect(lacuna.getByText("Desconhecido")).toBeInTheDocument();
 });
 
-test("promover a fato é um ato humano: manda o PATCH e o selo muda", async () => {
+test("promover a fato é ato humano: manda o PATCH com o revisor e o selo muda", async () => {
   const user = userEvent.setup();
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
@@ -226,58 +251,69 @@ test("promover a fato é um ato humano: manda o PATCH e o selo muda", async () =
   const achado = "A equipe acredita que metade do retrabalho vem de cadastro desatualizado.";
   expect(within(linhaDe(achado)).getByText("Hipótese")).toBeInTheDocument();
 
-  // A segunda carga já traz o rótulo promovido pelo backend — a tela não o adivinha.
-  evidencias = [evidencia({ rotulo: "fato", rotulo_display: "Fato" })];
+  // A segunda carga já traz o estado promovido pelo backend — a tela não o adivinha.
+  findings = [finding({ epistemic_status: "fact", epistemic_status_display: "Fato" })];
   await user.click(screen.getByLabelText(`Promover a fato: ${achado}`));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/evidencias/7/", expect.objectContaining({
-    method: "PATCH", body: '{"rotulo":"fato"}',
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/findings/20/", expect.objectContaining({
+    method: "PATCH", body: '{"epistemic_status":"fact","reviewed_by":99}',
   })));
   await waitFor(() => expect(within(linhaDe(achado)).getByText("Fato")).toBeInTheDocument());
   // Não há para onde promover de novo: um botão inerte diria que existe um grau acima do fato.
   expect(screen.queryByLabelText(/Promover a fato:/)).not.toBeInTheDocument();
 });
 
-test("a evidência que já é fato não oferece promover", async () => {
-  evidencias = [evidencia({ rotulo: "fato", rotulo_display: "Fato" })];
+test("o achado que já é fato não oferece promover", async () => {
+  findings = [finding({ epistemic_status: "fact", epistemic_status_display: "Fato" })];
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
   expect(screen.queryByLabelText(/Promover a fato:/)).not.toBeInTheDocument();
 });
 
-test("rótulo e forma abrem sem escolha feita — o default que a ADR 0034 recusou no banco não volta pela tela", async () => {
+test("classificação e forma abrem sem escolha feita — o default que a ADR 0034 recusou não volta pela tela", async () => {
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
-  const rotulo = screen.getByLabelText("Rótulo") as HTMLSelectElement;
-  const forma = screen.getByLabelText("Forma") as HTMLSelectElement;
-  expect(rotulo.value).toBe("");
+  const classificacao = screen.getByLabelText("Classificação") as HTMLSelectElement;
+  const forma = screen.getByLabelText("Forma da fonte") as HTMLSelectElement;
+  expect(classificacao.value).toBe("");
   expect(forma.value).toBe("");
   // A opção vazia existe, é a selecionada e não é escolhível: quem não escolheu não passa.
-  expect(within(rotulo).getByRole("option", { name: "Selecione…" })).toBeDisabled();
+  expect(within(classificacao).getByRole("option", { name: "Selecione…" })).toBeDisabled();
   expect(within(forma).getByRole("option", { name: "Selecione…" })).toBeDisabled();
+  // E "Fato" não é oferecido na criação: ele é o que a promoção faz, com revisor e evidência viva.
+  expect(within(classificacao).queryByRole("option", { name: "Fato" })).not.toBeInTheDocument();
 });
 
-test("registra a evidência com o rótulo e a forma escolhidos", async () => {
+test("registrar o achado grava a evidência e o finding ligados", async () => {
   const user = userEvent.setup();
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
-  await user.selectOptions(screen.getByLabelText("Rótulo"), "fato");
-  await user.selectOptions(screen.getByLabelText("Forma"), "dado");
-  await user.type(screen.getByPlaceholderText("O que foi levantado, na frase de quem levantou"), "O ERP registrou 412 notas no mês.");
-  await user.click(screen.getByRole("button", { name: "Registrar evidência" }));
+  await user.selectOptions(screen.getByLabelText("Classificação"), "hypothesis");
+  await user.selectOptions(screen.getByLabelText("Forma da fonte"), "data");
+  await user.type(screen.getByPlaceholderText(/O que foi dito ou observado/), "O ERP registrou 412 notas no mês.");
+  await user.type(screen.getByPlaceholderText(/A conclusão que a casa tirou/), "O volume mensal é de 412 notas.");
+  await user.click(screen.getByRole("button", { name: "Registrar achado" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/evidencias/", expect.objectContaining({
-    method: "POST", body: expect.stringContaining('"rotulo":"fato"'),
+  // Primeiro a `Evidence`, com a forma e o trecho.
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/evidence/", expect.objectContaining({
+    method: "POST", body: expect.stringContaining('"kind":"data"'),
   })));
-  expect(mocks.api).toHaveBeenCalledWith("/evidencias/", expect.objectContaining({
-    body: expect.stringContaining('"forma":"dado"'),
+  expect(mocks.api).toHaveBeenCalledWith("/evidence/", expect.objectContaining({
+    body: expect.stringContaining('"raw_excerpt":"O ERP registrou 412 notas no mês."'),
   }));
+  // Depois o `Finding`, em hipótese e ligado à evidência recém-criada (id 501 do stub).
+  const findingPost = mocks.api.mock.calls.find(([path, init]) => path === "/findings/" && (init as RequestInit)?.method === "POST");
+  expect(findingPost).toBeTruthy();
+  const corpo = JSON.parse((findingPost![1] as RequestInit).body as string);
+  expect(corpo.statement).toBe("O volume mensal é de 412 notas.");
+  expect(corpo.epistemic_status).toBe("hypothesis");
+  expect(corpo.evidences).toEqual([501]);
 });
 
-test("arquivar avisa que etapas e evidências vão junto", async () => {
+test("arquivar avisa que as etapas vão junto e os achados ficam com a conta", async () => {
   const user = userEvent.setup();
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
@@ -287,7 +323,8 @@ test("arquivar avisa que etapas e evidências vão junto", async () => {
   expect(mocks.api).not.toHaveBeenCalledWith("/processos/1/", expect.objectContaining({ method: "DELETE" }));
 
   const dialogo = within(screen.getByRole("dialog"));
-  expect(dialogo.getByText(/1 etapa\(s\) e as 1 evidência\(s\)/)).toBeInTheDocument();
+  expect(dialogo.getByText(/1 etapa\(s\) dele/)).toBeInTheDocument();
+  expect(dialogo.getByText(/achados ficam com a conta/)).toBeInTheDocument();
   expect(dialogo.getByRole("button", { name: "Arquivar" })).toBeInTheDocument();
 });
 
@@ -359,37 +396,42 @@ test("o achado pode ser ligado a uma etapa, e sem escolha vai como null", async 
 
   // O padrão é o processo inteiro: a extração nunca liga achado a etapa, porque o modelo não sabe
   // a qual delas ele pertence. Quem sabe é quem estava na reunião.
-  await user.selectOptions(screen.getByLabelText("Rótulo"), "hipotese");
-  await user.selectOptions(screen.getByLabelText("Forma"), "observacao");
+  await user.selectOptions(screen.getByLabelText("Classificação"), "hypothesis");
+  await user.selectOptions(screen.getByLabelText("Forma da fonte"), "observation");
+  await user.type(screen.getByPlaceholderText(/O que foi dito ou observado/), "Vi a fila travar.");
   await user.type(screen.getByLabelText("Achado"), "A conferência trava quando o pedido vem sem PO.");
-  await user.click(screen.getByRole("button", { name: /Registrar evidência/ }));
+  await user.click(screen.getByRole("button", { name: /Registrar achado/ }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/evidencias/", expect.anything()));
-  const semEtapa = JSON.parse(
-    (mocks.api.mock.calls.find(([path, init]) => path === "/evidencias/" && init?.method === "POST")![1] as RequestInit).body as string
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/findings/", expect.anything()));
+  const corpo = JSON.parse(
+    (mocks.api.mock.calls.find(([path, init]) => path === "/findings/" && init?.method === "POST")![1] as RequestInit).body as string
   );
-  expect(semEtapa.step).toBeNull();
+  expect(corpo.step).toBeNull();
 });
 
-test("escolher a etapa manda o id dela no achado", async () => {
+test("escolher a etapa manda o id dela no achado e na evidência", async () => {
   const user = userEvent.setup();
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
-  // Escopado ao formulário da evidência: "Etapa (opcional)" é o rótulo dos **dois** vínculos
-  // opcionais desta tela — o do achado e o da dor (DAP priorização r1, decisão E1) —, e a consulta
-  // solta passou a casar com dois campos.
-  await user.selectOptions(within(screen.getByTestId("evidencia-form")).getByLabelText("Etapa (opcional)"), "5");
-  await user.selectOptions(screen.getByLabelText("Rótulo"), "fato");
-  await user.selectOptions(screen.getByLabelText("Forma"), "dado");
-  await user.type(screen.getByLabelText("Achado"), "São 400 notas por mês.");
-  await user.click(screen.getByRole("button", { name: /Registrar evidência/ }));
+  // Escopado ao formulário do achado: "Etapa (opcional)" é o rótulo dos **dois** vínculos opcionais
+  // desta tela — o do achado e o da dor (DAP priorização r1, decisão E1).
+  await user.selectOptions(within(screen.getByTestId("finding-form")).getByLabelText("Etapa (opcional)"), "5");
+  await user.selectOptions(screen.getByLabelText("Classificação"), "hypothesis");
+  await user.selectOptions(screen.getByLabelText("Forma da fonte"), "data");
+  await user.type(screen.getByPlaceholderText(/O que foi dito ou observado/), "São 400 notas por mês.");
+  await user.type(screen.getByLabelText("Achado"), "O volume mensal é de 400 notas.");
+  await user.click(screen.getByRole("button", { name: /Registrar achado/ }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/evidencias/", expect.anything()));
-  const corpo = JSON.parse(
-    (mocks.api.mock.calls.find(([path, init]) => path === "/evidencias/" && init?.method === "POST")![1] as RequestInit).body as string
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/findings/", expect.anything()));
+  const evid = JSON.parse(
+    (mocks.api.mock.calls.find(([path, init]) => path === "/evidence/" && init?.method === "POST")![1] as RequestInit).body as string
   );
-  expect(corpo.step).toBe("5");
+  const find = JSON.parse(
+    (mocks.api.mock.calls.find(([path, init]) => path === "/findings/" && init?.method === "POST")![1] as RequestInit).body as string
+  );
+  expect(evid.step).toBe(5);
+  expect(find.step).toBe(5);
 });
 
 // --- a dor se registra onde é observada (DAP priorização r1, decisão E1) ------------------------
@@ -451,8 +493,8 @@ test("descartar a dor manda o PATCH — e confirmar não é oferecido aqui", asy
   render(<ProcessDetailPage clientId={4} id={1} />);
   await screen.findByRole("heading", { name: "Faturamento manual de notas" });
 
-  // Confirmar exige achado vivo (FDD 048) e o produto não tem tela de achados: oferecer o valor
-  // produziria um 400 que quem clicou não entende.
+  // Confirmar exige achado vivo (FDD 048) e o produto ainda não tem essa costura na tela: oferecer
+  // o valor produziria um 400 que quem clicou não entende.
   expect(screen.queryByRole("button", { name: /Confirmar pain point/ })).not.toBeInTheDocument();
 
   dores = [painPoint({ status: "discarded", status_display: "Descartado" })];

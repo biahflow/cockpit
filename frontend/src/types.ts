@@ -110,41 +110,31 @@ export type CustoEstadoAtual = { parcelas: { label: string; valor: string }[]; t
 // §2c): a fatia 4 da issue #67 renomeou o campo do modelo, e a chave antiga continua saindo no GET
 // e sendo aceita na escrita até a `/api/v2/`. As telas leem e escrevem a canônica.
 export type ProcessStep = { id: number; process: number; processo: number; name: string; position: number; pessoas: string; sistema: string; dados: string; tempo: string; erro: string; retrabalho: string };
-export type EvidenciaForma = "entrevista" | "observacao" | "artefato" | "sistema" | "dado";
-// FATO / HIPÓTESE / DESCONHECIDO (`docs/metodologia-fde.md:117`). **`rotulo` não tem default no
-// banco (ADR 0034)** e não pode ganhar um na tela: um select que já abre em "hipótese" faz a casa
-// escolher por quem não escolheu, e o erro cai sempre para o mesmo lado. `desconhecido` é valor de
-// primeira classe — nomear o que ainda não se sabe é fazer o trabalho, não deixar de fazê-lo.
-export type EvidenciaRotulo = "fato" | "hipotese" | "desconhecido";
-export type Evidencia = { id: number; process: number; processo: number; step: number | null; etapa: number | null; forma: EvidenciaForma; forma_display: string; rotulo: EvidenciaRotulo; rotulo_display: string; content: string; source_meeting: number | null; registered_by: number | null };
-// O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). **Nenhuma tela consome estes tipos
-// ainda**, e isso é o recorte da fatia, não esquecimento: o dual-write mantém `ProcessDetailPage`
-// e `AccountDetailPage` funcionando sobre `Evidencia`/`Process`, e a interface nova (tela de
-// Discovery, painel de achados) exige Design Approval Package que não existe. Eles entram aqui
-// para que a próxima fatia não comece do zero — e para que a forma do contrato fique escrita do
-// lado do consumidor no mesmo commit em que ela nasce no servidor.
+// O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). O `ProcessDetailPage` **consome**
+// `Finding`/`Evidence` desde a Fase 6 (ADR 0052), que removeu a `Evidencia` fundida e o dual-write:
+// a tela lista os achados do split e promove a fato por ali. As demais superfícies (tela de
+// Discovery, painel de achados dedicado) seguem pendentes de Design Approval Package.
 //
-// A regra de nome da ontologia vale aqui igual: termo canônico em inglês nas quatro superfícies,
-// e o que aponta para modelo legado usa o nome canônico no campo (`account`, `process`, `step`).
+// A regra de nome da ontologia vale aqui igual: termo canônico em inglês nas quatro superfícies.
 export type DiscoveryStatus = "planned" | "running" | "completed" | "cancelled";
 export type Discovery = { id: number; project: number; project_name: string; scope: string; status: DiscoveryStatus; status_display: string; started_at: string | null; completed_at: string | null; owner: number | null; created_at: string; updated_at: string };
 export type DiscoverySession = { id: number; discovery: number; meeting: number | null; happened_at: string; participants: string; source_artifact: number | null; transcript: string; created_at: string; updated_at: string };
 export type ProcessObservationKind = "initial" | "revisit" | "validation";
 export type ProcessObservation = { id: number; discovery: number; process: number; observed_at: string; observation_type: ProcessObservationKind; observation_type_display: string; source_session: number | null; created_at: string; updated_at: string };
-// As cinco formas de evidência, agora em inglês (espelho de `EvidenciaForma`). A tradução é a da
-// migração 0054, e ela é um-para-um de propósito: um sexto valor aqui seria um conceito novo.
+// As cinco formas de evidência, em inglês canônico (`docs/metodologia-fde.md:112-115`). São cinco
+// de propósito: um sexto valor aqui seria um conceito novo, não uma tradução.
 export type EvidenceKind = "interview" | "observation" | "artifact" | "system" | "data";
 // `raw_excerpt` é o trecho **como foi dito**, e `reference` é o localizador — um dos dois precisa
 // existir. A conclusão que a casa tirou dali mora em `Finding.statement`, nunca aqui: misturar as
 // duas refaria a fusão que este split desfaz. `content_hash` é o carimbo de integridade do trecho,
 // derivado e só de leitura.
-export type Evidence = { id: number; account: number; discovery: number | null; process: number | null; step: number | null; kind: EvidenceKind; kind_display: string; raw_excerpt: string; reference: string; source_session: number | null; source_meeting: number | null; captured_at: string; captured_by: number | null; content_hash: string; legacy_evidencia: number | null; created_at: string; updated_at: string };
-// FATO / HIPÓTESE / DESCONHECIDO com o nome canônico da ontologia (`language-map` §4). Vale aqui a
-// mesma proibição do `EvidenciaRotulo` acima e uma a mais: **um select não promove a `fact`
+export type Evidence = { id: number; account: number; discovery: number | null; process: number | null; step: number | null; kind: EvidenceKind; kind_display: string; raw_excerpt: string; reference: string; source_session: number | null; source_meeting: number | null; captured_at: string; captured_by: number | null; content_hash: string; created_at: string; updated_at: string };
+// FATO / HIPÓTESE / DESCONHECIDO com o nome canônico da ontologia (`language-map` §4). O rótulo não
+// tem default no banco (ADR 0034), e há uma proibição a mais: **um select não promove a `fact`
 // sozinho**. Promover exige revisor humano e evidência viva, e o backend responde 400 — a tela que
 // oferecer o valor sem pedir as duas coisas produz um erro que quem clica não entende.
 export type EpistemicStatus = "fact" | "hypothesis" | "unknown";
-export type Finding = { id: number; account: number; process: number | null; step: number | null; statement: string; epistemic_status: EpistemicStatus; epistemic_status_display: string; confidence: number | null; reviewed_by: number | null; reviewed_at: string | null; evidences: number[]; legacy_evidencia: number | null; created_at: string; updated_at: string };
+export type Finding = { id: number; account: number; process: number | null; step: number | null; statement: string; epistemic_status: EpistemicStatus; epistemic_status_display: string; confidence: number | null; reviewed_by: number | null; reviewed_at: string | null; evidences: number[]; created_at: string; updated_at: string };
 // A cadeia do PRIORITIZE (FDD 048, ADR 0054): dor → oportunidade de melhoria → avaliação →
 // hipótese. **Nenhuma tela consome estes tipos ainda**, exatamente como os do split da Fase 3
 // logo acima, e pelo mesmo motivo: é o recorte da fatia, não esquecimento — a superfície tem DAP

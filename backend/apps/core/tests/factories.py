@@ -16,7 +16,6 @@ from apps.core.models import (
     Engagement,
     EngineeringHandoff,
     Evidence,
-    Evidencia,
     FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
@@ -274,23 +273,6 @@ class ProcessStepFactory(factory.django.DjangoModelFactory):
     sistema = "ERP e planilha"
 
 
-class EvidenciaFactory(factory.django.DjangoModelFactory):
-    """Achado de entrevista rotulado como hipótese — o caso mais comum e o menos afirmativo.
-
-    `forma` e `rotulo` não têm default no modelo (é a decisão central da fatia); a fábrica escolhe
-    um valor explícito para não obrigar todo teste a repeti-lo, e quem testa a ausência monta o
-    payload à mão.
-    """
-
-    class Meta:
-        model = Evidencia
-
-    process = factory.SubFactory(ProcessFactory)
-    forma = Evidencia.Forma.ENTREVISTA
-    rotulo = Evidencia.Rotulo.HIPOTESE
-    content = "O time diz que o fechamento leva dois dias."
-
-
 class DiscoveryFactory(factory.django.DjangoModelFactory):
     """Discovery em andamento — o estado em que quase todo teste quer o levantamento (FDD 045)."""
 
@@ -324,8 +306,8 @@ class ProcessObservationFactory(factory.django.DjangoModelFactory):
 class EvidenceFactory(factory.django.DjangoModelFactory):
     """Trecho de entrevista, com o texto **bruto** e sem conclusão nenhuma (FDD 045).
 
-    `kind` não tem default no modelo, como a `forma` da `Evidencia`; a fábrica escolhe um valor
-    explícito para não obrigar todo teste a repeti-lo, e quem testa a ausência monta o payload.
+    `kind` não tem default no modelo; a fábrica escolhe um valor explícito para não obrigar todo
+    teste a repeti-lo, e quem testa a ausência monta o payload à mão.
     """
 
     class Meta:
@@ -391,7 +373,7 @@ class SolutionHypothesisFactory(factory.django.DjangoModelFactory):
 
 
 class FindingFactory(factory.django.DjangoModelFactory):
-    """Achado nascendo **hipótese**, no espírito da `EvidenciaFactory` acima (FDD 045).
+    """Achado nascendo **hipótese** — o estado menos afirmativo dos três (FDD 045).
 
     Nunca `fact` por padrão: promover exige revisor e evidência viva, e uma fábrica que entregasse
     fatos de graça faria todo teste da invariante §6.9 começar desfazendo o que ela fez — e o

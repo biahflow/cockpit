@@ -1,32 +1,34 @@
-"""O Discovery estruturado: processo, etapa e evidência (FDD 039).
+"""O Discovery estruturado: processo, etapa e o custo do estado atual (FDD 039).
 
-Três coisas são exercitadas aqui, e as três são a razão de a fatia existir:
+Duas coisas são exercitadas aqui:
 
-- **a distinção entre observado e suposto** — `rotulo` e `forma` sem default, no molde de
-  `Satisfacao.fonte`: o POST sem eles é 400, e não um "fato" escolhido por omissão;
-- **a fronteira do cliente nas duas metades**, como em `test_satisfacao.py` — e aqui ela se
-  estende pelo processo pai, que é por onde a etapa e a evidência chegariam ao cliente alheio;
+- **a fronteira do cliente nas duas metades** (processo e etapa), como em `test_satisfacao.py` —
+  e aqui ela se estende pelo processo pai, que é por onde a etapa chegaria ao cliente alheio;
 - **a lacuna dita e não preenchida** no custo do estado atual: fator ausente vai para
   `nao_apurado` e não vira zero no total, no molde do KPI sem base registrada da FDD 027.
 
+O achado deixou de morar aqui: a `Evidencia` fundida saiu na Fase 6 (ADR 0052), e o par
+`Evidence`/`Finding` do split (FDD 045) tem suíte própria em `test_evidence_finding.py`. O que
+sobrou do achado neste arquivo é o que o processo pergunta a ele — `sustentacao`, que agora lê o
+`Finding(epistemic_status=fact)` vivo em vez do `Evidencia(rotulo=fato)` legado.
+
 O oráculo do cálculo é função pura (`apps/core/process.py`), testado sem banco onde dá — o
-resto precisa de banco porque `sustentacao` pergunta pelas evidências vivas do processo.
+resto precisa de banco porque `sustentacao` pergunta pelos achados vivos do processo.
 """
 
 import json
 from decimal import Decimal
 
 import pytest
-from django.core.exceptions import ValidationError
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.core import process as process_module
-from apps.core.models import Evidencia, Process, ProcessStep, User
+from apps.core.models import Finding, Process, ProcessStep, User
 
 from .factories import (
     AccountFactory,
-    EvidenciaFactory,
+    FindingFactory,
     ProcessFactory,
     ProcessStepFactory,
     ProjectFactory,
@@ -40,15 +42,20 @@ def client() -> APIClient:
     return APIClient()
 
 
-def _payload_evidencia(processo_id: int, **overrides: object) -> dict:
+def _fato_vivo(processo: Process, **overrides: object) -> Finding:
+    """Um `Finding` **fato** ligado ao processo — o que sustenta o custo (§6.9, `:117`).
+
+    A fábrica não passa por `full_clean`, então o fato nasce sem revisor aqui de propósito: o que
+    `sustentacao` pergunta é `epistemic_status=fact` e `archived_at` nulo, e é só isso que estes
+    testes precisam montar. A guarda do revisor é da API, exercitada em `test_evidence_finding.py`.
+    """
     base: dict = {
-        "process": processo_id,
-        "forma": Evidencia.Forma.OBSERVACAO,
-        "rotulo": Evidencia.Rotulo.FATO,
-        "content": "Vi a analista conferindo pedido a pedido na planilha.",
+        "process": processo,
+        "account": processo.account,
+        "epistemic_status": Finding.EpistemicStatus.FACT,
     }
     base.update(overrides)
-    return base
+    return FindingFactory(**base)
 
 
 # --- O cálculo do custo do estado atual ---------------------------------------
@@ -145,17 +152,17 @@ def test_processo_sem_insumo_nenhum_nao_afirma_que_custa_zero() -> None:
 def test_a_sustentacao_pede_fato_vivo_e_volta_a_hipotese_quando_ele_e_arquivado() -> None:
     """O número vale conforme o que o sustenta (`docs/metodologia-fde.md:117`).
 
-    Entrevista rotulada como hipótese não sustenta, e registro arquivado deixa de sustentar —
-    desfazer o registro é desfazer o que ele afirmava.
+    Achado em hipótese não sustenta, e registro arquivado deixa de sustentar — desfazer o registro
+    é desfazer o que ele afirmava. A fonte é o `Finding` do split (Fase 6): é o mesmo achado que a
+    tela promove e que o custo consulta.
     """
     processo = ProcessFactory()
-    EvidenciaFactory(process=processo)  # entrevista/hipótese
+    FindingFactory(process=processo, account=processo.account)  # hipótese
 
     assert process_module.custo_do_estado_atual(processo)["sustentacao"] == "hipotese"
 
-    fato = EvidenciaFactory(
-        process=processo, forma=Evidencia.Forma.DADO, rotulo=Evidencia.Rotulo.FATO,
-        content="Relatório do ERP: 412 pedidos em agosto.",
+    fato = _fato_vivo(
+        processo, statement="Relatório do ERP: 412 pedidos em agosto."
     )
     assert process_module.custo_do_estado_atual(processo)["sustentacao"] == "sustentado"
 
@@ -166,8 +173,8 @@ def test_a_sustentacao_pede_fato_vivo_e_volta_a_hipotese_quando_ele_e_arquivado(
 def test_processo_ainda_nao_salvo_calcula_e_nao_se_diz_sustentado() -> None:
     """Sem banco: a conta é aritmética e não depende de o processo existir em tabela nenhuma.
 
-    Quem pede a prévia antes de gravar recebe `"hipotese"`, que é a resposta certa — nenhuma
-    evidência foi registrada ainda, e o gerente reverso nem poderia ser consultado.
+    Quem pede a prévia antes de gravar recebe `"hipotese"`, que é a resposta certa — nenhum achado
+    foi registrado ainda, e o gerente reverso nem poderia ser consultado.
     """
     custo = process_module.custo_do_estado_atual(
         Process(volume_mes=2, tempo_horas=Decimal("1.00"), pessoas=1, custo_hora=Decimal("30.00"))
@@ -178,53 +185,11 @@ def test_processo_ainda_nao_salvo_calcula_e_nao_se_diz_sustentado() -> None:
 
 
 @pytest.mark.django_db
-def test_evidencia_de_outro_processo_nao_sustenta_este() -> None:
+def test_fato_de_outro_processo_nao_sustenta_este() -> None:
     processo = ProcessFactory()
-    EvidenciaFactory(rotulo=Evidencia.Rotulo.FATO)  # de outro processo
+    _fato_vivo(ProcessFactory())  # fato de outro processo (e de outra conta)
 
     assert process_module.custo_do_estado_atual(processo)["sustentacao"] == "hipotese"
-
-
-# --- Os modelos ---------------------------------------------------------------
-
-
-@pytest.mark.django_db
-def test_o_clean_da_evidencia_recusa_etapa_de_outro_processo() -> None:
-    """Sem esta guarda, um campo opcional vaza entre contas: a etapa alheia pode ser de outro
-    cliente, e a evidência passaria a apontar para dentro dele."""
-    processo = ProcessFactory()
-    alheia = ProcessStepFactory()
-
-    with pytest.raises(ValidationError) as erro:
-        Evidencia(
-            process=processo, step=alheia, forma=Evidencia.Forma.DADO,
-            rotulo=Evidencia.Rotulo.FATO, content="x",
-        ).clean()
-
-    assert "step" in erro.value.message_dict
-
-    # A etapa do próprio processo passa, e é o caso que a guarda não pode atrapalhar.
-    Evidencia(
-        process=processo, step=ProcessStepFactory(process=processo),
-        forma=Evidencia.Forma.DADO, rotulo=Evidencia.Rotulo.FATO, content="x",
-    ).clean()
-
-
-@pytest.mark.django_db
-def test_a_etapa_e_a_evidencia_ordenam_por_posicao_e_por_recencia() -> None:
-    processo = ProcessFactory()
-    segunda = ProcessStepFactory(process=processo, name="Segunda", position=2)
-    primeira = ProcessStepFactory(process=processo, name="Primeira", position=1)
-
-    assert list(processo.steps.all()) == [primeira, segunda]
-    assert str(primeira) == "Primeira"
-    assert str(processo) == "Faturamento mensal"
-
-    velha = EvidenciaFactory(process=processo, content="Primeiro achado")
-    nova = EvidenciaFactory(process=processo, content="Achado mais recente")
-    assert list(processo.evidencias.all())[0] in {nova, velha}  # ordenado por `-created_at, -id`
-    assert list(processo.evidencias.all())[0] == nova
-    assert str(nova).startswith("Hipótese — ")
 
 
 # --- O contrato: papéis --------------------------------------------------------
@@ -232,13 +197,14 @@ def test_a_etapa_e_a_evidencia_ordenam_por_posicao_e_por_recencia() -> None:
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("papel", [User.Role.ADMIN, User.Role.SALES, User.Role.DELIVERY])
-def test_os_tres_papeis_criam_leem_editam_e_arquivam_nas_tres_rotas(
+def test_os_tres_papeis_criam_leem_editam_e_arquivam_nas_duas_rotas(
     client: APIClient, papel: str
 ) -> None:
     """Quem conduz Discovery é das duas áreas (FDD 037 aplicada de novo), e o admin sempre.
 
-    A Entrega entra pelo cliente de um projeto seu — é a única forma de ela alcançar qualquer uma
-    das três rotas.
+    A Entrega entra pelo cliente de um projeto seu — é a única forma de ela alcançar as rotas de
+    processo e etapa. O achado do split tem o mesmo contrato de papéis, exercitado em
+    `test_evidence_finding.py`.
     """
     usuario = UserFactory(role=papel)
     projeto = ProjectFactory()
@@ -262,16 +228,6 @@ def test_os_tres_papeis_criam_leem_editam_e_arquivam_nas_tres_rotas(
     )
     assert etapa.status_code == 201
 
-    evidencia = client.post(
-        reverse("evidencia-list"),
-        _payload_evidencia(processo_id, step=etapa.data["id"]),
-        format="json",
-    )
-    assert evidencia.status_code == 201
-    assert evidencia.data["rotulo_display"] == "Fato"
-    assert evidencia.data["forma_display"] == "Observação (o que fazem)"
-    assert evidencia.data["registered_by"] == usuario.id
-
     editado = client.patch(
         reverse("processo-detail", args=[processo_id]), {"pessoas": 3}, format="json"
     )
@@ -279,7 +235,6 @@ def test_os_tres_papeis_criam_leem_editam_e_arquivam_nas_tres_rotas(
     assert editado.data["pessoas"] == 3
 
     for rota, item in (
-        ("evidencia", evidencia.data["id"]),
         ("processoetapa", etapa.data["id"]),
         ("processo", processo_id),
     ):
@@ -289,46 +244,41 @@ def test_os_tres_papeis_criam_leem_editam_e_arquivam_nas_tres_rotas(
 
 
 @pytest.mark.django_db
-def test_quem_nao_foi_liberado_nao_alcanca_nenhuma_das_tres_rotas(client: APIClient) -> None:
+def test_quem_nao_foi_liberado_nao_alcanca_nenhuma_das_duas_rotas(client: APIClient) -> None:
     """Recurso novo nasce fechado: o papel sem nenhuma linha para ele cai no `return False`."""
-    evidencia = EvidenciaFactory()
+    processo = ProcessFactory()
+    etapa = ProcessStepFactory(process=processo)
     client.force_authenticate(UserFactory(role=""))
 
     assert client.get(reverse("processo-list")).status_code == 403
     assert client.get(reverse("processoetapa-list")).status_code == 403
-    assert client.get(reverse("evidencia-list")).status_code == 403
-    assert client.get(reverse("evidencia-detail", args=[evidencia.id])).status_code == 403
-    assert client.post(
-        reverse("evidencia-list"), _payload_evidencia(evidencia.process_id), format="json"
-    ).status_code == 403
+    assert client.get(reverse("processo-detail", args=[processo.id])).status_code == 403
+    assert client.get(reverse("processoetapa-detail", args=[etapa.id])).status_code == 403
 
 
 # --- O contrato: a fronteira do cliente, nas duas metades ----------------------
 
 
 @pytest.mark.django_db
-def test_entrega_sem_projeto_no_cliente_nao_le_as_tres_entidades(client: APIClient) -> None:
+def test_entrega_sem_projeto_no_cliente_nao_le_as_duas_entidades(client: APIClient) -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     ProjectMemberFactory(project=ProjectFactory(), user=delivery)
     alheio = ProcessFactory(account=AccountFactory(name="Cliente alheio"))
     etapa_alheia = ProcessStepFactory(process=alheio)
-    evidencia_alheia = EvidenciaFactory(process=alheio, step=etapa_alheia)
     client.force_authenticate(delivery)
 
     assert [row["id"] for row in client.get(reverse("processo-list")).data] == []
     assert [row["id"] for row in client.get(reverse("processoetapa-list")).data] == []
-    assert [row["id"] for row in client.get(reverse("evidencia-list")).data] == []
     # Fora da queryset: do ponto de vista dela, nem existe.
     assert client.get(reverse("processo-detail", args=[alheio.id])).status_code == 404
     assert client.get(reverse("processoetapa-detail", args=[etapa_alheia.id])).status_code == 404
-    assert client.get(reverse("evidencia-detail", args=[evidencia_alheia.id])).status_code == 404
 
 
 @pytest.mark.django_db
-def test_entrega_sem_projeto_no_cliente_nao_escreve_as_tres_entidades(client: APIClient) -> None:
+def test_entrega_sem_projeto_no_cliente_nao_escreve_as_duas_entidades(client: APIClient) -> None:
     """A metade que a listagem não protege: sem a guarda de escrita, uma requisição bastaria para
-    mapear a operação de um cliente que a tela esconde — e nos filhos o cliente é alcançado
-    **só pelo processo pai**, que é onde a guarda é fácil de esquecer."""
+    mapear a operação de um cliente que a tela esconde — e na etapa o cliente é alcançado **só pelo
+    processo pai**, que é onde a guarda é fácil de esquecer."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     ProjectMemberFactory(project=ProjectFactory(), user=delivery)
     alheio = ProcessFactory(account=AccountFactory(name="Cliente alheio"))
@@ -340,14 +290,11 @@ def test_entrega_sem_projeto_no_cliente_nao_escreve_as_tres_entidades(client: AP
     etapa = client.post(
         reverse("processoetapa-list"), {"process": alheio.id, "name": "x"}, format="json"
     )
-    evidencia = client.post(reverse("evidencia-list"), _payload_evidencia(alheio.id), format="json")
 
     assert criacao.status_code in {403, 404}
     assert etapa.status_code in {403, 404}
-    assert evidencia.status_code in {403, 404}
     assert Process.objects.filter(account=alheio.account).count() == 1
     assert not ProcessStep.objects.exists()
-    assert not Evidencia.objects.exists()
 
 
 @pytest.mark.django_db
@@ -357,7 +304,6 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     meu = ProjectFactory()
     ProjectMemberFactory(project=meu, user=delivery)
     processo = ProcessFactory(account=meu.client)
-    evidencia = EvidenciaFactory(process=processo)
     etapa = ProcessStepFactory(process=processo)
     alheio = ProcessFactory(account=AccountFactory())
     client.force_authenticate(delivery)
@@ -367,109 +313,19 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
         {"account": alheio.account_id},
         format="json",
     )
-    mudou_pai_da_evidencia = client.patch(
-        reverse("evidencia-detail", args=[evidencia.id]), {"process": alheio.id}, format="json"
-    )
     mudou_pai_da_etapa = client.patch(
         reverse("processoetapa-detail", args=[etapa.id]), {"process": alheio.id}, format="json"
     )
 
     assert mudou_cliente.status_code == 403
-    assert mudou_pai_da_evidencia.status_code == 403
     assert mudou_pai_da_etapa.status_code == 403
     processo.refresh_from_db()
-    evidencia.refresh_from_db()
     etapa.refresh_from_db()
     assert processo.account_id == meu.client_id
-    assert evidencia.process_id == processo.id
     assert etapa.process_id == processo.id
 
 
-# --- O contrato: rótulo, forma e filtros ---------------------------------------
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("ausente", ["rotulo", "forma"])
-def test_evidencia_sem_rotulo_ou_sem_forma_e_400_e_nao_default_silencioso(
-    client: APIClient, ausente: str
-) -> None:
-    """A decisão central da fatia, no precedente de `Satisfacao.fonte`.
-
-    Um default faria a casa escolher por quem não escolheu, e o erro cairia sempre para o mesmo
-    lado — apresentar como fato o que ninguém confirmou, que é o que
-    `docs/metodologia-fde.md:117` proíbe.
-    """
-    processo = ProcessFactory()
-    client.force_authenticate(UserFactory(role=User.Role.ADMIN))
-    payload = _payload_evidencia(processo.id)
-    del payload[ausente]
-
-    resposta = client.post(reverse("evidencia-list"), payload, format="json")
-
-    assert resposta.status_code == 400
-    assert ausente in resposta.data
-    assert not Evidencia.objects.exists()
-
-
-@pytest.mark.django_db
-def test_desconhecido_e_valor_de_primeira_classe(client: APIClient) -> None:
-    """Nomear o que ainda não se sabe é fazer o trabalho (`docs/metodologia-fde.md:128-129`)."""
-    processo = ProcessFactory()
-    client.force_authenticate(UserFactory(role=User.Role.ADMIN))
-
-    resposta = client.post(
-        reverse("evidencia-list"),
-        _payload_evidencia(
-            processo.id, rotulo=Evidencia.Rotulo.DESCONHECIDO,
-            content="Ninguém soube dizer quantas devoluções acontecem por mês.",
-        ),
-        format="json",
-    )
-
-    assert resposta.status_code == 201
-    assert resposta.data["rotulo_display"] == "Desconhecido"
-
-
-@pytest.mark.django_db
-def test_a_api_recusa_etapa_de_outro_processo_com_400(client: APIClient) -> None:
-    """400 e não 500, e sobretudo **não 201**: o `save()` do DRF não chama `full_clean`, então sem
-    a regra repetida no serializer o vazamento seria gravado em silêncio."""
-    processo = ProcessFactory()
-    alheia = ProcessStepFactory()
-    client.force_authenticate(UserFactory(role=User.Role.ADMIN))
-
-    resposta = client.post(
-        reverse("evidencia-list"),
-        _payload_evidencia(processo.id, step=alheia.id),
-        format="json",
-    )
-
-    assert resposta.status_code == 400
-    assert "step" in resposta.data
-    assert not Evidencia.objects.exists()
-
-
-@pytest.mark.django_db
-def test_os_filtros_separam_processo_etapa_rotulo_e_forma(client: APIClient) -> None:
-    """`?rotulo=fato` precisa **filtrar**: em `filter_fields` ele cairia no chão sem erro nenhum,
-    e a lista voltaria inteira, com hipótese junto de fato."""
-    processo, outro = ProcessFactory(), ProcessFactory()
-    etapa = ProcessStepFactory(process=processo)
-    fato = EvidenciaFactory(
-        process=processo, step=etapa, forma=Evidencia.Forma.DADO,
-        rotulo=Evidencia.Rotulo.FATO, content="412 pedidos em agosto (ERP).",
-    )
-    hipotese = EvidenciaFactory(process=processo)
-    EvidenciaFactory(process=outro, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO)
-    client.force_authenticate(UserFactory(role=User.Role.ADMIN))
-
-    def _ids(**params: object) -> list[int]:
-        return [row["id"] for row in client.get(reverse("evidencia-list"), params).data]
-
-    assert set(_ids(process=processo.id)) == {fato.id, hipotese.id}
-    assert _ids(step=etapa.id) == [fato.id]
-    assert _ids(process=processo.id, rotulo=Evidencia.Rotulo.FATO) == [fato.id]
-    assert _ids(process=processo.id, forma=Evidencia.Forma.ENTREVISTA) == [hipotese.id]
+# --- O contrato: o custo derivado ----------------------------------------------
 
 
 @pytest.mark.django_db
@@ -509,29 +365,34 @@ def test_o_autor_nao_entra_pelo_corpo(client: APIClient) -> None:
     assert criado.data["registered_by"] == admin.id
 
 
-@pytest.mark.django_db
-def test_arquivar_o_processo_leva_etapas_e_evidencias_juntas() -> None:
-    """A regra transversal da FDD 025: filho listável não fica visível apontando para pai oculto.
+# --- O contrato: arquivamento --------------------------------------------------
 
-    Sem a cascata, `/processo-etapas/?process=` e `/evidencias/?process=` seguiriam devolvendo
-    as linhas de um processo que sumiu da tela — e uma evidência órfã continua sendo uma
-    afirmação sobre a operação de um cliente, sem o processo que lhe dava contexto.
+
+@pytest.mark.django_db
+def test_arquivar_o_processo_leva_as_etapas_mas_nao_os_achados() -> None:
+    """A regra transversal da FDD 025 vale para a etapa; o achado tem outra ancoragem.
+
+    A etapa é filha do processo (`/processo-etapas/?process=`) e cascateia — sem isso ela ficaria
+    visível apontando para um pai oculto. O `Finding` não: ele é da **conta** (Fase 6, ADR 0052),
+    e sobrevive ao arquivamento do mapa que o citava, porque uma afirmação sobre a operação do
+    cliente não deixa de valer quando a entrada do processo é guardada. Some a sustentação **deste**
+    processo — que `custo_do_estado_atual` recalcula —, não o achado.
     """
     processo = ProcessFactory()
     etapa = ProcessStepFactory(process=processo)
-    evidencia = EvidenciaFactory(process=processo, step=etapa)
+    achado = FindingFactory(process=processo, account=processo.account)
 
     processo.archive()
 
     etapa.refresh_from_db()
-    evidencia.refresh_from_db()
+    achado.refresh_from_db()
     assert etapa.archived_at == processo.archived_at
-    assert evidencia.archived_at == processo.archived_at
+    assert achado.archived_at is None
 
 
 @pytest.mark.django_db
 def test_desarquivar_devolve_so_o_que_este_arquivamento_levou() -> None:
-    """A armadilha simétrica, e a razão de o carimbo ser o mesmo nos três.
+    """A armadilha simétrica, e a razão de o carimbo ser o mesmo nas etapas.
 
     A etapa arquivada **antes**, de propósito, não pode voltar junto: restaurar tudo o que está
     arquivado desfaria uma decisão que ninguém pediu para desfazer.
@@ -540,17 +401,14 @@ def test_desarquivar_devolve_so_o_que_este_arquivamento_levou() -> None:
     removida_antes = ProcessStepFactory(process=processo)
     removida_antes.archive()
     junto = ProcessStepFactory(process=processo)
-    evidencia = EvidenciaFactory(process=processo)
 
     processo.archive()
     processo.unarchive()
 
     junto.refresh_from_db()
-    evidencia.refresh_from_db()
     removida_antes.refresh_from_db()
     assert processo.archived_at is None
     assert junto.archived_at is None
-    assert evidencia.archived_at is None
     assert removida_antes.archived_at is not None
 
 
@@ -575,18 +433,19 @@ def test_a_rota_de_desarquivar_passa_pelo_modelo_e_nao_devolve_processo_vazio(
 
 
 @pytest.mark.django_db
-def test_arquivar_o_processo_tira_a_sustentacao_do_calculo() -> None:
-    """Consequência que precisa ser verdade e não só coerente: o fato arquivado junto não sustenta.
+def test_arquivar_o_achado_tira_a_sustentacao_do_calculo() -> None:
+    """Consequência que precisa ser verdade e não só coerente: fato arquivado não sustenta.
 
-    `custo_do_estado_atual` já ignora evidência arquivada; a cascata faz o processo guardado
-    parar de afirmar número sustentado sem ninguém ter revisado o registro.
+    `custo_do_estado_atual` ignora achado arquivado. Arquivar o processo **não** arquiva o achado
+    (ele é da conta), então quem tira a sustentação é arquivar o próprio fato — e é o mesmo achado
+    que a tela promove.
     """
     processo = ProcessFactory(volume_mes=10, tempo_horas=Decimal("2"), pessoas=1,
-                               custo_hora=Decimal("50"))
-    EvidenciaFactory(process=processo, rotulo=Evidencia.Rotulo.FATO)
+                              custo_hora=Decimal("50"))
+    fato = _fato_vivo(processo)
     assert process_module.custo_do_estado_atual(processo)["sustentacao"] == "sustentado"
 
-    processo.archive()
+    fato.archive()
 
     assert process_module.custo_do_estado_atual(processo)["sustentacao"] == "hipotese"
 

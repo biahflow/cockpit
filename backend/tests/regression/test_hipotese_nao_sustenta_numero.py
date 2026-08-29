@@ -24,11 +24,11 @@ from decimal import Decimal
 import pytest
 
 from apps.core import ai
-from apps.core.models import Evidencia
+from apps.core.models import Finding
 from apps.core.tests.factories import (
     AccountFactory,
     CommercialOpportunityFactory,
-    EvidenciaFactory,
+    FindingFactory,
     ProcessFactory,
     ProcessStepFactory,
 )
@@ -83,9 +83,10 @@ def test_o_mapa_qualitativo_entra_de_qualquer_jeito() -> None:
 def test_com_fato_registrado_o_numero_aparece() -> None:
     """A metade complementar: sem ela, tudo passaria por o número nunca sair de lugar nenhum."""
     opportunity, processo = _oportunidade_com_processo()
-    EvidenciaFactory(
-        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
-        content="Relatório do ERP: 400 notas conferidas em abril.",
+    FindingFactory(
+        process=processo, account=processo.account,
+        epistemic_status=Finding.EpistemicStatus.FACT,
+        statement="Relatório do ERP: 400 notas conferidas em abril.",
     )
 
     contexto = ai.build_opportunity_context(opportunity)
@@ -103,9 +104,10 @@ def test_arquivar_o_fato_faz_o_numero_sumir_de_novo() -> None:
     apurado, porque já foi visto como apurado uma vez.
     """
     opportunity, processo = _oportunidade_com_processo()
-    fato = EvidenciaFactory(
-        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
-        content="Relatório do ERP: 400 notas conferidas em abril.",
+    fato = FindingFactory(
+        process=processo, account=processo.account,
+        epistemic_status=Finding.EpistemicStatus.FACT,
+        statement="Relatório do ERP: 400 notas conferidas em abril.",
     )
     assert NUMERO in ai.build_opportunity_context(opportunity)
 
@@ -119,9 +121,10 @@ def test_arquivar_o_fato_faz_o_numero_sumir_de_novo() -> None:
 def test_o_total_parcial_diz_o_que_ficou_de_fora() -> None:
     """Sustentado não quer dizer completo: os cinco aditivos da fórmula não foram apurados aqui."""
     opportunity, processo = _oportunidade_com_processo()
-    EvidenciaFactory(
-        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
-        content="Relatório do ERP: 400 notas conferidas em abril.",
+    FindingFactory(
+        process=processo, account=processo.account,
+        epistemic_status=Finding.EpistemicStatus.FACT,
+        statement="Relatório do ERP: 400 notas conferidas em abril.",
     )
 
     contexto = ai.build_opportunity_context(opportunity)
@@ -146,9 +149,10 @@ def test_processo_arquivado_nao_entra_na_proposta() -> None:
     """Arquivar é o jeito de tirar do mapa; um processo guardado que continua sendo vendido
     desfaria o arquivamento pela porta dos fundos."""
     opportunity, processo = _oportunidade_com_processo()
-    EvidenciaFactory(
-        process=processo, rotulo=Evidencia.Rotulo.FATO, forma=Evidencia.Forma.DADO,
-        content="Relatório do ERP.",
+    FindingFactory(
+        process=processo, account=processo.account,
+        epistemic_status=Finding.EpistemicStatus.FACT,
+        statement="Relatório do ERP.",
     )
     processo.archive()
 

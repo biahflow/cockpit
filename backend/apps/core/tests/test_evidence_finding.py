@@ -17,12 +17,9 @@ são o mesmo registro. O que se exercita aqui é o que a separação passa a per
 """
 
 from datetime import timedelta
-from io import StringIO
 
 import pytest
 from django.core.exceptions import ValidationError
-from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -34,7 +31,6 @@ from .factories import (
     DiscoveryFactory,
     DiscoverySessionFactory,
     EvidenceFactory,
-    EvidenciaFactory,
     FindingFactory,
     MeetingFactory,
     ProcessFactory,
@@ -731,42 +727,3 @@ def test_a_lista_de_evidencias_filtra_por_conta_e_por_forma(api: APIClient) -> N
 
     assert len(por_conta.data) == 2
     assert len(por_forma.data) == 1
-
-
-# --- O comando de reconciliação ---------------------------------------------------------------
-
-
-def _reconciliar() -> str:
-    saida = StringIO()
-    call_command("reconciliar_evidence_finding", stdout=saida)
-    return saida.getvalue()
-
-
-def test_a_reconciliacao_acusa_o_legado_sem_par() -> None:
-    """Enquanto o dual-write durar, a divergência entre os dois modelos não aparece em tela."""
-    EvidenciaFactory()
-
-    with pytest.raises(CommandError) as erro:
-        _reconciliar()
-
-    assert "1 Evidencia sem par completo" in str(erro.value)
-
-
-def test_a_reconciliacao_conta_o_par_completo_e_a_divida_herdada() -> None:
-    conta = AccountFactory()
-    legada = EvidenciaFactory(process=ProcessFactory(account=conta))
-    Evidence.objects.create(
-        account=conta, kind=Evidence.Kind.INTERVIEW, raw_excerpt=legada.content,
-        legacy_evidencia=legada,
-    )
-    # Fato sem revisor: é exatamente a dívida que a migração 0054 pode deixar quando a linha
-    # legada não tinha `registered_by`. Ela é relatada, e **não** derruba o comando.
-    Finding.objects.create(
-        account=conta, statement=legada.content,
-        epistemic_status=Finding.EpistemicStatus.FACT, legacy_evidencia=legada,
-    )
-
-    saida = _reconciliar()
-
-    assert "Par Evidence + Finding    1" in saida
-    assert "sem revisor" in saida

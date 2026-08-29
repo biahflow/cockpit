@@ -99,7 +99,6 @@ from .models import (
     Engagement,
     EngineeringHandoff,
     Evidence,
-    Evidencia,
     FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
@@ -166,7 +165,6 @@ from .serializers import (
     EngagementSerializer,
     EngineeringHandoffSerializer,
     EvidenceSerializer,
-    EvidenciaSerializer,
     FeasibilityAssessmentSerializer,
     FindingSerializer,
     GithubDeliveryProjectionSerializer,
@@ -501,7 +499,7 @@ def processos_do_texto(text: str) -> list[dict]:
     imposição parecer negociável para quem lesse o código depois.
 
     **O achado é do processo, nunca da etapa.** O modelo não distingue com confiança a qual etapa
-    um achado pertence, e vínculo errado é pior que vínculo nenhum — `Evidencia.etapa` é opcional
+    um achado pertence, e vínculo errado é pior que vínculo nenhum — `Finding.step` é opcional
     exatamente para que uma pessoa o preencha depois, olhando o mapa.
     """
     inicio, fim = text.find("["), text.rfind("]")
@@ -2526,12 +2524,13 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
         silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
         e como sair dele, que é para o que o `StateConflict` existe.
 
-        **Desde a FDD 045 a gravação é dupla, e a forma da resposta não muda.** Além de
-        `Process`/`ProcessStep`/`Evidencia`, a mesma transação escreve o par do split: uma
-        `Evidence` por processo, que diz de onde o achado veio, e um `Finding` por achado, que diz
-        o que ele afirma — sempre em `hypothesis`, pela mesma razão que a `Evidencia` nasce
-        `hipotese`. O legado continua porque o custo do estado atual e a tela ainda leem dele; a
-        resposta segue `{"processos": [...]}` e nenhuma tela precisou mudar.
+        **A gravação é do par do split, e a forma da resposta não muda.** Além de
+        `Process`/`ProcessStep`, a mesma transação escreve uma `Evidence` por processo, que diz de
+        onde o achado veio, e um `Finding` por achado, que diz o que ele afirma — sempre em
+        `hypothesis`, porque o modelo produz o que foi dito, não prova. Até a Fase 6 (ADR 0052)
+        havia também a `Evidencia` fundida; com o legado removido e o custo do estado atual lendo o
+        `Finding`, sobra o par canônico. A resposta segue `{"processos": [...]}` e nenhuma tela
+        precisou mudar por causa disso.
         """
         meeting = self.get_object()
         if not meeting.transcript.strip():
@@ -2587,29 +2586,19 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                         source_meeting=meeting, captured_by=request.user,
                     )
                     for achado in bruto["achados"]:
-                        # **Dual-write, e nenhuma das duas gravações é opcional** (FDD 045): a
-                        # `Evidencia` legada continua porque `process.custo_do_estado_atual` e a
-                        # tela `ProcessDetailPage` leem dela — desligá-la aqui derrubaria as
-                        # duas. O par novo nasce ao lado, e o `legacy_evidencia` do `Finding`
-                        # guarda de qual linha fundida ele saiu: é o vínculo que permite
-                        # descontinuar o legado depois sem perder o rastro.
+                        # Um `Finding` por achado, sempre em `hypothesis` — o modelo lê *o que foi
+                        # dito*, não prova, e promover a fato é ato de gente (§6.9). A `Evidence`
+                        # logo acima diz de onde ele veio, e o `evidences.add` os liga: é essa
+                        # evidência viva que uma promoção futura vai exigir.
                         #
-                        # `create` no lugar do `bulk_create` de antes por causa desse ponteiro: o
-                        # `bulk_create` não devolve a chave em todo backend, e sem a chave o
-                        # mapeamento viraria adivinhação por posição.
-                        legado = Evidencia.objects.create(
-                            process=processo,
-                            # Sem etapa de propósito: o modelo não distingue com confiança a qual
-                            # delas o achado pertence, e vínculo errado é pior que vínculo nenhum.
-                            step=None,
-                            rotulo=Evidencia.Rotulo.HIPOTESE,
-                            forma=Evidencia.Forma.ENTREVISTA,
-                            content=achado, source_meeting=meeting, registered_by=request.user,
-                        )
+                        # Até a Fase 6 (ADR 0052) havia uma terceira gravação aqui — a `Evidencia`
+                        # fundida —, mantida porque o custo do estado atual e a tela liam dela. Com
+                        # o legado removido e o custo repontado para o `Finding` (`process.py`), a
+                        # gravação dupla deixou de existir: sobra o par do split, que é o dado
+                        # canônico.
                         achado_novo = Finding.objects.create(
                             account=account, process=processo, statement=achado,
                             epistemic_status=Finding.EpistemicStatus.HYPOTHESIS,
-                            legacy_evidencia=legado,
                         )
                         achado_novo.evidences.add(evidence)
                 criados.append(processo)
@@ -2941,39 +2930,6 @@ class ProcessStepViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         super().perform_update(serializer)
 
 
-class EvidenciaViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
-    """O achado com forma e rótulo (FDD 039) — a distinção entre observado e suposto."""
-
-    resource = "evidencia"
-    queryset = Evidencia.objects.select_related(
-        "process", "process__account", "step", "source_meeting", "registered_by"
-    ).all()
-    serializer_class = EvidenciaSerializer
-    filter_fields = ("process", "step")
-    filter_field_aliases = {"process": "processo", "step": "etapa"}
-    # `rotulo` e `forma` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
-    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?rotulo=fato`
-    # cairia no chão sem erro nenhum — a lista voltaria inteira, com hipótese junto de fato, que é
-    # exatamente a mistura que esta fatia existe para desfazer.
-    filter_exact_fields = ("rotulo", "forma")
-
-    def get_queryset(self):  # type: ignore[no-untyped-def]
-        queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "process__account__projects")
-        return queryset.filter(scope).distinct() if scope else queryset
-
-    def perform_create(self, serializer: EvidenciaSerializer) -> None:
-        processo = serializer.validated_data.get("process")
-        _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
-        serializer.save(registered_by=self.request.user)
-
-    def perform_update(self, serializer: EvidenciaSerializer) -> None:
-        if "process" in serializer.validated_data:
-            processo = serializer.validated_data.get("process")
-            _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
-        super().perform_update(serializer)
-
-
 # `outcome` da avaliação → `status` do lead. O mapa é explícito porque as duas escalas existiam
 # antes uma da outra: `nurture` cai em "contatado" (o lead segue no radar, sem decisão tomada) e
 # não em "qualificado", que afirmaria uma venda que ninguém abriu.
@@ -3071,9 +3027,9 @@ class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     ).all()
     serializer_class = EvidenceSerializer
     filter_fields = ("account", "discovery", "process", "step", "source_session")
-    # `kind` em `filter_exact_fields` pelo motivo do `rotulo` na `EvidenciaViewSet`: o teste de
-    # dígito de `filter_fields` derrubaria `?kind=interview` no chão sem erro nenhum, e a lista
-    # voltaria inteira.
+    # `kind` em `filter_exact_fields`, e não em `filter_fields`: o teste de dígito de
+    # `filter_fields` derrubaria `?kind=interview` no chão sem erro nenhum, e a lista voltaria
+    # inteira.
     filter_exact_fields = ("kind",)
 
     def get_queryset(self):  # type: ignore[no-untyped-def]

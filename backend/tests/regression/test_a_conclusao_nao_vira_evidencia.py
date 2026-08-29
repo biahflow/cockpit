@@ -11,10 +11,9 @@ string. O que impede é a decisão de que a `Evidence` da extração carrega **o
 reunião** e nada mais: o modelo não devolve o trecho que gerou o achado, e inventar um seria
 afirmar que alguém disse aquilo com aquelas palavras.
 
-A segunda metade é a invariante §6.8 do language map, agora do lado novo: `Finding` criado por
-extração nasce `hypothesis`. A regra já é guardada para a `Evidencia` legada em
-`test_a_extracao_nasce_hipotese.py`; sem esta cópia, o dia em que o produto passar a ler o
-`Finding` traria a regra de volta a zero.
+A segunda metade é a invariante §6.8 do language map: `Finding` criado por extração nasce
+`hypothesis`. A regra é guardada em `test_a_extracao_nasce_hipotese.py` pelo lado do custo; esta
+cópia a trava pelo lado do dado — o achado extraído nunca nasce fato, e nunca sem fonte.
 """
 
 import json
@@ -26,7 +25,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai
-from apps.core.models import Evidence, Evidencia, Finding, Meeting, User
+from apps.core.models import Evidence, Finding, Meeting, User
 from apps.core.tests.factories import ProjectFactory, ProjectMemberFactory, UserFactory
 
 #: O modelo dizendo o contrário do que a casa impõe, como no teste irmão da FDD 039.
@@ -92,17 +91,3 @@ def test_o_finding_extraido_nasce_hipotese_e_ligado_a_evidencia(
     assert all(list(a.evidences.all()) == [evidencia] for a in achados)
     assert evidencia.kind == Evidence.Kind.INTERVIEW
     assert evidencia.source_meeting_id == reuniao.pk
-
-
-@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
-def test_o_par_novo_aponta_para_a_linha_legada_de_onde_saiu(
-    api: APIClient, reuniao: Meeting
-) -> None:
-    """`legacy_evidencia` é o que permite descontinuar o legado depois sem perder o vínculo."""
-    api.post(reverse("meeting-estruturar", args=[reuniao.pk]))
-
-    legadas = {e.pk: e.content for e in Evidencia.objects.all()}
-    assert len(legadas) == 2
-    for achado in Finding.objects.all():
-        assert achado.legacy_evidencia_id in legadas
-        assert legadas[achado.legacy_evidencia_id] == achado.statement

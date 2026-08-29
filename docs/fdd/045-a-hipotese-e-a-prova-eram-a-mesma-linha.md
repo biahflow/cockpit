@@ -205,27 +205,28 @@ Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e a
 - `apps/core/tests/test_evidence_finding.py` — as duas metades da invariante §6.9 na criação e na
   promoção, a recusa 409 do arquivamento com as suas três metades simétricas (penúltima evidência,
   hipótese, achado já arquivado), as transições, o par trecho/localizador, o hash, as datas do
-  Discovery, a sessão de outro projeto, o mesmo processo em dois Discoveries, a fronteira de conta
-  nas quatro pontas (com controle positivo em cada uma) e o comando de reconciliação.
+  Discovery, a sessão de outro projeto, o mesmo processo em dois Discoveries e a fronteira de conta
+  nas quatro pontas (com controle positivo em cada uma). (A seção do comando de reconciliação saiu
+  na Fase 6, junto com o comando — ver a emenda no fim.)
 - `tests/regression/test_a_conclusao_nao_vira_evidencia.py` — a fusão não volta pela extração: o
   achado vai para `Finding.statement`, a `Evidence` fica com o localizador, e o `Finding` nasce
   `hypothesis` ligado a ela.
-- `tests/regression/test_o_dual_write_nao_muda_o_custo.py` — os dois lados são gravados, a resposta
-  da action não muda de forma, e quem sustenta o número continua sendo a `Evidencia` legada.
-- `tests/regression/test_backfill_do_split_preserva_o_legado.py` — a função da migração rodada
-  sobre dados reais: as cinco formas e os três rótulos um a um, a aproximação de revisão, as
-  arquivadas com o carimbo, o legado intacto, a idempotência e a reversa que só apaga o migrado.
+- `tests/regression/test_o_fato_do_split_sustenta_o_custo.py` — **desde a Fase 6** (era
+  `test_o_dual_write_nao_muda_o_custo.py`, invertido): a extração grava só o par do split, e promover
+  o `Finding` a fato move a sustentação do custo. O `test_backfill_do_split_preserva_o_legado.py`
+  saiu com a `Evidencia`, cujo model ele exercitava.
 
 ## Fora deste recorte
 
-- **Tela.** Nenhuma. O dual-write mantém `ProcessDetailPage` e `AccountDetailPage` funcionando
-  sobre o modelo legado; tela de Discovery e painel de achados são interface nova e exigem Design
-  Approval Package, que não existe. Entraram só os tipos em `frontend/src/types.ts`, sem consumidor,
-  para a próxima fatia não começar do zero.
+- **Tela.** Nenhuma *nesta fatia*. O dual-write mantinha `ProcessDetailPage` e `AccountDetailPage`
+  funcionando sobre o modelo legado; a **Fase 6 migrou `ProcessDetailPage` para o split** (lista e
+  promove `Finding`/`Evidence`) — ver a emenda. Tela de Discovery e painel de achados dedicado
+  seguem sendo interface nova, com Design Approval Package pendente.
 - **`Engagement`.** A issue original cita `discovery.engagement`, e o modelo **não existe ainda** —
   ele é a Fase 2 da ontologia. O campo é aditivo e entra lá.
-- **Descontinuar a `Evidencia`.** É a fatia seguinte, e ela começa por trocar a fonte de
-  `process.custo_do_estado_atual`.
+- **Descontinuar a `Evidencia`.** Era a fatia seguinte, e a **Fase 6 (issue #70) a executou** —
+  trocou a fonte de `process.custo_do_estado_atual` para o `Finding(fact)` e removeu o modelo. Ver a
+  emenda no fim.
 - **Renomear `Processo`/`ProcessoEtapa`/`Evidencia`.** Era "fora deste recorte" quando esta FDD
   foi escrita, e a issue #67 (ADR 0052) pagou os dois primeiros: `Processo`/`ProcessoEtapa` viraram
   `Process`/`ProcessStep` na fatia 4, em 28/08/2026, junto de `Client`→`Account` na fatia 2. As
@@ -235,3 +236,30 @@ Comparar com o banco para saber "mudou?" custaria uma leitura por gravação e a
   `step`) apontando para o modelo legado; depois da #67 esses campos apontam para a classe de nome
   certo.
 - **`PainPoint`, `ImprovementOpportunity`, `PriorityAssessment`, `SolutionHypothesis`.** Fase 4.
+
+## Emenda — Fase 6 (issue #70): o dual-write e a `Evidencia` saíram
+
+O dual-write existia para uma coisa só: manter o custo do estado atual e a tela funcionando
+enquanto o split crescia ao lado. A Fase 6 (ADR 0052, migração `0068`) tirou os dois leitores do
+legado e apagou a `Evidencia`.
+
+- **A fonte da sustentação virou o `Finding`.** `process.custo_do_estado_atual` lê
+  `processo.findings.filter(archived_at__isnull=True, epistemic_status=fact)` no lugar de
+  `Evidencia(rotulo=fato)`. A consequência é a que o split existe para produzir: promover um
+  `Finding` a fato — ato que exige revisor e evidência viva (§6.9) — passa a mover a sustentação,
+  porque agora é o mesmo registro que a tela promove e que o custo consulta. A regressão que
+  travava a fonte no legado (`test_o_dual_write_nao_muda_o_custo.py`) foi **invertida** e renomeada
+  para `test_o_fato_do_split_sustenta_o_custo.py`.
+- **`MeetingViewSet.estruturar` grava só o par do split.** A terceira gravação (a `Evidencia`
+  fundida) saiu; sobram uma `Evidence` por processo e um `Finding` por achado, ligados.
+- **`ProcessDetailPage` migrou para o split.** Lista `Finding`s, cria o par `Evidence`+`Finding`
+  num formulário (trecho da fonte + conclusão, dois campos porque são dois fatos), e "Promover a
+  fato" manda `epistemic_status=fact` com o revisor autenticado. É um port fiel mínimo, marcado
+  para revisão de DAP.
+- **Arquivar o processo não arquiva mais os achados.** `Evidence`/`Finding` são ancorados na conta
+  (`process` é `SET_NULL`), não filhos do processo como a `Evidencia` `CASCADE` era; um achado é uma
+  afirmação sobre a operação do cliente e sobrevive ao arquivamento do mapa que o citava.
+- **Sem perda de dado, com gate de reconciliação.** O backfill da `0054` já traduzira cada
+  `Evidencia`; `legacy_evidencia` e o comando `reconciliar_evidence_finding` saíram junto. Rodar
+  esse comando na base alvo (`"Split reconciliado: todo legado tem par"`) e ter backup restaurável
+  é o gate de pré-deploy que a issue #70 fixa, registrado na docstring da migração `0068`.

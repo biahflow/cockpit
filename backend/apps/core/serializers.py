@@ -40,7 +40,6 @@ from .models import (
     Engagement,
     EngineeringHandoff,
     Evidence,
-    Evidencia,
     FeasibilityAssessment,
     Finding,
     GithubDeliveryProjection,
@@ -953,54 +952,6 @@ class ProcessStepSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Pro
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-class EvidenciaSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Evidencia]):
-    """O achado com a forma de onde veio e o rótulo que a metodologia exige (`:112-117`).
-
-    `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
-    corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
-    por quem não escolheu, sempre para o mesmo lado — chamar de fato o que ninguém confirmou.
-    """
-
-    ALIASES_DE_ENTRADA = {"processo": "process", "etapa": "step"}
-
-    forma_display = serializers.CharField(source="get_forma_display", read_only=True)
-    rotulo_display = serializers.CharField(source="get_rotulo_display", read_only=True)
-    # Aliases de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): as chaves antigas saem
-    # com o mesmo valor das canônicas e morrem na `/api/v2/`. A escrita vem do
-    # `AliasDeEntradaMixin`. A classe continua se chamando `Evidencia` — ela não é renome, é a
-    # metade legada do split que a Fase 6 remove com o dual-write —, mas os **campos** dela
-    # passaram a `process` e `step` na fatia 4 da issue #67.
-    processo = serializers.PrimaryKeyRelatedField(source="process", read_only=True)
-    etapa = serializers.PrimaryKeyRelatedField(source="step", read_only=True)
-
-    class Meta:
-        model = Evidencia
-        fields = ["id", "process", "processo", "step", "etapa", "forma", "forma_display",
-                  "rotulo", "rotulo_display", "content", "source_meeting", "registered_by",
-                  "created_at", "updated_at"]
-        read_only_fields = ["id", "forma_display", "rotulo_display", "registered_by", "created_at",
-                            "updated_at"]
-
-    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
-        """A mesma regra do `clean()` do modelo, repetida aqui pelo motivo da `Satisfacao` acima.
-
-        Sem ela o `save()` do DRF não chama `full_clean`, e a evidência apontando para a etapa de
-        **outro cliente** seria gravada em silêncio — a guarda do modelo só valeria para quem
-        passasse pelo admin ou pelo shell.
-        """
-        processo = cast(
-            Process | None, attrs.get("process", getattr(self.instance, "process", None))
-        )
-        etapa = cast(
-            ProcessStep | None, attrs.get("step", getattr(self.instance, "step", None))
-        )
-        if etapa and processo and etapa.process_id != processo.id:
-            raise serializers.ValidationError(
-                {"step": "A etapa deve pertencer ao mesmo processo."}
-            )
-        return attrs
-
-
 class DiscoverySerializer(serializers.ModelSerializer[Discovery]):
     """O Discovery como unidade de levantamento (FDD 045).
 
@@ -1092,11 +1043,9 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
     """O dado bruto que sustenta um achado (FDD 045).
 
     `content_hash` é só de leitura e sai do `save()` do modelo: um carimbo de integridade que o
-    corpo da requisição pudesse escrever não carimbaria nada. `legacy_evidencia` também, porque é
-    marca de backfill — quem cria pela API não veio do modelo fundido.
+    corpo da requisição pudesse escrever não carimbaria nada.
 
-    `captured_by` sai da sessão, como `registered_by` na `Evidencia`: quem observou tem nome, e o
-    nome é o de quem está autenticado.
+    `captured_by` sai da sessão: quem observou tem nome, e o nome é o de quem está autenticado.
     """
 
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
@@ -1105,10 +1054,9 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
         model = Evidence
         fields = ["id", "account", "discovery", "process", "step", "kind", "kind_display",
                   "raw_excerpt", "reference", "source_session", "source_meeting", "captured_at",
-                  "captured_by", "content_hash", "legacy_evidencia", "created_at",
-                  "updated_at"]
+                  "captured_by", "content_hash", "created_at", "updated_at"]
         read_only_fields = ["id", "kind_display", "captured_by", "content_hash",
-                            "legacy_evidencia", "created_at", "updated_at"]
+                            "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """A mesma regra do `clean()` do modelo — o `save()` do DRF não chama `full_clean`."""
@@ -1180,8 +1128,8 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
         model = Finding
         fields = ["id", "account", "process", "step", "statement", "epistemic_status",
                   "epistemic_status_display", "confidence", "reviewed_by", "reviewed_at",
-                  "evidences", "legacy_evidencia", "created_at", "updated_at"]
-        read_only_fields = ["id", "epistemic_status_display", "reviewed_at", "legacy_evidencia",
+                  "evidences", "created_at", "updated_at"]
+        read_only_fields = ["id", "epistemic_status_display", "reviewed_at",
                             "created_at", "updated_at"]
 
     def validate_epistemic_status(self, value: str) -> str:

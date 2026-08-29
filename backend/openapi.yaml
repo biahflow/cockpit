@@ -3601,181 +3601,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
-  /api/v1/evidencias/:
-    get:
-      operationId: v1_evidencias_list
-      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
-        e suposto.
-      tags:
-      - v1
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Evidencia'
-          description: ''
-    post:
-      operationId: v1_evidencias_create
-      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
-        e suposto.
-      tags:
-      - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Evidencia'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Evidencia'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Evidencia'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Evidencia'
-          description: ''
-  /api/v1/evidencias/{id}/:
-    get:
-      operationId: v1_evidencias_retrieve
-      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
-        e suposto.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Um valor inteiro único que identifica este evidencia.
-        required: true
-      tags:
-      - v1
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Evidencia'
-          description: ''
-    put:
-      operationId: v1_evidencias_update
-      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
-        e suposto.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Um valor inteiro único que identifica este evidencia.
-        required: true
-      tags:
-      - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Evidencia'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Evidencia'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Evidencia'
-        required: true
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Evidencia'
-          description: ''
-    patch:
-      operationId: v1_evidencias_partial_update
-      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
-        e suposto.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Um valor inteiro único que identifica este evidencia.
-        required: true
-      tags:
-      - v1
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedEvidencia'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedEvidencia'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedEvidencia'
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Evidencia'
-          description: ''
-    delete:
-      operationId: v1_evidencias_destroy
-      description: O achado com forma e rótulo (FDD 039) — a distinção entre observado
-        e suposto.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Um valor inteiro único que identifica este evidencia.
-        required: true
-      tags:
-      - v1
-      security:
-      - cookieAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/v1/evidencias/{id}/unarchive/:
-    post:
-      operationId: v1_evidencias_unarchive_create
-      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Um valor inteiro único que identifica este evidencia.
-        required: true
-      tags:
-      - v1
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Unarchived'
-          description: ''
   /api/v1/feasibility-assessments/:
     get:
       operationId: v1_feasibility_assessments_list
@@ -6563,12 +6388,13 @@ paths:
         silêncio**, e um duplo clique bastaria. Recusar com 409 é dizer qual é o estado que impede
         e como sair dele, que é para o que o `StateConflict` existe.
 
-        **Desde a FDD 045 a gravação é dupla, e a forma da resposta não muda.** Além de
-        `Process`/`ProcessStep`/`Evidencia`, a mesma transação escreve o par do split: uma
-        `Evidence` por processo, que diz de onde o achado veio, e um `Finding` por achado, que diz
-        o que ele afirma — sempre em `hypothesis`, pela mesma razão que a `Evidencia` nasce
-        `hipotese`. O legado continua porque o custo do estado atual e a tela ainda leem dele; a
-        resposta segue `{"processos": [...]}` e nenhuma tela precisou mudar.
+        **A gravação é do par do split, e a forma da resposta não muda.** Além de
+        `Process`/`ProcessStep`, a mesma transação escreve uma `Evidence` por processo, que diz de
+        onde o achado veio, e um `Finding` por achado, que diz o que ele afirma — sempre em
+        `hypothesis`, porque o modelo produz o que foi dito, não prova. Até a Fase 6 (ADR 0052)
+        havia também a `Evidencia` fundida; com o legado removido e o custo do estado atual lendo o
+        `Finding`, sobra o par canônico. A resposta segue `{"processos": [...]}` e nenhuma tela
+        precisou mudar por causa disso.
       parameters:
       - in: path
         name: id
@@ -13847,11 +13673,9 @@ components:
         O dado bruto que sustenta um achado (FDD 045).
 
         `content_hash` é só de leitura e sai do `save()` do modelo: um carimbo de integridade que o
-        corpo da requisição pudesse escrever não carimbaria nada. `legacy_evidencia` também, porque é
-        marca de backfill — quem cria pela API não veio do modelo fundido.
+        corpo da requisição pudesse escrever não carimbaria nada.
 
-        `captured_by` sai da sessão, como `registered_by` na `Evidencia`: quem observou tem nome, e o
-        nome é o de quem está autenticado.
+        `captured_by` sai da sessão: quem observou tem nome, e o nome é o de quem está autenticado.
       properties:
         id:
           type: integer
@@ -13893,10 +13717,6 @@ components:
         content_hash:
           type: string
           readOnly: true
-        legacy_evidencia:
-          type: integer
-          readOnly: true
-          nullable: true
         created_at:
           type: string
           format: date-time
@@ -13913,7 +13733,6 @@ components:
       - id
       - kind
       - kind_display
-      - legacy_evidencia
       - updated_at
     EvidenceKindEnum:
       enum:
@@ -13929,71 +13748,6 @@ components:
         * `artifact` - Artefato (planilha, PDF, croqui)
         * `system` - Sistema (ERP, CRM, CAD, WhatsApp)
         * `data` - Dado (volume, tempo, custo, erro)
-    Evidencia:
-      type: object
-      description: |-
-        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:112-117`).
-
-        `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
-        corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
-        por quem não escolheu, sempre para o mesmo lado — chamar de fato o que ninguém confirmou.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        process:
-          type: integer
-        processo:
-          type: integer
-          readOnly: true
-          deprecated: true
-        step:
-          type: integer
-          nullable: true
-        etapa:
-          type: integer
-          readOnly: true
-          deprecated: true
-        forma:
-          $ref: '#/components/schemas/FormaEnum'
-        forma_display:
-          type: string
-          readOnly: true
-        rotulo:
-          $ref: '#/components/schemas/RotuloEnum'
-        rotulo_display:
-          type: string
-          readOnly: true
-        content:
-          type: string
-        source_meeting:
-          type: integer
-          nullable: true
-        registered_by:
-          type: integer
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - content
-      - created_at
-      - etapa
-      - forma
-      - forma_display
-      - id
-      - process
-      - processo
-      - registered_by
-      - rotulo
-      - rotulo_display
-      - updated_at
     FeasibilityAssessment:
       type: object
       description: |-
@@ -14144,10 +13898,6 @@ components:
           type: array
           items:
             type: integer
-        legacy_evidencia:
-          type: integer
-          readOnly: true
-          nullable: true
         created_at:
           type: string
           format: date-time
@@ -14161,7 +13911,6 @@ components:
       - created_at
       - epistemic_status_display
       - id
-      - legacy_evidencia
       - reviewed_at
       - statement
       - updated_at
@@ -14173,20 +13922,6 @@ components:
       description: |-
         * `declarada` - Declarada pelo cliente
         * `percebida` - Percebida por quem entrega
-    FormaEnum:
-      enum:
-      - entrevista
-      - observacao
-      - artefato
-      - sistema
-      - dado
-      type: string
-      description: |-
-        * `entrevista` - Entrevista (o que dizem)
-        * `observacao` - Observação (o que fazem)
-        * `artefato` - Artefato (planilha, PDF, croqui)
-        * `sistema` - Sistema (ERP, CRM, CAD, WhatsApp)
-        * `dado` - Dado (volume, tempo, custo, erro)
     GateDecisionEnum:
       enum:
       - go
@@ -16474,11 +16209,9 @@ components:
         O dado bruto que sustenta um achado (FDD 045).
 
         `content_hash` é só de leitura e sai do `save()` do modelo: um carimbo de integridade que o
-        corpo da requisição pudesse escrever não carimbaria nada. `legacy_evidencia` também, porque é
-        marca de backfill — quem cria pela API não veio do modelo fundido.
+        corpo da requisição pudesse escrever não carimbaria nada.
 
-        `captured_by` sai da sessão, como `registered_by` na `Evidencia`: quem observou tem nome, e o
-        nome é o de quem está autenticado.
+        `captured_by` sai da sessão: quem observou tem nome, e o nome é o de quem está autenticado.
       properties:
         id:
           type: integer
@@ -16520,62 +16253,6 @@ components:
         content_hash:
           type: string
           readOnly: true
-        legacy_evidencia:
-          type: integer
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-    PatchedEvidencia:
-      type: object
-      description: |-
-        O achado com a forma de onde veio e o rótulo que a metodologia exige (`:112-117`).
-
-        `forma` e `rotulo` **não têm default** no modelo, e o serializer não inventa um: omiti-los no
-        corpo é erro de validação, e é o comportamento que se quer. Um default faria a casa escolher
-        por quem não escolheu, sempre para o mesmo lado — chamar de fato o que ninguém confirmou.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        process:
-          type: integer
-        processo:
-          type: integer
-          readOnly: true
-          deprecated: true
-        step:
-          type: integer
-          nullable: true
-        etapa:
-          type: integer
-          readOnly: true
-          deprecated: true
-        forma:
-          $ref: '#/components/schemas/FormaEnum'
-        forma_display:
-          type: string
-          readOnly: true
-        rotulo:
-          $ref: '#/components/schemas/RotuloEnum'
-        rotulo_display:
-          type: string
-          readOnly: true
-        content:
-          type: string
-        source_meeting:
-          type: integer
-          nullable: true
-        registered_by:
-          type: integer
-          readOnly: true
-          nullable: true
         created_at:
           type: string
           format: date-time
@@ -16699,10 +16376,6 @@ components:
           type: array
           items:
             type: integer
-        legacy_evidencia:
-          type: integer
-          readOnly: true
-          nullable: true
         created_at:
           type: string
           format: date-time
@@ -19766,16 +19439,6 @@ components:
         * `admin` - Administrador
         * `sales` - Vendas
         * `delivery` - Entrega
-    RotuloEnum:
-      enum:
-      - fato
-      - hipotese
-      - desconhecido
-      type: string
-      description: |-
-        * `fato` - Fato
-        * `hipotese` - Hipótese
-        * `desconhecido` - Desconhecido
     Satisfacao:
       type: object
       description: |-

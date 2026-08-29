@@ -19,7 +19,6 @@ from rest_framework.test import APIClient
 from apps.core import ai
 from apps.core.models import (
     Evidence,
-    Evidencia,
     Finding,
     Meeting,
     Process,
@@ -217,9 +216,11 @@ def test_a_extracao_grava_processos_etapas_e_achados(
     ]
     conferir = faturamento.steps.first()
     assert conferir is not None and conferir.tempo == "Dois dias"
-    assert faturamento.evidencias.count() == 2
+    # Um `Finding` por achado, e uma `Evidence` por processo (de onde os achados vieram).
+    assert faturamento.findings.count() == 2
+    assert faturamento.evidence.count() == 1
     assert ProcessStep.objects.count() == 2
-    assert Evidencia.objects.count() == 2
+    assert Finding.objects.count() == 2
 
 
 @pytest.mark.django_db
@@ -243,14 +244,18 @@ def test_todo_achado_nasce_hipotese_vinda_de_entrevista(
     resposta = api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
     assert resposta.status_code == 200, resposta.data
-    achados = list(Evidencia.objects.all())
+    achados = list(Finding.objects.all())
     assert len(achados) == 2
-    assert {a.rotulo for a in achados} == {Evidencia.Rotulo.HIPOTESE}
-    assert {a.forma for a in achados} == {Evidencia.Forma.ENTREVISTA}
+    assert {a.epistemic_status for a in achados} == {Finding.EpistemicStatus.HYPOTHESIS}
     # E o achado fica no processo, não na etapa: vínculo errado é pior que vínculo nenhum.
     assert all(a.step_id is None for a in achados)
-    assert all(a.source_meeting_id == meeting.pk for a in achados)
-    assert all(a.registered_by_id == delivery.pk for a in achados)
+    # A forma de onde o achado veio mora na `Evidence` do split — entrevista, uma por processo —,
+    # e é o autuado da sessão que a captura.
+    evidencia = Evidence.objects.get()
+    assert evidencia.kind == Evidence.Kind.INTERVIEW
+    assert evidencia.source_meeting_id == meeting.pk
+    assert evidencia.captured_by_id == delivery.pk
+    assert all(list(a.evidences.all()) == [evidencia] for a in achados)
 
 
 @pytest.mark.django_db
@@ -285,7 +290,7 @@ def test_resposta_inutilizavel_nao_grava_nada_e_diz_isso(
 
     assert resposta.status_code == 502
     assert Process.objects.count() == 0
-    assert Evidencia.objects.count() == 0
+    assert Finding.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -323,7 +328,7 @@ def test_a_segunda_extracao_e_recusada_com_409(
     assert resposta.status_code == 409
     assert "2" in resposta.json()["detail"]  # diz **quantos**, e não só que já houve
     assert Process.objects.count() == 2
-    assert Evidencia.objects.count() == 2
+    assert Finding.objects.count() == 2
 
 
 @pytest.mark.django_db
@@ -382,18 +387,16 @@ def test_falha_no_meio_nao_deixa_nada_para_tras(
     def explode(*args: object, **kwargs: object) -> None:
         raise RuntimeError("banco fora do ar no meio da gravação")
 
-    # `create` e não `bulk_create`: desde o dual-write da FDD 045 a evidência legada é gravada
-    # linha a linha, porque o `Finding` novo precisa da chave dela em `legacy_evidencia`.
-    monkeypatch.setattr(Evidencia.objects, "create", explode)
+    # Estoura na gravação do achado, no meio da transação: o `Finding` é criado por processo, e
+    # se a transação não cobrisse tudo um `Process` sem achado sobreviveria à falha.
+    monkeypatch.setattr(Finding.objects, "create", explode)
 
     with pytest.raises(RuntimeError):
         api.post(reverse("meeting-estruturar", args=[meeting.pk]))
 
+    # A transação cobre o mapa inteiro: nada do processo, da etapa nem do par do split sobrevive.
     assert Process.objects.count() == 0
     assert ProcessStep.objects.count() == 0
-    assert Evidencia.objects.count() == 0
-    # A transação cobre os dois lados da gravação dupla: um `Finding` sobrevivente descreveria um
-    # processo que não existe mais.
     assert Evidence.objects.count() == 0
     assert Finding.objects.count() == 0
 

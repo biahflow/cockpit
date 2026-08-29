@@ -29,7 +29,7 @@ from decimal import Decimal
 import pytest
 
 from apps.core import portal
-from apps.core.models import Evidencia, Process, ProcessStep
+from apps.core.models import Finding, Process, ProcessStep
 from apps.core.tests.factories import ProjectFactory
 
 pytestmark = pytest.mark.django_db
@@ -77,12 +77,12 @@ def projeto_com_discovery():  # type: ignore[no-untyped-def]
         erro="Pedido faturado com preço desatualizado",
         retrabalho="Nota cancelada e reemitida no dia seguinte",
     )
-    Evidencia.objects.create(
+    Finding.objects.create(
+        account=project.client,
         process=processo,
         step=etapa,
-        forma=Evidencia.Forma.ENTREVISTA,
-        rotulo=Evidencia.Rotulo.HIPOTESE,
-        content="Suspeita nossa: o time do cliente não confere o preço antes de faturar.",
+        epistemic_status=Finding.EpistemicStatus.HYPOTHESIS,
+        statement="Suspeita nossa: o time do cliente não confere o preço antes de faturar.",
     )
     return project
 
@@ -92,6 +92,8 @@ def test_o_snapshot_nao_carrega_processo_etapa_nem_evidencia(projeto_com_discove
 
     assert "processos" not in snapshot
     assert "evidencias" not in snapshot
+    assert "findings" not in snapshot
+    assert "evidence" not in snapshot
     serializado = json.dumps(snapshot, default=str).lower()
     for palavra in PROIBIDOS:
         assert palavra not in serializado, f"'{palavra}' vazou para o snapshot do cliente"
