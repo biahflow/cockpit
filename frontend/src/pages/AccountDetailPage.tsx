@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, Briefcase, Coins, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, getConfig } from "../api";
@@ -474,7 +474,13 @@ export function AccountDetailPage({ id }: { id: number }) {
         desta página não são tocadas por esta entrega, e o pacote é explícito quanto a isso. E não
         entra no menu lateral: a priorização é sempre de uma conta, e um item de menu que abre
         pedindo "qual conta?" é um beco. */}
-    <a className="btn btn--secondary" href={`/contas/${id}/priorizacao`}><Target className="size-4" />Abrir a priorização</a>
+    <div className="flex flex-wrap gap-2">
+      <a className="btn btn--secondary" href={`/contas/${id}/priorizacao`}><Target className="size-4" />Abrir a priorização</a>
+      {/* A porta do Value Ledger (DAP `dap-prove-e-valor-r1`, decisão **D1**) — ao lado da
+          priorização, pelo mesmo motivo: valor é sempre de uma conta, e nenhum dos dois entra no
+          menu lateral. */}
+      <a className="btn btn--secondary" href={`/contas/${id}/valor`}><Coins className="size-4" />Abrir o valor gerado</a>
+    </div>
 
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
       <form className="panel space-y-4 sm:p-6" onSubmit={event => void saveClient(event)} data-testid="client-form">

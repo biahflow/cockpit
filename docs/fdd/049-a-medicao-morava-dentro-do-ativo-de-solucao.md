@@ -303,14 +303,8 @@ resolvido.
 
 ## Fora deste recorte
 
-- **Tela.** Nenhuma nesta fatia. A superfície tem DAP aprovado
-  (`docs/design/dap-prove-e-valor-r1/`, decisões **A1 · B1 · C1 · D1 · E1**) e vem na seguinte; no
-  recorte do backend entraram só os tipos em `frontend/src/types.ts`, sem consumidor, como a Fase 3
-  e a Fase 4 fizeram.
-- **A remoção dos dois campos do formulário do Time Digital.** A decisão C1 está paga no
-  **servidor** — a escrita deixou de ter efeito —, e a remoção dos `<input>` de
-  `ProjectDetailPage.tsx` é da fatia da tela. Enquanto isso, o formulário envia dois campos que o
-  servidor ignora: é um estado transitório e escrito, não um esquecimento.
+- ~~**Tela.**~~ e ~~**A remoção dos dois campos do formulário do Time Digital.**~~ — as duas saíram
+  deste recorte na emenda de 29/08 abaixo, que é a fatia da superfície.
 - **`Case` derivado de Outcomes aprovados.** O DAP o marcou como **reservado**: `cases.freeze`
   continua congelando como hoje, só lendo de outro lugar.
 - **O One.** `portal.build_snapshot` não muda, e `kpi_value`, `kpi_label`, `kpi_unit`,
@@ -324,3 +318,59 @@ resolvido.
 - Nada de Fase 6: nem `Evidencia`, nem dual-write, nem `db_table`, nem `Project.client`.
 - **Renomear tabela.** Não se aplica: os cinco nascem com o nome canônico, e por isso nenhum leva
   `Meta.db_table` — esse é o instrumento de quem renomeia modelo existente (ADR 0052).
+
+## Emenda de 29/08 — a superfície
+
+A fatia do backend acima deixou a tela fora do recorte, de propósito, e ela é esta emenda. O que
+foi construído é o DAP `docs/design/dap-prove-e-valor-r1/`, revisão 1, decisões
+**A1 · B1 · C1 · D1 · E1** — o pacote aprovado é a especificação, e mudar a superfície exige
+revisão nova dele.
+
+- **Dois painéis em `ProjectDetailPage`, logo abaixo da Jornada** (A1), visíveis só quando a
+  jornada do projeto tem a fase canônica correspondente (`canonical_stage` ∈
+  `feasibility`/`prove`). Um projeto de Discovery Sprint não mostra painel de PROVE — e a condição
+  também poupa as requisições, porque não há laudo a buscar onde não há gate de Feasibility.
+- **A linha do KPI é `Baseline → Outcome · variação`** (B1), com o histórico completo de
+  `Measurement` num `<details>` colapsado, e a unidade na linha e não no cabeçalho — a comparação
+  só é legítima com mesma unidade e mesmo método. **KPI sem baseline mostra `— → 68` com a variação
+  vazia, e sem medição nenhuma mostra `— → —`. Nunca `0`.** A variação também não existe quando a
+  baseline é zero: de zero não se calcula variação percentual, e um `∞` ali seria pior que a
+  lacuna.
+- **O formulário do Time Digital perdeu "Antes (base)" e "Depois (atual)"** (C1), o `PATCH` parou
+  de enviá-los e a action `from-blueprint` parou de enviar `kpi_baseline`. O painel passou a
+  mostrar, só-leitura, o KPI que o ativo **referencia** e a última medição, com link para o PROVE.
+  O servidor já ignorava as três chaves desde a ADR 0055 — e é exatamente por isso que a metade de
+  cliente precisa de teste: campo morto que o servidor aceita em silêncio não deixa nada vermelho,
+  e a próxima pessoa a ler a tela concluiria que ela ainda escreve a medição.
+- **A tela `/contas/:id/valor`** (D1), simétrica a `/contas/:id/priorizacao` e **fora do menu
+  lateral**: valor é sempre de uma conta. Total em `.metric-card` somando **só o aprovado**, com a
+  linha do que ficou de fora; montante não apurado é `—` e nunca `R$ 0`. O ledger é lido **por
+  mandato** — uma chamada por `Engagement`, porque a rota não expõe filtro por conta, e um `GET`
+  sem filtro traria justamente o consolidado entre contas que o DAP reservou.
+- **O início do PROVE bloqueia** (E1): botão desabilitado, as três pastilhas `Pronto`/`Falta`
+  (KPI · critério de sucesso · baseline) e a saída "registrar lacuna aprovada", que pede quem
+  aprovou e por quê. **A lista vem de `missing_to_start`**, que o servidor deriva da mesma
+  `prove.o_que_falta_para_iniciar` que a action `start/` usa para recusar — reexpressar a regra no
+  cliente habilitaria o botão de um `POST` que o servidor nega, sem nada ficar vermelho.
+
+**A decisão de gate aparece como decisão, ao lado do resultado e nunca no lugar dele**
+(`language-map` §6.3): é a mesma pílula da Jornada, com o mesmo `gateVariant` e o mesmo
+`GATE_DECISION_LABEL` de `journey.ts` — um segundo mapa divergiria do primeiro em silêncio.
+
+**Três divergências conscientes do board**, todas por o dado não existir no contrato:
+
+1. o board nomeia o experimento (*PROVE "Triagem de Tickets N1"*) e `ProveExperiment` **não tem
+   `name`**; a tela identifica o experimento pela janela e pelo escopo controlado, e o link "Ver no
+   PROVE" é âncora para o painel;
+2. o board escreve as horas como `4h20` e `Measurement.value` é decimal — formatar duração seria
+   inventar uma segunda definição de "quanto é 0,33 h", então o número sai na régua pt-BR com a
+   unidade ao lado;
+3. o board oferece "Ver evidências" no laudo e **não existe tela de evidências**; a linha mostra a
+   contagem, porque link para lugar nenhum é pior que a ausência dele.
+
+Testes: `frontend/src/pages/ProjectDetailProve.test.tsx` (os dois painéis, a lacuna que nunca vira
+zero, as três pastilhas, a lacuna aprovada que exige autor, o histórico colapsado e o recorte de
+quem só lê), `frontend/src/pages/ValorPage.test.tsx` (o total que ignora o não aprovado, o `—` do
+montante não apurado, o Outcome citado pelo nome do KPI) e, em
+`frontend/src/pages/ProjectDetailPage.test.tsx`, a metade de cliente da C1. As duas superfícies
+entraram em `frontend/e2e/matrix.ts` — axe e ausência de rolagem horizontal nas três larguras.

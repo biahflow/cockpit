@@ -277,6 +277,21 @@ Key cross-cutting patterns to preserve:
   invariantes §6.11 e §6.12, testáveis pela primeira vez. Ela pende de `Engagement` e **fica fora
   de `PROJECT_OF`** (o `project` é opcional, e o mandato não é fronteira de acesso): a visibilidade
   deriva de `Project.objects.visible_to`, como a do próprio `Engagement`.
+- **A superfície da Fase 5 é governada pelo DAP `docs/design/dap-prove-e-valor-r1/`**, r1, decisões
+  **A1 · B1 · C1 · D1 · E1** — mudar exige revisão nova do pacote, não julgamento na hora. Os dois
+  painéis (**Technical Feasibility** e **PROVE**) ficam em `ProjectDetailPage`, logo abaixo da
+  Jornada, e existem **só onde a fase canônica existe**: um projeto de Discovery Sprint não mostra
+  painel de PROVE. A linha do KPI é `Baseline → Outcome · variação`, com o histórico num
+  `<details>`, e **a lacuna é `—`, nunca `0`** — inclusive quando a baseline é zero, de onde não se
+  calcula variação. As três pastilhas `Pronto`/`Falta` saem de `missing_to_start`, e **a tela nunca
+  reexpressa a invariante**: recalculá-la habilitaria o botão de um `POST` que o servidor nega, sem
+  nada ficar vermelho. A decisão de gate aparece **como decisão, ao lado do resultado**
+  (`language-map` §6.3), com o `GATE_DECISION_LABEL`/`gateVariant` que a Jornada já usa — nunca um
+  mapa novo. O formulário do Time Digital **perdeu** "Antes (base)" e "Depois (atual)" (C1) e o
+  painel passou a só ler o KPI referenciado. O Value Ledger é a tela `/contas/:id/valor`, simétrica
+  a `/contas/:id/priorizacao`, **fora do menu lateral** e lida **por mandato** (uma chamada por
+  `Engagement`; sem filtro, a rota traria o consolidado entre contas que o DAP reservou). Ficam
+  reservados no pacote: gráfico de série do KPI, `Case` derivado de Outcomes e ledger consolidado.
 - **Os renomes da ontologia estão em curso, e "renome" são três coisas com prazos distintos**
   (ADR 0052, issue #67). O nome da **classe** — e de tudo que a nomeia: serializer, viewset,
   `resource`, campo FK, tipo TS — muda **agora**, uma fatia por PR. O nome da **tabela** fica para

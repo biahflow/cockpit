@@ -21,6 +21,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/contas/1", name: "Detalhe da conta", role: "admin" },
   { path: "/contas/1/processos/1", name: "Processo mapeado", role: "admin" },
   { path: "/contas/1/priorizacao", name: "Priorização", role: "admin" },
+  { path: "/contas/1/valor", name: "Valor gerado", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
@@ -164,6 +165,18 @@ const saude = serie(8, index => ({
 }));
 
 /** Rotas exatas → resposta. O que não casar cai no default por método (lista vazia). */
+/** As leituras de cada KPI. O 22 **não tem baseline**: é o `—` que nunca pode virar `0`. */
+const MEDICOES_POR_KPI: Record<string, unknown[]> = {
+  "21": [
+    { id: 30, kpi: 21, kind: "baseline", kind_display: "Baseline", value: "260.00", measured_at: "2026-07-03T10:00:00Z" },
+    { id: 32, kpi: 21, kind: "outcome", kind_display: "Outcome", value: "85.00", measured_at: "2026-07-17T10:00:00Z" },
+    { id: 31, kpi: 21, kind: "outcome", kind_display: "Outcome", value: "65.00", measured_at: "2026-07-24T10:00:00Z" },
+  ],
+  "22": [
+    { id: 33, kpi: 22, kind: "outcome", kind_display: "Outcome", value: "68.00", measured_at: "2026-07-24T10:00:00Z" },
+  ],
+};
+
 const FIXTURES: Record<string, unknown> = {
   "/api/v1/auth/csrf/": { csrfToken: "test" },
   // As sete flags que `flags.FLAGS` serve, e **com `missing`** — o campo nasceu na ADR 0018, a
@@ -463,6 +476,72 @@ const FIXTURES: Record<string, unknown> = {
     improvement_opportunity: 1, intervention: "", assumptions: "", expected_effect: "",
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
+  // Feasibility, PROVE, KPI/medição e Value Ledger (FDD 049), nas superfícies que o DAP
+  // `dap-prove-e-valor-r1` aprovou. **Uma linha de cada combinação que a tela sabe desenhar**: os
+  // três vereditos do laudo, o experimento planejado com dois dos três requisitos faltando (as
+  // pastilhas `Pronto`/`Falta` e o botão desabilitado), o KPI com o par completo e o **sem
+  // baseline** — que é o `— → 65` com a variação vazia, o estado que o pacote inteiro existe para
+  // preservar. Sem ele o axe mediria só a metade bonita da tela.
+  "/api/v1/feasibility-assessments/": [{
+    id: 1, solution_hypothesis: 1, project: 1,
+    technical_verdict: "favorable", technical_verdict_display: "Favorável",
+    technical_note: "A integração com o CRM sustenta o volume de pico sem timeout em 93% das chamadas simuladas.",
+    operational_verdict: "caveat", operational_verdict_display: "Com ressalva",
+    operational_note: "O time de N1 precisa de um fallback humano para tickets ambíguos — sem ele, a fila trava.",
+    economic_verdict: "unfavorable", economic_verdict_display: "Desfavorável",
+    economic_note: "O custo de inferência por ticket ainda supera o custo humano equivalente na mesma tarefa.",
+    sample: "312 tickets analisados na simulação de 15 dias corridos.",
+    error_classes: "Classificação incorreta em tickets ambíguos (7%) · timeout de integração em picos (3%).",
+    evidence: [1, 2, 3], gate_decision: "conditional_go", gate_decision_display: "CONDITIONAL GO",
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  }],
+  "/api/v1/prove-experiments/": [{
+    id: 9, solution_hypothesis: 1, project: 1,
+    controlled_scope: "Rotear tickets do time de Suporte N1 durante o expediente comercial, com fallback humano automático.",
+    started_at: null, ended_at: null, success_criteria: "",
+    status: "planned", status_display: "Planejado",
+    gate_decision: "", gate_decision_display: "",
+    gap_waiver: "", gap_waiver_by: null, gap_waiver_at: null,
+    missing_to_start: ["success_criteria", "baseline"],
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  }],
+  "/api/v1/kpis/": [
+    { id: 21, name: "Tempo de resposta", unit: "hours", unit_display: "Horas", direction: "down", direction_display: "Menor é melhor" },
+    { id: 22, name: "Taxa de resolução no primeiro contato", unit: "percent", unit_display: "Percentual", direction: "up", direction_display: "Maior é melhor" },
+  ].map(registro => ({
+    project: 1, prove_experiment: 9, definition: "", formula: "", data_source: "", cadence: "",
+    owner: null, target: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+    ...registro,
+  })),
+  "/api/v1/kpis/21/": { id: 21, project: 1, prove_experiment: 9, name: "Tempo de resposta", definition: "", formula: "", unit: "hours", unit_display: "Horas", direction: "down", direction_display: "Menor é melhor", data_source: "", cadence: "", owner: null, target: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z` },
+  "/api/v1/measurements/31/": { id: 31, kpi: 21, kind: "outcome", kind_display: "Outcome", value: "65.00", period_start: "2026-07-01", period_end: "2026-07-31", measured_at: "2026-07-24T10:00:00Z", source_evidence: [], confidence: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z` },
+  "/api/v1/solution-hypotheses/1/": {
+    id: 1, improvement_opportunity: 1,
+    statement: "Padronizar um checklist único de documentos por convênio",
+    intervention: "", assumptions: "", expected_effect: "",
+    status: "chosen", status_display: "Escolhida",
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  },
+  // O Value Ledger de `/contas/1/valor`: uma aprovada, uma pendente e um rascunho **sem montante
+  // apurado** — o `—` que não pode virar `R$ 0`, e a razão de a linha do total dizer o que ficou
+  // de fora.
+  "/api/v1/value-ledger-entries/": [
+    { id: 51, outcome_measurement: 31, value_type: "cost_saving", value_type_display: "Redução de custo",
+      amount: "18400.00", period_start: "2026-07-01", period_end: "2026-07-31",
+      attribution_method: "direta (medição do PROVE)", status: "approved", status_display: "Aprovado",
+      approved_by: 1, approved_at: `${HOJE}T09:00:00Z` },
+    { id: 52, outcome_measurement: 31, value_type: "capacity", value_type_display: "Capacidade",
+      amount: "6200.00", period_start: "2026-08-01", period_end: "2026-08-31",
+      attribution_method: "estimada (projeção linear)", status: "pending", status_display: "Pendente",
+      approved_by: null, approved_at: null },
+    { id: 53, outcome_measurement: 31, value_type: "risk_reduction", value_type_display: "Redução de risco",
+      amount: null, period_start: "2026-06-01", period_end: "2026-08-31",
+      attribution_method: "qualitativa, ainda sem apuração", status: "draft", status_display: "Rascunho",
+      approved_by: null, approved_at: null },
+  ].map(registro => ({
+    engagement: 1, project: 1, quantity: null,
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  })),
   "/api/v1/processos/1/": processos[0],
   "/api/v1/processo-etapas/": processoEtapas,
   "/api/v1/evidencias/": evidencias,
@@ -556,6 +635,12 @@ const FIXTURES: Record<string, unknown> = {
     // FDD 033: a fase concluída carrega uma decisão (o selo renderiza e o axe o mede) e a ativa
     // termina em gate com checklist pendente — senão o e2e aprova superfícies que nunca abriu.
     requires_gate: index === 1,
+    // A fase canônica é o que faz os painéis de Feasibility e PROVE existirem (DAP
+    // `dap-prove-e-valor-r1`, decisão A1). Sem ela a matriz aprovaria o detalhe do projeto sem os
+    // dois painéis novos — que é o mesmo modo de falha da chave de rota errada, um nível acima.
+    // `serie` é **1-based** (`indice + 1`), e é por isso que os dois valores são 1 e 2: a fase 1 é
+    // a ativa, a 2 é a seguinte, e as duas juntas fazem os dois painéis existirem.
+    canonical_stage: index === 1 ? "feasibility" : index === 2 ? "prove" : "",
     gate_decision: index === 0 ? "conditional_go" : "",
     gate_notes: index === 0 ? "Seguimos monitorando a acurácia do OCR." : "",
     checklist_waiver: "",
@@ -563,10 +648,17 @@ const FIXTURES: Record<string, unknown> = {
       ? serie(2, c => ({ id: c, project_phase: index, text: `Item de qualidade ${c}`, position: c, checked: c === 0, checked_at: c === 0 ? `${HOJE}T08:00:00Z` : null }))
       : [],
   })),
+  // O ativo **referencia** o KPI desde a decisão C1: `kpi` aponta para o indicador e
+  // `kpi_baseline`/`kpi_current` continuam saindo derivados. Um deles fica **sem baseline**, para o
+  // axe medir o `— → 65` e o "variação —" e não só o par completo.
   "/api/v1/digital-employees/": serie(3, index => ({
-    id: index, project: 1, name: `Agente de conciliação ${index}`, area: "Financeiro",
+    id: index, project: 1, blueprint: null, kpi: index === 3 ? null : 21,
+    name: `Agente de conciliação ${index}`, area: "Financeiro",
     description: "Concilia notas fiscais com o extrato bancário.", status: "active",
-    kpi_label: "Horas poupadas", kpi_value: "120", hours_saved_month: "120.0", roi_month: "18000.00",
+    kpi_label: "Horas poupadas", kpi_value: "120",
+    kpi_unit: "hours", kpi_direction: "down",
+    kpi_baseline: index === 2 ? null : "260.00", kpi_current: "65.00",
+    hours_saved_month: "120.0", roi_month: "18000.00",
   })),
   "/api/v1/meetings/": serie(4, index => ({
     id: index, project: 1, title: `Comitê quinzenal de acompanhamento ${index}`,
@@ -643,6 +735,23 @@ export async function mockApi(page: Page, role: Role | null): Promise<void> {
     }
     if (role === "delivery" && (pathname === "/api/v1/projects/" || pathname === "/api/v1/clients/")) {
       return route.fulfill({ json: [] });
+    }
+    // Duas rotas da Fase 5 precisam **respeitar o filtro**, e são as duas únicas leituras de query
+    // string desta função.
+    //
+    // As medições são por KPI, e o KPI sem baseline é justamente o estado que o axe precisa medir
+    // (`— → 68`, com a variação vazia): um fixture único, igual para os dois indicadores,
+    // esconderia metade do desenho. O Value Ledger é por engajamento, e a tela faz uma chamada por
+    // mandato da conta — devolver a mesma lista três vezes renderizaria cada entrada em triplicata
+    // e o total sairia triplicado, aprovando uma soma que o produto não faz.
+    const busca = new URL(route.request().url()).searchParams;
+    if (pathname === "/api/v1/measurements/") {
+      return route.fulfill({ json: MEDICOES_POR_KPI[busca.get("kpi") ?? ""] ?? [] });
+    }
+    if (pathname === "/api/v1/value-ledger-entries/") {
+      const doMandato = (FIXTURES[pathname] as { engagement: number }[])
+        .filter(entrada => String(entrada.engagement) === busca.get("engagement"));
+      return route.fulfill({ json: doMandato });
     }
     const fixture = FIXTURES[pathname];
     if (fixture !== undefined) return route.fulfill({ json: fixture });
