@@ -47,7 +47,10 @@ def estado_0066():
     yield executor.loader.project_state([ANTES]).apps
     de_volta = MigrationExecutor(connection)
     de_volta.loader.build_graph()
-    de_volta.migrate([DEPOIS])
+    # Migra até o **HEAD**, não só até `DEPOIS`: a partir da `0069` (renome das tabelas da Fase 6)
+    # o nome físico das tabelas muda entre estados de migração, e o `flush` do teardown usa o nome
+    # do HEAD. Parar num estado intermediário deixa a tabela com o nome antigo e o flush estoura.
+    de_volta.migrate(de_volta.loader.graph.leaf_nodes())
 
 
 def _rodar_backfill(apps) -> None:

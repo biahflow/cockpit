@@ -22,19 +22,18 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 
 | Alias vivo hoje | Nome canônico | Onde vive | Morre em |
 | --- | --- | --- | --- |
-| tabela `core_client` | `core_account` | `Meta.db_table` | Fase 6 |
 | rota `/api/v1/clients/` e chaves `client` / `status` | `/accounts/`, `account`, `lifecycle_status` | `urls.py`, `serializers.py` | `/api/v2/` |
 | campo `Project.client` | `engagement.account` (é projeção, não alias) | `backend/apps/core/models.py` | Fase 6 |
-| tabela `core_opportunity` | `core_commercialopportunity` | `Meta.db_table` | Fase 6 |
 | rota `/api/v1/opportunities/` e chave `opportunity` | `/commercial-opportunities/` e `commercial_opportunity` | `urls.py`, `serializers.py` | `/api/v2/` |
 | chave de payload `gate_outcome` | `gate_decision` | `serializers.py` | `/api/v2/` |
-| tabelas `core_processo` / `core_processoetapa` | `core_process` / `core_processstep` | `Meta.db_table` | Fase 6 |
 | rotas `/processos/` e `/processo-etapas/` | `/processes/` e `/process-steps/` | `urls.py` | `/api/v2/` |
 | chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
 
-> A classe `Evidencia` (a metade legada do split) **saiu** na Fase 6 (issue #70, migração `0068`),
-> junto com o dual-write — ver a nota de Fase 6 mais abaixo. Ela não era alias de rota nem de
-> payload; era legado a remover, e por isso deixa a tabela sem deixar chave viva atrás.
+> **Fase 6 já pagou as tabelas** (issue #70, migração `0069`): `core_client`→`core_account`,
+> `core_opportunity`→`core_commercialopportunity`, `core_processo`→`core_process`,
+> `core_processoetapa`→`core_processstep`. `AlterModelTable` renomeou cada uma em lugar,
+> preservando linha e **pk** (§2b) — ver a nota de Fase 6 abaixo. A classe `Evidencia` também saiu
+> (migração `0068`), com o dual-write. O que resta para a Fase 6 é só `Project.client`, a projeção.
 
 ### Já pagos pela #67 — 28/08/2026
 
@@ -42,12 +41,13 @@ Quatro renomes de classe saíram da tabela porque deixaram de ser alias: o nome 
 mais em código. **Sair daqui não é o fim da dívida** — é o fim de *uma* das três, e as outras duas
 continuam listadas acima.
 
-**A #67 fechou com a fatia 4.** O que ela deixa para trás está nas linhas de cima: as **tabelas**
-(`core_client`, `core_opportunity`, `core_processo`, `core_processoetapa`), mais `Project.client`,
-que é projeção e não alias. A classe `Evidencia` **já saiu** — a Fase 6 a removeu com o dual-write
-(nota abaixo). As **rotas** (`/clients/`, `/opportunities/`, `/processos/`, `/processo-etapas/`) e
-as **chaves de payload** (`client`, `status`, `opportunity`, `gate_outcome`, `processo`, `etapa`)
-morrem na `/api/v2/`, e a v2 não nasce antes de a Fase 6 concluir as tabelas.
+**A #67 fechou com a fatia 4, e a Fase 6 já pagou as tabelas.** O que a #67 deixou para trás eram as
+**tabelas** (`core_client`, `core_opportunity`, `core_processo`, `core_processoetapa`) e
+`Project.client`. As tabelas **saíram** na Fase 6 (migração `0069`, renome em lugar), e a classe
+`Evidencia` também (migração `0068`, com o dual-write). Resta `Project.client`, que é projeção e não
+alias. As **rotas** (`/clients/`, `/opportunities/`, `/processos/`, `/processo-etapas/`) e as
+**chaves de payload** (`client`, `status`, `opportunity`, `gate_outcome`, `processo`, `etapa`)
+morrem na `/api/v2/` — que agora **pode nascer**, porque as tabelas já foram concluídas.
 
 | Foi | É | Fatia |
 | --- | --- | --- |
@@ -71,9 +71,10 @@ enquanto teve leitor vivo (`process.custo_do_estado_atual` e `ProcessDetailPage`
 migrou para o split — ver a nota de Fase 6 abaixo. Os **campos** dela já haviam passado a `process`
 e `step` na fatia 4 — renome de campo é `RenameField`, e ele preserva linha e pk.
 
-Depois da #67 sobra uma dívida com forma nova e nome antigo: a tabela `core_processo` guardando
-linhas de uma classe chamada `Process`. É desconfortável no `dbshell` e é de propósito — o risco
-que a espera protegia é o da **pk**, e pk é o que a §2b trata.
+Depois da #67 sobrava uma dívida com forma nova e nome antigo: a tabela `core_processo` guardando
+linhas de uma classe chamada `Process`. Era desconfortável no `dbshell` e proposital — o risco que a
+espera protegia é o da **pk**, e pk é o que a §2b trata. A **Fase 6 pagou** essa dívida (migração
+`0069`): renomeou as tabelas em lugar, sem tocar na pk (nota abaixo).
 
 ### Fase 6 (issue #70) — o dual-write e a `Evidencia` saíram
 
@@ -88,8 +89,19 @@ base alvo **antes** do deploy (`"Split reconciliado: todo legado tem par"`) e co
 restaurável, na ordem que a issue #70 fixa. Consequência da ancoragem na conta: arquivar o processo
 deixou de arquivar os achados — `Evidence`/`Finding` têm `process` `SET_NULL`, não são filhos do
 processo, e uma afirmação sobre a operação do cliente sobrevive ao arquivamento do mapa que a citava.
-As **tabelas** dos quatro renomes e as **rotas**/**chaves de payload** seguem como acima: Fase 6 e
-`/api/v2/`, respectivamente.
+
+### Fase 6 (issue #70) — as tabelas foram renomeadas
+
+A segunda fatia (migração `0069`) pagou as quatro tabelas que a #67 fixou em `Meta.db_table`:
+`core_client`→`core_account`, `core_opportunity`→`core_commercialopportunity`,
+`core_processo`→`core_process`, `core_processoetapa`→`core_processstep`. Cada uma saiu por um
+`AlterModelTable(table=None)`, que emite um `ALTER TABLE ... RENAME TO` e **preserva linha e pk** —
+a garantia normativa da §2b, porque o One deriva chave de identidade de seis dessas pks e a persiste,
+e o renome da tabela não toca o `id`. Fazer com modelo novo + migração de dados criaria pk nova e
+desgrudaria os registros externos em silêncio; por isso a §2b proíbe esse caminho e por isso os pins
+saíram do `Meta` sem nenhuma outra operação junto. A reversa reaplica o `db_table` legado. Com as
+tabelas concluídas, a `/api/v2/` — onde morrem as **rotas** e as **chaves de payload** — pode
+finalmente nascer.
 
 ## As três regras
 
@@ -186,9 +198,10 @@ não existe.
 número de sequência por conta. Identificador que alguém pode recalcular é identificador que alguém
 vai recalcular diferente.
 
-Regra prática, para a fase que ainda não começou: **em toda travessia de nome, a linha e a pk
-sobrevivem; só o rótulo muda.** Uma migração que crie linha nova para o mesmo fato precisa dizer,
-no próprio arquivo, como o consumidor externo continua achando o registro antigo.
+Regra prática, para a fase **em curso** (as tabelas já foram, `Project.client` ainda não): **em toda
+travessia de nome, a linha e a pk sobrevivem; só o rótulo muda.** O renome de tabela da `0069` seguiu
+isso à risca — `AlterModelTable` não toca a pk. Uma migração que crie linha nova para o mesmo fato
+precisa dizer, no próprio arquivo, como o consumidor externo continua achando o registro antigo.
 
 ### 2c. Campo renomeia; **chave de payload** não
 

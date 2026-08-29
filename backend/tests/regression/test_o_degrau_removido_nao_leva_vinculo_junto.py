@@ -50,7 +50,11 @@ def estado_0063():
     yield executor.loader.project_state([ANTES]).apps
     de_volta = MigrationExecutor(connection)
     de_volta.loader.build_graph()
-    de_volta.migrate([DEPOIS])
+    # Migra até o **HEAD**, não só até `DEPOIS`: desde a `0069` (renome das tabelas da Fase 6) o
+    # nome físico da tabela muda entre estados de migração, e o `flush` do teardown usa o nome do
+    # HEAD (`core_process`, `core_account`). Parar num estado intermediário deixaria `core_processo`
+    # onde o flush procura `core_process`, e o teardown estouraria com FK/constraint.
+    de_volta.migrate(de_volta.loader.graph.leaf_nodes())
 
 
 def _migrar():
