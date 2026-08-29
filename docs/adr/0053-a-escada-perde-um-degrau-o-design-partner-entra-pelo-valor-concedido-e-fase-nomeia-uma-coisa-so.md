@@ -112,7 +112,7 @@ ADR.
 
 **Isto é mudança de enum, não alinhamento ao que o código já faz.** A primeira redação desta ADR
 dizia "decide-se a favor do código", e o código não desempata: o *seed* da `0050` anuncia
-SCALE/ITERATE/STOP no resumo do degrau, mas `ProjectPhase.GateOutcome` tem exatamente as quatro
+SCALE/ITERATE/STOP no resumo do degrau, mas `ProjectPhase.GateDecision` tem exatamente as quatro
 saídas de Feasibility e é o único vocabulário que existe no modelo — `JourneyPhase.requires_gate`
 é booleano e não diz de qual gate se trata. O comportamento hoje oferece GO/CONDITIONAL GO/REDESIGN/
 NO-GO também no gate do PROVE. Implementar esta decisão exige distinguir os dois gates no modelo,
@@ -220,7 +220,7 @@ correção não se perca:
    editada.
 2. **`Engagement.commercial_model` já existe** desde a ADR 0050. A ADR dizia que talvez precisasse
    ser proposto.
-3. **O vocabulário do gate do PROVE não é expressável no modelo hoje** — `ProjectPhase.GateOutcome`
+3. **O vocabulário do gate do PROVE não é expressável no modelo hoje** — `ProjectPhase.GateDecision`
    só tem as quatro saídas de Feasibility. A decisão é mudança de enum, não alinhamento.
 4. **`discovery_assessment` tem seis consumidores vivos** que a ADR não listava.
 5. **O preço semeado do `discovery_sprint` é `0,00`**, não R$ 3.000.
@@ -228,3 +228,10 @@ correção não se perca:
 O que isso mostra sobre o método: uma ADR escrita a partir de documentos descreve o que a casa
 *acredita* que faz. Só a leitura do código diz o que ela faz. As duas leituras precisam acontecer
 antes da implementação — foi a segunda que impediu uma migração que abortaria em todos os bancos.
+
+**A própria revisão errou o nome, e o erro se registra em vez de se apagar.** O item 3 dizia
+`ProjectPhase.GateOutcome` — o nome que a fatia 1 da issue #67 já tinha renomeado para
+`GateDecision` (commit `83c1842`, anterior a esta revisão). Uma emenda que se propõe a confrontar
+o texto com o código citou, ela mesma, um nome que o código não tinha mais. Corrigido acima; a
+lição que fica é que "revisado contra o código" não é estado permanente — é fotografia de um
+commit, e a próxima leitura pode achar que a foto envelheceu.

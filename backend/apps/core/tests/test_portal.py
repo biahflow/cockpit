@@ -23,6 +23,7 @@ from apps.core.models import (
     Project,
     ProjectDeliverable,
     ProjectPhase,
+    Qualification,
     Vertical,
 )
 
@@ -31,7 +32,10 @@ from .factories import (
     ArtifactFactory,
     CommercialOpportunityFactory,
     EngagementFactory,
+    LeadFactory,
+    PipelineStageFactory,
     ProjectFactory,
+    QualificationFactory,
 )
 
 
@@ -851,6 +855,56 @@ def test_a_situacao_interna_nao_atravessa_a_fronteira_do_cliente() -> None:
     serializado = json.dumps(portal.build_snapshot(project)["journey"], default=str)
     for chave in ("situation", "waiting_party", "blocker_note", "gate_notes", "checklist_waiver"):
         assert chave not in serializado
+
+
+@pytest.mark.django_db
+def test_o_snapshot_nao_expoe_lead_qualificacao_venda_nem_etapa_do_pipeline() -> None:
+    """Invariante 10 do `language-map` §6: "Nenhum endpoint do One expõe `Lead`, `Qualification`,
+    `CommercialOpportunity` ou `PipelineStage`".
+
+    Ela é verdadeira hoje **por construção** — `build_snapshot` parte de `Project` e nunca importa
+    nenhum dos quatro modelos (`portal.py` só importa `Artifact`, `Decisao`, `DigitalEmployee`,
+    `Document`, `Meeting`, `Milestone`, `Pendencia`, `Project`, `ProjectPhase`) —, mas não tinha
+    asserção, no molde do que já vale para `situation`/`waiting_party` acima. Sem o teste, um
+    agregador novo que precisasse "só de um campo" de uma dessas quatro classes poderia colar o
+    dado no snapshot sem que nada aqui dentro ficasse vermelho.
+
+    O projeto nasce da mesma conta de uma `Qualification` qualificada e de uma `CommercialOpportunity`
+    com `PipelineStage` próprios — a cadeia real Lead → Qualification → CommercialOpportunity →
+    Project —, e os quatro nomes recebem um rótulo sentinela para a asserção pegar tanto a
+    **entidade** (chave/classe) quanto o **valor** (o dado que ela carrega) vazando para o cliente.
+    """
+    etapa = PipelineStageFactory(name="Etapa Sentinela do Pipeline")
+    lead = LeadFactory(name="Lead Sentinela", company="Empresa Sentinela Ltda")
+    qualificacao = QualificationFactory(
+        lead=lead, outcome=Qualification.Outcome.QUALIFIED
+    )
+    venda = CommercialOpportunityFactory(
+        account=qualificacao.account, stage=etapa, title="Venda Sentinela"
+    )
+    project = ProjectFactory(
+        client=qualificacao.account, originating_commercial_opportunity=venda
+    )
+    journey.materialize_journey(project)
+
+    serializado = json.dumps(portal.build_snapshot(project), default=str).lower()
+
+    # O valor: nenhum rótulo distintivo de Lead/Qualification/CommercialOpportunity/PipelineStage
+    # atravessa para o snapshot.
+    for rotulo in (
+        "lead sentinela",
+        "empresa sentinela",
+        "venda sentinela",
+        "etapa sentinela do pipeline",
+    ):
+        assert rotulo not in serializado, f"{rotulo!r} vazou para o snapshot do portal do cliente"
+
+    # A entidade: nem o nome da classe, nem a chave que uma serialização ingênua usaria.
+    for identidade in ("lead", "qualification", "commercialopportunity", "pipelinestage"):
+        assert identidade not in serializado, (
+            f"{identidade!r} apareceu no snapshot — o One não pode ver esta entidade "
+            "(language-map §6, invariante 10)"
+        )
 
 
 # --- O carimbo da projeção (ADR 0051) -----------------------------------------

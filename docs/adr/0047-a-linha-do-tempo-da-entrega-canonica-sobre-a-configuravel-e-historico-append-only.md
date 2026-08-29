@@ -72,3 +72,13 @@ importar `PR merged` como conclusão de fase.
 - O snapshot do portal do cliente (`portal.py`) **não** recebe os campos novos: a linha do tempo é
   linguagem operacional interna, e a projeção para o One é fatia própria (fora de escopo, como em
   FDD 033).
+
+## Emenda (issue #67, fatia 1 — 28/08/2026) — `gate_outcome` virou `gate_decision`
+
+Esta ADR é de 27/08, um dia antes de a fatia 1 da issue #67 renomear o campo. Onde o texto acima
+cita `gate_outcome` (`:18`, `:45`) como nome corrente, o campo hoje se chama `gate_decision`
+(ADR 0052, decisão D7 do `language-map`). A **chave de payload** `gate_outcome` continua saindo na
+`/api/v1/` como alias de leitura, com data de morte na `/api/v2/`
+(`docs/ontology/aliases.md` §2c) — quem já integrou não precisa mudar nada. O "mesmo desenho do
+`gate_outcome`" que a decisão 3 cita para justificar `set-waiting` continua valendo como referência
+de desenho; só o nome do campo que ele ecoa mudou.

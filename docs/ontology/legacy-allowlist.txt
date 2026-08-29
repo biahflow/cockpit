@@ -12,7 +12,7 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 29), que conta **dívidas
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 30), que conta **dívidas
 #     distintas** — linhas deste arquivo, não ocorrências no código. Os dois números não medem a
 #     mesma coisa.
 #
@@ -99,8 +99,24 @@ backend/apps/core/urls.py::client-como-organizacao::clients::1
 # identificador inteiro está errado: não existe uso legítimo do nome antigo *dentro* do código.
 # A exceção é a chave de payload, e ela está declarada aqui — com a regressão que impede removê-la
 # antes da hora (`backend/tests/regression/test_o_alias_do_gate_sobrevive_na_v1.py`).
+#
+# Segunda linha, issue #67 (fechamento) — `openapi_aliases.py` precisa do mesmo nome literal.
+# O critério de aceite "versionar a depreciação do alias no próprio contrato" criou
+# `ALIASES_DEPRECIADOS` (`backend/apps/core/openapi_aliases.py`), o mapa que o
+# `POSTPROCESSING_HOOKS` do drf-spectacular usa para marcar `deprecated: true` em cada alias no
+# `openapi.yaml`. Para `ProjectPhase`/`PhaseEvent` esse mapa **precisa** conter a string
+# `gate_outcome` — é o nome da propriedade que o esquema expõe, e o hook a procura por igualdade
+# de texto. Não há como expressar isso sem a referência: é a mesma exceção de cima, num arquivo
+# novo. A referência foi reduzida a **uma** ocorrência (uma constante, reaproveitada nas duas
+# entradas do mapa) antes de entrar aqui — ver o comentário no próprio módulo.
+#
+# **As duas linhas deste bloco morrem juntas, e na mesma hora.** O mapa de depreciação existe para
+# anunciar o alias; quando a `/api/v2/` parar de emitir `gate_outcome`, não há mais o que anunciar
+# — a entrada sai de `ALIASES_DEPRECIADOS` e a referência sai com ela. Este bloco é o único da
+# allowlist cujo prazo é o mesmo para as duas linhas.
 # ---------------------------------------------------------------------------------------------
 backend/apps/core/serializers.py::outcome-como-decisao-de-gate::gate_outcome::5
+backend/apps/core/openapi_aliases.py::outcome-como-decisao-de-gate::gate_outcome::1
 
 # ---------------------------------------------------------------------------------------------
 # Nome de modelo em português — o que sobrou depois da fatia 4 da issue #67.
