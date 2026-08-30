@@ -154,7 +154,7 @@ export function CasesPage() {
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50/60 p-3">
-            {item.client_consent
+            {item.account_consent
               ? <span className="back-link"><BadgeCheck className="size-4" />Consentimento registrado</span>
               : <button type="button" className="btn btn--secondary" onClick={() => setConsenting(item)}><ShieldCheck className="size-4" />Registrar consentimento</button>}
             {item.status !== "published" && <>
@@ -162,8 +162,8 @@ export function CasesPage() {
               {item.status === "review" && <button type="button" className="btn btn--secondary" onClick={() => void moveTo(item, "draft")}>Voltar para rascunho</button>}
               {/* Desabilitado **com o motivo à vista**: um botão que some deixa quem revisa
                   procurando o que falta, e o que falta é uma conversa com o cliente. */}
-              <button type="button" className="btn" disabled={!item.client_consent} onClick={() => void moveTo(item, "published")}>Publicar</button>
-              {!item.client_consent && <span className="text-xs text-slate-600">Publicar exige o consentimento do cliente — anonimizar não substitui.</span>}
+              <button type="button" className="btn" disabled={!item.account_consent} onClick={() => void moveTo(item, "published")}>Publicar</button>
+              {!item.account_consent && <span className="text-xs text-slate-600">Publicar exige o consentimento do cliente — anonimizar não substitui.</span>}
             </>}
           </div>
         </form> : item.summary && <p className="mt-4 border-t pt-4 text-sm text-slate-600">{item.summary}</p>}

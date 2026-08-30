@@ -172,7 +172,7 @@ def test_oportunidade_com_projeto_vira_avaliacao_mas_nao_e_arquivada(porta: Serv
     opportunity, _ = _oportunidade_de_qualificacao(
         porta, stage=PipelineStage.objects.get(kind="won")
     )
-    ProjectFactory(client=opportunity.account, originating_commercial_opportunity=opportunity)
+    ProjectFactory(engagement__account=opportunity.account, originating_commercial_opportunity=opportunity)
 
     _rodar_backfill()
 
@@ -247,7 +247,7 @@ def test_reversa_nao_desarquiva_quem_alguem_arquivou_depois(porta: Service) -> N
     opportunity, _ = _oportunidade_de_qualificacao(
         porta, stage=PipelineStage.objects.get(kind="won")
     )
-    ProjectFactory(client=opportunity.account, originating_commercial_opportunity=opportunity)  # a ida não arquiva
+    ProjectFactory(engagement__account=opportunity.account, originating_commercial_opportunity=opportunity)  # a ida não arquiva
     _rodar_backfill()
     depois = timezone.now() + timedelta(days=1)
     CommercialOpportunity.objects.filter(pk=opportunity.pk).update(archived_at=depois)

@@ -96,7 +96,7 @@ def test_delivery_cannot_create_or_delete_projects(api: APIClient, delivery: Use
     ProjectMemberFactory(project=existing, user=delivery)
 
     created = api.post(reverse("project-list"), {
-        "client": existing.client_id,
+        "engagement": existing.engagement_id,
         "name": "Projeto próprio",
         "start_date": str(existing.start_date),
         "due_date": str(existing.due_date),

@@ -94,7 +94,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
     evidencia = api.post(
         reverse("evidence-list"),
         {
-            "account": projeto.client_id, "discovery": discovery.pk,
+            "account": projeto.engagement.account_id, "discovery": discovery.pk,
             "kind": "interview", "raw_excerpt": "o fechamento leva tres dias",
         },
         format="json",
@@ -105,7 +105,7 @@ def test_de_lead_a_achado_sem_elo_solto(api: APIClient) -> None:
     achado = api.post(
         reverse("finding-list"),
         {
-            "account": projeto.client_id, "statement": "o fechamento e lento",
+            "account": projeto.engagement.account_id, "statement": "o fechamento e lento",
             "evidences": [evidencia.data["id"]],
         },
         format="json",

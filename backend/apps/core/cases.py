@@ -96,7 +96,7 @@ def freeze(project: Project) -> Case:
         .prefetch_related("kpi__measurements")
         .order_by("name", "id")
     )
-    account = project.client
+    account = project.engagement.account
     return Case.objects.create(
         project=project,
         title=f"{account.name} — {project.name}",
@@ -132,10 +132,10 @@ def record_consent(case: Case, user: Any) -> Case:
     é um ato — e sem `consent_recorded_by` "o cliente autorizou" é alegação de ninguém. Mesma forma
     de `ProjectMember.added_by`.
     """
-    case.client_consent = True
+    case.account_consent = True
     case.consent_recorded_at = timezone.now()
     case.consent_recorded_by = user
     case.save(update_fields=[
-        "client_consent", "consent_recorded_at", "consent_recorded_by", "updated_at",
+        "account_consent", "consent_recorded_at", "consent_recorded_by", "updated_at",
     ])
     return case

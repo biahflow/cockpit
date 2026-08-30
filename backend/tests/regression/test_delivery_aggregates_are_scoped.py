@@ -80,15 +80,15 @@ def test_dashboard_hides_the_commercial_pipeline(api: APIClient, mine) -> None: 
 def test_client_list_only_shows_clients_i_work_for(api: APIClient, mine, theirs) -> None:  # type: ignore[no-untyped-def]
     listed = {row["id"] for row in api.get(reverse("client-list")).data}
 
-    assert listed == {mine.client_id}
+    assert listed == {mine.engagement.account_id}
 
 
 def test_client_overview_aggregates_only_my_projects(api: APIClient, delivery) -> None:  # type: ignore[no-untyped-def]
     """O agregado é por cliente: estreitar a lista de clientes não bastaria."""
     shared = AccountFactory()
-    mine = ProjectFactory(client=shared, actual_value=100, cost=40)
+    mine = ProjectFactory(engagement__account=shared, actual_value=100, cost=40)
     ProjectMemberFactory(project=mine, user=delivery)
-    ProjectFactory(client=shared, actual_value=900, cost=300)
+    ProjectFactory(engagement__account=shared, actual_value=900, cost=300)
 
     rows = api.get(reverse("client-overview")).data["clients"]
 
@@ -161,17 +161,17 @@ def test_delivery_agent_context_does_not_leak_satisfaction_from_other_clients(de
 
     hoje = timezone.localdate()
     Satisfacao.objects.create(
-        account=mine.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=mine.engagement.account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=hoje, note="Ficou quieto na última call.",
     )
     Satisfacao.objects.create(
-        account=theirs.client, nivel=Satisfacao.Nivel.INSATISFEITO,
+        account=theirs.engagement.account, nivel=Satisfacao.Nivel.INSATISFEITO,
         fonte=Satisfacao.Fonte.DECLARADA, happened_on=hoje,
         note="Segredo do cliente alheio.",
     )
     # Fora da janela de 90 dias: registro que já não é o estado de hoje não entra no contexto.
     Satisfacao.objects.create(
-        account=mine.client, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+        account=mine.engagement.account, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=date(2000, 1, 1), note="Elogio de outra era.",
     )
 

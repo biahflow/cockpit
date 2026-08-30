@@ -141,9 +141,10 @@ def assess_project_health(
     # um sinal que somasse faria "100" deixar de significar "nenhum problema conhecido" — os cinco
     # sinais acima teriam de ser reescritos para conviver com isso.
     if satisfacoes is None:
+        account_id = project.engagement.account_id
         satisfacoes = satisfacao_module.registros_vigentes_por_cliente(
-            [project.client_id], today
-        ).get(project.client_id, [])
+            [account_id], today
+        ).get(account_id, [])
     insatisfacao = satisfacao_module.vigente(
         satisfacoes, today, fonte=Satisfacao.Fonte.DECLARADA
     )
@@ -202,7 +203,7 @@ def assess_projects_health(projects: Iterable[Project]) -> list[dict[str, Any]]:
     ):
         pendencias[pendencia.project_id].append(pendencia)
     satisfacoes = satisfacao_module.registros_vigentes_por_cliente(
-        {project.client_id for project in items}, today
+        {project.engagement.account_id for project in items}, today
     )
 
     return [
@@ -214,7 +215,7 @@ def assess_projects_health(projects: Iterable[Project]) -> list[dict[str, Any]]:
             open_pendencias=pendencias[project.pk],
             # `[]` e não `None`: cliente sem registro tem "nenhuma satisfação", não "vá ao banco
             # descobrir" — e é essa distinção que mantém a contagem de queries constante.
-            satisfacoes=satisfacoes.get(project.client_id, []),
+            satisfacoes=satisfacoes.get(project.engagement.account_id, []),
         )
         for project in items
     ]

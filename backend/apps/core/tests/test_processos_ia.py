@@ -207,7 +207,7 @@ def test_a_extracao_grava_processos_etapas_e_achados(
     assert Process.objects.count() == 2
     faturamento = Process.objects.get(name="Faturamento mensal")
     # Procedência: de que cliente é o mapa, e de onde ele veio.
-    assert faturamento.account_id == meeting.project.client_id
+    assert faturamento.account_id == meeting.project.engagement.account_id
     assert faturamento.source_meeting_id == meeting.pk
     assert faturamento.source_project_id == meeting.project_id
     assert faturamento.registered_by_id == delivery.pk
@@ -357,7 +357,7 @@ def test_a_extracao_entra_depois_do_que_foi_mapeado_a_mao(
 ) -> None:
     """`position` é a ordem em que a operação acontece; o que veio do modelo não se intercala."""
     meeting = _reuniao_de_discovery(delivery)
-    account = meeting.project.client
+    account = meeting.project.engagement.account
     ProcessFactory(account=account, name="Compras", position=1)
     ProcessFactory(account=account, name="Expedição", position=7)
     # Arquivado não conta como ocupante da ordem — senão um mapa antigo empurraria o novo sem

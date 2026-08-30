@@ -221,10 +221,10 @@ def _case_lines(opportunity: CommercialOpportunity) -> list[str]:
     publicados = list(
         Case.objects.filter(
             status=Case.Status.PUBLISHED,
-            client_consent=True,
+            account_consent=True,
             archived_at__isnull=True,
             vertical=vertical,
-        ).select_related("project__client")[:OPPORTUNITY_CASE_LIMIT]
+        ).select_related("project__engagement__account")[:OPPORTUNITY_CASE_LIMIT]
     )
     if not publicados:
         return []

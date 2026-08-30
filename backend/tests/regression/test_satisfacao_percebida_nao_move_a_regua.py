@@ -52,7 +52,7 @@ def test_a_percebida_nao_muda_o_health_score() -> None:
     """Mesmo nível, mesma data, mesma nota: a única diferença é a fonte."""
     sem_registro = ProjectFactory()
     com_percebida = ProjectFactory()
-    _registrar(com_percebida.client, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(com_percebida.engagement.account, Satisfacao.Fonte.PERCEBIDA)
 
     controle = health.assess_project_health(sem_registro)
     medido = health.assess_project_health(com_percebida)
@@ -65,7 +65,7 @@ def test_a_declarada_muda_o_health_score() -> None:
     """O complemento do teste acima: cercar tudo não é cercar — se a declarada também não movesse,
     o teste de cima passaria por o sinal não existir."""
     project = ProjectFactory()
-    _registrar(project.client, Satisfacao.Fonte.DECLARADA)
+    _registrar(project.engagement.account, Satisfacao.Fonte.DECLARADA)
 
     resultado = health.assess_project_health(project)
 
@@ -78,7 +78,7 @@ def test_a_percebida_nao_muda_o_health_score_em_lote() -> None:
     um filtro por fonte esquecido **ali** não apareceria no caminho individual."""
     sem_registro = ProjectFactory()
     com_percebida = ProjectFactory()
-    _registrar(com_percebida.client, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(com_percebida.engagement.account, Satisfacao.Fonte.PERCEBIDA)
 
     por_projeto = {
         linha["project_id"]: linha
@@ -92,8 +92,8 @@ def test_a_percebida_nao_muda_o_health_score_em_lote() -> None:
 def test_o_lote_e_o_individual_concordam_sobre_a_fonte() -> None:
     """A pré-carga troca a fonte do dado, nunca a regra (FDD 022)."""
     projetos = [ProjectFactory() for _ in range(3)]
-    _registrar(projetos[0].client, Satisfacao.Fonte.DECLARADA)
-    _registrar(projetos[1].client, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(projetos[0].engagement.account, Satisfacao.Fonte.DECLARADA)
+    _registrar(projetos[1].engagement.account, Satisfacao.Fonte.PERCEBIDA)
 
     assert health.assess_projects_health(projetos) == [
         health.assess_project_health(project) for project in projetos

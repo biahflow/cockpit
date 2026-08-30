@@ -33,8 +33,8 @@ def cenario() -> tuple[APIClient, User, Project, Project]:
     """Uma pessoa da Entrega, membro de **um** projeto de um mandato que tem dois."""
     pessoa = UserFactory(role=User.Role.DELIVERY)
     engagement = EngagementFactory()
-    meu = ProjectFactory(client=engagement.account, engagement=engagement)
-    vizinho = ProjectFactory(client=engagement.account, engagement=engagement)
+    meu = ProjectFactory(engagement__account=engagement.account, engagement=engagement)
+    vizinho = ProjectFactory(engagement__account=engagement.account, engagement=engagement)
     ProjectMemberFactory(project=meu, user=pessoa)
     api = APIClient()
     api.force_authenticate(pessoa)
@@ -91,7 +91,7 @@ def test_entrega_sem_projeto_nenhum_no_mandato_nao_ve_o_mandato() -> None:
     """O outro lado: a visibilidade do engajamento **deriva** dos projetos, não os concede."""
     pessoa = UserFactory(role=User.Role.DELIVERY)
     engagement = EngagementFactory()
-    ProjectFactory(client=engagement.account, engagement=engagement)
+    ProjectFactory(engagement__account=engagement.account, engagement=engagement)
     api = APIClient()
     api.force_authenticate(pessoa)
 
@@ -113,11 +113,11 @@ def test_o_contrato_da_oportunidade_mantem_a_forma() -> None:
         account=engagement.account, stage=PipelineStage.objects.get(kind="won"), owner=admin
     )
     primeiro = ProjectFactory(
-        client=engagement.account, engagement=engagement,
+        engagement=engagement,
         originating_commercial_opportunity=origem,
     )
     ProjectFactory(
-        client=engagement.account, engagement=engagement,
+        engagement=engagement,
         originating_commercial_opportunity=origem,
     )
 

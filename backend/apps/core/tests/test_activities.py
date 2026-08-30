@@ -64,14 +64,14 @@ def test_delivery_le_mas_nao_escreve(client: APIClient) -> None:
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
     ProjectMemberFactory(project=project, user=delivery)
-    activity = ActivityFactory(account=project.client)
+    activity = ActivityFactory(account=project.engagement.account)
     client.force_authenticate(delivery)
 
     listed = client.get(reverse("activity-list"))
     rejected_create = client.post(
         reverse("activity-list"),
         {
-            "account": project.client_id,
+            "account": project.engagement.account_id,
             "kind": Activity.Kind.NOTE,
             "happened_on": str(timezone.localdate()),
             "summary": "Nota indevida",

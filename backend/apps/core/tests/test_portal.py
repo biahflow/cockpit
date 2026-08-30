@@ -76,7 +76,7 @@ def test_build_snapshot_projects_status_completion_and_children() -> None:
     snapshot = portal.build_snapshot(project)
 
     assert snapshot["project"]["id"] == project.pk
-    assert snapshot["project"]["account"]["name"] == project.client.name
+    assert snapshot["project"]["account"]["name"] == project.engagement.account.name
     assert snapshot["completion"] == 50  # 1 de 2 marcos ativos concluído
     assert len(snapshot["milestones"]) == 2  # marco arquivado é excluído
     assert snapshot["milestones"][0]["party"] == "provider"
@@ -152,7 +152,7 @@ def test_snapshot_does_not_carry_the_internal_catalog() -> None:
     cujo snapshot é por projeto. Isso pede RFC, não uma emenda no `build_snapshot`.
     """
     vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
-    project = ProjectFactory(client=AccountFactory(vertical=vertical))
+    project = ProjectFactory(engagement__account=AccountFactory(vertical=vertical))
     blueprint = DigitalEmployeeBlueprint.objects.create(name="SDR", description="Interno.")
     blueprints.instantiate(project, blueprint, vertical)
 
@@ -336,7 +336,7 @@ def test_snapshot_carries_the_date_of_the_first_accepted_artifact() -> None:
     depois = timezone.now() - timedelta(days=3)
     ArtifactFactory(
         kind=Artifact.Kind.CONTRACT,
-        commercial_opportunity=CommercialOpportunityFactory(account=project.client),
+        commercial_opportunity=CommercialOpportunityFactory(account=project.engagement.account),
         status=Artifact.Status.ACCEPTED,
         decided_at=primeiro,
     )
@@ -363,7 +363,7 @@ def test_an_artifact_still_awaiting_a_decision_is_not_a_rung() -> None:
     """
     project = ProjectFactory()
     ArtifactFactory(
-        commercial_opportunity=CommercialOpportunityFactory(account=project.client),
+        commercial_opportunity=CommercialOpportunityFactory(account=project.engagement.account),
         status=Artifact.Status.SENT,
     )
     ArtifactFactory(project=project, commercial_opportunity=None, status=Artifact.Status.REJECTED)
@@ -414,10 +414,10 @@ def test_an_artifact_on_an_opportunity_names_the_clients_oldest_live_project(
     Um projeto só, nunca fan-out — o argumento é o mesmo do `post_delete` de `Project`.
     """
     account = AccountFactory()
-    mais_velho = ProjectFactory(client=account)
-    arquivado = ProjectFactory(client=account)
+    mais_velho = ProjectFactory(engagement__account=account)
+    arquivado = ProjectFactory(engagement__account=account)
     arquivado.archive()
-    ProjectFactory(client=account)  # vivo, porém mais novo
+    ProjectFactory(engagement__account=account)  # vivo, porém mais novo
     calls: list[tuple] = []
     monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
 
@@ -494,7 +494,7 @@ def test_snapshot_endpoint_requires_valid_token() -> None:
 @pytest.mark.django_db
 def test_ai_score_crosses_to_snapshot_only_after_review() -> None:
     project = ProjectFactory(
-        ai_maturity=40, ai_opportunity=85,
+        ai_maturity=40, ai_potential=85,
         ai_dimensions=[{"label": "Dados", "score": 30}],
         ai_score_summary="Espaço para automação", ai_scored_at=timezone.now(),
     )
@@ -747,9 +747,8 @@ def test_saving_publishing_and_archiving_a_decision_all_emit(
 def test_snapshot_leva_a_conta_e_o_engajamento_canonicos() -> None:
     """`account` e `engagement` entram; `account` fica, inalterado, até a `/api/v2/`.
 
-    A conta sai do **engajamento** e não de `Project.client`: os dois são iguais por construção
-    (`Project.clean()` amarra `engagement.account_id == account_id`), e ler pela fonte é o que
-    faz o consumidor não precisar mudar quando a Fase 6 remover a projeção temporária.
+    A conta sai do **engajamento** (`engagement.account`), a fonte canônica desde a ADR 0050.
+    `Project.client` foi removido na Fase 6.
     """
     project = ProjectFactory()
 
@@ -765,7 +764,7 @@ def test_snapshot_leva_a_conta_e_o_engajamento_canonicos() -> None:
         "status": "active",
     }
     # O alias com data continua saindo exatamente como saía.
-    assert bloco["account"] == {"id": project.client_id, "name": project.client.name}
+    assert bloco["account"] == {"id": project.engagement.account_id, "name": project.engagement.account.name}
 
 
 @pytest.mark.django_db
@@ -883,7 +882,7 @@ def test_o_snapshot_nao_expoe_lead_qualificacao_venda_nem_etapa_do_pipeline() ->
         account=qualificacao.account, stage=etapa, title="Venda Sentinela"
     )
     project = ProjectFactory(
-        client=qualificacao.account, originating_commercial_opportunity=venda
+        engagement__account=qualificacao.account, originating_commercial_opportunity=venda
     )
     journey.materialize_journey(project)
 
@@ -1011,8 +1010,8 @@ def test_renomear_um_engajamento_emite_para_todos_os_projetos_dele(
     É o contrário do `_emit_artifact`, que escolhe **um** projeto porque só um é afetado.
     """
     engagement = EngagementFactory()
-    um = ProjectFactory(client=engagement.account, engagement=engagement)
-    outro = ProjectFactory(client=engagement.account, engagement=engagement)
+    um = ProjectFactory(engagement__account=engagement.account, engagement=engagement)
+    outro = ProjectFactory(engagement__account=engagement.account, engagement=engagement)
     de_fora = ProjectFactory()
 
     calls: list[tuple] = []

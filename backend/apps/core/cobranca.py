@@ -374,11 +374,13 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     # que gerou a fatura. Projeto concluído fica de fora de propósito — um crítico congelado no
     # passado deixaria a trava ligada para sempre, que é como uma trava apodrece.
     ativos = list(
-        ProjectModel.objects.filter(client_id__in=clientes, archived_at__isnull=True).exclude(
+        ProjectModel.objects.filter(
+            engagement__account_id__in=clientes, archived_at__isnull=True
+        ).select_related("engagement").exclude(
             status=ProjectModel.Status.COMPLETED
         )
     )
-    cliente_do_projeto = {project.pk: project.client_id for project in ativos}
+    cliente_do_projeto = {project.pk: project.engagement.account_id for project in ativos}
     niveis: dict[int, list[str]] = defaultdict(list)
     for avaliacao in health_module.assess_projects_health(ativos):
         niveis[cliente_do_projeto[avaliacao["project_id"]]].append(avaliacao["level"])
@@ -578,9 +580,9 @@ def entrega_critica(
         # impede a tela de dizer "saudável" com a régua já tensa por entrega.
         return contexto.health_por_cliente.get(account.pk) == health_module.CRITICAL
     ativos = list(
-        Project.objects.filter(client=account, archived_at__isnull=True).exclude(
+        Project.objects.filter(engagement__account=account, archived_at__isnull=True).exclude(
             status=Project.Status.COMPLETED
-        )
+        ).select_related("engagement")
     )
     return any(
         avaliacao["level"] == health_module.CRITICAL

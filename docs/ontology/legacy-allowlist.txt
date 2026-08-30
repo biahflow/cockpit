@@ -12,9 +12,9 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 26, depois que a Fase 6
-#     removeu as quatro linhas da `Evidencia`), que conta **dívidas distintas** — linhas deste
-#     arquivo, não ocorrências no código. Os dois números não medem a mesma coisa.
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 23, depois que a Fase 6
+#     removeu `ai_opportunity`, `Project.client` e `client_consent`), que conta **dívidas
+#     distintas** — linhas deste arquivo, não ocorrências no código.
 #
 # A entrada **não carrega número de linha**, de propósito: dívida declarada não pode ser reaberta
 # por alguém ter inserido um import acima dela. Ela carrega a **contagem**, que é a outra metade
@@ -42,8 +42,7 @@
 #   * `opportunities` em `urls.py` — a **rota**, que morre na `/api/v2/`. `/api/v1/opportunities/`
 #     e o `basename` `opportunity` respondem como sempre responderam, agora com o `basename`
 #     explícito porque o derivado da classe viraria `commercialopportunity`.
-#   * `ai_opportunity` — não é venda: é o AI Score de maturidade, escalar, e o papel dele vira
-#     `PriorityAssessment` na Fase 4 (language-map §5). O campo em si é renomeado na Fase 6.
+#   * `ai_opportunity` — renomeado para `ai_potential` na Fase 6 (migração `0071`).
 #
 # As **chaves de payload** (`opportunity` no corpo e na resposta de documento, artefato,
 # interação, lead e projeto) não aparecem aqui porque a regra casa declaração de campo de modelo
@@ -51,7 +50,6 @@
 # antes da `/api/v2/` é a regressão
 # `backend/tests/regression/test_o_alias_de_venda_sobrevive_na_v1.py`.
 # ---------------------------------------------------------------------------------------------
-backend/apps/core/models.py::opportunity-sem-qualificador::ai_opportunity::1
 backend/apps/core/urls.py::opportunity-sem-qualificador::opportunities::1
 
 # ---------------------------------------------------------------------------------------------
@@ -62,18 +60,13 @@ backend/apps/core/urls.py::opportunity-sem-qualificador::opportunities::1
 # signal, tipos TS e as duas telas já dizem o nome certo. A tabela continua `core_client`
 # (`Meta.db_table`), porque é a linha e a pk que a `aliases.md` §2b protege.
 #
-# O que ficou, e por quê:
+# O que ficou:
 #
-#   * `client` em `models.py`, **uma ocorrência**: `Project.client`. Ele é a projeção temporária
-#     cuja fonte canônica é `engagement.account` (ADR 0050) e cuja remoção é a Fase 6. Renomeá-lo
-#     criaria **duas** coisas com o nome canônico no mesmo objeto — `project.account` e
-#     `project.engagement.account` — que podem divergir, e o nome canônico deixaria de identificar
-#     a fonte. Quem o mantém honesto é `Project.clean()`.
+#   * `Project.client` — removido na Fase 6 (migração `0070`).
+#   * `client_consent` — renomeado para `account_consent` na Fase 6 (migração `0072`).
 #   * `clients` em `urls.py` — a **rota**, que morre na `/api/v2/`. `/api/v1/clients/` e o
 #     `basename` `client` respondem como sempre responderam, agora com o `basename` explícito
 #     porque o derivado da classe viraria `account`.
-#   * `client_consent` — consentimento da organização, no `Case`. Vira `account_consent` quando a
-#     Fase 6 fizer o renome físico; não entra agora porque é chave de payload da `/api/v1/`.
 #
 # As **chaves de payload** (`client` no corpo e na resposta de contato, interação, venda,
 # documento, fatura, satisfação, processo, cobrança e lead; `status` na conta) não aparecem aqui
@@ -81,8 +74,6 @@ backend/apps/core/urls.py::opportunity-sem-qualificador::opportunities::1
 # `serializers.PrimaryKeyRelatedField`/`CharField`. Quem impede removê-lo antes da `/api/v2/` é a
 # regressão `backend/tests/regression/test_o_alias_de_conta_sobrevive_na_v1.py`.
 # ---------------------------------------------------------------------------------------------
-backend/apps/core/models.py::client-como-organizacao::client::1
-backend/apps/core/models.py::client-como-organizacao::client_consent::1
 backend/apps/core/urls.py::client-como-organizacao::clients::1
 
 # ---------------------------------------------------------------------------------------------

@@ -30,7 +30,7 @@ def build_recommendations() -> list[dict[str, Any]]:
     # Clientes com projetos mas sem oportunidade aberta → oportunidade de novo negócio.
     open_kind = PipelineStage.Kind.OPEN
     for account in Account.objects.filter(archived_at__isnull=True):
-        has_project = Project.objects.filter(client=account, archived_at__isnull=True).exists()
+        has_project = Project.objects.filter(engagement__account=account, archived_at__isnull=True).exists()
         has_open = CommercialOpportunity.objects.filter(
             account=account, archived_at__isnull=True, stage__kind=open_kind
         ).exists()

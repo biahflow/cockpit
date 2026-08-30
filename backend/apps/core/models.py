@@ -414,18 +414,6 @@ class Project(TimestampedModel):
         ON_HOLD = "on_hold", "Em espera"
         COMPLETED = "completed", "Concluído"
 
-    # **Projeção temporária.** A conta canônica do projeto é `engagement.account`; este campo
-    # sobrevive porque metade do produto (agregadores, permissões, portal) ainda pergunta pelo
-    # cliente direto, e removê-lo é a Fase 6. O que o mantém honesto é a validação em `clean()`
-    # abaixo — sem ela, a projeção divergiria da fonte em silêncio, que é exatamente o defeito
-    # que uma projeção introduz quando ninguém a amarra.
-    #
-    # **É o único campo que a fatia 2 da issue #67 não renomeou, e isso é decisão.** Chamá-lo de
-    # `account` criaria duas coisas com o nome canônico no mesmo objeto — `project.account` e
-    # `project.engagement.account` — que podem divergir; o nome canônico deixaria de identificar
-    # a fonte, que é a única coisa que ele existe para fazer. Ele fica com o nome antigo até a
-    # Fase 6 removê-lo. Ver ADR 0052.
-    client = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="projects")
     # O mandato a que este projeto pertence — **obrigatório** (invariante 7 do mapa de linguagem).
     # Nasceu nulo na 0055 e virou NOT NULL na 0057, com o backfill da 0056 no meio; ver a
     # docstring da 0057 para por que os três passos são migrações separadas.
@@ -456,7 +444,7 @@ class Project(TimestampedModel):
     # transcrição de uma reunião (Discovery/Assessment) e revisado por humano antes de cruzar
     # ao portal do cliente. Vazio até a IA rodar; só publica quando `ai_score_reviewed`.
     ai_maturity = models.PositiveSmallIntegerField(null=True, blank=True)  # 0–100
-    ai_opportunity = models.PositiveSmallIntegerField(null=True, blank=True)  # 0–100
+    ai_potential = models.PositiveSmallIntegerField(null=True, blank=True)  # 0–100
     ai_dimensions = models.JSONField(default=list, blank=True)  # [{"label": str, "score": 0-100}]
     ai_score_summary = models.TextField(blank=True, default="")
     ai_scored_at = models.DateTimeField(null=True, blank=True)
@@ -493,15 +481,6 @@ class Project(TimestampedModel):
         if service is not None and service.category == Service.Category.ACQUISITION:
             raise ValidationError({
                 "service": "Oferta de aquisição não gera projeto — escolha um degrau da escada."
-            })
-        # O que mantém a projeção `client` honesta (ADR 0050). Dois caminhos chegam ao dono do
-        # projeto — `project.client` e `project.engagement.account` — e nada além desta linha
-        # impede que eles digam coisas diferentes. Divergindo, o projeto aparece na carteira de
-        # uma conta e no mandato de outra, e nenhuma tela acusa.
-        engagement = self.engagement if self.engagement_id else None
-        if engagement is not None and engagement.account_id != self.client_id:
-            raise ValidationError({
-                "engagement": "O engajamento deve pertencer ao mesmo cliente do projeto."
             })
 
     @property
@@ -1394,7 +1373,7 @@ class Satisfacao(TimestampedModel):
         return f"{self.get_nivel_display()} — {self.account.name} ({self.happened_on})"
 
     def clean(self) -> None:
-        if self.project_id and self.project and self.project.client_id != self.account_id:
+        if self.project_id and self.project and self.project.engagement.account_id != self.account_id:
             raise ValidationError({"project": "O projeto deve pertencer ao mesmo cliente."})
         # Mesma checagem para a atividade de origem, e pela mesma razão: sem ela, a resposta de
         # **outro** cliente viraria a satisfação declarada deste — e essa é a linha que troca a
@@ -1796,7 +1775,7 @@ class Evidence(TimestampedModel):
         # depois concluir que há uma razão para a exceção, e não há — é a mesma classe de vínculo
         # cruzado, com um hop a menos que `step`.
         discovery = self.discovery if self.discovery_id else None
-        if discovery is not None and discovery.project.client_id != self.account_id:
+        if discovery is not None and discovery.project.engagement.account_id != self.account_id:
             raise ValidationError({"discovery": "O Discovery deve pertencer à mesma conta."})
         # E, tendo os dois, eles precisam concordar — a mesma regra que a `ProcessObservation`
         # aplica sobre o par dela. Uma evidência apontando para a sessão de outro Discovery é uma
@@ -2834,13 +2813,11 @@ class FeasibilityAssessment(TimestampedModel):
         return f"Feasibility — {self.solution_hypothesis_id} @ {self.project_id}"
 
     def clean(self) -> None:
-        # `filter(client=…)` continua sendo a projeção que a Fase 6 remove; a fonte canônica é
-        # `engagement.account` e `Project.clean()` mantém as duas honestas.
         hipotese = self.solution_hypothesis if self.solution_hypothesis_id else None
         projeto = self.project if self.project_id else None
         if hipotese is None or projeto is None:
             return
-        if hipotese.improvement_opportunity.account_id != projeto.client_id:
+        if hipotese.improvement_opportunity.account_id != projeto.engagement.account_id:
             raise ValidationError(
                 {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
             )
@@ -2910,7 +2887,7 @@ class ProveExperiment(TimestampedModel):
         hipotese = self.solution_hypothesis if self.solution_hypothesis_id else None
         projeto = self.project if self.project_id else None
         if hipotese is not None and projeto is not None:
-            if hipotese.improvement_opportunity.account_id != projeto.client_id:
+            if hipotese.improvement_opportunity.account_id != projeto.engagement.account_id:
                 raise ValidationError(
                     {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
                 )
@@ -3426,14 +3403,14 @@ class Case(TimestampedModel):
     # O trio do consentimento. São três campos e não um booleano porque autorizar o uso do próprio
     # resultado é ato com autor e data — sem a cadeia, "o cliente deixou" é alegação de ninguém.
     # Gravados só pela ação `record-consent` (admin); read-only no serializer.
-    client_consent = models.BooleanField(default=False)
+    account_consent = models.BooleanField(default=False)
     consent_recorded_at = models.DateTimeField(null=True, blank=True)
     consent_recorded_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     # Publicar como "uma imobiliária de médio porte". É **outra** permissão, não uma versão fraca
     # do consentimento: autorizar o uso do resultado e autorizar o uso da marca são duas conversas,
-    # e por isso anonimizar não dispensa `client_consent`.
+    # e por isso anonimizar não dispensa `account_consent`.
     anonymized = models.BooleanField(default=False)
 
     class Meta:
@@ -3443,7 +3420,7 @@ class Case(TimestampedModel):
         return self.title
 
     def clean(self) -> None:
-        if self.status == self.Status.PUBLISHED and not self.client_consent:
+        if self.status == self.Status.PUBLISHED and not self.account_consent:
             raise ValidationError(
                 {"status": "Sem consentimento registrado do cliente, o case não pode ser publicado."}
             )

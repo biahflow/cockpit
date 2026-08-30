@@ -89,14 +89,14 @@ def score_meeting(meeting: Meeting, user: User | None = None) -> dict[str, Any]:
 
     project = meeting.project
     project.ai_maturity = _clamp(data.get("maturity"))
-    project.ai_opportunity = _clamp(data.get("opportunity"))
+    project.ai_potential = _clamp(data.get("opportunity"))
     project.ai_dimensions = _dimensions(data.get("dimensions"))
     project.ai_score_summary = str(data.get("summary", ""))
     project.ai_scored_at = timezone.now()
     project.ai_score_reviewed = False
     project.ai_score_meeting = meeting
     project.save(update_fields=[
-        "ai_maturity", "ai_opportunity", "ai_dimensions", "ai_score_summary",
+        "ai_maturity", "ai_potential", "ai_dimensions", "ai_score_summary",
         "ai_scored_at", "ai_score_reviewed", "ai_score_meeting", "updated_at",
     ])
 
@@ -108,7 +108,7 @@ def score_meeting(meeting: Meeting, user: User | None = None) -> dict[str, Any]:
 
     return {
         "maturity": project.ai_maturity,
-        "opportunity": project.ai_opportunity,
+        "opportunity": project.ai_potential,
         "dimensions": project.ai_dimensions,
         "summary": project.ai_score_summary,
         "scored_at": project.ai_scored_at.isoformat(),

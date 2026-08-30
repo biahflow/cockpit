@@ -106,7 +106,7 @@ def test_document_rejects_multiple_links_and_excessive_size() -> None:
 
     linked_twice = client.post(reverse("document-list"), {
         "account": first.id,
-        "project": ProjectFactory(client=second).id,
+        "project": ProjectFactory(engagement__account=second).id,
         "file": SimpleUploadedFile("duplicado.pdf", b"ok"),
     })
     oversized = client.post(reverse("document-list"), {
@@ -179,7 +179,7 @@ def test_safe_original_name(raw: str | None, expected: str) -> None:
 
 
 @pytest.mark.django_db
-def test_conversion_rejects_delivery_foreign_client_and_invalid_dates() -> None:
+def test_conversion_rejects_delivery_foreign_engagement_and_invalid_dates() -> None:
     sales = UserFactory(role=User.Role.SALES)
     opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"), owner=sales)
     endpoint = reverse("opportunity-convert-to-project", args=[opportunity.id])
@@ -190,9 +190,11 @@ def test_conversion_rejects_delivery_foreign_client_and_invalid_dates() -> None:
 
     sales_client = APIClient()
     sales_client.force_authenticate(sales)
+    # Fase 6: `Project.client` saiu e a conta do projeto é a do engagement. A invariante que
+    # sobrevive é "o engagement tem de ser da mesma conta da oportunidade" (view l. 1031), 400.
     foreign = sales_client.post(endpoint, {
-        "client": AccountFactory().id,
-        "name": "Cliente incorreto",
+        "engagement": EngagementFactory().id,
+        "name": "Conta incorreta",
         "start_date": "2026-08-01",
         "due_date": "2026-08-10",
     }, format="json")

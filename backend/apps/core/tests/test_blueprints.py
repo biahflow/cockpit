@@ -121,7 +121,7 @@ def test_unidade_e_direcao_do_kpi_nao_passam_pela_variante():
 @pytest.mark.django_db
 def test_instantiating_copies_the_catalog_into_the_project():
     vertical = _vertical()
-    project = ProjectFactory(client=AccountFactory(vertical=vertical))
+    project = ProjectFactory(engagement__account=AccountFactory(vertical=vertical))
     blueprint = _blueprint()
     BlueprintVariant.objects.create(
         blueprint=blueprint, vertical=vertical, description="Agenda visita pastoral.",
@@ -169,7 +169,7 @@ def test_editing_the_blueprint_does_not_rewrite_what_was_delivered():
 
 @pytest.mark.django_db
 def test_client_without_vertical_still_instantiates_from_the_generic_catalog():
-    project = ProjectFactory(client=AccountFactory(vertical=None))
+    project = ProjectFactory(engagement__account=AccountFactory(vertical=None))
     blueprint = _blueprint()
     BlueprintVariant.objects.create(
         blueprint=blueprint, vertical=_vertical(), description="Só para igrejas."
@@ -395,7 +395,7 @@ def test_sales_reads_the_roster_but_does_not_instantiate():
 def test_client_carries_a_vertical_and_the_project_exposes_it():
     vertical = _vertical()
     cliente = AccountFactory()
-    project = ProjectFactory(client=cliente)
+    project = ProjectFactory(engagement__account=cliente)
     client = _admin_client()
 
     atualizado = client.patch(

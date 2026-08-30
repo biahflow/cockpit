@@ -690,7 +690,7 @@ def build_account_overview(
     cliente — o caminho do detalhe.
     """
     if projects is None:
-        projects = account.projects.filter(archived_at__isnull=True)
+        projects = Project.objects.filter(engagement__account=account, archived_at__isnull=True)
     projects = list(projects)
     if context is None:
         context = build_overview_context(projects)
@@ -759,8 +759,10 @@ class AccountViewSet(ArchiveModelViewSet):
         ) or self.request.query_params.get("status")
         if status_param in set(Account.LifecycleStatus.values):
             queryset = queryset.filter(lifecycle_status=status_param)
-        # Entrega só conhece o cliente para quem trabalha (RFC 0003).
-        scope = project_scope_q(self.request.user, "projects")
+        # Entrega só conhece o cliente para quem trabalha (RFC 0003). Desde a Fase 6, `Account` não
+        # tem mais o reverso `projects` (era o related_name de `Project.client`, removido); o
+        # caminho canônico até o projeto passa pelo mandato: `engagements__projects`.
+        scope = project_scope_q(self.request.user, "engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_destroy(self, instance: Account) -> None:
@@ -777,7 +779,7 @@ class AccountViewSet(ArchiveModelViewSet):
         não sobrou projeto nem oportunidade viva na conta, e um mandato sem nenhum dos dois não é
         trabalho em aberto, é o resíduo dele. Acompanha o contato, na mesma transação.
         """
-        projetos = Project.objects.filter(client=instance, archived_at__isnull=True).count()
+        projetos = Project.objects.filter(engagement__account=instance, archived_at__isnull=True).count()
         oportunidades = CommercialOpportunity.objects.filter(
             account=instance, archived_at__isnull=True
         ).count()
@@ -803,8 +805,8 @@ class AccountViewSet(ArchiveModelViewSet):
 
     def _visible_projects(self, account: Account):  # type: ignore[no-untyped-def]
         return Project.objects.visible_to(self.request.user).filter(
-            client=account, archived_at__isnull=True
-        )
+            engagement__account=account, archived_at__isnull=True
+        ).select_related("engagement")
 
     @extend_schema(responses=inline_serializer("AccountOverviewList", {"clients": serializers.ListField()}))
     @action(detail=False, methods=["get"])
@@ -816,9 +818,9 @@ class AccountViewSet(ArchiveModelViewSet):
         # o custo do endpoint deixa de crescer com o tamanho da carteira (FDD 022).
         by_client: dict[int, list[Project]] = defaultdict(list)
         for project in Project.objects.visible_to(request.user).filter(
-            client__in=accounts, archived_at__isnull=True
-        ):
-            by_client[project.client_id].append(project)
+            engagement__account__in=accounts, archived_at__isnull=True
+        ).select_related("engagement"):
+            by_client[project.engagement.account_id].append(project)
         context = build_overview_context(
             [project for projects in by_client.values() for project in projects]
         )
@@ -844,7 +846,7 @@ class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Sem isto, as pessoas dos clientes que acabaram de sumir continuariam listadas.
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
 
@@ -862,7 +864,7 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Mesma fronteira do Contact: a Entrega só enxerga interações de clientes com projeto seu.
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: ActivitySerializer) -> None:
@@ -1027,14 +1029,16 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
             return Response({"detail": "A oportunidade deve estar na etapa Ganho."}, status=400)
         serializer = ProjectSerializer(data=request.data, engagement_optional=True)
         serializer.is_valid(raise_exception=True)
-        if serializer.validated_data["client"].id != opportunity.account_id:
-            return Response({"client": "O projeto deve usar o cliente da oportunidade."}, status=400)
+        # A chave `client` segue no contrato da `/api/v1/`. Quando o payload não traz engagement,
+        # o serializer ainda não tem contra o que compará-la; a oportunidade é a fonte que cria o
+        # mandato logo abaixo. Ignorar uma conta divergente devolveria 201 para um corpo que a v1
+        # sempre recusou — e faria o consumidor acreditar que escolheu uma conta que não foi usada.
+        legacy_client = request.data.get("client")
+        if legacy_client is not None and int(legacy_client) != opportunity.account_id:
+            return Response(
+                {"client": "O projeto deve usar o cliente da oportunidade."}, status=400
+            )
         engagement = serializer.validated_data.get("engagement")
-        # Ramo **inalcançável**, mantido como cinto de segurança em vez de removido: quem chega
-        # aqui já passou por `ProjectSerializer.validate` (que recusa `engagement.account !=
-        # client`) e pela comparação de conta logo acima, e as duas juntas já garantem esta
-        # terceira igualdade. `test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer`
-        # fixa quem de fato responde ali; remover a guarda é decisão de outra varredura.
         if engagement is not None and engagement.account_id != opportunity.account_id:
             return Response(
                 {"engagement": "O engagement deve ser da mesma conta da oportunidade."}, status=400
@@ -1226,7 +1230,7 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
     resource = "project"
     project_path = ""  # o recorte é sobre o próprio projeto
     queryset = Project.objects.select_related(
-        "client", "engagement", "originating_commercial_opportunity", "owner"
+        "engagement", "engagement__account", "originating_commercial_opportunity", "owner"
     ).all()
     serializer_class = ProjectSerializer
 
@@ -1277,7 +1281,7 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         vertical = (
             Vertical.objects.filter(pk=vertical_id).first()
             if vertical_id
-            else project.client.vertical
+            else project.engagement.account.vertical
         )
         employee = blueprints.instantiate(project, blueprint, vertical)
         return Response(DigitalEmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
@@ -1544,7 +1548,7 @@ def _build_timeline_overview(user: User) -> list[dict[str, Any]]:
         Project.objects.visible_to(user)
         .filter(archived_at__isnull=True)
         .exclude(status=Project.Status.COMPLETED)
-        .select_related("client")
+        .select_related("engagement__account")
         .order_by("due_date", "id")
     )
     if not projects:
@@ -1565,7 +1569,7 @@ def _build_timeline_overview(user: User) -> list[dict[str, Any]]:
         rows.append({
             "project_id": project.pk,
             "project_name": project.name,
-            "client_name": project.client.name,
+            "client_name": project.engagement.account.name,
             "current_phase_name": current.phase.name if current else None,
             "canonical_stage": current.phase.canonical_stage if current else "",
             "situation": current.situation if current else None,
@@ -1800,7 +1804,7 @@ class CaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet
     """
 
     resource = "case"
-    queryset = Case.objects.select_related("project__client", "vertical").all()
+    queryset = Case.objects.select_related("project__engagement__account", "vertical").all()
     serializer_class = CaseSerializer
     filter_fields = ("project", "vertical")
     filter_exact_fields = ("status",)
@@ -2314,7 +2318,7 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
 
     resource = "artifact"
     queryset = Artifact.objects.select_related(
-        "commercial_opportunity__account", "project__client", "document"
+        "commercial_opportunity__account", "project__engagement__account", "document"
     ).all()
     serializer_class = ArtifactSerializer
     filter_fields = ("commercial_opportunity", "project")
@@ -2552,7 +2556,7 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                 # Mesma distinção do `extrair_decisoes`: sem lista não houve extração, e isso não
                 # é o mesmo que "a reunião não descreveu processo nenhum".
                 raise _ExtracaoSemResultado()
-            account = meeting.project.client
+            account = meeting.project.engagement.account
             # A extração entra **depois** do que já foi mapeado à mão: `position` é a ordem em que
             # a operação acontece, e intercalar processos vindos de um modelo no meio de uma
             # sequência que alguém montou reescreveria essa ordem sem pedir licença.
@@ -2800,7 +2804,7 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Mesma fronteira da `Activity`: a Entrega só enxerga clientes com projeto seu.
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def _assert_cliente_no_escopo(self, account: Account | None) -> None:
@@ -2817,7 +2821,7 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         user = self.request.user
         if user.is_admin_role or user.role != User.Role.DELIVERY:
             return
-        if account is None or not Project.objects.visible_to(user).filter(client=account).exists():
+        if account is None or not Project.objects.visible_to(user).filter(engagement__account=account).exists():
             raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
     def perform_create(self, serializer: SatisfacaoSerializer) -> None:
@@ -2846,7 +2850,7 @@ def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
     """
     if user.is_admin_role or user.role != User.Role.DELIVERY:
         return
-    if account is None or not Project.objects.visible_to(user).filter(client=account).exists():
+    if account is None or not Project.objects.visible_to(user).filter(engagement__account=account).exists():
         raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
 
@@ -2868,7 +2872,7 @@ class ProcessViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: ProcessSerializer) -> None:
@@ -2913,7 +2917,7 @@ class ProcessStepViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "process__account__projects")
+        scope = project_scope_q(self.request.user, "process__account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: ProcessStepSerializer) -> None:
@@ -2949,7 +2953,7 @@ class DiscoveryViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVi
     """
 
     resource = "discovery"
-    queryset = Discovery.objects.select_related("project", "project__client", "owner").all()
+    queryset = Discovery.objects.select_related("project", "project__engagement__account", "owner").all()
     serializer_class = DiscoverySerializer
     filter_fields = ("project", "owner")
     filter_exact_fields = ("status",)
@@ -3034,7 +3038,7 @@ class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: EvidenceSerializer) -> None:
@@ -3095,7 +3099,7 @@ class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: FindingSerializer) -> None:
@@ -3156,7 +3160,7 @@ class PainPointViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: PainPointSerializer) -> None:
@@ -3189,7 +3193,7 @@ class ImprovementOpportunityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
-        scope = project_scope_q(self.request.user, "account__projects")
+        scope = project_scope_q(self.request.user, "account__engagements__projects")
         return queryset.filter(scope).distinct() if scope else queryset
 
     def perform_create(self, serializer: ImprovementOpportunitySerializer) -> None:
@@ -3225,7 +3229,7 @@ class PriorityAssessmentViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
         scope = project_scope_q(
-            self.request.user, "improvement_opportunity__account__projects"
+            self.request.user, "improvement_opportunity__account__engagements__projects"
         )
         return queryset.filter(scope).distinct() if scope else queryset
 
@@ -3257,7 +3261,7 @@ class SolutionHypothesisViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()
         scope = project_scope_q(
-            self.request.user, "improvement_opportunity__account__projects"
+            self.request.user, "improvement_opportunity__account__engagements__projects"
         )
         return queryset.filter(scope).distinct() if scope else queryset
 
@@ -4219,9 +4223,9 @@ class AnalyticsView(APIView):
         revenue = projects.aggregate(v=Sum("actual_value"))["v"] or Decimal("0")
         cost = projects.aggregate(v=Sum("cost"))["v"] or Decimal("0")
         by_client = [
-            {"label": row["client__name"], "revenue": row["rev"] or 0, "cost": row["cost"] or 0,
+            {"label": row["engagement__account__name"], "revenue": row["rev"] or 0, "cost": row["cost"] or 0,
              "roi": _roi(row["rev"] or Decimal("0"), row["cost"] or Decimal("0"))}
-            for row in projects.values("client__name").annotate(rev=Sum("actual_value"), cost=Sum("cost")).order_by("-rev")
+            for row in projects.values("engagement__account__name").annotate(rev=Sum("actual_value"), cost=Sum("cost")).order_by("-rev")
         ]
         by_service = [
             {"label": row["service__name"] or "Sem serviço", "revenue": row["rev"] or 0, "cost": row["cost"] or 0,
@@ -4256,7 +4260,7 @@ class AnalyticsView(APIView):
             rejected = rows.filter(status=Artifact.Status.REJECTED).count()
             reached = (
                 rows.annotate(
-                    account=Coalesce("commercial_opportunity__account_id", "project__client_id")
+                    account=Coalesce("commercial_opportunity__account_id", "project__engagement__account_id")
                 )
                 .values("account").distinct().count()
             )
@@ -4354,7 +4358,11 @@ class HealthView(APIView):
 
     @extend_schema(responses=inline_serializer("HealthResponse", {"projects": serializers.ListField()}))
     def get(self, request: Request) -> Response:
-        projects = Project.objects.visible_to(request.user).filter(
+        # `select_related("engagement")`: `assess_projects_health` lê `project.engagement.account_id`
+        # por projeto (satisfação é por conta). Antes da Fase 6 isso era `project.client_id`, campo
+        # direto sem query; agora é um hop, e sem o join o custo cresce com a base (N+1). Ver
+        # `test_aggregate_query_budget`.
+        projects = Project.objects.visible_to(request.user).select_related("engagement").filter(
             archived_at__isnull=True
         ).exclude(status=Project.Status.COMPLETED)
         # pior primeiro: menor score de saúde no topo, para a equipe agir onde dói.
@@ -4892,6 +4900,6 @@ class PortalProjectSnapshotView(APIView):
         # (Issue #71): sem ele, cada leitura somaria três consultas ao que já é uma projeção
         # inteira montada por requisição.
         project = get_object_or_404(
-            Project.objects.select_related("client", "engagement", "engagement__account"), pk=pk
+            Project.objects.select_related("engagement", "engagement__account"), pk=pk
         )
         return Response(portal.build_snapshot(project))

@@ -656,7 +656,7 @@ def test_a_escolhida_arquivada_libera_a_proxima(api: APIClient) -> None:
 
 def test_o_recomendador_aponta_a_priorizada_de_maior_score() -> None:
     """Critério de aceite da issue: o próximo passo sai da `PriorityAssessment` vigente, e não de
-    um campo opaco — `Lead.ai_score` e `Project.ai_opportunity` medem outra coisa (§5)."""
+    um campo opaco — `Lead.ai_score` e `Project.ai_potential` medem outra coisa (§5)."""
     conta = AccountFactory()
     campea = ImprovementOpportunityFactory(
         account=conta, title="Campeã", status=ImprovementOpportunity.Status.PRIORITIZED
@@ -707,7 +707,7 @@ def test_entrega_nao_ve_os_quatro_recursos_de_outra_conta() -> None:
     minha = AccountFactory()
     alheia = AccountFactory()
     entrega = UserFactory(role=User.Role.DELIVERY)
-    ProjectMemberFactory(project=ProjectFactory(client=minha), user=entrega)
+    ProjectMemberFactory(project=ProjectFactory(engagement__account=minha), user=entrega)
 
     for conta in (minha, alheia):
         PainPointFactory(account=conta)
@@ -787,7 +787,7 @@ def test_entrega_escreve_dentro_do_proprio_cliente() -> None:
     """Controle positivo dos três acima: o levantamento é das duas áreas (FDD 039, FDD 045)."""
     minha = AccountFactory()
     entrega = UserFactory(role=User.Role.DELIVERY)
-    ProjectMemberFactory(project=ProjectFactory(client=minha), user=entrega)
+    ProjectMemberFactory(project=ProjectFactory(engagement__account=minha), user=entrega)
     api = APIClient()
     api.force_authenticate(entrega)
 

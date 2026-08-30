@@ -39,7 +39,7 @@ def cenario():
     api.force_authenticate(admin)
     cliente = AccountFactory()
     projeto = ProjectFactory(
-        client=cliente,
+        engagement__account=cliente,
         owner=admin,
         service=Service.objects.get(tier="prove"),
         actual_value=Decimal("120000.00"),
@@ -53,7 +53,7 @@ def _fotografar(api, projeto, admin):
     return {
         "analytics": api.get("/api/v1/analytics/").data,
         "clients_overview": api.get("/api/v1/clients/overview/").data,
-        "client_overview": api.get(f"/api/v1/clients/{projeto.client_id}/overview/").data,
+        "client_overview": api.get(f"/api/v1/clients/{projeto.engagement.account_id}/overview/").data,
         "portal_snapshot": portal.build_snapshot(projeto).get("roi"),
         "health": health.assess_project_health(projeto),
         "finance_context": agents.build_finance_context(admin),
@@ -83,7 +83,7 @@ def test_fatura_vencida_tambem_nao_mexe_no_roi(cenario):
     antes = _fotografar(api, projeto, admin)
 
     InvoiceFactory(
-        account=projeto.client,
+        account=projeto.engagement.account,
         project=projeto,
         status=Invoice.Status.OVERDUE,
         number="2026-6001",

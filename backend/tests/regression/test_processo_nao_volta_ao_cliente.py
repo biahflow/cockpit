@@ -61,7 +61,7 @@ def projeto_com_discovery():  # type: ignore[no-untyped-def]
     """Cenário em que os três registros existem, e o mais constrangedor possível se vazasse."""
     project = ProjectFactory()
     processo = Process.objects.create(
-        account=project.client,
+        account=project.engagement.account,
         source_project=project,
         name="Faturamento manual",
         volume_mes=400,
@@ -78,7 +78,7 @@ def projeto_com_discovery():  # type: ignore[no-untyped-def]
         retrabalho="Nota cancelada e reemitida no dia seguinte",
     )
     Finding.objects.create(
-        account=project.client,
+        account=project.engagement.account,
         process=processo,
         step=etapa,
         epistemic_status=Finding.EpistemicStatus.HYPOTHESIS,

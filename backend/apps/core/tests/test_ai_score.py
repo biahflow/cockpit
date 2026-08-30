@@ -26,7 +26,7 @@ def test_score_meeting_persists_on_project_and_audits(monkeypatch):
     project = meeting.project
     project.refresh_from_db()
     assert project.ai_maturity == 40
-    assert project.ai_opportunity == 85
+    assert project.ai_potential == 85
     assert project.ai_dimensions == [
         {"label": "Dados", "score": 30},
         {"label": "Processos", "score": 55},
@@ -55,7 +55,7 @@ def test_score_meeting_clamps_and_drops_invalid_dimensions(monkeypatch):
 
     project = meeting.project
     project.refresh_from_db()
-    assert project.ai_maturity == 100 and project.ai_opportunity == 0
+    assert project.ai_maturity == 100 and project.ai_potential == 0
     assert project.ai_dimensions == [{"label": "Dados", "score": 100}]  # só a entrada válida
 
 
@@ -68,7 +68,7 @@ def test_score_meeting_tolerates_garbage_output(monkeypatch):
 
     project = meeting.project
     project.refresh_from_db()
-    assert project.ai_maturity is None and project.ai_opportunity is None
+    assert project.ai_maturity is None and project.ai_potential is None
     assert project.ai_dimensions == []
     assert project.ai_scored_at is not None  # registrou a tentativa mesmo sem dados
 

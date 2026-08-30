@@ -39,12 +39,12 @@ def admin_client() -> APIClient:
 def test_cliente_com_projeto_aberto_nao_arquiva(admin_client: APIClient) -> None:
     project = ProjectFactory()
 
-    resposta = admin_client.delete(reverse("client-detail", args=[project.client.pk]))
+    resposta = admin_client.delete(reverse("client-detail", args=[project.engagement.account.pk]))
 
     assert resposta.status_code == 409
     assert "1 projeto(s)" in resposta.data["detail"]
-    project.client.refresh_from_db()
-    assert project.client.archived_at is None
+    project.engagement.account.refresh_from_db()
+    assert project.engagement.account.archived_at is None
 
 
 @pytest.mark.django_db
@@ -102,8 +102,8 @@ def test_arquivar_o_projeto_libera_o_cliente(admin_client: APIClient) -> None:
     project = ProjectFactory()
     assert admin_client.delete(reverse("project-detail", args=[project.pk])).status_code == 204
 
-    resposta = admin_client.delete(reverse("client-detail", args=[project.client.pk]))
+    resposta = admin_client.delete(reverse("client-detail", args=[project.engagement.account.pk]))
 
     assert resposta.status_code == 204
     assert Project.objects.filter(pk=project.pk, archived_at__isnull=False).exists()
-    assert CommercialOpportunity.objects.filter(account=project.client).count() == 0
+    assert CommercialOpportunity.objects.filter(account=project.engagement.account).count() == 0

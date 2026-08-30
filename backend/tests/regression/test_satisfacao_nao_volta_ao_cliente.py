@@ -44,7 +44,7 @@ def projeto_com_satisfacao():  # type: ignore[no-untyped-def]
     asserção passaria por ausência de dado, não por ausência de vazamento."""
     project = ProjectFactory()
     Satisfacao.objects.create(
-        account=project.client,
+        account=project.engagement.account,
         project=project,
         nivel=Satisfacao.Nivel.INSATISFEITO,
         fonte=Satisfacao.Fonte.PERCEBIDA,
@@ -73,7 +73,7 @@ def test_a_nota_nao_vaza_nem_pelo_health_do_snapshot(projeto_com_satisfacao) -> 
     impede que "detalhar um pouco mais para o cliente" desfaça isso.
     """
     Satisfacao.objects.create(
-        account=projeto_com_satisfacao.client,
+        account=projeto_com_satisfacao.engagement.account,
         nivel=Satisfacao.Nivel.INSATISFEITO,
         fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=timezone.localdate(),

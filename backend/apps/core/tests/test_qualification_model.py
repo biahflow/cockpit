@@ -29,6 +29,7 @@ from apps.core.models import (
 from .factories import (
     AccountFactory,
     CommercialOpportunityFactory,
+    EngagementFactory,
     LeadFactory,
     QualificationFactory,
     ServiceFactory,
@@ -353,7 +354,7 @@ def test_convert_to_project_recusa_oferta_de_aquisicao(api: APIClient, vendas: U
 def test_project_clean_recusa_oferta_de_aquisicao() -> None:
     porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
     project = Project(
-        client=AccountFactory(), name="Projeto", owner=UserFactory(), service=porta,
+        engagement=EngagementFactory(), name="Projeto", owner=UserFactory(), service=porta,
         start_date=timezone.localdate(), due_date=timezone.localdate() + timedelta(days=10),
     )
     with pytest.raises(ValidationError) as exc:

@@ -260,7 +260,7 @@ def _entrega_em_frangalhos(account: Account, **kwargs) -> Project:
     quer — em vez de deixar a trava sendo testada contra um projeto saudável.
     """
     ontem = timezone.localdate() - timedelta(days=1)
-    project = ProjectFactory(client=account, due_date=ontem, **kwargs)
+    project = ProjectFactory(engagement__account=account, due_date=ontem, **kwargs)
     for indice in range(4):
         Milestone.objects.create(
             project=project, title=f"Marco {indice}", due_date=ontem, owner=project.owner
@@ -350,7 +350,7 @@ def test_projeto_saudavel_nao_troca_a_escada() -> None:
     """O complemento: cercar tudo não é cercar. Se qualquer projeto trocasse a escada, o teste de
     cima passaria por ausência de projeto e não por ausência de crítico."""
     account = AccountFactory()
-    ProjectFactory(client=account)
+    ProjectFactory(engagement__account=account)
 
     assert cobranca.entrega_critica(account, HOJE) is False
     assert cobranca.regua_para(account, HOJE) is cobranca.PADRAO
@@ -575,7 +575,7 @@ def test_a_escalada_acorda_o_dono_do_cliente_e_os_admins_nao_a_equipe() -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     entrega = UserFactory(role=User.Role.DELIVERY)
     account = AccountFactory(owner=dono)
-    projeto = ProjectFactory(client=account)
+    projeto = ProjectFactory(engagement__account=account)
     ProjectMemberFactory(project=projeto, user=entrega)
     _vencendo_em(22, account=account, project=projeto)
 
@@ -898,7 +898,12 @@ def test_rascunhar_devolve_texto_e_nao_envia(
 
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
-def test_rascunhar_sem_degrau_aplicavel_recusa(admin_api: APIClient) -> None:
+def test_rascunhar_sem_degrau_aplicavel_recusa(admin_api: APIClient, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # A view chama `degrau_devido(invoice)` sem `hoje`, então lê o relógio real — enquanto a fatura
+    # é construída relativa a `HOJE`. Sem congelar, o dia real pode cair no pré-aviso (D negativo) e
+    # a régua indicaria um degrau, furando a carência que o teste quer exercer. Congelamos o "hoje"
+    # da régua em `HOJE` para o caso ser determinístico.
+    monkeypatch.setattr(cobranca, "_hoje", lambda hoje=None: hoje or HOJE)
     invoice = _vencendo_em(1)  # carência: a régua não indica degrau nenhum hoje
     resp = admin_api.post(f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {}, format="json")
     assert resp.status_code == 400
@@ -1126,7 +1131,7 @@ def test_o_painel_traz_a_relacao_a_vista(admin_api: APIClient) -> None:
     """Critério de aceite 7 da FDD 036 e a exigência da seção Segurança da RFC: health, tempo de
     casa e valor do cliente **na mesma linha** do próximo degrau."""
     antigo = _cliente_de_casa()
-    projeto = ProjectFactory(client=antigo)
+    projeto = ProjectFactory(engagement__account=antigo)
     invoice = _vencendo_em(12, account=antigo, project=projeto)
     InvoiceFactory(
         account=antigo, status=Invoice.Status.PAID, number="2025-0100",
@@ -1216,7 +1221,7 @@ def test_o_painel_mostra_o_pior_health_do_cliente_e_nao_o_da_fatura(admin_api: A
     """A linha não pode contradizer o relógio (FDD 038): a guarda olha **todos** os projetos ativos
     do cliente, então mostrar o health do projeto da fatura diria "saudável" com a régua tensa."""
     account = AccountFactory()
-    saudavel = ProjectFactory(client=account)
+    saudavel = ProjectFactory(engagement__account=account)
     _entrega_em_frangalhos(account)
     # A fatura está presa ao projeto **saudável**: é exatamente o caso em que as duas leituras
     # discordavam.
@@ -1397,7 +1402,7 @@ def test_o_painel_nao_leva_custo_margem_nem_roi(admin_api: APIClient) -> None:
     nunca o que a casa calcula sobre si mesma."""
     projeto = ProjectFactory(actual_value=Decimal("250000.00"))
     _fatura(
-        account=projeto.client, project=projeto, due_date=timezone.localdate() - timedelta(days=12)
+        account=projeto.engagement.account, project=projeto, due_date=timezone.localdate() - timedelta(days=12)
     )
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
@@ -1481,7 +1486,7 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
     # é o caso em que guardar o health do projeto da fatura, e não o pior do cliente, faria o lote
     # divergir da consulta.
     em_frangalhos = AccountFactory()
-    saudavel = ProjectFactory(client=em_frangalhos)
+    saudavel = ProjectFactory(engagement__account=em_frangalhos)
     _entrega_em_frangalhos(em_frangalhos)
     critica = _fatura(due_date=hoje - timedelta(days=12), account=em_frangalhos, project=saudavel)
 

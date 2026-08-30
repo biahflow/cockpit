@@ -154,16 +154,8 @@ class ProjectFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Project
 
-    # `client` e não `account`: `Project.client` é a projeção que a fatia 2 da issue #67 **não**
-    # renomeou, e a Fase 6 é quem a remove (ADR 0052).
-    client = factory.SubFactory(AccountFactory)
-    # O engajamento nasce **na conta do próprio projeto**, e não numa conta nova: um
-    # `SubFactory(EngagementFactory)` cru criaria uma segunda `Account` e todo projeto de fábrica
-    # violaria a invariante que `Project.clean()` protege (`engagement.account == client`) — o
-    # teste ficaria verde num estado que a API recusa.
     engagement = factory.SubFactory(
         EngagementFactory,
-        account=factory.SelfAttribute("..client"),
         owner=factory.SelfAttribute("..owner"),
     )
     name = "Projeto de aceleração"
@@ -406,7 +398,7 @@ class FeasibilityAssessmentFactory(factory.django.DjangoModelFactory):
     # que `ProjectFactory` tem com o `engagement`.
     solution_hypothesis = factory.LazyAttribute(
         lambda obj: SolutionHypothesisFactory(
-            improvement_opportunity=ImprovementOpportunityFactory(account=obj.project.client)
+            improvement_opportunity=ImprovementOpportunityFactory(account=obj.project.engagement.account)
         )
     )
     technical_verdict = FeasibilityAssessment.Verdict.FAVORABLE
@@ -432,7 +424,7 @@ class ProveExperimentFactory(factory.django.DjangoModelFactory):
     # que `ProjectFactory` tem com o `engagement`.
     solution_hypothesis = factory.LazyAttribute(
         lambda obj: SolutionHypothesisFactory(
-            improvement_opportunity=ImprovementOpportunityFactory(account=obj.project.client)
+            improvement_opportunity=ImprovementOpportunityFactory(account=obj.project.engagement.account)
         )
     )
     controlled_scope = "Uma filial, por quatro semanas."

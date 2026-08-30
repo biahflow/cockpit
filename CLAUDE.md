@@ -103,9 +103,9 @@ Key cross-cutting patterns to preserve:
   `Engagement` (ADR 0050, FDD 046) is the transformation mandate a client contracted: it groups
   several sales and several projects that are the *same* work. `Project.engagement` is NOT NULL —
   a one-off sale is **not** a special case, it gets a single-scope Engagement that
-  `convert-to-project` creates on its own. `Project.client` survives only as a **projection**
-  (canonical is `engagement.account`; removal is Phase 6), and the single thing keeping it honest
-  is `Project.clean()`: `engagement.account_id == client_id`. The Engagement is **not** an access
+  `convert-to-project` creates on its own. `Project.client` was removed in Phase 6; the canonical
+  account is `engagement.account`, and the `/api/v1/` still emits `client` as a read-only alias
+  derived from `engagement.account_id`. The Engagement is **not** an access
   boundary — Delivery scope is still `ProjectMember`, and engagement visibility *derives* from
   `Project.objects.visible_to(user)`, never the reverse. Sales writes it; Delivery only reads.
   The mandate also records `commercial_model` (`paid`/`design_partner`, default `paid`): a
@@ -246,8 +246,8 @@ Key cross-cutting patterns to preserve:
   sobrevive ao corte.
 - **O snapshot do portal fala canônico, e quem carimba a projeção é quem muda o estado.**
   `portal.build_snapshot` é projeção de leitura do One, e o One **nunca renomeia** (`language-map`
-  §3): por isso ele leva `account` (de `engagement.account`, a fonte — não de `Project.client`, que
-  é a projeção temporária), `engagement`, e `canonical_stage`/`requires_gate`/`gate_decision` em
+  §3): por isso ele leva `account` (de `engagement.account`), `engagement`, e
+  `canonical_stage`/`requires_gate`/`gate_decision` em
   cada fase. `gate_decision` era lido de uma **propriedade** de `ProjectPhase`, para o nome legado
   não se espalhar; desde a #67 é o nome do próprio campo, e a chave emitida nunca mudou — que era
   o ponto do alias. `client` fica como alias até a `/api/v2/`; `situation` e `waiting_party` **não**
@@ -320,12 +320,12 @@ Key cross-cutting patterns to preserve:
   `processos.py` virando `process.py`). `Evidencia` **não** foi renomeada: ela era a metade legada do
   split, e a **Fase 6 (issue #70, migração `0068`) a removeu** com o dual-write, em vez de renomeá-la
   — trocar o nome sem dividir preservaria o defeito de linguagem que a divisão corrige. As
-  **tabelas** dos quatro renomes saíram na Fase 6 (migração `0069`, renome em lugar); sobram
-  `Project.client` (a projeção, Fase 6) e as rotas e chaves de payload (`/api/v2/`, que agora pode
-  nascer). O que a guarda ainda
-  tolera está em `docs/ontology/legacy-allowlist.txt` (teto **26**, depois que as quatro linhas da
-  `Evidencia` saíram), e o prazo de cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c
-  campo vs. chave).
+  **tabelas** dos quatro renomes saíram na Fase 6 (migração `0069`, renome em lugar).
+  `Project.client` (migração `0070`), `ai_opportunity`→`ai_potential` (migração `0071`) e
+  `client_consent`→`account_consent` (migração `0072`) também saíram na Fase 6; sobram as rotas
+  e chaves de payload (`/api/v2/`, que agora pode nascer). O que a guarda ainda tolera está em
+  `docs/ontology/legacy-allowlist.txt` (teto **23**), e o prazo de cada alias, em
+  `docs/ontology/aliases.md` (§2b as seis pks, §2c campo vs. chave).
 - **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
   `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
   `docs/design/dap-engagement-r1/`, r1, decisões **A1** (título em inglês, copy em volta em pt-BR)

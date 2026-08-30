@@ -52,7 +52,7 @@ def _entrega_em_frangalhos(account: Account) -> Project:
     apontando o cenário, e não passar silenciosamente medindo um projeto saudável.
     """
     ontem = timezone.localdate() - timedelta(days=1)
-    project = ProjectFactory(client=account, due_date=ontem)
+    project = ProjectFactory(engagement__account=account, due_date=ontem)
     for indice in range(4):
         Milestone.objects.create(
             project=project, title=f"Marco {indice}", due_date=ontem, owner=project.owner

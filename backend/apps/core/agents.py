@@ -167,7 +167,7 @@ def build_delivery_context(user: User) -> str:
     # Por cliente e não por projeto: a satisfação é da relação. O recorte continua saindo de
     # `visible_to` (ADR 0010), pela lista `active` que o bloco de riscos já usa.
     vigentes = satisfacao_module.vigentes_por_cliente(
-        {project.client_id for project in active}, hoje
+        {project.engagement.account_id for project in active}, hoje
     )
     if vigentes:
         lines.append("Satisfação registrada (o mais recente por cliente, últimos 90 dias):")
@@ -191,11 +191,11 @@ def build_finance_context(user: User) -> str:
     cost = active.aggregate(v=Sum("cost"))["v"] or Decimal("0")
     lines = [f"Financeiro (projetos ativos): receita {revenue}, custo {cost}, resultado {revenue - cost}.",
              "ROI por cliente:"]
-    for row in active.values("client__name").annotate(rev=Sum("actual_value"), c=Sum("cost")).order_by("-rev")[:15]:
+    for row in active.values("engagement__account__name").annotate(rev=Sum("actual_value"), c=Sum("cost")).order_by("-rev")[:15]:
         rev = row["rev"] or Decimal("0")
         client_cost = row["c"] or Decimal("0")
         roi = round(float((rev - client_cost) / client_cost), 2) if client_cost else None
-        lines.append(f"- {row['client__name']}: receita {rev}, custo {client_cost}, ROI {roi if roi is not None else 'n/d'}")
+        lines.append(f"- {row['engagement__account__name']}: receita {rev}, custo {client_cost}, ROI {roi if roi is not None else 'n/d'}")
     return "\n".join(lines)
 
 

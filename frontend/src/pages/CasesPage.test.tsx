@@ -28,7 +28,7 @@ function caso(overrides: Record<string, unknown> = {}) {
     health_snapshot: { score: 82, level: "saudável", signals: [] },
     roi_snapshot: { revenue: "180000.00", cost: "90000.00", roi: 1 },
     status: "draft", status_display: "Rascunho", published_at: null,
-    client_consent: false, consent_recorded_at: null, consent_recorded_by: null,
+    account_consent: false, client_consent: false, consent_recorded_at: null, consent_recorded_by: null,
     anonymized: false, created_at: "2026-08-01T12:00:00Z", updated_at: "2026-08-01T12:00:00Z",
     ...overrides,
   };
@@ -87,7 +87,7 @@ test("registra o consentimento pelo diálogo de confirmação", async () => {
 });
 
 test("com consentimento registrado, publicar fica disponível", async () => {
-  mocks.api.mockImplementation(stub([caso({ client_consent: true, status: "review", status_display: "Em revisão" })]));
+  mocks.api.mockImplementation(stub([caso({ account_consent: true, client_consent: true, status: "review", status_display: "Em revisão" })]));
   const user = userEvent.setup();
   render(<CasesPage />);
   await screen.findByText("Consentimento registrado");

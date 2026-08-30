@@ -678,7 +678,7 @@ def test_analytics_breaks_the_funnel_down_by_journey_stage(api_client: APIClient
                     status=Artifact.Status.ACCEPTED)
     ArtifactFactory(commercial_opportunity=CommercialOpportunityFactory(account=account, owner=admin_user),
                     status=Artifact.Status.REJECTED)
-    ArtifactFactory(commercial_opportunity=None, project=ProjectFactory(client=account, owner=admin_user),
+    ArtifactFactory(commercial_opportunity=None, project=ProjectFactory(engagement__account=account, owner=admin_user),
                     kind=Artifact.Kind.ASSESSMENT, status=Artifact.Status.SENT)
     api_client.force_authenticate(admin_user)
 

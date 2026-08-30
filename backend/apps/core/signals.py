@@ -231,12 +231,9 @@ def _emit_artifact(sender: type[Artifact], instance: Artifact, **kwargs: Any) ->
         return
     project_id = instance.project_id
     if project_id is None and instance.commercial_opportunity_id is not None:
-        # Pela oportunidade e não pelo `instance.commercial_opportunity.account_id`: aquele
-        # caminho custa uma busca a mais só para descobrir o cliente que este `filter` já
-        # alcança pela travessia.
         project_id = (
             Project.objects.filter(
-                client__opportunities=instance.commercial_opportunity_id,
+                engagement__account__opportunities=instance.commercial_opportunity_id,
                 archived_at__isnull=True,
             )
             .order_by("created_at", "id")
