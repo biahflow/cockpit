@@ -644,23 +644,23 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v1/project-phases/": serie(4, index => ({
     id: index, project: 1, phase: index, phase_name: `Fase ${index} — implantação assistida`,
     phase_description: "", phase_position: index,
-    status: index === 0 ? "done" : index === 1 ? "active" : "locked",
-    started_at: null, completed_at: index === 0 ? `${HOJE}T08:00:00Z` : null, target_date: HOJE,
+    status: index === 1 ? "done" : index === 2 ? "active" : "locked",
+    started_at: null, completed_at: index === 1 ? `${HOJE}T08:00:00Z` : null, target_date: HOJE,
     deliverables: serie(2, d => ({ id: d, project_phase: index, name: `Entregável ${d}`, status: "pending", document: null, position: d, delivered_at: null })),
     // FDD 033: a fase concluída carrega uma decisão (o selo renderiza e o axe o mede) e a ativa
     // termina em gate com checklist pendente — senão o e2e aprova superfícies que nunca abriu.
-    requires_gate: index === 1,
+    requires_gate: index === 2,
     // A fase canônica é o que faz os painéis de Feasibility e PROVE existirem (DAP
     // `dap-prove-e-valor-r1`, decisão A1). Sem ela a matriz aprovaria o detalhe do projeto sem os
     // dois painéis novos — que é o mesmo modo de falha da chave de rota errada, um nível acima.
-    // `serie` é **1-based** (`indice + 1`), e é por isso que os dois valores são 1 e 2: a fase 1 é
-    // a ativa, a 2 é a seguinte, e as duas juntas fazem os dois painéis existirem.
+    // `serie` é **1-based** (`indice + 1`), e é por isso que os dois valores são 1 e 2: a fase 1
+    // concluída é Feasibility e a fase 2 ativa é PROVE; as duas juntas fazem os painéis existirem.
     canonical_stage: index === 1 ? "feasibility" : index === 2 ? "prove" : "",
-    gate_decision: index === 0 ? "conditional_go" : "",
-    gate_notes: index === 0 ? "Seguimos monitorando a acurácia do OCR." : "",
+    gate_decision: index === 1 ? "conditional_go" : "",
+    gate_notes: index === 1 ? "Seguimos monitorando a acurácia do OCR." : "",
     checklist_waiver: "",
-    checklist_items: index === 1
-      ? serie(2, c => ({ id: c, project_phase: index, text: `Item de qualidade ${c}`, position: c, checked: c === 0, checked_at: c === 0 ? `${HOJE}T08:00:00Z` : null }))
+    checklist_items: index === 2
+      ? serie(2, c => ({ id: c, project_phase: index, text: `Item de qualidade ${c}`, position: c, checked: c === 1, checked_at: c === 1 ? `${HOJE}T08:00:00Z` : null }))
       : [],
   })),
   // O ativo **referencia** o KPI desde a decisão C1: `kpi` aponta para o indicador e

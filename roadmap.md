@@ -57,6 +57,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 046 | Engagement entre a conta e o projeto (ontologia, fase 2) | Entregue | 1 | `docs/fdd/046-o-engajamento-entre-a-conta-e-o-projeto.md` |
 | FDD 047 | Snapshot do portal no vocabulário canônico e carimbo da projeção | Entregue | 1 | `docs/fdd/047-o-snapshot-que-falava-o-vocabulario-antigo.md` |
 | ADR 0052 | Renome de classe da ontologia — `GateOutcome`→`GateDecision`, `Opportunity`→`CommercialOpportunity`, `Client`→`Account`, `Processo`/`ProcessoEtapa`→`Process`/`ProcessStep` (issue #67) | Entregue | 1 | `docs/adr/0052-o-renome-de-classe-vem-antes-da-fase-6-a-tabela-e-a-rota-ficam.md` |
+| ADR 0056 | Valores de enum em inglês canônico, com aliases portugueses na `/api/v1/` (issue #94) | Entregue | 1 | `docs/adr/0056-valor-de-enum-tambem-e-vocabulario.md` |
 | FDD 048 | Cadeia do PRIORITIZE: PainPoint, ImprovementOpportunity, PriorityAssessment e SolutionHypothesis (ontologia, fase 4) | Entregue (backend) | 1 | `docs/fdd/048-onde-atuar-nao-tinha-onde-morar.md` |
 | FDD 049 | Feasibility, PROVE, KPI/Measurement e Value Ledger (ontologia, fase 5) | Entregue (backend) | 1 | `docs/fdd/049-a-medicao-morava-dentro-do-ativo-de-solucao.md` |
 

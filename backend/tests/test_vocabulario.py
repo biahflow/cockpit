@@ -428,6 +428,54 @@ def test_a_allowlist_so_encolhe() -> None:
     )
 
 
+def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
+    """D10: dívida existente pode migrar em sua fatia; ocorrência nova não entra por carona.
+
+    O teste usa as próprias `choices`, não busca textual: comentário, copy e rótulo traduzido são
+    português legítimo. O que fica congelado é só o valor que persiste e atravessa a API.
+    """
+    from apps.core import cobranca
+    from apps.core.models import Activity, CobrancaContato, DigitalEmployeeBlueprint, Satisfacao
+
+    legados = {
+        "Activity.CobrancaSinal": tuple(Activity.CobrancaSinal.values),
+        "CobrancaContato.Degrau": tuple(CobrancaContato.Degrau.values),
+        "Satisfacao.Fonte": tuple(Satisfacao.Fonte.values),
+        "Satisfacao.Nivel": tuple(Satisfacao.Nivel.values),
+        "DigitalEmployeeBlueprint.Area": tuple(DigitalEmployeeBlueprint.Area.values),
+    }
+    assert legados == {
+        "Activity.CobrancaSinal": ("esqueceu", "nao_pode", "insatisfeito"),
+        "CobrancaContato.Degrau": (
+            "pre_aviso",
+            "lembrete",
+            "firme",
+            "escalada",
+            "renegociacao",
+        ),
+        "Satisfacao.Fonte": ("declarada", "percebida"),
+        "Satisfacao.Nivel": ("promotor", "satisfeito", "neutro", "insatisfeito"),
+        "DigitalEmployeeBlueprint.Area": (
+            "comercial",
+            "financeiro",
+            "rh",
+            "juridico",
+            "atendimento",
+        ),
+    }
+
+    chaves_operacionais = {
+        "PADRAO": tuple(degrau.key for degrau in cobranca.PADRAO),
+        "RELACAO_LONGA": tuple(degrau.key for degrau in cobranca.RELACAO_LONGA),
+        "RELACAO_TENSA": tuple(degrau.key for degrau in cobranca.RELACAO_TENSA),
+    }
+    assert chaves_operacionais == {
+        "PADRAO": ("pre_aviso", "lembrete", "firme", "escalada", "renegociacao"),
+        "RELACAO_LONGA": ("pre_aviso", "lembrete", "escalada", "renegociacao"),
+        "RELACAO_TENSA": ("pre_aviso", "lembrete", "escalada", "renegociacao"),
+    }
+
+
 # --------------------------------------------------------------------------------------------
 # A guarda tem teste, como qualquer outro código
 # --------------------------------------------------------------------------------------------

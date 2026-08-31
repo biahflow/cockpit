@@ -59,6 +59,18 @@ for (const screen of ROUTES) {
   test(`${screen.name} não tem violação de acessibilidade`, async ({ page }) => {
     await abrir(page, screen);
 
+    // A matriz já passou meses "cobrindo" esta pílula sem nunca renderizá-la: `serie` é
+    // 1-based e o fixture comparava o índice com zero. Esta asserção torna a medição não-vazia.
+    // Como esta spec roda nos projetos mobile, tablet e desktop, as três larguras provam que a
+    // decisão de uma fase concluída chegou ao DOM antes de o axe medir seu contraste.
+    if (screen.path === "/projetos/1") {
+      const decisaoDaFase = page.locator(
+        'span.state[title="Seguimos monitorando a acurácia do OCR."]',
+      );
+      await expect(decisaoDaFase).toHaveText("CONDITIONAL GO");
+      await expect(decisaoDaFase).toBeVisible();
+    }
+
     const { violations } = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();

@@ -61,3 +61,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0053 — A escada perde um degrau, o Design Partner entra pelo valor concedido, e "fase" nomeia uma coisa só
 - 0054 — A avaliação de prioridade é imutável, e a fórmula fica congelada na linha
 - 0055 — A medição sai do ativo de solução, e o ativo passa a referenciá-la
+- 0056 — Valor de enum também é vocabulário
