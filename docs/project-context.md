@@ -43,7 +43,7 @@ disponíveis são:
 | Compose | Configuração dos composes de desenvolvimento e produção. |
 | Backup/recovery | `.github/scripts/backup-drill.sh`. |
 | Backend lint, tipos, segurança, checks e migrações | `ruff`, `mypy`, `pip-audit`, `manage.py check` e `makemigrations --check`. |
-| Backend testes e contrato | `pytest`, OpenAPI validado e diffs de `openapi.yaml`. |
+| Backend testes e contrato | `pytest` hermético (egress bloqueado; loopback/Unix socket permitidos), OpenAPI validado e diffs de `openapi.yaml`. |
 | Corpus de conhecimento | `build_knowledge_corpus` e diff de `apps/core/knowledge_corpus.jsonl`. |
 | Segurança de produção | `collectstatic` e `check --deploy --tag security` em ambiente simulado. |
 | PostgreSQL/pgvector | Testes marcados `pgvector` contra Postgres. |

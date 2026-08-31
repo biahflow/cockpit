@@ -9,6 +9,7 @@ que a casa já usa —, então nada aqui está atrás de `# pragma: no cover`.
 
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import Mock
 
 import pytest
 from django.core import mail
@@ -898,15 +899,19 @@ def test_rascunhar_devolve_texto_e_nao_envia(
 
 @pytest.mark.django_db
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
-def test_rascunhar_sem_degrau_aplicavel_recusa(admin_api: APIClient, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    # A view chama `degrau_devido(invoice)` sem `hoje`, então lê o relógio real — enquanto a fatura
-    # é construída relativa a `HOJE`. Sem congelar, o dia real pode cair no pré-aviso (D negativo) e
-    # a régua indicaria um degrau, furando a carência que o teste quer exercer. Congelamos o "hoje"
-    # da régua em `HOJE` para o caso ser determinístico.
-    monkeypatch.setattr(cobranca, "_hoje", lambda hoje=None: hoje or HOJE)
+def test_rascunhar_sem_degrau_aplicavel_recusa(
+    admin_api: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A view chama `degrau_devido(invoice)` sem `hoje`, então o relógio que ela alcança precisa
+    # estar congelado no mesmo dia usado pela fixture. Assim o caso continua na carência em
+    # qualquer data de execução, inclusive depois de 02/09/2026.
+    monkeypatch.setattr(cobranca.timezone, "localdate", lambda: HOJE)
+    complete = Mock()
+    monkeypatch.setattr(ai, "complete", complete)
     invoice = _vencendo_em(1)  # carência: a régua não indica degrau nenhum hoje
     resp = admin_api.post(f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {}, format="json")
     assert resp.status_code == 400
+    complete.assert_not_called()
 
 
 @pytest.mark.django_db
