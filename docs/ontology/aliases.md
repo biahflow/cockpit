@@ -30,7 +30,7 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chave `ai_opportunity` (só leitura) | `ai_potential` | `serializers.py` | `/api/v2/` |
 | chave `client_consent` (só leitura) | `account_consent` | `serializers.py` | `/api/v2/` |
 | valores `esqueceu` / `nao_pode` / `insatisfeito` | `forgot` / `unable_to_pay` / `dissatisfied` | `Activity.cobranca_sinal` e serializers | junto do renome para `DunningSignal`; alias morre na `/api/v2/` |
-| degraus `pre_aviso` / `renegociacao` | `pre_notice` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
+| degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
 | valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
 | áreas `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprint.Area` e serializers | após o conceito entrar no mapa; alias morre na `/api/v2/` |
 

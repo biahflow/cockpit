@@ -434,6 +434,7 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
     O teste usa as próprias `choices`, não busca textual: comentário, copy e rótulo traduzido são
     português legítimo. O que fica congelado é só o valor que persiste e atravessa a API.
     """
+    from apps.core import cobranca
     from apps.core.models import Activity, CobrancaContato, DigitalEmployeeBlueprint, Satisfacao
 
     legados = {
@@ -461,6 +462,17 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
             "juridico",
             "atendimento",
         ),
+    }
+
+    chaves_operacionais = {
+        "PADRAO": tuple(degrau.key for degrau in cobranca.PADRAO),
+        "RELACAO_LONGA": tuple(degrau.key for degrau in cobranca.RELACAO_LONGA),
+        "RELACAO_TENSA": tuple(degrau.key for degrau in cobranca.RELACAO_TENSA),
+    }
+    assert chaves_operacionais == {
+        "PADRAO": ("pre_aviso", "lembrete", "firme", "escalada", "renegociacao"),
+        "RELACAO_LONGA": ("pre_aviso", "lembrete", "escalada", "renegociacao"),
+        "RELACAO_TENSA": ("pre_aviso", "lembrete", "escalada", "renegociacao"),
     }
 
 

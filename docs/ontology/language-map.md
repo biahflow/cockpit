@@ -2,9 +2,11 @@
 
 > Espelho do documento canônico no Notion: **Language Map — Pulse · One · Notion · Biahflow**
 > <https://app.notion.com/p/3ca82225ad278115bd44c2d90247f44e>
-> Quando divergirem, a página do Notion vence — e a divergência se registra antes de qualquer edição.
+> A precedência é assimétrica: o repositório é fonte do método; o Language Map do Notion é
+> normativo para os rótulos por superfície. Em divergência de método, o repositório vence; em
+> divergência de vocabulário, a página do Notion vence.
 
-**Status:** normativo · **Depende de:** Biahflow Operating Ontology v1 · **Data:** 30/08/2026
+**Status:** normativo · **Depende de:** Biahflow Operating Ontology v1 · **Data:** 28/08/2026
 
 A Ontology v1 define **o que cada termo significa**. Esta página define **onde cada termo aparece e com que nome**, nas quatro superfícies em que a Biahflow fala: Pulse, One, Notion e material de mercado. Quando as duas divergirem, a Ontology v1 vence no significado e esta página vence no rótulo.
 
@@ -72,7 +74,7 @@ Dez conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. C
 | **Baseline** | `Measurement(kind=baseline)` | Baseline | Baseline | Baseline | Meta, Outcome, estimativa |
 | **Outcome** | `Measurement(kind=outcome)` | Outcome | Outcome | resultado medido | Gate, promessa, ROI projetado |
 | **Value** | `ValueLedgerEntry` → Value Ledger | Value Ledger | Value · Client Value Ledger | valor gerado | ROI projetado, Case |
-| **GateDecision** | `GateDecision` (era `GateOutcome`) | decisão da fase | Gate Decision | Feasibility: GO / CONDITIONAL GO / REDESIGN / NO-GO; PROVE: SCALE / ITERATE / STOP | Outcome |
+| **GateDecision** | `GateDecision` (era `GateOutcome`) | decisão da fase | Gate Decision | GO / CONDITIONAL GO / REDESIGN / NO-GO | Outcome |
 | **DigitalEmployee** | `DigitalEmployee` | Digital Employee | Funcionário Digital | Funcionário Digital | Solução, SolutionHypothesis, Agente |
 | **Service** | `Service` (catálogo de ofertas) | nome do produto contratado | degrau / produto | Discovery Sprint, PROVE… | Estágio, Fase, Tier de trabalho |
 | **JourneyPhase / ProjectPhase** | idem | timeline da fase | fase FDE | DISCOVER · PRIORITIZE · … | os agregados Feasibility/PROVE |
@@ -117,7 +119,7 @@ Três regras que sustentam isso:
 | `engagement.status` | `active` · `paused` · `closed` | |
 | `engagement.commercial_model` | `design_partner` · `paid` | Obrigatório. `design_partner` não exige CommercialOpportunity de origem (D8) |
 | `activity.dunning_signal` | `forgot` · `unable_to_pay` · `dissatisfied` | Aliases v1: `esqueceu` · `nao_pode` · `insatisfeito` (D10) |
-| `dunning_step` | `pre_notice` · `reminder` · `firm` · `escalation` · `renegotiation` | Aliases v1 necessários só para `pre_aviso` e `renegociacao`; os demais já eram canônicos (D10) |
+| `dunning_step` | `pre_notice` · `reminder` · `firm` · `escalation` · `renegotiation` | Aliases v1: `pre_aviso` · `lembrete` · `firme` · `escalada` · `renegociacao` (D10) |
 | `satisfaction_record.source` | `declared` · `perceived` | Aliases v1: `declarada` · `percebida` (D10) |
 | `satisfaction_record.level` | `promoter` · `satisfied` · `neutral` · `dissatisfied` | Aliases v1: `promotor` · `satisfeito` · `neutro` · `insatisfeito` (D10) |
 | `digital_employee_blueprint.area` | `commercial` · `finance` · `hr` · `legal` · `support` | Aliases v1: `comercial` · `financeiro` · `rh` · `juridico` · `atendimento` (D10) |
@@ -188,22 +190,33 @@ Mudança de significado gera **nova versão desta página e da Ontology**, com r
 
 ## 9. Pendências abertas — decisão do Daniel
 
-A varredura de 28/08/2026 cobriu as 20 páginas de conteúdo do workspace Notion e os schemas das 4 databases vivas. A ADR 0053 resolveu A1, A3, A4 e A5; continua aberta apenas a decisão de catálogo A2.
+A varredura de 28/08/2026 cobriu as 20 páginas de conteúdo do workspace e os schemas das 4
+databases vivas. Corrigi tudo que era violação de vocabulário. Sobraram cinco pontos que **não são
+de vocabulário — são decisão de negócio**, e por isso ficaram intocados. A **ADR 0053** decidiu
+quatro deles — **A1, A3, A4 e A5** —, marcados como resolvidos abaixo. Continua aberta apenas a
+**A2**.
 
-| # | Pendência | Onde | Status |
+| # | Pendência | Onde | Status — por que não decidi por você |
 | --- | --- | --- | --- |
-| A1 | "Implementation Project" como venda direta de implementação, sem PROVE | PROVE Framework | ✅ Resolvida pela ADR 0053: o caminho é **Scale** |
-| A2 | "Design Partner" funciona como oferta de entrada, mas o único gratuito no catálogo é a Qualification Call | Home Care KB · Igreja · Founding Client | Aberta: condição comercial de um degrau (seis) ou oferta própria (sete) |
-| A3 | Duração da Qualification Call divergente | Discovery Questions × demais | ✅ Resolvida pela ADR 0053: **45–60 min** |
-| A4 | Preço da Technical Feasibility divergente | Feasibility Framework × Financeiro | ✅ Resolvida pela ADR 0053: **R$ 5.000** |
-| A5 | PROVE gratuito no acordo de Design Partner | Playbook Nova Vertical | ✅ Resolvida pela ADR 0053: gratuito só dentro do acordo; nos demais casos é pago |
+| A1 | **"Implementation Project"** aparece como venda direta de implementação, sem PROVE. Se existe, é um sétimo caminho comercial fora dos seis degraus | PROVE Framework | ✅ **Resolvida pela ADR 0053:** "Implementation Project" / "IMPLEMENTATION" deixa de existir. O caminho é **Scale** (R$ 80k) |
+| A2 | **"Design Partner"** funciona como oferta de entrada (Discovery sem cobrança), mas o único gratuito no catálogo é a Qualification Call | Home Care KB · Igreja — Entrada via Design Partner · Founding Client Program | **Parcialmente resolvido em D8:** o Design Partner Agreement já é origem válida de Engagement, e `commercial_model` marca a condição. O que continua aberto é só o catálogo: se for condição comercial de um degrau ("Discovery Sprint em condição Design Partner"), são seis degraus; se for oferta própria, sete |
+| A3 | Duração da **Qualification Call**: `30-45min` em três páginas, `45–60 min` em uma | Discovery Questions × Metodologia FDE / Founding Client / Discovery Sprint | ✅ **Resolvida pela ADR 0053:** a duração canônica é **45–60 min**. Onde estiver "30–45 min", corrige-se |
+| A4 | Preço da **Technical Feasibility**: `R$ 2.500–5.000` no Feasibility Framework, `R$ 5.000` no Financeiro & Precificação | Feasibility Framework × Financeiro & Precificação | ✅ **Resolvida pela ADR 0053:** **R$ 5.000**, preço único. A faixa R$ 2.500–5.000 deixa de existir |
+| A5 | O Playbook de Nova Vertical diz "PROVE operando — cobrança: **Não** — concedido dentro do acordo de Design Partner" na tabela do **Passo 3–4**, e a §12 trata das alternativas ao PROVE gratuito fora desse acordo | Playbook — Entrada em Nova Vertical | ✅ **Resolvida pela ADR 0053:** o PROVE é gratuito **apenas dentro de um acordo de Design Partner**; para todos os demais é pago. Cada degrau concedido entra no funil como `CommercialOpportunity` no preço de tabela, com o subsídio como desconto — nunca zero |
 
 ### Dívida estrutural conhecida
 
-As databases do Notion (Projects · Tasks · Meetings · Docs) **não implementam o modelo canônico** — `Project` é a raiz lá, sem `Account` nem `Engagement` acima. Coerente com a decisão de que o CRM vive no Pulse, mas significa que essas databases são camada de execução, não fonte da verdade do modelo.
+As databases do Notion (Projects · Tasks · Meetings · Docs) **não implementam o modelo canônico**
+— `Project` é a raiz da hierarquia lá, sem `Account` nem `Engagement` acima. Isso é coerente com a
+decisão de que o CRM vive no Pulse, mas significa que essas databases são camada de execução
+operacional, **não** fonte da verdade do modelo. Quem quiser saber a estrutura da relação com um
+cliente olha o Pulse, não o Notion.
 
-Na varredura, `Projects.Lead` foi renomeado para `Owner` (colidia com a entidade `Lead`) e `Projects.Stage` para `Execution Status`.
+Na varredura, `Projects.Lead` foi renomeado para `Owner` (colidia com a entidade `Lead`) e
+`Projects.Stage` para `Execution Status` (não são fases da jornada).
 
 ### Regra de manutenção
 
-Termo novo entra **primeiro no Language Map**, depois no Pulse, depois no One. Página nova no Notion que use vocabulário de domínio referencia o mapa. Divergência encontrada em campo se registra no mapa antes de ser corrigida na página de origem.
+Termo novo entra **primeiro nesta página**, depois no Pulse, depois no One. Página nova no Notion
+que use vocabulário de domínio referencia esta página. Divergência encontrada em campo se registra
+aqui antes de ser corrigida na página de origem — assim o mapa nunca fica atrás da realidade.

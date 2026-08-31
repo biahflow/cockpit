@@ -12,7 +12,7 @@ O Language Map já exigia inglês para classe, campo, rota e chave de payload, m
 regra alcançava o **valor** persistido por um enum. O silêncio deixou três famílias bilíngues:
 
 - `Activity.CobrancaSinal`, com `esqueceu`, `nao_pode` e `insatisfeito`, e os degraus
-  `pre_aviso` e `renegociacao`;
+  `pre_aviso`, `lembrete`, `firme`, `escalada` e `renegociacao`;
 - `Satisfacao`, com fontes e níveis em português;
 - `DigitalEmployeeBlueprint.Area`, com cinco áreas em português.
 
@@ -30,7 +30,7 @@ Os destinos decididos são:
 | Família | Legado | Canônico |
 | --- | --- | --- |
 | sinal de cobrança | `esqueceu` · `nao_pode` · `insatisfeito` | `forgot` · `unable_to_pay` · `dissatisfied` |
-| degrau de cobrança | `pre_aviso` · `renegociacao` | `pre_notice` · `renegotiation` |
+| degrau de cobrança | `pre_aviso` · `lembrete` · `firme` · `escalada` · `renegociacao` | `pre_notice` · `reminder` · `firm` · `escalation` · `renegotiation` |
 | fonte de satisfação | `declarada` · `percebida` | `declared` · `perceived` |
 | nível de satisfação | `promotor` · `satisfeito` · `neutro` · `insatisfeito` | `promoter` · `satisfied` · `neutral` · `dissatisfied` |
 | área de blueprint | `comercial` · `financeiro` · `rh` · `juridico` · `atendimento` | `commercial` · `finance` · `hr` · `legal` · `support` |
