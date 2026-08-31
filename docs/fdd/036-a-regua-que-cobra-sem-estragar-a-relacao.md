@@ -180,7 +180,7 @@ Campos novos, todos opcionais: `Contact.receives_billing`, `Activity.invoice` e
 
 ## O que a construção decidiu
 
-Onze pontos em que construir mudou o desenho. Ficam aqui, e não no commit, porque é esta página que
+Doze pontos em que construir mudou o desenho. Ficam aqui, e não no commit, porque é esta página que
 a próxima pessoa lê.
 
 **O degrau virou janela, e não offset.** "Passou de D−3" mandaria o pré-aviso em D+1 se a régua não
@@ -244,3 +244,9 @@ sem nada ficar vermelho.
 por serializer vira float no encoder do DRF: `10000.01` passaria a depender do binário, e — pior que
 o centavo — `amount` seria string em `/invoices/` e número em `/cobranca/painel/`, com o SPA
 obrigado a saber qual é qual.
+
+**A carência é testada no relógio da rota, e a suíte não alcança fornecedor.** O teste que pede um
+rascunho quando nenhum degrau cabe congela o `localdate()` que `degrau_devido` realmente lê e prova
+que `ai.complete` não foi chamado. A cerca global da ADR 0059 impede qualquer teste backend de
+resolver DNS, conectar ou enviar UDP para fora — inclusive por cliente async; mocks terminam no
+limite do adapter, enquanto loopback e Unix socket seguem livres para infraestrutura local de teste.

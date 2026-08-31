@@ -61,6 +61,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 048 | Cadeia do PRIORITIZE: PainPoint, ImprovementOpportunity, PriorityAssessment e SolutionHypothesis (ontologia, fase 4) | Entregue | 1 | `docs/fdd/048-onde-atuar-nao-tinha-onde-morar.md` |
 | FDD 049 | Feasibility, PROVE, KPI/Measurement e Value Ledger (ontologia, fase 5) | Entregue | 1 | `docs/fdd/049-a-medicao-morava-dentro-do-ativo-de-solucao.md` |
 | ADR 0058 | Instrumento assinado como origem obrigatória do Engagement; legado sem inferência (issue #62) | Entregue | 1 | `docs/adr/0058-o-engagement-nasce-do-instrumento-assinado-e-o-legado-declara-a-lacuna.md` |
+| ADR 0059 | Suíte backend hermética: egress bloqueado e integrações mockadas (issue #92) | Entregue | — | `docs/adr/0059-a-suite-nao-atravessa-a-rede-para-provar-um-adapter.md` |
 
 ## Base atual — entregue
 
@@ -73,6 +74,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 - **Toggles de integração em runtime** + página de Configurações só-admin.
 - Painel operacional/comercial, indicadores/ROI, API versionada (`/api/v1/`) e docs (ADR/FDD/RFC).
 - Testes unitários, de API, regressão e E2E; **CI** com lint, tipos, testes, cobertura, build e E2E.
+  A suíte backend bloqueia egress por construção (ADR 0059), sem impedir serviços locais de teste.
 - **Agendador de trabalho periódico** (serviço `scheduler`): digest diário, sincronia de calendário
   e conferência de backup passam a rodar sozinhos (FDD 023, ADR 0015).
 - **Digest por participação** (FDD 010): o resumo diário deixa de filtrar só por `owner=` e passa a

@@ -64,3 +64,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0056 — Valor de enum também é vocabulário
 - 0057 — A decisão aponta para a fase materializada, e a lacuna histórica não é inferida
 - 0058 — O Engagement nasce do instrumento assinado, e o legado declara a lacuna
+- 0059 — A suíte não atravessa a rede para provar um adapter
