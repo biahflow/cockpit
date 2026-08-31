@@ -804,9 +804,31 @@ class DecisaoSerializer(serializers.ModelSerializer[Decisao]):
     # decisão passou a valer.
     class Meta:
         model = Decisao
-        fields = ["id", "project", "title", "rationale", "decided_on", "decided_by", "status",
-                  "source_meeting", "published_at", "created_at", "updated_at"]
+        fields = ["id", "project", "project_phase", "title", "rationale", "decided_on",
+                  "decided_by", "status", "source_meeting", "published_at", "created_at",
+                  "updated_at"]
         read_only_fields = ["id", "published_at", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        instance = self.instance
+        project = attrs.get("project", instance.project if instance is not None else None)
+        project_phase = attrs.get(
+            "project_phase", instance.project_phase if instance is not None else None
+        )
+        status_value = attrs.get(
+            "status", instance.status if instance is not None else Decisao.Status.DRAFT
+        )
+
+        if project_phase is not None and project is not None:
+            if project_phase.project_id != project.pk:
+                raise serializers.ValidationError(
+                    {"project_phase": "A fase deve pertencer ao mesmo projeto da decisão."}
+                )
+        if status_value == Decisao.Status.PUBLISHED and project_phase is None:
+            raise serializers.ValidationError(
+                {"project_phase": "Escolha uma fase da jornada antes de publicar a decisão."}
+            )
+        return attrs
 
 
 class RiscoSerializer(serializers.ModelSerializer[Risco]):

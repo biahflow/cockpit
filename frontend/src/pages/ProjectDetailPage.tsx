@@ -89,7 +89,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [taskDraft, setTaskDraft] = useState({ title: "", due_date: "", milestone: "" });
   const [meetingDraft, setMeetingDraft] = useState(blankMeeting);
   const [pendenciaDraft, setPendenciaDraft] = useState<{ title: string; party: Party }>({ title: "", party: "provider" });
-  const [decisaoDraft, setDecisaoDraft] = useState({ title: "", rationale: "", decided_by: "" });
+  const [decisaoDraft, setDecisaoDraft] = useState({ title: "", rationale: "", decided_by: "", project_phase: "" });
   const [riscoDraft, setRiscoDraft] = useState<{ title: string; probability: RiscoNivel; impact: RiscoNivel; mitigation: string }>({ title: "", probability: "medium", impact: "medium", mitigation: "" });
   const [services, setServices] = useState<Service[]>([]);
   const [risk, setRisk] = useState<RiskAssessment>();
@@ -330,7 +330,11 @@ export function ProjectDetailPage({ id }: { id: number }) {
   }
   async function createDecisao(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    try { await api("/decisoes/", { method: "POST", body: JSON.stringify({ project: id, ...decisaoDraft }) }); setDecisaoDraft({ title: "", rationale: "", decided_by: "" }); await load(); }
+    try { await api("/decisoes/", { method: "POST", body: JSON.stringify({ project: id, ...decisaoDraft, project_phase: Number(decisaoDraft.project_phase) }) }); setDecisaoDraft({ title: "", rationale: "", decided_by: "", project_phase: "" }); await load(); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function setDecisaoPhase(decisaoId: number, projectPhase: string) {
+    try { await api(`/decisoes/${decisaoId}/`, { method: "PATCH", body: JSON.stringify({ project_phase: Number(projectPhase) }) }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   // Publicar é o que faz a decisão atravessar para o cliente: só `published` entra no snapshot
@@ -666,7 +670,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
         <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" className="size-4 rounded border-slate-300 text-accent" checked={showArchivedEmployees} onChange={event => setShowArchivedEmployees(event.target.checked)} />Mostrar arquivados</label>
       </div>
       {employees.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{employees.map(employee => <article className="rounded-xl border bg-slate-50/50 p-4" key={employee.id}>
-        <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{employee.name}</p><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${employee.status === "active" ? "state--1" : employee.status === "paused" ? "state--off" : "state--2"}`}>{employeeStatusLabel[employee.status]}</span></div>
+        <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{employee.name}</p><span className={`state ${employee.status === "active" ? "state--1" : employee.status === "paused" ? "state--off" : "state--2"}`}>{employeeStatusLabel[employee.status]}</span></div>
         {employee.area && <p className="mt-0.5 text-xs text-accent">{employee.area}</p>}
         {employee.description && <p className="mt-1 text-xs text-slate-600">{employee.description}</p>}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{employee.kpi_label && <span><strong className="text-ink">{employee.kpi_label}:</strong> {employee.kpi_value}</span>}{Number(employee.hours_saved_month) > 0 && <span>{Number(employee.hours_saved_month)}h/mês</span>}{Number(employee.roi_month) > 0 && <span>ROI {money.format(Number(employee.roi_month))}/mês</span>}</div>
@@ -709,7 +713,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
     </section>
 
     {risk && risk.signals.length > 0 && <section className="panel sm:p-6">
-      <div className="flex items-center gap-3"><span className={`rounded-full px-3 py-1 text-sm font-semibold ${risk.level === "alto" ? "state--3" : risk.level === "médio" ? "state--2" : "state--1"}`}>Risco {risk.level}</span><h2 className="font-semibold text-ink">Sinais de atraso</h2></div>
+      <div className="flex items-center gap-3"><span className={`state ${risk.level === "alto" ? "state--3" : risk.level === "médio" ? "state--2" : "state--1"}`}>Risco {risk.level}</span><h2 className="font-semibold text-ink">Sinais de atraso</h2></div>
       <ul className="mt-3 space-y-1.5 text-sm text-slate-600">{risk.signals.map((signal, index) => <li className="flex gap-2" key={index}><AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" /><span><strong className="text-ink">{signal.label}:</strong> {signal.detail}</span></li>)}</ul>
       {risk.forecast && <p className={`mt-3 text-sm font-medium ${risk.forecast.delay_days > 0 ? "text-danger" : "text-slate-600"}`}>Previsão de término: {formatDate(risk.forecast.predicted_finish_date)}{risk.forecast.delay_days > 0 ? ` — atraso previsto de ${risk.forecast.delay_days} dia(s)` : " — dentro do prazo"} <span className="text-slate-600">({risk.forecast.basis})</span></p>}
     </section>}
@@ -722,7 +726,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
       {projections.length ? <div className="mt-4 space-y-3">{projections.map(proj => <article className="rounded-xl border bg-slate-50/50 p-4" key={proj.id}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <a className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink hover:text-accent" href={proj.issue_url || `https://github.com/${proj.repository}/issues/${proj.issue_number}`} target="_blank" rel="noreferrer">{proj.repository}#{proj.issue_number}<ExternalLink className="size-3.5 text-accent" /></a>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${projectionStateVariant[proj.state]}`}>{projectionStateLabel[proj.state]}</span>
+          <span className={`state ${projectionStateVariant[proj.state]}`}>{projectionStateLabel[proj.state]}</span>
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
           <span><strong className="text-ink">Issue:</strong> {issueStateLabel[proj.issue_state]}</span>
@@ -772,7 +776,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{meeting.title}</p><p className="mt-0.5 text-xs text-slate-600">{formatDate(meeting.date)}</p></div>
             {meeting.meeting_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-accent" href={meeting.meeting_url} target="_blank" rel="noreferrer" aria-label={`Abrir reunião de ${meeting.title}`}><Video className="size-4" /></a>}
             {meeting.recording_url && <a className="shrink-0 rounded-lg p-1.5 text-slate-600 hover:text-accent" href={meeting.recording_url} target="_blank" rel="noreferrer" aria-label={`Abrir gravação de ${meeting.title}`}><ExternalLink className="size-4" /></a>}
-            <button type="button" onClick={() => void toggleMeeting(meeting)} aria-label={meeting.status === "held" ? `Marcar ${meeting.title} como agendada` : `Marcar ${meeting.title} como realizada`} className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition hover:ring-2 hover:ring-accent/30 ${meeting.status === "held" ? "state--1" : "state--off"}`}>{meeting.status === "held" ? "Realizada" : "Agendada"}</button>
+            <button type="button" onClick={() => void toggleMeeting(meeting)} aria-label={meeting.status === "held" ? `Marcar ${meeting.title} como agendada` : `Marcar ${meeting.title} como realizada`} className={`state shrink-0 transition hover:ring-2 hover:ring-accent/30 ${meeting.status === "held" ? "state--1" : "state--off"}`}>{meeting.status === "held" ? "Realizada" : "Agendada"}</button>
           </div>
           {aiEnabled && meeting.transcript.trim() && <div className="mt-2 flex flex-wrap gap-2 pl-12">
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runMeetingAi(meeting, "discovery")}><Sparkles className="size-3.5 text-accent" />Discovery</button>
@@ -809,13 +813,17 @@ export function ProjectDetailPage({ id }: { id: number }) {
         que faz um palpite de modelo não alcançar a tela do cliente antes de alguém olhar. */}
     <div className="grid gap-5 lg:grid-cols-2">
       <WorkColumn icon={<Scale className="size-4" />} title="Decisões" count={decisoes.length}>
-        <form className="grid gap-3" onSubmit={event => void createDecisao(event)}>
-          <input className="field" placeholder="O que foi decidido" value={decisaoDraft.title} onChange={event => setDecisaoDraft({ ...decisaoDraft, title: event.target.value })} required />
+        {phases.length ? <form className="grid gap-3" onSubmit={event => void createDecisao(event)}>
+          <div className="grid gap-3 sm:grid-cols-[1fr_0.8fr]">
+            <label className="form-label">Título<input className="field" placeholder="O que foi decidido" value={decisaoDraft.title} onChange={event => setDecisaoDraft({ ...decisaoDraft, title: event.target.value })} required /></label>
+            <label className="form-label">Fase da jornada<select className="field" value={decisaoDraft.project_phase} onChange={event => setDecisaoDraft({ ...decisaoDraft, project_phase: event.target.value })} required><option value="">Selecione a fase</option>{phases.map(phase => <option key={phase.id} value={phase.id}>{phase.phase_name}</option>)}</select></label>
+          </div>
           <div className="flex gap-2"><input className="field min-w-0 flex-1" placeholder="Quem decidiu (opcional)" value={decisaoDraft.decided_by} onChange={event => setDecisaoDraft({ ...decisaoDraft, decided_by: event.target.value })} /><button className="btn btn--icon" aria-label="Adicionar decisão" type="submit"><Plus className="size-4" /></button></div>
           <textarea className="field min-h-20" placeholder="Por quê — o que pesou, e o que foi descartado" value={decisaoDraft.rationale} onChange={event => setDecisaoDraft({ ...decisaoDraft, rationale: event.target.value })} />
-        </form>
+        </form> : <div className="empty-state"><p className="font-semibold text-ink">Configure a jornada antes de publicar decisões</p><p className="mt-1">Uma decisão precisa apontar para uma fase existente.</p><a className="btn btn--secondary mt-3" href="/jornada">Ver jornada</a></div>}
         {decisoes.length ? <div className="divide-y">{decisoes.map(decisao => {
           const published = decisao.status === "published";
+          const decisionPhase = phases.find(phase => phase.id === decisao.project_phase);
           return <div className="py-3" key={decisao.id}>
             <div className="flex items-start gap-3">
               <span className="metric-icon shrink-0"><Scale className="size-4" /></span>
@@ -823,8 +831,10 @@ export function ProjectDetailPage({ id }: { id: number }) {
                 <p className="text-sm font-medium text-ink">{decisao.title}</p>
                 {decisao.rationale && <p className="mt-0.5 text-xs text-slate-600">{decisao.rationale}</p>}
                 <p className="mt-0.5 text-xs text-slate-600">{[decisao.decided_by, decisao.decided_on && formatDate(decisao.decided_on)].filter(Boolean).join(" · ") || "Sem autoria registrada"}</p>
+                {decisionPhase && <p className="mt-1"><span className="state state--off">Fase · {decisionPhase.phase_name}</span></p>}
+                {!decisao.project_phase && <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end"><label className="form-label">Vincular à fase<select className="field" aria-label={`Fase de ${decisao.title}`} defaultValue="" onChange={event => { if (event.target.value) void setDecisaoPhase(decisao.id, event.target.value); }}><option value="">Selecione a fase</option>{phases.map(phase => <option key={phase.id} value={phase.id}>{phase.phase_name}</option>)}</select></label><span className="state state--2">Ação necessária</span></div>}
               </div>
-              <button type="button" onClick={() => void toggleDecisao(decisao.id, published)} aria-label={published ? `Despublicar ${decisao.title}` : `Publicar ${decisao.title}`} className={`state shrink-0 transition hover:ring-2 hover:ring-accent/30 ${published ? "state--1" : "state--off"}`}>{published ? "Publicada" : "Rascunho"}</button>
+              <button type="button" disabled={!published && !decisao.project_phase} onClick={() => void toggleDecisao(decisao.id, published)} aria-label={published ? `Despublicar ${decisao.title}` : `Publicar ${decisao.title}`} className={`state shrink-0 transition hover:ring-2 hover:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-50 ${published ? "state--1" : "state--off"}`}>{published ? "Publicada" : "Rascunho"}</button>
             </div>
           </div>;
         })}</div> : <p className="empty-state">Nenhuma decisão registrada.</p>}
@@ -916,7 +926,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
   const reabre = gateDecisionByEffect(stage, "reopen");
   const para = gateDecisionByEffect(stage, "halt");
 
-  return <section className="panel space-y-5 sm:p-6">
+  return <section id="jornada" className="panel space-y-5 sm:p-6">
     <div className="flex flex-wrap items-center gap-3">
       <span className="metric-icon"><MapPin className="size-4" /></span>
       <div className="flex-1"><h2 className="font-semibold text-ink">Jornada de Transformação</h2><p className="text-sm text-slate-600">{done} de {phases.length} fases concluídas</p></div>
@@ -928,7 +938,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
     <div className="flex flex-wrap gap-2">{phases.map(phase => {
       const isDone = phase.status === "done"; const isActive = phase.status === "active";
       return <span key={phase.id} className="inline-flex items-center gap-1.5">
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isDone ? "state--1" : isActive ? "bg-ink text-white" : "state--off"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>
+        <span className={`state ${isDone ? "state--1" : isActive ? "state--active" : "state--off"}`}>{isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <MapPin className="size-3.5" /> : <Lock className="size-3.5" />}{phase.phase_name}</span>
         {/* O selo do gate acompanha a fase e não some quando ela fecha: é o registro de *como* a
             jornada passou por ali — inclusive na fase que o REDESIGN trancou. */}
         {phase.gate_decision && <span className={`state ${gateVariant[phase.gate_decision]}`} title={phase.gate_notes || undefined}>{GATE_DECISION_LABEL[phase.gate_decision]}</span>}
@@ -937,12 +947,12 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
 
     {active ? <div className="rounded-2xl border bg-slate-50/60 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-accent">Você está aqui</p><h3 className="mt-0.5 text-lg font-semibold text-ink">{active.phase_name}</h3>{active.phase_description && <p className="mt-1 text-sm text-slate-600">{active.phase_description}</p>}</div>
+        <div className="min-w-0"><p className="eyebrow">Você está aqui</p><h3 className="mt-0.5 text-lg font-semibold text-ink">{active.phase_name}</h3>{active.phase_description && <p className="mt-1 text-sm text-slate-600">{active.phase_description}</p>}</div>
         {next && <p className="shrink-0 text-right text-xs text-slate-600">Próxima<span className="mt-0.5 flex items-center gap-1 font-semibold text-slate-600"><ChevronRight className="size-3.5" />{next.phase_name}</span></p>}
       </div>
 
       {active.deliverables.length > 0 && <div className="mt-4">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Entregáveis · {active.deliverables.filter(item => item.status === "delivered").length}/{active.deliverables.length}</p>
+        <p className="section-label mb-1">Entregáveis · {active.deliverables.filter(item => item.status === "delivered").length}/{active.deliverables.length}</p>
         <div className="divide-y">{active.deliverables.map(item => {
           const delivered = item.status === "delivered";
           return <div className="flex items-center gap-3 py-2.5" key={item.id}>
@@ -955,7 +965,7 @@ function JourneySection({ phases, canManage, onAdvance, onMark, onSetTarget, onT
       {checklist.length > 0 && <div className="mt-4">
         {/* O quality gate (FDD 033). Distinto dos entregáveis logo acima: aquilo é o que sai da
             fase, isto é a condição para que possa sair — e é só isto que trava a conclusão. */}
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Checklist de qualidade · {checklist.length - pending}/{checklist.length}</p>
+        <p className="section-label mb-1">Checklist de qualidade · {checklist.length - pending}/{checklist.length}</p>
         <div className="divide-y">{checklist.map(item => <div className="flex items-center gap-3 py-2.5" key={item.id}>
           <button className={`shrink-0 ${item.checked ? "text-emerald-600 hover:text-ink" : canManage ? "text-slate-300 hover:text-accent" : "text-slate-200"}`} aria-label={item.checked ? `Desmarcar ${item.text}` : `Marcar ${item.text}`} disabled={!canManage} onClick={() => onToggleChecklist(item.id, !item.checked)}>{item.checked ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}</button>
           <span className={`flex-1 text-sm font-medium ${item.checked ? "text-slate-600 line-through" : "text-ink"}`}>{item.text}</span>
@@ -1061,7 +1071,7 @@ function DeliveryTimelinePanel({ timeline, canManage, onSetWaiting }: DeliveryTi
         </div>)}
 
     <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Histórico · {timeline.events.length} evento(s)</p>
+      <p className="section-label mb-1">Histórico · {timeline.events.length} evento(s)</p>
       {timeline.events.length ? <ol className="divide-y">{timeline.events.map(event => <li className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2.5" key={event.id}>
         <div className="min-w-0"><p className="text-sm font-medium text-ink">{PHASE_EVENT_LABEL[event.kind]}{event.phase_name ? ` · ${event.phase_name}` : ""}</p>{(event.note || event.gate_decision || event.waiting_party) && <p className="mt-0.5 text-xs text-slate-600">{event.gate_decision ? `${GATE_DECISION_LABEL[event.gate_decision]}. ` : ""}{event.waiting_party ? `${WAITING_PARTY_LABEL[event.waiting_party as Exclude<WaitingParty, "">]}. ` : ""}{event.note}</p>}</div>
         <time className="shrink-0 text-xs text-slate-600">{eventTime(event.created_at)}{event.actor_name ? ` · ${event.actor_name}` : " · sistema"}</time>

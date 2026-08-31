@@ -62,3 +62,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0054 — A avaliação de prioridade é imutável, e a fórmula fica congelada na linha
 - 0055 — A medição sai do ativo de solução, e o ativo passa a referenciá-la
 - 0056 — Valor de enum também é vocabulário
+- 0057 — A decisão aponta para a fase materializada, e a lacuna histórica não é inferida

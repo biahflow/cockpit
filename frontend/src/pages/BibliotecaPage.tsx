@@ -172,7 +172,7 @@ export function BibliotecaPage() {
             <label className="form-label">ROI/mês (padrão)<input className="field" type="number" min="0" step="0.01" value={blueprint.default_roi_month} onChange={event => updateBlueprint(blueprint.id, { default_roi_month: event.target.value })} aria-label={`ROI padrão de ${blueprint.name}`} /></label>
           </div>
 
-          <p className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-600">Variantes por vertical</p>
+          <p className="section-label mb-2 mt-5">Variantes por vertical</p>
           <p className="mb-2 text-xs text-slate-600">Campo em branco na variante herda o valor do bloco acima.</p>
           <div className="divide-y">{blueprint.variants.map(variant => <div className="flex flex-wrap items-center gap-3 py-2" key={variant.id}>
             <span className="state state--0">{variant.vertical_name}</span>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAP GH-44/GH-45 r1 — Eyebrows, rótulos e estados</title>
+<style>
+  :root {
+    --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --canvas:#fafaf9; --surface:#fff;
+    --subtle:#f5f5f4; --brand-50:#fdf1ec; --brand-200:#dd8b62; --brand-500:#bd4a30;
+    --brand-700:#9c3c26; --brand-900:#5c2317; --success:#047857; --success-50:#ecfdf5;
+    --warning:#b45309; --warning-50:#fffbeb; --danger:#b91c1c; --danger-50:#fef2f2;
+    --info:#1d4ed8; --info-50:#eff6ff;
+  }
+  * { box-sizing:border-box }
+  body { margin:0; padding:44px 30px 80px; background:var(--canvas); color:var(--ink);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  main { max-width:1180px; margin:auto }
+  h1 { margin:0; font-size:32px; line-height:38px; letter-spacing:-.03em; font-weight:650 }
+  .intro { margin:8px 0 36px; max-width:78ch; color:var(--muted); font-size:14px; line-height:22px }
+  h2 { margin:42px 0 7px; font-size:18px; line-height:26px; letter-spacing:-.02em }
+  .lead { margin:0 0 16px; color:var(--muted); font-size:13px; line-height:20px }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px }
+  .card { overflow:hidden; border:1px solid var(--line); border-radius:12px; background:var(--surface) }
+  .card-head { display:flex; align-items:center; justify-content:space-between; padding:12px 16px;
+    border-bottom:1px solid var(--line); background:var(--subtle); font-size:12px; font-weight:650 }
+  .tag { border-radius:999px; padding:3px 8px; font-size:10px; line-height:15px; font-weight:750;
+    text-transform:uppercase; letter-spacing:.08em }
+  .tag.old { background:#e7e5e4; color:var(--muted) }
+  .tag.new { background:var(--brand-50); color:var(--brand-700) }
+  .sample { min-height:150px; padding:28px }
+  .sample.dark { background:linear-gradient(135deg,var(--brand-900),#3d1710); color:white }
+  .old-eyebrow { color:var(--brand-500); font-size:12px; line-height:18px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.025em }
+  .eyebrow { color:var(--brand-500); font-size:11px; line-height:16px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.18em }
+  .old-dark { color:var(--brand-200); font-size:14px; line-height:22px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.18em }
+  .eyebrow.dark-tone { color:var(--brand-200) }
+  .title { margin:8px 0 0; font-size:24px; line-height:30px; font-weight:650; letter-spacing:-.03em }
+  .caption { margin:18px 0 0; color:var(--muted); font-size:12px; line-height:18px }
+  .dark .caption { color:rgba(255,255,255,.72) }
+  .section-old,.section-label { color:var(--muted); font-size:12px; line-height:16px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.025em }
+  .line { height:1px; margin:12px 0 18px; background:var(--line) }
+  table { width:100%; border-collapse:collapse; margin-top:12px; font-size:12px }
+  th,td { border-bottom:1px solid var(--line); padding:9px 10px; text-align:left }
+  th { background:#f8fafc; color:var(--muted); font-weight:400; text-transform:uppercase; letter-spacing:.025em }
+  .states { display:flex; flex-wrap:wrap; gap:10px; align-items:center }
+  .state { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px;
+    font-size:11px; line-height:16px; font-weight:600 }
+  .s0 { background:var(--info-50); color:var(--info) }
+  .s1 { background:var(--success-50); color:var(--success) }
+  .s2 { background:var(--warning-50); color:var(--warning) }
+  .s3 { background:var(--danger-50); color:var(--danger) }
+  .soff { background:#f1f5f9; color:#475569 }
+  .sactive { background:var(--ink); color:white }
+  .old-states span { display:inline-flex; border-radius:999px; padding:6px 12px; font-size:12px;
+    line-height:18px; font-weight:600 }
+  .phase { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:12px;
+    border-bottom:1px solid var(--line); padding:14px 0 }
+  .phase:last-child { border-bottom:0 }
+  .num { display:grid; place-items:center; width:28px; height:28px; border-radius:999px;
+    background:var(--subtle); color:var(--muted); font-size:12px; font-weight:700 }
+  .phase strong { display:block; font-size:13px }
+  .phase small { color:var(--muted); font-size:11px }
+  .decision { margin-top:36px; border:1px solid var(--brand-200); border-radius:12px;
+    background:var(--brand-50); padding:18px 20px; color:var(--brand-700); font-size:13px; line-height:20px }
+  code { border-radius:4px; background:rgba(18,17,15,.07); padding:2px 5px; font-size:12px }
+  @media(min-width:761px) {
+    body { padding:10px 30px }
+    h1 { font-size:28px; line-height:32px }
+    .intro { margin:5px 0 10px }
+    h2 { margin:14px 0 3px; font-size:16px; line-height:22px }
+    .lead { margin-bottom:6px; line-height:17px }
+    .grid { gap:10px }
+    .card-head { padding:8px 14px }
+    .sample { min-height:80px; padding:12px 20px }
+    .title { margin-top:5px; font-size:20px; line-height:24px }
+    .caption { margin-top:7px }
+    .line { margin:8px 0 10px }
+    th,td { padding:6px 9px }
+    .phase { padding:4px 0 }
+    .decision { margin-top:12px; padding:9px 16px }
+  }
+  @media(max-width:760px) { body{padding:28px 16px 60px}.grid{grid-template-columns:1fr}.sample{padding:22px} }
+</style>
+<main>
+  <h1>Eyebrows, rótulos e estados — revisão 1</h1>
+  <p class="intro">Proposta para as issues #44 e #45. O pacote remove geometrias paralelas sem
+    mudar texto ou fluxo. “Antes” reproduz os literais atuais; “Proposta” usa uma base única e
+    variantes nomeadas.</p>
+
+  <h2>1 · Eyebrow em superfície clara</h2>
+  <p class="lead">Os dois “Você está aqui” passam a consumir a geometria já normativa da
+    <code>.eyebrow</code>.</p>
+  <div class="grid">
+    <section class="card"><div class="card-head">Detalhe do projeto <span class="tag old">Antes</span></div>
+      <div class="sample"><div class="old-eyebrow">Você está aqui</div><div class="title">PROVE</div>
+        <p class="caption">12px · peso 600 · tracking 0,025em</p></div></section>
+    <section class="card"><div class="card-head">Detalhe do projeto <span class="tag new">Proposta</span></div>
+      <div class="sample"><div class="eyebrow">Você está aqui</div><div class="title">PROVE</div>
+        <p class="caption">11px · peso 700 · tracking 0,18em · <code>.eyebrow</code></p></div></section>
+  </div>
+
+  <h2>2 · Eyebrow em superfície escura</h2>
+  <p class="lead">A variante escura troca apenas a tinta para <code>brand-200</code>; a geometria
+    continua sendo a da base.</p>
+  <div class="grid">
+    <section class="card"><div class="card-head">Login <span class="tag old">Antes</span></div>
+      <div class="sample dark"><div class="old-dark">Operação Biahflow</div><div class="title">Clareza para vender,<br>entregar e crescer.</div>
+        <p class="caption">14px · peso 600 · literal local</p></div></section>
+    <section class="card"><div class="card-head">Login <span class="tag new">Proposta</span></div>
+      <div class="sample dark"><div class="eyebrow dark-tone">Operação Biahflow</div><div class="title">Clareza para vender,<br>entregar e crescer.</div>
+        <p class="caption">11px · peso 700 · <code>.eyebrow .eyebrow--dark</code></p></div></section>
+  </div>
+
+  <h2>3 · Rótulo neutro de seção</h2>
+  <p class="lead">Quatro consumidores formam a primitiva <code>.section-label</code>. O único
+    cabeçalho de tabela permanece literal: outro papel e um consumidor não formam um sistema.</p>
+  <div class="grid">
+    <section class="card"><div class="card-head">Seção neutra <span class="tag old">Antes</span></div>
+      <div class="sample"><div class="section-old">Entregáveis da fase</div><div class="line"></div>
+        <p class="caption">Mesmo visual, quatro literais independentes.</p></div></section>
+    <section class="card"><div class="card-head">Seção neutra <span class="tag new">Proposta</span></div>
+      <div class="sample"><div class="section-label">Entregáveis da fase</div><div class="line"></div>
+        <p class="caption">Papel label 12/16 · <code>muted</code> · <code>.section-label</code>.</p></div></section>
+  </div>
+  <section class="card" style="margin-top:18px"><div class="card-head">Cabeçalho de tabela <span class="tag old">Literal deliberado</span></div>
+    <div style="padding:14px 20px 22px"><table><thead><tr><th>Projeto</th><th>Fase</th><th>Prazo</th></tr></thead>
+      <tbody><tr><td>Automação financeira</td><td>PROVE</td><td>12 set</td></tr></tbody></table></div></section>
+
+  <h2>4 · Pastilhas de estado</h2>
+  <p class="lead">As cinco geometrias atuais convergem para a base normativa. Cor continua vindo
+    de variante; o ativo ganha nome próprio.</p>
+  <div class="grid">
+    <section class="card"><div class="card-head">Bases locais <span class="tag old">Antes</span></div>
+      <div class="sample"><div class="states old-states"><span class="s1">Concluído</span><span class="s2" style="font-size:14px">Em atenção</span><span class="sactive" style="padding:6px 12px">Ativo</span></div>
+        <p class="caption">12–14px, paddings diferentes e “ativo” como cor crua.</p></div></section>
+    <section class="card"><div class="card-head">Base única <span class="tag new">Proposta</span></div>
+      <div class="sample"><div class="states"><span class="state s0">Informativo</span><span class="state s1">Concluído</span><span class="state s2">Em atenção</span><span class="state s3">Bloqueado</span><span class="state soff">Arquivado</span><span class="state sactive">Ativo</span></div>
+        <p class="caption">11px/600, <code>px-2.5 py-1</code>; <code>.state--active</code> usa ink/branco.</p></div></section>
+  </div>
+
+  <h2>5 · Tracker de jornada</h2>
+  <section class="card"><div class="card-head">Composição proposta <span class="tag new">Proposta</span></div>
+    <div class="sample">
+      <div class="phase"><span class="num">1</span><span><strong>Discovery</strong><small>Escopo validado</small></span><span class="state s1">Concluído</span></div>
+      <div class="phase"><span class="num">2</span><span><strong>PROVE</strong><small>Você está aqui</small></span><span class="state sactive">Ativo</span></div>
+      <div class="phase"><span class="num">3</span><span><strong>Scale</strong><small>Aguardando fase anterior</small></span><span class="state soff">Bloqueado</span></div>
+    </div>
+  </section>
+
+  <div class="decision"><strong>O que a aprovação decide:</strong> base única para eyebrow e state;
+    variante escura apenas de tinta; primitiva neutra para os quatro rótulos de seção; variante
+    <code>state--active</code>; cabeçalho de tabela deliberadamente fora deste pacote.</div>
+</main>
+</html>

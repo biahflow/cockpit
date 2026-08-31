@@ -48,6 +48,8 @@ Use a classe. Não reescreva o literal. A guarda é `frontend/src/test/primitiva
 | Classe | Uso |
 | --- | --- |
 | `.page-head` / `.eyebrow` | cabeçalho de tela |
+| `.eyebrow--dark` | mesma geometria da eyebrow sobre superfície escura; muda só para `brand-200` |
+| `.section-label` | rótulo neutro de seção, sem semântica de marca |
 | `.panel` / `.panel--flush` | cartão |
 | `.btn` | primário **ink** |
 | `.btn--secondary` | contorno |
@@ -58,6 +60,7 @@ Use a classe. Não reescreva o literal. A guarda é `frontend/src/test/primitiva
 | `.state--2` | aviso |
 | `.state--3` | perigo (`danger-50` + `danger`) |
 | `.state--off` | neutro (arquivado, desligado) |
+| `.state--active` | fase atual da jornada (`ink`/branco), presença sem semântica de sucesso |
 | `.alert--error` / `.alert--ok` | alerta de tela, não selo |
 | `.empty-state` | vazio |
 | `.form-label` + `field` | rótulo e campo |

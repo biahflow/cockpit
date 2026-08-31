@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -297,7 +297,7 @@ test("a lacuna aprovada não se registra sem quem aprovou", async () => {
   await screen.findByText("Falta para iniciar o PROVE:");
 
   await user.click(screen.getByRole("button", { name: "Registrar lacuna aprovada" }));
-  await user.type(screen.getByLabelText("Por quê"), "A baseline histórica se perdeu na troca de ferramenta.");
+  fireEvent.change(screen.getByLabelText("Por quê"), { target: { value: "A baseline histórica se perdeu na troca de ferramenta." } });
   await user.click(screen.getByRole("button", { name: "Registrar lacuna" }));
   // Aprovar é ato com autor: sem `gap_waiver_by` o servidor devolveria 400, e o formulário nem
   // chega a submeter.

@@ -13041,6 +13041,9 @@ components:
           readOnly: true
         project:
           type: integer
+        project_phase:
+          type: integer
+          nullable: true
         title:
           type: string
           maxLength: 255
@@ -15775,6 +15778,9 @@ components:
           readOnly: true
         project:
           type: integer
+        project_phase:
+          type: integer
+          nullable: true
         title:
           type: string
           maxLength: 255

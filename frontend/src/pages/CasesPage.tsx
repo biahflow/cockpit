@@ -131,7 +131,7 @@ export function CasesPage() {
       <div className="px-5 py-4 sm:px-6">
         {item.metrics.length ? <table className="w-full text-sm">
           <caption className="sr-only">Resultados congelados de {item.title}</caption>
-          <thead><tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <thead><tr className="section-label text-left">
             <th scope="col" className="pb-2">Funcionário Digital</th><th scope="col" className="pb-2">KPI</th>
             <th scope="col" className="pb-2">Antes</th><th scope="col" className="pb-2">Depois</th>
           </tr></thead>

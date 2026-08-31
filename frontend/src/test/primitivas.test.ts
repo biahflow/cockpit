@@ -40,16 +40,23 @@ const PROIBIDOS: ReadonlyArray<readonly [RegExp, string]> = [
   // Arquivar/remover em tamanho de botão: neutro em repouso, vermelho na intenção. Quatro
   // consumidores, e a forma é estável o bastante para ter nome.
   [/text-(?:slate-600|muted) hover:border-danger/, ".btn .btn--secondary .btn--secondary-danger"],
-  // Exige `bg-`: um selo tem fundo. `rounded-lg px-2 py-1 text-xs font-semibold text-slate-600`
-  // é um **botão de texto**, e flagrá-lo mandaria trocar um controle por um rótulo.
-  [/rounded-(?:full|lg) px-[\d.]+ py-[\d.]+ text-xs font-semibold bg-|bg-\S+ [^"]*rounded-full px-[\d.]+ py-[\d.]+ text-xs font-semibold/, ".state + variante"],
+  // A base é o que define a pastilha; a cor pode chegar por `${variant}` e por isso **não** faz
+  // parte do padrão (issue #45). A versão anterior exigia `bg-` adjacente e era cega exatamente
+  // aos seis selos condicionais que deveria reprovar. `rounded-full` + padding nos dois eixos +
+  // peso 600 é estreito o bastante para não confundir ponto, avatar nem barra de progresso.
+  [/rounded-full px-(?:2|2\.5|3) py-(?:0\.5|1|1\.5) (?:text-(?:xs|sm) )?font-semibold/, ".state + variante"],
   // `font-semibold` é o que distingue **selo** de tinta de ícone: um quadradinho âmbar com um
   // ícone dentro é decoração legítima e não tem primitiva; um selo com texto tem.
   [/bg-(?:emerald|amber)-50 [^"]*font-semibold|font-semibold[^"]*bg-(?:emerald|amber)-50/, "uma variante de .state"],
   [/text-3xl font-semibold tracking-tight text-ink/, ".page-head (o h1 já vem estilizado)"],
-  // Só o rótulo **solto** acima do título; um `text-accent` dentro de uma pastilha com fundo é
-  // outra coisa, e o `(?<!\S )` sozinho não separaria os dois — daí exigir início do literal.
-  [/className="(?:mt-\d+ )?text-sm font-semibold text-accent"/, ".eyebrow"],
+  // A geometria que a primitiva realmente protege (issue #44): corpo pequeno, peso forte, caixa
+  // alta, tracking largo e tinta da marca. Aceita a divergência histórica 12px/600/`wide` para
+  // flagrá-la, além da cópia exata 11px/700/0.18em. `brand-200` inclui a superfície escura, que
+  // agora tem `.eyebrow--dark`; não há mais motivo legítimo para reescrever a base.
+  [/className="[^"]*text-(?:\[11px\]|xs|sm) [^"]*font-(?:bold|semibold) [^"]*uppercase [^"]*tracking-(?:wide|\[(?:0\.)?18em\]|\[\.18em\]) [^"]*text-(?:accent|brand-(?:200|500))[^"]*"/, ".eyebrow + variante"],
+  // O neutro é outro papel e ganhou primitiva própria. O cabeçalho de `ProjectsPage` não casa:
+  // não tem `font-semibold`, porque é deliberadamente sem peso e segue fora deste pacote.
+  [/className="[^"]*text-xs font-semibold uppercase tracking-wide text-(?:slate-600|muted)[^"]*"/, ".section-label"],
   [/rounded-xl bg-red-50 p-3 text-sm text-danger/, ".alert--error"],
   [/rounded-(?:xl|2xl) border border-dashed[^"]*text-center/, ".empty-state"],
   [/hover:bg-ink"/, ".btn (um `hover:bg-ink` sobre `bg-ink` não faz nada)"],
@@ -91,6 +98,23 @@ test("nenhuma tela reescreve à mão uma primitiva que já existe", () => {
   }
 
   expect(achados, "literal reescrito à mão onde há primitiva (ADR 0026)").toEqual([]);
+});
+
+test("a guarda enxerga as formas que escapavam por literal e interpolação", () => {
+  const amostras: ReadonlyArray<readonly [string, string]> = [
+    ['className="text-xs font-semibold uppercase tracking-wide text-accent"', ".eyebrow + variante"],
+    ['className="mb-4 text-sm font-semibold uppercase tracking-[.18em] text-brand-200"', ".eyebrow + variante"],
+    ['className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600"', ".section-label"],
+    ['className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}', ".state + variante"],
+    ['className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${tone}`}', ".state + variante"],
+  ];
+
+  for (const [literal, primitiva] of amostras) {
+    expect(
+      PROIBIDOS.some(([padrao, destino]) => destino === primitiva && padrao.test(literal)),
+      `a guarda deveria mandar ${literal} para ${primitiva}`,
+    ).toBe(true);
+  }
 });
 
 /**

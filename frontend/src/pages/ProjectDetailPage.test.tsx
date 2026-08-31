@@ -31,6 +31,14 @@ const artifact = () => ({
   decided_at: null, created_at: "2026-08-05T10:00:00Z", updated_at: "2026-08-05T10:00:00Z",
 });
 
+const projectPhase = () => ({
+  id: 10, project: 1, phase: 2, phase_name: "PROVE", phase_description: "Validar em produção",
+  phase_position: 2, requires_gate: false, canonical_stage: "", status: "active",
+  situation: "active", started_at: "2026-08-01T10:00:00Z", completed_at: null,
+  target_date: null, gate_decision: "", gate_outcome: "", gate_notes: "", checklist_waiver: "",
+  waiting_party: "", blocker_note: "", deliverables: [], checklist_items: [],
+});
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path.includes("/assistant/")) return Promise.resolve({ text: "Resposta da IA" });
@@ -45,12 +53,20 @@ function stub() {
     if (path.startsWith("/tasks")) return Promise.resolve([{ id: 1, project: 1, title: "Tarefa 1", description: "", owner: 1, due_date: "2026-08-10", completed_at: null, status: "todo", party: "provider", is_overdue: false, milestone: null }]);
     if (path.startsWith("/meetings")) return Promise.resolve([{ id: 1, project: 1, title: "Kickoff", date: "2026-08-05", recording_url: "https://rec/1", transcript: "Cliente descreveu suas dores.", status: "held" }]);
     if (path.startsWith("/pendencias")) return Promise.resolve([{ id: 1, project: 1, title: "Aprovar escopo", description: "", status: "open", party: "client", owner: null, resolved_at: null }]);
-    if (path.startsWith("/decisoes")) return Promise.resolve([{ id: 1, project: 1, title: "Adotar fila gerenciada", rationale: "Custa menos que o Memorystore.", decided_on: "2026-08-06", decided_by: "Marina", status: "draft", source_meeting: 1, published_at: null }]);
+    if (path.startsWith("/decisoes")) return Promise.resolve([{ id: 1, project: 1, project_phase: 10, title: "Adotar fila gerenciada", rationale: "Custa menos que o Memorystore.", decided_on: "2026-08-06", decided_by: "Marina", status: "draft", source_meeting: 1, published_at: null }]);
     if (path.startsWith("/riscos")) return Promise.resolve([{ id: 1, project: 1, title: "ERP do cliente pode atrasar a carga", description: "", probability: "high", impact: "medium", mitigation: "Janela alternativa negociada com o TI.", status: "open", owner: 2, resolved_at: null }]);
     if (path.startsWith("/project-members")) return Promise.resolve([{ id: 7, project: 1, user: 3, user_name: "Ana Lima", user_username: "ana", user_role: "delivery", added_by: 1, created_at: "2026-08-05T10:00:00Z" }]);
     if (path.startsWith("/github-projections")) return Promise.resolve([{ id: 3, project: 1, handoff: null, repository: "acme/repo", issue_number: 18, issue_url: "https://github.com/acme/repo/issues/18", projection_status: "current", state: "current", stale_after_seconds: 3600, issue_state: "open", pr_state: "open", pr_number: 42, pr_url: "https://github.com/acme/repo/pull/42", head_sha: "abc1234def", head_ref: "feature/x", review_state: "approved", ci_state: "success", observed_at: "2026-08-27T10:00:00Z", last_event_at: "2026-08-27T10:00:00Z", last_delivery_id: "d1", last_event_type: "issues", last_error_code: "", last_error_message: "", created_at: "2026-08-27T09:00:00Z", updated_at: "2026-08-27T10:00:00Z" }]);
     return Promise.resolve([]);
   });
+}
+
+function comFase() {
+  const anterior = mocks.api.getMockImplementation()!;
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) =>
+    path.startsWith("/project-phases") && !options?.method
+      ? Promise.resolve([projectPhase()])
+      : anterior(path, options));
 }
 
 beforeEach(() => { mocks.api.mockReset(); mocks.auth = { aiEnabled: true }; mocks.people = []; stub(); });
@@ -308,15 +324,13 @@ test("preenche pela tela os campos que só a API alcançava", async () => {
   await screen.findByText("Agente Financeiro");
 
   await user.click(screen.getByLabelText("Editar Agente Financeiro"));
-  await user.type(screen.getByLabelText("O que ele faz"), "Concilia notas fiscais.");
+  fireEvent.change(screen.getByLabelText("O que ele faz"), { target: { value: "Concilia notas fiscais." } });
   await user.selectOptions(screen.getByLabelText("Status"), "active");
-  await user.type(screen.getByLabelText("Rótulo do KPI"), "Notas/mês");
-  await user.type(screen.getByLabelText("Valor do KPI (texto livre)"), "312");
+  fireEvent.change(screen.getByLabelText("Rótulo do KPI"), { target: { value: "Notas/mês" } });
+  fireEvent.change(screen.getByLabelText("Valor do KPI (texto livre)"), { target: { value: "312" } });
   await user.selectOptions(screen.getByLabelText("Unidade do KPI"), "count");
-  await user.clear(screen.getByLabelText("Horas poupadas/mês"));
-  await user.type(screen.getByLabelText("Horas poupadas/mês"), "40");
-  await user.clear(screen.getByLabelText("ROI/mês (R$)"));
-  await user.type(screen.getByLabelText("ROI/mês (R$)"), "8000");
+  fireEvent.change(screen.getByLabelText("Horas poupadas/mês"), { target: { value: "40" } });
+  fireEvent.change(screen.getByLabelText("ROI/mês (R$)"), { target: { value: "8000" } });
   await user.click(screen.getByRole("button", { name: "Salvar" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employees/4/", expect.objectContaining({
@@ -490,10 +504,12 @@ test("a decisão em rascunho aparece marcada como tal, e publicar é um clique",
   // O selo é a única coisa na tela que diz **se o cliente vê**: rascunho não entra no snapshot
   // (FDD 032), e é isso que faz a extração por IA não alcançar o portal antes de alguém olhar.
   stub();
+  comFase();
   render(<ProjectDetailPage id={1} />);
 
   expect(await screen.findByText("Adotar fila gerenciada")).toBeTruthy();
   expect(screen.getByText("Custa menos que o Memorystore.")).toBeTruthy();
+  expect(screen.getByText("Fase · PROVE")).toBeTruthy();
 
   const selo = screen.getByRole("button", { name: "Publicar Adotar fila gerenciada" });
   expect(selo.textContent).toBe("Rascunho");
@@ -502,6 +518,52 @@ test("a decisão em rascunho aparece marcada como tal, e publicar é um clique",
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
     "/decisoes/1/",
     expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "published" }) }),
+  ));
+});
+
+test("registra decisão manual com fase escolhida explicitamente", async () => {
+  const user = userEvent.setup();
+  stub();
+  comFase();
+  render(<ProjectDetailPage id={1} />);
+  await screen.findByText("Projeto X");
+
+  await user.type(screen.getByLabelText("Título"), "Validar oferta com contas piloto");
+  await user.selectOptions(screen.getByLabelText("Fase da jornada"), "10");
+  await user.click(screen.getByLabelText("Adicionar decisão"));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
+    "/decisoes/",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        project: 1,
+        title: "Validar oferta com contas piloto",
+        rationale: "",
+        decided_by: "",
+        project_phase: 10,
+      }),
+    }),
+  ));
+});
+
+test("rascunho sem fase exige vínculo humano antes de publicar", async () => {
+  comFase();
+  const base = mocks.api.getMockImplementation()!;
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) =>
+    path.startsWith("/decisoes") && !options?.method
+      ? Promise.resolve([{ id: 2, project: 1, project_phase: null, title: "Priorizar onboarding assistido", rationale: "", decided_on: null, decided_by: "", status: "draft", source_meeting: 1, published_at: null }])
+      : base(path, options));
+  const user = userEvent.setup();
+  render(<ProjectDetailPage id={1} />);
+
+  const publicar = await screen.findByRole("button", { name: "Publicar Priorizar onboarding assistido" });
+  expect(publicar).toBeDisabled();
+  await user.selectOptions(screen.getByLabelText("Fase de Priorizar onboarding assistido"), "10");
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
+    "/decisoes/2/",
+    expect.objectContaining({ method: "PATCH", body: JSON.stringify({ project_phase: 10 }) }),
   ));
 });
 

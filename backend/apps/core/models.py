@@ -937,6 +937,18 @@ class Decisao(TimestampedModel):
         PUBLISHED = "published", "Publicada"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="decisoes")
+    # A fase **materializada deste projeto**, não o template global (`JourneyPhase`). É esta pk que
+    # o snapshot já expõe em `journey.phases[].id`, então o One recasa sem nome estável inventado.
+    # Nulo preserva rascunhos extraídos por IA e registros históricos; a API recusa publicar sem
+    # vínculo. `SET_NULL` declara a lacuna se uma fase for removida por operação excepcional —
+    # apagar a decisão seria transformar ausência de contexto em perda de fato.
+    project_phase = models.ForeignKey(
+        "ProjectPhase",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="decisions",
+    )
     title = models.CharField(max_length=255)
     rationale = models.TextField(blank=True)
     decided_on = models.DateField(null=True, blank=True)

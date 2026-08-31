@@ -2664,7 +2664,7 @@ class PendenciaViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVi
 
 class DecisaoViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "decisao"
-    queryset = Decisao.objects.select_related("project", "source_meeting").all()
+    queryset = Decisao.objects.select_related("project", "project_phase", "source_meeting").all()
     serializer_class = DecisaoSerializer
     # `status` entra no filtro porque a tela precisa separar rascunho de publicada: o rascunho é
     # interno e a publicada é a que o cliente vê. Sem ele, revisar a extração da IA obrigaria a
