@@ -73,5 +73,25 @@ vazio em vez de inferir, e o parser trata a ausência de lista como falha em vez
 
 - **A aba no portal do cliente.** É a fatia seguinte, no outro repositório, e nasce depois do
   escritor por regra escrita (`ROADMAP.md` de lá: *"painel só nasce depois do escritor"*).
-- **Decisão pendurada em fase, marco ou entregável.** Ela é filha de `Project` e nada mais. Ligá-la
-  a um marco é vocabulário novo, e o snapshot não tem como projetar o que a tela de lá não mostra.
+- ~~**Decisão pendurada em fase.**~~ Entregue na emenda de 31/08/2026 abaixo. Marco e entregável
+  continuam fora: são identidades diferentes e não foram pedidos pelo consumidor.
+
+## Emenda (31/08/2026) — a decisão passa a dizer em qual fase aconteceu
+
+A issue #46 e a ADR 0057 fecham a lacuna que este FDD deixou deliberadamente fora. `Decisao`
+ganha a FK anulável `project_phase` para a fase materializada do mesmo projeto, e o snapshot leva
+`phase_ref` com exatamente a pk que já aparece em `journey.phases[].id`.
+
+A nulabilidade não enfraquece a publicação. Ela preserva dois estados honestos: rascunho de IA
+ainda não revisado e registro histórico para o qual não existe backfill determinístico. A API
+recusa `published` sem fase e recusa fase de outro projeto. A interface exige escolha explícita,
+sem preselecionar a fase ativa, e deixa o botão de publicar inerte até o vínculo existir.
+
+O legado publicado aparece com `phase_ref=null` até correção humana. Data, texto e fase atual não
+são usados como heurística. Salvar o vínculo já passa por `_emit_decisao`; como `portal.emit` é o
+ponto que carimba a projeção (ADR 0051), a correção incrementa `projection_version` antes do
+webhook sem mover versão para `build_snapshot`.
+
+Testes de contrato cobrem: identidade igual à da jornada, rascunho sem fase, publicação recusada
+sem fase, recusa de fase alheia e lacuna histórica explícita. A superfície segue o DAP GH-46 r1,
+aprovado em 31/08/2026.

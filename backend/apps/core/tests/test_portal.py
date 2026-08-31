@@ -680,9 +680,12 @@ def test_snapshot_carries_published_decisions_only() -> None:
     meeting = Meeting.objects.create(
         project=project, title="Comitê", date=timezone.localdate(), transcript="ata"
     )
+    project_phase = project.phases.first()
+    assert project_phase is not None
     Decisao.objects.create(project=project, title="Rascunho da IA", source_meeting=meeting)
     Decisao.objects.create(
         project=project,
+        project_phase=project_phase,
         title="Adotar fila gerenciada",
         rationale="Memorystore custa mais que o volume previsto.",
         decided_by="Marina (cliente)",
@@ -695,6 +698,11 @@ def test_snapshot_carries_published_decisions_only() -> None:
     assert [d["title"] for d in decisions] == ["Adotar fila gerenciada"]
     assert decisions[0]["rationale"] == "Memorystore custa mais que o volume previsto."
     assert decisions[0]["decided_by"] == "Marina (cliente)"
+    # A mesma pk já emitida em `journey.phases`, sem recasamento por nome ou data.
+    assert decisions[0]["phase_ref"] == project_phase.pk
+    assert decisions[0]["phase_ref"] in {
+        phase["id"] for phase in portal.build_snapshot(project)["journey"]["phases"]
+    }
     # A pk da reunião, que é como o portal recasa a proveniência com o que ele espelhou.
     assert decisions[0]["meeting_id"] == meeting.pk
 
@@ -702,12 +710,28 @@ def test_snapshot_carries_published_decisions_only() -> None:
 @pytest.mark.django_db
 def test_an_archived_decision_stops_counting_like_every_other_child() -> None:
     project = ProjectFactory()
+    project_phase = project.phases.first()
+    assert project_phase is not None
     decisao = Decisao.objects.create(
-        project=project, title="Adotar fila gerenciada", status=Decisao.Status.PUBLISHED
+        project=project,
+        project_phase=project_phase,
+        title="Adotar fila gerenciada",
+        status=Decisao.Status.PUBLISHED,
     )
     assert portal.build_snapshot(project)["decisions"] != []
     decisao.archive()
     assert portal.build_snapshot(project)["decisions"] == []
+
+
+@pytest.mark.django_db
+def test_historical_published_decision_declares_missing_phase_without_inference() -> None:
+    """Compatibilidade aprovada no DAP GH-46 r1: lacuna explícita, nunca fase presumida."""
+    project = ProjectFactory()
+    Decisao.objects.create(
+        project=project, title="Decisão histórica", status=Decisao.Status.PUBLISHED
+    )
+
+    assert portal.build_snapshot(project)["decisions"][0]["phase_ref"] is None
 
 
 @pytest.mark.django_db

@@ -234,6 +234,12 @@
   /* O rótulo acima do título. É o principal lugar onde o laranja aparece como texto, e o
      `tracking` largo é o que o mantém legível em caixa alta e corpo pequeno. */
   .eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.18em] text-brand-500; }
+  /* Mesma geometria sobre a superfície escura do login; só a tinta muda para o acento que passa
+     contraste no `auth-brand` (DAP GH-44/GH-45 r1, issue #44). */
+  .eyebrow--dark { @apply text-brand-200; }
+  /* Rótulo neutro de seção: outro papel, sem a semântica de marca da eyebrow. O cabeçalho de
+     tabela fica fora de propósito até existir um sistema de tabela com mais de um consumidor. */
+  .section-label { @apply text-xs font-semibold uppercase tracking-wide text-muted; }
 
   .page-head { @apply mb-6 grid gap-1.5; }
   /* `text-3xl` e não `text-2xl` (ADR 0026): as 19 páginas já vinham escrevendo `text-3xl` inline,
@@ -391,6 +397,9 @@
      para o âmbar do `--2`, e uma tela onde tudo é aviso não avisa nada. É o `.state--2` do portal
      do cliente, que na escala de lá já é o cinza. */
   .state--off { @apply bg-slate-100 text-slate-600; }
+  /* A fase atual é ação presente, não sucesso: usa a tinta estrutural do produto em vez do verde.
+     A geometria continua vindo de `.state` (DAP GH-44/GH-45 r1, issue #45). */
+  .state--active { @apply bg-ink text-white; }
 
   /* ---------- O shell (ADR 0025) ----------
      Portado do `.sidebar` / `.topbar` do portal do cliente, e o que muda é só a cor. A barra

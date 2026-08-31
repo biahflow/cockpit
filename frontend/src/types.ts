@@ -71,7 +71,7 @@ export type Milestone = { id: number; project: number; title: string; descriptio
 export type Task = Milestone & { milestone: number | null };
 export type Meeting = { id: number; project: number; title: string; date: string; meeting_url: string; recording_url: string; transcript: string; status: "scheduled" | "held" };
 export type Pendencia = { id: number; project: number; title: string; description: string; status: "open" | "resolved"; party: Party; owner: number | null; resolved_at: string | null };
-export type Decisao = { id: number; project: number; title: string; rationale: string; decided_on: string | null; decided_by: string; status: "draft" | "published"; source_meeting: number | null; published_at: string | null };
+export type Decisao = { id: number; project: number; project_phase: number | null; title: string; rationale: string; decided_on: string | null; decided_by: string; status: "draft" | "published"; source_meeting: number | null; published_at: string | null };
 // Risk Register do projeto (FDD 034) — o risco **declarado** por alguém, que não é o mesmo que a
 // `RiskAssessment` calculada logo abaixo. Aquela deriva de prazo e item atrasado; esta é escrita.
 export type RiscoNivel = "low" | "medium" | "high";

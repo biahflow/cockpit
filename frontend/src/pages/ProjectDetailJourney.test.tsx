@@ -48,7 +48,8 @@ afterEach(cleanup);
 test("mostra a jornada com fases e entregáveis", async () => {
   render(<ProjectDetailPage id={1} />);
   expect(await screen.findByText("Jornada de Transformação")).toBeInTheDocument();
-  expect(screen.getByText("Welcome")).toBeInTheDocument();
+  // A fase aparece no tracker e, desde a issue #46, também como opção do vínculo da decisão.
+  expect(screen.getAllByText("Welcome").length).toBeGreaterThan(0);
   expect(screen.getAllByText("Scale").length).toBeGreaterThan(0); // pílula + "Próxima"
   expect(screen.getByText("Você está aqui")).toBeInTheDocument();
   expect(screen.getByText("Dashboard")).toBeInTheDocument();

@@ -139,6 +139,19 @@ navegador.
 
 ## Consequências
 
+### Emenda de 31/08/2026 — forma é base; variante pode vir por interpolação
+
+As issues #44/#45 provaram que a segunda medição acima ainda guardava uma premissa falsa. Exigir
+`bg-` evitava confundir botão com selo estático, mas tornava a guarda cega a toda pastilha cuja
+variante chegava por `${...}` — precisamente a forma comum de estado condicional. Seis bases de
+`.state` e dois eyebrows divergentes ficaram verdes por causa disso.
+
+A guarda passa a reconhecer a **geometria da base**, independentemente de onde venha a variante,
+e tem amostras de sabotagem no próprio teste. O destino aprovado no DAP GH-44/GH-45 r1 é:
+`.eyebrow--dark` muda apenas tinta; `.section-label` formaliza quatro rótulos neutros;
+`.state--active` nomeia a fase atual; e o único cabeçalho de tabela sem peso continua literal até
+existir um sistema de tabela com mais de um consumidor. A allowlist permanece vazia.
+
 - A adoção das primitivas saiu de 2 para **399 usos**. O que separa as duas telas dos dois
   portais passou a ser o matiz, que era o objetivo desde a ADR 0025.
 - Página nova nasce chamando primitiva ou reprova no `npm test`. Quem precisar de exceção escreve

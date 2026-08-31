@@ -246,6 +246,9 @@ def build_snapshot(project: Project) -> dict[str, Any]:
             "rationale": decisao.rationale,
             "decided_on": decisao.decided_on.isoformat() if decisao.decided_on else None,
             "decided_by": decisao.decided_by,
+            # Mesma identidade de `journey.phases[].id`: o consumidor só recasa duas chaves que
+            # o Pulse afirmou, sem inferir pela data nem pelo nome da fase (ADR 0057).
+            "phase_ref": decisao.project_phase_id,
             # A pk da reunião, não a nossa chave interna: é por ela que o portal recasa a
             # proveniência com a reunião que ele acabou de espelhar.
             "meeting_id": decisao.source_meeting_id,

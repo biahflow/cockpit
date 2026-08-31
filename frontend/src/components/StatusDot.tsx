@@ -70,7 +70,7 @@ export function StatusDot({ level, title }: { level: HealthLevel | null; title?:
 
 export function HealthBadge({ level, score }: { level: HealthLevel; score?: number }) {
   return (
-    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${HEALTH_BADGE[level]}`}>
+    <span className={`state ${HEALTH_BADGE[level]}`}>
       {level}{score !== undefined ? ` · ${score}` : ""}
     </span>
   );

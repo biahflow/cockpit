@@ -128,7 +128,11 @@ def test_publishing_a_decisao_stamps_and_republishing_never_moves_the_stamp() ->
     delivery = UserFactory(role=User.Role.DELIVERY)
     project = ProjectFactory()
     ProjectMemberFactory(project=project, user=delivery)
-    decisao = Decisao.objects.create(project=project, title="Adotar fila gerenciada")
+    project_phase = project.phases.first()
+    assert project_phase is not None
+    decisao = Decisao.objects.create(
+        project=project, project_phase=project_phase, title="Adotar fila gerenciada"
+    )
     assert decisao.published_at is None
 
     client = APIClient()
@@ -152,3 +156,49 @@ def test_publishing_a_decisao_stamps_and_republishing_never_moves_the_stamp() ->
     )
     decisao.refresh_from_db()
     assert decisao.published_at == primeiro
+
+
+@pytest.mark.django_db
+def test_publishing_requires_an_explicit_project_phase() -> None:
+    delivery = UserFactory(role=User.Role.DELIVERY)
+    project = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
+    decisao = Decisao.objects.create(project=project, title="Adotar fila gerenciada")
+    client = APIClient()
+    client.force_authenticate(delivery)
+
+    resp = client.patch(
+        reverse("decisao-detail", args=[decisao.pk]), {"status": "published"}, format="json"
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["project_phase"] == [
+        "Escolha uma fase da jornada antes de publicar a decisão."
+    ]
+
+
+@pytest.mark.django_db
+def test_decision_phase_must_belong_to_the_same_project() -> None:
+    delivery = UserFactory(role=User.Role.DELIVERY)
+    project = ProjectFactory()
+    other = ProjectFactory()
+    ProjectMemberFactory(project=project, user=delivery)
+    other_phase = other.phases.first()
+    assert other_phase is not None
+    client = APIClient()
+    client.force_authenticate(delivery)
+
+    resp = client.post(
+        reverse("decisao-list"),
+        {
+            "project": project.pk,
+            "project_phase": other_phase.pk,
+            "title": "Adotar fila gerenciada",
+        },
+        format="json",
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["project_phase"] == [
+        "A fase deve pertencer ao mesmo projeto da decisão."
+    ]

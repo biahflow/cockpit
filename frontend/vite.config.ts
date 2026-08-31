@@ -30,6 +30,10 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    // As páginas de detalhe montam árvores grandes em jsdom. Deixar o Vitest usar todos os cores
+    // põe dezenas delas em paralelo e faz interações simples estourarem o timeout de 5s por
+    // starvation; limitar trabalhadores estabiliza a suíte sem alargar timeout nem reduzir gate.
+    maxWorkers: 4,
     coverage: { provider: "v8", reporter: ["text", "html"], thresholds: { lines: 80 } },
   },
 });

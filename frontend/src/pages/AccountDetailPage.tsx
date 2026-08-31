@@ -328,7 +328,7 @@ export function AccountDetailPage({ id }: { id: number }) {
       ? <section className="panel sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2"><h2 className="font-semibold text-ink">Saúde da relação</h2><HealthBadge level={overview.health.level} score={overview.health.score} /></div>
-            {overview.phase && <span className="text-xs font-semibold uppercase tracking-wide text-accent">Você está aqui · {overview.phase.name}</span>}
+            {overview.phase && <span className="eyebrow">Você está aqui · {overview.phase.name}</span>}
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <Metric label="Risco de atraso" value={overview.risk_level ?? "—"} />
