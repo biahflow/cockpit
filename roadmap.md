@@ -1,6 +1,6 @@
 # Roadmap — Pulse (Biahflow)
 
-Atualizado em 19/08/2026. Esta é a fonte canônica de inventário e estado das features/work items
+Atualizado em 31/08/2026. Esta é a fonte canônica de inventário e estado das features/work items
 do projeto. Separa o que já compõe a plataforma do que falta, e aponta o norte (jornada de
 consultoria assistida por IA). Marcações: `[x]` entregue, `[~]` parcial, `[ ]` pendente.
 
@@ -58,8 +58,9 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 047 | Snapshot do portal no vocabulário canônico e carimbo da projeção | Entregue | 1 | `docs/fdd/047-o-snapshot-que-falava-o-vocabulario-antigo.md` |
 | ADR 0052 | Renome de classe da ontologia — `GateOutcome`→`GateDecision`, `Opportunity`→`CommercialOpportunity`, `Client`→`Account`, `Processo`/`ProcessoEtapa`→`Process`/`ProcessStep` (issue #67) | Entregue | 1 | `docs/adr/0052-o-renome-de-classe-vem-antes-da-fase-6-a-tabela-e-a-rota-ficam.md` |
 | ADR 0056 | Valores de enum em inglês canônico, com aliases portugueses na `/api/v1/` (issue #94) | Entregue | 1 | `docs/adr/0056-valor-de-enum-tambem-e-vocabulario.md` |
-| FDD 048 | Cadeia do PRIORITIZE: PainPoint, ImprovementOpportunity, PriorityAssessment e SolutionHypothesis (ontologia, fase 4) | Entregue (backend) | 1 | `docs/fdd/048-onde-atuar-nao-tinha-onde-morar.md` |
-| FDD 049 | Feasibility, PROVE, KPI/Measurement e Value Ledger (ontologia, fase 5) | Entregue (backend) | 1 | `docs/fdd/049-a-medicao-morava-dentro-do-ativo-de-solucao.md` |
+| FDD 048 | Cadeia do PRIORITIZE: PainPoint, ImprovementOpportunity, PriorityAssessment e SolutionHypothesis (ontologia, fase 4) | Entregue | 1 | `docs/fdd/048-onde-atuar-nao-tinha-onde-morar.md` |
+| FDD 049 | Feasibility, PROVE, KPI/Measurement e Value Ledger (ontologia, fase 5) | Entregue | 1 | `docs/fdd/049-a-medicao-morava-dentro-do-ativo-de-solucao.md` |
+| ADR 0058 | Instrumento assinado como origem obrigatória do Engagement; legado sem inferência (issue #62) | Entregue | 1 | `docs/adr/0058-o-engagement-nasce-do-instrumento-assinado-e-o-legado-declara-a-lacuna.md` |
 
 ## Base atual — entregue
 
@@ -559,15 +560,18 @@ Fase aprovada (blocos que o material já estabilizou):
       junto, com a metade simétrica que **não** ressuscita o que alguém removeu de propósito antes.
       Ver FDD 039 e ADR 0034.
 
-Segue adiado, agora com o motivo escrito ao lado do nome — que é a diferença entre backlog e
-lacuna. Reprovam no teste da ADR 0030: **Pain Points** (o termo não aparece em
-`docs/metodologia-fde.md`), **Business Cases** (uma menção, sem estrutura), **Value Ledger** (zero
-ocorrências no documento), **Opportunity Backlog por conta** (só como pauta de reunião mensal),
-**cockpit de reunião de Discovery** e **"Next Best Opportunity"** (existem só nesta lista, em
-lugar nenhum do material). E o **Opportunity Score**, que é o mais incômodo dos sete: o quality
-gate de Discovery já o **cobra** e a fórmula não existe em lugar nenhum — hoje só se responde
-"sim" no braço. É pergunta para o material responder antes de virar código. A migração dos dados
-do Notion (Accounts/Contacts/Opportunities/Activities) segue nomeada e não feita.
+Este parágrafo registrava a lacuna antes das FDDs 048 e 049. `PainPoint`,
+`ImprovementOpportunity`, o `PriorityAssessment` que sustenta o rótulo Opportunity Score,
+`SolutionHypothesis`, `KPI`, `Measurement` e `ValueLedgerEntry` agora estão entregues, inclusive
+nas superfícies aprovadas pelas emendas de 29/08. Seguem adiados **Business Cases**, o **cockpit de
+reunião de Discovery**, **Next Best Opportunity** e a migração dos dados do Notion
+(Accounts/Contacts/CommercialOpportunities/Activities).
+
+A issue #62 fecha a última lacuna material da invariante 13: todo Engagement novo nasce de uma
+CommercialOpportunity ganha ou de um Design Partner Agreement assinado. O legado permanece
+válido com `needs_review`, sem inferência nem contrato retroativo (ADR 0058). As 15 invariantes do
+Language Map têm agora representação e regressão no Pulse; a retirada dos aliases históricos
+continua deliberadamente reservada para `/api/v2/`.
 
 ## Princípios de entrega
 

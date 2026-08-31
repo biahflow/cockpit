@@ -87,14 +87,22 @@ const etapas = ["Qualificação", "Proposta enviada", "Negociação", "Ganha", "
   position: i, opportunity_count: 3, estimated_total: "450000.00",
 }));
 
-const oportunidades = serie(8, index => ({
-  id: index, client: index, contact: null,
-  title: `Discovery e assessment de automação — ${NOME_LONGO}`,
-  scope: "Mapeamento de processos e desenho de agentes.", estimated_value: "150000.00",
-  stage: (index % 3) + 1, stage_name: etapas[(index % 3)].name, owner: 1,
-  expected_close_date: HOJE, service: 1, service_name: "Discovery Sprint",
-  service_tier: "discovery_sprint",
-}));
+const oportunidades = serie(8, index => {
+  // Uma venda ganha e ainda sem mandato alimenta o select da origem contratual no detalhe da
+  // Account. As demais preservam a variedade do pipeline; a segunda já vinculada prova que a
+  // tela não a oferece de novo.
+  const etapa = index === 1 ? etapas[3] : etapas[index % 3];
+  return {
+    id: index, account: index, client: index, contact: null,
+    title: `Discovery e assessment de automação — ${NOME_LONGO}`,
+    scope: "Mapeamento de processos e desenho de agentes.", estimated_value: "150000.00",
+    stage: etapa.id, stage_name: etapa.name, stage_kind: etapa.kind,
+    engagement: index === 2 ? 1 : null, owner: 1,
+    expected_close_date: HOJE, service: 1, service_name: "Discovery Sprint",
+    service_tier: "discovery_sprint", project: null, project_archived: false,
+    origin_qualification: null,
+  };
+});
 
 const itensDeTrabalho = serie(8, index => ({
   id: index, project: 1, title: `Entrevistar área de faturamento — bloco ${index}`,
@@ -278,12 +286,13 @@ const FIXTURES: Record<string, unknown> = {
     qualification_outcome: "", created_at: `${HOJE}T09:00:00Z`,
   })),
   "/api/v1/documents/": serie(6, index => ({
-    id: index, client: index, commercial_opportunity: null, opportunity: null, project: null,
+    id: index, account: index, client: index, commercial_opportunity: null, opportunity: null,
+    project: null,
     file: "/media/x.pdf",
     drive_link: "", original_name: `Contrato de prestação de serviços — ${NOME_LONGO}.pdf`,
-    uploaded_by: 1, created_at: `${HOJE}T09:00:00Z`,
+    uploaded_by: 1, created_at: `${HOJE}T09:00:00Z`, originated_engagement: null,
     signature_requests: index === 1
-      ? [{ id: 1, signer_email: "juridico@empresa.test", status: "pending", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: null, created_at: `${HOJE}T09:00:00Z` }]
+      ? [{ id: 1, signer_email: "juridico@empresa.test", status: "signed", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: `${HOJE}T10:00:00Z`, created_at: `${HOJE}T09:00:00Z` }]
       : [],
   })),
   "/api/v1/verticals/": serie(5, index => ({
@@ -720,6 +729,10 @@ const FIXTURES: Record<string, unknown> = {
     owner: 1, owner_name: "Ana Souza",
     success_definition: "Fechamento mensal sem reemissão de nota por erro de cadastro.",
     needs_review: false, archived_at: null,
+    originating_commercial_opportunity: registro.commercial_model === "paid" ? indice + 1 : null,
+    originating_commercial_opportunity_title: registro.commercial_model === "paid" ? "Discovery e assessment de automação" : "",
+    originating_design_partner_agreement: registro.commercial_model === "design_partner" ? 1 : null,
+    originating_design_partner_agreement_name: registro.commercial_model === "design_partner" ? "Design Partner Agreement.pdf" : "",
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
     ...registro,
   })),

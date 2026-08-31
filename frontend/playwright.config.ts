@@ -10,7 +10,7 @@ const baseURL = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
 // 390 é celular. 768 não é enfeite: é a fronteira `md` do Tailwind e, como o corte estrutural
 // do `Layout` é `lg` (1024), é a largura em que o tablet **cai no menu hambúrguer** — a faixa
 // que ninguém testava e onde `md:` aparece 4 vezes no código inteiro.
-const MATRIZ = /(a11y|responsive|design-system)\.spec\.ts/;
+const MATRIZ = /(a11y|responsive|design-system|engagement-origin)\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./e2e",

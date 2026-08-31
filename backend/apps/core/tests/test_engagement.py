@@ -21,9 +21,11 @@ from rest_framework.test import APIClient
 from apps.core.models import (
     CommercialOpportunity,
     Contact,
+    Document,
     Engagement,
     PipelineStage,
     Project,
+    SignatureRequest,
     User,
 )
 
@@ -44,6 +46,28 @@ def _api(role: str = User.Role.ADMIN) -> tuple[APIClient, User]:
     client = APIClient()
     client.force_authenticate(user)
     return client, user
+
+
+def _won_opportunity(account=None) -> CommercialOpportunity:
+    return CommercialOpportunityFactory(
+        account=account or AccountFactory(),
+        stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON),
+    )
+
+
+def _signed_design_partner_agreement(account, uploaded_by=None) -> Document:
+    document = Document.objects.create(
+        account=account,
+        original_name="design-partner-agreement.pdf",
+        uploaded_by=uploaded_by or UserFactory(),
+    )
+    SignatureRequest.objects.create(
+        document=document,
+        signer_email="sponsor@example.test",
+        status=SignatureRequest.Status.SIGNED,
+        signed_at=timezone.now(),
+    )
+    return document
 
 
 # --------------------------------------------------------------------------- modelo
@@ -93,9 +117,22 @@ def test_patrocinador_da_propria_conta_passa() -> None:
     engagement = EngagementFactory.build(
         account=conta, owner=UserFactory(),
         sponsor=Contact.objects.create(account=conta, first_name="Patrocinadora"),
+        originating_commercial_opportunity=_won_opportunity(conta),
     )
 
     engagement.clean()  # não levanta
+
+
+def test_engagement_novo_nao_usa_needs_review_para_pular_a_origem() -> None:
+    """O carimbo abre a exceção para o legado persistido, nunca para uma criação nova."""
+    engagement = EngagementFactory.build(
+        account=AccountFactory(), owner=UserFactory(), needs_review=True,
+    )
+
+    with pytest.raises(ValidationError) as erro:
+        engagement.clean()
+
+    assert "originating_commercial_opportunity" in erro.value.message_dict
 
 
 def test_todo_projeto_de_fabrica_tem_engajamento_coerente() -> None:
@@ -127,12 +164,14 @@ def test_design_partner_so_quando_explicito() -> None:
 def test_post_engagement_aceita_e_devolve_commercial_model() -> None:
     api, vendedora = _api(User.Role.SALES)
     conta = AccountFactory()
+    agreement = _signed_design_partner_agreement(conta, vendedora)
 
     resposta = api.post(
         reverse("engagement-list"),
         {
             "account": conta.pk, "name": "Discovery gratuito", "owner": vendedora.pk,
             "commercial_model": "design_partner",
+            "originating_design_partner_agreement": agreement.pk,
         },
         format="json",
     )
@@ -140,6 +179,9 @@ def test_post_engagement_aceita_e_devolve_commercial_model() -> None:
     assert resposta.status_code == 201
     assert resposta.data["commercial_model"] == "design_partner"
     assert resposta.data["commercial_model_display"] == "Design partner"
+    assert resposta.data["originating_design_partner_agreement"] == agreement.pk
+    documents = api.get(reverse("document-list"), {"account": conta.pk})
+    assert documents.data[0]["originated_engagement"] == resposta.data["id"]
 
 
 def test_commercial_model_fora_do_enum_e_recusado() -> None:
@@ -157,17 +199,17 @@ def test_commercial_model_fora_do_enum_e_recusado() -> None:
 
 
 def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() -> None:
-    """A invariante que motivou a emenda: hoje não existe FK de `Engagement` para `CommercialOpportunity`
-    (a direção é a inversa), então um mandato de design partner já pode nascer — e um projeto
-    pendurar nele — sem nenhuma oportunidade no banco."""
+    """Design Partner nasce do acordo assinado — e continua sem oportunidade de origem."""
     api, vendedora = _api(User.Role.SALES)
     conta = AccountFactory()
+    agreement = _signed_design_partner_agreement(conta, vendedora)
 
     criado = api.post(
         reverse("engagement-list"),
         {
             "account": conta.pk, "name": "Cartas Vivas — Discovery", "owner": vendedora.pk,
             "commercial_model": "design_partner",
+            "originating_design_partner_agreement": agreement.pk,
         },
         format="json",
     )
@@ -178,6 +220,214 @@ def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() ->
     assert projeto.engagement_id is not None
     assert projeto.engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER
     assert not CommercialOpportunity.objects.exists()
+
+
+def test_engagement_pago_exige_oportunidade_ganha_da_mesma_conta() -> None:
+    api, vendedora = _api(User.Role.SALES)
+    conta = AccountFactory()
+    aberta = CommercialOpportunityFactory(account=conta)
+
+    sem_origem = api.post(
+        reverse("engagement-list"),
+        {"account": conta.pk, "name": "Sem origem", "owner": vendedora.pk},
+        format="json",
+    )
+    nao_ganha = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk,
+            "name": "Origem aberta",
+            "owner": vendedora.pk,
+            "originating_commercial_opportunity": aberta.pk,
+        },
+        format="json",
+    )
+    de_outra_conta = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk,
+            "name": "Origem cruzada",
+            "owner": vendedora.pk,
+            "originating_commercial_opportunity": _won_opportunity().pk,
+        },
+        format="json",
+    )
+
+    assert sem_origem.status_code == 400
+    assert "originating_commercial_opportunity" in sem_origem.data
+    assert nao_ganha.status_code == 400
+    assert "originating_commercial_opportunity" in nao_ganha.data
+    assert de_outra_conta.status_code == 400
+    assert "originating_commercial_opportunity" in de_outra_conta.data
+
+
+def test_engagement_pago_registra_a_oportunidade_ganha_e_o_vinculo_inverso() -> None:
+    api, vendedora = _api(User.Role.SALES)
+    conta = AccountFactory()
+    opportunity = _won_opportunity(conta)
+
+    resposta = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk,
+            "name": "Transformation Partnership",
+            "owner": vendedora.pk,
+            "originating_commercial_opportunity": opportunity.pk,
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["originating_commercial_opportunity"] == opportunity.pk
+    opportunity.refresh_from_db()
+    assert opportunity.engagement_id == resposta.data["id"]
+
+
+def test_opportunities_filtra_por_conta_e_expoe_estado_e_engagement() -> None:
+    """A seleção aprovada no DAP r2 não oferece origem que a API recusaria."""
+    api, _ = _api(User.Role.SALES)
+    conta = AccountFactory()
+    disponivel = _won_opportunity(conta)
+    vinculado = _won_opportunity(conta)
+    vinculado.engagement = EngagementFactory(account=conta)
+    vinculado.save(update_fields=["engagement", "updated_at"])
+    _won_opportunity()
+
+    resposta = api.get(reverse("opportunity-list"), {"account": conta.pk})
+
+    assert resposta.status_code == 200
+    assert [linha["id"] for linha in resposta.data] == [disponivel.pk, vinculado.pk]
+    assert resposta.data[0]["stage_kind"] == PipelineStage.Kind.WON
+    assert resposta.data[0]["engagement"] is None
+    assert resposta.data[1]["engagement"] == vinculado.engagement_id
+
+
+def test_continuidade_design_partner_abre_oportunidade_no_engagement_existente() -> None:
+    """D8: a parceria nasce sem venda; a venda seguinte nasce dentro do mandato já existente."""
+    api, _ = _api(User.Role.SALES)
+    engagement = EngagementFactory(
+        commercial_model=Engagement.CommercialModel.DESIGN_PARTNER,
+    )
+    stage = PipelineStage.objects.filter(kind=PipelineStage.Kind.OPEN).order_by("position").first()
+    assert stage is not None
+
+    resposta = api.post(
+        reverse("opportunity-list"),
+        {
+            "account": engagement.account_id,
+            "title": "Continuidade paga",
+            "scope": "PROVE após o Design Partner",
+            "estimated_value": "25000.00",
+            "stage": stage.pk,
+            "expected_close_date": str(timezone.localdate() + timedelta(days=15)),
+            "engagement": engagement.pk,
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["engagement"] == engagement.pk
+    assert CommercialOpportunity.objects.get(pk=resposta.data["id"]).engagement_id == engagement.pk
+
+
+def test_design_partner_exige_agreement_assinado_da_mesma_conta() -> None:
+    api, vendedora = _api(User.Role.SALES)
+    conta = AccountFactory()
+    unsigned = Document.objects.create(
+        account=conta, original_name="pendente.pdf", uploaded_by=vendedora
+    )
+    other_account = _signed_design_partner_agreement(AccountFactory(), vendedora)
+
+    sem_agreement = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk,
+            "name": "Sem acordo",
+            "owner": vendedora.pk,
+            "commercial_model": "design_partner",
+        },
+        format="json",
+    )
+    pendente = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk,
+            "name": "Acordo pendente",
+            "owner": vendedora.pk,
+            "commercial_model": "design_partner",
+            "originating_design_partner_agreement": unsigned.pk,
+        },
+        format="json",
+    )
+    cruzado = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk,
+            "name": "Acordo de outra conta",
+            "owner": vendedora.pk,
+            "commercial_model": "design_partner",
+            "originating_design_partner_agreement": other_account.pk,
+        },
+        format="json",
+    )
+
+    assert sem_agreement.status_code == 400
+    assert "originating_design_partner_agreement" in sem_agreement.data
+    assert pendente.status_code == 400
+    assert "originating_design_partner_agreement" in pendente.data
+    assert cruzado.status_code == 400
+    assert "originating_design_partner_agreement" in cruzado.data
+
+
+def test_engagement_nao_aceita_as_duas_origens_ao_mesmo_tempo() -> None:
+    api, vendedora = _api(User.Role.SALES)
+    conta = AccountFactory()
+
+    resposta = api.post(
+        reverse("engagement-list"),
+        {
+            "account": conta.pk,
+            "name": "Duas origens",
+            "owner": vendedora.pk,
+            "originating_commercial_opportunity": _won_opportunity(conta).pk,
+            "originating_design_partner_agreement": _signed_design_partner_agreement(
+                conta, vendedora
+            ).pk,
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 400
+    assert "originating_design_partner_agreement" in resposta.data
+
+
+def test_legado_sem_origem_permanece_valido_e_so_pode_receber_origem_uma_vez() -> None:
+    api, _ = _api()
+    legacy = EngagementFactory(needs_review=True)
+    opportunity = _won_opportunity(legacy.account)
+
+    editado_sem_inferir = api.patch(
+        reverse("engagement-detail", args=[legacy.pk]),
+        {"name": "Legado revisado"},
+        format="json",
+    )
+    remediado = api.patch(
+        reverse("engagement-detail", args=[legacy.pk]),
+        {"originating_commercial_opportunity": opportunity.pk},
+        format="json",
+    )
+    troca = api.patch(
+        reverse("engagement-detail", args=[legacy.pk]),
+        {"originating_commercial_opportunity": _won_opportunity(legacy.account).pk},
+        format="json",
+    )
+
+    assert editado_sem_inferir.status_code == 200
+    assert editado_sem_inferir.data["needs_review"] is True
+    assert remediado.status_code == 200
+    assert remediado.data["originating_commercial_opportunity"] == opportunity.pk
+    assert troca.status_code == 400
+    assert "originating_commercial_opportunity" in troca.data
 
 
 # ------------------------------------------------------------------- POST /projects/
@@ -287,6 +537,9 @@ def test_conversao_sem_engajamento_cria_um_de_escopo_unico() -> None:
     assert engagement.status == Engagement.Status.ACTIVE
     # Pago por construção: a action só converte oportunidade em "Ganho".
     assert engagement.commercial_model == Engagement.CommercialModel.PAID
+    assert engagement.originating_commercial_opportunity_id == opportunity.pk
+    opportunity.refresh_from_db()
+    assert opportunity.engagement_id == engagement.pk
 
 
 def test_conversao_com_engajamento_no_payload_usa_o_informado() -> None:
@@ -299,6 +552,25 @@ def test_conversao_com_engajamento_no_payload_usa_o_informado() -> None:
     assert resposta.status_code == 201
     assert resposta.data["engagement"] == engagement.pk
     # Não criou um segundo mandato por baixo.
+    assert Engagement.objects.filter(account=opportunity.account).count() == 1
+
+
+def test_conversao_da_continuidade_usa_o_engagement_ja_declarado_na_oportunidade() -> None:
+    """O formulário comercial não precisa repetir um vínculo que a venda já carrega."""
+    api, _ = _api()
+    engagement = EngagementFactory(
+        commercial_model=Engagement.CommercialModel.DESIGN_PARTNER,
+    )
+    opportunity = CommercialOpportunityFactory(
+        account=engagement.account,
+        engagement=engagement,
+        stage=PipelineStage.objects.get(kind="won"),
+    )
+
+    resposta = _converter(api, opportunity)
+
+    assert resposta.status_code == 201
+    assert resposta.data["engagement"] == engagement.pk
     assert Engagement.objects.filter(account=opportunity.account).count() == 1
 
 
@@ -322,10 +594,16 @@ def test_vendas_escreve_e_entrega_so_le() -> None:
     entrega, pessoa = _api(User.Role.DELIVERY)
     engagement = EngagementFactory(account=conta)
     ProjectMemberFactory(project=ProjectFactory(engagement=engagement), user=pessoa)
+    origin = _won_opportunity(conta)
 
     criado = vendas.post(
         reverse("engagement-list"),
-        {"account": conta.pk, "name": "Transformação 2027", "owner": vendedora.pk},
+        {
+            "account": conta.pk,
+            "name": "Transformação 2027",
+            "owner": vendedora.pk,
+            "originating_commercial_opportunity": origin.pk,
+        },
         format="json",
     )
     lido = entrega.get(reverse("engagement-detail", args=[engagement.pk]))
@@ -411,10 +689,17 @@ def test_arquivar_a_conta_leva_o_mandato_junto() -> None:
 def test_serializer_recusa_encerrado_sem_data_final() -> None:
     api, user = _api()
     conta = AccountFactory()
+    origin = _won_opportunity(conta)
 
     resposta = api.post(
         reverse("engagement-list"),
-        {"account": conta.pk, "name": "Encerrado", "owner": user.pk, "status": "closed"},
+        {
+            "account": conta.pk,
+            "name": "Encerrado",
+            "owner": user.pk,
+            "status": "closed",
+            "originating_commercial_opportunity": origin.pk,
+        },
         format="json",
     )
 
@@ -523,10 +808,15 @@ def test_criar_sem_owner_grava_quem_esta_logado() -> None:
     onde quem cria é quem está logado. Mesmo precedente da `convert-to-project`."""
     api, vendedora = _api(User.Role.SALES)
     conta = AccountFactory()
+    origin = _won_opportunity(conta)
 
     resposta = api.post(
         reverse("engagement-list"),
-        {"account": conta.pk, "name": "Transformação Financeira"},
+        {
+            "account": conta.pk,
+            "name": "Transformação Financeira",
+            "originating_commercial_opportunity": origin.pk,
+        },
         format="json",
     )
 
@@ -540,10 +830,16 @@ def test_criar_com_owner_no_payload_respeita_o_informado() -> None:
     api, _ = _api()
     conta = AccountFactory()
     outra = UserFactory(role=User.Role.SALES)
+    origin = _won_opportunity(conta)
 
     resposta = api.post(
         reverse("engagement-list"),
-        {"account": conta.pk, "name": "Mandato de outra pessoa", "owner": outra.pk},
+        {
+            "account": conta.pk,
+            "name": "Mandato de outra pessoa",
+            "owner": outra.pk,
+            "originating_commercial_opportunity": origin.pk,
+        },
         format="json",
     )
 

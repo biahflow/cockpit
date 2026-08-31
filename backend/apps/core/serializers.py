@@ -9,6 +9,7 @@ from typing import Any, cast
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.uploadedfile import UploadedFile
+from django.db import transaction
 from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -528,6 +529,7 @@ class CommercialOpportunitySerializer(
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
 
     stage_name = serializers.CharField(source="stage.name", read_only=True)
+    stage_kind = serializers.CharField(source="stage.kind", read_only=True)
     service_name = serializers.CharField(source="service.name", read_only=True)
     service_tier = serializers.CharField(source="service.tier", read_only=True)
     project = serializers.SerializerMethodField()
@@ -537,7 +539,7 @@ class CommercialOpportunitySerializer(
         model = CommercialOpportunity
         fields = [
             "id", "account", "client", "contact", "title", "scope", "estimated_value", "stage",
-            "stage_name",
+            "stage_name", "stage_kind", "engagement",
             "owner", "expected_close_date", "service", "service_name", "service_tier", "project",
             "project_archived", "origin_qualification", "created_at", "updated_at",
         ]
@@ -546,7 +548,9 @@ class CommercialOpportunitySerializer(
         # da avaliação antes. Editável aqui, um `PATCH` cru gravaria a mesma coluna sem passar por
         # `CommercialOpportunity.clean()` — a distinção entre "campo" e "ato" que a FDD 028 já
         # fez no `status` da fatura.
-        read_only_fields = ["id", "owner", "origin_qualification", "created_at", "updated_at"]
+        read_only_fields = [
+            "id", "owner", "origin_qualification", "created_at", "updated_at"
+        ]
 
     def _projeto_do_card(self, obj: CommercialOpportunity) -> Project | None:
         """O projeto que representa esta oportunidade no card do pipeline.
@@ -603,6 +607,12 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         source="get_commercial_model_display", read_only=True
     )
     projects_count = serializers.SerializerMethodField()
+    originating_commercial_opportunity_title = serializers.CharField(
+        source="originating_commercial_opportunity.title", read_only=True, default=""
+    )
+    originating_design_partner_agreement_name = serializers.CharField(
+        source="originating_design_partner_agreement.original_name", read_only=True, default=""
+    )
 
     class Meta:
         model = Engagement
@@ -610,6 +620,10 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
             "id", "account", "account_name", "name", "mandate", "sponsor", "sponsor_name",
             "owner", "owner_name",
             "status", "status_display", "commercial_model", "commercial_model_display",
+            "originating_commercial_opportunity",
+            "originating_commercial_opportunity_title",
+            "originating_design_partner_agreement",
+            "originating_design_partner_agreement_name",
             "started_at", "ended_at", "success_definition", "projects_count",
             "needs_review", "archived_at", "created_at", "updated_at",
         ]
@@ -655,34 +669,96 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         return getattr(obj, "projects_count", 0)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
-        """As três regras do `clean()` do modelo, aqui, para virarem 400 em vez de 500.
+        """Repete no contrato HTTP a invariante 13 que `Engagement.clean()` sustenta no modelo.
 
-        Repetir a validação é o padrão da casa (`CommercialOpportunitySerializer.validate` faz o
-        mesmo com o contato): o `clean()` existe porque shell, admin e migração não passam por
-        serializer;
-        este existe porque `ModelSerializer` não chama `full_clean`, e sem ele a violação sairia
-        como `IntegrityError` ou como um registro incoerente salvo em silêncio.
+        O legado sem origem continua editável enquanto `needs_review=True`; uma criação nova não
+        ganha essa exceção nem quando o cliente tenta mandar o carimbo no payload. Quando a origem
+        histórica é preenchida, ela não muda por PATCH — corrigir fato observado exige intervenção
+        administrativa deliberada, não edição casual do formulário.
         """
-        instance = self.instance
-        account = cast(Account | None, attrs.get("account", getattr(instance, "account", None)))
-        sponsor = cast(Contact | None, attrs.get("sponsor", getattr(instance, "sponsor", None)))
-        started = cast(date | None, attrs.get("started_at", getattr(instance, "started_at", None)))
-        ended = cast(date | None, attrs.get("ended_at", getattr(instance, "ended_at", None)))
-        status_value = attrs.get("status", getattr(instance, "status", Engagement.Status.ACTIVE))
-        if sponsor and account and sponsor.account_id != account.id:
-            raise serializers.ValidationError(
-                {"sponsor": "O patrocinador deve ser contato da mesma conta."}
+        current = self.instance
+
+        def value(field: str, default: object = None) -> object:
+            if field in attrs:
+                return attrs[field]
+            return getattr(current, field, default) if current is not None else default
+
+        opportunity = cast(
+            CommercialOpportunity | None,
+            value("originating_commercial_opportunity"),
+        )
+        agreement = cast(
+            Document | None,
+            value("originating_design_partner_agreement"),
+        )
+        if current is not None:
+            for field in (
+                "originating_commercial_opportunity",
+                "originating_design_partner_agreement",
+            ):
+                current_id = getattr(current, f"{field}_id")
+                incoming = attrs.get(field)
+                incoming_id = getattr(incoming, "pk", None)
+                if field in attrs and current_id is not None and incoming_id != current_id:
+                    raise serializers.ValidationError({
+                        field: "O instrumento de origem não muda depois de registrado."
+                    })
+        if current is None and opportunity is None and agreement is None:
+            field = (
+                "originating_design_partner_agreement"
+                if value("commercial_model", Engagement.CommercialModel.PAID)
+                == Engagement.CommercialModel.DESIGN_PARTNER
+                else "originating_commercial_opportunity"
             )
-        if started and ended and ended < started:
+            raise serializers.ValidationError({
+                field: "Informe o instrumento assinado que originou o engagement."
+            })
+
+        candidate = Engagement(
+            pk=current.pk if current is not None else None,
+            account=cast(Account | None, value("account")),
+            name=str(value("name", "")),
+            owner=cast(User | None, value("owner")),
+            sponsor=cast(Contact | None, value("sponsor")),
+            status=str(value("status", Engagement.Status.ACTIVE)),
+            commercial_model=str(value("commercial_model", Engagement.CommercialModel.PAID)),
+            started_at=cast(date | None, value("started_at")),
+            ended_at=cast(date | None, value("ended_at")),
+            needs_review=bool(value("needs_review", False)),
+            originating_commercial_opportunity=opportunity,
+            originating_design_partner_agreement=agreement,
+        )
+        # O objeto-candidato não veio do ORM, mas representa uma linha legada já persistida no
+        # PATCH. Sem preservar esse estado, `Engagement.clean()` o trataria como criação nova e
+        # fecharia justamente a exceção de edição que `needs_review` existe para manter.
+        candidate._state.adding = current is None
+        try:
+            candidate.clean()
+        except DjangoValidationError as exc:
             raise serializers.ValidationError(
-                {"ended_at": "A data final não pode ser anterior à inicial."}
-            )
-        if status_value == Engagement.Status.CLOSED and ended is None:
-            raise serializers.ValidationError(
-                {"ended_at": "Um engajamento encerrado precisa de data final."}
-            )
+                exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+            ) from exc
         return attrs
 
+    @staticmethod
+    def _bind_origin(instance: Engagement) -> None:
+        opportunity_id = instance.originating_commercial_opportunity_id
+        if opportunity_id is not None:
+            CommercialOpportunity.objects.filter(
+                pk=opportunity_id, engagement__isnull=True
+            ).update(engagement=instance)
+
+    @transaction.atomic
+    def create(self, validated_data: dict[str, object]) -> Engagement:
+        instance = super().create(validated_data)
+        self._bind_origin(instance)
+        return instance
+
+    @transaction.atomic
+    def update(self, instance: Engagement, validated_data: dict[str, object]) -> Engagement:
+        updated = super().update(instance, validated_data)
+        self._bind_origin(updated)
+        return updated
 
 class ProjectSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Project]):
     ALIASES_DE_ENTRADA = {"ai_opportunity": "ai_potential"}
@@ -1945,15 +2021,23 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
     )
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     signature_requests = SignatureRequestSerializer(many=True, read_only=True)
+    originated_engagement = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
         fields = [
             "id", "account", "client", "commercial_opportunity", "opportunity", "project", "file",
             "drive_link", "original_name",
-            "uploaded_by", "created_at", "signature_requests",
+            "uploaded_by", "created_at", "signature_requests", "originated_engagement",
         ]
         read_only_fields = ["id", "drive_link", "original_name", "uploaded_by", "created_at"]
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_originated_engagement(self, obj: Document) -> int | None:
+        try:
+            return obj.originated_design_partner_engagement.pk
+        except Engagement.DoesNotExist:
+            return None
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         links = [

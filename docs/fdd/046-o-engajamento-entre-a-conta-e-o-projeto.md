@@ -286,3 +286,32 @@ comparação de cliente da própria action fecha o resto. Quem responde de fato 
 uma mensagem que continua em português — é superfície de Projetos/Comercial, fora deste DAP, e
 trocá-la é varredura própria. `test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer`
 fixa o achado.
+
+## Emenda (31/08/2026) — o instrumento assinado fecha a invariante 13
+
+A emenda de `commercial_model` acima preservou a origem livre porque o schema não tinha vínculo.
+Essa frase descrevia o estado implementado, mas contrariava D8 e a invariante 13 do mapa de
+linguagem. A decisão humana da issue #62 resolve o conflito em favor da regra normativa, registrada
+na [ADR 0058](../adr/0058-o-engagement-nasce-do-instrumento-assinado-e-o-legado-declara-a-lacuna.md).
+
+Toda criação nova referencia exatamente um instrumento:
+
+- `paid` → `originating_commercial_opportunity`, da mesma Account e ganha;
+- `design_partner` → `originating_design_partner_agreement`, um Document da mesma Account com
+  assinatura concluída e datada.
+
+Design Partner **continua sem CommercialOpportunity de origem**. O que deixa de existir é o
+Engagement novo sem instrumento nenhum. `convert-to-project` grava a oportunidade ganha nos dois
+lados: como origem do Engagement e como primeira `CommercialOpportunity.engagement` daquele
+mandato.
+
+A migração `0074` não escolhe candidatos nem cria contrato retroativo. Todos os Engagements
+anteriores entram com as duas referências nulas e `needs_review=True`; permanecem válidos até
+remediação humana. Preencher a origem não limpa o carimbo automaticamente, pois ele também cobre a
+ambiguidade de agrupamento herdada da migração 0056.
+
+A interface segue o DAP
+[`docs/design/dap-engagement-r2/`](../design/dap-engagement-r2/README.md), revisão 2 aprovada: na
+criação, o modelo comercial mostra um único select com instrumentos elegíveis. Sem oportunidade
+ganha ou acordo assinado, a ação fica desabilitada e orienta o pré-requisito. Upload, assinatura e
+remediação em lote continuam fora dessa superfície.
