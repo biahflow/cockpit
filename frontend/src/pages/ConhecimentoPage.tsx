@@ -115,10 +115,10 @@ export function ConhecimentoPage() {
               {piece.next_review_at ? ` · revisa em ${formatDate(piece.next_review_at)}` : " · não vence"}
             </p>
           </div>
-          {podeVerificar(piece) && <button type="button" disabled={busy === piece.id} onClick={() => void verificar(piece)}
-            className="btn btn--secondary shrink-0">
+          {podeVerificar(piece) && <div className="row-meta justify-end"><button type="button" disabled={busy === piece.id} onClick={() => void verificar(piece)}
+            className="btn btn--secondary">
             {busy === piece.id ? "…" : "Marcar como verificado"}
-          </button>}
+          </button></div>}
         </article>)}
       </div>
     </section> : <p className="panel text-sm text-muted">Nenhuma peça neste filtro. O inventário é populado por <code>manage.py ingest_knowledge</code>, a partir da metodologia versionada no repositório.</p>}

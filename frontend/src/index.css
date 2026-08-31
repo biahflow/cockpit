@@ -211,7 +211,7 @@
   /* A linha de lista. Correspondente das `.field-row`/`.setting-row`/`.member-row` de lá, que são
      a mesma declaração três vezes — aqui é uma, porque o que muda entre elas é o conteúdo. */
   .row { @apply flex flex-wrap items-center gap-4 px-5 py-4 sm:px-6; }
-  .row-main { @apply min-w-0 flex-1; }
+  .row-main { @apply min-w-0 flex-1; overflow-wrap: anywhere; }
   .row-main strong { @apply block text-sm font-semibold text-ink; }
   .row-main span { @apply mt-0.5 block text-xs text-muted; }
   /* O cluster de selos de uma linha — score, versão, estado —, **sempre numa linha própria dentro
@@ -227,8 +227,9 @@
      de `.row-main` pela razão de sempre — `.row-main span`/`strong` sobrescreveriam display e cor
      de qualquer primitiva aninhada ali dentro.
 
-     As telas que já compõem `.row` + `.state` **não** a adotam nesta entrega: o defeito é o mesmo
-     lá, e consertá-las aqui seria ampliar escopo por conta própria — é a issue #91. */
+     A issue #91 auditou os consumidores anteriores e levou todos os metadados não encolhíveis
+     para esta faixa. `overflow-wrap: anywhere` na própria `.row-main` fecha a outra metade do caso:
+     um token sem espaço ou hífen também não pode alargar a página, qualquer que seja a tag do título. */
   .row-meta { @apply mt-0.5 flex flex-wrap items-center gap-2; flex: 1 1 100%; }
 
   /* O rótulo acima do título. É o principal lugar onde o laranja aparece como texto, e o

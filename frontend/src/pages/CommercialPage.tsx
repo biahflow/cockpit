@@ -207,7 +207,7 @@ export function CommercialPage() {
             <span>{activity.kind_display} · {new Date(`${activity.happened_on}T12:00:00`).toLocaleDateString("pt-BR")}</span>
             {activity.notes && <span>{activity.notes}</span>}
           </div>
-          {user?.role !== "delivery" && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar interação: ${activity.summary}`} onClick={() => void archiveDetailActivity(activity)}><Trash2 className="size-4" /></button>}
+          {user?.role !== "delivery" && <div className="row-meta justify-end"><button className="rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar interação: ${activity.summary}`} onClick={() => void archiveDetailActivity(activity)}><Trash2 className="size-4" /></button></div>}
         </div>)}</div> : <p className="mt-3 text-sm text-slate-600">Nenhuma interação registrada.</p>}
         {user?.role !== "delivery" && <form className="form-grid mt-3" onSubmit={event => void createDetailActivity(event)}>
           <label className="form-label">Tipo<select className="field" value={activityDraft.kind} onChange={event => setActivityDraft({ ...activityDraft, kind: event.target.value as ActivityKind })}>{Object.entries(activityKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>

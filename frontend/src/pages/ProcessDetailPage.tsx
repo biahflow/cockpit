@@ -323,7 +323,7 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
       {custo.parcelas.length
         ? <div className="panel-rows">{custo.parcelas.map(parcela => <div className="row" key={parcela.label}>
             <div className="row-main"><strong>{parcela.label}</strong></div>
-            <span className="shrink-0 text-sm font-semibold text-ink">{moeda(parcela.valor)}</span>
+            <div className="row-meta justify-end"><span className="text-sm font-semibold text-ink">{moeda(parcela.valor)}</span></div>
           </div>)}</div>
         : <p className="empty-state">Nenhuma parcela apurada ainda — sem volume, tempo, pessoas e custo/hora não há conta a mostrar, e zero não seria a resposta.</p>}
 
@@ -411,11 +411,13 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
           </div>
           {/* Fora de `.row-main`: `.row-main span`/`strong` sobrescrevem display e cor de qualquer
               primitiva aninhada ali dentro, e o `.state` perderia a própria pele em silêncio. */}
-          <span className={`state ${STATUS_BADGE[finding.epistemic_status]} shrink-0`}>{finding.epistemic_status_display}</span>
-          {/* Some quando já é fato: não há para onde promover, e um botão inerte na linha diria que
-              existe um grau acima. O `aria-label` nomeia o achado porque a tela tem um botão destes
-              por linha, e "Promover a fato" repetido cinco vezes não localiza nenhum deles. */}
-          {finding.epistemic_status !== "fact" && <button type="button" className="btn btn--secondary shrink-0" disabled={promovendo === finding.id} aria-label={`Promover a fato: ${finding.statement}`} onClick={() => void promover(finding)}><BadgeCheck className="size-4" />Promover a fato</button>}
+          <div className="row-meta">
+            <span className={`state ${STATUS_BADGE[finding.epistemic_status]}`}>{finding.epistemic_status_display}</span>
+            {/* Some quando já é fato: não há para onde promover, e um botão inerte na linha diria que
+                existe um grau acima. O `aria-label` nomeia o achado porque a tela tem um botão destes
+                por linha, e "Promover a fato" repetido cinco vezes não localiza nenhum deles. */}
+            {finding.epistemic_status !== "fact" && <button type="button" className="btn btn--secondary ml-auto" disabled={promovendo === finding.id} aria-label={`Promover a fato: ${finding.statement}`} onClick={() => void promover(finding)}><BadgeCheck className="size-4" />Promover a fato</button>}
+          </div>
         </div>;
       })}</div> : <p className="empty-state">Nenhum achado registrado — sem achado classificado, o custo acima é hipótese da casa.</p>}
     </section>

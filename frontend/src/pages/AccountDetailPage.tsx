@@ -436,18 +436,21 @@ export function AccountDetailPage({ id }: { id: number }) {
           {engagement.sponsor_name && <span>Patrocínio de {engagement.sponsor_name}</span>}
           <span>{[periodoDoEngagement(engagement), projetosDoEngagement(engagement.projects_count)].filter(Boolean).join(" · ")}</span>
         </div>
-        {/* As duas pílulas são **irmãs** de `.row-main`, nunca filhas, pela razão escrita nos
+        {/* As duas pílulas ficam **fora** de `.row-main`, nunca filhas, pela razão escrita nos
             blocos de Satisfação e Interações: `.row-main span` declara `block text-xs text-muted`
             e um `.state` aninhado ali perderia a própria pele sem nada ficar vermelho.
 
             E são **duas, sempre** (decisão B1): mostrar só o `design_partner` faria "sem selo"
-            significar duas coisas para quem lê — conta paga, ou campo que ninguém preencheu. */}
-        <span className={`state ${engagementStatusBadge[engagement.status]} shrink-0`}>{engagement.status_display}</span>
-        <span className={`state ${engagementCommercialModelBadge[engagement.commercial_model]} shrink-0`}>{engagement.commercial_model_display}</span>
-        {canWriteEngagements && <div className="flex shrink-0 gap-1.5">
-          <button type="button" className="btn btn--icon btn--secondary" aria-label={`Editar ${engagement.name}`} onClick={() => startEngagementEdit(engagement)}><Pencil className="size-4" /></button>
-          <button type="button" className="btn btn--icon btn--secondary btn--secondary-danger" aria-label={`Arquivar ${engagement.name}`} onClick={() => setRemovingEngagement(engagement)}><Trash2 className="size-4" /></button>
-        </div>}
+            significar duas coisas para quem lê — conta paga, ou campo que ninguém preencheu. A
+            `.row-meta` lhes dá uma faixa própria para o nome não receber só a sobra. */}
+        <div className="row-meta">
+          <span className={`state ${engagementStatusBadge[engagement.status]}`}>{engagement.status_display}</span>
+          <span className={`state ${engagementCommercialModelBadge[engagement.commercial_model]}`}>{engagement.commercial_model_display}</span>
+          {canWriteEngagements && <div className="ml-auto flex gap-1.5">
+            <button type="button" className="btn btn--icon btn--secondary" aria-label={`Editar ${engagement.name}`} onClick={() => startEngagementEdit(engagement)}><Pencil className="size-4" /></button>
+            <button type="button" className="btn btn--icon btn--secondary btn--secondary-danger" aria-label={`Arquivar ${engagement.name}`} onClick={() => setRemovingEngagement(engagement)}><Trash2 className="size-4" /></button>
+          </div>}
+        </div>
       </div>)}</div> : <p className="empty-state">Nenhum engagement nesta conta. Crie o mandato com seu instrumento de origem antes de iniciar um projeto.</p>}
     </section>
 
@@ -475,9 +478,12 @@ export function AccountDetailPage({ id }: { id: number }) {
         {/* Fora de `.row-main` de propósito: `.row-main span`/`.row-main strong` sobrescrevem
             display/cor de qualquer primitiva aninhada ali dentro (ver o comentário do bloco de
             Interações abaixo) — um `.state` ou `.eyebrow` filho perderia a própria pele em
-            silêncio. Como irmãos do `.row-main`, os dois selos ficam com a pele que têm. */}
-        <span className={`state ${satisfacaoBadgeClass(registro.nivel)} shrink-0`}>{registro.nivel_display}</span>
-        <span className="eyebrow shrink-0">{registro.fonte_display}</span>
+            silêncio. Na `.row-meta`, os dois selos ficam com a pele que têm e não comprimem o
+            texto da linha. */}
+        <div className="row-meta">
+          <span className={`state ${satisfacaoBadgeClass(registro.nivel)}`}>{registro.nivel_display}</span>
+          <span className="eyebrow">{registro.fonte_display}</span>
+        </div>
       </div>)}</div> : <p className="empty-state">Nenhum registro de satisfação para este cliente.</p>}
     </section>
 
@@ -501,10 +507,12 @@ export function AccountDetailPage({ id }: { id: number }) {
           <strong>{processo.name}</strong>
           <span>{moeda(processo.custo.total)} por mês{processo.custo.nao_apurado.length > 0 && ` · total parcial, ${processo.custo.nao_apurado.length} sem apuração`}</span>
         </div>
-        {/* Selo e link como irmãos do `.row-main`, pela razão escrita no bloco de Satisfação acima:
+        {/* Selo e link fora do `.row-main`, pela razão escrita no bloco de Satisfação acima:
             `.row-main span`/`strong` sobrescrevem display e cor de qualquer primitiva aninhada. */}
-        <span className={`state ${sustentacaoBadgeClass(processo.custo.sustentacao)} shrink-0`}>{SUSTENTACAO_LABEL[processo.custo.sustentacao]}</span>
-        <a className="btn btn--secondary shrink-0" href={`/contas/${id}/processos/${processo.id}`}>Abrir o mapa</a>
+        <div className="row-meta">
+          <span className={`state ${sustentacaoBadgeClass(processo.custo.sustentacao)}`}>{SUSTENTACAO_LABEL[processo.custo.sustentacao]}</span>
+          <a className="btn btn--secondary ml-auto" href={`/contas/${id}/processos/${processo.id}`}>Abrir o mapa</a>
+        </div>
       </div>)}</div> : <p className="empty-state">Nenhum processo mapeado para este cliente.</p>}
     </section>
 
@@ -609,8 +617,10 @@ export function AccountDetailPage({ id }: { id: number }) {
         {/* Só com a flag `ai` ligada e só enquanto não houver sinal: reclassificar sobrescreveria a
             leitura que alguém já usou para decidir. A régua funciona com a IA desligada — o que
             some daqui é o botão, não um degrau (ADR 0031). */}
-        {canWriteActivities && iaLigada && !activity.cobranca_sinal && <button type="button" className="btn btn--secondary shrink-0" disabled={classificando === activity.id} aria-label={`Classificar resposta: ${activity.summary}`} onClick={() => void classificar(activity)}><Sparkles className="size-4" />{classificando === activity.id ? "Lendo…" : "Classificar resposta"}</button>}
-        {canWriteActivities && <button className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar interação: ${activity.summary}`} onClick={() => void archiveActivity(activity)}><Trash2 className="size-4" /></button>}
+        {canWriteActivities && <div className="row-meta justify-end">
+          {iaLigada && !activity.cobranca_sinal && <button type="button" className="btn btn--secondary" disabled={classificando === activity.id} aria-label={`Classificar resposta: ${activity.summary}`} onClick={() => void classificar(activity)}><Sparkles className="size-4" />{classificando === activity.id ? "Lendo…" : "Classificar resposta"}</button>}
+          <button className="rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar interação: ${activity.summary}`} onClick={() => void archiveActivity(activity)}><Trash2 className="size-4" /></button>
+        </div>}
       </div>)}</div> : <p className="empty-state">Nenhuma interação registrada.</p>}
     </section>
   </section>;

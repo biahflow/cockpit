@@ -246,6 +246,10 @@ A fatia seguinte construiu a tela que o DAP `docs/design/dap-priorizacao-r1/` (r
 - **`.row-meta` em `index.css`**, com consumidor no mesmo commit. As telas que já compõem
   `.row` + `.state` **não** a adotam: o defeito é o mesmo lá, e a correção é a issue #91.
 
+A issue #91 fechou essa dívida em 31/08/2026: auditou as composições `.row` + `.row-main` com
+irmão não encolhível, moveu seus selos/ações para `.row-meta` e acrescentou a regressão de 390px
+com token sem espaço nem hífen na matriz de responsividade (FDD 022).
+
 Três coisas que a tela **não** faz, e cada uma tem motivo:
 
 - **Não mostra quem avaliou.** `PriorityAssessmentSerializer` publica `assessed_by` como id e não

@@ -50,11 +50,15 @@ export function SettingsPage() {
       <div className="panel-heading panel-heading--icon"><span className="metric-icon"><Settings className="size-4" /></span><div><h2>Integrações</h2><p className="mt-0.5 text-sm text-muted">Estado atual de cada recurso conectável.</p></div></div>
       {flags.length ? <div className="panel-rows">{flags.map(flag => <div className="row" key={flag.key}>
         <div className="row-main"><strong>{flag.label}</strong><span>{hint(flag)}</span></div>
-        <span className={`state ${flag.enabled ? "state--0" : "state--off"}`}>{flag.enabled ? "Ligada" : "Desligada"}</span>
-        {flag.key === "calendar" && flag.enabled && <button className="btn btn--secondary" disabled={syncing} onClick={() => void runCalendarSync()}><RefreshCw className={`size-4${syncing ? " animate-spin" : ""}`} />{syncing ? "Sincronizando…" : "Sincronizar agora"}</button>}
-        {flag.toggleable
-          ? <button className="btn btn--secondary" disabled={busy === flag.key || (!flag.enabled && !flag.configured)} onClick={() => void toggle(flag)}><Power className="size-4" />{busy === flag.key ? "Salvando…" : flag.enabled ? "Desligar" : "Ligar"}</button>
-          : <span className="text-xs font-medium text-muted">via .env</span>}
+        <div className="row-meta">
+          <span className={`state ${flag.enabled ? "state--0" : "state--off"}`}>{flag.enabled ? "Ligada" : "Desligada"}</span>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {flag.key === "calendar" && flag.enabled && <button className="btn btn--secondary" disabled={syncing} onClick={() => void runCalendarSync()}><RefreshCw className={`size-4${syncing ? " animate-spin" : ""}`} />{syncing ? "Sincronizando…" : "Sincronizar agora"}</button>}
+            {flag.toggleable
+              ? <button className="btn btn--secondary" disabled={busy === flag.key || (!flag.enabled && !flag.configured)} onClick={() => void toggle(flag)}><Power className="size-4" />{busy === flag.key ? "Salvando…" : flag.enabled ? "Desligar" : "Ligar"}</button>
+              : <span className="text-xs font-medium text-muted">via .env</span>}
+          </div>
+        </div>
       </div>)}</div> : <p className="px-6 py-6 text-center text-sm text-muted">Carregando integrações…</p>}
     </section>
   </section>;

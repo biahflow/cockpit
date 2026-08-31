@@ -1290,7 +1290,7 @@ function PainelDeFeasibility({ laudos, hipoteses, carregando, erro }: PainelDeFe
       <div className="panel-rows">
         {eixos.map(([rotulo, veredito, nota]) => <div className="row" key={rotulo}>
           <div className="row-main"><strong>{rotulo}</strong><span>{nota || "Sem nota registrada."}</span></div>
-          <span className={`state ${VERDICT_VARIANT[veredito]} shrink-0`}>{VERDICT_LABEL[veredito]}</span>
+          <div className="row-meta"><span className={`state ${VERDICT_VARIANT[veredito]}`}>{VERDICT_LABEL[veredito]}</span></div>
         </div>)}
         <div className="row"><div className="row-main"><strong>Amostra usada</strong><span>{laudo.sample || "—"}</span></div></div>
         <div className="row"><div className="row-main"><strong>Classes de erro observadas</strong><span>{laudo.error_classes || "—"}</span></div></div>
