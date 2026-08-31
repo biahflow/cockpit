@@ -1,10 +1,10 @@
-# Biahflow Language Map v1.1 — Pulse · One · Notion · Biahflow
+# Biahflow Language Map v1.4 — Pulse · One · Notion · Biahflow
 
 > Espelho do documento canônico no Notion: **Language Map — Pulse · One · Notion · Biahflow**
 > <https://app.notion.com/p/3ca82225ad278115bd44c2d90247f44e>
 > Quando divergirem, a página do Notion vence — e a divergência se registra antes de qualquer edição.
 
-**Status:** normativo · **Depende de:** Biahflow Operating Ontology v1 · **Data:** 28/08/2026
+**Status:** normativo · **Depende de:** Biahflow Operating Ontology v1 · **Data:** 30/08/2026
 
 A Ontology v1 define **o que cada termo significa**. Esta página define **onde cada termo aparece e com que nome**, nas quatro superfícies em que a Biahflow fala: Pulse, One, Notion e material de mercado. Quando as duas divergirem, a Ontology v1 vence no significado e esta página vence no rótulo.
 
@@ -14,7 +14,7 @@ Regra de ouro: **um conceito, um nome, quatro superfícies.** Se uma superfície
 
 ## 0. Decisões desta versão
 
-Sete conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. Cada um mudava o significado de dado já persistido, então nenhum ficou em aberto.
+Dez conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. Cada um mudava o significado de dado já persistido, então nenhum ficou em aberto.
 
 | # | Conflito | Decisão | Quem muda |
 | --- | --- | --- | --- |
@@ -25,6 +25,9 @@ Sete conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. 
 | D5 | "Opportunity Score" existe na FDE, mas não há entidade que o carregue | O score é `priority_assessment.score`. **"Opportunity Score" é rótulo de UI/cliente**, aplicável só a ImprovementOpportunity — nunca a CommercialOpportunity | Pulse · One · Executive Readout |
 | D6 | FATO / HIPÓTESE / DESCONHECIDO vive dentro de `Evidencia` | Vira `finding.epistemic_status` = `fact` · `hypothesis` · `unknown`. Finding extraído por IA nasce `hypothesis`; promoção a `fact` é ato humano | Pulse · FDE |
 | D7 | `GateOutcome` colide com Outcome de negócio | Renomeado para `GateDecision`, valores `go` · `conditional_go` · `redesign` · `no_go` | Pulse · One · FDE |
+| D8 | Ontology v1 dizia que Engagement nasce após uma CommercialOpportunity `Won`; um design partner não tem venda, e sem Engagement não se pode criar Project (D3) | Engagement nasce de **instrumento contratual assinado** — CommercialOpportunity `Won` **ou** Design Partner Agreement. Novo atributo obrigatório `engagement.commercial_model` = `design_partner` · `paid`. A continuidade de um design partner nasce como CommercialOpportunity **dentro** do Engagement existente | Ontology v1 §4 · §9 · Pulse · One |
+| D9 | `gate_decision` declarado válido para Feasibility **e** PROVE, misturando dois vocabulários de decisão | **Cada gate tem seu vocabulário.** Feasibility → `go` · `conditional_go` · `redesign` · `no_go`. PROVE → `scale` · `iterate` · `stop`. Nunca misturar (ADR 0053) | Pulse · One · FDE · Notion |
+| D10 | Valores de enum em português deixavam modelo, banco e API bilíngues mesmo quando classe e campo já tinham nome canônico em inglês | **Valor de enum é termo de domínio e segue a regra de idioma:** inglês canônico em modelo, banco e API. Valores portugueses existentes permanecem aliases de entrada da `/api/v1/`; a migração de cada família ocorre junto do respectivo renome e os aliases morrem na `/api/v2/` | Pulse · One |
 
 ---
 
@@ -34,10 +37,10 @@ Sete conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. 
 | --- | --- | --- | --- |
 | **Pulse** | Portal operacional interno da Biahflow (repo `pulse`) | Biahflow | Fonte da verdade do **dado**. Nomes canônicos em modelo, banco, API e UI interna |
 | **One** | Portal do cliente (repo `one`) | Sponsor e time do cliente | **Projeção de leitura** do Pulse. Mesmos nomes, subconjunto visível. Não inventa termo |
-| **Notion** | Estratégia, método, playbooks, verticais | Biahflow | Fonte da verdade do **método**. Prosa em português, termos canônicos em inglês |
+| **Notion** | Estratégia, método, playbooks, verticais | Biahflow | **Espelho do método.** A fonte é `docs/` no repositório do Pulse; o sistema Pulse manda no **dado** (ADR 0035). Nenhuma ficha do Notion se declara fonte da verdade do método. Prosa em português, termos canônicos em inglês |
 | **Biahflow** | Site, decks, propostas, one-pagers, conteúdo | Mercado | Mesma palavra, sem jargão de banco. Nunca um sinônimo criado para "soar melhor" |
 
-**Regra de idioma:** termos canônicos **em inglês nas quatro superfícies**. `snake_case` em código, banco e API; `Title Case` em UI e prosa. Não se traduz o termo — traduz-se o texto em volta dele. "A Account tem três Engagements ativos" está certo; "A Conta tem três Compromissos ativos" está errado.
+**Regra de idioma:** termos canônicos **em inglês nas quatro superfícies**. `snake_case` em código, banco e API; `Title Case` em UI e prosa. **Valores de enum também são termos canônicos:** persistem e atravessam APIs em inglês; a UI traduz apenas o rótulo exibido. Valores portugueses anteriores a D10 são aliases de compatibilidade da `/api/v1/`, nunca valores novos. Não se traduz o termo — traduz-se o texto em volta dele. "A Account tem três Engagements ativos" está certo; "A Conta tem três Compromissos ativos" está errado.
 
 ---
 
@@ -49,7 +52,7 @@ Sete conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. 
 | **Qualification** | `Qualification` · `/qualifications` | — | Qualification | Qualification Call (o encontro) | Oportunidade, Projeto, Lead status |
 | **CommercialOpportunity** | `CommercialOpportunity` · `/commercial-opportunities` | — | Commercial Opportunity | Proposta / negociação | `Opportunity` sozinho |
 | **Account** | `Account` (era `Client`) · `/accounts` | sua organização | Account | Cliente (só com `lifecycle_status=active`) | Client (no modelo), Empresa |
-| **Engagement** | `Engagement` · `/engagements` | Engagement | Engagement | Programa de transformação | Projeto, Conta, Contrato |
+| **Engagement** | `Engagement` · `/engagements` · `commercial_model` | Engagement | Engagement | Programa de transformação | Projeto, Conta, Contrato |
 | **Project** | `Project` · `/projects` | Project | Project | Discovery Sprint · Feasibility · PROVE · Scale | Engagement, Entrega |
 | **Process** | `Process` (era `Processo`) | Process (mapa AS-IS) | Process | Processo | Fluxo, Projeto |
 | **ProcessStep** | `ProcessStep` (era `ProcessoEtapa`) | Step | Process Step | Etapa | Tarefa |
@@ -69,7 +72,7 @@ Sete conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. 
 | **Baseline** | `Measurement(kind=baseline)` | Baseline | Baseline | Baseline | Meta, Outcome, estimativa |
 | **Outcome** | `Measurement(kind=outcome)` | Outcome | Outcome | resultado medido | Gate, promessa, ROI projetado |
 | **Value** | `ValueLedgerEntry` → Value Ledger | Value Ledger | Value · Client Value Ledger | valor gerado | ROI projetado, Case |
-| **GateDecision** | `GateDecision` (era `GateOutcome`) | decisão da fase | Gate Decision | GO / CONDITIONAL GO / REDESIGN / NO-GO | Outcome |
+| **GateDecision** | `GateDecision` (era `GateOutcome`) | decisão da fase | Gate Decision | Feasibility: GO / CONDITIONAL GO / REDESIGN / NO-GO; PROVE: SCALE / ITERATE / STOP | Outcome |
 | **DigitalEmployee** | `DigitalEmployee` | Digital Employee | Funcionário Digital | Funcionário Digital | Solução, SolutionHypothesis, Agente |
 | **Service** | `Service` (catálogo de ofertas) | nome do produto contratado | degrau / produto | Discovery Sprint, PROVE… | Estágio, Fase, Tier de trabalho |
 | **JourneyPhase / ProjectPhase** | idem | timeline da fase | fase FDE | DISCOVER · PRIORITIZE · … | os agregados Feasibility/PROVE |
@@ -106,12 +109,18 @@ Três regras que sustentam isso:
 | --- | --- | --- |
 | `qualification.outcome` | `qualified` · `nurture` · `disqualified` | Só `qualified` abre CommercialOpportunity (D2) |
 | `finding.epistemic_status` | `fact` · `hypothesis` · `unknown` | Extração por IA nasce `hypothesis` (D6) |
-| `gate_decision` | `go` · `conditional_go` · `redesign` · `no_go` | Vale para Feasibility e PROVE (D7) |
+| `gate_decision` | `go` · `conditional_go` · `redesign` · `no_go` | Vale **só** para Feasibility (D7 · D9). A decisão do PROVE é `scale` · `iterate` · `stop` |
 | `measurement.kind` | `baseline` · `outcome` · `monitoring` | Uma única `baseline` por KPI e janela |
-| `journey_phase.canonical_stage` | `discover` · `prioritize` · `feasibility` · `prove` · `scale` · `optimize` | Já existe no Pulse |
+| `journey_phase.canonical_stage` | `discover` · `prioritize` · `feasibility` · `prove` · `scale` · `optimize` | Enum canônico e fechado (ADR 0053). A fase `VALUE` **não existe** |
 | `account.lifecycle_status` | `prospect` · `active` · `inactive` | Rótulo "cliente" só em `active` |
 | `service.category` | `acquisition` · `commercial` | `qualification_call` é `acquisition` (D4) |
 | `engagement.status` | `active` · `paused` · `closed` | |
+| `engagement.commercial_model` | `design_partner` · `paid` | Obrigatório. `design_partner` não exige CommercialOpportunity de origem (D8) |
+| `activity.dunning_signal` | `forgot` · `unable_to_pay` · `dissatisfied` | Aliases v1: `esqueceu` · `nao_pode` · `insatisfeito` (D10) |
+| `dunning_step` | `pre_notice` · `reminder` · `firm` · `escalation` · `renegotiation` | Aliases v1 necessários só para `pre_aviso` e `renegociacao`; os demais já eram canônicos (D10) |
+| `satisfaction_record.source` | `declared` · `perceived` | Aliases v1: `declarada` · `percebida` (D10) |
+| `satisfaction_record.level` | `promoter` · `satisfied` · `neutral` · `dissatisfied` | Aliases v1: `promotor` · `satisfeito` · `neutro` · `insatisfeito` (D10) |
+| `digital_employee_blueprint.area` | `commercial` · `finance` · `hr` · `legal` · `support` | Aliases v1: `comercial` · `financeiro` · `rh` · `juridico` · `atendimento` (D10) |
 
 ---
 
@@ -149,6 +158,9 @@ Estas viram teste automatizado no Pulse e revisão de PR nos dois repos.
 10. Nenhum endpoint do One expõe `Lead`, `Qualification`, `CommercialOpportunity` ou `PipelineStage`.
 11. Todo texto voltado ao cliente que diga "Outcome" aponta para um `Measurement(kind=outcome)` com `Baseline` comparável.
 12. `ValueLedgerEntry` aponta para um `Outcome` e registra método de atribuição.
+13. Todo `Engagement` tem `commercial_model` preenchido e referência ao instrumento assinado que o originou.
+14. `Engagement.commercial_model=design_partner` não exige `CommercialOpportunity` de origem — e não dispensa o Engagement.
+15. Todo valor novo de enum é inglês canônico. Valores portugueses existentes são aliases de compatibilidade explícitos da `/api/v1/` e não sobrevivem à `/api/v2/`.
 
 ---
 
@@ -176,15 +188,15 @@ Mudança de significado gera **nova versão desta página e da Ontology**, com r
 
 ## 9. Pendências abertas — decisão do Daniel
 
-A varredura de 28/08/2026 cobriu as 20 páginas de conteúdo do workspace Notion e os schemas das 4 databases vivas. Tudo que era violação de vocabulário foi corrigido. Sobraram cinco pontos que **não são de vocabulário — são decisão de negócio**.
+A varredura de 28/08/2026 cobriu as 20 páginas de conteúdo do workspace Notion e os schemas das 4 databases vivas. A ADR 0053 resolveu A1, A3, A4 e A5; continua aberta apenas a decisão de catálogo A2.
 
-| # | Pendência | Onde | Por que ficou aberto |
+| # | Pendência | Onde | Status |
 | --- | --- | --- | --- |
-| A1 | "Implementation Project" como venda direta de implementação, sem PROVE — um sétimo caminho comercial fora dos seis degraus | PROVE Framework | Ou vira degrau nomeado no catálogo, ou vira porta de entrada de Scale/Transformation Partnership |
-| A2 | "Design Partner" funciona como oferta de entrada (Discovery sem cobrança), mas o único gratuito é a Qualification Call | Home Care KB · Igreja · Founding Client | Condição comercial de um degrau (seis) vs. oferta própria (sete) |
-| A3 | Duração da Qualification Call: `30-45min` em três páginas, `45–60 min` em uma | Discovery Questions × demais | Conflito factual |
-| A4 | Preço da Technical Feasibility: `R$ 2.500–5.000` vs `R$ 5.000` | Feasibility Framework × Financeiro | Conflito de tabela de preço |
-| A5 | Playbook de Nova Vertical: "PROVE operando — cobrança: Não (ou simbólico)" na Fase 3–4, e §12 argumenta contra PROVE gratuito | Playbook Nova Vertical | Posição comercial |
+| A1 | "Implementation Project" como venda direta de implementação, sem PROVE | PROVE Framework | ✅ Resolvida pela ADR 0053: o caminho é **Scale** |
+| A2 | "Design Partner" funciona como oferta de entrada, mas o único gratuito no catálogo é a Qualification Call | Home Care KB · Igreja · Founding Client | Aberta: condição comercial de um degrau (seis) ou oferta própria (sete) |
+| A3 | Duração da Qualification Call divergente | Discovery Questions × demais | ✅ Resolvida pela ADR 0053: **45–60 min** |
+| A4 | Preço da Technical Feasibility divergente | Feasibility Framework × Financeiro | ✅ Resolvida pela ADR 0053: **R$ 5.000** |
+| A5 | PROVE gratuito no acordo de Design Partner | Playbook Nova Vertical | ✅ Resolvida pela ADR 0053: gratuito só dentro do acordo; nos demais casos é pago |
 
 ### Dívida estrutural conhecida
 

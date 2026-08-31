@@ -29,13 +29,24 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
 | chave `ai_opportunity` (só leitura) | `ai_potential` | `serializers.py` | `/api/v2/` |
 | chave `client_consent` (só leitura) | `account_consent` | `serializers.py` | `/api/v2/` |
+| valores `esqueceu` / `nao_pode` / `insatisfeito` | `forgot` / `unable_to_pay` / `dissatisfied` | `Activity.cobranca_sinal` e serializers | junto do renome para `DunningSignal`; alias morre na `/api/v2/` |
+| degraus `pre_aviso` / `renegociacao` | `pre_notice` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
+| valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
+| áreas `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprint.Area` e serializers | após o conceito entrar no mapa; alias morre na `/api/v2/` |
 
-> **O recorte físico da Fase 6 foi concluído; a issue #70 permanece aberta.** Tabelas renomeadas
+> A decisão D10 da Language Map v1.4 torna o **valor** do enum parte do mesmo contrato de idioma
+> do nome da classe e do campo. Esta tabela não autoriza migração isolada: os dados do grupo de
+> cobrança e satisfação mudam junto do renome de cada família, com reversa e normalização de
+> entrada na v1. A área do blueprint muda depois de o conceito canônico estar no mapa — condição
+> cumprida pela própria D10. Até essas fatias chegarem, os valores portugueses seguem sendo os
+> persistidos e expostos pela `/api/v1/`; nenhum valor novo nasce em português.
+
+> **O recorte físico da Fase 6 foi concluído; a issue #70 foi encerrada por decisão do mantenedor.** Tabelas renomeadas
 > (migração `0069`), dual-write e `Evidencia` removidos (migração `0068`), `Project.client`
 > removido após prova automática de equivalência (migração `0070`), `ai_opportunity` renomeado
 > para `ai_potential` (migração `0071`) e `client_consent` renomeado para `account_consent`
-> (migração `0072`). A #70 só fecha depois do critério operacional que ela própria define e da
-> `/api/v2/`, onde morrem rotas e chaves de payload; por isso a allowlist ainda não é zero.
+> (migração `0072`). Os aliases de rota, payload e enum continuam com prazo na `/api/v2/`; por
+> isso encerrar a issue não torna a allowlist zero nem revoga os critérios operacionais registrados.
 
 ### Já pagos pela #67 — 28/08/2026
 

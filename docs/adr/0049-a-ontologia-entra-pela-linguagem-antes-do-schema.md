@@ -6,13 +6,14 @@
 prazos distintos. O nome da **classe** passa para a issue #67 (passo 5); o nome da **tabela**
 continua na Fase 6; rota e chave de payload continuam na `/api/v2/`. Onde esta ADR diz "o renome
 físico é a Fase 6" — em Contexto, em Consequências e em Alternativas consideradas — leia-se o nome
-da tabela.
+da tabela. **ADR 0056 (30/08/2026):** valor de enum também é termo canônico e segue o inglês;
+valores portugueses já publicados ficam como aliases explícitos da `/api/v1/` até a `/api/v2/`.
 
 ## Contexto
 
 A Biahflow fala em quatro superfícies — Pulse, One, Notion e material de mercado — e até agora cada
 uma nomeava as coisas por conta própria. O resultado está catalogado na Ontology v1 e no Language
-Map v1.1 (`docs/ontology/language-map.md`): sete conflitos em que a **mesma palavra** significava
+Map v1.4 (`docs/ontology/language-map.md`): conflitos em que a **mesma palavra** significava
 coisas diferentes conforme quem lia. `Opportunity` era a venda no pipeline e a melhoria operacional
 no mapa do FDE. `Outcome` era o resultado medido de um KPI e a saída de um decision gate.
 `Evidencia` era o registro bruto de uma observação e a conclusão tirada dele. `Client` era a
