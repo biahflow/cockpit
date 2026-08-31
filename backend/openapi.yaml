@@ -12862,6 +12862,12 @@ components:
         stage_name:
           type: string
           readOnly: true
+        stage_kind:
+          type: string
+          readOnly: true
+        engagement:
+          type: integer
+          nullable: true
         owner:
           type: integer
           readOnly: true
@@ -12910,6 +12916,7 @@ components:
       - service_name
       - service_tier
       - stage
+      - stage_kind
       - stage_name
       - title
       - updated_at
@@ -13456,6 +13463,10 @@ components:
           items:
             $ref: '#/components/schemas/SignatureRequest'
           readOnly: true
+        originated_engagement:
+          type: integer
+          nullable: true
+          readOnly: true
       required:
       - client
       - created_at
@@ -13463,6 +13474,7 @@ components:
       - id
       - opportunity
       - original_name
+      - originated_engagement
       - signature_requests
       - uploaded_by
     Engagement:
@@ -13504,6 +13516,20 @@ components:
         commercial_model_display:
           type: string
           readOnly: true
+        originating_commercial_opportunity:
+          type: integer
+          nullable: true
+        originating_commercial_opportunity_title:
+          type: string
+          readOnly: true
+          default: ''
+        originating_design_partner_agreement:
+          type: integer
+          nullable: true
+        originating_design_partner_agreement_name:
+          type: string
+          readOnly: true
+          default: ''
         started_at:
           type: string
           format: date
@@ -13540,6 +13566,8 @@ components:
       - created_at
       - id
       - name
+      - originating_commercial_opportunity_title
+      - originating_design_partner_agreement_name
       - owner_name
       - projects_count
       - sponsor_name
@@ -15685,6 +15713,12 @@ components:
         stage_name:
           type: string
           readOnly: true
+        stage_kind:
+          type: string
+          readOnly: true
+        engagement:
+          type: integer
+          nullable: true
         owner:
           type: integer
           readOnly: true
@@ -16069,6 +16103,10 @@ components:
           items:
             $ref: '#/components/schemas/SignatureRequest'
           readOnly: true
+        originated_engagement:
+          type: integer
+          nullable: true
+          readOnly: true
     PatchedEngagement:
       type: object
       properties:
@@ -16108,6 +16146,20 @@ components:
         commercial_model_display:
           type: string
           readOnly: true
+        originating_commercial_opportunity:
+          type: integer
+          nullable: true
+        originating_commercial_opportunity_title:
+          type: string
+          readOnly: true
+          default: ''
+        originating_design_partner_agreement:
+          type: integer
+          nullable: true
+        originating_design_partner_agreement_name:
+          type: string
+          readOnly: true
+          default: ''
         started_at:
           type: string
           format: date

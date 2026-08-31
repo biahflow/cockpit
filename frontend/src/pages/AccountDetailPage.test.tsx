@@ -83,6 +83,10 @@ function mandato(overrides: Record<string, unknown> = {}) {
     mandate: "", sponsor: null, sponsor_name: null, owner: 1, owner_name: "Ana Souza",
     status: "active", status_display: "Ativo",
     commercial_model: "paid", commercial_model_display: "Pago",
+    originating_commercial_opportunity: 21,
+    originating_commercial_opportunity_title: "Discovery Sprint — Financeiro",
+    originating_design_partner_agreement: null,
+    originating_design_partner_agreement_name: "",
     started_at: "2026-03-02", ended_at: null, success_definition: "",
     projects_count: 3, needs_review: false, archived_at: null,
     created_at: "2026-03-02T10:00:00Z", updated_at: "2026-03-02T10:00:00Z",
@@ -93,6 +97,31 @@ function mandato(overrides: Record<string, unknown> = {}) {
 // Vazia por padrão, pela razão das listas acima: os testes que não são sobre o mandato não devem
 // ganhar dois selos a mais na tela para colidir com o texto dos vizinhos.
 let engagements: unknown[] = [];
+
+function oportunidade(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 21, account: 1, client: 1, contact: null, title: "Discovery Sprint — Financeiro",
+    scope: "", estimated_value: "12000.00", stage: 3, stage_name: "Ganho", stage_kind: "won",
+    engagement: null, owner: 1, expected_close_date: "2026-08-20", service: null,
+    service_name: "", service_tier: "", project: null, project_archived: false,
+    origin_qualification: null,
+    ...overrides,
+  };
+}
+
+function documento(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 31, account: 1, client: 1, commercial_opportunity: null, opportunity: null,
+    project: null, file: "", drive_link: "", original_name: "Acordo Design Partner — 2026.pdf",
+    uploaded_by: 1, created_at: "2026-08-20T10:00:00Z",
+    originated_engagement: null,
+    signature_requests: [{ id: 41, signer_email: "sponsor@example.test", status: "signed", sign_url: "", reminded_at: null, signed_at: "2026-08-21T10:00:00Z", created_at: "2026-08-20T10:00:00Z" }],
+    ...overrides,
+  };
+}
+
+let opportunities: unknown[] = [oportunidade()];
+let documents: unknown[] = [documento()];
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
@@ -105,6 +134,8 @@ function stub() {
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
     if (path.startsWith("/processos")) return Promise.resolve(processos);
     if (path.startsWith("/engagements")) return Promise.resolve(engagements);
+    if (path.startsWith("/opportunities/?account=")) return Promise.resolve(opportunities);
+    if (path.startsWith("/documents/?account=")) return Promise.resolve(documents);
     return Promise.resolve([]);
   });
 }
@@ -118,6 +149,8 @@ beforeEach(() => {
   processos = [];
   contacts = [contato()];
   engagements = [];
+  opportunities = [oportunidade()];
+  documents = [documento()];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -488,7 +521,7 @@ test("cliente sem processo mapeado mostra o estado vazio, não um painel em bran
   expect(await screen.findByText("Nenhum processo mapeado para este cliente.")).toBeInTheDocument();
 });
 
-// --- Engagements (ADR 0050, FDD 046; DAP `docs/design/dap-engagement-r1/`, r1, A1 · B1) --------
+// --- Engagements (ADR 0050/0058, FDD 046; DAP r1 A1/B1 e DAP r2) -------------------------------
 
 test("a seção lista os mandatos com status e as duas pílulas de modelo comercial", async () => {
   engagements = [
@@ -543,9 +576,8 @@ test("conta sem mandato mostra o estado vazio, não um painel em branco", async 
   const painel = within(screen.getByTestId("engagements-panel"));
 
   expect(painel.getByText("Nenhum engagement")).toBeInTheDocument();
-  // A copy diz o que fazer e por quê — "Nenhum engagement cadastrado." deixaria a pessoa
-  // exatamente onde estava.
-  expect(painel.getByText(/Crie o mandato antes de converter uma oportunidade/)).toBeInTheDocument();
+  // A copy diz o que fazer e explicita o novo pré-requisito contratual.
+  expect(painel.getByText(/Crie o mandato com seu instrumento de origem/)).toBeInTheDocument();
   // O vazio não esconde a saída.
   expect(painel.getByRole("button", { name: "Novo engagement" })).toBeInTheDocument();
 });
@@ -565,7 +597,7 @@ test("entrega vê a lista de mandatos e nenhuma ação sobre ela", async () => {
   expect(painel.queryByLabelText("Arquivar Transformação Financeira")).not.toBeInTheDocument();
 });
 
-test("o formulário embutido cria o mandato e não pede responsável", async () => {
+test("o formulário embutido cria Design Partner com agreement assinado e não pede responsável", async () => {
   const user = userEvent.setup();
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
@@ -575,16 +607,51 @@ test("o formulário embutido cria o mandato e não pede responsável", async () 
   await user.click(painel.getByRole("button", { name: "Novo engagement" }));
   await user.type(painel.getByLabelText("Nome"), "Transformação Financeira");
   await user.selectOptions(painel.getByLabelText("Modelo comercial"), "design_partner");
+  await user.selectOptions(painel.getByLabelText("Design Partner Agreement assinado"), "31");
   await user.click(painel.getByRole("button", { name: "Adicionar engagement" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/engagements/", expect.objectContaining({ method: "POST" })));
   const corpo = JSON.parse(mocks.api.mock.calls.find(([rota]) => rota === "/engagements/")![1].body);
-  expect(corpo).toMatchObject({ account: 1, name: "Transformação Financeira", commercial_model: "design_partner" });
+  expect(corpo).toMatchObject({ account: 1, name: "Transformação Financeira", commercial_model: "design_partner", originating_design_partner_agreement: 31, originating_commercial_opportunity: null });
   // `owner` não vai no payload: quem cria aqui é quem está logado, e é `perform_create` que grava.
   expect(corpo).not.toHaveProperty("owner");
   // Data vazia vai como `null`, e não como `""` — um `DateField` com string vazia volta 400.
   expect(corpo.started_at).toBeNull();
   expect(corpo.sponsor).toBeNull();
+});
+
+test("criação paga oferece somente oportunidade ganha e ainda sem engagement", async () => {
+  opportunities = [
+    oportunidade(),
+    oportunidade({ id: 22, title: "Ainda aberta", stage_kind: "open", stage_name: "Proposta" }),
+    oportunidade({ id: 23, title: "Continuidade", engagement: 9 }),
+  ];
+  const user = userEvent.setup();
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo engagement" }));
+
+  const origin = painel.getByLabelText("Oportunidade ganha de origem");
+  expect(within(origin).getByRole("option", { name: "Discovery Sprint — Financeiro" })).toBeInTheDocument();
+  expect(within(origin).queryByRole("option", { name: "Ainda aberta" })).not.toBeInTheDocument();
+  expect(within(origin).queryByRole("option", { name: "Continuidade" })).not.toBeInTheDocument();
+});
+
+test("Design Partner oferece só documento assinado e bloqueia quando não há nenhum", async () => {
+  documents = [documento({ signature_requests: [] })];
+  const user = userEvent.setup();
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo engagement" }));
+  await user.selectOptions(painel.getByLabelText("Modelo comercial"), "design_partner");
+
+  expect(painel.getByLabelText("Design Partner Agreement assinado")).toBeDisabled();
+  expect(painel.getByText(/Envie o acordo em Documentos e conclua a assinatura/)).toBeInTheDocument();
+  expect(painel.getByRole("button", { name: "Adicionar engagement" })).toBeDisabled();
 });
 
 test("o lápis carrega o mandato no formulário e o título vira Editando", async () => {

@@ -259,9 +259,53 @@ class Engagement(TimestampedModel):
     commercial_model = models.CharField(
         max_length=16, choices=CommercialModel.choices, default=CommercialModel.PAID
     )
+    # Invariante 13 do mapa de linguagem: o mandato não nasce de uma intenção solta, e sim do
+    # instrumento que foi assinado. Há dois caminhos, mutuamente exclusivos:
+    #
+    # - `paid`: a CommercialOpportunity ganha que originou o mandato;
+    # - `design_partner`: o Design Partner Agreement guardado como Document da Account.
+    #
+    # Ambos são nulos no schema para que o legado anterior à 0074 continue legível. A migração
+    # não adivinha qual venda foi a primeira nem fabrica um contrato: mantém os vínculos vazios e
+    # marca `needs_review=True`. `PROTECT` preserva a proveniência depois de observada; arquivar o
+    # instrumento continua possível porque os registros de negócio usam exclusão lógica.
+    originating_commercial_opportunity = models.OneToOneField(
+        "CommercialOpportunity",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="originated_engagement",
+    )
+    originating_design_partner_agreement = models.OneToOneField(
+        "Document",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="originated_design_partner_engagement",
+    )
 
     class Meta:
         ordering = ["-started_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        needs_review=True,
+                        originating_commercial_opportunity__isnull=True,
+                        originating_design_partner_agreement__isnull=True,
+                    )
+                    | Q(
+                        originating_commercial_opportunity__isnull=False,
+                        originating_design_partner_agreement__isnull=True,
+                    )
+                    | Q(
+                        originating_commercial_opportunity__isnull=True,
+                        originating_design_partner_agreement__isnull=False,
+                    )
+                ),
+                name="engagement_has_one_origin_or_needs_review",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -277,6 +321,68 @@ class Engagement(TimestampedModel):
         sponsor = self.sponsor if self.sponsor_id else None
         if sponsor is not None and sponsor.account_id != self.account_id:
             raise ValidationError({"sponsor": "O patrocinador deve ser contato da mesma conta."})
+
+        opportunity = (
+            self.originating_commercial_opportunity
+            if self.originating_commercial_opportunity_id
+            else None
+        )
+        agreement = (
+            self.originating_design_partner_agreement
+            if self.originating_design_partner_agreement_id
+            else None
+        )
+        if opportunity is None and agreement is None:
+            if self._state.adding or not self.needs_review:
+                field = (
+                    "originating_design_partner_agreement"
+                    if self.commercial_model == self.CommercialModel.DESIGN_PARTNER
+                    else "originating_commercial_opportunity"
+                )
+                raise ValidationError({field: "Informe o instrumento assinado que originou o engagement."})
+            return
+        if opportunity is not None and agreement is not None:
+            raise ValidationError({
+                "originating_design_partner_agreement":
+                    "Informe um único instrumento de origem para o engagement."
+            })
+        if self.commercial_model == self.CommercialModel.PAID:
+            if opportunity is None:
+                raise ValidationError({
+                    "originating_commercial_opportunity":
+                        "Engagement pago nasce de uma oportunidade comercial ganha."
+                })
+            if opportunity.account_id != self.account_id:
+                raise ValidationError({
+                    "originating_commercial_opportunity":
+                        "A oportunidade de origem deve pertencer à mesma conta."
+                })
+            if not opportunity.is_won:
+                raise ValidationError({
+                    "originating_commercial_opportunity":
+                        "A oportunidade de origem precisa estar ganha."
+                })
+            if opportunity.engagement_id not in {None, self.pk}:
+                raise ValidationError({
+                    "originating_commercial_opportunity":
+                        "A oportunidade já pertence a outro engagement."
+                })
+            return
+        if agreement is None:
+            raise ValidationError({
+                "originating_design_partner_agreement":
+                    "Design Partner nasce de um Design Partner Agreement assinado."
+            })
+        if agreement.account_id != self.account_id:
+            raise ValidationError({
+                "originating_design_partner_agreement":
+                    "O Design Partner Agreement deve pertencer à mesma conta."
+            })
+        if not agreement.is_signed:
+            raise ValidationError({
+                "originating_design_partner_agreement":
+                    "O Design Partner Agreement precisa estar assinado."
+            })
 
 
 class PipelineStage(models.Model):
@@ -862,6 +968,19 @@ class Document(TimestampedModel):
     @property
     def linked_resource(self) -> Account | CommercialOpportunity | Project | None:
         return self.account or self.commercial_opportunity or self.project
+
+    @property
+    def is_signed(self) -> bool:
+        """Há uma assinatura concluída e datada para este documento.
+
+        `status=signed` sem `signed_at` é estado incompleto: os dois caminhos reais que fecham a
+        assinatura (`mark-signed` e webhook) gravam ambos. Exigir os dois impede que um update cru
+        de status transforme um arquivo em instrumento contratual sem carimbo temporal.
+        """
+        return self.signature_requests.filter(
+            status=SignatureRequest.Status.SIGNED,
+            signed_at__isnull=False,
+        ).exists()
 
 
 class Meeting(TimestampedModel):

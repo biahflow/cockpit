@@ -139,7 +139,12 @@ class ActivityFactory(factory.django.DjangoModelFactory):
 
 
 class EngagementFactory(factory.django.DjangoModelFactory):
-    """O mandato de transformação da conta (ADR 0050) — a camada entre `Account` e `Project`."""
+    """Mandato legado por padrão, sem instrumento inferido (invariante 13, migração 0074).
+
+    Teste que exerce criação nova deve informar uma das duas origens explicitamente. A fábrica
+    genérica sustenta a massa histórica usada pelas suítes anteriores e por isso carrega o mesmo
+    `needs_review=True` que a migração grava — nunca fabrica venda ou contrato por conveniência.
+    """
 
     class Meta:
         model = Engagement
@@ -148,6 +153,7 @@ class EngagementFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"Engajamento {n}")
     owner = factory.SubFactory(UserFactory)
     started_at = factory.LazyFunction(timezone.localdate)
+    needs_review = True
 
 
 class ProjectFactory(factory.django.DjangoModelFactory):

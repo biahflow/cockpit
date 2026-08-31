@@ -28,15 +28,21 @@ admin.site.register(
 )
 
 
-# `commercial_model` não tem tela própria (a tela de Engagement exige Design Approval Package, e
-# não há um aprovado — FDD 046), e a lista de contas de design partner cresce por venda, não por
-# deploy. Sem um lugar para carimbar a conta nova, o campo dependeria de shell/curl toda vez. O
-# admin não substitui a tela: é o único jeito de gente-não-engenharia ler e mudar o campo hoje.
+# A tela operacional cobre **criação nova** com instrumento assinado (DAP engagement r2). O admin
+# continua sendo a superfície deliberada de remediação do legado: a migração 0074 não inventa
+# venda nem acordo, apenas carimba `needs_review=True` para uma pessoa registrar o que observou.
 @admin.register(Engagement)
 class EngagementAdmin(admin.ModelAdmin):
-    list_display = ["name", "account", "status", "commercial_model", "owner"]
-    list_filter = ["status", "commercial_model"]
-    search_fields = ["name", "account__name"]
+    list_display = [
+        "name", "account", "status", "commercial_model", "needs_review", "owner"
+    ]
+    list_filter = ["status", "commercial_model", "needs_review"]
+    search_fields = [
+        "name",
+        "account__name",
+        "originating_commercial_opportunity__title",
+        "originating_design_partner_agreement__original_name",
+    ]
 
 
 # Só-leitura: quem escreve aqui é o `run_scheduler`. Editar o carimbo à mão é reagendar um job por

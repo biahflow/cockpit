@@ -945,7 +945,7 @@ class PipelineStageViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-class CommercialOpportunityViewSet(ArchiveModelViewSet):
+class CommercialOpportunityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "commercial_opportunity"
     # `projects` é o reverso lido por `CommercialOpportunitySerializer._projeto_do_card`. Era
     # `select_related("project")` enquanto a relação era 1-1; virou `prefetch_related` porque
@@ -958,6 +958,7 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
         .all()
     )
     serializer_class = CommercialOpportunitySerializer
+    filter_fields = ("account",)
 
     def perform_create(self, serializer: CommercialOpportunitySerializer) -> None:
         serializer.save(owner=self.request.user)
@@ -1043,6 +1044,14 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
             return Response(
                 {"engagement": "O engagement deve ser da mesma conta da oportunidade."}, status=400
             )
+        if (
+            engagement is not None
+            and opportunity.engagement_id is not None
+            and opportunity.engagement_id != engagement.pk
+        ):
+            return Response(
+                {"engagement": "A oportunidade já pertence a outro engagement."}, status=400
+            )
         # O nível de produto vendido segue para a entrega; o payload pode sobrescrever.
         service = serializer.validated_data.get("service") or opportunity.service
         # Invariante 6 do mapa de linguagem (ADR 0049): oferta de **aquisição** não gera projeto.
@@ -1065,6 +1074,12 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
                 vivo = travada.projects.filter(archived_at__isnull=True).order_by("id").first()
                 if vivo is not None:
                     return Response({"detail": "A oportunidade já foi convertida."}, status=409)
+                # A continuidade de um Design Partner nasce como CommercialOpportunity **dentro**
+                # do Engagement existente (D8). O formulário de conversão não precisa repetir um
+                # vínculo que a venda já declara; sem esta linha ele criaria um segundo mandato e
+                # separaria o projeto da própria continuidade que o originou.
+                if engagement is None and travada.engagement_id is not None:
+                    engagement = travada.engagement
                 if engagement is None:
                     # **D3 em código**: todo projeto pertence a um engajamento, e a venda avulsa
                     # não vira caso especial — ela cria um mandato de escopo único. Manter o
@@ -1079,6 +1094,14 @@ class CommercialOpportunityViewSet(ArchiveModelViewSet):
                         # Explícito e não herdado do default: aqui é pago por construção, porque
                         # a action exige oportunidade em "Ganho".
                         commercial_model=Engagement.CommercialModel.PAID,
+                        originating_commercial_opportunity=travada,
+                    )
+                # A oportunidade de origem também é a primeira venda **dentro** do mandato. O
+                # campo inverso já existia para continuidades; preenchê-lo aqui mantém as duas
+                # leituras da mesma relação coerentes sem inferir nada no legado.
+                if travada.engagement_id is None:
+                    CommercialOpportunity.objects.filter(pk=travada.pk).update(
+                        engagement=engagement
                     )
                 project = serializer.save(
                     engagement=engagement,
@@ -1151,7 +1174,13 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """
 
     resource = "engagement"
-    queryset = Engagement.objects.select_related("account", "owner", "sponsor").all()
+    queryset = Engagement.objects.select_related(
+        "account",
+        "owner",
+        "sponsor",
+        "originating_commercial_opportunity",
+        "originating_design_partner_agreement",
+    ).all()
     serializer_class = EngagementSerializer
     # `status` em `filter_exact_fields` e não em `filter_fields`: o primeiro conjunto só aplica
     # valores numéricos (`value.isdigit()`), e `?status=active` seria silenciosamente ignorado —
@@ -2351,7 +2380,8 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
 
     resource = "document"
     queryset = Document.objects.select_related(
-        "account", "commercial_opportunity", "project", "uploaded_by"
+        "account", "commercial_opportunity", "project", "uploaded_by",
+        "originated_design_partner_engagement",
     ).prefetch_related("signature_requests").all()
     serializer_class = DocumentSerializer
     filter_fields = ("account", "commercial_opportunity", "project")

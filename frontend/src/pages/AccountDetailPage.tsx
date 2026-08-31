@@ -8,7 +8,7 @@ import { ConfirmDialog } from "../components/Modal";
 import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, Contact, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, CommercialOpportunity, Contact, DocumentEntry, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -26,7 +26,8 @@ const satisfacaoFonteLabels: Record<SatisfacaoFonte, string> = { declarada: "Dec
 
 /* -------------------------------------------------------------------------------------------
    O mandato de transformação da conta (ADR 0050, FDD 046), desenhado no DAP
-   `docs/design/dap-engagement-r1/` — revisão 1, decisões **A1** e **B1**.
+   `docs/design/dap-engagement-r1/` — revisão 1, decisões **A1** e **B1** — e
+   `docs/design/dap-engagement-r2/` — revisão 2, origem contratual aprovada.
 
    `owner` não está no rascunho de propósito: o formulário aprovado não pergunta quem é o
    responsável, porque quem cria o mandato aqui dentro é quem está logado, e é
@@ -35,6 +36,7 @@ const satisfacaoFonteLabels: Record<SatisfacaoFonte, string> = { declarada: "Dec
 const blankEngagement = {
   name: "", commercial_model: "paid" as EngagementCommercialModel, status: "active" as EngagementStatus,
   sponsor: "", started_at: "", ended_at: "", mandate: "", success_definition: "",
+  originating_commercial_opportunity: "", originating_design_partner_agreement: "",
 };
 const engagementStatusLabels: Record<EngagementStatus, string> = { active: "Ativo", paused: "Pausado", closed: "Encerrado" };
 const engagementCommercialModelLabels: Record<EngagementCommercialModel, string> = { paid: "Pago", design_partner: "Design partner" };
@@ -124,6 +126,8 @@ export function AccountDetailPage({ id }: { id: number }) {
   const [processos, setProcessos] = useState<Process[]>([]);
   const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
+  const [commercialOpportunities, setCommercialOpportunities] = useState<CommercialOpportunity[]>([]);
+  const [accountDocuments, setAccountDocuments] = useState<DocumentEntry[]>([]);
   const [engagementDraft, setEngagementDraft] = useState(blankEngagement);
   const [editingEngagement, setEditingEngagement] = useState<Engagement | null>(null);
   // O formulário de engagement abre por ação, ao contrário do de Contatos, que fica sempre à
@@ -142,6 +146,8 @@ export function AccountDetailPage({ id }: { id: number }) {
   // saber a que mandato o projeto pertence sem poder redefinir o que foi contratado). O desenho
   // não inventa permissão: ele deixa de mostrar o que a API recusaria.
   const canWriteEngagements = !!user && user.role !== "delivery";
+  const eligibleCommercialOpportunities = commercialOpportunities.filter(opportunity => opportunity.stage_kind === "won" && opportunity.engagement === null);
+  const eligibleDesignPartnerAgreements = accountDocuments.filter(document => document.originated_engagement === null && document.signature_requests.some(signature => signature.status === "signed" && signature.signed_at));
 
   const load = useCallback(() => Promise.all([
     api<Account>(`/clients/${id}/`),
@@ -155,10 +161,12 @@ export function AccountDetailPage({ id }: { id: number }) {
     // estado de carregamento seu (decisão do DAP), e uma segunda chamada criaria um — a tela
     // mostraria a seção vazia antes de mostrá-la cheia.
     api<Engagement[]>(`/engagements/?account=${id}`),
-  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements);
+    canWriteEngagements ? api<CommercialOpportunity[]>(`/opportunities/?account=${id}`) : Promise.resolve([]),
+    canWriteEngagements ? api<DocumentEntry[]>(`/documents/?account=${id}`) : Promise.resolve([]),
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements, loadedOpportunities, loadedDocuments]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements); setCommercialOpportunities(loadedOpportunities); setAccountDocuments(loadedDocuments);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, lifecycle_status: loadedClient.lifecycle_status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
-  }).catch((cause: Error) => setError(cause.message)), [id]);
+  }).catch((cause: Error) => setError(cause.message)), [canWriteEngagements, id]);
   useEffect(() => { void load(); }, [load]);
   // A flag `ai` tira o botão de classificar da tela, como tira o de rascunhar na Cobrança
   // (ADR 0031). A Entrega não escreve interação nem alcança fatura, então nem pergunta.
@@ -209,11 +217,20 @@ export function AccountDetailPage({ id }: { id: number }) {
    */
   async function saveEngagement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const {
+      originating_commercial_opportunity,
+      originating_design_partner_agreement,
+      ...editableFields
+    } = engagementDraft;
     const corpo = {
-      ...engagementDraft,
+      ...editableFields,
       sponsor: engagementDraft.sponsor ? Number(engagementDraft.sponsor) : null,
       started_at: engagementDraft.started_at || null,
       ended_at: engagementDraft.ended_at || null,
+      ...(!editingEngagement && {
+        originating_commercial_opportunity: originating_commercial_opportunity ? Number(originating_commercial_opportunity) : null,
+        originating_design_partner_agreement: originating_design_partner_agreement ? Number(originating_design_partner_agreement) : null,
+      }),
     };
     try {
       if (editingEngagement) await api(`/engagements/${editingEngagement.id}/`, { method: "PATCH", body: JSON.stringify(corpo) });
@@ -229,6 +246,24 @@ export function AccountDetailPage({ id }: { id: number }) {
       sponsor: engagement.sponsor ? String(engagement.sponsor) : "",
       started_at: engagement.started_at ?? "", ended_at: engagement.ended_at ?? "",
       mandate: engagement.mandate, success_definition: engagement.success_definition,
+      originating_commercial_opportunity: engagement.originating_commercial_opportunity ? String(engagement.originating_commercial_opportunity) : "",
+      originating_design_partner_agreement: engagement.originating_design_partner_agreement ? String(engagement.originating_design_partner_agreement) : "",
+    });
+  }
+  function openEngagementForm() {
+    setEditingEngagement(null);
+    setEngagementDraft({
+      ...blankEngagement,
+      originating_commercial_opportunity: eligibleCommercialOpportunities[0] ? String(eligibleCommercialOpportunities[0].id) : "",
+    });
+    setEngagementFormOpen(true);
+  }
+  function changeEngagementCommercialModel(commercial_model: EngagementCommercialModel) {
+    setEngagementDraft({
+      ...engagementDraft,
+      commercial_model,
+      originating_commercial_opportunity: commercial_model === "paid" && eligibleCommercialOpportunities[0] ? String(eligibleCommercialOpportunities[0].id) : "",
+      originating_design_partner_agreement: commercial_model === "design_partner" && eligibleDesignPartnerAgreements[0] ? String(eligibleDesignPartnerAgreements[0].id) : "",
     });
   }
   function closeEngagementForm() { setEditingEngagement(null); setEngagementFormOpen(false); setEngagementDraft(blankEngagement); }
@@ -344,7 +379,8 @@ export function AccountDetailPage({ id }: { id: number }) {
     )}
 
     {/* Os mandatos de transformação da conta (ADR 0050, FDD 046), governados pelo DAP
-        `docs/design/dap-engagement-r1/` — revisão 1, decisões **A1** e **B1**.
+        `docs/design/dap-engagement-r1/` — revisão 1, decisões **A1** e **B1** — e
+        `docs/design/dap-engagement-r2/` — revisão 2, origem contratual aprovada.
 
         **Entre Saúde da relação e Satisfação, e a ordem é a decisão 1 do pacote**: a saúde é o
         relance de *como estamos indo*, o engajamento é *o que estamos fazendo*, e estrutura vem
@@ -369,12 +405,15 @@ export function AccountDetailPage({ id }: { id: number }) {
         </div>
         {canWriteEngagements && (engagementFormOpen
           ? <button type="button" className="btn btn--secondary shrink-0" onClick={closeEngagementForm}>Cancelar</button>
-          : <button type="button" className="btn shrink-0" onClick={() => setEngagementFormOpen(true)}><Plus className="size-4" />Novo engagement</button>)}
+          : <button type="button" className="btn shrink-0" onClick={openEngagementForm}><Plus className="size-4" />Novo engagement</button>)}
       </div>
       {canWriteEngagements && engagementFormOpen && <form className="mb-4 space-y-4" onSubmit={event => void saveEngagement(event)}>
         <label className="form-label">Nome<input className="field" value={engagementDraft.name} onChange={event => setEngagementDraft({ ...engagementDraft, name: event.target.value })} placeholder="Como a casa chama este mandato" required /></label>
+        <label className="form-label">Modelo comercial<select className="field" value={engagementDraft.commercial_model} disabled={!!editingEngagement} onChange={event => changeEngagementCommercialModel(event.target.value as EngagementCommercialModel)}>{Object.entries(engagementCommercialModelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        {!editingEngagement && engagementDraft.commercial_model === "paid" && <label className="form-label">Oportunidade ganha de origem<select aria-label="Oportunidade ganha de origem" className="field" value={engagementDraft.originating_commercial_opportunity} disabled={!eligibleCommercialOpportunities.length} onChange={event => setEngagementDraft({ ...engagementDraft, originating_commercial_opportunity: event.target.value })}>{eligibleCommercialOpportunities.length ? eligibleCommercialOpportunities.map(opportunity => <option key={opportunity.id} value={opportunity.id}>{opportunity.title}</option>) : <option value="">Nenhuma oportunidade ganha disponível</option>}</select><span className={eligibleCommercialOpportunities.length ? "text-xs font-normal text-slate-600" : "text-xs font-normal text-danger"}>{eligibleCommercialOpportunities.length ? "Somente oportunidades ganhas desta Account." : "Marque uma oportunidade desta Account como ganha antes de criar o Engagement."}</span></label>}
+        {!editingEngagement && engagementDraft.commercial_model === "design_partner" && <label className="form-label">Design Partner Agreement assinado<select aria-label="Design Partner Agreement assinado" className="field" value={engagementDraft.originating_design_partner_agreement} disabled={!eligibleDesignPartnerAgreements.length} onChange={event => setEngagementDraft({ ...engagementDraft, originating_design_partner_agreement: event.target.value })}>{eligibleDesignPartnerAgreements.length ? eligibleDesignPartnerAgreements.map(document => <option key={document.id} value={document.id}>{document.original_name}</option>) : <option value="">Nenhum acordo assinado disponível</option>}</select><span className={eligibleDesignPartnerAgreements.length ? "text-xs font-normal text-slate-600" : "text-xs font-normal text-danger"}>{eligibleDesignPartnerAgreements.length ? "Somente documentos desta Account com assinatura concluída." : "Envie o acordo em Documentos e conclua a assinatura antes de criar o Engagement."}</span></label>}
+        {editingEngagement && (editingEngagement.originating_commercial_opportunity_title || editingEngagement.originating_design_partner_agreement_name) && <div className="form-label">Origem contratual<p className="field m-0 font-normal">{editingEngagement.originating_commercial_opportunity_title || editingEngagement.originating_design_partner_agreement_name}</p></div>}
         <div className="form-grid">
-          <label className="form-label">Modelo comercial<select className="field" value={engagementDraft.commercial_model} onChange={event => setEngagementDraft({ ...engagementDraft, commercial_model: event.target.value as EngagementCommercialModel })}>{Object.entries(engagementCommercialModelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label className="form-label">Status<select className="field" value={engagementDraft.status} onChange={event => setEngagementDraft({ ...engagementDraft, status: event.target.value as EngagementStatus })}>{Object.entries(engagementStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           {/* Só os contatos **desta conta**, e não é conveniência: `Engagement.clean()` e
               `EngagementSerializer.validate()` recusam patrocinador de outra organização. Um
@@ -386,7 +425,7 @@ export function AccountDetailPage({ id }: { id: number }) {
         <label className="form-label">Mandato<textarea className="field min-h-20" value={engagementDraft.mandate} onChange={event => setEngagementDraft({ ...engagementDraft, mandate: event.target.value })} placeholder="O que a casa foi contratada para transformar" /></label>
         <label className="form-label">Definição de sucesso<textarea className="field min-h-20" value={engagementDraft.success_definition} onChange={event => setEngagementDraft({ ...engagementDraft, success_definition: event.target.value })} placeholder="Como saberemos que deu certo" /></label>
         <div className="flex gap-2">
-          <button className="btn" type="submit">{editingEngagement ? <><Save className="size-4" />Salvar alterações</> : <><Plus className="size-4" />Adicionar engagement</>}</button>
+          <button className="btn" type="submit" disabled={!editingEngagement && !(engagementDraft.originating_commercial_opportunity || engagementDraft.originating_design_partner_agreement)}>{editingEngagement ? <><Save className="size-4" />Salvar alterações</> : <><Plus className="size-4" />Adicionar engagement</>}</button>
           {editingEngagement && <button type="button" className="btn btn--secondary" onClick={closeEngagementForm}>Cancelar</button>}
         </div>
       </form>}
@@ -409,7 +448,7 @@ export function AccountDetailPage({ id }: { id: number }) {
           <button type="button" className="btn btn--icon btn--secondary" aria-label={`Editar ${engagement.name}`} onClick={() => startEngagementEdit(engagement)}><Pencil className="size-4" /></button>
           <button type="button" className="btn btn--icon btn--secondary btn--secondary-danger" aria-label={`Arquivar ${engagement.name}`} onClick={() => setRemovingEngagement(engagement)}><Trash2 className="size-4" /></button>
         </div>}
-      </div>)}</div> : <p className="empty-state">Nenhum engagement nesta conta. Crie o mandato antes de converter uma oportunidade — é ele que agrupa as vendas e os projetos que são o mesmo trabalho.</p>}
+      </div>)}</div> : <p className="empty-state">Nenhum engagement nesta conta. Crie o mandato com seu instrumento de origem antes de iniciar um projeto.</p>}
     </section>
 
     {/* A satisfação do cliente (FDD 037, ADR 0032) — logo depois da saúde da relação porque as

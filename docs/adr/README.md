@@ -63,3 +63,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0055 — A medição sai do ativo de solução, e o ativo passa a referenciá-la
 - 0056 — Valor de enum também é vocabulário
 - 0057 — A decisão aponta para a fase materializada, e a lacuna histórica não é inferida
+- 0058 — O Engagement nasce do instrumento assinado, e o legado declara a lacuna
