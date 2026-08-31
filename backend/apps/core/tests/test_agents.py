@@ -55,11 +55,11 @@ def test_o_contexto_de_entrega_leva_as_duas_fontes_de_satisfacao() -> None:
         ProjectMemberFactory(project=projeto, user=delivery)
     hoje = timezone.localdate()
     Satisfacao.objects.create(
-        account=um.client, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+        account=um.engagement.account, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
         happened_on=hoje, note="Disse que o marco 2 atrasou duas vezes.",
     )
     Satisfacao.objects.create(
-        account=outro.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=outro.engagement.account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=hoje,
     )
 

@@ -84,9 +84,7 @@ def account_of(document: Document) -> Account | None:
         return opportunity.account
     project = document.project if document.project_id else None
     if project:
-        # `project.client` e não `project.account`: a projeção é o único campo `client` que a
-        # fatia 2 da issue #67 preservou (ADR 0052), e a Fase 6 é quem a remove.
-        return project.client
+        return project.engagement.account
     return None
 
 
@@ -150,7 +148,7 @@ def ensure_project_folder(project: Project) -> str:  # pragma: no cover - I/O
     if project.drive_folder_id:
         return project.drive_folder_id
     service = _service()
-    account_folder = _ensure_account_folder(service, project.client)
+    account_folder = _ensure_account_folder(service, project.engagement.account)
     bucket_folder = _ensure_subfolder(service, PROJECT_BUCKET, account_folder)
     folder_id = _ensure_subfolder(service, project.name, bucket_folder)
     project.drive_folder_id = folder_id

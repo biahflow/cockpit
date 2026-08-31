@@ -98,26 +98,12 @@ def test_patrocinador_da_propria_conta_passa() -> None:
     engagement.clean()  # não levanta
 
 
-def test_projeto_recusa_engajamento_de_outra_conta() -> None:
-    """A validação que mantém honesta a projeção `Project.client` (ADR 0050): sem ela, o projeto
-    apareceria na carteira de uma conta e no mandato de outra."""
-    projeto = ProjectFactory.build(
-        client=AccountFactory(), engagement=EngagementFactory(), owner=UserFactory(),
-        start_date=timezone.localdate(), due_date=timezone.localdate() + timedelta(days=10),
-    )
-
-    with pytest.raises(ValidationError) as erro:
-        projeto.clean()
-
-    assert "engagement" in erro.value.message_dict
-
-
 def test_todo_projeto_de_fabrica_tem_engajamento_coerente() -> None:
     """Invariante 7 do mapa de linguagem, no caminho mais banal que existe."""
     projeto = ProjectFactory()
 
     assert projeto.engagement_id is not None
-    assert projeto.engagement.account_id == projeto.client_id
+    assert projeto.engagement.account_id is not None
 
 
 # ------------------------------------------------------------- commercial_model (emenda)
@@ -187,7 +173,7 @@ def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() ->
     )
     assert criado.status_code == 201
     engagement = Engagement.objects.get(pk=criado.data["id"])
-    projeto = ProjectFactory(client=conta, engagement=engagement)
+    projeto = ProjectFactory(engagement=engagement)
 
     assert projeto.engagement_id is not None
     assert projeto.engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER
@@ -199,7 +185,6 @@ def test_design_partner_nasce_sem_nenhuma_oportunidade_e_projeto_pende_dele() ->
 
 def _payload_de_projeto(conta, engagement=None) -> dict:
     corpo = {
-        "client": conta.pk,
         "name": "Projeto novo",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=10)),
@@ -214,19 +199,6 @@ def test_criar_projeto_sem_engajamento_e_recusado() -> None:
     conta = AccountFactory()
 
     resposta = api.post(reverse("project-list"), _payload_de_projeto(conta), format="json")
-
-    assert resposta.status_code == 400
-    assert "engagement" in resposta.data
-
-
-def test_criar_projeto_com_engajamento_de_outra_conta_e_recusado() -> None:
-    api, _ = _api()
-    conta = AccountFactory()
-    alheio = EngagementFactory()
-
-    resposta = api.post(
-        reverse("project-list"), _payload_de_projeto(conta, alheio), format="json"
-    )
 
     assert resposta.status_code == 400
     assert "engagement" in resposta.data
@@ -269,7 +241,7 @@ def test_a_origem_comercial_nao_se_reescreve_por_patch() -> None:
     """A proveniência é fato histórico: o funil e o ciclo médio a leem como tal."""
     api, _ = _api()
     projeto = ProjectFactory()
-    outra = CommercialOpportunityFactory(account=projeto.client)
+    outra = CommercialOpportunityFactory(account=projeto.engagement.account)
 
     resposta = api.patch(
         reverse("project-detail", args=[projeto.pk]),
@@ -287,7 +259,6 @@ def test_a_origem_comercial_nao_se_reescreve_por_patch() -> None:
 
 def _converter(api: APIClient, opportunity, **extra) -> object:
     corpo = {
-        "client": opportunity.account_id,
         "name": "Projeto convertido",
         "start_date": str(timezone.localdate()),
         "due_date": str(timezone.localdate() + timedelta(days=10)),
@@ -350,7 +321,7 @@ def test_vendas_escreve_e_entrega_so_le() -> None:
     vendas, vendedora = _api(User.Role.SALES)
     entrega, pessoa = _api(User.Role.DELIVERY)
     engagement = EngagementFactory(account=conta)
-    ProjectMemberFactory(project=ProjectFactory(client=conta, engagement=engagement), user=pessoa)
+    ProjectMemberFactory(project=ProjectFactory(engagement=engagement), user=pessoa)
 
     criado = vendas.post(
         reverse("engagement-list"),
@@ -370,9 +341,9 @@ def test_vendas_escreve_e_entrega_so_le() -> None:
 def test_entrega_ve_so_o_mandato_de_projeto_que_participa() -> None:
     entrega, pessoa = _api(User.Role.DELIVERY)
     meu = EngagementFactory()
-    ProjectMemberFactory(project=ProjectFactory(client=meu.account, engagement=meu), user=pessoa)
+    ProjectMemberFactory(project=ProjectFactory(engagement=meu), user=pessoa)
     alheio = EngagementFactory()
-    ProjectFactory(client=alheio.account, engagement=alheio)
+    ProjectFactory(engagement=alheio)
     EngagementFactory()  # sem projeto nenhum
 
     resposta = entrega.get(reverse("engagement-list"))
@@ -387,7 +358,7 @@ def test_o_mandato_nao_se_duplica_por_ter_dois_projetos() -> None:
     entrega, pessoa = _api(User.Role.DELIVERY)
     engagement = EngagementFactory()
     for _ in range(3):
-        projeto = ProjectFactory(client=engagement.account, engagement=engagement)
+        projeto = ProjectFactory(engagement=engagement)
         ProjectMemberFactory(project=projeto, user=pessoa)
 
     resposta = entrega.get(reverse("engagement-list"))
@@ -413,7 +384,7 @@ def test_arquivar_mandato_com_projeto_vivo_e_recusado() -> None:
     """Regra de órfão da FDD 025: `ProjectViewSet` nunca olha o `archived_at` do engajamento."""
     api, _ = _api()
     engagement = EngagementFactory()
-    projeto = ProjectFactory(client=engagement.account, engagement=engagement)
+    projeto = ProjectFactory(engagement=engagement)
 
     bloqueado = api.delete(reverse("engagement-detail", args=[engagement.pk]))
     api.delete(reverse("project-detail", args=[projeto.pk]))
@@ -459,10 +430,10 @@ def test_o_engajamento_nao_e_fronteira_de_acesso() -> None:
     """
     entrega, pessoa = _api(User.Role.DELIVERY)
     engagement = EngagementFactory()
-    meu = ProjectFactory(client=engagement.account, engagement=engagement)
+    meu = ProjectFactory(engagement=engagement)
     ProjectMemberFactory(project=meu, user=pessoa)
     # Mesmo mandato, mesma conta — e a pessoa não é membro deste.
-    vizinho = ProjectFactory(client=engagement.account, engagement=engagement)
+    vizinho = ProjectFactory(engagement=engagement)
 
     assert entrega.get(reverse("engagement-detail", args=[engagement.pk])).status_code == 200
     assert entrega.get(reverse("project-detail", args=[vizinho.pk])).status_code == 404
@@ -508,7 +479,7 @@ def test_a_contagem_de_projetos_e_recortada_pelo_escopo_de_quem_le() -> None:
     admin, _ = _api()
     entrega, pessoa = _api(User.Role.DELIVERY)
     engagement = EngagementFactory()
-    projetos = [ProjectFactory(client=engagement.account, engagement=engagement) for _ in range(3)]
+    projetos = [ProjectFactory(engagement=engagement) for _ in range(3)]
     ProjectMemberFactory(project=projetos[0], user=pessoa)
 
     do_admin = admin.get(reverse("engagement-detail", args=[engagement.pk])).data
@@ -523,8 +494,8 @@ def test_a_contagem_ignora_projeto_arquivado() -> None:
     não tem trabalho em aberto, e mostrar "1 projeto" ali convidaria a procurá-lo na tela."""
     admin, _ = _api()
     engagement = EngagementFactory()
-    ProjectFactory(client=engagement.account, engagement=engagement)
-    arquivado = ProjectFactory(client=engagement.account, engagement=engagement)
+    ProjectFactory(engagement=engagement)
+    arquivado = ProjectFactory(engagement=engagement)
     admin.delete(reverse("project-detail", args=[arquivado.pk]))
 
     resposta = admin.get(reverse("engagement-detail", args=[engagement.pk]))
@@ -538,7 +509,7 @@ def test_a_contagem_nao_infla_com_o_join_da_entrega() -> None:
     `distinct`, dois membros no mesmo projeto virariam "2 projetos"."""
     entrega, pessoa = _api(User.Role.DELIVERY)
     engagement = EngagementFactory()
-    projeto = ProjectFactory(client=engagement.account, engagement=engagement)
+    projeto = ProjectFactory(engagement=engagement)
     ProjectMemberFactory(project=projeto, user=pessoa)
     ProjectMemberFactory(project=projeto, user=UserFactory(role=User.Role.DELIVERY))
 
@@ -585,7 +556,7 @@ def test_a_recusa_de_arquivar_diz_engagement_e_nao_engajamento() -> None:
     em português deixaria **três** palavras para o mesmo conceito diante de quem lê."""
     api, _ = _api()
     engagement = EngagementFactory()
-    ProjectFactory(client=engagement.account, engagement=engagement)
+    ProjectFactory(engagement=engagement)
 
     resposta = api.delete(reverse("engagement-detail", args=[engagement.pk]))
 
@@ -597,16 +568,11 @@ def test_a_recusa_de_arquivar_diz_engagement_e_nao_engajamento() -> None:
 
 
 def test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer() -> None:
-    """**A segunda troca de copy que o spec pediu está em ramo morto, e isto o registra.**
+    """A action recusa engagement de outra conta.
 
-    `convert_to_project` compara `engagement.account_id` com `opportunity.account_id` depois de já
-    ter passado por dois filtros que juntos tornam a divergência impossível:
-    `ProjectSerializer.validate` recusa `engagement.account != account`, e a própria action recusa
-    `account != opportunity.account`. Quem chega à terceira comparação já tem as duas igualdades.
-
-    A mensagem que a pessoa de fato lê nesse caminho é a **do serializer**, e ela continua em
-    português — mas é da superfície de Projetos/Comercial, não da seção de Engagements que o DAP
-    `dap-engagement-r1` aprovou. Trocá-la é varredura própria, fora deste escopo.
+    Desde a Fase 6, a guarda que vivia no serializer (`engagement.account != client`) saiu com
+    `Project.client`. Quem responde agora é a comparação da action:
+    `engagement.account_id != opportunity.account_id`.
     """
     api, _ = _api()
     opportunity = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind="won"))
@@ -614,6 +580,6 @@ def test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer() -> None
     resposta = _converter(api, opportunity, engagement=EngagementFactory().pk)
 
     assert resposta.status_code == 400
-    assert resposta.data["engagement"] == [
-        "O engajamento deve pertencer ao mesmo cliente do projeto."
-    ]
+    assert resposta.data["engagement"] == (
+        "O engagement deve ser da mesma conta da oportunidade."
+    )

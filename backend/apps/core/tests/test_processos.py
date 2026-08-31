@@ -213,12 +213,12 @@ def test_os_tres_papeis_criam_leem_editam_e_arquivam_nas_duas_rotas(
 
     criado = client.post(
         reverse("processo-list"),
-        {"account": projeto.client_id, "name": "Fechamento de mês", "volume_mes": 20},
+        {"account": projeto.engagement.account_id, "name": "Fechamento de mês", "volume_mes": 20},
         format="json",
     )
     assert criado.status_code == 201
     assert criado.data["registered_by"] == usuario.id
-    assert criado.data["client_name"] == projeto.client.name
+    assert criado.data["client_name"] == projeto.engagement.account.name
     processo_id = criado.data["id"]
 
     etapa = client.post(
@@ -303,7 +303,7 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     delivery = UserFactory(role=User.Role.DELIVERY)
     meu = ProjectFactory()
     ProjectMemberFactory(project=meu, user=delivery)
-    processo = ProcessFactory(account=meu.client)
+    processo = ProcessFactory(account=meu.engagement.account)
     etapa = ProcessStepFactory(process=processo)
     alheio = ProcessFactory(account=AccountFactory())
     client.force_authenticate(delivery)
@@ -321,7 +321,7 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     assert mudou_pai_da_etapa.status_code == 403
     processo.refresh_from_db()
     etapa.refresh_from_db()
-    assert processo.account_id == meu.client_id
+    assert processo.account_id == meu.engagement.account_id
     assert etapa.process_id == processo.id
 
 

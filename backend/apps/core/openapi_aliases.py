@@ -59,6 +59,7 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     "Artifact": ("opportunity",),
     "CobrancaContato": ("client",),
     "CobrancaSuspensao": ("client",),
+    "Case": ("client_consent",),
     "CommercialOpportunity": ("client",),
     "Contact": ("client",),
     "Document": ("client", "opportunity"),
@@ -67,7 +68,7 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     "PhaseEvent": _CHAVE_LEGADA_DO_GATE,
     "Process": ("client",),
     "ProcessStep": ("processo",),
-    "Project": ("opportunity",),
+    "Project": ("opportunity", "client", "ai_opportunity"),
     "ProjectPhase": _CHAVE_LEGADA_DO_GATE,
     "Satisfacao": ("client",),
 }

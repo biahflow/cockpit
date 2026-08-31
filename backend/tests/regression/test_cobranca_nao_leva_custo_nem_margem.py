@@ -36,7 +36,7 @@ def fatura_de_projeto_lucrativo() -> Invoice:
     por ausência de dado, não por ausência de vazamento."""
     project = ProjectFactory(actual_value=Decimal("250000.00"))
     return InvoiceFactory(
-        account=project.client,
+        account=project.engagement.account,
         project=project,
         status=Invoice.Status.OVERDUE,
         number="2026-0001",

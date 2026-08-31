@@ -37,7 +37,7 @@ def test_sales_operates_crm_but_cannot_create_or_edit_projects(client: APIClient
     rejected_project = client.post(
         reverse("project-list"),
         {
-            "client": project.client_id,
+            "client": project.engagement.account_id,
             "name": "Projeto indevido",
             "start_date": str(timezone.localdate()),
             "due_date": str(timezone.localdate() + timedelta(days=10)),
@@ -58,7 +58,7 @@ def test_delivery_only_sees_won_opportunities_and_cannot_edit_crm(client: APICli
     """Ganha **e** convertida num projeto da equipe (RFC 0003) — antes bastava estar ganha."""
     delivery = UserFactory(role=User.Role.DELIVERY)
     won = CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
-    project = ProjectFactory(originating_commercial_opportunity=won, client=won.account)
+    project = ProjectFactory(originating_commercial_opportunity=won, engagement__account=won.account)
     ProjectMemberFactory(project=project, user=delivery)
     CommercialOpportunityFactory(stage=PipelineStage.objects.get(kind=PipelineStage.Kind.WON))
     CommercialOpportunityFactory()

@@ -66,7 +66,7 @@ def test_assess_project_low_risk_when_healthy():
 @pytest.mark.django_db
 def test_recommendations_cover_upsell_and_deadline():
     account = AccountFactory()
-    ProjectFactory(client=account, due_date=timezone.localdate() + timedelta(days=3), status="active")
+    ProjectFactory(engagement__account=account, due_date=timezone.localdate() + timedelta(days=3), status="active")
 
     kinds = {rec["kind"] for rec in recommendations.build_recommendations()}
 

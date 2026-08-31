@@ -75,9 +75,9 @@ compose run --rm --no-deps api-migrate
 # ---------------------------------------------------------------------------
 passo "2/7 · semeando estado real (um cliente no banco, um documento na mídia)"
 compose run --rm --no-deps api python manage.py shell -c "
-from apps.core.models import Client, User
+from apps.core.models import Account, User
 dono = User.objects.create_user(username='drill', password='drill-nao-e-segredo', role='admin')
-Client.objects.create(name='''$MARCA''', owner=dono)
+Account.objects.create(name='''$MARCA''', owner=dono)
 # Um trecho de conhecimento com vetor de verdade (FDD 029): é o que prova que o dump e a
 # restauração levam e trazem uma coluna \`vector\` inteira. Sem isto, quem descobre que o alvo
 # de restauração precisa da extensão presente descobre às 4 da manhã.
@@ -119,8 +119,8 @@ compose exec -T backup sh -c 'rm -rf /media/documents'
 # ---------------------------------------------------------------------------
 passo "5/7 · conferindo que a destruição foi real"
 # Sem este passo o drill mentiria: um restore que não faz nada "passa" se o dado nunca saiu.
-tabela="$(compose exec -T db psql -U biahflow -d biahflow -tAc "SELECT to_regclass('public.core_client');" | tr -d '[:space:]')"
-[ -z "$tabela" ] || falhar "a tabela core_client ainda existe depois do DROP DATABASE"
+tabela="$(compose exec -T db psql -U biahflow -d biahflow -tAc "SELECT to_regclass('public.core_account');" | tr -d '[:space:]')"
+[ -z "$tabela" ] || falhar "a tabela core_account ainda existe depois do DROP DATABASE"
 compose exec -T backup sh -c '[ ! -e /media/documents/2026/08/drill.txt ]' \
     || falhar "o documento ainda existe depois de apagar a mídia"
 echo "banco vazio e mídia vazia — confirmado"
@@ -135,15 +135,15 @@ passo "7/7 · conferindo que o dado voltou"
 # `--no-deps` é essencial aqui: sem ele o `run api` acionaria o `api-migrate` e recriaria o schema,
 # o que faria o drill passar mesmo com uma restauração que não restaurou nada.
 compose run --rm --no-deps api python manage.py shell -c "
-from apps.core.models import Client, KnowledgeChunk
-assert Client.objects.filter(name='''$MARCA''').exists(), 'o cliente não voltou'
+from apps.core.models import Account, KnowledgeChunk
+assert Account.objects.filter(name='''$MARCA''').exists(), 'a conta não voltou'
 # A coluna \`vector\` inteira tem de voltar byte a byte (FDD 029). Um dump que perde o embedding
 # restauraria um índice mudo: as buscas passariam a não achar nada, sem erro nenhum.
 trecho = KnowledgeChunk.objects.get(heading_path='Drill › Vetor')
 assert trecho.embedding is not None, 'o embedding voltou nulo'
 assert len(trecho.embedding) == 1536, f'dimensão errada: {len(trecho.embedding)}'
 assert abs(float(trecho.embedding[0]) - 0.25) < 1e-6, 'o valor do vetor mudou na restauração'
-print('banco: cliente restaurado')
+print('banco: conta restaurada')
 "
 lido="$(compose exec -T backup cat /media/documents/2026/08/drill.txt)"
 [ "$lido" = "$CONTEUDO" ] || falhar "o documento voltou diferente: '$lido' != '$CONTEUDO'"

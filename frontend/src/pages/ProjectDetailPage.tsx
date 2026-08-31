@@ -882,7 +882,7 @@ function AiScorePanel({ project, canManage, onTogglePublish }: { project: Projec
     </div>
     <div className="grid gap-3 sm:grid-cols-2">
       <ScoreBar label="Maturidade" value={project.ai_maturity} tone="brand" />
-      <ScoreBar label="Oportunidade" value={project.ai_opportunity} tone="positive" />
+      <ScoreBar label="Oportunidade" value={project.ai_potential} tone="positive" />
     </div>
     {project.ai_dimensions.length > 0 && <div className="grid gap-2 sm:grid-cols-2">{project.ai_dimensions.map((dimension, index) => <ScoreBar key={index} label={dimension.label} value={dimension.score} tone="brand" />)}</div>}
     {project.ai_score_summary && <p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700">{project.ai_score_summary}</p>}

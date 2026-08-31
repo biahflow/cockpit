@@ -19,6 +19,7 @@ from apps.core.models import Account, Case, CommercialOpportunity, Project, Vert
 from apps.core.tests.factories import (
     AccountFactory,
     CommercialOpportunityFactory,
+    EngagementFactory,
     ProjectFactory,
     UserFactory,
 )
@@ -31,7 +32,7 @@ CNPJ = "12.345.678/0001-90"
 def _case_publicado_anonimo(vertical: Vertical) -> Case:
     account = AccountFactory(name=NOME, legal_name=RAZAO, tax_id=CNPJ, vertical=vertical)
     project = ProjectFactory(
-        client=account, name="Implantação de agentes",
+        engagement=EngagementFactory(account=account), name="Implantação de agentes",
         actual_value=Decimal("100.00"), cost=Decimal("50.00"),
     )
     project.status = Project.Status.COMPLETED
@@ -109,6 +110,6 @@ def test_o_cliente_do_case_continua_intacto_no_cadastro() -> None:
     vertical = Vertical.objects.create(name="Imobiliárias", slug="imobiliarias")
     case = _case_publicado_anonimo(vertical)
 
-    cliente = Account.objects.get(pk=case.project.client_id)
+    cliente = Account.objects.get(pk=case.project.engagement.account_id)
 
     assert (cliente.name, cliente.legal_name, cliente.tax_id) == (NOME, RAZAO, CNPJ)

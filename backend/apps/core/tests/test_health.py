@@ -61,7 +61,7 @@ def test_health_penalizes_negative_roi():
 
 def _satisfacao(project, **kwargs):  # type: ignore[no-untyped-def]
     campos = {
-        "account": project.client,
+        "account": project.engagement.account,
         "nivel": Satisfacao.Nivel.INSATISFEITO,
         "fonte": Satisfacao.Fonte.DECLARADA,
         "happened_on": timezone.localdate(),
@@ -153,7 +153,7 @@ def test_health_endpoint_lists_worst_first():
 @pytest.mark.django_db
 def test_client_overview_aggregates_health_phase_roi_and_next_meeting():
     client_obj = AccountFactory(lifecycle_status="active")
-    project = ProjectFactory(client=client_obj, status="active", actual_value=1000, cost=250)
+    project = ProjectFactory(engagement__account=client_obj, status="active", actual_value=1000, cost=250)
     Task.objects.create(
         project=project, title="Atraso", owner=project.owner,
         due_date=timezone.localdate() - timedelta(days=3),
@@ -182,12 +182,12 @@ def test_client_overview_aggregates_health_phase_roi_and_next_meeting():
 def test_client_overview_includes_reviewed_ai_score():
     client_obj = AccountFactory(lifecycle_status="active")
     ProjectFactory(
-        client=client_obj, status="active",
-        ai_maturity=35, ai_opportunity=80, ai_dimensions=[{"label": "Dados", "score": 30}],
+        engagement__account=client_obj, status="active",
+        ai_maturity=35, ai_potential=80, ai_dimensions=[{"label": "Dados", "score": 30}],
         ai_score_summary="ok", ai_scored_at=timezone.now(), ai_score_reviewed=True,
     )
     # Projeto com rascunho não revisado não deve entrar.
-    ProjectFactory(client=client_obj, status="active", ai_maturity=99, ai_scored_at=timezone.now())
+    ProjectFactory(engagement__account=client_obj, status="active", ai_maturity=99, ai_scored_at=timezone.now())
 
     api = APIClient()
     api.force_authenticate(UserFactory())

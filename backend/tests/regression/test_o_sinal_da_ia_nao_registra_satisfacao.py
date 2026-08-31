@@ -83,7 +83,7 @@ def test_classificar_nao_move_o_health_score(admin_api: APIClient, insatisfeito:
     """20 pontos por inferência seriam indistinguíveis de 20 pontos por evidência — e um número
     errado é consultado com a mesma confiança de um número certo."""
     activity = _resposta_de_cobranca()
-    project = ProjectFactory(client=activity.account)
+    project = ProjectFactory(engagement__account=activity.account)
     antes = health.assess_project_health(project)
 
     admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")

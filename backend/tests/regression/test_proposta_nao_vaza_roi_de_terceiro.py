@@ -18,6 +18,7 @@ from apps.core.models import Case, KpiDirection, KpiUnit, Project, Vertical
 from apps.core.tests.factories import (
     AccountFactory,
     CommercialOpportunityFactory,
+    EngagementFactory,
     ProjectFactory,
     UserFactory,
     digital_employee_medido,
@@ -33,7 +34,7 @@ def _vertical() -> Vertical:
 
 def _case_entregue(vertical: Vertical) -> Case:
     project = ProjectFactory(
-        client=AccountFactory(name="Cliente antigo", vertical=vertical),
+        engagement=EngagementFactory(account=AccountFactory(name="Cliente antigo", vertical=vertical)),
         actual_value=Decimal(RECEITA), cost=Decimal(CUSTO),
     )
     digital_employee_medido(
@@ -98,7 +99,7 @@ def test_case_arquivado_nao_entra_na_proposta() -> None:
 @pytest.mark.django_db
 def test_metrica_sem_base_registrada_diz_a_lacuna_em_vez_de_um_zero() -> None:
     vertical = _vertical()
-    project = ProjectFactory(client=AccountFactory(vertical=vertical))
+    project = ProjectFactory(engagement__account=AccountFactory(vertical=vertical))
     digital_employee_medido(
         project, baseline=None, current=Decimal("12.00"),
         name="Cobrador", kpi_label="Dias de atraso",

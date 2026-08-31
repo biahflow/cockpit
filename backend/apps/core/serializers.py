@@ -684,13 +684,16 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         return attrs
 
 
-class ProjectSerializer(serializers.ModelSerializer[Project]):
+class ProjectSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Project]):
+    ALIASES_DE_ENTRADA = {"ai_opportunity": "ai_potential"}
+
     is_overdue = serializers.SerializerMethodField()
     # A vertical do cliente, aqui, para o detalhe do projeto pedir o catálogo já resolvido sem
     # ter de carregar o cliente inteiro só por causa de um id (FDD 026).
-    client_vertical = serializers.IntegerField(source="client.vertical_id", read_only=True)
+    client = serializers.IntegerField(source="engagement.account_id", read_only=True)
+    client_vertical = serializers.IntegerField(source="engagement.account.vertical_id", read_only=True)
     client_vertical_name = serializers.CharField(
-        source="client.vertical.name", read_only=True, default=""
+        source="engagement.account.vertical.name", read_only=True, default=""
     )
     engagement_name = serializers.CharField(source="engagement.name", read_only=True, default="")
     # **Alias de compatibilidade, e só isso** (`docs/ontology/language-map.md` §7): o campo do
@@ -701,6 +704,7 @@ class ProjectSerializer(serializers.ModelSerializer[Project]):
     opportunity = serializers.PrimaryKeyRelatedField(
         source="originating_commercial_opportunity", read_only=True
     )
+    ai_opportunity = serializers.IntegerField(source="ai_potential", read_only=True)
 
     class Meta:
         model = Project
@@ -708,15 +712,9 @@ class ProjectSerializer(serializers.ModelSerializer[Project]):
             "id", "client", "engagement", "engagement_name", "originating_commercial_opportunity",
             "opportunity", "name", "description", "owner", "start_date", "due_date",
             "status", "service", "actual_value", "cost", "is_overdue", "created_at", "updated_at",
-            "ai_maturity", "ai_opportunity", "ai_dimensions", "ai_score_summary", "ai_scored_at",
-            "ai_score_reviewed", "client_vertical", "client_vertical_name",
+            "ai_maturity", "ai_potential", "ai_opportunity", "ai_dimensions", "ai_score_summary",
+            "ai_scored_at", "ai_score_reviewed", "client_vertical", "client_vertical_name",
         ]
-        # ai_maturity/opportunity/dimensions/summary são editáveis: parte da revisão humana do
-        # rascunho antes de publicar. ai_scored_at é carimbo da geração (só a IA escreve).
-        # `opportunity` **não** entra aqui: ele é declarado acima com `read_only=True`, e
-        # `read_only_fields` só alcança campo que o `ModelSerializer` gera sozinho. Repetido nos
-        # dois lugares, o daqui seria configuração morta — e a próxima pessoa a ler apagaria o
-        # errado.
         read_only_fields = [
             "id", "owner", "is_overdue", "created_at", "updated_at", "ai_scored_at",
         ]
@@ -743,16 +741,22 @@ class ProjectSerializer(serializers.ModelSerializer[Project]):
         due = cast(date | None, attrs.get("due_date", getattr(self.instance, "due_date", None)))
         if start and due and due < start:
             raise serializers.ValidationError({"due_date": "A data final não pode ser anterior à inicial."})
-        # A projeção `client` não pode divergir de `engagement.account` (ADR 0050). Mesma regra do
-        # `Project.clean()`, aqui para virar 400 de campo em vez de 500.
-        client = cast(Account | None, attrs.get("client", getattr(self.instance, "client", None)))
-        engagement = cast(
-            Engagement | None, attrs.get("engagement", getattr(self.instance, "engagement", None))
-        )
-        if engagement and client and engagement.account_id != client.id:
-            raise serializers.ValidationError(
-                {"engagement": "O engajamento deve pertencer ao mesmo cliente do projeto."}
+        # `client` segue aceito na escrita da `/api/v1/`, mas deixou de ser uma coluna: a fonte
+        # canônica agora é exclusivamente `engagement.account`. Validar o alias em vez de só
+        # ignorá-lo preserva o contrato anterior — um chamador antigo que mande uma conta alheia
+        # continua recebendo 400, em vez de acreditar que moveu o projeto quando nada foi gravado.
+        if hasattr(self, "initial_data") and "client" in self.initial_data:
+            legacy_account = serializers.PrimaryKeyRelatedField(
+                queryset=Account.objects.all()
+            ).run_validation(self.initial_data["client"])
+            engagement = cast(
+                Engagement | None,
+                attrs.get("engagement", getattr(self.instance, "engagement", None)),
             )
+            if engagement and legacy_account.pk != engagement.account_id:
+                raise serializers.ValidationError(
+                    {"engagement": "O engajamento deve pertencer ao mesmo cliente do projeto."}
+                )
         return attrs
 
     def get_is_overdue(self, project: Project) -> bool:
@@ -851,7 +855,7 @@ class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Sati
         project = cast(
             Project | None, attrs.get("project", getattr(self.instance, "project", None))
         )
-        if project and account and project.client_id != account.id:
+        if project and account and project.engagement.account_id != account.id:
             raise serializers.ValidationError(
                 {"project": "O projeto deve pertencer ao mesmo cliente."}
             )
@@ -1088,7 +1092,7 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
             )
         if step and account and step.process.account_id != account.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
-        if discovery and account and discovery.project.client_id != account.pk:
+        if discovery and account and discovery.project.engagement.account_id != account.pk:
             raise serializers.ValidationError(
                 {"discovery": "O Discovery deve pertencer à mesma conta."}
             )
@@ -1463,7 +1467,7 @@ class FeasibilityAssessmentSerializer(serializers.ModelSerializer[FeasibilityAss
         )
         if hipotese and projeto:
             conta_id = hipotese.improvement_opportunity.account_id
-            if conta_id != projeto.client_id:
+            if conta_id != projeto.engagement.account_id:
                 raise serializers.ValidationError(
                     {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
                 )
@@ -1536,7 +1540,7 @@ class ProveExperimentSerializer(serializers.ModelSerializer[ProveExperiment]):
         projeto = cast(
             Project | None, attrs.get("project", getattr(self.instance, "project", None))
         )
-        if hipotese and projeto and hipotese.improvement_opportunity.account_id != projeto.client_id:
+        if hipotese and projeto and hipotese.improvement_opportunity.account_id != projeto.engagement.account_id:
             raise serializers.ValidationError(
                 {"solution_hypothesis": "A hipótese deve pertencer à mesma conta do projeto."}
             )
@@ -2198,17 +2202,19 @@ class CaseSerializer(serializers.ModelSerializer[Case]):
     vertical_name = serializers.CharField(source="vertical.name", read_only=True, default="")
     client_name = serializers.SerializerMethodField()
     project_name = serializers.CharField(source="project.name", read_only=True)
+    # Alias de leitura da `/api/v1/` — morre na v2.
+    client_consent = serializers.BooleanField(source="account_consent", read_only=True)
 
     class Meta:
         model = Case
         fields = ["id", "project", "project_name", "title", "summary", "vertical",
                   "vertical_name", "client_name", "metrics", "health_snapshot", "roi_snapshot",
-                  "status", "status_display", "published_at", "client_consent",
+                  "status", "status_display", "published_at", "account_consent", "client_consent",
                   "consent_recorded_at", "consent_recorded_by", "anonymized",
                   "created_at", "updated_at"]
         read_only_fields = ["id", "project", "project_name", "vertical", "vertical_name",
                             "client_name", "metrics", "health_snapshot", "roi_snapshot",
-                            "status_display", "published_at", "client_consent",
+                            "status_display", "published_at", "account_consent", "client_consent",
                             "consent_recorded_at", "consent_recorded_by",
                             "created_at", "updated_at"]
 
@@ -2219,7 +2225,7 @@ class CaseSerializer(serializers.ModelSerializer[Case]):
         aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
         nunca são projetados, anonimizado ou não: o case não precisa deles.
         """
-        return "" if case.anonymized else case.project.client.name
+        return "" if case.anonymized else case.project.engagement.account.name
 
     def _anonimo(self, case: Case) -> str:
         setor = case.vertical.name if case.vertical else None
@@ -2239,7 +2245,7 @@ class CaseSerializer(serializers.ModelSerializer[Case]):
         dados = super().to_representation(instance)
         if not instance.anonymized:
             return dados
-        nome = instance.project.client.name
+        nome = instance.project.engagement.account.name
         rotulo = self._anonimo(instance)
         for campo in ("title", "summary"):
             if isinstance(dados.get(campo), str):
@@ -2263,7 +2269,7 @@ class CaseSerializer(serializers.ModelSerializer[Case]):
         # devolve 400 com o campo certo. `anonymized` não abre exceção — anonimizar autoriza omitir
         # a marca, não usar o resultado.
         status = attrs.get("status", getattr(self.instance, "status", Case.Status.DRAFT))
-        consent = getattr(self.instance, "client_consent", False)
+        consent = getattr(self.instance, "account_consent", False)
         if status == Case.Status.PUBLISHED and not consent:
             raise serializers.ValidationError(
                 {"status": "Registre o consentimento do cliente antes de publicar o case."}

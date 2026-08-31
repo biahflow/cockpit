@@ -94,9 +94,10 @@ def _artifact_accepted_at(project: Project) -> str | None:
     `commercial_opportunity`) chegam à mesma `Account`, e a aceitação do contrato quase sempre
     está no lado da oportunidade, antes de existir projeto algum.
     """
+    account_id = project.engagement.account_id
     first = Artifact.objects.filter(
-        Q(project__client=project.client_id)
-        | Q(commercial_opportunity__account=project.client_id),
+        Q(project__engagement__account=account_id)
+        | Q(commercial_opportunity__account=account_id),
         status=Artifact.Status.ACCEPTED,
         archived_at__isnull=True,
         decided_at__isnull=False,
@@ -174,10 +175,7 @@ def ai_score_snapshot(project: Project) -> dict[str, Any] | None:
         return None
     return {
         "maturity": project.ai_maturity,
-        # A colisão de nome com a venda é **léxica**: esta chave é o AI Score de maturidade
-        # (`Project.ai_opportunity`), escalar, e o papel dela vira `PriorityAssessment` na
-        # Fase 4. Renomeá-la aqui seria mudança de contrato do snapshot que o One consome.
-        "opportunity": project.ai_opportunity,
+        "opportunity": project.ai_potential,
         "dimensions": project.ai_dimensions,
         "summary": project.ai_score_summary,
         "scored_at": project.ai_scored_at.isoformat(),
@@ -307,15 +305,12 @@ def build_snapshot(project: Project) -> dict[str, Any]:
             # indistinguível de "projeto inexistente", que é o que travava o read model dele no
             # último estado bom. `None` quando ativo, e o portal desfaz igual ao restaurar.
             "archived_at": project.archived_at.isoformat() if project.archived_at else None,
-            # **`client` é alias com data** e continua saindo inalterado: ele morre na
-            # `/api/v2/`, junto com a rota (`docs/ontology/aliases.md`). Quebrar o consumidor
-            # antes disso não é o que a fatia se propõe.
-            "client": {"id": project.client_id, "name": project.client.name},
-            # A conta canônica sai do **engajamento**, não de `Project.client`. Os dois são
-            # iguais por construção — `Project.clean()` amarra `engagement.account_id ==
-            # client_id` —, e ainda assim a projeção lê a fonte e não o alias: `Project.client`
-            # é projeção temporária que a Fase 6 remove, e quem já lê pelo lado canônico não
-            # precisa mudar quando ela sair.
+            # **`client` é alias com data** — o One consome esta chave, e ela morre na
+            # `/api/v2/`. Desde a Fase 6 os dois caminhos são o mesmo: `engagement.account`.
+            "client": {
+                "id": project.engagement.account_id,
+                "name": project.engagement.account.name,
+            },
             "account": {
                 "id": project.engagement.account_id,
                 "name": project.engagement.account.name,

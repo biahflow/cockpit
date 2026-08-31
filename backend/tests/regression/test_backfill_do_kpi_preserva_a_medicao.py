@@ -286,7 +286,7 @@ def test_a_reversa_nao_toca_em_kpi_de_experimento(estado_0066) -> None:
     apps = estado_0066
     projeto = _projeto(apps)
     oportunidade = apps.get_model("core", "ImprovementOpportunity").objects.create(
-        account_id=projeto.client_id, title="Automatizar a conferência"
+        account_id=projeto.engagement.account_id, title="Automatizar a conferência"
     )
     hipotese = apps.get_model("core", "SolutionHypothesis").objects.create(
         improvement_opportunity=oportunidade, statement="Um leitor de nota fiscal resolve."

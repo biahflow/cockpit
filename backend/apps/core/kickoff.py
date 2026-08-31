@@ -149,7 +149,7 @@ def _send_kickoff_email(project: Project) -> None:
     send_mail(
         f"Kickoff do projeto {project.name}",
         f"O projeto '{project.name}' foi criado a partir de uma oportunidade ganha.\n\n"
-        f"Cliente: {project.client.name}\n"
+        f"Cliente: {project.engagement.account.name}\n"
         f"Período: {project.start_date} a {project.due_date}\n\n"
         f"Um cronograma inicial de marcos e tarefas já foi criado para revisão.",
         None,

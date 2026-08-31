@@ -25,7 +25,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core import health, risk
+from apps.core import cobranca, health, risk
 from apps.core.models import (
     Activity,
     Meeting,
@@ -69,7 +69,7 @@ def seed(clients: int) -> None:
     for _ in range(clients):
         account = AccountFactory()
         for _ in range(2):
-            project = ProjectFactory(client=account, due_date=ontem)
+            project = ProjectFactory(engagement__account=account, due_date=ontem)
             dono = project.owner
             Milestone.objects.create(project=project, title="Marco", due_date=ontem, owner=dono)
             Task.objects.create(project=project, title="Tarefa", due_date=ontem, owner=dono)
@@ -103,7 +103,7 @@ def test_avaliacao_em_lote_da_o_mesmo_resultado_da_individual() -> None:
     projects = list(Project.objects.order_by("id"))
     # Um projeto sem nenhum filho: o caso em que o lote precisa devolver lista vazia, e não
     # o dado do vizinho no dicionário.
-    projects.append(ProjectFactory(client=AccountFactory()))
+    projects.append(ProjectFactory(engagement__account=AccountFactory()))
 
     assert risk.assess_projects(projects) == [risk.assess_project(p) for p in projects]
     assert health.assess_projects_health(projects) == [
@@ -125,6 +125,42 @@ def test_agregador_nao_cresce_com_a_base(api: APIClient, url: str) -> None:
         f"{url} emitiu mais queries com 4× a base — o custo cresce com o número de "
         f"clientes/projetos (N+1). Carregue em lote em vez de consultar dentro do laço."
     )
+
+
+def test_overview_de_uma_conta_nao_cresce_com_os_projetos(api: APIClient) -> None:
+    """O detalhe usa um queryset próprio; o orçamento da lista não protege este caminho.
+
+    `assess_projects_health` lê `project.engagement.account_id` duas vezes por projeto. Filtrar
+    por `engagement__account` faz JOIN para o predicado, mas não preenche a relação no objeto;
+    sem `select_related`, cada projeto acrescenta uma query invisível ao gate da lista.
+    """
+    account = AccountFactory()
+    for _ in range(2):
+        ProjectFactory(engagement__account=account)
+    url = f"/api/v1/clients/{account.pk}/overview/"
+    baseline = count_queries(api, url)
+
+    for _ in range(8):
+        ProjectFactory(engagement__account=account)
+
+    assert count_queries(api, url) == baseline
+
+
+def test_entrega_critica_isolada_nao_cresce_com_os_projetos() -> None:
+    """O painel usa contexto em lote; chamadas isoladas também precisam custo constante."""
+    account = AccountFactory()
+    for _ in range(2):
+        ProjectFactory(engagement__account=account)
+    with CaptureQueriesContext(connection) as capturadas:
+        cobranca.entrega_critica(account)
+    baseline = len(capturadas.captured_queries)
+
+    for _ in range(8):
+        ProjectFactory(engagement__account=account)
+    with CaptureQueriesContext(connection) as capturadas:
+        cobranca.entrega_critica(account)
+
+    assert len(capturadas.captured_queries) == baseline
 
 
 # --- O painel de cobrança (FDD 036) -------------------------------------------------------------
@@ -163,13 +199,13 @@ def seed_cobranca(clients: int) -> None:
     hoje = timezone.localdate()
     for _ in range(clients):
         account = AccountFactory()
-        project = ProjectFactory(client=account, due_date=hoje - timedelta(days=1))
+        project = ProjectFactory(engagement__account=account, due_date=hoje - timedelta(days=1))
         Milestone.objects.create(
             project=project, title="Marco", due_date=hoje - timedelta(days=1), owner=project.owner
         )
         # O segundo projeto, em estado crítico: é ele que troca a escada para `relacao_tensa` e
         # obriga o painel a escolher o pior nível entre os dois.
-        critico = ProjectFactory(client=account, due_date=hoje - timedelta(days=1))
+        critico = ProjectFactory(engagement__account=account, due_date=hoje - timedelta(days=1))
         for indice in range(4):
             Milestone.objects.create(
                 project=critico, title=f"Marco {indice}", due_date=hoje - timedelta(days=1),

@@ -66,7 +66,7 @@ def test_a_etapa_chega_a_conta_pelo_processo_e_nao_pelo_projeto() -> None:
 def test_o_processo_sobrevive_ao_projeto_que_o_descobriu() -> None:
     """A regra estrutural exercitada: arquivar o projeto de origem não leva o mapa junto."""
     conta = AccountFactory()
-    projeto = ProjectFactory(client=conta)
+    projeto = ProjectFactory(engagement__account=conta)
     processo = ProcessFactory(account=conta, source_project=projeto)
 
     projeto.archive()

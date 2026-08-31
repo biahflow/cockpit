@@ -23,17 +23,19 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | Alias vivo hoje | Nome canônico | Onde vive | Morre em |
 | --- | --- | --- | --- |
 | rota `/api/v1/clients/` e chaves `client` / `status` | `/accounts/`, `account`, `lifecycle_status` | `urls.py`, `serializers.py` | `/api/v2/` |
-| campo `Project.client` | `engagement.account` (é projeção, não alias) | `backend/apps/core/models.py` | Fase 6 |
 | rota `/api/v1/opportunities/` e chave `opportunity` | `/commercial-opportunities/` e `commercial_opportunity` | `urls.py`, `serializers.py` | `/api/v2/` |
 | chave de payload `gate_outcome` | `gate_decision` | `serializers.py` | `/api/v2/` |
 | rotas `/processos/` e `/processo-etapas/` | `/processes/` e `/process-steps/` | `urls.py` | `/api/v2/` |
 | chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
+| chave `ai_opportunity` (só leitura) | `ai_potential` | `serializers.py` | `/api/v2/` |
+| chave `client_consent` (só leitura) | `account_consent` | `serializers.py` | `/api/v2/` |
 
-> **Fase 6 já pagou as tabelas** (issue #70, migração `0069`): `core_client`→`core_account`,
-> `core_opportunity`→`core_commercialopportunity`, `core_processo`→`core_process`,
-> `core_processoetapa`→`core_processstep`. `AlterModelTable` renomeou cada uma em lugar,
-> preservando linha e **pk** (§2b) — ver a nota de Fase 6 abaixo. A classe `Evidencia` também saiu
-> (migração `0068`), com o dual-write. O que resta para a Fase 6 é só `Project.client`, a projeção.
+> **O recorte físico da Fase 6 foi concluído; a issue #70 permanece aberta.** Tabelas renomeadas
+> (migração `0069`), dual-write e `Evidencia` removidos (migração `0068`), `Project.client`
+> removido após prova automática de equivalência (migração `0070`), `ai_opportunity` renomeado
+> para `ai_potential` (migração `0071`) e `client_consent` renomeado para `account_consent`
+> (migração `0072`). A #70 só fecha depois do critério operacional que ela própria define e da
+> `/api/v2/`, onde morrem rotas e chaves de payload; por isso a allowlist ainda não é zero.
 
 ### Já pagos pela #67 — 28/08/2026
 
@@ -56,11 +58,9 @@ morrem na `/api/v2/` — que agora **pode nascer**, porque as tabelas já foram 
 | classe `Client`, 10 campos `client`, `status` | `Account` / `account` / `lifecycle_status` | 2 |
 | classes `Processo` / `ProcessoEtapa` e 3 campos `processo`/`etapa` | `Process` / `ProcessStep` / `process` / `step` | 4 |
 
-**`Project.client` sobreviveu à fatia 2 de propósito, e é a única exceção.** Ele não é alias: é a
-**projeção** temporária cuja fonte canônica é `engagement.account` (ADR 0050), mantida honesta por
-`Project.clean()`. Renomeá-lo para `account` criaria duas coisas com o nome canônico no mesmo
-objeto — `project.account` e `project.engagement.account` — que podem divergir, e aí o nome
-canônico deixaria de identificar a fonte. Quem o remove é a Fase 6.
+**`Project.client` saiu na Fase 6** (migração `0070`). Ele era a projeção temporária cuja fonte
+canônica é `engagement.account` (ADR 0050). A chave `client` continua saindo no `GET` como alias
+de leitura (`source="engagement.account_id"`, `read_only`), e morre na `/api/v2/`.
 
 `Evidencia` era o único que não é só renome, e por isso foi o único que **não** entrou na #67: a
 Fase 3 a **dividiu** em `Evidence` (o registro bruto) e `Finding` (a conclusão, com
@@ -78,7 +78,7 @@ espera protegia é o da **pk**, e pk é o que a §2b trata. A **Fase 6 pagou** e
 
 ### Fase 6 (issue #70) — o dual-write e a `Evidencia` saíram
 
-A Fase 6 fecha a migração, e a primeira fatia dela removeu o dual-write e a `Evidencia` legada
+A primeira fatia do recorte físico da Fase 6 removeu o dual-write e a `Evidencia` legada
 (migração `0068`). O gatilho era ter um leitor: enquanto `process.custo_do_estado_atual` e
 `ProcessDetailPage` liam o modelo fundido, ele não podia sair. A fatia repontou o custo para o
 `Finding(epistemic_status=fact)` vivo do processo e migrou a tela para o split; sem leitor, a classe
@@ -189,19 +189,18 @@ começar a guardar.
 O modo de falha, em todos os casos, é o pior possível: não é erro, é silêncio. Nenhum dos dois
 lados levanta exceção, e o registro duplicado parece apenas um cadastro novo.
 
-Enquanto isso, `project.account.id` e `project.client.id` continuam iguais na projeção — hoje por
-construção (`Project.clean()` amarra `engagement.account_id == client_id`), e há teste que compara
-os dois. Isso protege a invariante de **hoje** e não alcança a de amanhã, porque a migração ainda
-não existe.
+A projeção `Project.client` foi removida na Fase 6 (migração `0070`). A invariante de igualdade
+entre `project.engagement.account_id` e o antigo `project.client_id` já não precisa ser guardada —
+a fonte canônica é a única que resta.
 
 **Identidade tem de ser a pk estável da linha**, nunca valor recalculável — slug, hash do nome,
 número de sequência por conta. Identificador que alguém pode recalcular é identificador que alguém
 vai recalcular diferente.
 
-Regra prática, para a fase **em curso** (as tabelas já foram, `Project.client` ainda não): **em toda
-travessia de nome, a linha e a pk sobrevivem; só o rótulo muda.** O renome de tabela da `0069` seguiu
-isso à risca — `AlterModelTable` não toca a pk. Uma migração que crie linha nova para o mesmo fato
-precisa dizer, no próprio arquivo, como o consumidor externo continua achando o registro antigo.
+Regra prática: **em toda travessia de nome, a linha e a pk sobrevivem; só o rótulo muda.** O
+renome de tabela da `0069` seguiu isso à risca — `AlterModelTable` não toca a pk. Uma migração
+que crie linha nova para o mesmo fato precisa dizer, no próprio arquivo, como o consumidor externo
+continua achando o registro antigo.
 
 ### 2c. Campo renomeia; **chave de payload** não
 

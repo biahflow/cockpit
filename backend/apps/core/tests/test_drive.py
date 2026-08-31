@@ -10,7 +10,7 @@ from .factories import AccountFactory, CommercialOpportunityFactory, ProjectFact
 def test_para_bucket_for_follows_link_type():
     account = AccountFactory()
     opportunity = CommercialOpportunityFactory(account=account)
-    project = ProjectFactory(client=account)
+    project = ProjectFactory(engagement__account=account)
 
     assert drive.para_bucket_for(Document(account=account)) == drive.CLIENT_BUCKET
     assert drive.para_bucket_for(Document(commercial_opportunity=opportunity)) == drive.OPPORTUNITY_BUCKET
@@ -21,7 +21,7 @@ def test_para_bucket_for_follows_link_type():
 def test_account_of_resolves_owner_from_any_link():
     account = AccountFactory()
     opportunity = CommercialOpportunityFactory(account=account)
-    project = ProjectFactory(client=account)
+    project = ProjectFactory(engagement__account=account)
 
     assert drive.account_of(Document(account=account)) == account
     assert drive.account_of(Document(commercial_opportunity=opportunity)) == account

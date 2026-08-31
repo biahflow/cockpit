@@ -15,9 +15,9 @@ fechou — `GateOutcome` virou `GateDecision` com o campo `gate_decision`, `Oppo
 `CommercialOpportunity` com os cinco campos `commercial_opportunity`, `Client` virou `Account` com
 os dez campos `account` e o `lifecycle_status`, e `Processo`/`ProcessoEtapa` viraram
 `Process`/`ProcessStep` com os três campos `process`/`step` —, restando na allowlist as rotas, as
-chaves de payload que a v1 promete, o `ai_opportunity` (que nunca foi venda), o `client_consent`,
-o `Project.client` (a projeção que a Fase 6 remove), a `Evidencia` (que não é renome: a Fase 3 a
-dividiu, e a Fase 6 a remove com o dual-write) e a família sem nome canônico na Ontology v1.
+chaves de payload que a v1 promete, o `client_consent`,
+e a família sem nome canônico na Ontology v1. `ai_opportunity` virou `ai_potential` (Fase 6),
+`Project.client` saiu (Fase 6), e a `Evidencia` saiu com o dual-write (Fase 6).
 
 O que a invariante §6 proíbe é **batizar** coisa nova com o nome errado. Batizar tem forma
 sintática: `class X`, `campo = models.…`, `router.register(...)`, `path(...)`, `type X`,
@@ -357,7 +357,7 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # sai do mapa e as duas linhas saem daqui juntas. Um mecanismo de depreciação não sobrevive ao que
 # ele deprecia; ler esta linha como permanente transformaria em dívida eterna a única dívida deste
 # arquivo que já tem data marcada.
-TETO_DA_ALLOWLIST = 26
+TETO_DA_ALLOWLIST = 23
 
 
 def test_nenhum_termo_banido_novo() -> None:

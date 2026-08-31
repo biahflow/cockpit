@@ -244,7 +244,7 @@ class RolePermission(BasePermission):
                 # registro de cliente sem projeto — a Entrega tomaria 403 no detalhe de um
                 # registro que a listagem dela mostra. A pergunta certa é a do cliente, e ela sai
                 # de `visible_to`, a única expressão da regra (ADR 0010), nunca reescrita à mão.
-                return Project.objects.visible_to(request.user).filter(client=obj.account).exists()
+                return Project.objects.visible_to(request.user).filter(engagement__account=obj.account).exists()
             if isinstance(
                 obj,
                 Process | ProcessStep | Evidence | Finding | PainPoint
@@ -274,9 +274,7 @@ class RolePermission(BasePermission):
                     account = obj.account
                 else:
                     account = obj.process.account
-                # `filter(client=…)` e não `account=`: `Project.client` é a projeção que a
-                # Fase 6 remove, e é o único campo que a fatia 2 da #67 não renomeou.
-                return Project.objects.visible_to(request.user).filter(client=account).exists()
+                return Project.objects.visible_to(request.user).filter(engagement__account=account).exists()
             if isinstance(obj, ValueLedgerEntry):
                 # **Fora de `PROJECT_OF`** pelo motivo escrito lá em cima: `project` é opcional.
                 # A pergunta é a mesma do `Engagement` logo abaixo — a pessoa alcança algum

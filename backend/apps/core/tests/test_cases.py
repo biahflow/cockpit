@@ -22,6 +22,7 @@ from apps.core.models import (
 
 from .factories import (
     AccountFactory,
+    EngagementFactory,
     ProjectFactory,
     ProjectMemberFactory,
     UserFactory,
@@ -78,7 +79,7 @@ def _completed_project(**overrides) -> Project:
 def test_concluir_projeto_congela_um_case_em_rascunho():
     vertical = _vertical()
     project = _completed_project(
-        client=AccountFactory(vertical=vertical),
+        engagement=EngagementFactory(account=AccountFactory(vertical=vertical)),
         actual_value=Decimal("180000.00"),
         cost=Decimal("90000.00"),
     )
@@ -179,7 +180,7 @@ def test_registrar_consentimento_grava_autor_e_carimbo():
 
     assert resposta.status_code == 200
     case.refresh_from_db()
-    assert case.client_consent is True
+    assert case.account_consent is True
     assert case.consent_recorded_by == admin
     assert case.consent_recorded_at is not None
 
@@ -227,7 +228,7 @@ def test_consentimento_nao_e_gravavel_pelo_patch():
     _api().patch(f"/api/v1/cases/{case.pk}/", {"client_consent": True}, format="json")
 
     case.refresh_from_db()
-    assert case.client_consent is False
+    assert case.account_consent is False
 
 
 # --- a superfície da API -----------------------------------------------------------------------
@@ -268,8 +269,8 @@ def test_numeros_congelados_sao_somente_leitura_na_api():
 @pytest.mark.django_db
 def test_lista_filtra_por_vertical_e_por_status():
     igrejas, saude = _vertical(), _vertical("Saúde", "saude")
-    _completed_project(client=AccountFactory(vertical=igrejas))
-    _completed_project(client=AccountFactory(vertical=saude))
+    _completed_project(engagement=EngagementFactory(account=AccountFactory(vertical=igrejas)))
+    _completed_project(engagement=EngagementFactory(account=AccountFactory(vertical=saude)))
     api = _api()
 
     por_vertical = api.get(f"/api/v1/cases/?vertical={igrejas.pk}")

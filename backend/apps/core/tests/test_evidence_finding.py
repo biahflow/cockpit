@@ -380,7 +380,7 @@ def test_o_discovery_da_evidencia_precisa_ser_da_mesma_conta(api: APIClient) -> 
         reverse("evidence-list"),
         {
             "account": AccountFactory().pk,
-            "discovery": DiscoveryFactory(project=ProjectFactory(client=AccountFactory())).pk,
+            "discovery": DiscoveryFactory(project=ProjectFactory(engagement__account=AccountFactory())).pk,
             "kind": Evidence.Kind.INTERVIEW,
             "raw_excerpt": "Disseram que leva dois dias.",
         },
@@ -399,7 +399,7 @@ def test_o_discovery_da_propria_conta_passa(api: APIClient) -> None:
         reverse("evidence-list"),
         {
             "account": conta.pk,
-            "discovery": DiscoveryFactory(project=ProjectFactory(client=conta)).pk,
+            "discovery": DiscoveryFactory(project=ProjectFactory(engagement__account=conta)).pk,
             "kind": Evidence.Kind.INTERVIEW,
             "raw_excerpt": "Disseram que leva dois dias.",
         },
@@ -412,7 +412,7 @@ def test_o_discovery_da_propria_conta_passa(api: APIClient) -> None:
 def test_a_sessao_da_evidencia_precisa_ser_do_mesmo_discovery(api: APIClient) -> None:
     """Tendo os dois, eles precisam concordar — proveniência que se contradiz não é proveniência."""
     conta = AccountFactory()
-    discovery = DiscoveryFactory(project=ProjectFactory(client=conta))
+    discovery = DiscoveryFactory(project=ProjectFactory(engagement__account=conta))
 
     resposta = api.post(
         reverse("evidence-list"),
@@ -432,7 +432,7 @@ def test_a_sessao_da_evidencia_precisa_ser_do_mesmo_discovery(api: APIClient) ->
 
 def test_a_sessao_do_proprio_discovery_passa(api: APIClient) -> None:
     conta = AccountFactory()
-    discovery = DiscoveryFactory(project=ProjectFactory(client=conta))
+    discovery = DiscoveryFactory(project=ProjectFactory(engagement__account=conta))
 
     resposta = api.post(
         reverse("evidence-list"),
@@ -452,14 +452,14 @@ def test_a_sessao_do_proprio_discovery_passa(api: APIClient) -> None:
 def test_o_modelo_tambem_recusa_discovery_e_sessao_incoerentes() -> None:
     """As duas guardas do lado do modelo, para quem entra pelo admin ou pelo shell."""
     conta = AccountFactory()
-    de_outra_conta = DiscoveryFactory(project=ProjectFactory(client=AccountFactory()))
+    de_outra_conta = DiscoveryFactory(project=ProjectFactory(engagement__account=AccountFactory()))
     evidencia = EvidenceFactory(account=conta)
 
     evidencia.discovery = de_outra_conta
     with pytest.raises(ValidationError) as conta_errada:
         evidencia.full_clean()
 
-    proprio = DiscoveryFactory(project=ProjectFactory(client=conta))
+    proprio = DiscoveryFactory(project=ProjectFactory(engagement__account=conta))
     evidencia.discovery = proprio
     evidencia.source_session = DiscoverySessionFactory()
     with pytest.raises(ValidationError) as sessao_errada:
@@ -553,8 +553,8 @@ def test_o_mesmo_processo_cabe_em_dois_discoveries(api: APIClient) -> None:
     """O defeito que esta tabela desfaz: `Process.source_project` responde por **uma** origem."""
     conta = AccountFactory()
     processo = ProcessFactory(account=conta)
-    primeiro = DiscoveryFactory(project=ProjectFactory(client=conta))
-    segundo = DiscoveryFactory(project=ProjectFactory(client=conta))
+    primeiro = DiscoveryFactory(project=ProjectFactory(engagement__account=conta))
+    segundo = DiscoveryFactory(project=ProjectFactory(engagement__account=conta))
 
     for discovery, tipo in (
         (primeiro, ProcessObservation.Kind.INITIAL),
@@ -614,11 +614,11 @@ def test_entrega_nao_ve_discovery_evidence_nem_finding_de_outra_conta() -> None:
     minha = AccountFactory()
     alheia = AccountFactory()
     entrega = UserFactory(role=User.Role.DELIVERY)
-    meu_projeto = ProjectFactory(client=minha)
+    meu_projeto = ProjectFactory(engagement__account=minha)
     ProjectMemberFactory(project=meu_projeto, user=entrega)
 
     DiscoveryFactory(project=meu_projeto)
-    DiscoveryFactory(project=ProjectFactory(client=alheia))
+    DiscoveryFactory(project=ProjectFactory(engagement__account=alheia))
     EvidenceFactory(account=minha)
     EvidenceFactory(account=alheia)
     FindingFactory(account=minha)

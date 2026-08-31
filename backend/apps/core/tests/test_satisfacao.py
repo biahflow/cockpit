@@ -212,7 +212,7 @@ def test_entrega_registra_no_cliente_de_projeto_seu(client: APIClient) -> None:
     created = client.post(
         reverse("satisfacao-list"),
         _payload(
-            projeto.client_id, project=projeto.id, fonte=Satisfacao.Fonte.PERCEBIDA,
+            projeto.engagement.account_id, project=projeto.id, fonte=Satisfacao.Fonte.PERCEBIDA,
             nivel=Satisfacao.Nivel.NEUTRO,
         ),
         format="json",
@@ -255,7 +255,7 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     ProjectMemberFactory(project=meu, user=delivery)
     alheio = AccountFactory()
     registro = Satisfacao.objects.create(
-        account=meu.client, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+        account=meu.engagement.account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
         happened_on=HOJE,
     )
     client.force_authenticate(delivery)
@@ -266,7 +266,7 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
 
     assert response.status_code == 403
     registro.refresh_from_db()
-    assert registro.account_id == meu.client_id
+    assert registro.account_id == meu.engagement.account_id
 
 
 @pytest.mark.django_db
