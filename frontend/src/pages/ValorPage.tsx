@@ -147,10 +147,12 @@ export function ValorPage({ accountId }: { accountId: number }) {
                 dinheiro saiu, e sem ele a linha é um valor que ninguém consegue conferir. */}
             <span>Outcome de origem: {kpi ? kpi.name : "—"}</span>
           </div>
-          {/* Pílula e link como irmãos do `.row-main`: a primitiva sobrescreve display e cor de
-              qualquer `span`/`strong` aninhado nela. */}
-          <span className={`state ${LEDGER_VARIANT[entrada.status]} shrink-0`}>{entrada.status_display}</span>
-          {entrada.project !== null && <a className="back-link shrink-0 text-xs" href={`/projetos/${entrada.project}#prove`}>Ver no PROVE</a>}
+          {/* Pílula e link fora do `.row-main`: a primitiva sobrescreve display e cor de qualquer
+              `span`/`strong` aninhado nela; `.row-meta` lhes reserva a linha própria. */}
+          <div className="row-meta">
+            <span className={`state ${LEDGER_VARIANT[entrada.status]}`}>{entrada.status_display}</span>
+            {entrada.project !== null && <a className="back-link ml-auto text-xs" href={`/projetos/${entrada.project}#prove`}>Ver no PROVE</a>}
+          </div>
         </div>;
       })}</div> : <div className="p-5 sm:p-6"><p className="empty-state">Nenhum valor registrado. Uma entrada de valor aponta para um Outcome medido.</p></div>}
     </section>

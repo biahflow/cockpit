@@ -150,6 +150,20 @@ a estourar **5 px** na horizontal no celular — uma fileira de quatro botões d
 `flex-wrap`. O layout estava, sem que ninguém soubesse, ajustado contra a fonte de fallback. É
 exatamente o defeito que esta matriz existe para pegar, e ela pegou.
 
+## Emenda (31/08/2026) — títulos de linha sem ponto de quebra
+
+A issue #91 fechou uma lacuna que o teste genérico de rolagem não isolava: `.row-main` dividia a
+mesma faixa com selo, botão ou link que não encolhe. Em 390px, o texto recebia só a sobra e podia
+pintar sobre a ação; um token sem espaço nem hífen também alargava a página mesmo quando os
+metadados já estavam na linha seguinte.
+
+Todos os consumidores vulneráveis foram auditados e passaram a colocar esse cluster em
+`.row-meta`, a faixa de posicionamento aprovada com a priorização. A própria `.row-main` também
+aceita quebra em qualquer ponto quando o conteúdo não oferece uma, independentemente da tag usada
+como título. A regressão dedicada em
+`frontend/e2e/responsive.spec.ts` abre o processo em 390px com um token realmente inquebrável,
+mede os retângulos pintados do título contra estado e ação e mede a rolagem horizontal da página.
+
 ## Fora deste recorte
 
 **`eslint-plugin-jsx-a11y`.** Estava planejado e ficou de fora por um motivo concreto: a versão

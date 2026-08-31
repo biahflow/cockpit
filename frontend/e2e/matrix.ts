@@ -53,6 +53,8 @@ export const ROUTES: readonly Screen[] = [
  * de uma razão social real.
  */
 const NOME_LONGO = "Indústria Metalúrgica São Bernardo do Campo Participações S.A.";
+/** Um token sem espaço nem hífen: reproduz o conteúdo que não oferece ponto natural de quebra. */
+export const TITULO_DE_LINHA_INQUEBRAVEL = "Inconsistenciacadastralidentificadaautomaticamentenoprocessodefaturamentomensal";
 const HOJE = "2026-08-05";
 const VENCIDO = "2026-07-01";
 
@@ -161,7 +163,7 @@ const findings = [
   { epistemic_status: "fact", epistemic_status_display: "Fato",
     statement: "O ERP registrou 412 notas emitidas no mês passado, com 37 canceladas e reemitidas." },
   { epistemic_status: "hypothesis", epistemic_status_display: "Hipótese",
-    statement: "A equipe acredita que metade do retrabalho vem de cadastro de cliente desatualizado." },
+    statement: TITULO_DE_LINHA_INQUEBRAVEL },
   { epistemic_status: "unknown", epistemic_status_display: "Desconhecido",
     statement: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
 ].map((registro, indice) => ({
