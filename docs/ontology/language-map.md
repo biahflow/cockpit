@@ -113,7 +113,7 @@ Três regras que sustentam isso:
 | `finding.epistemic_status` | `fact` · `hypothesis` · `unknown` | Extração por IA nasce `hypothesis` (D6) |
 | `gate_decision` | `go` · `conditional_go` · `redesign` · `no_go` | Vale **só** para Feasibility (D7 · D9). A decisão do PROVE é `scale` · `iterate` · `stop` |
 | `measurement.kind` | `baseline` · `outcome` · `monitoring` | Uma única `baseline` por KPI e janela |
-| `journey_phase.canonical_stage` | `discover` · `prioritize` · `feasibility` · `prove` · `scale` · `optimize` | Enum canônico e fechado (ADR 0053). A fase `VALUE` **não existe** |
+| `journey_phase.canonical_stage` | `discover` · `prioritize` · `feasibility` · `prove` · `scale` · `optimize` | Enum canônico e fechado (ADR 0053). A fase `VALUE` **não existe**; o Priority Assessment é a fase `prioritize`, e "Fase" nomeia só o ciclo do cliente |
 | `account.lifecycle_status` | `prospect` · `active` · `inactive` | Rótulo "cliente" só em `active` |
 | `service.category` | `acquisition` · `commercial` | `qualification_call` é `acquisition` (D4) |
 | `engagement.status` | `active` · `paused` · `closed` | |
