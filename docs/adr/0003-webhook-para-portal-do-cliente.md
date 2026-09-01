@@ -199,3 +199,57 @@ Onde esta ADR diz `Client`, o modelo hoje se chama `Account`, e o `status` dele 
 consome. A **tabela** continua `core_client` e a **rota** continua
 `/api/v1/clients/`: o que a `docs/ontology/aliases.md` §2b protege é a linha e a pk, e nenhuma das
 duas se move.
+
+## Emenda (issue #105, 01/09/2026) — a cadeia de medição atravessa, e o que a filtra
+
+Quinta lacuna, e a maior delas: o Pulse é a fonte da verdade do estado do projeto, e o estado que
+mais importa — *funcionou?* — não estava na projeção.
+
+`KPI`, `Measurement` e `ValueLedgerEntry` existem desde a Fase 5 da ontologia (ADR 0055, FDD 049), a
+§3 do `docs/ontology/language-map.md` já listava `KPI · Baseline · Outcome` e `Value Ledger` entre o
+que o One mostra, e nenhum dos três atravessava — a FDD 049 adiou o One de propósito. O que o
+cliente via no lugar eram os quatro campos legados de `DigitalEmployee`, texto livre sem unidade nem
+janela, e `roi`, que é `actual_value - cost` do projeto: o dinheiro do contrato, não o resultado do
+trabalho.
+
+**Duas chaves de topo entram, e `roi` não sai.** `kpis[]` leva o indicador com as leituras
+**aninhadas dentro dele** — `baseline`, `outcome` e `monitoring` —, e `value_ledger[]` leva o valor
+aprovado do mandato. `digital_employees[]` ganha `kpi_ids`, aditivo, com os quatro campos legados
+intactos: mesma convivência de `account`/`client`, e o legado sai quando o One parar de ler.
+
+**O aninhamento é a decisão.** O que torna duas leituras comparáveis é serem do mesmo KPI, com a
+mesma unidade e o mesmo método (invariante §6.11 — e é por isso que `Measurement` não tem `unit`).
+Numa lista irmã, parear baseline com outcome seria trabalho do consumidor, e um pareamento errado
+não deixaria nada vermelho de nenhum dos dois lados. Junto com ele, **nenhum outcome é emitido sem
+baseline do mesmo KPI**: emitir o número sozinho e deixar o One recusá-lo faria o cliente ver lacuna
+onde há dado.
+
+**Uma entrada do Value Ledger carrega dinheiro, e mesmo assim não contradiz a linha "nenhum dado
+comercial é exposto".** O que ela afirma é o valor entregue e aprovado, com o método de atribuição
+que o sustenta. O que continua não cruzando é o outro lado do dinheiro: preço, margem,
+`Service.price`, valor e probabilidade da venda. Dois filtros sustentam a distinção, e os dois valem
+como regra desta ADR:
+
+- **só `status=approved` atravessa** — rascunho e pendente são deliberação interna (regra 1 da §3),
+  e aqui isso pesa mais que no resto do snapshot, porque é a linha que o cliente lê como *valor
+  gerado*;
+- **`attribution_method` não-vazio é condição para atravessar** — o `clean()` já o exige, mas ele
+  não roda em shell nem em migração de dados, e é este campo que separa valor medido de número
+  escrito à mão. Sem ele a linha vira promessa com casas decimais, que é a razão de "ROI" como
+  resultado ser termo banido (§5).
+
+**Não atravessam** `KPI.owner` e `ValueLedgerEntry.approved_by` (pessoa interna),
+`Measurement.source_evidence` (evidência bruta não revisada) e `ValueLedgerEntry.status` — este
+último contaria ao cliente que existe uma fila de aprovação da qual ele não participa. A medição
+também não leva `id` nem `kind`: o aninhamento é a identidade e o papel dela. **Não há campo de
+moeda e não se criou um**: toda entrada é BRL hoje, e o `roi` que já atravessa tem a mesma ausência.
+
+**Três emissores novos, pela regra que abre esta ADR.** `_emit_kpi` e `_emit_measurement` avisam o
+projeto — o segundo pesa mais, porque registrar o Outcome do mês não salva `Project` nem `KPI` e
+sem ele o fato chegaria de carona no próximo salvamento de outra coisa. `_emit_value_ledger_entry`
+faz **fan-out** por projeto, no molde do `_emit_engagement` e pelo mesmo argumento: a entrada pende
+do mandato e aparece no snapshot de todos os projetos dele.
+
+A guarda da ADR 0027 alcança as duas chaves de topo. **`Measurement` não tem chave própria** — ela é
+o conteúdo de `kpis[].baseline`/`.outcome`/`.monitoring` —, e por isso o emissor dela é afirmado por
+um teste escrito à mão, na única forma que a guarda derivada não pega. Ver a **FDD 050**.

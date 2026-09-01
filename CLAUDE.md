@@ -255,7 +255,13 @@ Key cross-cutting patterns to preserve:
   é escrito em `portal.emit` (`F()+1`, **antes** da guarda de flag), nunca no `build_snapshot`:
   a rota é um `GET`, e incrementar na leitura produziria versões fora de ordem — o sinal exato que
   o comparador do outro lado usa para descartar o obsoleto. Duas leituras seguidas devolvendo a
-  mesma versão é o caso comum, não sintoma. Ver FDD 047, ADR 0051 e a emenda de 28/08 na ADR 0003.
+  mesma versão é o caso comum, não sintoma. Desde a FDD 050 ele leva também a cadeia de medição:
+  `kpis[]` com `baseline`/`outcome`/`monitoring` **aninhados dentro do indicador** — porque é o KPI
+  que fixa unidade e método, e aninhar torna o pareamento invariante por construção — e
+  `value_ledger[]` lido **por mandato**, só `approved` e só com `attribution_method`; `outcome` sem
+  baseline do mesmo KPI **não sai**, `null` e `{"value": null}` são lacunas diferentes e nenhuma é
+  zero, e `roi` mais os quatro campos legados de `digital_employees` continuam onde estão. Ver FDD
+  047, FDD 050, ADR 0051 e as emendas de 28/08 e 01/09 na ADR 0003.
 - **A medição saiu do ativo de solução, e "antes" e "depois" são o mesmo KPI em dois momentos.**
   `kpi_baseline` e `kpi_current` eram colunas de `DigitalEmployee`; desde a ADR 0055 (FDD 049) o
   indicador é `KPI` — do **projeto**, com `prove_experiment` opcional porque o KPI migrado não

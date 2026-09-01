@@ -17,6 +17,13 @@ acompanhamento, e uma decisão sem o porquê é um título. O porquê é justame
 consegue reconstituir sozinho, e é o que ele volta para consultar meses depois. O limite continua
 onde estava: sai o racional da decisão **publicada**, nunca o rascunho e nunca anotação interna.
 
+A terceira é a cadeia de medição (emenda de 01/09/2026 na ADR 0003, FDD 050): `kpis` e
+`value_ledger`. Uma entrada do Value Ledger carrega dinheiro, e ainda assim não é dado comercial —
+é o **valor entregue e aprovado**, com o método de atribuição que o sustenta, e a §3 do
+`language-map` já a lista entre o que o One mostra. O que continua não cruzando é o outro lado do
+dinheiro: preço, margem, `Service.price`, valor e probabilidade da venda. E só a entrada
+`approved` com método de atribuição atravessa — rascunho e pendente são deliberação interna.
+
 Desde a ADR 0051 este módulo também **escreve**, e num lugar só: `emit` carimba
 `projection_version`/`projection_observed_at` no projeto. É a inversão que o desenho exige —
 quem muda o estado carimba, quem lê não —, e ela está escrita em detalhe no próprio `emit`.
@@ -38,17 +45,20 @@ from django.db import transaction
 from django.db.models import F, Min, Q
 from django.utils import timezone
 
-from . import flags, health, service_identity
+from . import flags, health, prove, service_identity
 from .models import (
+    KPI,
     Artifact,
     Decisao,
     DigitalEmployee,
     Document,
+    Measurement,
     Meeting,
     Milestone,
     Pendencia,
     Project,
     ProjectPhase,
+    ValueLedgerEntry,
 )
 
 logger = logging.getLogger(__name__)
@@ -182,6 +192,128 @@ def ai_score_snapshot(project: Project) -> dict[str, Any] | None:
     }
 
 
+def _medicao(medicao: Measurement | None) -> dict[str, Any] | None:
+    """A forma de uma leitura de KPI no snapshot (FDD 050).
+
+    **Duas nulidades distintas, e as duas são necessárias.** `None` aqui — a chave inteira nula —
+    diz *não há medição desta natureza*; um dicionário com `"value": None` diz *a janela existe e a
+    medição não foi feita*. Colapsar as duas em zero é o defeito que `Measurement.value` guarda
+    sendo nulável: zero afirma que se mediu e deu zero.
+
+    Não saem `id`, `kind` nem `source_evidence`. Os dois primeiros porque o aninhamento **é** a
+    identidade e o papel da leitura — ela é *a* baseline daquele KPI —, e o terceiro porque o
+    material bruto do levantamento, antes de revisão humana, não atravessa a fronteira do cliente
+    (`language-map` §3, regra 1). Há regressão sobre o **vocabulário desta fonte**, e não só sobre o
+    dicionário emitido: as palavras do levantamento não têm por que aparecer aqui, e a guarda toma a
+    presença delas como intenção de levar o mapa ao cliente.
+    """
+    if medicao is None:
+        return None
+    return {
+        "value": float(medicao.value) if medicao.value is not None else None,
+        # A janela a que a leitura se refere, que não é o instante em que ela foi tomada:
+        # "outubro" medido em novembro é uma coisa só, e sem as três datas não dá para dizer isso.
+        "period_start": medicao.period_start.isoformat(),
+        "period_end": medicao.period_end.isoformat(),
+        "measured_at": medicao.measured_at.isoformat(),
+        "confidence": medicao.confidence,
+    }
+
+
+def _kpis(project: Project) -> list[dict[str, Any]]:
+    """Os KPIs vivos do projeto, **com as leituras aninhadas dentro de cada um** (FDD 050).
+
+    O aninhamento é a decisão da fatia, e não arrumação: o que torna duas leituras comparáveis é
+    serem do *mesmo* KPI, com a mesma unidade e o mesmo método (`KPI.unit`, `definition`,
+    `formula` — invariante §6.11 do `language-map`). Numa lista irmã de medições, parear baseline e
+    outcome viraria trabalho do leitor, e um pareamento errado não deixaria nada vermelho.
+
+    `owner` **não** atravessa: é pessoa interna (`language-map` §3).
+    """
+    resultado = []
+    for kpi in KPI.objects.filter(project=project, archived_at__isnull=True).prefetch_related(
+        "measurements"
+    ):
+        # `prefetch_related` acima e `.all()` lá dentro: `prove._medicoes_vivas` filtra em Python
+        # justamente para reusar o prefetch. Um `.filter()` por KPI emitiria consulta nova a cada
+        # volta, e este bloco roda a cada `GET` do snapshot.
+        baseline = prove.medicao_de_baseline(kpi)
+        # **Nenhum outcome é emitido sem baseline do mesmo KPI.** O critério de aceite do outro
+        # lado é "todo Outcome renderizado tem Baseline no mesmo componente" (§6.11): emitir o
+        # outcome sozinho e deixar o One recusá-lo faz o cliente ver lacuna onde há dado, que é
+        # pior que a lacuna honesta. Quem tem a baseline é quem sabe disso — aqui.
+        outcome = prove.medicao_de_outcome(kpi) if baseline is not None else None
+        resultado.append(
+            {
+                "id": kpi.pk,
+                "name": kpi.name,
+                "definition": kpi.definition,
+                "formula": kpi.formula,
+                "unit": kpi.unit,
+                "direction": kpi.direction,
+                "data_source": kpi.data_source,
+                "cadence": kpi.cadence,
+                "target": float(kpi.target) if kpi.target is not None else None,
+                "baseline": _medicao(baseline),
+                "outcome": _medicao(outcome),
+                "monitoring": [
+                    _medicao(medicao) for medicao in prove.medicoes_de_monitoramento(kpi)
+                ],
+            }
+        )
+    return resultado
+
+
+def _value_ledger(project: Project) -> list[dict[str, Any]]:
+    """O Value Ledger do **mandato**, não do projeto (FDD 050).
+
+    A leitura é por `Engagement`, como a da tela `/contas/:id/valor`: valor é do mandato, e
+    `ValueLedgerEntry.project` é opcional de propósito — um resultado que atravessa dois projetos
+    do mesmo programa é uma entrada só. A consequência é que a mesma entrada sai no snapshot de
+    todos os projetos do mandato, e o `_emit_value_ledger_entry` faz fan-out por isso.
+
+    **Dois filtros além do arquivamento, e nenhum é zelo excessivo:**
+
+    - só `approved`. Rascunho e pendente não atravessam (regra 1 da §3 do `language-map`), e aqui
+      isso pesa mais que no resto do snapshot: é a linha que o cliente lê como *valor gerado*.
+    - `attribution_method` não-vazio. O `clean()` já o exige, mas `clean()` não roda em shell nem
+      em migração de dados — e este é exatamente o campo cuja ausência transforma a linha num
+      número sem procedência. "ROI" como resultado é termo banido (§5) por isto.
+
+    **Não há campo de moeda, e não se cria um aqui.** Toda entrada é BRL hoje; uma coluna para o
+    caso hipotético seria especulação, e o `roi` que já atravessa tem a mesma ausência. Quando
+    houver a primeira entrada em outra moeda, ela nasce no modelo — não na projeção.
+
+    `approved_by` e `status` **não** atravessam: o primeiro é pessoa interna, e o segundo diria ao
+    cliente que existe uma fila de aprovação da qual ele não participa.
+    """
+    entradas = ValueLedgerEntry.objects.filter(
+        engagement_id=project.engagement_id,
+        archived_at__isnull=True,
+        status=ValueLedgerEntry.Status.APPROVED,
+    ).select_related("outcome_measurement")
+    return [
+        {
+            "id": entry.pk,
+            "value_type": entry.value_type,
+            "amount": float(entry.amount) if entry.amount is not None else None,
+            "quantity": float(entry.quantity) if entry.quantity is not None else None,
+            "period_start": entry.period_start.isoformat(),
+            "period_end": entry.period_end.isoformat(),
+            "attribution_method": entry.attribution_method,
+            # O resultado que sustenta a entrada, por referência: o KPI que o One já recebeu em
+            # `kpis[]` e o instante da leitura. Recasar é dele; afirmar o vínculo é nosso.
+            "kpi_id": entry.outcome_measurement.kpi_id,
+            "outcome_measured_at": entry.outcome_measurement.measured_at.isoformat(),
+        }
+        for entry in entradas
+        # Em Python e não no queryset porque a regra é uma só — "método de atribuição ausente" —, e
+        # `""` e `"   "` são a mesma ausência. Duas metades em SQL e em Python divergiriam na
+        # primeira correção; o conjunto já veio estreito a um mandato.
+        if entry.attribution_method.strip()
+    ]
+
+
 def build_snapshot(project: Project) -> dict[str, Any]:
     """Projeção read-only e segura do projeto para o portal do cliente."""
     milestones = [
@@ -280,6 +412,12 @@ def build_snapshot(project: Project) -> dict[str, Any]:
             "kpi_value": employee.kpi_value,
             "hours_saved_month": float(employee.hours_saved_month),
             "roi_month": float(employee.roi_month),
+            # **Aditivo, e os quatro acima ficam onde estão** — mesma convivência de
+            # `account`/`client`: o legado sai quando o One parar de ler, não antes. Lista porque o
+            # contrato do outro lado é lista e porque a FK singular de hoje é o estado atual, não a
+            # forma final; hoje ela tem zero ou um elemento. Aponta para `kpis[]`, onde estão a
+            # unidade, o método e as leituras — o que estes quatro campos nunca souberam dizer.
+            "kpi_ids": [employee.kpi_id] if employee.kpi_id else [],
         }
         for employee in DigitalEmployee.objects.filter(project=project, archived_at__isnull=True)
     ]
@@ -344,6 +482,12 @@ def build_snapshot(project: Project) -> dict[str, Any]:
         "completion": completion,
         "health": {"label": health_label, "level": health_level},
         "digital_employees": digital_employees,
+        # A cadeia de medição (FDD 050). `kpis` leva o indicador com as leituras **dentro** dele, e
+        # `value_ledger` leva o valor aprovado do mandato. As duas eram o buraco que a FDD 049
+        # adiou explicitamente: o cliente via `roi` — receita menos custo do projeto — e nenhum
+        # indicador do trabalho que ele contratou.
+        "kpis": _kpis(project),
+        "value_ledger": _value_ledger(project),
         "journey": {"current_phase": current_phase, "phases": journey},
         "ai_score": ai_score_snapshot(project),
         "milestones": milestones,

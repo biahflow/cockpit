@@ -10,6 +10,7 @@ from django.dispatch import receiver
 
 from . import cases, journey, notifications, portal, tasksync
 from .models import (
+    KPI,
     Account,
     Artifact,
     CommercialOpportunity,
@@ -20,6 +21,7 @@ from .models import (
     Invoice,
     JourneyPhase,
     Lead,
+    Measurement,
     Meeting,
     Milestone,
     Pendencia,
@@ -29,6 +31,7 @@ from .models import (
     ProjectPhase,
     Task,
     User,
+    ValueLedgerEntry,
 )
 
 
@@ -241,6 +244,37 @@ def _emit_artifact(sender: type[Artifact], instance: Artifact, **kwargs: Any) ->
             .first()
         )
     portal.emit("updated", "artifact", project_id)
+
+
+# A cadeia de medição entrou no snapshot (FDD 050) e precisa de emissor, pela regra que abre a
+# ADR 0003. Três receivers, e nenhum leva guarda de `created`: nenhum dos três nasce em laço como
+# `ProjectPhase`/`ProjectDeliverable` — KPI e medição são cadastrados um a um, e a entrada de valor
+# passa por uma aprovação. O que importa aqui é justamente o update: aprovar uma entrada e
+# arquivar um KPI são `save()` que mudam o que o cliente vê sem criar linha nenhuma.
+@receiver(post_save, sender=KPI)
+def _emit_kpi(sender: type[KPI], instance: KPI, **kwargs: Any) -> None:
+    portal.emit("updated", "kpi", instance.project_id)
+
+
+# **A medição é o evento**, e ela não passa pelo `save()` do `Project` nem pelo do `KPI`: registrar
+# o Outcome do mês é exatamente o que o cliente quer saber, e sem este receiver ele só chegaria de
+# carona no próximo salvamento de outra coisa — o defeito do funcionário digital (emenda de
+# 07/08/2026 na ADR 0003) por outro eixo. O projeto vem pelo KPI, que é quem o ancora.
+@receiver(post_save, sender=Measurement)
+def _emit_measurement(sender: type[Measurement], instance: Measurement, **kwargs: Any) -> None:
+    portal.emit("updated", "measurement", instance.kpi.project_id)
+
+
+# **Fan-out por projeto, no molde literal do `_emit_engagement`**, e pela mesma razão: a entrada de
+# valor pende do *mandato*, e `portal.build_snapshot` a mostra no snapshot de **todos** os projetos
+# dele. Um projeto que não recebesse o aviso ficaria sem a entrada até o próximo salvamento de
+# outra coisa. É o contrário do `_emit_artifact`, que escolhe um projeto porque só um é afetado.
+@receiver(post_save, sender=ValueLedgerEntry)
+def _emit_value_ledger_entry(
+    sender: type[ValueLedgerEntry], instance: ValueLedgerEntry, **kwargs: Any
+) -> None:
+    for project_id in instance.engagement.projects.values_list("id", flat=True):
+        portal.emit("updated", "value_ledger_entry", project_id)
 
 
 @receiver(post_save, sender=Lead)

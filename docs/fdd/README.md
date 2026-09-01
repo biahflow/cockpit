@@ -53,3 +53,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 047 — O snapshot que falava o vocabulário antigo
 - 048 — "Onde atuar" não tinha onde morar
 - 049 — A medição morava dentro do ativo de solução
+- 050 — A cadeia de medição parava na fronteira do cliente

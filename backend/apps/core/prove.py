@@ -21,6 +21,11 @@ No fim do módulo, a outra metade da fatia: `baseline_de` e `outcome_mais_recent
 `DigitalEmployeeSerializer` e `cases._metric` continuam publicando `kpi_baseline`/`kpi_current`
 depois de as colunas saírem (ADR 0055). Duas expressões de "qual é o antes deste ativo" divergiriam
 na primeira correção.
+
+Desde a FDD 050 esse par é **derivado**: quem responde "qual baseline conta" é `medicao_de_baseline`
+/`medicao_de_outcome`, que devolvem a `Measurement` inteira, e `baseline_de`/`outcome_mais_recente_de`
+tiram o `.value` delas. O snapshot do portal precisa da janela, do instante e da confiança, que só
+existem na linha — e o critério de qual linha conta continua num lugar só.
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .models import KPI, ProveExperiment
+    from .models import KPI, Measurement, ProveExperiment
 
 #: Os três requisitos da invariante, na ordem em que o board os desenha.
 REQUISITO_KPI = "kpi"
@@ -98,24 +103,27 @@ def _medicoes_vivas(kpi: KPI, kind: str) -> list:  # type: ignore[type-arg]
     ]
 
 
-def baseline_de(kpi: KPI | None) -> Decimal | None:
-    """O valor da baseline viva deste KPI, ou `None`.
+def medicao_de_baseline(kpi: KPI | None) -> Measurement | None:
+    """A **linha** da baseline viva deste KPI, ou `None`.
 
-    **`None` é "não medido", nunca zero** — a distinção que `DigitalEmployee.kpi_baseline` guardava
-    sendo nulável e que o `Case` publica como `has_baseline: false` em vez de `0`. A constraint
-    parcial garante que existe no máximo uma baseline viva; `max` pelo id resolve o empate
-    impossível sem depender dele.
+    A constraint parcial garante que existe no máximo uma baseline viva; `max` pelo id resolve o
+    empate impossível sem depender dela.
+
+    Devolve a `Measurement` inteira e não o valor porque quem publica a medição precisa da janela
+    (`period_start`/`period_end`), do instante (`measured_at`) e da `confidence` — e esses só
+    existem na linha. `baseline_de` continua existindo e delega aqui: qual baseline conta não pode
+    ter duas definições (FDD 050).
     """
     if kpi is None:
         return None
     vivas = _medicoes_vivas(kpi, "baseline")
     if not vivas:
         return None
-    return max(vivas, key=lambda medicao: medicao.pk).value
+    return max(vivas, key=lambda medicao: medicao.pk)
 
 
-def outcome_mais_recente_de(kpi: KPI | None) -> Decimal | None:
-    """O valor do `Outcome` mais recente deste KPI, ou `None`.
+def medicao_de_outcome(kpi: KPI | None) -> Measurement | None:
+    """A **linha** do `Outcome` mais recente deste KPI, ou `None`.
 
     "Mais recente" é por `measured_at`, e não por `created_at`: quem digita a leitura de outubro em
     novembro está registrando outubro. O id desempata para a ordem ser estável entre duas leituras.
@@ -125,4 +133,38 @@ def outcome_mais_recente_de(kpi: KPI | None) -> Decimal | None:
     vivas = _medicoes_vivas(kpi, "outcome")
     if not vivas:
         return None
-    return max(vivas, key=lambda medicao: (medicao.measured_at, medicao.pk)).value
+    return max(vivas, key=lambda medicao: (medicao.measured_at, medicao.pk))
+
+
+def medicoes_de_monitoramento(kpi: KPI) -> list[Measurement]:
+    """As leituras vivas de monitoramento, da mais recente para a mais antiga.
+
+    Ordena explicitamente pelo mesmo par do `Meta` (`-measured_at`, `-id`) em vez de confiar na
+    ordem que vier do queryset — é o cuidado das duas funções acima, que usam `max` com chave
+    explícita: um `prefetch_related` com queryset próprio mudaria a ordem sem nada ficar vermelho.
+
+    **Não aceita `None`, ao contrário das duas acima**, e a assimetria é deliberada: elas o aceitam
+    porque `DigitalEmployee.kpi` é nulável e os serializers passam a FK direto. Aqui quem chama é o
+    snapshot, iterando KPIs que existem — uma guarda de nulo seria ramo sem chamador.
+    """
+    return sorted(
+        _medicoes_vivas(kpi, "monitoring"),
+        key=lambda medicao: (medicao.measured_at, medicao.pk),
+        reverse=True,
+    )
+
+
+def baseline_de(kpi: KPI | None) -> Decimal | None:
+    """O valor da baseline viva deste KPI, ou `None`.
+
+    **`None` é "não medido", nunca zero** — a distinção que `DigitalEmployee.kpi_baseline` guardava
+    sendo nulável e que o `Case` publica como `has_baseline: false` em vez de `0`.
+    """
+    medicao = medicao_de_baseline(kpi)
+    return medicao.value if medicao is not None else None
+
+
+def outcome_mais_recente_de(kpi: KPI | None) -> Decimal | None:
+    """O valor do `Outcome` mais recente deste KPI, ou `None`. Mesma leitura, só o número."""
+    medicao = medicao_de_outcome(kpi)
+    return medicao.value if medicao is not None else None

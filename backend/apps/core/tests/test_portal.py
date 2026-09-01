@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from apps.core import blueprints, journey, portal
 from apps.core.models import (
+    KPI,
     AppSetting,
     Artifact,
     Decisao,
@@ -17,6 +18,7 @@ from apps.core.models import (
     DigitalEmployeeBlueprint,
     Document,
     JourneyPhase,
+    Measurement,
     Meeting,
     Milestone,
     Pendencia,
@@ -24,6 +26,7 @@ from apps.core.models import (
     ProjectDeliverable,
     ProjectPhase,
     Qualification,
+    ValueLedgerEntry,
     Vertical,
 )
 
@@ -597,6 +600,8 @@ _MODELO_DA_CHAVE = {
     "decisions": Decisao,
     "milestones": Milestone,
     "digital_employees": DigitalEmployee,
+    "kpis": KPI,
+    "value_ledger": ValueLedgerEntry,
 }
 
 #: Chaves sem emissor próprio, e o motivo de cada uma. Allowlist com razão escrita, na forma do
@@ -664,6 +669,20 @@ def test_the_guard_lists_do_not_keep_a_key_that_stopped_existing() -> None:
     snapshot = portal.build_snapshot(ProjectFactory())
     obsoletas = (set(_MODELO_DA_CHAVE) | set(_DERIVADA_DE)) - set(snapshot)
     assert not obsoletas, f"a guarda guarda chave que não existe mais no snapshot: {sorted(obsoletas)}"
+
+
+def test_a_medicao_tem_emissor_mesmo_sem_chave_de_topo() -> None:
+    """`Measurement` atravessa **aninhada** em `kpis[]`, e por isso a guarda acima não a alcança.
+
+    Ela compara chaves de topo, e a medição não é uma — é o conteúdo de `kpis[].baseline`,
+    `.outcome` e `.monitoring`. Sem esta asserção escrita à mão, registrar o Outcome do mês não
+    avisaria ninguém e o cliente continuaria vendo o estado anterior: o defeito exato que a regra
+    da ADR 0003 nomeia, na única forma que a guarda derivada não pega (FDD 050).
+    """
+    assert _tem_emissor(Measurement), (
+        "`Measurement` entra no snapshot dentro de `kpis[]` e precisa de um `post_save` em "
+        "signals.py — a guarda de chaves de topo não a alcança."
+    )
 
 
 # --- Decisões no snapshot (FDD 032) -------------------------------------------

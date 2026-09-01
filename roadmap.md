@@ -62,6 +62,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 049 | Feasibility, PROVE, KPI/Measurement e Value Ledger (ontologia, fase 5) | Entregue | 1 | `docs/fdd/049-a-medicao-morava-dentro-do-ativo-de-solucao.md` |
 | ADR 0058 | Instrumento assinado como origem obrigatória do Engagement; legado sem inferência (issue #62) | Entregue | 1 | `docs/adr/0058-o-engagement-nasce-do-instrumento-assinado-e-o-legado-declara-a-lacuna.md` |
 | ADR 0059 | Suíte backend hermética: egress bloqueado e integrações mockadas (issue #92) | Entregue | — | `docs/adr/0059-a-suite-nao-atravessa-a-rede-para-provar-um-adapter.md` |
+| FDD 050 | `kpis[]` e `value_ledger[]` no snapshot do portal do cliente (issue #105) | Entregue | 1 | `docs/fdd/050-a-cadeia-de-medicao-parava-na-fronteira-do-cliente.md` |
 
 ## Base atual — entregue
 
