@@ -24,6 +24,18 @@ A terceira é a cadeia de medição (emenda de 01/09/2026 na ADR 0003, FDD 050):
 dinheiro: preço, margem, `Service.price`, valor e probabilidade da venda. E só a entrada
 `approved` com método de atribuição atravessa — rascunho e pendente são deliberação interna.
 
+A quarta é o Discovery como **dado** (emenda de 01/09/2026 na ADR 0003, FDD 051): `processes`,
+`findings`, `pain_points` e `improvement_opportunities`. Ele chegava ao cliente como documento, e o
+que separa o One de um Drive compartilhado é chegar navegável. A linha "nenhum dado comercial é
+exposto" continua inteira — nada disto é venda —, e o que a governa é outra coisa: **nada
+atravessa sem a marca de publicável**, que é o ato de revisão humana que a regra 1 da §3 do
+`language-map` exige. **Não há exceção, e o mapa do AS-IS não é uma**: a §3 o qualifica como
+*validado*, e "validado" era um qualificador sem lastro nenhum no schema — exatamente como
+"revisada e publicável" era para a evidência. Ele atravessa porque alguém o publicou, e publicar
+é a validação com o cliente que a §3 pressupõe. Nunca cruzam o trecho bruto de uma evidência, o
+carimbo de integridade dele, o racional interno da priorização e os nove insumos do cálculo do
+custo do processo.
+
 Desde a ADR 0051 este módulo também **escreve**, e num lugar só: `emit` carimba
 `projection_version`/`projection_observed_at` no projeto. É a inversão que o desenho exige —
 quem muda o estado carimba, quem lê não —, e ela está escrita em detalhe no próprio `emit`.
@@ -52,12 +64,17 @@ from .models import (
     Decisao,
     DigitalEmployee,
     Document,
+    Finding,
+    ImprovementOpportunity,
     Measurement,
     Meeting,
     Milestone,
+    PainPoint,
     Pendencia,
+    Process,
     Project,
     ProjectPhase,
+    SolutionHypothesis,
     ValueLedgerEntry,
 )
 
@@ -314,6 +331,218 @@ def _value_ledger(project: Project) -> list[dict[str, Any]]:
     ]
 
 
+def _processes(account_id: int) -> list[dict[str, Any]]:
+    """O AS-IS mapeado da conta, com os `ProcessStep` vivos dentro de cada um (FDD 051).
+
+    **Escopo de conta, e é a decisão que destravou a fatia.** `Process` pende da `Account` desde a
+    FDD 039, porque o que se levantou sobre a operação de uma empresa sobrevive à venda que o
+    descobriu. Consequência: o mesmo bloco sai no snapshot de **todos** os projetos da conta, e o
+    One deduplica por id — que ele já sabe fazer. Recortar pelo projeto que levantou perderia
+    exatamente a propriedade que motivou a FK de conta, e uma rota de escopo Account seria um
+    segundo canal de ingestão, a única coisa desta fatia que não seria aditiva.
+
+    **Só o publicado e vivo atravessa** (ADR 0060). A §3 do `language-map` qualifica este par como
+    *validado* — e "validado" era, até aqui, um qualificador sem lastro no schema: nenhum campo
+    dizia que este mapa tinha sido conferido com o cliente. O AS-IS chega ao One porque **alguém o
+    publicou**, e publicar é a validação que a §3 pressupõe. O que a marca protege é concreto: as
+    letras E e R de cada passo são a caracterização da casa sobre onde o time do cliente erra e o
+    que acontece quando erra, e isso não pode subir sem decisão de gente.
+
+    A etapa **não** tem marca própria e anda com o pai: as seis letras do P-S-D-T-E-R são um
+    formulário só, e publicar meia etapa não é estado que alguém queira.
+
+    **Os nove insumos do cálculo de custo não saem.** São conta interna, não estão na §3, e um
+    total parcial lido sem quem o levantou por perto vira "vocês disseram que eu perco tanto por
+    mês". `registered_by` e as duas procedências também não: pessoa e origem internas.
+
+    As seis chaves do passo ficam **em português**, e não é descuido: elas *são* as seis letras do
+    P-S-D-T-E-R, nessa ordem, e o docstring de `ProcessStep` explica que renomear ou juntar faria o
+    levantamento da reunião deixar de casar com o formulário. A §5 do mapa de linguagem bane
+    português em nome de **modelo**, não em nome de campo — e este snapshot já leva `pendencias`
+    pelo mesmo tipo de razão.
+    """
+    return [
+        {
+            "id": item.pk,
+            "name": item.name,
+            "position": item.position,
+            "updated_at": item.updated_at.isoformat(),
+            "steps": [
+                {
+                    "id": passo.pk,
+                    "position": passo.position,
+                    "name": passo.name,
+                    "pessoas": passo.pessoas,
+                    "sistema": passo.sistema,
+                    "dados": passo.dados,
+                    "tempo": passo.tempo,
+                    "erro": passo.erro,
+                    "retrabalho": passo.retrabalho,
+                }
+                # `.all()` sobre o `prefetch_related`, filtrando em Python: um `.filter()` por
+                # item emitiria consulta nova a cada volta, e este bloco roda a cada `GET`. É o
+                # cuidado que `_kpis` toma e que `current_assessment` documenta.
+                for passo in item.steps.all()
+                if passo.archived_at is None
+            ],
+        }
+        for item in Process.objects.filter(
+            account_id=account_id, archived_at__isnull=True, published_at__isnull=False
+        ).prefetch_related("steps")
+    ]
+
+
+def _findings(account_id: int) -> list[dict[str, Any]]:
+    """Os achados **publicados e vivos** da conta, com as fontes publicadas de cada um (FDD 051).
+
+    **Metadado, nunca conteúdo bruto.** `raw_excerpt` e `content_hash` não atravessam — a §3 do
+    `language-map` proíbe transcrição e material não revisado. `reference` atravessa porque é a
+    citação, *de onde veio* e não *o que foi dito*, e é o que torna a fonte conferível pelo
+    cliente; o precedente é o `has_transcript` que `meetings` já usa. `captured_by` e `reviewed_by`
+    ficam fora: pessoa interna.
+
+    **A fonte só entra se ela própria estiver publicada e viva**, mesmo estando no M2M de um achado
+    publicado. Sem esse recorte a lista apontaria para o que não atravessou, e o cliente leria uma
+    afirmação com nada atrás — que é a invariante de cadeia inteira desta fatia.
+
+    **`unknown` atravessa e não é omitido.** O One o renderiza como lacuna declarada; sumir com ele
+    é o que faz o cliente achar que não há pergunta em aberto. `fact` e `hypothesis` saem
+    rotulados, e é o rótulo que os torna honestos.
+    """
+    return [
+        {
+            "id": achado.pk,
+            "statement": achado.statement,
+            "epistemic_status": achado.epistemic_status,
+            "confidence": achado.confidence,
+            "process_id": achado.process_id,
+            "step_id": achado.step_id,
+            "evidences": [
+                {
+                    "id": fonte.pk,
+                    "kind": fonte.kind,
+                    "reference": fonte.reference,
+                    "captured_at": fonte.captured_at.isoformat(),
+                }
+                for fonte in achado.evidences.all()
+                if fonte.archived_at is None and fonte.published_at is not None
+            ],
+        }
+        for achado in Finding.objects.filter(
+            account_id=account_id, archived_at__isnull=True, published_at__isnull=False
+        ).prefetch_related("evidences")
+    ]
+
+
+def _pain_points(account_id: int) -> list[dict[str, Any]]:
+    """As dores **publicadas e vivas** da conta (FDD 051).
+
+    `finding_ids` vem **filtrado aos achados publicados e vivos**, e nunca o M2M cru: a lista crua
+    apontaria para o que não atravessou em `findings[]`, e o One renderizaria referência quebrada.
+
+    `impact_estimate` sai `None` quando ninguém quantificou — **nunca `0`**. Zero afirma que a dor
+    não custa nada, e é a distinção que o campo guarda sendo nulável (a regra do não apurado).
+    """
+    return [
+        {
+            "id": dor.pk,
+            "title": dor.title,
+            "description": dor.description,
+            "impact_type": dor.impact_type,
+            "impact_estimate": (
+                float(dor.impact_estimate) if dor.impact_estimate is not None else None
+            ),
+            "finding_ids": [
+                achado.pk
+                for achado in dor.findings.all()
+                if achado.archived_at is None and achado.published_at is not None
+            ],
+            "status": dor.status,
+        }
+        for dor in PainPoint.objects.filter(
+            account_id=account_id, archived_at__isnull=True, published_at__isnull=False
+        ).prefetch_related("findings")
+    ]
+
+
+def _improvement_opportunities(account_id: int) -> list[dict[str, Any]]:
+    """As oportunidades de melhoria **publicadas e vivas**, com score e apostas (FDD 051).
+
+    A chave é `improvement_opportunities` e **não** `opportunities`: a §5 do `language-map` bane
+    `Opportunity` sem qualificador — melhoria operacional e venda colidiam nesse nome —, e o One
+    tem lint derivado dela do outro lado.
+
+    **`priority_assessment` é só a versão vigente**, lida de `ImprovementOpportunity.current_assessment`,
+    que é onde "vigente" está definido; reexpressar o recorte aqui seria a segunda definição do
+    mesmo fato. `None` quando não houver avaliação — nunca zero, pela mesma regra do não apurado.
+
+    **`rationale` nunca atravessa**: é proibição literal da §3, e o outro lado já tem portão para
+    ela. `assessed_by` também não (pessoa interna). `weights` e `formula_key` também não — são o
+    critério interno, e é justamente a mudança de critério que a versão existe para não confundir
+    quem lê sem contexto.
+
+    **`rank` não é emitido, e é desvio consciente do que a issue pediu.** Dois motivos, e cada um
+    bastaria: `priority.ranking_da_conta` ordena **todas** as oportunidades vivas da conta,
+    publicadas ou não, então emitir esse número entregaria ao cliente `2, 4, 7` e a dedução de que
+    existem itens escondidos que o superam; e recalcular o rank só entre as publicadas criaria uma
+    **segunda definição de rank**, exatamente o que este repositório recusou ao não persistir o
+    campo. O que o rank queria dizer — que o backlog é ordenável — é entregue por `score`, que é o
+    fato de onde ele sai.
+
+    `solution_hypotheses` vai **aninhada**, e não como lista irmã: as apostas de uma oportunidade
+    são concorrentes entre si, e soltá-las perderia a concorrência, que é a informação. Sem as
+    `discarded` e sem as arquivadas. `assumptions` não atravessa — é a nota interna do que se está
+    supondo.
+    """
+    resultado: list[dict[str, Any]] = []
+    for oportunidade in ImprovementOpportunity.objects.filter(
+        account_id=account_id, archived_at__isnull=True, published_at__isnull=False
+    ).prefetch_related("pain_points", "assessments", "hypotheses"):
+        vigente = oportunidade.current_assessment
+        resultado.append(
+            {
+                "id": oportunidade.pk,
+                "title": oportunidade.title,
+                "desired_change": oportunidade.desired_change,
+                "impact_hypothesis": oportunidade.impact_hypothesis,
+                "pain_point_ids": [
+                    dor.pk
+                    for dor in oportunidade.pain_points.all()
+                    if dor.archived_at is None and dor.published_at is not None
+                ],
+                "status": oportunidade.status,
+                "priority_assessment": (
+                    {
+                        "version": vigente.version,
+                        "score": float(vigente.score),
+                        "dimensions": {
+                            "impact": vigente.impact,
+                            "evidence_strength": vigente.evidence_strength,
+                            "feasibility": vigente.feasibility,
+                            "time_to_value": vigente.time_to_value,
+                            "economics": vigente.economics,
+                        },
+                    }
+                    if vigente is not None
+                    else None
+                ),
+                "solution_hypotheses": [
+                    {
+                        "id": aposta.pk,
+                        "statement": aposta.statement,
+                        "intervention": aposta.intervention,
+                        "expected_effect": aposta.expected_effect,
+                        "status": aposta.status,
+                    }
+                    for aposta in oportunidade.hypotheses.all()
+                    if aposta.archived_at is None
+                    and aposta.status != SolutionHypothesis.Status.DISCARDED
+                ],
+            }
+        )
+    return resultado
+
+
 def build_snapshot(project: Project) -> dict[str, Any]:
     """Projeção read-only e segura do projeto para o portal do cliente."""
     milestones = [
@@ -488,6 +717,17 @@ def build_snapshot(project: Project) -> dict[str, Any]:
         # indicador do trabalho que ele contratou.
         "kpis": _kpis(project),
         "value_ledger": _value_ledger(project),
+        # O Discovery como dado (FDD 051). Os quatro blocos são de escopo **conta**, alcançada
+        # por `engagement.account_id`, e por isso saem iguais no snapshot de todos os projetos
+        # dela — ver `_processes`. **Nada entra sem a marca de publicável**, sem exceção, e as
+        # listas de id vêm filtradas ao que atravessou: uma referência para o que ficou de fora
+        # faria o cliente ler afirmação com nada atrás.
+        "processes": _processes(project.engagement.account_id),
+        "findings": _findings(project.engagement.account_id),
+        "pain_points": _pain_points(project.engagement.account_id),
+        "improvement_opportunities": _improvement_opportunities(
+            project.engagement.account_id
+        ),
         "journey": {"current_phase": current_phase, "phases": journey},
         "ai_score": ai_score_snapshot(project),
         "milestones": milestones,

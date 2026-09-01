@@ -260,8 +260,25 @@ Key cross-cutting patterns to preserve:
   que fixa unidade e método, e aninhar torna o pareamento invariante por construção — e
   `value_ledger[]` lido **por mandato**, só `approved` e só com `attribution_method`; `outcome` sem
   baseline do mesmo KPI **não sai**, `null` e `{"value": null}` são lacunas diferentes e nenhuma é
-  zero, e `roi` mais os quatro campos legados de `digital_employees` continuam onde estão. Ver FDD
-  047, FDD 050, ADR 0051 e as emendas de 28/08 e 01/09 na ADR 0003.
+  zero, e `roi` mais os quatro campos legados de `digital_employees` continuam onde estão. Desde a
+  FDD 051 ele leva também o **Discovery como dado** — `processes[]`, `findings[]`, `pain_points[]` e
+  `improvement_opportunities[]`, os quatro de escopo **conta** (o mesmo bloco sai em todo projeto
+  dela, e o One deduplica por id) —, e ali a regra é outra: **nada atravessa sem a marca de
+  publicável** (`published_at`/`published_by`, ADR 0060), que é o ato de revisão humana da regra 1
+  da §3 e por isso tem autor, é action e exige sustentação publicada embaixo. São **cinco** modelos
+  marcados e **não há exceção**: o AS-IS entrou junto, porque "o AS-IS *validado*" da §3 era um
+  qualificador tão sem lastro no schema quanto "revisada e publicável" — e `ProcessStep.erro`/
+  `.retrabalho` são a caracterização da casa sobre onde o time do cliente erra. `ProcessStep` não
+  tem marca própria (anda com o pai), e o `Process` é **âncora**: publicar `Finding`/`PainPoint`
+  exige o mapa citado publicado e vivo, despublicá-lo ou arquivá-lo é 409 enquanto algo publicado
+  o citar, e **mover a âncora por baixo de um registro publicado é 400** — senão `process_id`
+  aponta para fora de `processes[]`. São **cinco** portas, e a quinta é a única que não passa
+  perto de `published_at`: quem responde às três perguntas é `publication.py`, num lugar só. Nunca
+  cruzam `raw_excerpt`, `content_hash`, os nove insumos do custo, `rationale`/`weights`/`formula_key`,
+  `assumptions`, e **nem `rank`** — ele ordena as oportunidades **não publicadas** junto, e
+  recalculá-lo entre as publicadas seria a segunda definição que a ADR 0054 recusou; quem responde é
+  `score`. Ver FDD 047, FDD 050, FDD 051, ADR 0051, ADR 0060 e as emendas de 28/08 e 01/09 na
+  ADR 0003.
 - **A medição saiu do ativo de solução, e "antes" e "depois" são o mesmo KPI em dois momentos.**
   `kpi_baseline` e `kpi_current` eram colunas de `DigitalEmployee`; desde a ADR 0055 (FDD 049) o
   indicador é `KPI` — do **projeto**, com `prove_experiment` opcional porque o KPI migrado não

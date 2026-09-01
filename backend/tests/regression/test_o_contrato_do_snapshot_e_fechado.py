@@ -7,8 +7,8 @@ emissor, ou está declarada como derivada? É a pergunta certa e não é esta. E
 podia sair da casa.
 
 Este teste fixa a lista. Acrescentar chave ao snapshot passa a exigir editar aqui, com o diff
-mostrando o nome da chave nova ao lado das dezenove existentes — que é o momento em que a pergunta
-"isto pode ir ao cliente?" é feita por alguém. Sem ele, um campo interno que vaze não deixa nada
+mostrando o nome da chave nova ao lado das vinte e três existentes — que é o momento em que a
+pergunta "isto pode ir ao cliente?" é feita por alguém. Sem ele, um campo interno que vaze não deixa nada
 vermelho: o snapshot é montado à mão, `json.dumps` aceita qualquer dicionário, e o portal do outro
 lado simplesmente ignora o que não conhece.
 
@@ -34,6 +34,10 @@ CHAVES_DE_TOPO = {
     "digital_employees",
     "kpis",
     "value_ledger",
+    "processes",
+    "findings",
+    "pain_points",
+    "improvement_opportunities",
     "journey",
     "ai_score",
     "milestones",

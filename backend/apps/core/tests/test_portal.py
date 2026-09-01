@@ -17,15 +17,23 @@ from apps.core.models import (
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    Evidence,
+    Finding,
+    ImprovementOpportunity,
     JourneyPhase,
     Measurement,
     Meeting,
     Milestone,
+    PainPoint,
     Pendencia,
+    PriorityAssessment,
+    Process,
+    ProcessStep,
     Project,
     ProjectDeliverable,
     ProjectPhase,
     Qualification,
+    SolutionHypothesis,
     ValueLedgerEntry,
     Vertical,
 )
@@ -602,6 +610,10 @@ _MODELO_DA_CHAVE = {
     "digital_employees": DigitalEmployee,
     "kpis": KPI,
     "value_ledger": ValueLedgerEntry,
+    "processes": Process,
+    "findings": Finding,
+    "pain_points": PainPoint,
+    "improvement_opportunities": ImprovementOpportunity,
 }
 
 #: Chaves sem emissor próprio, e o motivo de cada uma. Allowlist com razão escrita, na forma do
@@ -1094,3 +1106,104 @@ def test_editar_a_fase_do_template_emite_para_quem_a_tem_materializada(
 
     assert ("updated", "journey_phase", com_a_fase.pk) in calls
     assert ("updated", "journey_phase", arquivado.pk) not in calls
+
+
+# --- O Discovery: oito emissores, e quatro deles fora do alcance da guarda ----
+
+
+@pytest.mark.django_db
+def test_os_oito_modelos_do_discovery_emitem_para_todos_os_projetos_da_conta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Um teste, oito emissores, e o fan-out por conta que os oito compartilham (FDD 051).
+
+    Os oito pendem da `Account`, e `build_snapshot` os mostra no snapshot de **todos** os projetos
+    dela — é a decisão (a) da fatia. Um projeto que não recebesse o aviso ficaria exibindo o
+    Discovery anterior até o próximo salvamento de outra coisa, que é o defeito do funcionário
+    digital (emenda de 07/08/2026 na ADR 0003) por outro eixo.
+
+    Dois projetos da mesma conta em **engagements diferentes**, mais um projeto de fora: o fan-out
+    precisa alcançar os dois e parar antes do terceiro.
+    """
+    conta = AccountFactory()
+    um = ProjectFactory(engagement=EngagementFactory(account=conta))
+    outro = ProjectFactory(engagement=EngagementFactory(account=conta))
+    de_fora = ProjectFactory()
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(portal, "emit", lambda *args: calls.append(args))
+
+    processo = Process.objects.create(account=conta, name="Faturamento")
+    assert ("updated", "process", um.pk) in calls
+    assert ("updated", "process", outro.pk) in calls
+    assert ("updated", "process", de_fora.pk) not in calls
+
+    calls.clear()
+    etapa = ProcessStep.objects.create(process=processo, name="Conferir")
+    assert ("updated", "process_step", um.pk) in calls
+    assert ("updated", "process_step", outro.pk) in calls
+
+    calls.clear()
+    evidencia = Evidence.objects.create(
+        account=conta, kind=Evidence.Kind.INTERVIEW, raw_excerpt="Conferimos nota por nota."
+    )
+    assert ("updated", "evidence", um.pk) in calls
+    assert ("updated", "evidence", outro.pk) in calls
+
+    calls.clear()
+    achado = Finding.objects.create(account=conta, statement="O fechamento leva dois dias.")
+    assert ("updated", "finding", um.pk) in calls
+    assert ("updated", "finding", outro.pk) in calls
+
+    calls.clear()
+    dor = PainPoint.objects.create(
+        account=conta, title="Fechamento trava", impact_type=PainPoint.ImpactType.OPERATIONAL
+    )
+    assert ("updated", "pain_point", um.pk) in calls
+    assert ("updated", "pain_point", outro.pk) in calls
+
+    calls.clear()
+    oportunidade = ImprovementOpportunity.objects.create(account=conta, title="Automatizar")
+    assert ("updated", "improvement_opportunity", um.pk) in calls
+    assert ("updated", "improvement_opportunity", outro.pk) in calls
+
+    calls.clear()
+    PriorityAssessment.objects.create(
+        improvement_opportunity=oportunidade,
+        impact=4, evidence_strength=3, feasibility=3, time_to_value=3, economics=3,
+    )
+    assert ("updated", "priority_assessment", um.pk) in calls
+    assert ("updated", "priority_assessment", outro.pk) in calls
+
+    calls.clear()
+    SolutionHypothesis.objects.create(
+        improvement_opportunity=oportunidade, statement="Um leitor de nota fiscal."
+    )
+    assert ("updated", "solution_hypothesis", um.pk) in calls
+    assert ("updated", "solution_hypothesis", outro.pk) in calls
+
+    # Publicar é o evento inteiro desta fatia, e ele é um `save()` que não cria linha nenhuma:
+    # sem emissor no update, o achado publicado só chegaria de carona no próximo salvamento.
+    calls.clear()
+    achado.published_at = timezone.now()
+    achado.published_by = um.owner
+    achado.save(update_fields=["published_at", "published_by", "updated_at"])
+    assert ("updated", "finding", um.pk) in calls
+
+    assert etapa.pk and evidencia.pk and dor.pk  # os objetos existem; a asserção é sobre o aviso
+
+
+def test_os_quatro_aninhados_tem_emissor_mesmo_sem_chave_de_topo() -> None:
+    """`Evidence`, `ProcessStep`, `PriorityAssessment` e `SolutionHypothesis` atravessam **dentro**
+    de outra chave, e por isso a guarda derivada acima não os alcança (FDD 051).
+
+    Ela compara chaves de topo, e nenhum dos quatro é uma: a evidência é conteúdo de
+    `findings[].evidences`, o passo de `processes[].steps`, e a avaliação e a hipótese de solução
+    de `improvement_opportunities[]`. Sem estas asserções escritas à mão, publicar uma evidência
+    não avisaria ninguém — o mesmo defeito que a `Measurement` tem logo acima, quatro vezes.
+    """
+    for model in (Evidence, ProcessStep, PriorityAssessment, SolutionHypothesis):
+        assert _tem_emissor(model), (
+            f"`{model.__name__}` entra no snapshot aninhado em outra chave e precisa de um "
+            "`post_save` em signals.py — a guarda de chaves de topo não o alcança."
+        )

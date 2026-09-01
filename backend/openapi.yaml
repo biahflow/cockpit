@@ -3579,6 +3579,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/evidence/{id}/publish/:
+    post:
+      operationId: v1_evidence_publish_create
+      description: |-
+        Publica o registro, conferindo a sustentação publicada por baixo dele (FDD 051).
+
+        Duas recusas, com o status que cada uma merece:
+
+        - **409** se já está publicado: o pedido está bem formado, o que impede é o estado;
+        - **400** listando **o que falta** de sustentação publicada. É o pedido de *publicar
+          agora* que está errado — a mesma escolha de `apply_gate` e de `start/`.
+
+        Sucesso carimba `published_at` e `published_by` e devolve o objeto serializado.
+        `published_by` é quem está autenticado, e não um id do corpo: é a pessoa que leu, e é ela
+        que faz a marca valer como a revisão humana da regra 1 da §3 do `language-map`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidence.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
+          description: ''
   /api/v1/evidence/{id}/unarchive/:
     post:
       operationId: v1_evidence_unarchive_create
@@ -3600,6 +3633,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/evidence/{id}/unpublish/:
+    post:
+      operationId: v1_evidence_unpublish_create
+      description: |-
+        Retira o registro da projeção do cliente — e recusa quando ele sustenta algo publicado.
+
+        **É esta metade que sempre vaza.** Publicar confere a cadeia no instante em que o item
+        sobe; despublicar é o caminho por onde ela se desfaz depois, item a item, sem nada ficar
+        vermelho. 409 quando este é a última sustentação publicada e viva de algo publicado, com a
+        mensagem dizendo qual estado impede e como sair dele — despublique o de cima primeiro.
+
+        Recusar, e nunca despublicar o de cima em silêncio: é o argumento das guardas de
+        arquivamento da FDD 045 e da FDD 048, e desfazer sozinho uma decisão que uma pessoa tomou
+        é pior que a recusa explícita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este evidence.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evidence'
           description: ''
   /api/v1/feasibility-assessments/:
     get:
@@ -3977,6 +4042,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/findings/{id}/publish/:
+    post:
+      operationId: v1_findings_publish_create
+      description: |-
+        Publica o registro, conferindo a sustentação publicada por baixo dele (FDD 051).
+
+        Duas recusas, com o status que cada uma merece:
+
+        - **409** se já está publicado: o pedido está bem formado, o que impede é o estado;
+        - **400** listando **o que falta** de sustentação publicada. É o pedido de *publicar
+          agora* que está errado — a mesma escolha de `apply_gate` e de `start/`.
+
+        Sucesso carimba `published_at` e `published_by` e devolve o objeto serializado.
+        `published_by` é quem está autenticado, e não um id do corpo: é a pessoa que leu, e é ela
+        que faz a marca valer como a revisão humana da regra 1 da §3 do `language-map`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este finding.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+          description: ''
   /api/v1/findings/{id}/unarchive/:
     post:
       operationId: v1_findings_unarchive_create
@@ -3998,6 +4096,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/findings/{id}/unpublish/:
+    post:
+      operationId: v1_findings_unpublish_create
+      description: |-
+        Retira o registro da projeção do cliente — e recusa quando ele sustenta algo publicado.
+
+        **É esta metade que sempre vaza.** Publicar confere a cadeia no instante em que o item
+        sobe; despublicar é o caminho por onde ela se desfaz depois, item a item, sem nada ficar
+        vermelho. 409 quando este é a última sustentação publicada e viva de algo publicado, com a
+        mensagem dizendo qual estado impede e como sair dele — despublique o de cima primeiro.
+
+        Recusar, e nunca despublicar o de cima em silêncio: é o argumento das guardas de
+        arquivamento da FDD 045 e da FDD 048, e desfazer sozinho uma decisão que uma pessoa tomou
+        é pior que a recusa explícita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este finding.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
           description: ''
   /api/v1/github-projections/:
     get:
@@ -4444,6 +4574,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/improvement-opportunities/{id}/publish/:
+    post:
+      operationId: v1_improvement_opportunities_publish_create
+      description: |-
+        Publica o registro, conferindo a sustentação publicada por baixo dele (FDD 051).
+
+        Duas recusas, com o status que cada uma merece:
+
+        - **409** se já está publicado: o pedido está bem formado, o que impede é o estado;
+        - **400** listando **o que falta** de sustentação publicada. É o pedido de *publicar
+          agora* que está errado — a mesma escolha de `apply_gate` e de `start/`.
+
+        Sucesso carimba `published_at` e `published_by` e devolve o objeto serializado.
+        `published_by` é quem está autenticado, e não um id do corpo: é a pessoa que leu, e é ela
+        que faz a marca valer como a revisão humana da regra 1 da §3 do `language-map`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este improvement opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImprovementOpportunity'
+          description: ''
   /api/v1/improvement-opportunities/{id}/unarchive/:
     post:
       operationId: v1_improvement_opportunities_unarchive_create
@@ -4465,6 +4628,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/improvement-opportunities/{id}/unpublish/:
+    post:
+      operationId: v1_improvement_opportunities_unpublish_create
+      description: |-
+        Retira o registro da projeção do cliente — e recusa quando ele sustenta algo publicado.
+
+        **É esta metade que sempre vaza.** Publicar confere a cadeia no instante em que o item
+        sobe; despublicar é o caminho por onde ela se desfaz depois, item a item, sem nada ficar
+        vermelho. 409 quando este é a última sustentação publicada e viva de algo publicado, com a
+        mensagem dizendo qual estado impede e como sair dele — despublique o de cima primeiro.
+
+        Recusar, e nunca despublicar o de cima em silêncio: é o argumento das guardas de
+        arquivamento da FDD 045 e da FDD 048, e desfazer sozinho uma decisão que uma pessoa tomou
+        é pior que a recusa explícita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este improvement opportunity.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImprovementOpportunity'
           description: ''
   /api/v1/invitations/:
     get:
@@ -7286,6 +7481,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/pain-points/{id}/publish/:
+    post:
+      operationId: v1_pain_points_publish_create
+      description: |-
+        Publica o registro, conferindo a sustentação publicada por baixo dele (FDD 051).
+
+        Duas recusas, com o status que cada uma merece:
+
+        - **409** se já está publicado: o pedido está bem formado, o que impede é o estado;
+        - **400** listando **o que falta** de sustentação publicada. É o pedido de *publicar
+          agora* que está errado — a mesma escolha de `apply_gate` e de `start/`.
+
+        Sucesso carimba `published_at` e `published_by` e devolve o objeto serializado.
+        `published_by` é quem está autenticado, e não um id do corpo: é a pessoa que leu, e é ela
+        que faz a marca valer como a revisão humana da regra 1 da §3 do `language-map`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pain point.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PainPoint'
+          description: ''
   /api/v1/pain-points/{id}/unarchive/:
     post:
       operationId: v1_pain_points_unarchive_create
@@ -7307,6 +7535,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Unarchived'
+          description: ''
+  /api/v1/pain-points/{id}/unpublish/:
+    post:
+      operationId: v1_pain_points_unpublish_create
+      description: |-
+        Retira o registro da projeção do cliente — e recusa quando ele sustenta algo publicado.
+
+        **É esta metade que sempre vaza.** Publicar confere a cadeia no instante em que o item
+        sobe; despublicar é o caminho por onde ela se desfaz depois, item a item, sem nada ficar
+        vermelho. 409 quando este é a última sustentação publicada e viva de algo publicado, com a
+        mensagem dizendo qual estado impede e como sair dele — despublique o de cima primeiro.
+
+        Recusar, e nunca despublicar o de cima em silêncio: é o argumento das guardas de
+        arquivamento da FDD 045 e da FDD 048, e desfazer sozinho uma decisão que uma pessoa tomou
+        é pior que a recusa explícita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este pain point.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PainPoint'
           description: ''
   /api/v1/payments/webhook/:
     post:
@@ -8480,6 +8740,9 @@ paths:
         **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
         aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
         é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+
+        O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
+        de linguagem, era qualificador sem lastro nenhum no schema.
       tags:
       - v1
       security:
@@ -8501,6 +8764,9 @@ paths:
         **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
         aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
         é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+
+        O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
+        de linguagem, era qualificador sem lastro nenhum no schema.
       tags:
       - v1
       requestBody:
@@ -8533,6 +8799,9 @@ paths:
         **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
         aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
         é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+
+        O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
+        de linguagem, era qualificador sem lastro nenhum no schema.
       parameters:
       - in: path
         name: id
@@ -8559,6 +8828,9 @@ paths:
         **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
         aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
         é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+
+        O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
+        de linguagem, era qualificador sem lastro nenhum no schema.
       parameters:
       - in: path
         name: id
@@ -8597,6 +8869,9 @@ paths:
         **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
         aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
         é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+
+        O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
+        de linguagem, era qualificador sem lastro nenhum no schema.
       parameters:
       - in: path
         name: id
@@ -8634,6 +8909,9 @@ paths:
         **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
         aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
         é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+
+        O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
+        de linguagem, era qualificador sem lastro nenhum no schema.
       parameters:
       - in: path
         name: id
@@ -8648,6 +8926,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/processos/{id}/publish/:
+    post:
+      operationId: v1_processos_publish_create
+      description: |-
+        Publica o registro, conferindo a sustentação publicada por baixo dele (FDD 051).
+
+        Duas recusas, com o status que cada uma merece:
+
+        - **409** se já está publicado: o pedido está bem formado, o que impede é o estado;
+        - **400** listando **o que falta** de sustentação publicada. É o pedido de *publicar
+          agora* que está errado — a mesma escolha de `apply_gate` e de `start/`.
+
+        Sucesso carimba `published_at` e `published_by` e devolve o objeto serializado.
+        `published_by` é quem está autenticado, e não um id do corpo: é a pessoa que leu, e é ela
+        que faz a marca valer como a revisão humana da regra 1 da §3 do `language-map`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este process.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+          description: ''
   /api/v1/processos/{id}/unarchive/:
     post:
       operationId: v1_processos_unarchive_create
@@ -8676,6 +8987,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProcessUnarchived'
+          description: ''
+  /api/v1/processos/{id}/unpublish/:
+    post:
+      operationId: v1_processos_unpublish_create
+      description: |-
+        Retira o registro da projeção do cliente — e recusa quando ele sustenta algo publicado.
+
+        **É esta metade que sempre vaza.** Publicar confere a cadeia no instante em que o item
+        sobe; despublicar é o caminho por onde ela se desfaz depois, item a item, sem nada ficar
+        vermelho. 409 quando este é a última sustentação publicada e viva de algo publicado, com a
+        mensagem dizendo qual estado impede e como sair dele — despublique o de cima primeiro.
+
+        Recusar, e nunca despublicar o de cima em silêncio: é o argumento das guardas de
+        arquivamento da FDD 045 e da FDD 048, e desfazer sozinho uma decisão que uma pessoa tomou
+        é pior que a recusa explícita.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este process.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
           description: ''
   /api/v1/project-checklist-items/:
     get:
@@ -13712,6 +14055,11 @@ components:
         corpo da requisição pudesse escrever não carimbaria nada.
 
         `captured_by` sai da sessão: quem observou tem nome, e o nome é o de quem está autenticado.
+
+        `published_at`/`published_by` são **só de leitura**, como `content_hash` e pelo mesmo tipo de
+        razão: quem escreve a marca é a action `publish/`, que confere a cadeia de sustentação
+        (FDD 051). Um `PATCH` que pudesse carimbá-los publicaria sem passar por ela, e a invariante
+        viraria sugestão — é a decisão de `journey.apply_gate` e de `prove-experiments/{id}/start/`.
       properties:
         id:
           type: integer
@@ -13753,6 +14101,15 @@ components:
         content_hash:
           type: string
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -13769,6 +14126,8 @@ components:
       - id
       - kind
       - kind_display
+      - published_at
+      - published_by
       - updated_at
     EvidenceKindEnum:
       enum:
@@ -13897,6 +14256,14 @@ components:
         - **A transição lê `FINDING_TRANSITIONS`**, no molde do `ARTIFACT_TRANSITIONS`: de `fact` só
           se volta a `hypothesis`, porque ir direto a `unknown` apagaria a diferença entre "estávamos
           errados" e "nunca soubemos".
+        - **Promover a `fact` um achado que já está publicado exige evidência *publicada* viva**
+          (FDD 051). Sem esta terceira metade a cadeia de publicação vaza pelo `PATCH`: a action
+          `publish/` confere a sustentação no instante em que o achado sobe, mas um achado publicado
+          como hipótese — que não exige nada — pode virar fato num `PATCH` depois, e o cliente
+          passaria a ler "fato" com evidência interna embaixo. `published_at`/`published_by` são só de
+          leitura pela mesma razão: quem carimba a marca é a action.
+        - **Mover `process`/`step` de um achado publicado para um mapa não publicado é 400** — a quinta
+          porta da mesma cadeia, e a única das cinco que não passa perto de `published_at`.
       properties:
         id:
           type: integer
@@ -13934,6 +14301,15 @@ components:
           type: array
           items:
             type: integer
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -13947,6 +14323,8 @@ components:
       - created_at
       - epistemic_status_display
       - id
+      - published_at
+      - published_by
       - reviewed_at
       - statement
       - updated_at
@@ -14185,6 +14563,15 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -14198,6 +14585,8 @@ components:
       - assessment_version
       - created_at
       - id
+      - published_at
+      - published_by
       - rank
       - score
       - status_display
@@ -15282,6 +15671,10 @@ components:
 
         `impact_estimate` ausente fica **nulo**, e o serializer não o converte em zero em lugar
         nenhum: zero afirma que a dor não custa nada, e nulo diz que ninguém estimou.
+
+        **A quinta porta da cadeia de publicação também passa por aqui** (FDD 051): mover
+        `process`/`step` de uma dor **publicada** para um mapa não publicado é 400 — a dor emite
+        `process_id`/`step_id` no snapshot como o achado emite.
       properties:
         id:
           type: integer
@@ -15318,6 +15711,15 @@ components:
         status_display:
           type: string
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -15332,6 +15734,8 @@ components:
       - id
       - impact_type
       - impact_type_display
+      - published_at
+      - published_by
       - status_display
       - title
       - updated_at
@@ -16279,6 +16683,11 @@ components:
         corpo da requisição pudesse escrever não carimbaria nada.
 
         `captured_by` sai da sessão: quem observou tem nome, e o nome é o de quem está autenticado.
+
+        `published_at`/`published_by` são **só de leitura**, como `content_hash` e pelo mesmo tipo de
+        razão: quem escreve a marca é a action `publish/`, que confere a cadeia de sustentação
+        (FDD 051). Um `PATCH` que pudesse carimbá-los publicaria sem passar por ela, e a invariante
+        viraria sugestão — é a decisão de `journey.apply_gate` e de `prove-experiments/{id}/start/`.
       properties:
         id:
           type: integer
@@ -16320,6 +16729,15 @@ components:
         content_hash:
           type: string
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -16406,6 +16824,14 @@ components:
         - **A transição lê `FINDING_TRANSITIONS`**, no molde do `ARTIFACT_TRANSITIONS`: de `fact` só
           se volta a `hypothesis`, porque ir direto a `unknown` apagaria a diferença entre "estávamos
           errados" e "nunca soubemos".
+        - **Promover a `fact` um achado que já está publicado exige evidência *publicada* viva**
+          (FDD 051). Sem esta terceira metade a cadeia de publicação vaza pelo `PATCH`: a action
+          `publish/` confere a sustentação no instante em que o achado sobe, mas um achado publicado
+          como hipótese — que não exige nada — pode virar fato num `PATCH` depois, e o cliente
+          passaria a ler "fato" com evidência interna embaixo. `published_at`/`published_by` são só de
+          leitura pela mesma razão: quem carimba a marca é a action.
+        - **Mover `process`/`step` de um achado publicado para um mapa não publicado é 400** — a quinta
+          porta da mesma cadeia, e a única das cinco que não passa perto de `published_at`.
       properties:
         id:
           type: integer
@@ -16443,6 +16869,15 @@ components:
           type: array
           items:
             type: integer
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -16605,6 +17040,15 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -17170,6 +17614,10 @@ components:
 
         `impact_estimate` ausente fica **nulo**, e o serializer não o converte em zero em lugar
         nenhum: zero afirma que a dor não custa nada, e nulo diz que ninguém estimou.
+
+        **A quinta porta da cadeia de publicação também passa por aqui** (FDD 051): mover
+        `process`/`step` de uma dor **publicada** para um mapa não publicado é 400 — a dor emite
+        `process_id`/`step_id` no snapshot como o achado emite.
       properties:
         id:
           type: integer
@@ -17206,6 +17654,15 @@ components:
         status_display:
           type: string
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -17310,6 +17767,10 @@ components:
 
         `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
         sai da sessão, não do corpo.
+
+        `published_at`/`published_by` são só de leitura pelo motivo dos outros quatro publicáveis
+        (FDD 051): quem escreve a marca é a action `publish/`, que confere se o mapa pode sair — e
+        `unpublish/`, que recusa quando ele ancora achado publicado.
       properties:
         id:
           type: integer
@@ -17392,6 +17853,15 @@ components:
           type: object
           additionalProperties: {}
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -18577,6 +19047,10 @@ components:
 
         `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
         sai da sessão, não do corpo.
+
+        `published_at`/`published_by` são só de leitura pelo motivo dos outros quatro publicáveis
+        (FDD 051): quem escreve a marca é a action `publish/`, que confere se o mapa pode sair — e
+        `unpublish/`, que recusa quando ele ancora achado publicado.
       properties:
         id:
           type: integer
@@ -18659,6 +19133,15 @@ components:
           type: object
           additionalProperties: {}
           readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        published_by:
+          type: integer
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -18675,6 +19158,8 @@ components:
       - custo
       - id
       - name
+      - published_at
+      - published_by
       - registered_by
       - updated_at
     ProcessObservation:
