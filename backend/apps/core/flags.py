@@ -191,6 +191,21 @@ FLAGS: dict[str, Flag] = {
         "Régua de cobrança",
         lambda: bool(settings.DUNNING_ENABLED),
     ),
+    # Agendamento do Discovery pelo cliente (FDD 013, DAP `dap-agendamento-discovery-r1`). Governa
+    # as duas rotas públicas **e** o e-mail que leva o link — as duas metades do mesmo ato, e
+    # separá-las produziria o pior estado possível: o cliente recebe o convite e a página recusa.
+    #
+    # **Sem `requires`**, pelo precedente do `enrichment` e do `cobranca`: o convite sai pelo SMTP
+    # que a casa já usa e o link se monta com `FRONTEND_BASE_URL`, que tem default — não existe
+    # variável cuja ausência denuncie falta de configuração. A agenda em si é a flag `calendar`,
+    # que as rotas conferem por conta própria, como as de booking já faziam.
+    #
+    # **E `env_default` falso**, como a régua de cobrança: esta é a primeira rota sem autenticação
+    # do produto além do login, e o e-mail sai sozinho para fora da casa. Construir não é ligar.
+    "discovery_booking": Flag(
+        "Agendamento do Discovery pelo cliente",
+        lambda: bool(settings.DISCOVERY_BOOKING_ENABLED),
+    ),
 }
 
 

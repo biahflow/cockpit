@@ -2,6 +2,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import override_settings
@@ -161,6 +162,81 @@ def test_document_original_name_never_carries_a_path() -> None:
     assert response.status_code == 201
     original_name = Document.objects.get(id=response.data["id"]).original_name
     assert "/" not in original_name and ".." not in original_name
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_document_without_kind_keeps_working() -> None:
+    """`kind` é opcional — o caminho de upload que já existia antes dele não pode quebrar."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    linked = AccountFactory(owner=admin)
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    response = client.post(reverse("document-list"), {
+        "account": linked.id,
+        "file": SimpleUploadedFile("proposta.pdf", b"conteudo"),
+    })
+
+    assert response.status_code == 201
+    assert response.data["kind"] == ""
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_design_partner_agreement_accepts_account_link() -> None:
+    admin = UserFactory(role=User.Role.ADMIN)
+    linked = AccountFactory(owner=admin)
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    response = client.post(reverse("document-list"), {
+        "account": linked.id,
+        "kind": Document.Kind.DESIGN_PARTNER_AGREEMENT,
+        "file": SimpleUploadedFile("acordo.pdf", b"conteudo"),
+    })
+
+    assert response.status_code == 201
+    assert response.data["kind"] == Document.Kind.DESIGN_PARTNER_AGREEMENT
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_design_partner_agreement_rejects_project_link() -> None:
+    """Um acordo pendurado num projeto jamais poderia originar um `Engagement` (models.py:376-380)
+    — é melhor recusar no upload do que falhar obscuro lá na frente.
+    """
+    admin = UserFactory(role=User.Role.ADMIN)
+    account = AccountFactory(owner=admin)
+    project = ProjectFactory(engagement__account=account)
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    response = client.post(reverse("document-list"), {
+        "project": project.id,
+        "kind": Document.Kind.DESIGN_PARTNER_AGREEMENT,
+        "file": SimpleUploadedFile("acordo.pdf", b"conteudo"),
+    })
+
+    assert response.status_code == 400
+    assert "kind" in response.data
+
+
+@pytest.mark.django_db
+def test_design_partner_agreement_model_requires_account() -> None:
+    """A metade da invariante que protege shell, admin e migração — não passa pelo serializer."""
+    admin = UserFactory(role=User.Role.ADMIN)
+    account = AccountFactory(owner=admin)
+    project = ProjectFactory(engagement__account=account)
+    document = Document(
+        kind=Document.Kind.DESIGN_PARTNER_AGREEMENT,
+        project=project,
+        original_name="acordo.pdf",
+        uploaded_by=admin,
+    )
+
+    with pytest.raises(ValidationError):
+        document.full_clean()
 
 
 @pytest.mark.parametrize(("raw", "expected"), [

@@ -8,11 +8,12 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import invoices
-from apps.core.models import Invoice, PipelineStage, Service
+from apps.core.models import Engagement, Invoice, PipelineStage, Service
 
 from .factories import (
     AccountFactory,
     CommercialOpportunityFactory,
+    EngagementFactory,
     InvoiceFactory,
     ProjectFactory,
     ServiceFactory,
@@ -349,3 +350,33 @@ def test_summary_soma_por_faixa(admin_client_api):
     assert Decimal(dados["overdue"]) == Decimal("200.00")
     assert Decimal(dados["paid"]) == Decimal("300.00")
     assert dados["overdue_count"] == 1
+
+
+@pytest.mark.django_db
+def test_design_partner_nao_semeia_fatura_nenhuma():
+    """O mandato de parceria recebe o Discovery de graça — e a guarda mora onde a cobrança se decide.
+
+    Sem ela, um projeto nascido pela rota do mandato (`create-project`) cai no `Service.list_price`
+    do degrau, porque não há oportunidade de origem de onde herdar valor. O Discovery Sprint vale
+    R$ 3.000 desde a migração `0064`, e a casa emitiria rascunho de cobrança contra exatamente quem
+    ela decidiu não cobrar.
+    """
+    # O degrau **semeado**, e não um novo: há restrição de um serviço ativo por degrau, e é
+    # justamente o Discovery Sprint de tabela (R$ 3.000, migração `0064`) que este teste precisa.
+    degrau = Service.objects.get(tier="discovery_sprint", archived_at=None)
+    mandato = EngagementFactory(commercial_model=Engagement.CommercialModel.DESIGN_PARTNER)
+    projeto = ProjectFactory(engagement=mandato, service=degrau, actual_value=Decimal("0"))
+
+    assert invoices.seed_invoices(projeto) == 0
+    assert Invoice.objects.filter(project=projeto).count() == 0
+
+
+@pytest.mark.django_db
+def test_mandato_pago_com_o_mesmo_degrau_continua_faturando():
+    """A outra metade: a guarda é sobre o **modelo comercial**, não sobre o degrau nem sobre a rota."""
+    degrau = Service.objects.get(tier="discovery_sprint", archived_at=None)
+    mandato = EngagementFactory(commercial_model=Engagement.CommercialModel.PAID)
+    projeto = ProjectFactory(engagement=mandato, service=degrau, actual_value=Decimal("0"))
+
+    assert invoices.seed_invoices(projeto) > 0
+    assert Invoice.objects.filter(project=projeto).exists()

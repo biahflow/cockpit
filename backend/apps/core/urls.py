@@ -24,6 +24,8 @@ from .views import (
     DecisaoViewSet,
     DigitalEmployeeBlueprintViewSet,
     DigitalEmployeeViewSet,
+    DiscoveryBookingCreateView,
+    DiscoveryBookingSlotsView,
     DiscoverySessionViewSet,
     DiscoveryViewSet,
     DocumentViewSet,
@@ -192,6 +194,19 @@ urlpatterns = [
     path("leads/intake/", LeadIntakeView.as_view(), name="lead-intake"),
     path("booking/slots/", BookingSlotsView.as_view(), name="booking-slots"),
     path("booking/book/", BookingCreateView.as_view(), name="booking-book"),
+    # O agendamento do Discovery pelo cliente (FDD 013, DAP `dap-agendamento-discovery-r1`).
+    # Sob `booking/` porque é a mesma agenda e a mesma tabela; em rota própria porque a
+    # credencial é outra — token no link, sem `X-Intake-Token`.
+    path(
+        "booking/discovery/slots/",
+        DiscoveryBookingSlotsView.as_view(),
+        name="discovery-booking-slots",
+    ),
+    path(
+        "booking/discovery/",
+        DiscoveryBookingCreateView.as_view(),
+        name="discovery-booking-create",
+    ),
     path("tasks/sync/", TaskSyncIntakeView.as_view(), name="task-sync"),
     path("esign/webhook/", EsignWebhookView.as_view(), name="esign-webhook"),
     path("payments/webhook/", PaymentsWebhookView.as_view(), name="payments-webhook"),

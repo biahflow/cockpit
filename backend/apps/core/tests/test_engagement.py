@@ -8,6 +8,10 @@ cria sozinha, o recorte de `/engagements/` para cada papel, e a condição comer
 As duas invariantes que **não** são sobre o engajamento em si, e que por isso moram em
 `tests/regression/`, são a conversão de uso único e o fato de o engajamento visível não conceder
 acesso a projeto nenhum.
+
+O último bloco fixa o segundo caminho pelo qual um projeto nasce: `POST
+/engagements/{id}/create-project/`, aprovado no DAP `dap-engagement-r3` (D1) — o mandato origina
+projeto sozinho, sem venda no meio.
 """
 
 from datetime import timedelta
@@ -18,14 +22,20 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.core import kickoff
 from apps.core.models import (
     CommercialOpportunity,
     Contact,
     Document,
     Engagement,
+    Invoice,
+    Milestone,
+    Notification,
     PipelineStage,
     Project,
+    Service,
     SignatureRequest,
+    Task,
     User,
 )
 
@@ -879,3 +889,235 @@ def test_a_guarda_de_conta_da_conversao_e_inalcancavel_pelo_serializer() -> None
     assert resposta.data["engagement"] == (
         "O engagement deve ser da mesma conta da oportunidade."
     )
+
+
+# ------------------------------------------- POST /engagements/{id}/create-project/
+
+
+def _criar_projeto(api: APIClient, engagement, **extra) -> object:
+    corpo = {
+        "name": "Discovery Sprint — Rio Home Care",
+        "start_date": str(timezone.localdate()),
+        "due_date": str(timezone.localdate() + timedelta(days=10)),
+    } | extra
+    return api.post(
+        reverse("engagement-create-project", args=[engagement.pk]), corpo, format="json"
+    )
+
+
+def test_o_mandato_origina_projeto_com_o_cronograma_do_degrau() -> None:
+    """O 201 não basta: o que distingue esta rota de um `POST /projects/` cru é o que ela semeia.
+
+    Sem os marcos do degrau, o Discovery Sprint nasceria sem walkthrough, sem apuração do custo
+    e sem Executive Readout — e ninguém veria que faltou (decisão C1 do DAP).
+    """
+    api, quem = _api()
+    engagement = EngagementFactory()
+    degrau = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
+
+    resposta = _criar_projeto(api, engagement, service=degrau.pk)
+
+    assert resposta.status_code == 201
+    projeto = Project.objects.get(pk=resposta.data["id"])
+    assert projeto.engagement_id == engagement.pk
+    assert projeto.owner_id == quem.pk
+    # Não houve venda: inventar origem comercial contaminaria o funil e o ciclo médio.
+    assert projeto.originating_commercial_opportunity_id is None
+    esperado = kickoff.KICKOFF_TEMPLATES["discovery_sprint"]
+    assert Milestone.objects.filter(project=projeto).count() == len(esperado)
+    assert Task.objects.filter(project=projeto).count() == sum(
+        len(marco["tasks"]) for marco in esperado
+    )
+    titulos = list(
+        Milestone.objects.filter(project=projeto).order_by("due_date").values_list("title", flat=True)
+    )
+    assert titulos[-1] == "Executive Readout"
+
+
+def test_design_partner_nasce_sem_fatura_e_isso_nao_e_erro() -> None:
+    """Sem venda, o valor contratado cai no preço do degrau — e o Design Partner recebe o degrau
+    sem cobrança. `seed_invoices` devolve 0, o projeto nasce inteiro, e nada disso é falha."""
+    api, _ = _api()
+    engagement = EngagementFactory(commercial_model=Engagement.CommercialModel.DESIGN_PARTNER)
+    Service.objects.filter(tier=Service.Tier.DISCOVERY_SPRINT).update(list_price=0)
+    degrau = Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT)
+
+    resposta = _criar_projeto(api, engagement, service=degrau.pk)
+
+    assert resposta.status_code == 201
+    projeto = Project.objects.get(pk=resposta.data["id"])
+    assert Invoice.objects.filter(project=projeto).count() == 0
+    # O cronograma de trabalho continua: o degrau gratuito é entregue, não é dispensado.
+    assert Milestone.objects.filter(project=projeto).exists()
+
+
+def test_oferta_de_aquisicao_nao_gera_projeto() -> None:
+    """Invariante 6 do mapa de linguagem. `Project.clean()` a tem, mas o serializer não chama
+    `full_clean()` — sem esta guarda a rota entregaria a Qualification Call como projeto."""
+    api, _ = _api()
+    engagement = EngagementFactory()
+    porta = Service.objects.get(tier=Service.Tier.QUALIFICATION_CALL)
+
+    resposta = _criar_projeto(api, engagement, service=porta.pk)
+
+    assert resposta.status_code == 400
+    assert "Oferta de aquisição não gera projeto" in resposta.data["service"]
+    assert not Project.objects.filter(engagement=engagement).exists()
+
+
+def test_mandato_encerrado_recusa_projeto_novo() -> None:
+    """D1: projeto novo em mandato encerrado é contradição. 409 e não 400 — o corpo está certo,
+    o que impede é o estado."""
+    api, _ = _api()
+    engagement = EngagementFactory(
+        status=Engagement.Status.CLOSED, ended_at=timezone.localdate() - timedelta(days=1)
+    )
+
+    resposta = _criar_projeto(api, engagement)
+
+    assert resposta.status_code == 409
+    assert not Project.objects.filter(engagement=engagement).exists()
+
+
+def test_entrega_nao_cria_projeto_pelo_mandato() -> None:
+    api, _ = _api(User.Role.DELIVERY)
+    engagement = EngagementFactory()
+
+    resposta = _criar_projeto(api, engagement)
+
+    assert resposta.status_code == 403
+    assert not Project.objects.filter(engagement=engagement).exists()
+
+
+def test_vendas_cria_projeto_pelo_mandato() -> None:
+    """O ponto da guarda própria: `RolePermission` só deixa **admin** criar projeto, e a seção de
+    Engagements é visível a Vendas — quem negocia o mandato é quem cria o projeto dele."""
+    api, vendedora = _api(User.Role.SALES)
+    engagement = EngagementFactory()
+
+    resposta = _criar_projeto(api, engagement)
+
+    assert resposta.status_code == 201
+    assert Project.objects.get(pk=resposta.data["id"]).owner_id == vendedora.pk
+    # E `POST /projects/` continua fechado para ela: a guarda é da action, não do papel.
+    assert api.post(
+        reverse("project-list"), _payload_de_projeto(engagement.account, engagement), format="json"
+    ).status_code == 403
+
+
+def test_o_mesmo_mandato_origina_varios_projetos() -> None:
+    """D1 em código: a Transformation Partnership origina vários projetos ao longo do mandato, e a
+    trava contra duplo clique **serializa** as requisições — ela não impede a segunda."""
+    api, _ = _api()
+    engagement = EngagementFactory()
+
+    primeiro = _criar_projeto(api, engagement, name="Discovery")
+    segundo = _criar_projeto(api, engagement, name="Continuidade 2027")
+
+    assert primeiro.status_code == 201 and segundo.status_code == 201
+    assert engagement.projects.count() == 2
+
+
+def test_prazo_anterior_ao_inicio_e_recusado() -> None:
+    """A validação de datas é a do `ProjectSerializer` — uma definição só, reusada."""
+    api, _ = _api()
+    engagement = EngagementFactory()
+
+    resposta = _criar_projeto(
+        api, engagement, due_date=str(timezone.localdate() - timedelta(days=1))
+    )
+
+    assert resposta.status_code == 400
+    assert "due_date" in resposta.data
+
+
+def test_o_kickoff_do_mandato_nao_inventa_oportunidade_ganha(mailoutbox) -> None:
+    """A copy cravada afirmava uma venda que este caminho não tem. O e-mail do kickoff é a primeira
+    coisa que a casa diz ao dono do projeto — dizer origem errada ali é dizer errado uma vez só."""
+    api, _ = _api()
+    engagement = EngagementFactory(name="Parceria Rio Home Care")
+
+    resposta = _criar_projeto(api, engagement)
+
+    assert resposta.status_code == 201
+    projeto = Project.objects.get(pk=resposta.data["id"])
+    email = next(mail for mail in mailoutbox if projeto.name in mail.subject)
+    assert "oportunidade ganha" not in email.body
+    assert "a partir do engagement 'Parceria Rio Home Care'" in email.body
+    assert Notification.objects.filter(
+        kind="kickoff", message__contains="a partir do engagement 'Parceria Rio Home Care'"
+    ).exists()
+
+
+def test_a_conversao_continua_dizendo_oportunidade_ganha(mailoutbox) -> None:
+    """A parametrização não muda o caminho que já existia: o default é o texto anterior."""
+    api, _ = _api()
+    opportunity = _won_opportunity()
+
+    resposta = _converter(api, opportunity)
+
+    assert resposta.status_code == 201
+    email = next(mail for mail in mailoutbox if "Projeto convertido" in mail.subject)
+    assert "a partir de uma oportunidade ganha" in email.body
+
+
+def test_engagement_divergente_no_corpo_e_recusado() -> None:
+    """O mandato é o da rota. Sobrescrever em silêncio devolveria 201 para um pedido que escolheu
+    **outro** mandato, e quem chamou acreditaria ter criado o projeto lá."""
+    api, _ = _api()
+    engagement = EngagementFactory()
+    outro = EngagementFactory()
+
+    resposta = api.post(
+        reverse("engagement-create-project", args=[engagement.pk]),
+        _payload_de_projeto(engagement.account, outro),
+        format="json",
+    )
+
+    assert resposta.status_code == 400
+    assert "engagement" in resposta.data
+    assert not Project.objects.filter(engagement__in=[engagement, outro]).exists()
+
+
+def test_a_chave_legada_client_continua_conferida_nesta_rota() -> None:
+    """O mandato entra no corpo **antes** da validação justamente para isto: sem ele em mãos, o
+    `ProjectSerializer` pula a conferência de `client` em silêncio, e a rota nova aceitaria uma
+    conta alheia que o `POST /projects/` recusa. Uma regra, uma expressão."""
+    api, _ = _api()
+    engagement = EngagementFactory()
+
+    resposta = _criar_projeto(api, engagement, client=AccountFactory().pk)
+
+    assert resposta.status_code == 400
+    assert not Project.objects.filter(engagement=engagement).exists()
+
+
+@pytest.mark.django_db
+def test_o_aviso_do_kickoff_nao_estoura_o_limite_da_notificacao() -> None:
+    """`Notification.message` é `max_length=255`, e a frase junta nome de projeto e de mandato.
+
+    Estourar trunca em silêncio no SQLite e **levanta** no Postgres — e quem levanta é efeito de
+    pós-commit (`kickoff.finalize` roda fora da transação), então o projeto já existe e a rota
+    devolve 500 por causa do aviso. O corte no ponto de escrita (`notifications.notify`) vale para
+    todo chamador; este teste é a testemunha dele pelo caminho que mais o alcança.
+    """
+    from apps.core.models import Notification
+
+    api, _ = _api()
+    conta = AccountFactory()
+    engagement = EngagementFactory(account=conta, name="M" * 240)
+
+    resposta = api.post(
+        reverse("engagement-create-project", args=[engagement.pk]),
+        {
+            "name": "P" * 240,
+            "start_date": str(timezone.localdate()),
+            "due_date": str(timezone.localdate() + timedelta(days=10)),
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    aviso = Notification.objects.filter(kind="kickoff").latest("id")
+    assert len(aviso.message) <= 255
+    assert aviso.message.endswith("…")

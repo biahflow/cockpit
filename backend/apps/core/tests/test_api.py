@@ -580,11 +580,15 @@ def test_remind_signature_and_mark_signed_close_the_loop(api_client: APIClient, 
         assert signed.status_code == 200
         assert signed.data["status"] == "signed"
         assert signed.data["signed_at"] is not None
+        # `mark-signed` passou a passar por `esign.apply_decision`, o mesmo caminho do webhook —
+        # ela notifica quem subiu o documento, e a flag `email` (ligada por padrão) espelha isso
+        # por e-mail. Antes desta tarefa o fallback manual não fazia nenhum dos dois.
+        assert len(mailoutbox) == 2
 
         # Já assinado: um novo lembrete não envia nada.
         again = api_client.post(reverse("document-remind-signature", args=[document["id"]]))
     assert again.data["reminded"] == 0
-    assert len(mailoutbox) == 1
+    assert len(mailoutbox) == 2
 
 
 @pytest.mark.django_db

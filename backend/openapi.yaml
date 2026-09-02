@@ -792,6 +792,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/BookingCreateResponse'
           description: ''
+  /api/v1/booking/discovery/:
+    post:
+      operationId: v1_booking_discovery_create
+      description: Marca o Discovery do mandato no horário escolhido (rota pública).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BookingCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BookingCreate'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryBookingCreateResponse'
+          description: ''
+  /api/v1/booking/discovery/slots/:
+    get:
+      operationId: v1_booking_discovery_slots_retrieve
+      description: Horários livres para o cliente marcar o Discovery do seu mandato
+        (rota pública).
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryBookingSlotsResponse'
+          description: ''
   /api/v1/booking/slots/:
     get:
       operationId: v1_booking_slots_retrieve
@@ -3158,6 +3201,61 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/engagements/{id}/create-project/:
+    post:
+      operationId: v1_engagements_create_project_create
+      description: |-
+        Faz nascer um projeto do mandato, sem passar por venda (DAP `dap-engagement-r3`, D1).
+
+        `POST /projects/` não serve a este caminho por **três** razões, e nenhuma delas é estilo:
+
+        - ele só passa para admin (`RolePermission`), e a seção de Engagements é visível a Vendas —
+          quem negocia o mandato é quem cria o projeto dele. Afrouxar o `RolePermission` para
+          resolver isto abriria a criação crua de projeto para todo o comercial, que é mais do que
+          se pediu; a guarda própria desta action é o mesmo remédio da `convert-to-project`;
+        - `perform_create` não semeia nada: sem marcos, sem tarefas, sem faturas e sem kickoff. Um
+          projeto nascido por lá aparece vazio, e o Discovery Sprint perde os marcos que **são** a
+          metodologia (walkthrough, custo do estado atual, Executive Readout);
+        - a invariante 6 do mapa de linguagem (oferta de aquisição não gera projeto) vive em
+          `Project.clean()`, e o `ProjectSerializer` não chama `full_clean()` — hoje só a conversão
+          a aplica de fato.
+
+        **A trava não é a mesma da conversão, e a diferença é sutil.** Lá o `select_for_update`
+        sustenta um "converte uma vez só"; aqui não há o que impedir — um mandato origina vários
+        projetos por desenho (D1, ADR 0050), e o segundo é legítimo. A trava existe porque
+        `kickoff.seed_work_items` **não** é idempotente: ela apenas serializa duas requisições
+        simultâneas para que o duplo clique produza dois pedidos em fila, e não dois projetos com
+        dois cronogramas gravados por cima um do outro.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este engagement.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Project'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Project'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
   /api/v1/engagements/{id}/unarchive/:
     post:
       operationId: v1_engagements_unarchive_create
@@ -13712,6 +13810,35 @@ components:
       - project_name
       - status_display
       - updated_at
+    DiscoveryBookingCreateResponse:
+      type: object
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        link:
+          type: string
+      required:
+      - link
+      - starts_at
+    DiscoveryBookingSlotsResponse:
+      type: object
+      properties:
+        account:
+          type: string
+        slots:
+          type: array
+          items:
+            type: string
+            format: date-time
+        scheduled_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - account
+      - scheduled_at
+      - slots
     DiscoverySession:
       type: object
       description: A sessão do Discovery (FDD 045) — reunião, visita ou leitura de
@@ -13784,6 +13911,10 @@ components:
         project:
           type: integer
           nullable: true
+        kind:
+          oneOf:
+          - $ref: '#/components/schemas/DocumentKindEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         file:
           type: string
           format: uri
@@ -13820,6 +13951,11 @@ components:
       - originated_engagement
       - signature_requests
       - uploaded_by
+    DocumentKindEnum:
+      enum:
+      - design_partner_agreement
+      type: string
+      description: '* `design_partner_agreement` - Design Partner Agreement'
     Engagement:
       type: object
       properties:
@@ -16485,6 +16621,10 @@ components:
         project:
           type: integer
           nullable: true
+        kind:
+          oneOf:
+          - $ref: '#/components/schemas/DocumentKindEnum'
+          - $ref: '#/components/schemas/BlankEnum'
         file:
           type: string
           format: uri

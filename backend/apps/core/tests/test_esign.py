@@ -9,10 +9,10 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.core import esign
-from apps.core.models import Document, Notification, SignatureRequest
+from apps.core.models import Artifact, Document, Notification, SignatureRequest, User
 from apps.core.portal import sign
 
-from .factories import AccountFactory, UserFactory
+from .factories import AccountFactory, ArtifactFactory, CommercialOpportunityFactory, UserFactory
 
 SECRET = "webhook-secret"
 
@@ -512,6 +512,90 @@ def test_apply_event_is_idempotent():
 def test_apply_event_returns_none_without_match():
     assert esign.apply_event(esign.Event(status="signed", provider_ref="nada")) is None
     assert esign.apply_event(esign.Event(status="signed")) is None
+
+
+# --- mark-signed (fallback manual, sem provedor) -----------------------------
+#
+# `mark-signed` era o único caminho que concluía uma assinatura sem passar por
+# `esign.apply_event`: gravava `status`/`signed_at` à mão e parava aí — não fechava o artefato de
+# contrato, não notificava e não tinha guarda de idempotência. Os três testes abaixo afirmam que
+# ele passou a produzir exatamente os mesmos efeitos que o webhook já produzia.
+
+
+def _contract_artifact(document: Document, user: User) -> Artifact:
+    """Artefato de contrato "Enviado" ligado ao documento, pronto para `_close_contract_artifacts`."""
+    return ArtifactFactory(
+        kind=Artifact.Kind.CONTRACT,
+        commercial_opportunity=CommercialOpportunityFactory(account=document.account),
+        document=document,
+        status=Artifact.Status.SENT,
+        created_by=user,
+    )
+
+
+def _mark_signed(document: Document, signature: SignatureRequest, user: User) -> tuple[int, dict]:
+    client = APIClient()
+    client.force_authenticate(user)
+    response = client.post(
+        reverse("document-mark-signed", args=[document.pk]),
+        {"signature": signature.pk},
+        format="json",
+    )
+    return response.status_code, response.data
+
+
+@pytest.mark.django_db
+def test_mark_signed_closes_the_contract_artifact():
+    user = UserFactory(role=User.Role.ADMIN)
+    document = Document.objects.create(
+        account=AccountFactory(owner=user), original_name="contrato.pdf", uploaded_by=user
+    )
+    artifact = _contract_artifact(document, user)
+    signature = SignatureRequest.objects.create(document=document, signer_email="quem@x.test")
+
+    code, _ = _mark_signed(document, signature, user)
+
+    assert code == 200
+    artifact.refresh_from_db()
+    assert artifact.status == Artifact.Status.ACCEPTED
+    assert artifact.decided_at is not None
+
+
+@pytest.mark.django_db
+def test_mark_signed_notifies_the_uploader():
+    user = UserFactory(role=User.Role.ADMIN)
+    document = Document.objects.create(
+        account=AccountFactory(owner=user), original_name="contrato.pdf", uploaded_by=user
+    )
+    signature = SignatureRequest.objects.create(document=document, signer_email="quem@x.test")
+
+    code, _ = _mark_signed(document, signature, user)
+
+    assert code == 200
+    notification = Notification.objects.get(kind="esign")
+    assert notification.user_id == user.pk
+    assert "quem@x.test" in notification.message
+    assert notification.url == "/documentos"
+
+
+@pytest.mark.django_db
+def test_mark_signed_twice_does_not_duplicate_effects():
+    user = UserFactory(role=User.Role.ADMIN)
+    document = Document.objects.create(
+        account=AccountFactory(owner=user), original_name="contrato.pdf", uploaded_by=user
+    )
+    signature = SignatureRequest.objects.create(document=document, signer_email="quem@x.test")
+
+    first_code, _ = _mark_signed(document, signature, user)
+    signature.refresh_from_db()
+    first_signed_at = signature.signed_at
+
+    second_code, _ = _mark_signed(document, signature, user)
+    signature.refresh_from_db()
+
+    assert (first_code, second_code) == (200, 200)
+    assert signature.signed_at == first_signed_at
+    assert Notification.objects.filter(kind="esign").count() == 1
 
 
 # --- endpoint do webhook -----------------------------------------------------

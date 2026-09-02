@@ -43,6 +43,12 @@ def notify(
         recipients = [user for user in recipients if can_access_project(user, project)]
         if not recipients:
             return
+    # `message` é `CharField(max_length=255)`, e quem chama monta a frase com nome de projeto e de
+    # mandato — dois campos de 255 cada. Estourar aqui **trunca em silêncio no SQLite e levanta no
+    # Postgres**, e quem levanta é um efeito de pós-commit (`kickoff.finalize` roda fora da
+    # transação): o projeto já existe, e a rota devolve 500 por causa do aviso. Cortar no ponto de
+    # escrita resolve para todo chamador de uma vez — a alternativa era cada um lembrar do limite.
+    message = message if len(message) <= 255 else f"{message[:254]}…"
     Notification.objects.bulk_create(
         [Notification(user=user, kind=kind, message=message, url=url) for user in recipients]
     )

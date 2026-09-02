@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import transaction
 from django.utils import timezone
 
 from . import drive, flags, notifications
@@ -494,35 +495,75 @@ def _close_contract_artifacts(document, signature_status: str) -> None:  # type:
         contract.save(update_fields=["status", "decided_at", "updated_at"])
 
 
-def apply_event(event: Event) -> SignatureRequest | None:
-    """Aplica o status do fornecedor à solicitação. Idempotente: reentrega não muda nada.
+def apply_decision(signature_pk: int, new_status: str) -> SignatureRequest:
+    """Aplica a decisão do signatário — o único lugar onde uma assinatura se conclui.
 
-    Retorna a `SignatureRequest` afetada (mesmo quando já estava no status alvo) ou `None`
-    quando o evento não corresponde a nenhuma solicitação conhecida.
+    Recebe **pk** e não a instância já lida, de propósito: a trava é parte da operação, e uma
+    API que aceitasse o objeto já carregado permitiria chamá-la sem travar nada. Mesmo par
+    `atomic` + `select_for_update` de `convert_to_project` (`views.py`) — o lock na linha é o
+    que substitui a unicidade que o banco dava de graça, e é o que serializa duas entregas
+    simultâneas do mesmo evento em vez de deixar as duas passarem pela guarda de idempotência
+    ao mesmo tempo.
+
+    Idempotente: reentrega do webhook, ou um segundo clique em "marcar como assinado", não muda
+    nada e não repete efeito nenhum.
     """
+    from . import design_partner, discovery_booking
     from .models import SignatureRequest
 
-    signature = find_signature(event)
-    if signature is None:
-        return None
-    if signature.status == event.status:
-        return signature
-    signature.status = event.status
-    if event.status == SignatureRequest.Status.SIGNED:
-        signature.signed_at = timezone.now()
-    signature.save(update_fields=["status", "signed_at"])
-    document = signature.document
-    # O contrato do documento acompanha a decisão do signatário (FDD 016). A idempotência vem
-    # do retorno antecipado acima: reentrega não chega até aqui.
-    _close_contract_artifacts(document, event.status)
-    label = "assinou" if event.status == SignatureRequest.Status.SIGNED else "recusou assinar"
+    engagement = None
+    with transaction.atomic():
+        signature = SignatureRequest.objects.select_for_update().get(pk=signature_pk)
+        if signature.status == new_status:
+            return signature
+        signature.status = new_status
+        if new_status == SignatureRequest.Status.SIGNED:
+            signature.signed_at = timezone.now()
+        signature.save(update_fields=["status", "signed_at"])
+        document = signature.document
+        # O contrato do documento acompanha a decisão do signatário (FDD 016), ainda dentro da
+        # transação: é escrita no banco, não efeito externo — mesmo lugar de `seed_work_items`
+        # em `convert_to_project`, pelo mesmo motivo.
+        _close_contract_artifacts(document, new_status)
+        # O mandato de Design Partner nasce do mesmo jeito, e pelo mesmo motivo: assinatura de
+        # recusa não abre engagement nenhum.
+        if new_status == SignatureRequest.Status.SIGNED:
+            engagement = design_partner.abrir_engagement_do_acordo(document)
+
+    # Fora da transação: `notifications.notify` espelha por e-mail quando a flag `email` está
+    # ligada, o mesmo padrão de `kickoff.finalize` (chamado fora do `atomic` em `views.py`).
+    label = "assinou" if new_status == SignatureRequest.Status.SIGNED else "recusou assinar"
     notifications.notify(
         [document.uploaded_by],
         "esign",
         f"{signature.signer_email} {label} o documento {document.original_name}.",
         "/documentos",
     )
+    if engagement is not None:
+        notifications.notify(
+            [document.uploaded_by],
+            "engagement",
+            f"O acordo assinado por {engagement.account.name} abriu um mandato de Design Partner.",
+            f"/contas/{document.account_id}",
+        )
+        # E o cliente recebe o link para marcar o Discovery — aqui, fora da transação e junto do
+        # aviso interno, porque é o mesmo degrau: o mandato nasceu. Best-effort de propósito
+        # (`discovery_booking.enviar_convite` nunca levanta): a assinatura já está aplicada e o
+        # webhook do fornecedor reentregaria em laço um evento que já teve efeito.
+        discovery_booking.enviar_convite(engagement, signature.signer_email)
     return signature
+
+
+def apply_event(event: Event) -> SignatureRequest | None:
+    """Aplica o status do fornecedor à solicitação. Idempotente: reentrega não muda nada.
+
+    Retorna a `SignatureRequest` afetada (mesmo quando já estava no status alvo) ou `None`
+    quando o evento não corresponde a nenhuma solicitação conhecida.
+    """
+    signature = find_signature(event)
+    if signature is None:
+        return None
+    return apply_decision(signature.pk, event.status)
 
 
 def _http(  # pragma: no cover - I/O com o fornecedor

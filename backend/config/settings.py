@@ -221,6 +221,10 @@ REST_FRAMEWORK = {
         "lead_intake": os.getenv("LEAD_INTAKE_RATE", "20/hour"),
         "task_sync": os.getenv("TASK_SYNC_RATE", "60/hour"),
         "booking": os.getenv("BOOKING_RATE", "60/hour"),
+        # Escopo próprio, e não o `booking` acima: a porta do Discovery é aberta por um token de
+        # 14 dias que vai por e-mail, enquanto a da pré-venda depende do `X-Intake-Token` do
+        # relay. Compartilhar o balde faria uma sondagem numa esgotar a outra.
+        "discovery_booking": os.getenv("DISCOVERY_BOOKING_RATE", "60/hour"),
         "esign_webhook": os.getenv("ESIGN_WEBHOOK_RATE", "120/hour"),
         # Cinco vezes o teto do e-sign, de propósito: o Stripe trata 429 como falha e faz backoff
         # por até três dias, e cada pagamento chega em **dois** eventos (`invoice.paid` e
@@ -506,6 +510,11 @@ GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "")
 GOOGLE_BOOKING_CALENDAR_ID = os.getenv("GOOGLE_BOOKING_CALENDAR_ID", "")
 BOOKING_MIN_FIT = os.getenv("BOOKING_MIN_FIT", "medium")
 BOOKING_SLOT_MINUTES = int(os.getenv("BOOKING_SLOT_MINUTES", "45"))
+# Agendamento do Discovery pelo próprio cliente, depois do acordo de Design Partner assinado
+# (FDD 013, DAP `docs/design/dap-agendamento-discovery-r1/`). **Nasce desligada**, pelo mesmo
+# motivo do `DUNNING_ENABLED` e por um a mais: ela abre a primeira rota pública do produto além
+# do login, e manda e-mail sozinha para fora da casa. Ligar é ato de operação, não de deploy.
+DISCOVERY_BOOKING_ENABLED = _env_bool("DISCOVERY_BOOKING_ENABLED", False)
 # Assinatura eletrônica (ADR 0007): fornecedor homologado + webhook de status assinado.
 # `ESIGN_WEBHOOK_SECRET` é o segredo do HMAC da entrega; sem ele o webhook responde 401.
 # Ligado por padrão (ADR 0018), mas sem efeito enquanto faltar qualquer uma das três credenciais

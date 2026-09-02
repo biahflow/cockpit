@@ -949,11 +949,15 @@ class GithubWebhookDelivery(models.Model):
 
 
 class Document(TimestampedModel):
+    class Kind(models.TextChoices):
+        DESIGN_PARTNER_AGREEMENT = "design_partner_agreement", "Design Partner Agreement"
+
     account = models.ForeignKey(Account, on_delete=models.CASCADE, null=True, blank=True)
     commercial_opportunity = models.ForeignKey(
         CommercialOpportunity, on_delete=models.CASCADE, null=True, blank=True
     )
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
+    kind = models.CharField(max_length=32, choices=Kind.choices, blank=True, default="")
     file = models.FileField(upload_to="documents/%Y/%m/", blank=True)
     drive_file_id = models.CharField(max_length=128, blank=True, default="")
     drive_link = models.URLField(blank=True, default="")
@@ -964,6 +968,11 @@ class Document(TimestampedModel):
         links = [self.account_id, self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError("O documento deve estar vinculado a exatamente um recurso.")
+        if self.kind == self.Kind.DESIGN_PARTNER_AGREEMENT and self.account_id is None:
+            raise ValidationError(
+                "Um Design Partner Agreement deve estar vinculado a uma conta, "
+                "nunca a uma oportunidade ou projeto."
+            )
 
     @property
     def linked_resource(self) -> Account | CommercialOpportunity | Project | None:
@@ -1326,10 +1335,19 @@ class Qualification(TimestampedModel):
 
 
 class Booking(TimestampedModel):
-    """Reunião de pré-venda agendada por um lead qualificado (FDD 013).
+    """Horário reservado na agenda da casa — pela pré-venda (`lead`) ou pelo Discovery
+    (`engagement`), FDD 013.
 
-    Diferente de `Meeting` (presa a um projeto), guarda o agendamento no próprio lead, antes
-    de existir oportunidade/projeto. O evento correspondente vive no Google Calendar.
+    Diferente de `Meeting` (presa a um projeto), guarda o agendamento antes de existir
+    oportunidade/projeto. O evento correspondente vive no Google Calendar.
+
+    **A linha existe porque o evento no Google pode falhar.** É esta tabela que
+    `booking.available_slots`/`booking.book` consultam para saber o que já está tomado, e
+    `book()` grava a reserva antes de tentar criar o evento justamente porque a criação é
+    best-effort. Se o Discovery agendasse só no Google, um Discovery cujo evento não entrou
+    deixaria o horário parecendo livre para a pré-venda — e vice-versa. Por isso os dois
+    fluxos gravam aqui, e por isso `lead` deixou de ser obrigatório: o Design Partner não
+    tem lead, ele nasce do acordo assinado.
     """
 
     class Status(models.TextChoices):
@@ -1337,7 +1355,12 @@ class Booking(TimestampedModel):
         HELD = "held", "Realizada"
         CANCELED = "canceled", "Cancelada"
 
-    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="bookings")
+    lead = models.ForeignKey(
+        Lead, on_delete=models.CASCADE, null=True, blank=True, related_name="bookings"
+    )
+    engagement = models.ForeignKey(
+        Engagement, on_delete=models.CASCADE, null=True, blank=True, related_name="bookings"
+    )
     owner = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings"
     )
@@ -1350,9 +1373,38 @@ class Booking(TimestampedModel):
 
     class Meta:
         ordering = ["starts_at"]
+        constraints = [
+            # "Exatamente um", no molde de `engagement_has_one_origin_or_needs_review`: os dois
+            # nulos deixariam uma reserva sem dono nenhum, e os dois preenchidos fariam a mesma
+            # linha responder por duas origens. `clean()` espelha a regra para a mensagem chegar
+            # à tela, mas quem garante é o banco — shell, admin e migração não passam por
+            # serializer.
+            models.CheckConstraint(
+                condition=(
+                    Q(lead__isnull=False, engagement__isnull=True)
+                    | Q(lead__isnull=True, engagement__isnull=False)
+                ),
+                name="booking_has_exactly_one_origin",
+            )
+        ]
 
     def __str__(self) -> str:
-        return f"{self.lead.name} @ {self.starts_at:%Y-%m-%d %H:%M}"
+        lead = self.lead if self.lead_id else None
+        engagement = self.engagement if self.engagement_id else None
+        if lead is not None:
+            quem = lead.name
+        elif engagement is not None:
+            quem = engagement.account.name
+        else:  # pragma: no cover - a restrição de banco impede
+            quem = "sem origem"
+        return f"{quem} @ {self.starts_at:%Y-%m-%d %H:%M}"
+
+    def clean(self) -> None:
+        if bool(self.lead_id) == bool(self.engagement_id):
+            raise ValidationError(
+                {"lead": "A reserva pertence a um lead (pré-venda) ou a um engagement "
+                         "(Discovery) — exatamente um."}
+            )
 
 
 class Activity(TimestampedModel):

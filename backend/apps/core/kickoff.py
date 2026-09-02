@@ -4,6 +4,10 @@ Ao converter uma oportunidade ganha em projeto, semeamos um cronograma inicial
 (marcos + tarefas de um template) dentro da transação e, após o commit, disparamos os
 efeitos externos best-effort: pasta no Drive (se ligado), e-mail e notificação de kickoff.
 Nada aqui bloqueia a conversão — os efeitos externos são tolerantes a falha.
+
+Desde o DAP `dap-engagement-r3` há **dois** chamadores, e não um: a conversão de uma oportunidade
+ganha e a criação direta a partir de um `Engagement` (`POST /engagements/{id}/create-project/`).
+O cronograma é o mesmo nos dois; o que muda é a origem que o `finalize` anuncia.
 """
 
 from __future__ import annotations
@@ -142,13 +146,21 @@ def seed_work_items(project: Project) -> tuple[int, int]:
     return milestones, tasks
 
 
-def _send_kickoff_email(project: Project) -> None:
+# De onde o projeto veio, em uma oração — e é **parâmetro** desde que o mandato passou a originar
+# projeto sozinho (DAP `dap-engagement-r3`, decisão D1). Cravada no texto, a frase afirmava uma
+# venda que, no caminho novo, não existe: o Design Partner não passa por oportunidade nenhuma, e
+# o e-mail do kickoff seria a primeira coisa que a casa diz ao dono do projeto sobre uma origem
+# inventada. O default é o texto anterior, palavra por palavra, para a conversão não mudar.
+ORIGEM_PADRAO = "a partir de uma oportunidade ganha"
+
+
+def _send_kickoff_email(project: Project, origem: str) -> None:
     recipient = project.owner.email
     if not recipient:
         return
     send_mail(
         f"Kickoff do projeto {project.name}",
-        f"O projeto '{project.name}' foi criado a partir de uma oportunidade ganha.\n\n"
+        f"O projeto '{project.name}' foi criado {origem}.\n\n"
         f"Cliente: {project.engagement.account.name}\n"
         f"Período: {project.start_date} a {project.due_date}\n\n"
         f"Um cronograma inicial de marcos e tarefas já foi criado para revisão.",
@@ -158,18 +170,24 @@ def _send_kickoff_email(project: Project) -> None:
     )
 
 
-def finalize(project: Project) -> None:
-    """Efeitos externos best-effort do kickoff (executar após o commit da conversão)."""
+def finalize(project: Project, origem: str = ORIGEM_PADRAO) -> None:
+    """Efeitos externos best-effort do kickoff (executar após o commit da criação do projeto).
+
+    `origem` é a oração que diz de onde o projeto nasceu, e ela chega dos dois chamadores porque
+    são duas origens de verdade — a conversão de uma oportunidade ganha e a criação direta a
+    partir do mandato. Uma frase só serve às duas mensagens (e-mail e notificação) de propósito:
+    duas variantes do mesmo fato divergiriam na primeira edição.
+    """
     try:
         drive.ensure_project_folder(project)
     except Exception:  # noqa: BLE001 - best-effort: o kickoff não falha porque o Drive caiu
         # Best-effort é a decisão certa; o `pass` mudo é que não era. Sem log, o projeto ficava
         # **sem pasta e ninguém sabendo** — e a pasta é onde a entrega guarda tudo depois.
         logger.exception("kickoff: pasta do Drive não criada para o projeto %s", project.pk)
-    _send_kickoff_email(project)
+    _send_kickoff_email(project, origem)
     notifications.notify(
         [project.owner], "kickoff",
-        f"Projeto '{project.name}' criado a partir da oportunidade ganha.",
+        f"Projeto '{project.name}' criado {origem}.",
         f"/projetos/{project.id}",
         # No-op aqui pelo invariante `_owner_is_always_a_member`, mas a regra é "URL de projeto ⇒
         # guarda": exceção que depende de um invariante alheio é o que apodrece primeiro.

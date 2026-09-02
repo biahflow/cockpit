@@ -1,8 +1,13 @@
-"""Agendamento automático de reuniões de pré-venda (FDD 013, RFC 0002).
+"""Agendamento automático de reuniões (FDD 013, RFC 0002).
 
 Gera os horários livres a partir de uma grade de horário comercial menos o que já está ocupado
 (free/busy do Google) e as reservas existentes (`Booking`), e materializa a reserva criando o
 evento com horário no Google Calendar. Atrás da flag `calendar`.
+
+Dois fluxos entram pela mesma grade e pela mesma tabela: a **pré-venda** (`book`, o lead
+qualificado que veio do site) e o **Discovery** do Design Partner (`book_discovery`, o cliente que
+acabou de assinar o acordo). O núcleo é um só — `_reservar` — porque a checagem de conflito é
+justamente o que os dois precisam compartilhar: dois núcleos seriam duas agendas que não se veem.
 
 A geração de slots é pura/testável; o I/O com o Google fica em `calendar_sync` (`# pragma: no cover`).
 """
@@ -22,7 +27,7 @@ from . import calendar_sync, notifications
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from .models import Booking, Lead
+    from .models import Booking, Engagement, Lead
 
 # Grade de horário comercial: dia da semana (0=segunda … 6=domingo) → faixas (hora_ini, hora_fim).
 BOOKING_HOURS: dict[int, list[tuple[int, int]]] = {
@@ -111,8 +116,22 @@ def _default_owner():
     )
 
 
-def book(lead: Lead, slot_start: datetime) -> Booking:
-    """Reserva o horário para o lead: cria a `Booking`, o evento no Google e notifica o dono.
+def _reservar(
+    slot_start: datetime,
+    *,
+    attendee_email: str,
+    summary: str,
+    description: str,
+    aviso: str,
+    aviso_link: str,
+    lead: Lead | None = None,
+    engagement: Engagement | None = None,
+) -> Booking:
+    """Núcleo dos dois fluxos: trava o horário, grava a `Booking`, cria o evento e avisa o dono.
+
+    Um núcleo só, e não dois parecidos, porque é aqui que mora a checagem de conflito: quem
+    reserva pela pré-venda e quem reserva pelo Discovery precisam disputar a **mesma** linha
+    travada, senão os dois marcam o mesmo horário sem nada ficar vermelho.
 
     Levanta `SlotUnavailable` se o horário deixou de estar livre (corrida/duplo booking).
     """
@@ -131,8 +150,9 @@ def book(lead: Lead, slot_start: datetime) -> Booking:
             raise SlotUnavailable
         owner = _default_owner()
         booking = Booking.objects.create(
-            lead=lead, owner=owner, starts_at=slot_start, ends_at=slot_end,
-            attendee_email=lead.email,
+            lead=lead, engagement=engagement, owner=owner,
+            starts_at=slot_start, ends_at=slot_end,
+            attendee_email=attendee_email,
         )
 
     # A transação já fechou: a `Booking` está gravada e **bloqueia o horário** para todo mundo (é
@@ -149,10 +169,10 @@ def book(lead: Lead, slot_start: datetime) -> Booking:
     evento_falhou = False
     try:
         event_id, link = calendar_sync.create_timed_event(
-            summary=f"Reunião com {lead.name}",
+            summary=summary,
             start=slot_start, end=slot_end,
-            description=lead.message or "Reunião agendada pelo site.",
-            attendee_email=lead.email,
+            description=description,
+            attendee_email=attendee_email,
             origin=f"booking:{booking.id}",
         )
     except calendar_sync.CalendarProviderError:
@@ -168,14 +188,52 @@ def book(lead: Lead, slot_start: datetime) -> Booking:
         # O aviso diz que o evento não entrou, senão a degradação fica invisível para quem responde
         # pela reunião — e a pessoa conta com um convite que não existe.
         ressalva = " **A reunião não entrou na agenda** — inclua manualmente." if evento_falhou else ""
-        notifications.notify(
-            [owner], "booking",
+        notifications.notify([owner], "booking", f"{aviso}{ressalva}", aviso_link)
+    return booking
+
+
+def book(lead: Lead, slot_start: datetime) -> Booking:
+    """Reserva o horário para o lead: cria a `Booking`, o evento no Google e notifica o dono.
+
+    Levanta `SlotUnavailable` se o horário deixou de estar livre (corrida/duplo booking).
+    """
+    booking = _reservar(
+        slot_start,
+        lead=lead,
+        attendee_email=lead.email,
+        summary=f"Reunião com {lead.name}",
+        description=lead.message or "Reunião agendada pelo site.",
+        aviso=(
             f"{lead.name} agendou uma reunião para "
-            f"{timezone.localtime(slot_start):%d/%m %H:%M}.{ressalva}",
-            "/leads",
-        )
+            f"{timezone.localtime(slot_start):%d/%m %H:%M}."
+        ),
+        aviso_link="/leads",
+    )
     _send_confirmation(lead, slot_start)
     return booking
+
+
+def book_discovery(engagement: Engagement, slot_start: datetime, attendee_email: str) -> Booking:
+    """Reserva o Discovery do mandato de Design Partner (FDD 013, DAP agendamento-discovery r1).
+
+    Mesma agenda e mesma tabela da pré-venda; o que muda é a origem da reserva, o que o evento
+    diz e para onde o aviso ao dono aponta. **Sem confirmação por e-mail própria**: a decisão C1
+    do DAP é que a confirmação acontece na página e o convite do Google vai ao cliente — o texto
+    de `_send_confirmation` é de pré-venda e reusá-lo aqui mentiria sobre o que foi marcado.
+    """
+    account = engagement.account
+    return _reservar(
+        slot_start,
+        engagement=engagement,
+        attendee_email=attendee_email,
+        summary=f"Discovery — {account.name}",
+        description="Sessão de Discovery agendada pelo cliente.",
+        aviso=(
+            f"{account.name} agendou o Discovery para "
+            f"{timezone.localtime(slot_start):%d/%m %H:%M}."
+        ),
+        aviso_link=f"/contas/{engagement.account_id}",
+    )
 
 
 def _send_confirmation(lead: Lead, slot_start: datetime) -> None:
