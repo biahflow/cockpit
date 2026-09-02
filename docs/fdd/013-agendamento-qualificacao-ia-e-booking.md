@@ -60,3 +60,38 @@ devolvia 500.
 
 `booking_token` inválido ou expirado; com `calendar` desligado os endpoints retornam 503; a
 qualificação tolera saída não-JSON do modelo sem quebrar o intake.
+
+## Emenda de 02/09 — o Discovery do Design Partner entra na mesma agenda
+
+O ciclo do Design Partner terminava num beco: o acordo era assinado, o mandato nascia
+(`design_partner.abrir_engagement_do_acordo`) e o cliente não recebia nada. Agora a assinatura
+dispara um convite por e-mail com um link onde **o próprio cliente escolhe o horário do
+Discovery**. Superfície governada pelo DAP `docs/design/dap-agendamento-discovery-r1/`, r1,
+decisões **A1 · B1 · C1 · D1 · E2**; a página é trabalho separado do backend descrito aqui.
+
+- **`Booking` serve os dois fluxos**, e é a decisão que sustenta todas as outras. `lead` passou a
+  ser opcional (o Design Partner não tem lead), entrou `Booking.engagement`, e uma
+  `CheckConstraint` (`booking_has_exactly_one_origin`) cobra "exatamente um" no banco, espelhada
+  em `clean()`. Criar só o evento no Google seria mais curto e estaria errado: o teste de conflito
+  consulta a **tabela**, não o Google, porque a criação do evento é best-effort e pode falhar — um
+  Discovery sem evento deixaria o horário parecendo livre para a pré-venda, e vice-versa.
+  Regressão: `tests/regression/test_os_dois_fluxos_de_agendamento_nao_marcam_o_mesmo_horario.py`.
+- **Um núcleo de reserva** (`booking._reservar`) com duas entradas finas: `book(lead, slot)` —
+  inalterada — e `book_discovery(engagement, slot, attendee_email)`. Dois núcleos parecidos seriam
+  duas agendas que não se veem.
+- **Token próprio** (`discovery_booking`): `signing.dumps({"engagement": id})`, salt distinto do de
+  pré-venda (salt compartilhado deixaria um token servir para a outra rota) e validade alinhada ao
+  horizonte de 14 dias.
+- **Duas rotas públicas**, `AllowAny` e throttle `discovery_booking`:
+  `GET /api/v1/booking/discovery/slots/?token=` (devolve `account`, `slots`, `scheduled_at`) e
+  `POST /api/v1/booking/discovery/`. **Os quatro estados da D1 são distinguíveis pelo `code` da
+  resposta** — `token_expired` (400), `token_invalid` (400, sem dizer por quê), lista vazia (200) e
+  `calendar_unavailable` (503) —, porque colapsá-los faria a página afirmar "não há horário" quando
+  o que houve foi a agenda não responder. Sem remarcação (C1): mandato já agendado devolve 409
+  `already_scheduled` no `POST` e o horário marcado no `GET`. O e-mail do convidado sai do acordo
+  assinado, nunca do corpo da requisição.
+- **O convite** é constante de código revisada (redação **E2**), texto puro, enviada de
+  `esign.apply_decision` **fora** da transação e best-effort: SMTP fora do ar não desfaz a
+  assinatura nem o mandato.
+- **Flag `discovery_booking`**, nascida desligada: governa as duas rotas **e** o e-mail — separá-las
+  produziria o pior estado, o cliente recebendo um convite que a página recusa.

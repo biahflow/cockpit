@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAP — página pública de agendamento do Discovery · r1</title>
+<style>
+  /* Valores copiados um a um de `frontend/src/index.css`. O board é auto-contido de propósito:
+     abre sem build, sem toolchain e sem rede. Onde um valor diverge do produto, o produto vence. */
+  :root {
+    --ink: #12110f;
+    --muted: #57534e;
+    --line: #e7e5e4;
+    --line-strong: #d6d3d1;
+    --canvas: #fafaf9;
+    --surface: #ffffff;
+    --surface-subtle: #f5f5f4;
+    --brand-50: #fdf1ec;
+    --brand-100: #fadfd4;
+    --brand-500: #bd4a30;
+    --brand-600: #a8412a;
+    --brand-700: #9c3c26;
+    --brand-900: #5c2317;
+    --success: #047857;
+    --success-50: #ecfdf5;
+    --warning: #b45309;
+    --warning-50: #fffbeb;
+    --danger: #b91c1c;
+    --danger-50: #fef2f2;
+    --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.06);
+    --text-display: 2rem;
+    --text-title: 1rem;
+    --text-body: .875rem;
+    --text-label: .75rem;
+    --text-meta: .6875rem;
+    /* Só para a Decisão A. O roxo é o matiz do portal do cliente e **não** existe neste
+       repositório: está aqui apenas para a comparação lado a lado ser possível. */
+    --purple-500: #6e56cf;
+    --purple-50: #f2effc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px;
+    background: var(--canvas); color: var(--ink);
+    font-family: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--text-body); line-height: 1.375rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; }
+  .eyebrow {
+    font-size: var(--text-meta); font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--brand-500);
+  }
+  h1 { font-size: var(--text-display); line-height: 2.375rem; margin: 6px 0 8px; letter-spacing: -.02em; }
+  h2 { font-size: 1.25rem; margin: 0 0 6px; letter-spacing: -.01em; }
+  h3 { font-size: var(--text-title); margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 4px; max-width: 74ch; }
+  .rule { height: 1px; background: var(--line); margin: 40px 0 28px; border: 0; }
+  .note { color: var(--muted); font-size: var(--text-label); margin: 8px 0 0; max-width: 74ch; }
+
+  .panel {
+    border-radius: 12px; border: 1px solid var(--line);
+    background: var(--surface); padding: 20px; box-shadow: var(--shadow-card);
+  }
+  .grid2 { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid3 { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+  .opt {
+    font-size: var(--text-meta); font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 8px;
+  }
+  .rec {
+    display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+    background: var(--success-50); color: var(--success); letter-spacing: 0;
+  }
+
+  /* --- A página desenhada ---------------------------------------------------------------- */
+  .page {
+    background: var(--canvas); border: 1px solid var(--line); border-radius: 12px;
+    padding: 28px 24px; display: flex; flex-direction: column; align-items: center;
+  }
+  .card {
+    width: 100%; max-width: 420px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 12px; padding: 22px;
+    box-shadow: var(--shadow-card);
+  }
+  .mark { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .mark-glyph {
+    width: 22px; height: 22px; border-radius: 6px; background: var(--brand-500);
+    display: grid; place-items: center; color: #fff; font-weight: 800; font-size: .7rem;
+  }
+  .mark--purple .mark-glyph { background: var(--purple-500); }
+  .mark-name { font-weight: 700; letter-spacing: -.01em; }
+  .account { font-size: var(--text-label); color: var(--muted); margin: 0 0 2px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.0625rem; }
+  .card p.sub { color: var(--muted); margin: 0 0 18px; font-size: var(--text-body); }
+
+  .day { font-size: var(--text-label); font-weight: 700; color: var(--ink); margin: 14px 0 6px; }
+  .day:first-of-type { margin-top: 0; }
+  .slots { display: flex; flex-wrap: wrap; gap: 8px; }
+  .slot {
+    border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 12px;
+    background: var(--surface); font-size: var(--text-body); color: var(--ink); cursor: default;
+  }
+  .slot--on { border-color: var(--brand-500); background: var(--brand-50); color: var(--brand-700); font-weight: 600; }
+  .purple .slot--on { border-color: var(--purple-500); background: var(--purple-50); color: var(--purple-500); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border-radius: 8px; padding: 9px 14px; border: 1px solid var(--ink);
+    background: var(--ink); color: #fff; font-weight: 600; font-size: var(--text-body);
+    width: 100%; margin-top: 18px;
+  }
+  .btn[disabled] { opacity: .45; }
+
+  .state {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+    padding: 2px 9px; font-size: var(--text-meta); font-weight: 600;
+  }
+  .state--ok { background: var(--success-50); color: var(--success); }
+  .state--off { background: var(--surface-subtle); color: var(--muted); }
+
+  .empty {
+    border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--surface-subtle);
+    padding: 18px; text-align: center; color: var(--muted); font-size: var(--text-body);
+  }
+  .empty strong { display: block; color: var(--ink); margin-bottom: 4px; }
+  .alert {
+    border-radius: 8px; padding: 12px 14px; font-size: var(--text-body);
+    background: var(--danger-50); color: var(--danger); border: 1px solid #fecaca;
+  }
+  .alert strong { display: block; margin-bottom: 2px; }
+  .alert--warn { background: var(--warning-50); color: var(--warning); border-color: #fde68a; }
+
+  .skel { background: var(--surface-subtle); border-radius: 6px; height: 12px; }
+
+  .mail {
+    background: var(--surface-subtle); border: 1px solid var(--line); border-radius: 8px;
+    padding: 16px; font-size: var(--text-body); white-space: pre-wrap; line-height: 1.5rem;
+  }
+  .mail-subject { font-weight: 700; margin: 0 0 10px; }
+  .mail a { color: var(--brand-700); }
+
+  table { border-collapse: collapse; width: 100%; font-size: var(--text-body); }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: var(--text-label); color: var(--muted); font-weight: 700; }
+  tr:last-child td { border-bottom: 0; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Design Approval Package · r1</p>
+  <h1>A página pública de agendamento do Discovery</h1>
+  <p class="lead">
+    O cliente assina o acordo de parceria, recebe um e-mail e escolhe sozinho o horário da primeira
+    sessão. É a primeira rota do produto sem autenticação além do login — por isso o pacote decide
+    matiz, o que a página revela, e os quatro estados que não são o caminho feliz.
+  </p>
+
+  <hr class="rule">
+
+  <!-- ============================ DECISÃO A ============================ -->
+  <h2>Decisão A — o matiz</h2>
+  <p class="lead">
+    A página é servida <strong>pelo Pulse</strong> e vista <strong>por um cliente</strong>. É o
+    primeiro caso em que os dois critérios da regra de matiz discordam.
+  </p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">A1 — clay <span class="rec">recomendada</span></p>
+      <div class="page">
+        <div class="card">
+          <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+          <p class="account">Rio Home Care</p>
+          <h3>Vamos marcar seu Discovery</h3>
+          <p class="sub">São de 5 a 7 dias percorrendo seu processo com quem o executa. Escolha o melhor horário para a primeira conversa.</p>
+          <p class="day">Quinta, 4 de setembro</p>
+          <div class="slots">
+            <span class="slot">09:00</span><span class="slot slot--on">10:00</span><span class="slot">14:00</span>
+          </div>
+          <p class="day">Sexta, 5 de setembro</p>
+          <div class="slots">
+            <span class="slot">09:00</span><span class="slot">11:00</span><span class="slot">15:00</span>
+          </div>
+          <span class="btn">Confirmar 10:00 de quinta</span>
+        </div>
+      </div>
+      <p class="note">O matiz identifica o produto que serve a página.</p>
+    </div>
+
+    <div class="purple">
+      <p class="opt">A2 — roxo</p>
+      <div class="page">
+        <div class="card">
+          <div class="mark mark--purple"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+          <p class="account">Rio Home Care</p>
+          <h3>Vamos marcar seu Discovery</h3>
+          <p class="sub">São de 5 a 7 dias percorrendo seu processo com quem o executa. Escolha o melhor horário para a primeira conversa.</p>
+          <p class="day">Quinta, 4 de setembro</p>
+          <div class="slots">
+            <span class="slot">09:00</span><span class="slot slot--on">10:00</span><span class="slot">14:00</span>
+          </div>
+          <p class="day">Sexta, 5 de setembro</p>
+          <div class="slots">
+            <span class="slot">09:00</span><span class="slot">11:00</span><span class="slot">15:00</span>
+          </div>
+          <span class="btn">Confirmar 10:00 de quinta</span>
+        </div>
+      </div>
+      <p class="note">O matiz identifica a audiência — mas põe roxo dentro do código clay, que é o que a regra proíbe.</p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================ DECISÃO B ============================ -->
+  <h2>Decisão B — o que a página revela antes da escolha</h2>
+  <p class="lead">O token <strong>é</strong> a credencial: quem tem o link vê o que estiver aqui.</p>
+
+  <div class="grid3" style="margin-top:16px">
+    <div>
+      <p class="opt">B1 — conta + contexto <span class="rec">recomendada</span></p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <p class="account">Rio Home Care</p>
+        <h3>Vamos marcar seu Discovery</h3>
+        <p class="sub">São de 5 a 7 dias percorrendo seu processo com quem o executa.</p>
+        <div class="slots"><span class="slot">09:00</span><span class="slot">10:00</span><span class="slot">14:00</span></div>
+      </div></div>
+    </div>
+    <div>
+      <p class="opt">B2 — só os horários</p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <h3>Escolha um horário</h3>
+        <p class="sub">&nbsp;</p>
+        <div class="slots"><span class="slot">09:00</span><span class="slot">10:00</span><span class="slot">14:00</span></div>
+      </div></div>
+      <p class="note">Um link que não se identifica parece phishing.</p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================ DECISÃO C ============================ -->
+  <h2>Decisão C — depois de escolher</h2>
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">C1 — confirmado, sem remarcar <span class="rec">recomendada</span></p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <p class="account">Rio Home Care</p>
+        <h3>Está marcado</h3>
+        <p class="sub">Quinta, 4 de setembro, às 10:00. O convite foi para o seu e-mail.</p>
+        <span class="state state--ok">Discovery agendado</span>
+        <p class="note" style="margin-top:14px">Precisa mudar? Responda ao e-mail que enviamos.</p>
+      </div></div>
+    </div>
+    <div>
+      <p class="opt">C2 — permite remarcar</p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <p class="account">Rio Home Care</p>
+        <h3>Está marcado</h3>
+        <p class="sub">Quinta, 4 de setembro, às 10:00.</p>
+        <span class="state state--ok">Discovery agendado</span>
+        <span class="btn" style="background:var(--surface);color:var(--ink);border-color:var(--line-strong)">Escolher outro horário</span>
+      </div></div>
+      <p class="note">Reservado: exige desmarcar o evento anterior e tratar a corrida de dois cliques.</p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================ DECISÃO D ============================ -->
+  <h2>Decisão D — os quatro estados que não são o caminho feliz</h2>
+  <p class="lead">
+    Três deles são mais prováveis que o caminho feliz no primeiro mês. O quarto existe porque
+    <code>booking.freebusy</code> falha fechado de propósito — desenhar só o vazio faria a página
+    afirmar que não há horário quando o que houve foi a agenda não responder.
+  </p>
+
+  <div class="grid3" style="margin-top:16px">
+    <div>
+      <p class="opt">Link expirado</p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <div class="alert alert--warn"><strong>Seu link expirou</strong>Responda ao e-mail que enviamos e mandamos outro.</div>
+      </div></div>
+    </div>
+    <div>
+      <p class="opt">Link inválido</p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <div class="alert"><strong>Link não reconhecido</strong>Confira se copiou o endereço inteiro.</div>
+      </div></div>
+      <p class="note">Não diz por quê, de propósito: distinguir os motivos é dar retorno a quem sonda.</p>
+    </div>
+    <div>
+      <p class="opt">Sem horários na janela</p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <p class="account">Rio Home Care</p>
+        <div class="empty"><strong>Nenhum horário livre nos próximos 14 dias</strong>Responda ao e-mail que enviamos e achamos uma data juntos.</div>
+      </div></div>
+    </div>
+    <div>
+      <p class="opt">Agenda indisponível</p>
+      <div class="page"><div class="card">
+        <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+        <p class="account">Rio Home Care</p>
+        <div class="alert"><strong>Não foi possível carregar os horários</strong>Tente de novo em alguns minutos.</div>
+      </div></div>
+      <p class="note">Diferente de "sem horários" — e não pode cair no mesmo ramo.</p>
+    </div>
+  </div>
+
+  <p class="opt" style="margin-top:24px">Carregando</p>
+  <div style="max-width:466px">
+    <div class="page"><div class="card">
+      <div class="mark"><span class="mark-glyph">P</span><span class="mark-name">Pulse</span></div>
+      <div class="skel" style="width:40%;margin-bottom:10px"></div>
+      <div class="skel" style="width:70%;height:18px;margin-bottom:14px"></div>
+      <div class="slots">
+        <span class="skel" style="width:64px;height:32px"></span>
+        <span class="skel" style="width:64px;height:32px"></span>
+        <span class="skel" style="width:64px;height:32px"></span>
+      </div>
+    </div></div>
+  </div>
+
+  <hr class="rule">
+
+  <!-- ============================ DECISÃO E ============================ -->
+  <h2>Decisão E — o texto do e-mail</h2>
+  <p class="lead">
+    Vai como constante revisada em código, no molde do <code>Degrau</code> de
+    <code>cobranca.py</code>: é a revisão humana da constante que autoriza o envio automático.
+    Texto puro — não há template HTML de e-mail neste produto.
+  </p>
+
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">E1 — curto</p>
+      <div class="panel">
+        <p class="mail-subject">Sua parceria com a Biahflow começou</p>
+        <div class="mail">Olá, Sarah.
+
+O acordo está assinado — bem-vindo. O próximo passo é o Discovery, e você escolhe o horário:
+<a href="#">pulse.biahflow.ai/agendar/…</a>
+
+Qualquer coisa, é só responder este e-mail.</div>
+      </div>
+    </div>
+    <div>
+      <p class="opt">E2 — com o que esperar <span class="rec">recomendada</span></p>
+      <div class="panel">
+        <p class="mail-subject">Sua parceria com a Biahflow começou — vamos marcar o Discovery</p>
+        <div class="mail">Olá, Sarah.
+
+O acordo de parceria está assinado. A partir daqui, a Biahflow entra no seu processo para entender onde está o trabalho que dói — é o Discovery, e ele dura de 5 a 7 dias.
+
+Comece escolhendo o melhor horário para a primeira conversa:
+<a href="#">pulse.biahflow.ai/agendar/…</a>
+
+Na sessão vamos percorrer o processo junto com quem o executa. Não precisa preparar nada.
+
+Qualquer coisa, é só responder este e-mail.</div>
+      </div>
+      <p class="note">"Não precisa preparar nada" remove a hesitação que trava agendamento.</p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <h2>O que este pacote não decide</h2>
+  <table>
+    <tr><th>Assunto</th><th>Por quê</th></tr>
+    <tr><td>A grade de horários e o horizonte</td><td><code>BOOKING_HOURS</code> (seg–sex, 9–12 e 14–17) e 14 dias já existem e não mudam aqui.</td></tr>
+    <tr><td>Remarcação e cancelamento pelo cliente</td><td>Reservados na Decisão C — exigem desmarcar evento e política própria.</td></tr>
+    <tr><td>Reenvio automático do link expirado</td><td>É comportamento, não superfície; precisa de decisão própria.</td></tr>
+    <tr><td>Tornar pública qualquer outra tela</td><td>Esta aprovação vale para esta rota e só para ela.</td></tr>
+  </table>
+
+</div>
+</body>
+</html>

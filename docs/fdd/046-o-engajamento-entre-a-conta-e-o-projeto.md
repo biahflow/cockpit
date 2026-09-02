@@ -315,3 +315,72 @@ A interface segue o DAP
 criação, o modelo comercial mostra um único select com instrumentos elegíveis. Sem oportunidade
 ganha ou acordo assinado, a ação fica desabilitada e orienta o pré-requisito. Upload, assinatura e
 remediação em lote continuam fora dessa superfície.
+
+## Emenda (02/09/2026) — o mandato origina projeto, e a parceria não fatura
+
+A emenda de 31/08 fechou a invariante 13 pela origem do mandato. Ficou de fora o passo seguinte, e
+ele era um beco: **o mandato nascia e o projeto não**. `Project.engagement` é `NOT NULL`, e havia um
+único caminho para criar projeto na SPA — o modal do Comercial, que exige oportunidade **ganha** e
+carimba o mandato como `paid`. Para o Design Partner, que por desenho não passa por venda, esse
+caminho não existe: o Discovery não virava projeto sem um `POST /projects/` fora da tela.
+
+### A rota é própria, e as três razões não são de estilo
+
+`POST /engagements/{id}/create-project/` (`EngagementViewSet.create_project`), com guarda de papel
+própria no molde da `convert-to-project`. Não é `POST /projects/` cru porque:
+
+- **`POST /projects/` só passa para admin.** `RolePermission` fecha a Entrega e deixa Vendas só com
+  leitura de `project`, e a seção de Engagements é visível a Vendas — quem negocia o mandato é quem
+  cria o projeto dele. Afrouxar a permissão para resolver isto abriria a criação crua de projeto
+  para todo o comercial, que é mais do que se pediu.
+- **`POST /projects/` não semeia nada.** `perform_create` só grava o dono: sem marcos, sem tarefas,
+  sem faturas, sem kickoff. Um Discovery Sprint nascido por lá perde os marcos que **são** a
+  metodologia — walkthrough, custo do estado atual, Executive Readout.
+- **A invariante 6 (oferta de aquisição não gera projeto) não roda no serializer.** Ela vive em
+  `Project.clean()`, e o `ProjectSerializer` não chama `full_clean()`.
+
+**A trava não é a mesma da conversão, e a diferença é sutil o bastante para enganar quem comparar
+as duas.** Lá o `select_for_update` sustenta um "converte uma vez só". Aqui não há o que impedir —
+um mandato origina vários projetos por desenho (ADR 0050, e é o caso da Transformation Partnership),
+e o segundo é legítimo. A trava existe porque `kickoff.seed_work_items` **não** é idempotente: ela
+serializa duas requisições simultâneas para que o duplo clique produza dois pedidos em fila, e não
+dois cronogramas gravados um por cima do outro.
+
+O mandato da rota entra no **corpo** antes da validação, em vez de `engagement_optional` mais um
+`save(engagement=…)`. Com a segunda forma, duas chaves passariam a ser ignoradas em silêncio só
+nesta rota: um `engagement` divergente seria sobrescrito — 201 para um pedido que escolheu outro
+mandato — e a chave legada `client` deixaria de ser conferida contra a conta, porque
+`ProjectSerializer.validate` só a compara quando tem o engajamento em `attrs`.
+
+### Design Partner não fatura, e a guarda mora onde a cobrança se decide
+
+Consequência que só apareceu com a rota nova: sem oportunidade de origem,
+`invoices.contracted_value` cai no `Service.list_price` do degrau — e o Discovery Sprint vale
+**R$ 3.000** desde a migração `0064`. Um mandato `design_partner` criando projeto por aqui semearia
+dois rascunhos de cobrança contra exatamente quem a casa decidiu não cobrar.
+
+A guarda entrou em `invoices.seed_invoices` e não na action, porque é ali que a cobrança se decide:
+quem semeia fatura pergunta uma vez só, e a próxima rota que criar projeto herda a resposta em vez
+de repetir a pergunta. A regra é sobre o **modelo comercial**, não sobre o degrau — mandato pago com
+o mesmo Discovery Sprint continua faturando, e há teste para as duas metades.
+
+### O kickoff parou de afirmar uma venda que não houve
+
+`kickoff.finalize` dizia, no e-mail e na notificação, que o projeto nasceu *"a partir de uma
+oportunidade ganha"*. Neste caminho não há venda: a frase seria falsa em todo projeto de Design
+Partner. A origem virou parâmetro, com o texto anterior como default — a conversão não mudou, e há
+teste afirmando que ela continua dizendo o que dizia.
+
+Junto veio um corte em `notifications.notify`: `Notification.message` é `max_length=255`, e a frase
+nova junta nome de projeto e de mandato, dois campos de 255 cada. O estouro trunca em silêncio no
+SQLite e **levanta** no Postgres — e quem levanta é efeito de pós-commit, então o projeto já existe
+e a rota devolveria 500 por causa do aviso.
+
+### A superfície
+
+Botão **"Novo projeto"** com rótulo na linha do mandato, e **modal** — DAP `dap-engagement-r3`,
+decisões A1 · B2 · C1 · D1. A B2 é exceção deliberada à decisão 3 da r1 ("sem modal" nesta seção):
+a decisão 3 governa formulários que **editam a lista que está ali**, e criar projeto produz algo que
+**sai** desta tela. O formulário pede nome, degrau, início e prazo — o degrau porque
+`kickoff.template_for` escolhe o cronograma pelo `tier`, e sem ele o projeto nasceria com marcos
+genéricos sem nada ficar vermelho. Mandato encerrado não mostra o botão.

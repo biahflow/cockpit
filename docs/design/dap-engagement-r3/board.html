@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAP — criar projeto a partir do mandato · r3</title>
+<style>
+  /* Valores copiados um a um de `frontend/src/index.css`. Auto-contido: abre sem build nem rede. */
+  :root {
+    --ink: #12110f; --muted: #57534e; --line: #e7e5e4; --line-strong: #d6d3d1;
+    --canvas: #fafaf9; --surface: #ffffff; --surface-subtle: #f5f5f4;
+    --brand-50: #fdf1ec; --brand-500: #bd4a30; --brand-700: #9c3c26;
+    --success: #047857; --success-50: #ecfdf5;
+    --danger: #b91c1c; --danger-50: #fef2f2;
+    --shadow-card: 0 1px 2px rgba(18, 17, 15, 0.06);
+    --text-title: 1rem; --text-body: .875rem; --text-label: .75rem; --text-meta: .6875rem;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px; background: var(--canvas); color: var(--ink);
+    font-family: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--text-body); line-height: 1.375rem; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; }
+  .eyebrow { font-size: var(--text-meta); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-500); }
+  h1 { font-size: 2rem; line-height: 2.375rem; margin: 6px 0 8px; letter-spacing: -.02em; }
+  h2 { font-size: 1.25rem; margin: 0 0 6px; letter-spacing: -.01em; }
+  p.lead { color: var(--muted); margin: 0 0 4px; max-width: 78ch; }
+  .rule { height: 1px; background: var(--line); margin: 40px 0 28px; border: 0; }
+  .note { color: var(--muted); font-size: var(--text-label); margin: 8px 0 0; max-width: 78ch; }
+  .opt { font-size: var(--text-meta); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .rec { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--success-50); color: var(--success); letter-spacing: 0; }
+  .grid2 { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .panel { border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 20px; box-shadow: var(--shadow-card); }
+  .panel-heading { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
+  .metric-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--brand-50); color: var(--brand-500); display: grid; place-items: center; font-size: 14px; flex: none; }
+  .row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .row-main { min-width: 0; flex: 1; }
+  .row-main strong { display: block; }
+  .row-main span { display: block; font-size: var(--text-label); color: var(--muted); }
+  .row-actions { display: flex; gap: 6px; flex: none; align-items: center; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; padding: 8px 12px; border: 1px solid var(--ink); background: var(--ink); color: #fff; font-weight: 600; font-size: var(--text-body); }
+  .btn--secondary { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
+  .btn--icon { padding: 8px; width: 34px; height: 34px; }
+  .field { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; font-size: var(--text-body); background: var(--surface); color: var(--ink); }
+  .form-label { display: block; font-size: var(--text-label); font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .form-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  .state { display: inline-flex; border-radius: 999px; padding: 2px 9px; font-size: var(--text-meta); font-weight: 600; background: var(--surface-subtle); color: var(--muted); }
+  .alert { border-radius: 8px; padding: 10px 12px; font-size: var(--text-body); background: var(--danger-50); color: var(--danger); border: 1px solid #fecaca; }
+
+  .modal-scrim { background: rgba(18,17,15,.35); border-radius: 12px; padding: 24px; }
+  .modal { background: var(--surface); border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(18,17,15,.18); max-width: 420px; margin: 0 auto; }
+  .modal h3 { margin: 0 0 6px; font-size: 1.0625rem; }
+  table { border-collapse: collapse; width: 100%; font-size: var(--text-body); }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: var(--text-label); color: var(--muted); font-weight: 700; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8125rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Design Approval Package · r3</p>
+  <h1>Criar o projeto a partir do mandato</h1>
+  <p class="lead">
+    Todo projeto pende de um mandato, e hoje só nasce por conversão de venda ganha. O Design
+    Partner não passa por venda — e a Transformation Partnership origina vários projetos por
+    desenho. Este pacote decide de onde o projeto nasce quando a venda não é a porta.
+  </p>
+
+  <hr class="rule">
+
+  <h2>Decisão A — onde a ação mora</h2>
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">A1 — botão com rótulo na linha <span class="rec">recomendada</span></p>
+      <div class="panel">
+        <div class="panel-heading">
+          <div style="display:flex;align-items:center;gap:12px"><span class="metric-icon">◎</span><div><strong>Engagements</strong><br><span style="font-size:var(--text-label);color:var(--muted)">1 ativo</span></div></div>
+          <span class="btn btn--secondary">+ Novo engagement</span>
+        </div>
+        <div class="row">
+          <span class="metric-icon">◎</span>
+          <div class="row-main">
+            <strong>Design Partner — Rio Home Care</strong>
+            <span>Desde 02/09/2026 · nenhum projeto</span>
+          </div>
+          <div class="row-actions">
+            <span class="btn btn--secondary">Novo projeto</span>
+            <span class="btn btn--secondary btn--icon">✎</span>
+            <span class="btn btn--secondary btn--icon">🗑</span>
+          </div>
+        </div>
+      </div>
+      <p class="note">A ação mais consequente da seção tem rótulo, não ícone.</p>
+    </div>
+    <div>
+      <p class="opt">A2 — terceiro ícone</p>
+      <div class="panel">
+        <div class="panel-heading">
+          <div style="display:flex;align-items:center;gap:12px"><span class="metric-icon">◎</span><div><strong>Engagements</strong><br><span style="font-size:var(--text-label);color:var(--muted)">1 ativo</span></div></div>
+          <span class="btn btn--secondary">+ Novo engagement</span>
+        </div>
+        <div class="row">
+          <span class="metric-icon">◎</span>
+          <div class="row-main">
+            <strong>Design Partner — Rio Home Care</strong>
+            <span>Desde 02/09/2026 · nenhum projeto</span>
+          </div>
+          <div class="row-actions">
+            <span class="btn btn--secondary btn--icon">＋</span>
+            <span class="btn btn--secondary btn--icon">✎</span>
+            <span class="btn btn--secondary btn--icon">🗑</span>
+          </div>
+        </div>
+      </div>
+      <p class="note">Esconde criar projeto ao lado de duas ações de manutenção.</p>
+    </div>
+  </div>
+
+  <p class="opt" style="margin-top:22px">Mandato encerrado — sem a ação, nos dois casos</p>
+  <div class="panel" style="max-width:560px">
+    <div class="row" style="border-top:0">
+      <span class="metric-icon">◎</span>
+      <div class="row-main"><strong>Discovery 2025 — Cliente B</strong><span>02/01/2025 a 30/06/2025 · 2 projetos</span></div>
+      <div class="row-actions"><span class="state">Encerrado</span><span class="btn btn--secondary btn--icon">✎</span></div>
+    </div>
+  </div>
+  <p class="note">Projeto novo em mandato encerrado é contradição — a ação não aparece.</p>
+
+  <hr class="rule">
+
+  <h2>Decisão B — modal ou embutido</h2>
+  <p class="lead">
+    Dois precedentes da casa discordam: a decisão 3 da r1 governa esta seção e diz <strong>sem
+    modal</strong>; o "Criar projeto" que já existe no Comercial <strong>é</strong> um modal, com
+    os mesmos campos.
+  </p>
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">B1 — embutido, como o resto da seção</p>
+      <div class="panel">
+        <div class="panel-heading"><div style="display:flex;align-items:center;gap:12px"><span class="metric-icon">◎</span><strong>Novo projeto em Design Partner — Rio Home Care</strong></div><span class="btn btn--secondary">Cancelar</span></div>
+        <label class="form-label">Nome</label><input class="field" value="Discovery Sprint — Rio Home Care">
+        <div style="height:12px"></div>
+        <label class="form-label">Degrau</label>
+        <select class="field"><option>Discovery Sprint</option></select>
+        <div style="height:12px"></div>
+        <div class="form-grid">
+          <div><label class="form-label">Início</label><input class="field" value="03/09/2026"></div>
+          <div><label class="form-label">Prazo final</label><input class="field" value="12/09/2026"></div>
+        </div>
+        <div style="height:14px"></div>
+        <span class="btn">Criar projeto</span>
+      </div>
+      <p class="note">Coerente com Contatos e Engagement, na mesma tela.</p>
+    </div>
+    <div>
+      <p class="opt">B2 — modal, como o outro "Criar projeto" <span class="rec">recomendada</span></p>
+      <div class="modal-scrim">
+        <div class="modal">
+          <h3>Criar projeto</h3>
+          <p style="color:var(--muted);margin:0 0 14px;font-size:var(--text-body)">Em <strong style="color:var(--ink)">Design Partner — Rio Home Care</strong>. Defina o degrau e a janela inicial.</p>
+          <label class="form-label">Nome</label><input class="field" value="Discovery Sprint — Rio Home Care">
+          <div style="height:12px"></div>
+          <label class="form-label">Degrau</label>
+          <select class="field"><option>Discovery Sprint</option></select>
+          <div style="height:12px"></div>
+          <div class="form-grid">
+            <div><label class="form-label">Início</label><input class="field" value="03/09/2026"></div>
+            <div><label class="form-label">Prazo final</label><input class="field" value="12/09/2026"></div>
+          </div>
+          <div style="height:14px"></div>
+          <span class="btn" style="width:100%">Criar projeto</span>
+        </div>
+      </div>
+      <p class="note">O projeto <strong>sai</strong> desta tela — o modal marca a saída. E quem já converteu venda encontra a mesma caixa.</p>
+    </div>
+  </div>
+
+  <p class="opt" style="margin-top:22px">Erro do servidor, na forma escolhida</p>
+  <div class="panel" style="max-width:420px">
+    <div class="alert">O prazo final não pode ser anterior ao início.</div>
+  </div>
+
+  <hr class="rule">
+
+  <h2>Decisão C — o que o formulário pede</h2>
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">C1 — nome, degrau, início, prazo <span class="rec">recomendada</span></p>
+      <div class="panel">
+        <label class="form-label">Nome</label><input class="field" value="Discovery Sprint — Rio Home Care">
+        <div style="height:12px"></div>
+        <label class="form-label">Degrau</label>
+        <select class="field"><option>Discovery Sprint — R$ 3.000</option><option>Technical Feasibility (T.O.E.)</option><option>PROVE (piloto)</option><option>Scale</option><option>Transformation Partnership</option></select>
+        <div style="height:12px"></div>
+        <div class="form-grid">
+          <div><label class="form-label">Início</label><input class="field" value="03/09/2026"></div>
+          <div><label class="form-label">Prazo final</label><input class="field" value="12/09/2026"></div>
+        </div>
+      </div>
+      <p class="note">
+        Sem degrau, <code>kickoff.template_for</code> cai num template genérico e o projeto nasce
+        <strong>sem</strong> os marcos do Discovery Sprint — e ninguém vê que faltou. Só degraus
+        vendáveis aparecem: oferta de aquisição não gera projeto.
+      </p>
+    </div>
+    <div>
+      <p class="opt">C2 — só as datas, como o do Comercial</p>
+      <div class="panel">
+        <div class="form-grid">
+          <div><label class="form-label">Início</label><input class="field" value="03/09/2026"></div>
+          <div><label class="form-label">Prazo final</label><input class="field" value="12/09/2026"></div>
+        </div>
+      </div>
+      <p class="note">Funciona lá porque o degrau vem da oportunidade. Aqui não há de onde herdar.</p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <h2>Decisão D — quais mandatos oferecem a ação</h2>
+  <table>
+    <tr><th>Opção</th><th>Consequência</th></tr>
+    <tr><td><strong>D1 — todos os mandatos ativos</strong> <span class="rec">recomendada</span></td><td>Cobre o Design Partner de hoje <em>e</em> a Transformation Partnership, que origina vários projetos por desenho (ADR 0050). Encerrado não oferece.</td></tr>
+    <tr><td>D2 — só <code>design_partner</code></td><td>Resolve o caso de hoje e cria o de amanhã: o segundo projeto de uma parceria recorrente continuaria só por API.</td></tr>
+  </table>
+
+  <hr class="rule">
+  <h2>O que este pacote não decide</h2>
+  <table>
+    <tr><th>Assunto</th><th>Por quê</th></tr>
+    <tr><td>Lista, selos e ações das revisões 1 e 2</td><td>Continuam valendo, sem alteração.</td></tr>
+    <tr><td>Equipe, marcos ou faturas no ato da criação</td><td>O backend semeia o cronograma pelo degrau; escolher isso aqui seria outra tela.</td></tr>
+    <tr><td>O caminho de conversão do Comercial</td><td>Fica como está.</td></tr>
+    <tr><td>Editar ou arquivar o projeto criado, daqui</td><td>O projeto vive em <code>/projetos</code>.</td></tr>
+  </table>
+</div>
+</body>
+</html>
