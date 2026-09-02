@@ -66,6 +66,9 @@ const engagementCommercialModelBadge: Record<EngagementCommercialModel, string> 
  * coisas diferentes dentro do mesmo mandato, e copiar o nome do mandato esconderia essa escolha.
  */
 const blankNewProject = { name: "", service: "", start_date: "", due_date: "" };
+// O Discovery Sprint dura de 5 a 7 dias (o que o convite promete ao cliente) e o template de
+// kickoff fecha no Executive Readout em D+7. É só o padrão do formulário — quem cria ajusta.
+const DIAS_DO_DISCOVERY = 7;
 
 /**
  * Período com precisão de **mês** ("Desde 03/2026", "02/2026 → 05/2026") — decisão 6 do DAP: o
@@ -307,9 +310,30 @@ export function AccountDetailPage({ id }: { id: number }) {
     catch (cause) { setRemovingEngagement(null); setError((cause as Error).message); }
     finally { setBusy(false); }
   }
+  /**
+   * A janela inicial derivada da sessão que o cliente já marcou — o **dia 0** é o dia dela.
+   *
+   * Pré-preenchida e não travada: o formulário aprovado (DAP `dap-engagement-r3`, C1) pede início
+   * e prazo, e desabilitar os campos seria mudar a decisão sem revisar o pacote. O servidor
+   * também não sobrescreve — devolver 201 alterando em silêncio o que alguém preencheu é pior que
+   * um padrão errado, que se vê e se corrige.
+   *
+   * Sem sessão marcada, volta a abrir vazio: chutar datas quando não há âncora seria inventar.
+   */
+  function janelaInicial(engagement: Engagement) {
+    if (!engagement.discovery_scheduled_at) return blankNewProject;
+    // Fatia o ISO em vez de passar por `Date`: `new Date("2026-09-03T…")` renderizado com
+    // `toISOString()` volta para UTC e uma sessão do fim do dia recuaria 24h — o mesmo cuidado
+    // que `periodoDoEngagement` toma logo acima.
+    const dia0 = engagement.discovery_scheduled_at.slice(0, 10);
+    const fim = new Date(`${dia0}T12:00:00`);
+    fim.setDate(fim.getDate() + DIAS_DO_DISCOVERY);
+    return { ...blankNewProject, start_date: dia0, due_date: `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, "0")}-${String(fim.getDate()).padStart(2, "0")}` };
+  }
+
   function openCreateProject(engagement: Engagement) {
     setCreatingProject(engagement);
-    setNewProjectDraft(blankNewProject);
+    setNewProjectDraft(janelaInicial(engagement));
     setCreatingProjectError("");
   }
   function closeCreateProject() {

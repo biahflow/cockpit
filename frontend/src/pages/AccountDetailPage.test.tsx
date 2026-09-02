@@ -86,6 +86,7 @@ let contacts: unknown[] = [contato()];
 function mandato(overrides: Record<string, unknown> = {}) {
   return {
     id: 5, account: 1, account_name: "Cliente A", name: "Transformação Financeira",
+    discovery_scheduled_at: null,
     mandate: "", sponsor: null, sponsor_name: null, owner: 1, owner_name: "Ana Souza",
     status: "active", status_display: "Ativo",
     commercial_model: "paid", commercial_model_display: "Pago",
@@ -890,4 +891,34 @@ test("depois do sucesso o modal fecha e a lista recarrega — o projects_count d
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Criar projeto" })).not.toBeInTheDocument());
   painel = within(screen.getByTestId("engagements-panel"));
   await waitFor(() => expect(painel.getByText(/4 projetos/)).toBeInTheDocument());
+});
+
+
+test("o modal abre com a janela derivada da sessão que o cliente marcou", async () => {
+  // O **dia 0** é o dia da sessão (decisão do usuário, 02/09). Pré-preenchido e editável: o
+  // formulário aprovado (DAP `dap-engagement-r3`, C1) pede as datas, e travá-las seria mudar a
+  // decisão sem revisar o pacote.
+  const user = userEvent.setup();
+  engagements = [mandato({ discovery_scheduled_at: "2026-09-10T14:00:00-03:00" })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+
+  expect(screen.getByLabelText("Início")).toHaveValue("2026-09-10");
+  expect(screen.getByLabelText("Prazo final")).toHaveValue("2026-09-17");
+});
+
+test("sem sessão marcada o modal abre vazio, em vez de chutar datas", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato({ discovery_scheduled_at: null })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+
+  expect(screen.getByLabelText("Início")).toHaveValue("");
+  expect(screen.getByLabelText("Prazo final")).toHaveValue("");
 });
