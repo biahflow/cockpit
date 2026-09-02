@@ -95,3 +95,28 @@ decisões **A1 · B1 · C1 · D1 · E2**; a página é trabalho separado do back
   assinatura nem o mandato.
 - **Flag `discovery_booking`**, nascida desligada: governa as duas rotas **e** o e-mail — separá-las
   produziria o pior estado, o cliente recebendo um convite que a página recusa.
+
+## Emenda de 02/09 (2) — a janela do Discovery encolhe, e só a dele
+
+A emenda acima deixou a oferta do Discovery igual à da pré-venda: 14 dias corridos e **todos** os
+horários livres da grade. O primeiro teste em uso mediu **80 opções** numa página que pede uma —
+lista longa não é escolha, é adiamento. O DAP `dap-agendamento-discovery-r1` recebeu a emenda da
+janela e o horizonte saiu de "fora da aprovação".
+
+- **`booking.available_slots_for_discovery()`** oferta **3 dias** de prazo, **5 dias com grade** e
+  **3 horários por dia**. Três constantes nomeadas (`DISCOVERY_LEAD_TIME_DAYS`,
+  `DISCOVERY_BUSINESS_DAYS`, `DISCOVERY_MORNING_END_HOUR`/`DISCOVERY_AFTERNOON_START_HOUR`) e nenhum
+  número solto: os três eixos respondem perguntas diferentes e vão divergir na próxima revisão.
+- **"Dia útil" é dia com grade**, lido de `BOOKING_HOURS` — não uma segunda definição de calendário.
+  Contar corrido entregaria três dias de oferta na semana que começa numa quinta.
+- **Os três do dia são papéis, não contagem** (`booking.tres_do_dia`): primeiro livre da manhã,
+  primeiro livre da tarde, último livre do dia. Papéis que coincidem viram um, e é dessa
+  deduplicação que sai "menos de três livres oferece os que existem" — uma segunda regra de
+  contagem poderia discordar da primeira. Dia sem livre não aparece, que continua sendo diferente
+  do estado "sem horários" da D1.
+- **A pré-venda não muda.** `available_slots` segue com os 14 dias corridos e todo horário livre: o
+  lead que veio do site tem outro problema. As duas dividem a **agenda** (`_slots_livres` — mesma
+  grade, mesmo free/busy, mesma tabela `Booking`) e nada mais, pela razão de `_reservar`.
+  Regressão: `tests/regression/test_a_janela_do_discovery_nao_e_a_da_pre_venda.py`, que existe para
+  impedir a "simplificação" que unifica as duas ofertas e encolhe a rota do site sem nada ficar
+  vermelho.

@@ -14,9 +14,9 @@ Produzido por: harness (Claude Code), sob `docs/engineering-os/workflows/design-
 | Aprovado por | Daniel Campos, nesta sessão |
 | Data | 2026-09-02 |
 | Revisão aprovada | r1 |
-| Decisões | **A1** (clay) · **B1** (conta + contexto) · **C1** (sem remarcação) · **E2** (texto longo) |
+| Decisões | **A1** (clay) · **B1** (conta + contexto) · **C1** (sem remarcação) · **E2** (texto longo), revista para **E2-r2** em 02/09 — ver a emenda no fim |
 | Decisão D | **D1** é a recomendação vigente e não foi submetida a escolha em separado — D2 não tem defensor. Contestável a qualquer momento antes da construção. |
-| Explicitamente não aprovado | Remarcação e cancelamento pelo cliente; reenvio automático do link expirado; mudança na grade de horários ou no horizonte de 14 dias; tornar pública qualquer outra tela |
+| Explicitamente não aprovado | Remarcação e cancelamento pelo cliente; reenvio automático do link expirado; mudança na **grade** de horários; tornar pública qualquer outra tela. O **horizonte** saiu desta linha em 02/09 — ver a emenda da janela no fim |
 
 > Este artefato é evidência para um gate humano. Não é implementação e não deve ser copiado para
 > dentro do código de aplicação. Nenhuma linha de `frontend/src/` muda enquanto ele não for
@@ -194,7 +194,8 @@ produto, o produto vence.
 
 ## Fora da aprovação
 
-- Mudar a grade de horários (`BOOKING_HOURS`, seg–sex 9–12 e 14–17) ou o horizonte de 14 dias.
+- Mudar a **grade** de horários (`BOOKING_HOURS`, seg–sex 9–12 e 14–17). O **horizonte** deixou de
+  estar fora da aprovação em 02/09 — ver a emenda da janela no fim.
 - Expor qualquer dado do mandato além do nome da conta.
 - Reaproveitar esta rota para agendar outra coisa que não o Discovery.
 - Tornar pública qualquer outra tela do produto.
@@ -210,3 +211,70 @@ produto, o produto vence.
 - O estado "agenda indisponível" é diferente de "sem horários" e não pode cair no mesmo ramo.
 - Entra em `e2e/a11y.spec.ts` como tela nova (3 larguras, contraste AA).
 - Ordem de foco: marca, nome da conta, dias, horários, ação de confirmar.
+
+
+## Emenda (02/09/2026) — o convite passa a comemorar
+
+A **E2** foi aprovada de manhã e testada em uso na mesma tarde. O primeiro envio real mostrou o
+custo da redação: o texto estava **correto e seco**. O momento é de comemoração — alguém acabou de
+assinar uma parceria — e a mensagem tratava isso como notificação de sistema.
+
+A **E2-r2** celebra o aceite sem exagerar. O limite é deliberado e fica registrado, porque
+"entusiasmo" é o tipo de instrução que a próxima revisão estica: **nenhuma exclamação, nenhum
+superlativo, nenhuma promessa de resultado.** O que mudou é de onde a mensagem fala, não o quanto
+ela promete.
+
+> **É oficial: nossa parceria começou**
+>
+> Olá, {nome}.
+>
+> Que bom ter você com a gente. O acordo está assinado — e a partir de agora a Biahflow entra no
+> seu processo para descobrir onde está o trabalho que dói e o que dá para transformar.
+>
+> O primeiro passo é o Discovery, e ele começa com uma conversa. Escolha o melhor horário:
+> {link}
+>
+> Vamos percorrer o processo junto com quem executa ele no dia a dia. Não precisa preparar nada —
+> é só chegar.
+>
+> Estamos animados para começar. Qualquer coisa, é só responder este e-mail.
+
+**"Não precisa preparar nada — é só chegar" sobrevive intacta**, e é a frase mais funcional do
+texto: ela remove a hesitação de quem adia agendamento por achar que precisa se preparar antes. O
+assunto perdeu a instrução ("vamos marcar o Discovery") e ganhou o fato ("É oficial: nossa parceria
+começou") — o que faz alguém abrir é a notícia, e o pedido está no corpo, onde o link o acompanha.
+
+Aprovada por Daniel Campos em 2026-09-02, nesta revisão.
+
+
+## Emenda (02/09/2026) — a janela encolhe, e só a do Discovery
+
+A r1 deixou a oferta como estava: o horizonte de 14 dias corridos da pré-venda e **todos** os
+horários livres da grade. O primeiro teste em uso mediu o resultado — **80 opções** numa página que
+pede uma. Lista longa não é escolha; é adiamento.
+
+A janela do Discovery passa a ser:
+
+| Eixo | Valor | Por quê |
+| --- | --- | --- |
+| Prazo | **3 dias** a partir de agora | ninguém agenda um walkthrough para amanhã |
+| Cobertura | **5 dias com grade** | dias úteis, não corridos: contar corrido entrega três dias de oferta na semana que começa numa quinta |
+| Densidade | **3 horários por dia** | primeiro livre da manhã, primeiro livre da tarde, último livre do dia |
+
+Os três horários são **papéis**, não uma contagem: é o que sobrevive quando a agenda enche. Dois
+papéis que caem no mesmo horário viram um, e é dessa deduplicação que sai, de graça, "menos de três
+livres oferece os que existem" — uma segunda regra de contagem poderia discordar da primeira. Dia
+sem nenhum livre não aparece, que é diferente de "sem horários" na página.
+
+**A pré-venda não muda, e isso é a metade importante desta emenda.** A rota pública do site
+(`/booking/slots`) continua ofertando os 14 dias corridos e todo horário livre: o lead qualificado
+que veio do site tem outro problema. Os dois fluxos compartilham a **agenda** — a mesma grade, o
+mesmo free/busy, a mesma tabela `Booking`, porque dois núcleos seriam duas agendas que não se veem
+—, e nada mais. Há regressão afirmando a diferença
+(`backend/tests/regression/test_a_janela_do_discovery_nao_e_a_da_pre_venda.py`): sem ela, a próxima
+varredura acha duas funções parecidas, unifica e a rota do site encolhe sem nada ficar vermelho.
+
+O que continua fora da aprovação é a **grade** (`BOOKING_HOURS`, seg–sex 9–12 e 14–17): mexer nos
+dias e nas faixas em que a casa atende é outra decisão, e não esta.
+
+Aprovada por Daniel Campos em 2026-09-02, nesta revisão.

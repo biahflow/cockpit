@@ -384,3 +384,57 @@ a decisão 3 governa formulários que **editam a lista que está ali**, e criar 
 **sai** desta tela. O formulário pede nome, degrau, início e prazo — o degrau porque
 `kickoff.template_for` escolhe o cronograma pelo `tier`, e sem ele o projeto nasceria com marcos
 genéricos sem nada ficar vermelho. Mandato encerrado não mostra o botão.
+
+## Emenda (02/09/2026, 2) — a assinatura promove a conta, e a sessão marcada vira fato do projeto
+
+O ciclo da emenda anterior foi testado em uso no mesmo dia, e o teste expôs **três defeitos com a
+mesma raiz**: a assinatura e a reserva do Discovery acontecem, e o resto do sistema não as enxerga
+(ADR 0061).
+
+### A conta de um parceiro é "Cliente"
+
+Uma conta com parceria ativa e Discovery rodando continuava marcada **"Prospect"** na listagem. A
+única promoção automática era `_promote_account_on_won`, que depende de oportunidade **ganha** — e o
+Design Partner não passa por venda nenhuma (ADR 0053). Quem está recebendo entrega é cliente
+(`language-map` §4, DAP `dap-lifecycle-status-r1`).
+
+`signals._promote_account_on_engagement`, no molde exato do vizinho: `post_save`, só na **criação**,
+`.filter(lifecycle_status=PROSPECT).update(...)`. Vale para **qualquer** `Engagement` e não só o
+`design_partner` — mandato é trabalho contratado, e o caminho pago já promove pela oportunidade, de
+modo que o filtro faz os dois conviverem sem duplicar efeito. É o filtro, também, que impede a
+regressão que importa: `inactive` é **já foi** cliente, e não volta a `active` porque alguém abriu
+um mandato. `active → inactive` continua sem automação, pela razão que a docstring do vizinho dá.
+
+### A sessão agendada atravessa para o projeto
+
+`Booking` (a reserva que bloqueia o horário) e `Meeting` (a reunião do projeto) são dois modelos
+para "reunião marcada", e o painel "Saúde da relação" só conhece o segundo — então ele dizia
+*"Próxima reunião: A agendar"* com a sessão marcada. Junto vinha a tarefa "Agendar a sessão de
+discovery" nascendo pendente logo depois de a automação a ter cumprido.
+
+`discovery_booking.registrar_sessao_no_projeto(project, engagement)`, chamada por
+`EngagementViewSet.create_project` **dentro** da transação e **depois** de `kickoff.seed_work_items`
+— é escrita no banco, não efeito externo, e é a tarefa semeada que ela resolve. Quando há reserva
+viva ela cria a `Meeting` (`meeting_url` = `calendar_link` quando houver) e conclui a tarefa uma a
+uma, com `save()` e não `update()`, porque é `WorkItem.save()` que carimba `completed_at`.
+
+Duas armadilhas ficam registradas porque nenhuma das duas fica vermelha sozinha:
+
+- **a data é a local.** `Meeting.date` é `DateField` e a reserva é `DateTimeField`: converter em UTC
+  joga uma sessão das 21h para o dia seguinte, e o painel anuncia uma reunião que não é a marcada;
+- **o título da tarefa é constante** (`kickoff.TAREFA_DE_AGENDAR_O_DISCOVERY`), referenciada no
+  template e em quem a resolve. Casar por string mágica quebra calado: alguém reescreve o texto do
+  template e a tarefa nasce pendente para sempre.
+
+### O cronograma se ancora na sessão, mas quem ancora é a tela
+
+As datas do projeto **não** são sobrescritas no servidor: o formulário aprovado (DAP
+`dap-engagement-r3`, C1) pede início e prazo, e um 201 que muda em silêncio o que a pessoa escolheu
+é pior que um campo a menos. O `EngagementSerializer` publica `discovery_scheduled_at` (só leitura,
+`starts_at` da reserva viva ou `null`, derivado de `discovery_agendado` — a única expressão de
+"reserva viva"), e é dele que a tela pré-preenche.
+
+Regressões: `tests/regression/test_o_mandato_promove_a_conta_a_cliente.py` e
+`tests/regression/test_a_sessao_agendada_vira_fato_do_projeto.py` — esta afirma o efeito
+**observável** (`build_account_overview`, e não a existência da linha), porque uma `Meeting` criada
+com `status=held` ou data no passado some do agregado e o painel voltaria a mentir.
