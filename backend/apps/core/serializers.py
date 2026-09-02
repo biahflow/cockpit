@@ -14,7 +14,7 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, drive, knowledge
+from . import blueprints, drive, knowledge, publication
 from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
@@ -986,6 +986,10 @@ class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process
 
     `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
     sai da sessão, não do corpo.
+
+    `published_at`/`published_by` são só de leitura pelo motivo dos outros quatro publicáveis
+    (FDD 051): quem escreve a marca é a action `publish/`, que confere se o mapa pode sair — e
+    `unpublish/`, que recusa quando ele ancora achado publicado.
     """
 
     ALIASES_DE_ENTRADA = {"client": "account"}
@@ -1001,9 +1005,10 @@ class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process
         fields = ["id", "account", "client", "client_name", "name", "position", "source_project",
                   "source_meeting", "registered_by", "volume_mes", "tempo_horas", "pessoas",
                   "custo_hora", "retrabalho_mes", "erros_mes", "perdas_mes", "espera_mes",
-                  "risco_mes", "custo", "created_at", "updated_at"]
-        read_only_fields = ["id", "client_name", "registered_by", "custo", "created_at",
-                            "updated_at"]
+                  "risco_mes", "custo", "published_at", "published_by",
+                  "created_at", "updated_at"]
+        read_only_fields = ["id", "client_name", "registered_by", "custo", "published_at",
+                            "published_by", "created_at", "updated_at"]
 
     @extend_schema_field(serializers.DictField())
     def get_custo(self, processo: Process) -> dict[str, Any]:
@@ -1148,6 +1153,11 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
     corpo da requisição pudesse escrever não carimbaria nada.
 
     `captured_by` sai da sessão: quem observou tem nome, e o nome é o de quem está autenticado.
+
+    `published_at`/`published_by` são **só de leitura**, como `content_hash` e pelo mesmo tipo de
+    razão: quem escreve a marca é a action `publish/`, que confere a cadeia de sustentação
+    (FDD 051). Um `PATCH` que pudesse carimbá-los publicaria sem passar por ela, e a invariante
+    viraria sugestão — é a decisão de `journey.apply_gate` e de `prove-experiments/{id}/start/`.
     """
 
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
@@ -1156,9 +1166,10 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
         model = Evidence
         fields = ["id", "account", "discovery", "process", "step", "kind", "kind_display",
                   "raw_excerpt", "reference", "source_session", "source_meeting", "captured_at",
-                  "captured_by", "content_hash", "created_at", "updated_at"]
+                  "captured_by", "content_hash", "published_at", "published_by",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "kind_display", "captured_by", "content_hash",
-                            "created_at", "updated_at"]
+                            "published_at", "published_by", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """A mesma regra do `clean()` do modelo — o `save()` do DRF não chama `full_clean`."""
@@ -1205,6 +1216,47 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
         return attrs
 
 
+#: A recusa da quinta porta, por registro: as duas só diferem no gênero da copy.
+_ANCORA_MOVIDA: dict[str, str] = {
+    "finding": "Este achado está publicado: mover a âncora exige um processo publicado e vivo. "
+               "Publique o processo antes, ou despublique o achado.",
+    "pain_point": "Esta dor está publicada: mover a âncora exige um processo publicado e vivo. "
+                  "Publique o processo antes, ou despublique a dor.",
+}
+
+
+def _recusa_ancora_nao_publicada(
+    instance: Finding | PainPoint | None,
+    attrs: dict[str, object],
+    process: Process | None,
+    step: ProcessStep | None,
+    registro: str,
+) -> None:
+    """A quinta porta da cadeia de publicação (FDD 051): mover a âncora por baixo do publicado.
+
+    As quatro primeiras olham a **marca** — `publish/`, `unpublish/`, o `DELETE` e o `PATCH` que
+    promove a `fact`. Nenhuma delas vê este caminho: um `PATCH` de `process`/`step` num registro
+    **já publicado** não toca em `published_at` nenhum, e ainda assim faz `findings[].process_id`
+    (ou `step_id`) apontar para fora de `processes[]` — a mesma referência pendurada, pela porta
+    que ninguém olhou. É o argumento das outras quatro, e vale igual para a quinta.
+
+    Só o registro publicado é cobrado: mover a âncora de um achado interno é edição normal do
+    levantamento, e é assim que deve ser.
+
+    Quem responde "a âncora atravessa?" é `publication.falta_a_ancora`, sobre o valor **resolvido**
+    — o que veio no corpo, ou o que já estava. Reexpressar aqui "publicado e vivo, por `process` e
+    por `step`" seria a segunda definição que `publication.py` existe para não ter.
+    """
+    if instance is None or instance.published_at is None:
+        return
+    if not publication.falta_a_ancora(process, step):
+        return
+    # Nomeia o campo que o corpo mexeu. Quando os dois vêm juntos eles apontam para o mesmo mapa —
+    # a consistência entre `step` e `process` já foi validada logo acima.
+    campo = "step" if "step" in attrs else "process"
+    raise serializers.ValidationError({campo: _ANCORA_MOVIDA[registro]})
+
+
 class FindingSerializer(serializers.ModelSerializer[Finding]):
     """O achado, com o estado epistemológico que a metodologia exige (FDD 045, ADR 0049).
 
@@ -1220,6 +1272,14 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
     - **A transição lê `FINDING_TRANSITIONS`**, no molde do `ARTIFACT_TRANSITIONS`: de `fact` só
       se volta a `hypothesis`, porque ir direto a `unknown` apagaria a diferença entre "estávamos
       errados" e "nunca soubemos".
+    - **Promover a `fact` um achado que já está publicado exige evidência *publicada* viva**
+      (FDD 051). Sem esta terceira metade a cadeia de publicação vaza pelo `PATCH`: a action
+      `publish/` confere a sustentação no instante em que o achado sobe, mas um achado publicado
+      como hipótese — que não exige nada — pode virar fato num `PATCH` depois, e o cliente
+      passaria a ler "fato" com evidência interna embaixo. `published_at`/`published_by` são só de
+      leitura pela mesma razão: quem carimba a marca é a action.
+    - **Mover `process`/`step` de um achado publicado para um mapa não publicado é 400** — a quinta
+      porta da mesma cadeia, e a única das cinco que não passa perto de `published_at`.
     """
 
     epistemic_status_display = serializers.CharField(
@@ -1230,9 +1290,9 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
         model = Finding
         fields = ["id", "account", "process", "step", "statement", "epistemic_status",
                   "epistemic_status_display", "confidence", "reviewed_by", "reviewed_at",
-                  "evidences", "created_at", "updated_at"]
+                  "evidences", "published_at", "published_by", "created_at", "updated_at"]
         read_only_fields = ["id", "epistemic_status_display", "reviewed_at",
-                            "created_at", "updated_at"]
+                            "published_at", "published_by", "created_at", "updated_at"]
 
     def validate_epistemic_status(self, value: str) -> str:
         if self.instance is None:
@@ -1266,6 +1326,7 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         if step and process and step.process_id != process.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+        _recusa_ancora_nao_publicada(self.instance, attrs, process, step, "finding")
 
         estado = attrs.get(
             "epistemic_status",
@@ -1282,11 +1343,23 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
             evidencias = attrs.get("evidences")
             if evidencias is None:
                 evidencias = list(self.instance.evidences.all()) if self.instance else []
-            if not any(
-                evidence.archived_at is None for evidence in cast(list[Evidence], evidencias)
-            ):
+            evidencias = cast(list[Evidence], evidencias)
+            if not any(evidence.archived_at is None for evidence in evidencias):
                 raise serializers.ValidationError(
                     {"evidences": "Um fato precisa de ao menos uma evidência viva que o sustente."}
+                )
+            # A porta do `PATCH` da cadeia de publicação (FDD 051). Só vale para o achado que
+            # **já está publicado**: um achado interno vira fato com evidência interna, e é assim
+            # que deve ser — o que não pode é o que o cliente lê afirmar "fato" com sustentação
+            # que não atravessou.
+            if self.instance is not None and self.instance.published_at is not None and not any(
+                evidence.archived_at is None and evidence.published_at is not None
+                for evidence in evidencias
+            ):
+                raise serializers.ValidationError(
+                    {"evidences": "Este achado está publicado: promovê-lo a fato exige ao menos "
+                                  "uma evidência publicada e viva. Publique a evidência antes, ou "
+                                  "despublique o achado."}
                 )
         return attrs
 
@@ -1303,6 +1376,10 @@ class PainPointSerializer(serializers.ModelSerializer[PainPoint]):
 
     `impact_estimate` ausente fica **nulo**, e o serializer não o converte em zero em lugar
     nenhum: zero afirma que a dor não custa nada, e nulo diz que ninguém estimou.
+
+    **A quinta porta da cadeia de publicação também passa por aqui** (FDD 051): mover
+    `process`/`step` de uma dor **publicada** para um mapa não publicado é 400 — a dor emite
+    `process_id`/`step_id` no snapshot como o achado emite.
     """
 
     impact_type_display = serializers.CharField(source="get_impact_type_display", read_only=True)
@@ -1312,9 +1389,9 @@ class PainPointSerializer(serializers.ModelSerializer[PainPoint]):
         model = PainPoint
         fields = ["id", "account", "process", "step", "title", "description", "impact_type",
                   "impact_type_display", "impact_estimate", "findings", "status",
-                  "status_display", "created_at", "updated_at"]
-        read_only_fields = ["id", "impact_type_display", "status_display", "created_at",
-                            "updated_at"]
+                  "status_display", "published_at", "published_by", "created_at", "updated_at"]
+        read_only_fields = ["id", "impact_type_display", "status_display", "published_at",
+                            "published_by", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """As mesmas regras do `clean()` — o `save()` do DRF não chama `full_clean` —, mais o M2M."""
@@ -1333,6 +1410,7 @@ class PainPointSerializer(serializers.ModelSerializer[PainPoint]):
             raise serializers.ValidationError({"step": "A etapa deve pertencer à mesma conta."})
         if step and process and step.process_id != process.pk:
             raise serializers.ValidationError({"step": "A etapa deve pertencer ao mesmo processo."})
+        _recusa_ancora_nao_publicada(self.instance, attrs, process, step, "pain_point")
 
         # No PATCH que não mexe no M2M, `findings` não vem no corpo — a pergunta é sobre o que já
         # está ligado. Na criação, sobre o que veio. Mesma forma do `FindingSerializer`.
@@ -1382,9 +1460,9 @@ class ImprovementOpportunitySerializer(serializers.ModelSerializer[ImprovementOp
         model = ImprovementOpportunity
         fields = ["id", "account", "engagement", "title", "desired_change", "impact_hypothesis",
                   "pain_points", "status", "status_display", "score", "assessment_version",
-                  "rank", "created_at", "updated_at"]
+                  "rank", "published_at", "published_by", "created_at", "updated_at"]
         read_only_fields = ["id", "status_display", "score", "assessment_version", "rank",
-                            "created_at", "updated_at"]
+                            "published_at", "published_by", "created_at", "updated_at"]
 
     @extend_schema_field(serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True))
     def get_score(self, obj: ImprovementOpportunity) -> str | None:

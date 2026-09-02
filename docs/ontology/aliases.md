@@ -33,6 +33,16 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
 | valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
 | áreas `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprint.Area` e serializers | após o conceito entrar no mapa; alias morre na `/api/v2/` |
+| chaves `digital_employees[].kpi_label` / `kpi_value` / `hours_saved_month` / `roi_month` no snapshot do portal | `digital_employees[].kpi_ids` + `kpis[]` | `portal.py` | quando o One parar de lê-las |
+
+> **A quarta linha de baixo para cima é do snapshot, não da `/api/v1/`, e por isso o prazo dela tem
+> outra forma.** Até a FDD 050 os quatro campos legados do funcionário digital eram a *única* coisa
+> que o portal do cliente tinha sobre medição: texto livre, sem unidade tipada, sem janela e sem
+> como comparar duas leituras. Agora eles têm sucessor — `kpi_ids` aponta para `kpis[]`, onde moram
+> a unidade, o método, a baseline, o outcome e o monitoramento. Continuam saindo, inalterados, pela
+> convivência de sempre (§2c): o consumidor é o One, e quem declara que parou de ler é ele. A data,
+> portanto, não é a `/api/v2/` — é a confirmação do outro lado, e ela é registrada aqui quando
+> chegar. Ver ADR 0003 (emenda de 01/09/2026).
 
 > A decisão D10 da Language Map v1.4 torna o **valor** do enum parte do mesmo contrato de idioma
 > do nome da classe e do campo. Esta tabela não autoriza migração isolada: os dados do grupo de

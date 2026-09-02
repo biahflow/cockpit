@@ -1595,6 +1595,21 @@ class Process(TimestampedModel):
     espera_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     risco_mes = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    # A marca de publicável (FDD 051, ADR 0060) — ver `valida_marca_de_publicavel` mais abaixo
+    # para o porquê de ela ser campo próprio, e por que o AS-IS também a tem. **A §3 do
+    # `language-map` qualifica este par como "o AS-IS validado", e "validado" não tinha lastro
+    # nenhum aqui**: nenhum campo dizia que este mapa foi conferido com o cliente. Sem a marca, a
+    # caracterização da casa sobre onde o time dele erra — `ProcessStep.erro` e `.retrabalho` —
+    # atravessava sem ninguém ter decidido mostrá-la.
+    #
+    # **A etapa não tem marca própria e não precisa de uma**: ela anda com o pai, que é o que o
+    # docstring de `ProcessStep` já diz — as seis letras do P-S-D-T-E-R são um formulário só, e
+    # publicar meia etapa não é um estado que alguém queira.
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="published_processes"
+    )
+
     class Meta:
         # A tabela passou a `core_process` na Fase 6 (ADR 0052, issue #70): o `db_table` legado saiu
         # e o `AlterModelTable` renomeou `core_processo` em lugar, preservando linha e pk
@@ -1603,6 +1618,12 @@ class Process(TimestampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    def clean(self) -> None:
+        # O `clean()` deste modelo nasceu aqui, e nasceu com uma regra só: os dois campos da marca
+        # ou nenhum. Nada mais precisa ser cobrado — os nove insumos são independentes entre si por
+        # desenho, e é `process.custo_do_estado_atual` que decide o que fazer com a lacuna.
+        valida_marca_de_publicavel(self)
 
     def archive(self) -> None:
         """Arquiva o processo **e as etapas que pendem dele**, no mesmo instante.
@@ -1816,6 +1837,46 @@ def hash_do_trecho(texto: str) -> str:
     return hashlib.sha256(texto.encode("utf-8")).hexdigest() if texto else ""
 
 
+def valida_marca_de_publicavel(
+    instance: Process | Evidence | Finding | PainPoint | ImprovementOpportunity,
+) -> None:
+    """`published_at` e `published_by` vêm juntos, ou nenhum dos dois (FDD 051, ADR 0060).
+
+    **A marca responde uma pergunta que nenhum campo existente respondia**: *o cliente pode ver
+    isto?*. `epistemic_status` responde outra — *quão certos estamos disso* —, e as duas se
+    cruzam nos quatro sentidos: um achado pode ser `hypothesis` e perfeitamente publicável (é o
+    que se leva à reunião) e pode ser `fact` e interno. Deixar `reviewed_at` fazer as duas coisas
+    esconderia a decisão de mostrar dentro de um campo que significa outra coisa, e o mesmo vale
+    para `PainPoint.status=confirmed` e `ImprovementOpportunity.status=prioritized`, que são
+    estados de fluxo e não de visibilidade.
+
+    **O ato de publicar é a revisão humana que a regra 1 da §3 do `language-map` exige**, e é por
+    isso que ele precisa de autor: é `published_by` que torna aceitável um achado em `hypothesis`
+    atravessar rotulado como hipótese — ele atravessa porque alguém o leu e o publicou, não
+    porque a IA o extraiu. Sem nome, "alguém revisou" é alegação de ninguém.
+
+    **São cinco modelos, e o `Process` é um deles.** A §3 qualifica o AS-IS como *validado*, e
+    "validado" é um qualificador tão sem lastro no schema quanto "revisada e publicável" era para
+    a `Evidence`: não havia campo nenhum dizendo que aquele mapa foi conferido com o cliente. A
+    caracterização da casa sobre onde o time dele erra (`ProcessStep.erro`/`.retrabalho`) chegava
+    ao cliente sem ninguém ter decidido mostrá-la. `ProcessStep` **não** recebe marca própria: ele
+    anda com o processo pai, porque as seis letras do P-S-D-T-E-R são um formulário só.
+
+    Função de módulo e não cinco cópias, pelo argumento de `project_scope_q` (ADR 0010): a mesma
+    regra escrita em cinco lugares diverge no primeiro conserto. É a forma do par
+    `gap_waiver`/`gap_waiver_by` do `ProveExperiment` e do `status=approved`/`approved_by` do
+    `ValueLedgerEntry`.
+    """
+    if instance.published_at is not None and instance.published_by_id is None:
+        raise ValidationError(
+            {"published_by": "Publicar é ato com autor: informe quem publicou."}
+        )
+    if instance.published_by_id is not None and instance.published_at is None:
+        raise ValidationError(
+            {"published_at": "Quem publicou sem quando não registra publicação nenhuma."}
+        )
+
+
 class Evidence(TimestampedModel):
     """O **dado bruto** que sustenta um achado — a metade "de onde veio" do split (FDD 045).
 
@@ -1883,6 +1944,14 @@ class Evidence(TimestampedModel):
     # depois, se o que sustenta o fato continua sendo o mesmo texto — a mesma ideia do
     # `Case` congelado (FDD 027), no tamanho de um campo.
     content_hash = models.CharField(max_length=64, blank=True, default="")
+    # A marca de publicável (FDD 051, ADR 0060) — ver `valida_marca_de_publicavel` acima para o
+    # porquê de ela ser campo próprio. **Nada nasce publicado e não houve backfill** (migração
+    # `0075`): o schema não pode decidir retroativamente que uma observação sobre a operação do
+    # cliente pode ser mostrada a ele. A escrita é só pela action `publish/`, nunca por `PATCH`.
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="published_evidence"
+    )
 
     class Meta:
         ordering = ["-captured_at", "-id"]
@@ -1920,6 +1989,7 @@ class Evidence(TimestampedModel):
             raise ValidationError(
                 "Uma evidência precisa do trecho bruto ou de um localizador da fonte."
             )
+        valida_marca_de_publicavel(self)
 
     def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
         # Recalculado a cada gravação em vez de "quando mudou": comparar com o banco custaria uma
@@ -1987,6 +2057,15 @@ class Finding(TimestampedModel):
     # entrevista" do material (`docs/metodologia-fde.md:112-115`) que só se consegue verificar
     # quando as fontes são contáveis.
     evidences = models.ManyToManyField(Evidence, blank=True, related_name="findings")
+    # A marca de publicável (FDD 051, ADR 0060). **Não se confunde com `reviewed_by`/`reviewed_at`
+    # logo acima**, e é essa a decisão inteira: aqueles dizem quem promoveu o achado a fato, e só
+    # existem para o `fact`; estes dizem que o cliente pode ver a afirmação, e valem para os três
+    # estados epistemológicos. Um achado publicado em `hypothesis` atravessa **rotulado como
+    # hipótese**, que é exatamente o que a regra 1 da §3 do `language-map` permite.
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="published_findings"
+    )
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -2012,6 +2091,7 @@ class Finding(TimestampedModel):
             raise ValidationError(
                 {"reviewed_by": "Promover um achado a fato é ato humano: informe quem revisou."}
             )
+        valida_marca_de_publicavel(self)
 
     def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
         # Mesmo movimento do `Artifact.save()`: o carimbo de quando o estado mudou sai do próprio
@@ -2066,6 +2146,15 @@ class PainPoint(TimestampedModel):
     # recusado — a invariante mora no serializer porque o M2M só existe depois do save.
     findings = models.ManyToManyField(Finding, blank=True, related_name="pain_points")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OBSERVED)
+    # A marca de publicável (FDD 051, ADR 0060). **`status=confirmed` não serve para isto**: ele é
+    # estado de fluxo — "a dor se sustenta em achado vivo" —, e visibilidade é outra pergunta. Uma
+    # dor confirmada pode ser interna, e uma dor observada pode ser exatamente o que se leva ao
+    # cliente para conferir.
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="published_pain_points",
+    )
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -2086,6 +2175,10 @@ class PainPoint(TimestampedModel):
         # pergunta pelo M2M, que só existe depois do save — um `clean()` que o consultasse
         # recusaria toda criação. A metade que dá para cobrar sem o M2M é zero, então ela vive
         # inteira no serializer, mais a terceira metade no arquivamento do achado (FDD 048).
+        #
+        # A marca de publicável cabe, porque ela não pergunta pelo M2M: os dois campos ou nenhum.
+        # A sustentação publicada, essa sim, é pergunta de M2M e mora na action `publish/`.
+        valida_marca_de_publicavel(self)
 
 
 class ImprovementOpportunity(TimestampedModel):
@@ -2122,6 +2215,15 @@ class ImprovementOpportunity(TimestampedModel):
         PainPoint, blank=True, related_name="improvement_opportunities"
     )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    # A marca de publicável (FDD 051, ADR 0060). **`status=prioritized` não serve para isto**,
+    # pelo argumento do `confirmed` da dor: priorizar é decidir onde atuar, mostrar é outra
+    # decisão — e o backlog priorizado é justamente o entregável em que uma linha ainda em
+    # deliberação convive com as que já foram apresentadas.
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="published_improvement_opportunities",
+    )
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -2137,6 +2239,7 @@ class ImprovementOpportunity(TimestampedModel):
             raise ValidationError(
                 {"engagement": "O engajamento deve pertencer à mesma conta da oportunidade."}
             )
+        valida_marca_de_publicavel(self)
 
     @property
     def current_assessment(self) -> PriorityAssessment | None:

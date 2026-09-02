@@ -10,6 +10,7 @@ from django.dispatch import receiver
 
 from . import cases, journey, notifications, portal, tasksync
 from .models import (
+    KPI,
     Account,
     Artifact,
     CommercialOpportunity,
@@ -17,18 +18,28 @@ from .models import (
     DigitalEmployee,
     Document,
     Engagement,
+    Evidence,
+    Finding,
+    ImprovementOpportunity,
     Invoice,
     JourneyPhase,
     Lead,
+    Measurement,
     Meeting,
     Milestone,
+    PainPoint,
     Pendencia,
+    PriorityAssessment,
+    Process,
+    ProcessStep,
     Project,
     ProjectDeliverable,
     ProjectMember,
     ProjectPhase,
+    SolutionHypothesis,
     Task,
     User,
+    ValueLedgerEntry,
 )
 
 
@@ -241,6 +252,121 @@ def _emit_artifact(sender: type[Artifact], instance: Artifact, **kwargs: Any) ->
             .first()
         )
     portal.emit("updated", "artifact", project_id)
+
+
+# A cadeia de medição entrou no snapshot (FDD 050) e precisa de emissor, pela regra que abre a
+# ADR 0003. Três receivers, e nenhum leva guarda de `created`: nenhum dos três nasce em laço como
+# `ProjectPhase`/`ProjectDeliverable` — KPI e medição são cadastrados um a um, e a entrada de valor
+# passa por uma aprovação. O que importa aqui é justamente o update: aprovar uma entrada e
+# arquivar um KPI são `save()` que mudam o que o cliente vê sem criar linha nenhuma.
+@receiver(post_save, sender=KPI)
+def _emit_kpi(sender: type[KPI], instance: KPI, **kwargs: Any) -> None:
+    portal.emit("updated", "kpi", instance.project_id)
+
+
+# **A medição é o evento**, e ela não passa pelo `save()` do `Project` nem pelo do `KPI`: registrar
+# o Outcome do mês é exatamente o que o cliente quer saber, e sem este receiver ele só chegaria de
+# carona no próximo salvamento de outra coisa — o defeito do funcionário digital (emenda de
+# 07/08/2026 na ADR 0003) por outro eixo. O projeto vem pelo KPI, que é quem o ancora.
+@receiver(post_save, sender=Measurement)
+def _emit_measurement(sender: type[Measurement], instance: Measurement, **kwargs: Any) -> None:
+    portal.emit("updated", "measurement", instance.kpi.project_id)
+
+
+# **Fan-out por projeto, no molde literal do `_emit_engagement`**, e pela mesma razão: a entrada de
+# valor pende do *mandato*, e `portal.build_snapshot` a mostra no snapshot de **todos** os projetos
+# dele. Um projeto que não recebesse o aviso ficaria sem a entrada até o próximo salvamento de
+# outra coisa. É o contrário do `_emit_artifact`, que escolhe um projeto porque só um é afetado.
+@receiver(post_save, sender=ValueLedgerEntry)
+def _emit_value_ledger_entry(
+    sender: type[ValueLedgerEntry], instance: ValueLedgerEntry, **kwargs: Any
+) -> None:
+    for project_id in instance.engagement.projects.values_list("id", flat=True):
+        portal.emit("updated", "value_ledger_entry", project_id)
+
+
+def _emit_para_a_conta(account_id: int, object_type: str) -> None:
+    """Avisa **todos** os projetos da conta (FDD 051).
+
+    Os oito modelos do Discovery pendem da `Account`, e `portal.build_snapshot` os mostra no
+    snapshot de todos os projetos dela — é a decisão (a) da fatia. O fan-out é, portanto, o mesmo
+    do `_emit_engagement` e do `_emit_value_ledger_entry`, um nível acima: sem ele um projeto
+    ficaria exibindo o Discovery anterior até o próximo salvamento de outra coisa.
+
+    Um helper, e não oito laços copiados: o caminho da conta até os projetos é um só, e escrevê-lo
+    oito vezes garantiria que a nona cópia esquecesse `engagement__`.
+
+    **Não aceita `None`**, e a ausência da guarda é deliberada — a decisão de
+    `prove.medicoes_de_monitoramento`, pelo mesmo argumento. Os oito chegam à conta por FK
+    obrigatória: seis a têm direta, e os dois hops (`ProcessStep.process`,
+    `PriorityAssessment`/`SolutionHypothesis.improvement_opportunity`) são `CASCADE` não-nulos.
+    Um `if not account_id: return` seria ramo sem chamador, que este repositório trata como a
+    mesma dívida de uma classe CSS sem consumidor.
+    """
+    for project_id in Project.objects.filter(
+        engagement__account_id=account_id
+    ).values_list("id", flat=True):
+        portal.emit("updated", object_type, project_id)
+
+
+# O Discovery entrou no snapshot (FDD 051) e os **oito** modelos que alimentam as quatro chaves
+# novas precisam de emissor, pela regra que abre a ADR 0003. Quatro deles não têm chave de topo —
+# `Evidence`, `ProcessStep`, `PriorityAssessment` e `SolutionHypothesis` atravessam aninhados —,
+# então a guarda derivada da ADR 0027 não os alcança e `test_portal.py` os afirma à mão.
+#
+# Nenhum leva guarda de `created`, pelo motivo dos três da FDD 050: o que importa aqui é
+# justamente o update. Publicar, despublicar e arquivar são `save()` que mudam o que o cliente vê
+# sem criar linha nenhuma — e publicar é o evento inteiro desta fatia.
+@receiver(post_save, sender=Process)
+def _emit_process(sender: type[Process], instance: Process, **kwargs: Any) -> None:
+    _emit_para_a_conta(instance.account_id, "process")
+
+
+# O passo chega à conta pelo pai. `instance.process` é NOT NULL aqui — ao contrário do `process`
+# opcional da `Evidence` —, então o hop é sempre resolvível.
+@receiver(post_save, sender=ProcessStep)
+def _emit_process_step(sender: type[ProcessStep], instance: ProcessStep, **kwargs: Any) -> None:
+    _emit_para_a_conta(instance.process.account_id, "process_step")
+
+
+@receiver(post_save, sender=Evidence)
+def _emit_evidence(sender: type[Evidence], instance: Evidence, **kwargs: Any) -> None:
+    _emit_para_a_conta(instance.account_id, "evidence")
+
+
+@receiver(post_save, sender=Finding)
+def _emit_finding(sender: type[Finding], instance: Finding, **kwargs: Any) -> None:
+    _emit_para_a_conta(instance.account_id, "finding")
+
+
+@receiver(post_save, sender=PainPoint)
+def _emit_pain_point(sender: type[PainPoint], instance: PainPoint, **kwargs: Any) -> None:
+    _emit_para_a_conta(instance.account_id, "pain_point")
+
+
+@receiver(post_save, sender=ImprovementOpportunity)
+def _emit_improvement_opportunity(
+    sender: type[ImprovementOpportunity], instance: ImprovementOpportunity, **kwargs: Any
+) -> None:
+    _emit_para_a_conta(instance.account_id, "improvement_opportunity")
+
+
+# A avaliação e a hipótese de solução chegam à conta pela oportunidade. As duas atravessam
+# **dentro** de `improvement_opportunities[]`, e nenhuma das duas salva a oportunidade ao nascer:
+# repriorizar é `POST` de uma versão nova, e sem este receiver o score novo só chegaria ao cliente
+# de carona no próximo salvamento de outra coisa.
+@receiver(post_save, sender=PriorityAssessment)
+def _emit_priority_assessment(
+    sender: type[PriorityAssessment], instance: PriorityAssessment, **kwargs: Any
+) -> None:
+    _emit_para_a_conta(instance.improvement_opportunity.account_id, "priority_assessment")
+
+
+@receiver(post_save, sender=SolutionHypothesis)
+def _emit_solution_hypothesis(
+    sender: type[SolutionHypothesis], instance: SolutionHypothesis, **kwargs: Any
+) -> None:
+    _emit_para_a_conta(instance.improvement_opportunity.account_id, "solution_hypothesis")
 
 
 @receiver(post_save, sender=Lead)

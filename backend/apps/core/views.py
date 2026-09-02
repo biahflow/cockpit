@@ -62,6 +62,7 @@ from . import (
     payments,
     portal,
     prove,
+    publication,
     qualification,
     recommendations,
     risk,
@@ -300,6 +301,90 @@ class ProjectScopedMixin:
         if self.scope_payload_field in serializer.validated_data:
             self._assert_in_scope(self.scoped_project(serializer.validated_data))
         super().perform_update(serializer)  # type: ignore[misc]
+
+
+# As duas actions da marca de publicável, para os cinco recursos do Discovery (FDD 051, ADR 0060).
+#
+# **Uma action, e não um `PATCH` de `published_at`**, pela razão exata de `journey.apply_gate` e de
+# `POST /prove-experiments/{id}/start/`: o que vale depende do estado corrente — qual sustentação
+# está publicada e viva agora —, e só quem conhece esse estado pode fazer a pergunta. Por isso os
+# dois campos são só de leitura nos serializers.
+#
+# **Nenhuma regra nova de papel.** Os cinco `resource` já estão nos conjuntos de Vendas e de
+# Entrega em `permissions.py`, e o corte por objeto (a conta no escopo) já existe nos viewsets: a
+# action é um `POST` no recurso e passa pelo que já está lá.
+#
+# Um mixin, e não dez corpos quase iguais: a regra vive em `publication.py` e as duas portas que
+# a consultam vivem aqui. O `perform_destroy` de cada viewset chama `recusa_se_sustenta_publicado`
+# antes da guarda que já tinha — arquivar e despublicar desfazem a mesma sustentação.
+#
+# Sem docstring de propósito: o drf-spectacular usa o docstring da classe como `description` de
+# cada endpoint, e um mixin no topo da MRO vaza o próprio texto para dezenas de rotas alheias.
+class PublicationMixin:
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"])
+    def publish(self, request: Request, pk: str | None = None) -> Response:
+        """Publica o registro, conferindo a sustentação publicada por baixo dele (FDD 051).
+
+        Duas recusas, com o status que cada uma merece:
+
+        - **409** se já está publicado: o pedido está bem formado, o que impede é o estado;
+        - **400** listando **o que falta** de sustentação publicada. É o pedido de *publicar
+          agora* que está errado — a mesma escolha de `apply_gate` e de `start/`.
+
+        Sucesso carimba `published_at` e `published_by` e devolve o objeto serializado.
+        `published_by` é quem está autenticado, e não um id do corpo: é a pessoa que leu, e é ela
+        que faz a marca valer como a revisão humana da regra 1 da §3 do `language-map`.
+        """
+        obj = self.get_object()  # type: ignore[attr-defined]
+        if obj.published_at is not None:
+            raise StateConflict("Este registro já está publicado para o cliente.")
+        faltas = publication.o_que_falta_para_publicar(obj)
+        if faltas:
+            raise InvalidInput(
+                f"Publicar exige {publication.frase_do_que_falta(faltas)}. O que o cliente vê "
+                "precisa ter sustentação publicada embaixo."
+            )
+        obj.published_at = timezone.now()
+        obj.published_by = request.user
+        obj.save(update_fields=["published_at", "published_by", "updated_at"])
+        return Response(self.get_serializer(obj).data)  # type: ignore[attr-defined]
+
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"])
+    def unpublish(self, request: Request, pk: str | None = None) -> Response:
+        """Retira o registro da projeção do cliente — e recusa quando ele sustenta algo publicado.
+
+        **É esta metade que sempre vaza.** Publicar confere a cadeia no instante em que o item
+        sobe; despublicar é o caminho por onde ela se desfaz depois, item a item, sem nada ficar
+        vermelho. 409 quando este é a última sustentação publicada e viva de algo publicado, com a
+        mensagem dizendo qual estado impede e como sair dele — despublique o de cima primeiro.
+
+        Recusar, e nunca despublicar o de cima em silêncio: é o argumento das guardas de
+        arquivamento da FDD 045 e da FDD 048, e desfazer sozinho uma decisão que uma pessoa tomou
+        é pior que a recusa explícita.
+        """
+        obj = self.get_object()  # type: ignore[attr-defined]
+        if obj.published_at is None:
+            raise StateConflict("Este registro não está publicado.")
+        presos = publication.dependentes_publicados_de(obj)
+        if presos:
+            raise StateConflict(publication.frase_do_impedimento(obj, presos))
+        obj.published_at = None
+        obj.published_by = None
+        obj.save(update_fields=["published_at", "published_by", "updated_at"])
+        return Response(self.get_serializer(obj).data)  # type: ignore[attr-defined]
+
+    def recusa_se_sustenta_publicado(self, instance) -> None:  # type: ignore[no-untyped-def]
+        """A porta do `DELETE` da mesma invariante: arquivar some da projeção como despublicar.
+
+        Chamada **em cima** das guardas que cada viewset já tem, e não no lugar delas: aquelas
+        olham a dimensão do `fact`/`confirmed`, esta olha a da publicação, e as duas podem impedir
+        o mesmo arquivamento por motivos diferentes.
+        """
+        presos = publication.dependentes_publicados_de(instance)
+        if presos:
+            raise StateConflict(publication.frase_do_impedimento(instance, presos))
 
 
 # Filtra a lista por chaves estrangeiras informadas em query params (ex.: ?project=1).
@@ -2884,17 +2969,20 @@ def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
         raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
 
-class ProcessViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class ProcessViewSet(PublicationMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
     **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
     aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
     é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+
+    O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
+    de linguagem, era qualificador sem lastro nenhum no schema.
     """
 
     resource = "process"
     queryset = Process.objects.select_related(
-        "account", "source_project", "source_meeting", "registered_by"
+        "account", "source_project", "source_meeting", "registered_by", "published_by"
     ).all()
     serializer_class = ProcessSerializer
     filter_fields = ("account",)
@@ -2915,6 +3003,21 @@ class ProcessViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         if "account" in serializer.validated_data:
             _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
         super().perform_update(serializer)
+
+    def perform_destroy(self, instance: Process) -> None:
+        """Recusa arquivar o mapa que ancora achado ou dor publicados (FDD 051).
+
+        A porta do `DELETE` da mesma dimensão do `unpublish/`: arquivar some da projeção
+        exatamente como despublicar, e `findings[].process_id` passaria a apontar para o que não
+        está mais em `processes[]`.
+
+        **A guarda vem antes de `archive()`, e a ordem é o cuidado**: aquele cascateia para as
+        etapas no mesmo instante (FDD 039), então recusar depois já teria escondido metade do
+        mapa. É a primeira guarda deste viewset — até aqui nada dependia do processo para poder
+        ser mostrado.
+        """
+        self.recusa_se_sustenta_publicado(instance)
+        instance.archive()
 
     @extend_schema(
         responses=inline_serializer("ProcessUnarchived", {"id": serializers.IntegerField()}),
@@ -3045,7 +3148,7 @@ class ProcessObservationViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
         _exige_cliente_no_escopo(self.request.user, processo.account if processo else None)
 
 
-class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class EvidenceViewSet(PublicationMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """O dado bruto que sustenta um achado (FDD 045).
 
     **Sem `ProjectScopedMixin`**, como o `ProcessViewSet`: a evidência é da conta, e o Discovery
@@ -3057,7 +3160,7 @@ class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     resource = "evidence"
     queryset = Evidence.objects.select_related(
         "account", "discovery", "process", "step", "source_session", "source_meeting",
-        "captured_by",
+        "captured_by", "published_by",
     ).all()
     serializer_class = EvidenceSerializer
     filter_fields = ("account", "discovery", "process", "step", "source_session")
@@ -3093,7 +3196,13 @@ class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         rebaixar em silêncio desfaria uma promoção que uma pessoa fez, sem que ela pedisse. O 409
         diz qual é o estado que impede e como sair dele — rebaixe o achado, ou registre outra
         evidência.
+
+        **Duas dimensões, e a segunda entrou em cima da primeira** (FDD 051): a de baixo pergunta
+        se sobra evidência viva para o fato, a de cima se sobra evidência **publicada** para o
+        fato **publicado**. Um arquivamento pode passar na primeira e cair na segunda — é o caso
+        do fato publicado com duas evidências, uma publicada e uma interna.
         """
+        self.recusa_se_sustenta_publicado(instance)
         presos = [
             finding
             for finding in instance.findings.filter(
@@ -3112,7 +3221,7 @@ class EvidenceViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         instance.archive()
 
 
-class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class FindingViewSet(PublicationMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """O achado com o estado epistemológico da ontologia (FDD 045, ADR 0049).
 
     Mesmo recorte de conta da `EvidenceViewSet`. As invariantes de promoção a `fact` e de
@@ -3121,7 +3230,7 @@ class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "finding"
     queryset = Finding.objects.select_related(
-        "account", "process", "step", "reviewed_by"
+        "account", "process", "step", "reviewed_by", "published_by"
     ).prefetch_related("evidences").all()
     serializer_class = FindingSerializer
     filter_fields = ("account", "process", "step")
@@ -3152,7 +3261,12 @@ class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         Recusar em vez de rebaixar a dor, pelo argumento da FDD 045: desfazer em silêncio uma
         confirmação que uma pessoa fez, sem que ela peça, é pior que o 409 que diz qual é o estado
         que impede e como sair dele.
+
+        A dimensão da publicação entra **em cima** desta, e não no lugar dela (FDD 051): uma
+        pergunta é se sobra achado vivo para a dor confirmada, a outra se sobra achado publicado
+        para a dor publicada.
         """
+        self.recusa_se_sustenta_publicado(instance)
         presas = [
             dor
             for dor in instance.pain_points.filter(
@@ -3170,7 +3284,7 @@ class FindingViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         instance.archive()
 
 
-class PainPointViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class PainPointViewSet(PublicationMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """A dor observada na operação do cliente (FDD 048).
 
     **Sem `ProjectScopedMixin`**, como `Evidence` e `Finding` e pelo mesmo motivo: a dor é da
@@ -3179,9 +3293,9 @@ class PainPointViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """
 
     resource = "pain_point"
-    queryset = PainPoint.objects.select_related("account", "process", "step").prefetch_related(
-        "findings"
-    ).all()
+    queryset = PainPoint.objects.select_related(
+        "account", "process", "step", "published_by"
+    ).prefetch_related("findings").all()
     serializer_class = PainPointSerializer
     filter_fields = ("account", "process", "step")
     # `status` e `impact_type` em `filter_exact_fields` pelo motivo do `kind` da `Evidence`: o
@@ -3202,8 +3316,22 @@ class PainPointViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             _exige_cliente_no_escopo(self.request.user, serializer.validated_data.get("account"))
         super().perform_update(serializer)
 
+    def perform_destroy(self, instance: PainPoint) -> None:
+        """Recusa arquivar a **última** dor publicada de uma oportunidade publicada (FDD 051).
 
-class ImprovementOpportunityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+        A guarda que faltava — as irmãs de `Evidence` e `Finding` já existiam para a dimensão do
+        `fact`/`confirmed`, e a dor não tinha nenhuma porque nada dependia dela dentro da casa. A
+        publicação criou essa dependência: `improvement_opportunities[].pain_point_ids` só lista
+        as dores publicadas e vivas, e arquivar a última deixaria uma oportunidade de pé no One
+        com uma lista vazia embaixo.
+        """
+        self.recusa_se_sustenta_publicado(instance)
+        instance.archive()
+
+
+class ImprovementOpportunityViewSet(
+    PublicationMixin, QueryParamFilterMixin, ArchiveModelViewSet
+):
     """A oportunidade de melhoria — **e ela não é venda** (FDD 048).
 
     Nenhum filtro, nenhum campo e nenhum import de `PipelineStage` aqui: o mapa de linguagem §5
@@ -3215,7 +3343,7 @@ class ImprovementOpportunityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
 
     resource = "improvement_opportunity"
     queryset = ImprovementOpportunity.objects.select_related(
-        "account", "engagement"
+        "account", "engagement", "published_by"
     ).prefetch_related("pain_points", "assessments").all()
     serializer_class = ImprovementOpportunitySerializer
     filter_fields = ("account", "engagement")

@@ -199,3 +199,119 @@ Onde esta ADR diz `Client`, o modelo hoje se chama `Account`, e o `status` dele 
 consome. A **tabela** continua `core_client` e a **rota** continua
 `/api/v1/clients/`: o que a `docs/ontology/aliases.md` §2b protege é a linha e a pk, e nenhuma das
 duas se move.
+
+## Emenda (issue #105, 01/09/2026) — a cadeia de medição atravessa, e o que a filtra
+
+Quinta lacuna, e a maior delas: o Pulse é a fonte da verdade do estado do projeto, e o estado que
+mais importa — *funcionou?* — não estava na projeção.
+
+`KPI`, `Measurement` e `ValueLedgerEntry` existem desde a Fase 5 da ontologia (ADR 0055, FDD 049), a
+§3 do `docs/ontology/language-map.md` já listava `KPI · Baseline · Outcome` e `Value Ledger` entre o
+que o One mostra, e nenhum dos três atravessava — a FDD 049 adiou o One de propósito. O que o
+cliente via no lugar eram os quatro campos legados de `DigitalEmployee`, texto livre sem unidade nem
+janela, e `roi`, que é `actual_value - cost` do projeto: o dinheiro do contrato, não o resultado do
+trabalho.
+
+**Duas chaves de topo entram, e `roi` não sai.** `kpis[]` leva o indicador com as leituras
+**aninhadas dentro dele** — `baseline`, `outcome` e `monitoring` —, e `value_ledger[]` leva o valor
+aprovado do mandato. `digital_employees[]` ganha `kpi_ids`, aditivo, com os quatro campos legados
+intactos: mesma convivência de `account`/`client`, e o legado sai quando o One parar de ler.
+
+**O aninhamento é a decisão.** O que torna duas leituras comparáveis é serem do mesmo KPI, com a
+mesma unidade e o mesmo método (invariante §6.11 — e é por isso que `Measurement` não tem `unit`).
+Numa lista irmã, parear baseline com outcome seria trabalho do consumidor, e um pareamento errado
+não deixaria nada vermelho de nenhum dos dois lados. Junto com ele, **nenhum outcome é emitido sem
+baseline do mesmo KPI**: emitir o número sozinho e deixar o One recusá-lo faria o cliente ver lacuna
+onde há dado.
+
+**Uma entrada do Value Ledger carrega dinheiro, e mesmo assim não contradiz a linha "nenhum dado
+comercial é exposto".** O que ela afirma é o valor entregue e aprovado, com o método de atribuição
+que o sustenta. O que continua não cruzando é o outro lado do dinheiro: preço, margem,
+`Service.price`, valor e probabilidade da venda. Dois filtros sustentam a distinção, e os dois valem
+como regra desta ADR:
+
+- **só `status=approved` atravessa** — rascunho e pendente são deliberação interna (regra 1 da §3),
+  e aqui isso pesa mais que no resto do snapshot, porque é a linha que o cliente lê como *valor
+  gerado*;
+- **`attribution_method` não-vazio é condição para atravessar** — o `clean()` já o exige, mas ele
+  não roda em shell nem em migração de dados, e é este campo que separa valor medido de número
+  escrito à mão. Sem ele a linha vira promessa com casas decimais, que é a razão de "ROI" como
+  resultado ser termo banido (§5).
+
+**Não atravessam** `KPI.owner` e `ValueLedgerEntry.approved_by` (pessoa interna),
+`Measurement.source_evidence` (evidência bruta não revisada) e `ValueLedgerEntry.status` — este
+último contaria ao cliente que existe uma fila de aprovação da qual ele não participa. A medição
+também não leva `id` nem `kind`: o aninhamento é a identidade e o papel dela. **Não há campo de
+moeda e não se criou um**: toda entrada é BRL hoje, e o `roi` que já atravessa tem a mesma ausência.
+
+**Três emissores novos, pela regra que abre esta ADR.** `_emit_kpi` e `_emit_measurement` avisam o
+projeto — o segundo pesa mais, porque registrar o Outcome do mês não salva `Project` nem `KPI` e
+sem ele o fato chegaria de carona no próximo salvamento de outra coisa. `_emit_value_ledger_entry`
+faz **fan-out** por projeto, no molde do `_emit_engagement` e pelo mesmo argumento: a entrada pende
+do mandato e aparece no snapshot de todos os projetos dele.
+
+A guarda da ADR 0027 alcança as duas chaves de topo. **`Measurement` não tem chave própria** — ela é
+o conteúdo de `kpis[].baseline`/`.outcome`/`.monitoring` —, e por isso o emissor dela é afirmado por
+um teste escrito à mão, na única forma que a guarda derivada não pega. Ver a **FDD 050**.
+
+## Emenda (issue #106, 01/09/2026) — o Discovery atravessa como dado, atrás de uma marca
+
+Sexta lacuna, e a segunda do mesmo dia. O Discovery chegava ao cliente como **documento** — o
+`Artifact` de `kind=discovery`, a narrativa do readout —, e o que separa o One de um Drive
+compartilhado é chegar navegável. Os onze modelos do levantamento existem com nome canônico desde as
+Fases 3 e 4 da ontologia (ADR 0049, ADR 0054) e **nenhum atravessava**: não havia uma chave sequer
+no snapshot nem um receiver em `signals.py`.
+
+**Quatro chaves de topo entram**, todas de escopo **Account**, alcançada por
+`project.engagement.account_id`:
+
+- `processes[]` — o AS-IS mapeado, com os `ProcessStep` vivos aninhados. As seis chaves do passo
+  ficam em português porque *são* as seis letras do P-S-D-T-E-R (`ProcessStep`), e a §5 do mapa de
+  linguagem bane português em nome de **modelo**, não de campo — o mesmo caso de `pendencias`;
+- `findings[]` — os achados, com as fontes publicadas aninhadas;
+- `pain_points[]` — as dores, com `finding_ids` filtrado;
+- `improvement_opportunities[]` — com a avaliação **vigente**, as cinco dimensões e as apostas de
+  solução aninhadas. `improvement_opportunities` e nunca `opportunities`: a §5 bane `Opportunity`
+  sem qualificador.
+
+O Discovery é da conta e o snapshot é do projeto, então o mesmo bloco sai no snapshot de **todos**
+os projetos dela e o consumidor deduplica por id. É a decisão (a) da FDD 051, e é ela que faz os
+oito emissores novos terem fan-out por projeto, no molde do `_emit_engagement`.
+
+**A regra desta emenda: nada atravessa sem a marca de publicável, e não há exceção.** `Process`,
+`Evidence`, `Finding`, `PainPoint` e `ImprovementOpportunity` ganharam `published_at`/`published_by`
+(ADR 0060, migração `0075`), e publicar é o ato de revisão humana que a regra 1 da §3 do
+`docs/ontology/language-map.md` exige — por isso tem autor obrigatório, por isso é action e não
+`PATCH`, e por isso exige sustentação publicada embaixo. Sem backfill: nada nasce publicado.
+
+**O AS-IS entra na mesma regra.** A tabela da §3 o qualifica como `Process · ProcessStep (o AS-IS
+validado)`, e "validado" é um qualificador tão sem lastro no schema quanto "Evidence marcada como
+revisada e publicável" era: nenhum campo dizia que aquele mapa tinha sido conferido com o cliente.
+O que atravessaria sem marca não é neutro — `ProcessStep.erro` e `.retrabalho` são a caracterização
+da casa sobre onde o time do cliente erra. `ProcessStep` não tem marca própria: ele anda com o
+processo pai.
+
+**Mais a âncora**: publicar `Finding` ou `PainPoint` exige o `Process` citado publicado e vivo (por
+`process` ou por `step`), tirar esse mapa do ar — despublicando ou arquivando — é 409 enquanto
+algo publicado o citar, e **mover a âncora de um registro publicado** para um mapa não publicado é
+400. Sem isso, `findings[].process_id` apontaria para fora de `processes[]`: a mesma referência
+pendurada que `finding_ids`/`pain_point_ids` filtrados evitam do outro lado.
+
+**Não atravessam**, e cada ausência é uma linha da §3: `raw_excerpt` e `content_hash` (material
+bruto e o carimbo dele — transcrição nunca cruza); os nove insumos do cálculo do custo do estado
+atual; `PriorityAssessment.rationale`, `weights` e `formula_key` (racional e critério internos);
+`SolutionHypothesis.assumptions`; `captured_by`, `reviewed_by`, `assessed_by` e `published_by`
+(pessoa interna); `Discovery`, `DiscoverySession` e `ProcessObservation` (organização interna do
+trabalho, e a §3 não os lista). **`rank` também não**, e é desvio consciente: ele ordena todas as
+oportunidades vivas da conta, publicadas ou não, e emiti-lo entregaria ao cliente `2, 4, 7` — a
+dedução de que existem itens escondidos que o superam. O que ele diria é dito por `score`.
+
+**`reference` atravessa e o trecho não**, e a assimetria é o ponto: a citação é *de onde veio*, e é
+o que torna a fonte conferível pelo cliente; o trecho é *o que foi dito*. É o mesmo recorte do
+`has_transcript` que `meetings` já usa. E **`unknown` atravessa e não é omitido**: é lacuna
+declarada, e sumir com ela faz o cliente achar que não há pergunta em aberto.
+
+A guarda da ADR 0027 alcança as quatro chaves de topo. **Quatro dos oito emissores não têm chave
+própria** — `Evidence`, `ProcessStep`, `PriorityAssessment` e `SolutionHypothesis` atravessam
+aninhados —, e por isso são afirmados por um teste escrito à mão, na forma que a `Measurement`
+estreou na emenda anterior. Ver a **FDD 051** e a **ADR 0060**.
