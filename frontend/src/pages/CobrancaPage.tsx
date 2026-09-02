@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { healthBadgeClass, satisfacaoBadgeClass } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
+import { canWriteBeyondDelivery } from "../roles";
 import type { CobrancaContato, CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, CobrancaTensaoCausa, SatisfacaoFonte, SatisfacaoNivel, SessionUser } from "../types";
 
 /**
@@ -176,7 +177,7 @@ export function CobrancaPage() {
   const isAdmin = Boolean(user?.is_admin);
   // Suspender é o único ato financeiro que Vendas pratica, e a assimetria é do backend (FDD 036):
   // recuar é decisão de *relação*, e quem a carrega é quem responde pelo cliente.
-  const podeSuspender = Boolean(user) && user?.role !== "delivery";
+  const podeSuspender = canWriteBeyondDelivery(user);
   const [linhas, setLinhas] = useState<CobrancaPainelLinha[]>([]);
   const [iaLigada, setIaLigada] = useState(false);
   const [donos, setDonos] = useState<SessionUser[]>([]);
