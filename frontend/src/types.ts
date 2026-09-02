@@ -199,7 +199,7 @@ export type ValueLedgerEntry = { id: number; engagement: number; project: number
 export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 // `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
 // (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.
-export type DocumentEntry = { id: number; account: number | null; client: number | null; commercial_opportunity: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[]; originated_engagement: number | null };
+export type DocumentEntry = { id: number; kind: string; account: number | null; client: number | null; commercial_opportunity: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[]; originated_engagement: number | null };
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";
 export type ArtifactStatus = "draft" | "review" | "sent" | "accepted" | "rejected";
 // `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`

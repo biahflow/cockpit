@@ -13,7 +13,7 @@ from django.utils import timezone
 from apps.core import design_partner, esign
 from apps.core.models import Document, Engagement, SignatureRequest, User
 
-from .factories import AccountFactory, UserFactory
+from .factories import AccountFactory, ProjectFactory, UserFactory
 
 
 def _signed_agreement(account=None, uploaded_by=None) -> Document:
@@ -44,6 +44,65 @@ def test_acordo_assinado_cria_o_mandato():
     assert engagement.account_id == document.account_id
     assert engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER
     assert engagement.owner_id == document.uploaded_by_id
+    assert engagement.originating_design_partner_agreement_id == document.pk
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", [Document.Kind.NDA, Document.Kind.COMMERCIAL_CONTRACT])
+def test_assinar_nda_ou_contrato_comercial_nao_abre_mandato(kind: str):
+    """`kind` classifica o documento; abrir mandato é comportamento de um subconjunto só — hoje,
+    exatamente o Design Partner Agreement (ADR 0061).
+    """
+    uploader = UserFactory(role=User.Role.ADMIN)
+    document = Document.objects.create(
+        account=AccountFactory(owner=uploader),
+        original_name="documento.pdf",
+        uploaded_by=uploader,
+        kind=kind,
+    )
+    SignatureRequest.objects.create(
+        document=document,
+        signer_email="patrocinador@x.test",
+        status=SignatureRequest.Status.SIGNED,
+        signed_at=timezone.now(),
+    )
+
+    engagement = design_partner.abrir_engagement_do_acordo(document)
+
+    assert engagement is None
+    assert not Engagement.objects.filter(originating_design_partner_agreement=document).exists()
+
+
+@pytest.mark.django_db
+def test_a_decisao_de_abrir_mandato_mora_na_constante(monkeypatch: pytest.MonkeyPatch):
+    """A decisão de quais `kind` abrem mandato mora em `models.DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT`
+    — não numa comparação com o valor literal `DESIGN_PARTNER_AGREEMENT` espalhada por
+    `abrir_engagement_do_acordo`. Este teste amplia só a constante, sem tocar a função, e espera
+    que um NDA assinado passe a abrir mandato: se a função comparasse com o literal outra vez,
+    ampliar a constante não teria efeito nenhum e o `assert engagement is not None` falharia.
+    """
+    from apps.core import models
+
+    monkeypatch.setattr(
+        models, "DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT", frozenset({Document.Kind.NDA})
+    )
+    uploader = UserFactory(role=User.Role.ADMIN)
+    document = Document.objects.create(
+        account=AccountFactory(owner=uploader),
+        original_name="nda.pdf",
+        uploaded_by=uploader,
+        kind=Document.Kind.NDA,
+    )
+    SignatureRequest.objects.create(
+        document=document,
+        signer_email="patrocinador@x.test",
+        status=SignatureRequest.Status.SIGNED,
+        signed_at=timezone.now(),
+    )
+
+    engagement = design_partner.abrir_engagement_do_acordo(document)
+
+    assert engagement is not None
     assert engagement.originating_design_partner_agreement_id == document.pk
 
 
@@ -130,3 +189,36 @@ def test_mandato_nasce_com_julgamento_humano_vazio():
     assert engagement.mandate == ""
     assert engagement.sponsor_id is None
     assert engagement.success_definition == ""
+
+
+@pytest.mark.django_db
+def test_a_recusa_da_ancora_nomeia_o_documento_que_a_pessoa_escolheu(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A mensagem sai do valor escolhido, e não cravada em "Design Partner Agreement".
+
+    Hoje a constante tem um membro e a frase cravada bateria — é justamente por isso que ela
+    passaria despercebida. Este teste amplia a constante e exige que a recusa nomeie o **NDA**:
+    com a frase cravada, quem tentasse pendurar um NDA num projeto leria uma mensagem sobre um
+    documento que não é o dele.
+    """
+    from django.core.exceptions import ValidationError
+
+    from apps.core import models
+
+    monkeypatch.setattr(
+        models, "DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT", frozenset({Document.Kind.NDA})
+    )
+    uploader = UserFactory(role=User.Role.ADMIN)
+    documento = Document(
+        project=ProjectFactory(),
+        original_name="nda.pdf",
+        uploaded_by=uploader,
+        kind=Document.Kind.NDA,
+    )
+
+    with pytest.raises(ValidationError) as erro:
+        documento.full_clean()
+
+    assert "NDA" in str(erro.value)
+    assert "Design Partner Agreement" not in str(erro.value)

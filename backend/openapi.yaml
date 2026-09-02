@@ -13954,8 +13954,15 @@ components:
     DocumentKindEnum:
       enum:
       - design_partner_agreement
+      - nda
+      - commercial_contract
+      - proposal
       type: string
-      description: '* `design_partner_agreement` - Design Partner Agreement'
+      description: |-
+        * `design_partner_agreement` - Design Partner Agreement
+        * `nda` - NDA
+        * `commercial_contract` - Contrato comercial
+        * `proposal` - Proposta
     Engagement:
       type: object
       properties:

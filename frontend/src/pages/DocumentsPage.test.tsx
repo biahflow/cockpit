@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -11,7 +11,7 @@ vi.mock("../auth", () => ({ useAuth: () => authState }));
 
 function stub(signatureRequests: object[] = []) {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/documents/") return Promise.resolve([{ id: 1, account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "contrato.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: signatureRequests }]);
+    if (path === "/documents/") return Promise.resolve([{ id: 1, account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", kind: "", original_name: "contrato.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: signatureRequests }]);
     if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     return Promise.resolve([]);
   });
@@ -68,21 +68,59 @@ test("marca o documento como acordo de parceria e manda o kind", async () => {
   expect((options.body as FormData).get("kind")).toBe("design_partner_agreement");
 });
 
-test("a finalidade não existe fora do vínculo com conta", async () => {
-  // Decisão **A1** do DAP: o acordo de parceria só se ancora numa conta — `Document.clean()`
-  // recusa oportunidade e projeto. Oferecer a opção nos outros dois seria mostrar o que a API
-  // nega, e o 400 chegaria sem que nada na tela explicasse por quê.
+test("a finalidade classifica em qualquer vínculo, e só as que abrem mandato exigem conta", async () => {
+  // Decisão **A1-r2** do DAP r2, que revê a A1. O que exigia conta nunca foi o campo — era abrir
+  // mandato. Um NDA e um contrato comercial vivem numa oportunidade ou num projeto, e escondê-los
+  // ali era o defeito que a revisão corrige.
   const user = userEvent.setup();
   render(<DocumentsPage />);
   await screen.findByText("contrato.pdf");
 
-  expect(screen.getByLabelText("Finalidade")).toBeInTheDocument();
-
   await user.selectOptions(screen.getAllByRole("combobox")[0], "project");
-  expect(screen.queryByLabelText("Finalidade")).not.toBeInTheDocument();
+  const finalidade = screen.getByLabelText("Finalidade");
+  expect(within(finalidade).getByRole("option", { name: "NDA" })).toBeInTheDocument();
+  expect(within(finalidade).queryByRole("option", { name: "Design Partner Agreement" })).not.toBeInTheDocument();
 
+  await user.selectOptions(screen.getAllByRole("combobox")[0], "account");
+  expect(within(screen.getByLabelText("Finalidade")).getByRole("option", { name: "Design Partner Agreement" })).toBeInTheDocument();
+});
+
+test("trocar o vínculo limpa só a finalidade que deixou de ser oferecida", async () => {
+  // Apagar sempre perderia o que a pessoa disse: sair de Oportunidade para Projeto não tem por que
+  // esquecer um "NDA", que continua válido nos dois.
+  const user = userEvent.setup();
+  render(<DocumentsPage />);
+  await screen.findByText("contrato.pdf");
+
+  await user.selectOptions(screen.getByLabelText("Finalidade"), "design_partner_agreement");
+  await user.selectOptions(screen.getAllByRole("combobox")[0], "project");
+  expect(screen.getByLabelText("Finalidade")).toHaveValue("");
+
+  await user.selectOptions(screen.getByLabelText("Finalidade"), "nda");
   await user.selectOptions(screen.getAllByRole("combobox")[0], "commercial_opportunity");
-  expect(screen.queryByLabelText("Finalidade")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Finalidade")).toHaveValue("nda");
+});
+
+test("a finalidade aparece na listagem, e o documento comum não ganha pastilha", async () => {
+  // Decisão **B1**: sem isto, classificar não resolve o que motivou a revisão — achar o NDA depois.
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/documents/") return Promise.resolve([
+      { id: 1, kind: "nda", account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "nda.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: [] },
+      { id: 2, kind: "", account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "ata.pdf", uploaded_by: 1, created_at: "2026-08-01", signature_requests: [] },
+    ]);
+    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    return Promise.resolve([]);
+  });
+  render(<DocumentsPage />);
+  await screen.findByText("nda.pdf");
+
+  // Escopado na linha: "NDA" também é o rótulo de uma opção do select do formulário, e um
+  // `getByText` solto acharia as duas — passaria mesmo se a pastilha não existisse.
+  const linhaDoNda = screen.getByText("nda.pdf").parentElement!;
+  expect(within(linhaDoNda).getByText("NDA")).toBeInTheDocument();
+
+  const linhaComum = screen.getByText("ata.pdf").parentElement!;
+  expect(linhaComum.querySelector(".state--off")).toBeNull();
 });
 
 test("documento comum não manda kind nenhum", async () => {

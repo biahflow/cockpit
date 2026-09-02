@@ -951,6 +951,9 @@ class GithubWebhookDelivery(models.Model):
 class Document(TimestampedModel):
     class Kind(models.TextChoices):
         DESIGN_PARTNER_AGREEMENT = "design_partner_agreement", "Design Partner Agreement"
+        NDA = "nda", "NDA"
+        COMMERCIAL_CONTRACT = "commercial_contract", "Contrato comercial"
+        PROPOSAL = "proposal", "Proposta"
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, null=True, blank=True)
     commercial_opportunity = models.ForeignKey(
@@ -968,10 +971,13 @@ class Document(TimestampedModel):
         links = [self.account_id, self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError("O documento deve estar vinculado a exatamente um recurso.")
-        if self.kind == self.Kind.DESIGN_PARTNER_AGREEMENT and self.account_id is None:
+        if self.kind in DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT and self.account_id is None:
+            # O rótulo sai do próprio valor escolhido, e não cravado: a constante tem um membro
+            # hoje e a frase bateria, mas no dia em que entrar o segundo ela nomearia o documento
+            # errado — a segunda definição divergente que esta refatoração existe para impedir.
             raise ValidationError(
-                "Um Design Partner Agreement deve estar vinculado a uma conta, "
-                "nunca a uma oportunidade ou projeto."
+                f"O documento marcado como «{self.Kind(self.kind).label}» deve estar vinculado a "
+                "uma conta, nunca a uma oportunidade ou projeto."
             )
 
     @property
@@ -990,6 +996,15 @@ class Document(TimestampedModel):
             status=SignatureRequest.Status.SIGNED,
             signed_at__isnull=False,
         ).exists()
+
+
+# `kind` responde "que documento é este?" — uma pergunta só, de classificação. Abrir um
+# `Engagement` ao ser assinado é *consequência*, e a decisão de quais tipos disparam essa
+# consequência mora aqui, num lugar só (ADR 0061): acrescentar um segundo instrumento que abre
+# mandato é uma entrada nesta constante, não uma condição nova espalhada por `design_partner.py`.
+# A âncora obrigatória em `Account` (acima, em `clean()`, e em `DocumentSerializer.validate()`)
+# segue o comportamento, não o valor — por isso ela também testa pertencimento a este conjunto.
+DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT = frozenset({Document.Kind.DESIGN_PARTNER_AGREEMENT})
 
 
 class Meeting(TimestampedModel):

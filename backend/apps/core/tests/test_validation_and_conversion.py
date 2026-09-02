@@ -239,6 +239,36 @@ def test_design_partner_agreement_model_requires_account() -> None:
         document.full_clean()
 
 
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+@pytest.mark.parametrize("kind", [Document.Kind.NDA, Document.Kind.COMMERCIAL_CONTRACT])
+def test_nda_e_contrato_comercial_aceitam_oportunidade_e_projeto(kind: str) -> None:
+    """A metade que a mudança compra (ADR 0061): a âncora obrigatória segue o comportamento —
+    quem abre mandato —, não o valor de `kind`. Um NDA e um contrato comercial podem viver numa
+    oportunidade ou num projeto, ao contrário do Design Partner Agreement.
+    """
+    admin = UserFactory(role=User.Role.ADMIN)
+    account = AccountFactory(owner=admin)
+    opportunity = CommercialOpportunityFactory(account=account, owner=admin)
+    project = ProjectFactory(engagement__account=account)
+    client = APIClient()
+    client.force_authenticate(admin)
+
+    via_opportunity = client.post(reverse("document-list"), {
+        "commercial_opportunity": opportunity.id,
+        "kind": kind,
+        "file": SimpleUploadedFile(f"{kind}-oportunidade.pdf", b"conteudo"),
+    })
+    via_project = client.post(reverse("document-list"), {
+        "project": project.id,
+        "kind": kind,
+        "file": SimpleUploadedFile(f"{kind}-projeto.pdf", b"conteudo"),
+    })
+
+    assert via_opportunity.status_code == 201, via_opportunity.data
+    assert via_project.status_code == 201, via_project.data
+
+
 @pytest.mark.parametrize(("raw", "expected"), [
     ("../../etc/passwd.pdf", "passwd.pdf"),
     (r"C:\Users\alguem\contrato.pdf", "contrato.pdf"),

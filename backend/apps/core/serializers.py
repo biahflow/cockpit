@@ -20,6 +20,7 @@ from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
     CASE_TRANSITIONS,
+    DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT,
     FINDING_TRANSITIONS,
     INVOICE_TRANSITIONS,
     KPI,
@@ -2147,10 +2148,12 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
         ]
         if sum(value is not None for value in links) != 1:
             raise serializers.ValidationError("Vincule o documento a exatamente um cliente, oportunidade ou projeto.")
-        if attrs.get("kind") == Document.Kind.DESIGN_PARTNER_AGREEMENT and attrs.get("account") is None:
+        escolhido = cast(str, attrs.get("kind") or "")
+        if escolhido in DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT and attrs.get("account") is None:
+            # Mesma razão do `Document.clean()`: o rótulo vem do valor escolhido.
             raise serializers.ValidationError({
-                "kind": "Um Design Partner Agreement deve estar vinculado a uma conta, "
-                        "nunca a uma oportunidade ou projeto."
+                "kind": f"O documento marcado como «{Document.Kind(escolhido).label}» deve "
+                        "estar vinculado a uma conta, nunca a uma oportunidade ou projeto."
             })
         uploaded_file = cast(UploadedFile | None, attrs.get("file"))
         if uploaded_file is None:
