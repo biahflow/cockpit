@@ -1416,6 +1416,11 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
             # histórico. Projeto de mandato sem venda é o caso do Design Partner (ADR 0053).
             project = serializer.save(owner=request.user)
             kickoff.seed_work_items(project)
+            # Depois de semear, porque é a tarefa semeada que ela resolve — e dentro da transação
+            # pela mesma razão das faturas: é escrita no banco, não efeito externo. Sem isto o
+            # projeto nasce dizendo "Próxima reunião: A agendar" com a sessão já marcada pelo
+            # cliente, e com a tarefa de agendar pendente logo depois de a automação a ter feito.
+            discovery_booking.registrar_sessao_no_projeto(project, engagement)
             # Dentro da transação pela razão da conversão: é escrita no banco, não efeito externo.
             # Devolve 0 quando o valor contratado é zero — o Design Partner recebe o degrau sem
             # cobrança —, e isso é o cronograma correto, não uma falha.
@@ -4189,7 +4194,10 @@ class DiscoveryBookingSlotsView(APIView):
                 "scheduled_at": agendado.starts_at,
             })
         try:
-            slots = booking.available_slots()
+            # A janela do Discovery, **não** a da pré-venda: 5 dias com grade a partir de 3 dias,
+            # 3 opções por dia (DAP `dap-agendamento-discovery-r1`, emenda de 02/09). A oferta
+            # inteira eram 80 escolhas numa página que pede uma.
+            slots = booking.available_slots_for_discovery()
         except calendar_sync.CalendarUnavailable:
             # Sem enxergar a agenda não dá para dizer o que está livre, e lista vazia aqui seria a
             # página afirmando "não há horário" — o estado que a D1 separa deste.

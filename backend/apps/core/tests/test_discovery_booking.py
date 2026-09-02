@@ -123,7 +123,7 @@ def test_link_invalido_responde_400_sem_dizer_o_motivo():
 @LIGADA
 def test_sem_horario_na_janela_responde_200_com_lista_vazia(monkeypatch):
     """Agenda cheia é resposta legítima, não falha — e é o estado que o 503 abaixo não é."""
-    monkeypatch.setattr(booking, "available_slots", lambda: [])
+    monkeypatch.setattr(booking, "available_slots_for_discovery", lambda: [])
     engagement = _mandato()
 
     resp = APIClient().get(
@@ -142,7 +142,7 @@ def test_agenda_fora_do_ar_responde_503(monkeypatch):
     def indisponivel():
         raise calendar_sync.CalendarUnavailable
 
-    monkeypatch.setattr(booking, "available_slots", indisponivel)
+    monkeypatch.setattr(booking, "available_slots_for_discovery", indisponivel)
     engagement = _mandato()
 
     resp = APIClient().get(
@@ -161,7 +161,7 @@ def test_agenda_fora_do_ar_responde_503(monkeypatch):
 @LIGADA
 def test_a_pagina_recebe_o_nome_da_conta_e_os_horarios(monkeypatch):
     dia = _next_monday()
-    monkeypatch.setattr(booking, "available_slots", lambda: [_at(dia, 9)])
+    monkeypatch.setattr(booking, "available_slots_for_discovery", lambda: [_at(dia, 9)])
     engagement = _mandato()
 
     resp = APIClient().get(

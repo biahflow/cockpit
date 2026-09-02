@@ -420,6 +420,31 @@ def _promote_account_on_won(
         ).update(lifecycle_status=Account.LifecycleStatus.ACTIVE)
 
 
+@receiver(post_save, sender=Engagement)
+def _promote_account_on_engagement(
+    sender: type[Engagement], instance: Engagement, created: bool, **kwargs: Any
+) -> None:
+    """Promove a conta de prospect para "Cliente" quando um mandato é aberto (ADR 0061).
+
+    O vizinho `_promote_account_on_won` cobre só o caminho pago: ele depende de oportunidade
+    **ganha**, e o Design Partner não passa por venda nenhuma (ADR 0053). O efeito observado em
+    uso era uma conta com parceria assinada e Discovery rodando ainda marcada "Prospect" na
+    listagem — e um parceiro **é** cliente, porque está recebendo entrega (`language-map` §4).
+
+    Vale para **qualquer** `Engagement` e não só o `design_partner`: mandato é trabalho
+    contratado. Cobrir os dois aqui não duplica efeito por causa do filtro — quem veio pela venda
+    já saiu de `prospect` — e evita que um mandato criado à mão pela tela deixe a conta para trás.
+
+    Só na criação, e o filtro é o que impede regressão: `inactive` é **já foi** cliente, e
+    `active → inactive` continua sem automação pela razão que o vizinho dá — "não tem trabalho em
+    andamento" não é fato observável no banco.
+    """
+    if created:
+        Account.objects.filter(
+            pk=instance.account_id, lifecycle_status=Account.LifecycleStatus.PROSPECT
+        ).update(lifecycle_status=Account.LifecycleStatus.ACTIVE)
+
+
 @receiver(pre_delete, sender=Invoice)
 def _refuse_deleting_issued_invoice(sender: type[Invoice], instance: Invoice, **kwargs: Any) -> None:
     """A parede, atrás da boa mensagem (FDD 028, ADR 0021).

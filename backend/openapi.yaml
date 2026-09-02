@@ -14022,6 +14022,11 @@ components:
         projects_count:
           type: integer
           readOnly: true
+        discovery_scheduled_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
         needs_review:
           type: boolean
         archived_at:
@@ -14043,6 +14048,7 @@ components:
       - archived_at
       - commercial_model_display
       - created_at
+      - discovery_scheduled_at
       - id
       - name
       - originating_commercial_opportunity_title
@@ -16716,6 +16722,11 @@ components:
           type: string
         projects_count:
           type: integer
+          readOnly: true
+        discovery_scheduled_at:
+          type: string
+          format: date-time
+          nullable: true
           readOnly: true
         needs_review:
           type: boolean

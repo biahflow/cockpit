@@ -14,7 +14,7 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, drive, knowledge, publication
+from . import blueprints, discovery_booking, drive, knowledge, publication
 from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
@@ -613,6 +613,7 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     originating_design_partner_agreement_name = serializers.CharField(
         source="originating_design_partner_agreement.original_name", read_only=True, default=""
     )
+    discovery_scheduled_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Engagement
@@ -625,6 +626,7 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
             "originating_design_partner_agreement",
             "originating_design_partner_agreement_name",
             "started_at", "ended_at", "success_definition", "projects_count",
+            "discovery_scheduled_at",
             "needs_review", "archived_at", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "archived_at", "created_at", "updated_at"]
@@ -667,6 +669,28 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         nascer não tem projeto nenhum.
         """
         return getattr(obj, "projects_count", 0)
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_discovery_scheduled_at(self, obj: Engagement) -> str | None:
+        """Quando o cliente marcou o Discovery pelo link do convite — `null` quando não marcou.
+
+        Só leitura, e existe para a tela **pré-preencher** o início e o prazo do projeto (DAP
+        `dap-engagement-r3`, C1). O servidor não sobrescreve essas datas: quem preencheu o
+        formulário escolheu, e um 201 que muda a escolha em silêncio é pior que um campo a menos.
+
+        `discovery_agendado` é a única expressão de "a reserva viva do mandato" — a mesma que a
+        rota pública e `registrar_sessao_no_projeto` consultam. Reescrever o filtro aqui seria uma
+        segunda definição de "viva", que diverge da primeira no dia em que `Booking` ganhar estado.
+
+        A conversão passa por `DateTimeField.to_representation` e não pelo `datetime` cru: método
+        devolve o valor como está, e um `datetime` solto sairia formatado pelo encoder do renderer
+        em vez de pelo `DATETIME_FORMAT` do projeto — uma data com formato próprio no meio de um
+        recurso onde todas as outras concordam.
+        """
+        reserva = discovery_booking.discovery_agendado(obj)
+        if reserva is None:
+            return None
+        return cast(str, serializers.DateTimeField().to_representation(reserva.starts_at))
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Repete no contrato HTTP a invariante 13 que `Engagement.clean()` sustenta no modelo.

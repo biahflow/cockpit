@@ -55,6 +55,14 @@ KICKOFF_TEMPLATE: list[dict] = [
 #   coisas concordam. Gate que não vira item de trabalho é gate que não acontece.
 #
 # O template padrão continua genérico: serviço avulso não é PROVE.
+#
+# **Uma tarefa do Discovery Sprint tem nome de constante**, e é a única — porque é a única que outro
+# módulo precisa reencontrar depois de semeada. Quando o cliente já marcou a sessão pelo link do
+# convite (ADR 0061), a automação acabou de fazer o que ela pede, e `discovery_booking` a resolve
+# junto com o projeto. Casar por string mágica lá seria acoplamento que quebra calado: alguém
+# reescreve o texto do template, a tarefa passa a nascer pendente para sempre e nada fica vermelho.
+TAREFA_DE_AGENDAR_O_DISCOVERY = "Agendar a sessão de discovery"
+
 KICKOFF_TEMPLATES: dict[str, list[dict]] = {
     "qualification_call": [
         {"title": "Qualification Call", "offset": 3,
@@ -63,7 +71,7 @@ KICKOFF_TEMPLATES: dict[str, list[dict]] = {
     ],
     "discovery_sprint": [
         {"title": "Discovery", "offset": 3,
-         "tasks": ["Agendar a sessão de discovery", "Mapear o processo com o P-S-D-T-E-R",
+         "tasks": [TAREFA_DE_AGENDAR_O_DISCOVERY, "Mapear o processo com o P-S-D-T-E-R",
                    "Registrar a transcrição da reunião"]},
         {"title": "Baseline e priorização", "offset": 5,
          "tasks": ["Apurar o custo do estado atual",

@@ -9,13 +9,18 @@ qualificado que veio do site) e o **Discovery** do Design Partner (`book_discove
 acabou de assinar o acordo). O núcleo é um só — `_reservar` — porque a checagem de conflito é
 justamente o que os dois precisam compartilhar: dois núcleos seriam duas agendas que não se veem.
 
+**A oferta, essa é de cada um.** `available_slots` (pré-venda) mostra 14 dias corridos e todo
+horário livre; `available_slots_for_discovery` mostra 5 dias com grade a partir de 3 dias e no
+máximo 3 por dia. As duas leem a mesma ocupação por `_slots_livres` e decidem sozinhas a janela —
+unificá-las é o que o teste de regressão do agendamento existe para impedir.
+
 A geração de slots é pura/testável; o I/O com o Google fica em `calendar_sync` (`# pragma: no cover`).
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -39,6 +44,27 @@ BOOKING_HOURS: dict[int, list[tuple[int, int]]] = {
 }
 # Quantos dias à frente ofertar.
 BOOKING_HORIZON_DAYS = 14
+
+# --- A janela do Discovery ------------------------------------------------------------------
+#
+# **Só do Discovery.** A pré-venda continua com os 14 dias corridos e todos os horários livres: a
+# janela é a mesma decisão dos dois lados só enquanto ninguém mede, e o primeiro teste em uso mediu
+# — 80 opções numa página, que é lista longa demais para uma escolha (DAP
+# `dap-agendamento-discovery-r1`, emenda de 02/09). O que os dois fluxos precisam compartilhar é a
+# **agenda** (`slots_for_range`, `_slots_livres`), não a oferta.
+#
+# Três constantes e nenhum número solto, porque cada uma responde a uma pergunta diferente e elas
+# vão divergir na próxima revisão do pacote.
+#
+# O prazo é contado a partir de agora — ninguém agenda um walkthrough para amanhã.
+DISCOVERY_LEAD_TIME_DAYS = 3
+# **Dias com grade**, não dias corridos: `BOOKING_HOURS` tem segunda a sexta, e contar corrido
+# entregaria três dias úteis na semana que começa numa quinta.
+DISCOVERY_BUSINESS_DAYS = 5
+# As duas bordas da grade comercial, e é delas que sai a leitura de "manhã" e "tarde". Cravar 12 e
+# 14 dentro da regra de seleção faria a oferta discordar da grade na primeira mudança de horário.
+DISCOVERY_MORNING_END_HOUR = 12
+DISCOVERY_AFTERNOON_START_HOUR = 14
 
 
 class SlotUnavailable(Exception):
@@ -84,16 +110,15 @@ def slots_for_range(
     return slots
 
 
-def available_slots(start: datetime | None = None, end: datetime | None = None) -> list[datetime]:
-    """Horários livres para agendamento. Vazio quando a integração está desligada."""
-    if not calendar_sync.is_enabled():
-        return []
+def _slots_livres(start: datetime, end: datetime, now: datetime) -> list[datetime]:
+    """A agenda de verdade no intervalo: grade menos free/busy do Google menos `Booking` viva.
 
+    É o que os dois fluxos compartilham — quem oferta pela pré-venda e quem oferta pelo Discovery
+    precisa enxergar a **mesma** ocupação, pelo mesmo motivo que `_reservar` é um núcleo só. O que
+    cada um decide sozinho é a janela e quantas opções mostrar.
+    """
     from .models import Booking
 
-    now = timezone.localtime()
-    start = start or now
-    end = end or (now + timedelta(days=BOOKING_HORIZON_DAYS))
     busy = calendar_sync.freebusy(start, end)
     taken = [
         (b.starts_at, b.ends_at)
@@ -103,6 +128,93 @@ def available_slots(start: datetime | None = None, end: datetime | None = None) 
         )
     ]
     return slots_for_range(busy, start, end, now, taken=taken)
+
+
+def available_slots(start: datetime | None = None, end: datetime | None = None) -> list[datetime]:
+    """Horários livres para agendamento. Vazio quando a integração está desligada."""
+    if not calendar_sync.is_enabled():
+        return []
+
+    now = timezone.localtime()
+    start = start or now
+    end = end or (now + timedelta(days=BOOKING_HORIZON_DAYS))
+    return _slots_livres(start, end, now)
+
+
+def discovery_window(
+    now: datetime, hours: dict[int, list[tuple[int, int]]] | None = None
+) -> tuple[datetime, datetime]:
+    """O intervalo que o Discovery oferta: começa em `now + 3 dias`, cobre 5 **dias com grade**.
+
+    A varredura anda dia a dia contando só o que `BOOKING_HOURS` conhece, porque "dia útil" aqui
+    não é uma segunda definição de calendário — é a própria grade dizendo em que dias a casa
+    atende. O teto do laço existe para uma grade vazia devolver janela degenerada em vez de rodar
+    para sempre.
+    """
+    hours = BOOKING_HOURS if hours is None else hours
+    start = now + timedelta(days=DISCOVERY_LEAD_TIME_DAYS)
+    ultimo = day = start.date()
+    uteis = 0
+    for _ in range(DISCOVERY_BUSINESS_DAYS * 7):
+        if uteis >= DISCOVERY_BUSINESS_DAYS:
+            break
+        if hours.get(day.weekday()):
+            uteis += 1
+            ultimo = day
+        day += timedelta(days=1)
+    end = timezone.make_aware(
+        datetime.combine(ultimo, datetime.max.time()), timezone.get_current_timezone()
+    )
+    return start, end
+
+
+def _hora_local(slot: datetime) -> int:
+    return timezone.localtime(slot).hour
+
+
+def tres_do_dia(slots: list[datetime]) -> list[datetime]:
+    """Reduz cada dia a no máximo três opções: primeira da manhã, primeira da tarde, última do dia.
+
+    A regra é de **degradação**, não de contagem: os três papéis são o que sobrevive quando a
+    agenda enche. Dois papéis que caem no mesmo horário viram um — daí a deduplicação, e é por ela
+    que "menos de três livres oferece os que existem" sai de graça, sem uma segunda regra que
+    pudesse discordar da primeira. Dia sem nenhum livre simplesmente não aparece.
+
+    A leitura de manhã/tarde é sempre no fuso local (`localtime`), como o agrupamento por dia: o
+    slot chega ciente do fuso, e comparar a hora crua de um UTC deslocaria as duas faixas juntas.
+    """
+    por_dia: dict[date, list[datetime]] = {}
+    for slot in sorted(slots):
+        por_dia.setdefault(timezone.localtime(slot).date(), []).append(slot)
+
+    escolhidos: list[datetime] = []
+    for do_dia in por_dia.values():
+        papeis = (
+            next((s for s in do_dia if _hora_local(s) < DISCOVERY_MORNING_END_HOUR), None),
+            next((s for s in do_dia if _hora_local(s) >= DISCOVERY_AFTERNOON_START_HOUR), None),
+            do_dia[-1],
+        )
+        do_dia_escolhidos: list[datetime] = []
+        for candidato in papeis:
+            if candidato is not None and candidato not in do_dia_escolhidos:
+                do_dia_escolhidos.append(candidato)
+        escolhidos.extend(sorted(do_dia_escolhidos))
+    return escolhidos
+
+
+def available_slots_for_discovery() -> list[datetime]:
+    """Os horários que a página do Discovery oferece (DAP `dap-agendamento-discovery-r1`).
+
+    Função irmã de `available_slots`, e não um parâmetro dela, porque a pré-venda **não muda**:
+    ela continua ofertando a janela inteira, e é a rota pública do site que depende disso. As duas
+    dividem a agenda (`_slots_livres`) e nada mais.
+    """
+    if not calendar_sync.is_enabled():
+        return []
+
+    now = timezone.localtime()
+    start, end = discovery_window(now)
+    return tres_do_dia(_slots_livres(start, end, now))
 
 
 def _default_owner():
