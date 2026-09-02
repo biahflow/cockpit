@@ -45,6 +45,11 @@ export const ROUTES: readonly Screen[] = [
   { path: "/projetos", name: "Projetos (Entrega, sem equipe)", role: "delivery" },
   { path: "/", name: "Login", role: null },
   { path: "/aceitar-convite", name: "Aceitar convite", role: null },
+  // Pública e movida a token, como a de cima (DAP `dap-agendamento-discovery-r1`). Cobre o
+  // caminho feliz — os cinco estados de exceção são cobertos no vitest de
+  // `AgendarDiscoveryPage.test.tsx`, não aqui: a matriz mede uma tela por rota, e o token na URL
+  // não tem como selecionar qual resposta o mock devolve.
+  { path: "/agendar/tok-e2e", name: "Agendar Discovery", role: null },
 ];
 
 /**
@@ -203,6 +208,13 @@ const MEDICOES_POR_KPI: Record<string, unknown[]> = {
 
 const FIXTURES: Record<string, unknown> = {
   "/api/v1/auth/csrf/": { csrfToken: "test" },
+  // O caminho feliz de `/agendar/:token` (DAP `dap-agendamento-discovery-r1`, decisão B1):
+  // horários em dois dias, para o axe medir os dois cabeçalhos de dia e a grade de pastilhas.
+  "/api/v1/booking/discovery/slots/": {
+    account: "Rio Home Care",
+    slots: ["2026-09-10T13:00:00Z", "2026-09-10T15:00:00Z", "2026-09-11T13:00:00Z"],
+    scheduled_at: null,
+  },
   // As sete flags que `flags.FLAGS` serve, e **com `missing`** — o campo nasceu na ADR 0018, a
   // `SettingsPage` passou a fazer `flag.missing.join()` e esta fixture ficou para trás, estourando
   // a tela em toda varredura. Passou despercebido porque o `ErrorBoundary` também tem `<h1>` e a

@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { api, documentDownloadUrl } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
+import { isDeliveryOnly } from "../roles";
 import type { Account, CommercialOpportunity, DocumentEntry, Project } from "../types";
 
 // A chave **é** o nome do campo no corpo do `POST /documents/`, então ela é a canônica: a SPA
@@ -18,13 +19,16 @@ export function DocumentsPage() {
   // Idem: restrição, não papel. Sem isto o superusuário não anexava documento a cliente nem a
   // oportunidade — e, porque o fetch de oportunidades era pulado, os já existentes apareciam
   // como id cru ("Oportunidade: 17").
-  const isDelivery = user?.role === "delivery" && !user.is_admin;
+  const isDelivery = isDeliveryOnly(user);
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [opportunities, setOpportunities] = useState<CommercialOpportunity[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [linkType, setLinkType] = useState<LinkType>(isDelivery ? "project" : "account");
   const [target, setTarget] = useState("");
+  // A finalidade do documento (DAP `dap-finalidade-do-documento-r1`, decisões **A1 · B1**). Vazia
+  // é "Documento comum", que é o padrão e o que a maioria dos arquivos é.
+  const [kind, setKind] = useState("");
   const [error, setError] = useState("");
   const [isUploading, setUploading] = useState(false);
   const [archiving, setArchiving] = useState<DocumentEntry | null>(null);
@@ -65,8 +69,12 @@ export function DocumentsPage() {
       const body = new FormData();
       body.append(linkType, target);
       body.append("file", file);
+      // Só vai quando há finalidade **e** o vínculo é conta: o backend recusa com 400 um acordo de
+      // parceria pendurado em oportunidade ou projeto, e mandar a chave assim mesmo transformaria
+      // um estado impossível de alcançar na tela num 400 vindo do nada.
+      if (kind && linkType === "account") body.append("kind", kind);
       await api("/documents/", { method: "POST", body });
-      setTarget(""); if (fileInput.current) fileInput.current.value = "";
+      setTarget(""); setKind(""); if (fileInput.current) fileInput.current.value = "";
       await load();
     } catch (cause) { setError((cause as Error).message); } finally { setUploading(false); }
   }
@@ -111,8 +119,12 @@ export function DocumentsPage() {
     <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
       <form className="panel space-y-4 sm:p-6" onSubmit={event => void upload(event)}>
         <div className="flex items-center gap-3"><span className="metric-icon size-10"><UploadCloud className="size-5" /></span><div><h2 className="font-semibold text-ink">Enviar documento</h2><p className="text-sm text-slate-600">Vincule a exatamente um recurso.</p></div></div>
-        <label className="form-label">Vincular a<select className="field" value={linkType} onChange={event => { setLinkType(event.target.value as LinkType); setTarget(""); }}>{!isDelivery && <option value="account">Cliente</option>}{!isDelivery && <option value="commercial_opportunity">Oportunidade</option>}<option value="project">Projeto</option></select></label>
+        <label className="form-label">Vincular a<select className="field" value={linkType} onChange={event => { setLinkType(event.target.value as LinkType); setTarget(""); setKind(""); }}>{!isDelivery && <option value="account">Cliente</option>}{!isDelivery && <option value="commercial_opportunity">Oportunidade</option>}<option value="project">Projeto</option></select></label>
         <label className="form-label">{linkLabel[linkType]}<select className="field" value={target} onChange={event => setTarget(event.target.value)} required><option value="">Selecione</option>{targets.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+        {/* Só no vínculo com conta: o acordo de parceria não se ancora em oportunidade nem em
+            projeto (`Document.clean()`), e oferecer aqui a opção que o servidor nega é o oposto
+            da regra da casa — a tela deixa de mostrar o que a API recusaria. */}
+        {linkType === "account" && <label className="form-label">Finalidade<select className="field" value={kind} onChange={event => setKind(event.target.value)}><option value="">Documento comum</option><option value="design_partner_agreement">Design Partner Agreement</option></select></label>}
         <label className="form-label">Arquivo<input className="field file:mr-3 file:rounded-lg file:border-0 file:bg-accent-50 file:px-3 file:py-1 file:text-accent" type="file" ref={fileInput} /></label>
         <button className="btn w-full" type="submit" disabled={isUploading}><UploadCloud className="size-4" />{isUploading ? "Enviando…" : "Enviar documento"}</button>
       </form>

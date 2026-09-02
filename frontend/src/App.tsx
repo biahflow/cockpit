@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { AcceptInvitePage } from "./pages/AcceptInvitePage";
+import { AgendarDiscoveryPage } from "./pages/AgendarDiscoveryPage";
 import { BibliotecaPage } from "./pages/BibliotecaPage";
 import { CasesPage } from "./pages/CasesPage";
 import { AccountDetailPage } from "./pages/AccountDetailPage";
@@ -88,6 +89,10 @@ function rotaLegada(path: string): string | null {
 export function App() {
   const { isLoading, user } = useAuth();
   if (window.location.pathname === "/aceitar-convite") return <AcceptInvitePage />;
+  // Pública e movida a token, como a de cima — mas fala com um cliente que nunca vai ter login
+  // (DAP `dap-agendamento-discovery-r1`), então resolve antes do portão de sessão do mesmo jeito.
+  const agendar = window.location.pathname.match(/^\/agendar\/([^/]+)$/);
+  if (agendar) return <AgendarDiscoveryPage token={decodeURIComponent(agendar[1])} />;
   const destino = rotaLegada(window.location.pathname);
   if (destino) {
     window.location.replace(`${destino}${window.location.search}${window.location.hash}`);

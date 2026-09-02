@@ -53,6 +53,52 @@ test("envia um documento vinculado a um cliente", async () => {
   expect((options.body as FormData).get("account")).toBe("1");
 });
 
+test("marca o documento como acordo de parceria e manda o kind", async () => {
+  const user = userEvent.setup();
+  render(<DocumentsPage />);
+  await screen.findByText("contrato.pdf");
+
+  await user.selectOptions(screen.getAllByRole("combobox")[1], "1");
+  await user.selectOptions(screen.getByLabelText("Finalidade"), "design_partner_agreement");
+  await user.upload(screen.getByLabelText("Arquivo"), new File(["x"], "acordo.pdf", { type: "application/pdf" }));
+  await user.click(screen.getByRole("button", { name: "Enviar documento" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/documents/", expect.objectContaining({ method: "POST" })));
+  const [, options] = mocks.api.mock.calls.find(([path, opts]) => path === "/documents/" && opts?.method === "POST")!;
+  expect((options.body as FormData).get("kind")).toBe("design_partner_agreement");
+});
+
+test("a finalidade não existe fora do vínculo com conta", async () => {
+  // Decisão **A1** do DAP: o acordo de parceria só se ancora numa conta — `Document.clean()`
+  // recusa oportunidade e projeto. Oferecer a opção nos outros dois seria mostrar o que a API
+  // nega, e o 400 chegaria sem que nada na tela explicasse por quê.
+  const user = userEvent.setup();
+  render(<DocumentsPage />);
+  await screen.findByText("contrato.pdf");
+
+  expect(screen.getByLabelText("Finalidade")).toBeInTheDocument();
+
+  await user.selectOptions(screen.getAllByRole("combobox")[0], "project");
+  expect(screen.queryByLabelText("Finalidade")).not.toBeInTheDocument();
+
+  await user.selectOptions(screen.getAllByRole("combobox")[0], "commercial_opportunity");
+  expect(screen.queryByLabelText("Finalidade")).not.toBeInTheDocument();
+});
+
+test("documento comum não manda kind nenhum", async () => {
+  const user = userEvent.setup();
+  render(<DocumentsPage />);
+  await screen.findByText("contrato.pdf");
+
+  await user.selectOptions(screen.getAllByRole("combobox")[1], "1");
+  await user.upload(screen.getByLabelText("Arquivo"), new File(["x"], "nota.pdf", { type: "application/pdf" }));
+  await user.click(screen.getByRole("button", { name: "Enviar documento" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/documents/", expect.objectContaining({ method: "POST" })));
+  const [, options] = mocks.api.mock.calls.find(([path, opts]) => path === "/documents/" && opts?.method === "POST")!;
+  expect((options.body as FormData).has("kind")).toBe(false);
+});
+
 test("arquiva um documento", async () => {
   const user = userEvent.setup();
   render(<DocumentsPage />);

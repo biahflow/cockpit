@@ -1,14 +1,16 @@
 import { ArrowLeft, Briefcase, Coins, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
-import { api, getConfig } from "../api";
+import { api, createProjectFromEngagement, getConfig } from "../api";
 import { useAuth } from "../auth";
 import { LifecycleOptions } from "../components/AccountLifecycle";
-import { ConfirmDialog } from "../components/Modal";
+import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, CommercialOpportunity, Contact, DocumentEntry, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import { canWriteBeyondDelivery } from "../roles";
+import { rotuloDoDegrau } from "../tiers";
+import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, CommercialOpportunity, Contact, DocumentEntry, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Service, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -52,6 +54,18 @@ const engagementStatusBadge: Record<EngagementStatus, string> = { active: "state
 // sobre o registro, não um aviso. Mostrar só a exceção faria "sem selo" significar duas coisas para
 // quem lê: conta paga, ou campo que ninguém preencheu.
 const engagementCommercialModelBadge: Record<EngagementCommercialModel, string> = { paid: "state--off", design_partner: "state--0" };
+
+/**
+ * Criar projeto a partir do mandato (DAP `docs/design/dap-engagement-r3/`, decisões **A1 · B2 ·
+ * C1 · D1**) — a única saída aprovada além de Editar/Arquivar na linha do mandato, e a única desta
+ * seção que abre modal: a decisão 3 da r1 ("sem modal") governa formulário que edita a lista que
+ * está ali; criar projeto produz algo que **sai** desta tela, e o modal marca a saída (o mesmo do
+ * "Criar projeto" do Comercial).
+ *
+ * O nome nasce vazio de propósito: "Discovery Sprint — Rio Home Care" e "Continuidade 2027" são
+ * coisas diferentes dentro do mesmo mandato, e copiar o nome do mandato esconderia essa escolha.
+ */
+const blankNewProject = { name: "", service: "", start_date: "", due_date: "" };
 
 /**
  * Período com precisão de **mês** ("Desde 03/2026", "02/2026 → 05/2026") — decisão 6 do DAP: o
@@ -135,19 +149,27 @@ export function AccountDetailPage({ id }: { id: number }) {
   // o que mantém a seção legível numa página que já empilha seis painéis.
   const [engagementFormOpen, setEngagementFormOpen] = useState(false);
   const [removingEngagement, setRemovingEngagement] = useState<Engagement | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [creatingProject, setCreatingProject] = useState<Engagement | null>(null);
+  const [newProjectDraft, setNewProjectDraft] = useState(blankNewProject);
+  const [creatingProjectError, setCreatingProjectError] = useState("");
+  const [creatingProjectBusy, setCreatingProjectBusy] = useState(false);
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
-  const canWriteActivities = !!user && user.role !== "delivery";
+  const canWriteActivities = canWriteBeyondDelivery(user);
   // Mesma regra de `canWriteActivities` — a Entrega só lê `contact` (RolePermission,
   // `permissions.py`) —, com nome próprio porque é o painel de Contatos que ela gate-ia aqui.
-  const canWriteContacts = !!user && user.role !== "delivery";
+  const canWriteContacts = canWriteBeyondDelivery(user);
   // A mesma leitura de papel outra vez, e pelo mesmo motivo dos dois acima: a Entrega só lê
   // `engagement` (`permissions.py`, e a assimetria é a decisão da FDD 046 — quem entrega precisa
   // saber a que mandato o projeto pertence sem poder redefinir o que foi contratado). O desenho
   // não inventa permissão: ele deixa de mostrar o que a API recusaria.
-  const canWriteEngagements = !!user && user.role !== "delivery";
+  const canWriteEngagements = canWriteBeyondDelivery(user);
   const eligibleCommercialOpportunities = commercialOpportunities.filter(opportunity => opportunity.stage_kind === "won" && opportunity.engagement === null);
   const eligibleDesignPartnerAgreements = accountDocuments.filter(document => document.originated_engagement === null && document.signature_requests.some(signature => signature.status === "signed" && signature.signed_at));
+  // Só degraus **vendáveis**: oferta de aquisição não gera projeto e o backend recusa com 400
+  // (invariante 6 do mapa de linguagem) — oferecer aqui mostraria o que a API nega.
+  const sellableServices = services.filter(service => service.active && service.category === "commercial");
 
   const load = useCallback(() => Promise.all([
     api<Account>(`/clients/${id}/`),
@@ -163,8 +185,11 @@ export function AccountDetailPage({ id }: { id: number }) {
     api<Engagement[]>(`/engagements/?account=${id}`),
     canWriteEngagements ? api<CommercialOpportunity[]>(`/opportunities/?account=${id}`) : Promise.resolve([]),
     canWriteEngagements ? api<DocumentEntry[]>(`/documents/?account=${id}`) : Promise.resolve([]),
-  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements, loadedOpportunities, loadedDocuments]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements); setCommercialOpportunities(loadedOpportunities); setAccountDocuments(loadedDocuments);
+    // Só quem escreve o mandato alcança a ação de criar projeto, e é ela a única consumidora do
+    // catálogo aqui — a Entrega não vê o botão, então não precisa da chamada.
+    canWriteEngagements ? api<Service[]>("/services/") : Promise.resolve([]),
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements, loadedOpportunities, loadedDocuments, loadedServices]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements); setCommercialOpportunities(loadedOpportunities); setAccountDocuments(loadedDocuments); setServices(loadedServices);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, lifecycle_status: loadedClient.lifecycle_status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [canWriteEngagements, id]);
   useEffect(() => { void load(); }, [load]);
@@ -282,6 +307,44 @@ export function AccountDetailPage({ id }: { id: number }) {
     catch (cause) { setRemovingEngagement(null); setError((cause as Error).message); }
     finally { setBusy(false); }
   }
+  function openCreateProject(engagement: Engagement) {
+    setCreatingProject(engagement);
+    setNewProjectDraft(blankNewProject);
+    setCreatingProjectError("");
+  }
+  function closeCreateProject() {
+    setCreatingProject(null);
+    setNewProjectDraft(blankNewProject);
+    setCreatingProjectError("");
+  }
+  /**
+   * `POST /engagements/{id}/create-project/` — rota própria com guarda de papel (ver `api.ts`),
+   * e não `POST /projects/` cru. No erro (400 de data invertida ou degrau de aquisição, 403 de
+   * papel, 409 de mandato encerrado) o modal **não fecha** e o rascunho fica como estava: quem
+   * errou a data corrige sem redigitar o resto. A mensagem é a do servidor, sem reescrita — nada
+   * de `mensagemDeFalha` aqui, ela acrescentaria orientação genérica sobre uma resposta que já
+   * diz exatamente o que corrigir.
+   */
+  async function createProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!creatingProject) return;
+    setCreatingProjectError("");
+    setCreatingProjectBusy(true);
+    try {
+      await createProjectFromEngagement(creatingProject.id, {
+        name: newProjectDraft.name,
+        service: Number(newProjectDraft.service),
+        start_date: newProjectDraft.start_date,
+        due_date: newProjectDraft.due_date,
+      });
+      closeCreateProject();
+      await load();
+    } catch (cause) {
+      setCreatingProjectError((cause as Error).message);
+    } finally {
+      setCreatingProjectBusy(false);
+    }
+  }
   async function createActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const { invoice, ...resto } = activityDraft;
@@ -347,6 +410,23 @@ export function AccountDetailPage({ id }: { id: number }) {
       confirmLabel="Arquivar" busy={busy}
       onCancel={() => setRemovingEngagement(null)} onConfirm={() => void removeEngagement()}
     />}
+    {/* Criar projeto a partir do mandato — DAP `dap-engagement-r3`, decisão **B2**: exceção
+        deliberada à decisão 3 da r1 ("sem modal"), porque criar projeto produz algo que sai desta
+        tela, e não edita a lista que está aqui. Mesmo molde do "Criar projeto" do Comercial
+        (`CommercialPage.tsx`), com dois campos a mais (nome e degrau — decisão **C1**). */}
+    {creatingProject && <Modal title="Criar projeto" onClose={closeCreateProject}>
+      <p className="mb-5 text-sm text-slate-600">Em <strong className="text-ink">{creatingProject.name}</strong>. Defina o degrau e a janela inicial.</p>
+      {creatingProjectError && <p role="alert" className="alert--error mb-4">{creatingProjectError}</p>}
+      <form className="grid gap-4" onSubmit={event => void createProject(event)}>
+        <Field label="Nome"><input className="field" value={newProjectDraft.name} onChange={event => setNewProjectDraft({ ...newProjectDraft, name: event.target.value })} required /></Field>
+        <Field label="Degrau"><select className="field" value={newProjectDraft.service} onChange={event => setNewProjectDraft({ ...newProjectDraft, service: event.target.value })} required><option value="">Selecione</option>{sellableServices.map(service => <option key={service.id} value={service.id}>{rotuloDoDegrau(service)}</option>)}</select></Field>
+        <div className="form-grid">
+          <Field label="Início"><input className="field" type="date" value={newProjectDraft.start_date} onChange={event => setNewProjectDraft({ ...newProjectDraft, start_date: event.target.value })} required /></Field>
+          <Field label="Prazo final"><input className="field" type="date" value={newProjectDraft.due_date} onChange={event => setNewProjectDraft({ ...newProjectDraft, due_date: event.target.value })} required /></Field>
+        </div>
+        <button className="btn" type="submit" disabled={creatingProjectBusy}>{creatingProjectBusy ? "Criando…" : "Criar projeto"}</button>
+      </form>
+    </Modal>}
     {isArchiving && <ConfirmDialog
       title="Arquivar cliente"
       message={<>O cliente <strong className="text-ink">{client.name}</strong> e os contatos dele saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
@@ -447,6 +527,11 @@ export function AccountDetailPage({ id }: { id: number }) {
           <span className={`state ${engagementStatusBadge[engagement.status]}`}>{engagement.status_display}</span>
           <span className={`state ${engagementCommercialModelBadge[engagement.commercial_model]}`}>{engagement.commercial_model_display}</span>
           {canWriteEngagements && <div className="ml-auto flex gap-1.5">
+            {/* Decisão **D1**: todo mandato ativo oferece a ação, e não só `design_partner` — a
+                Transformation Partnership origina vários projetos pelo mesmo mandato. Mandato
+                `closed` não mostra o botão: o backend recusa com 409, e a tela não oferece o que a
+                API nega. */}
+            {engagement.status !== "closed" && <button type="button" className="btn btn--secondary" onClick={() => openCreateProject(engagement)}>Novo projeto</button>}
             <button type="button" className="btn btn--icon btn--secondary" aria-label={`Editar ${engagement.name}`} onClick={() => startEngagementEdit(engagement)}><Pencil className="size-4" /></button>
             <button type="button" className="btn btn--icon btn--secondary btn--secondary-danger" aria-label={`Arquivar ${engagement.name}`} onClick={() => setRemovingEngagement(engagement)}><Trash2 className="size-4" /></button>
           </div>}

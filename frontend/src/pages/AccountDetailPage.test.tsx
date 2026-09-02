@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -9,7 +9,13 @@ const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
   auth: { user: { id: 1, is_admin: true, role: "admin" } } as { user: { id: number; is_admin: boolean; role: string } },
 }));
-vi.mock("../api", () => ({ api: mocks.api, getConfig: mocks.getConfig }));
+vi.mock("../api", () => ({
+  api: mocks.api,
+  getConfig: mocks.getConfig,
+  // Espelha `createProjectFromEngagement` de `api.ts`: chama o mesmo `mocks.api`, para os testes
+  // afirmarem a chamada e controlarem a resposta do mesmo jeito que fazem com o resto da tela.
+  createProjectFromEngagement: (engagement: number, payload: unknown) => mocks.api(`/engagements/${engagement}/create-project/`, { method: "POST", body: JSON.stringify(payload) }),
+}));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 function atividade(overrides: Record<string, unknown> = {}) {
@@ -123,6 +129,23 @@ function documento(overrides: Record<string, unknown> = {}) {
 let opportunities: unknown[] = [oportunidade()];
 let documents: unknown[] = [documento()];
 
+/** Um degrau do catálogo, no formato que `ServiceSerializer` devolve. */
+function servico(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 10, name: "Discovery Sprint", active: true, tier: "discovery_sprint", tier_display: "Discovery Sprint",
+    category: "commercial", category_display: "Comercial", list_price: "3000.00", summary: "",
+    ...overrides,
+  };
+}
+
+// Um vendável e um de aquisição por padrão — o segundo existe para que o teste de C1 (o select do
+// modal de criar projeto não oferece aquisição) encontre algo a excluir mesmo quando outro teste
+// não sobrescreve a lista.
+let services: unknown[] = [
+  servico(),
+  servico({ id: 1, name: "Qualification Call", tier: "qualification_call", tier_display: "Qualification Call", category: "acquisition", category_display: "Aquisição", list_price: "0.00" }),
+];
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "" });
@@ -133,6 +156,7 @@ function stub() {
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
     if (path.startsWith("/processos")) return Promise.resolve(processos);
+    if (path === "/services/") return Promise.resolve(services);
     if (path.startsWith("/engagements")) return Promise.resolve(engagements);
     if (path.startsWith("/opportunities/?account=")) return Promise.resolve(opportunities);
     if (path.startsWith("/documents/?account=")) return Promise.resolve(documents);
@@ -151,6 +175,10 @@ beforeEach(() => {
   engagements = [];
   opportunities = [oportunidade()];
   documents = [documento()];
+  services = [
+    servico(),
+    servico({ id: 1, name: "Qualification Call", tier: "qualification_call", tier_display: "Qualification Call", category: "acquisition", category_display: "Aquisição", list_price: "0.00" }),
+  ];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -340,6 +368,29 @@ test("entrega não vê o formulário nem o botão de arquivar de interações", 
 
   expect(screen.queryByPlaceholderText("Do que se tratou o contato")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Arquivar interação: Alinhamento de escopo")).not.toBeInTheDocument();
+});
+
+test("superusuário com papel de entrega escreve contatos — a tela não esconde o que a API aceita", async () => {
+  // `createsuperuser` não pergunta o papel, e o default do modelo é `delivery`: este é o estado
+  // de quem acabou de subir o produto. A API o trata como admin (`User.is_admin_role` é
+  // `role == ADMIN or is_superuser`), então filtrar só por `role` escondia o formulário de quem
+  // a API aceitaria — o mesmo defeito que `Layout.tsx` já tinha corrigido para o menu lateral.
+  mocks.auth.user = { id: 4, is_admin: true, role: "delivery" };
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  expect(painel.getByRole("button", { name: "Adicionar contato" })).toBeInTheDocument();
+});
+
+test("entrega sem superusuário segue sem escrever contatos", async () => {
+  // A outra metade, para o conserto acima não virar liberação geral.
+  mocks.auth.user = { id: 5, is_admin: false, role: "delivery" };
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  expect(painel.queryByRole("button", { name: "Adicionar contato" })).not.toBeInTheDocument();
 });
 
 test("classificar chama a rota e o sinal gravado volta com a conduta, não só com o selo", async () => {
@@ -712,4 +763,131 @@ test("arquivar mandato com projeto vivo mostra a recusa do backend no topo da p�
   const alerta = await screen.findByRole("alert");
   expect(alerta).toHaveTextContent("Este engagement ainda tem 3 projeto(s) em aberto. Arquive esses projetos antes de arquivar o engagement.");
   expect(alerta).toHaveClass("alert--error");
+});
+
+// --- Criar projeto a partir do mandato (DAP `dap-engagement-r3`, decisões A1 · B2 · C1 · D1) ---
+
+test("o botão Novo projeto abre o modal e o POST sai com os quatro campos, no mandato certo", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const modal = within(dialog);
+  await user.type(modal.getByLabelText("Nome"), "Discovery Sprint — Cliente A");
+  await user.selectOptions(modal.getByLabelText("Degrau"), "10");
+  const [inicio, prazo] = dialog.querySelectorAll('input[type="date"]');
+  fireEvent.change(inicio, { target: { value: "2026-09-03" } });
+  fireEvent.change(prazo, { target: { value: "2026-09-12" } });
+
+  mocks.api.mockImplementationOnce(() => Promise.resolve({ id: 99, name: "Discovery Sprint — Cliente A" }));
+  await user.click(modal.getByRole("button", { name: "Criar projeto" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/engagements/5/create-project/", expect.objectContaining({ method: "POST" })));
+  const chamada = mocks.api.mock.calls.find(([rota]) => rota === "/engagements/5/create-project/")!;
+  const corpo = JSON.parse(chamada[1].body);
+  expect(corpo).toEqual({ name: "Discovery Sprint — Cliente A", service: 10, start_date: "2026-09-03", due_date: "2026-09-12" });
+});
+
+test("mandato encerrado não mostra o botão Novo projeto (D1) — o backend recusaria com 409", async () => {
+  engagements = [mandato({ status: "closed", status_display: "Encerrado", ended_at: "2026-06-30" })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.queryByRole("button", { name: "Novo projeto" })).not.toBeInTheDocument();
+  // A ação encerrada perde só o "Novo projeto" — Editar segue disponível.
+  expect(painel.getByLabelText("Editar Transformação Financeira")).toBeInTheDocument();
+});
+
+test("entrega não vê o botão Novo projeto — o mesmo portão canWriteEngagements", async () => {
+  mocks.auth.user = { id: 3, is_admin: false, role: "delivery" };
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.queryByRole("button", { name: "Novo projeto" })).not.toBeInTheDocument();
+});
+
+test("o select de degrau não oferece serviço de categoria acquisition", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const degrau = within(dialog).getByLabelText("Degrau") as HTMLSelectElement;
+  const valores = Array.from(degrau.options).map(option => option.value);
+
+  // id 10 é `commercial` (Discovery Sprint) — oferecido. id 1 é `acquisition` (Qualification
+  // Call) — o backend recusa com 400, e a tela não deve oferecer o que a API nega.
+  expect(valores).toContain("10");
+  expect(valores).not.toContain("1");
+});
+
+test("erro do servidor aparece no modal e ele não fecha — quem errou a data corrige sem redigitar tudo", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const modal = within(dialog);
+  await user.type(modal.getByLabelText("Nome"), "Discovery Sprint — Cliente A");
+  await user.selectOptions(modal.getByLabelText("Degrau"), "10");
+  const [inicio, prazo] = dialog.querySelectorAll('input[type="date"]');
+  fireEvent.change(inicio, { target: { value: "2026-09-12" } });
+  fireEvent.change(prazo, { target: { value: "2026-09-03" } });
+
+  mocks.api.mockImplementationOnce(() => Promise.reject(Object.assign(
+    new Error("O prazo final não pode ser anterior ao início."),
+    { status: 400 },
+  )));
+  await user.click(modal.getByRole("button", { name: "Criar projeto" }));
+
+  const alerta = await within(dialog).findByRole("alert");
+  expect(alerta).toHaveTextContent("O prazo final não pode ser anterior ao início.");
+  expect(alerta).toHaveClass("alert--error");
+  // O modal segue aberto e o rascunho não se perde.
+  expect(screen.getByRole("dialog", { name: "Criar projeto" })).toBeInTheDocument();
+  expect(modal.getByLabelText("Nome")).toHaveValue("Discovery Sprint — Cliente A");
+});
+
+test("depois do sucesso o modal fecha e a lista recarrega — o projects_count da linha muda", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato({ projects_count: 3 })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  let painel = within(screen.getByTestId("engagements-panel"));
+  expect(painel.getByText(/3 projetos/)).toBeInTheDocument();
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const modal = within(dialog);
+  await user.type(modal.getByLabelText("Nome"), "Discovery Sprint — Cliente A");
+  await user.selectOptions(modal.getByLabelText("Degrau"), "10");
+  const [inicio, prazo] = dialog.querySelectorAll('input[type="date"]');
+  fireEvent.change(inicio, { target: { value: "2026-09-03" } });
+  fireEvent.change(prazo, { target: { value: "2026-09-12" } });
+
+  // O `load()` recarrega a lista após o sucesso — a linha muda porque o mandato que o backend
+  // devolveria já tem o projeto novo contado.
+  mocks.api.mockImplementationOnce(() => {
+    engagements = [mandato({ projects_count: 4 })];
+    return Promise.resolve({ id: 99, name: "Discovery Sprint — Cliente A" });
+  });
+  await user.click(modal.getByRole("button", { name: "Criar projeto" }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Criar projeto" })).not.toBeInTheDocument());
+  painel = within(screen.getByTestId("engagements-panel"));
+  await waitFor(() => expect(painel.getByText(/4 projetos/)).toBeInTheDocument());
 });
