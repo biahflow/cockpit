@@ -143,6 +143,20 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   idempotente, então as reentregas (3 tentativas: 60s, 120s e 300s) não duplicam nada. Só
   `signature.accepted` e `signature.rejected` movem a assinatura; os demais eventos são ignorados
   com 200.
+  **A rodada tem mais de uma pessoa desde a ADR 0065**: `request-signature` aceita
+  `{"signers": [{"email": …, "role": "house"|"counterparty"|"witness"}]}` numa chamada só — os três
+  assinam o mesmo documento, e chamar o fornecedor uma vez por pessoa criaria três documentos
+  separados. O corpo antigo (`signer_email`) continua valendo como um único `counterparty`.
+  `ESIGN_HOUSE_SIGNER_EMAIL` (**vazio por padrão**) é o e-mail com que a casa assina: preenchido, o
+  Pulse acrescenta o signatário `house` a toda rodada, e quem envia não digita o próprio e-mail
+  toda vez; vazio, a rodada tem exatamente os signatários que o pedido nomeou. **O documento só
+  conta como assinado quando a rodada inteira assinou** — por isso o contrato só é aceito e o
+  mandato de Design Partner só abre depois do último, enquanto uma recusa vale na hora. A assinatura
+  vai **posicionada** na última página (`positions`, contada com `pypdf`) nos três tipos que têm
+  bloco de assinatura — acordo de Design Partner, NDA e contrato comercial; documento que não é PDF
+  legível vai sem posição, com o motivo no log, e a assinatura cai na página anexa como antes. **As
+  coordenadas x/y são estimativa não medida**: confira no painel do fornecedor onde os campos caíram
+  no primeiro envio real e ajuste `_POSICAO_POR_PAPEL` em `backend/apps/core/esign.py`.
 - **Pagamentos (Stripe)**: já vem `PAYMENTS_ENABLED=true` (ADR 0018). Sem `PAYMENTS_PROVIDER`, a
   integração roda no **registro local**: a fatura vive só no portal e "Marcar como paga" é o único
   caminho de baixa — modo previsto, não degradado, e a tela Financeiro funciona inteira assim. Para

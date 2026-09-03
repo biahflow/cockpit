@@ -10,7 +10,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from pgvector.django import VectorField
 
@@ -1000,17 +1000,45 @@ class Document(TimestampedModel):
         return self.account or self.commercial_opportunity or self.project
 
     @property
-    def is_signed(self) -> bool:
-        """Há uma assinatura concluída e datada para este documento.
+    def rodada_assinada(self) -> str | None:
+        """A referência da **rodada** deste documento em que todos assinaram — `None` se não há.
 
         `status=signed` sem `signed_at` é estado incompleto: os dois caminhos reais que fecham a
         assinatura (`mark-signed` e webhook) gravam ambos. Exigir os dois impede que um update cru
         de status transforme um arquivo em instrumento contratual sem carimbo temporal.
+
+        A pergunta é por rodada, e não por documento, desde a issue #115. Antes era um `.exists()`
+        — com um signatário só, "alguém assinou" e "está assinado" eram a mesma frase. Com a casa,
+        a parte contratante e uma testemunha na mesma solicitação, deixaram de ser: a assinatura da
+        casa tornaria o instrumento "assinado" antes de o cliente sequer abrir o link, e daí sairiam
+        o artefato aceito e o mandato de Design Partner aberto.
+
+        A rodada é o `document_ref`, e **toda solicitação tem uma** — a do fornecedor quando ele
+        devolve o `id` do `createDocument`, ou a cunhada por `esign.send_for_signature` (prefixo
+        `local:`) quando não há fornecedor. Sem esse cunho, o registro local deixaria todas as
+        solicitações do documento com `document_ref` vazio, ou seja, na *mesma* rodada: um
+        documento recusado, reenviado e assinado à mão ficaria com uma concluída e uma recusada no
+        mesmo grupo, e nunca mais contaria como assinado — o `NullProvider` é modo previsto, não
+        degradado, e o `mark-signed` manual é caminho legítimo nele.
+
+        Devolve a referência, e não um booleano, porque quem precisa saber *qual* rodada fechou
+        também precisa saber quem era a contraparte **dela** (`esign.email_da_contraparte`). Duas
+        consultas parecidas para a mesma pergunta divergiriam no primeiro conserto.
         """
-        return self.signature_requests.filter(
-            status=SignatureRequest.Status.SIGNED,
-            signed_at__isnull=False,
-        ).exists()
+        rodadas = self.signature_requests.values("document_ref").annotate(
+            total=Count("id"),
+            concluidas=Count(
+                "id",
+                filter=Q(status=SignatureRequest.Status.SIGNED, signed_at__isnull=False),
+            ),
+        )
+        fechadas = [r["document_ref"] for r in rodadas if r["total"] == r["concluidas"]]
+        return fechadas[0] if fechadas else None
+
+    @property
+    def is_signed(self) -> bool:
+        """Há uma rodada deste documento em que todos assinaram, com data."""
+        return self.rodada_assinada is not None
 
 
 # `kind` responde "que documento é este?" — uma pergunta só, de classificação. Abrir um
@@ -2580,8 +2608,28 @@ class SignatureRequest(models.Model):
         SIGNED = "signed", "Assinado"
         DECLINED = "declined", "Recusado"
 
+    class SignerRole(models.TextChoices):
+        """Quem é este signatário no instrumento — a casa, a outra parte, ou quem testemunha.
+
+        O papel não é enfeite: ele decide **onde** a assinatura aparece na página (o mapa de
+        posições vive num lugar só, em `esign.py`), qual `action` vai para o fornecedor
+        (testemunha assina como testemunha) e, na volta, para quem sai o convite do Discovery —
+        que é o cliente, nunca a casa nem a testemunha.
+        """
+
+        HOUSE = "house", "Biahflow"
+        COUNTERPARTY = "counterparty", "Parte contratante"
+        WITNESS = "witness", "Testemunha"
+
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="signature_requests")
     signer_email = models.EmailField()
+    # `counterparty` como default é a **decisão**, não conveniência: até a issue #115 o único
+    # signatário que existia era a outra parte, então toda linha já gravada está certa sob esse
+    # default e nenhum backfill é necessário. Um default vazio exigiria adivinhar o papel de cada
+    # assinatura histórica — e adivinhar aqui é escrever quem assinou o quê.
+    signer_role = models.CharField(
+        max_length=16, choices=SignerRole.choices, default=SignerRole.COUNTERPARTY
+    )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     # Referências do fornecedor (ADR 0007): `provider_ref` casa 1:1 com o signatário e é a
     # chave de busca do webhook; `document_ref` é o fallback junto com o e-mail.

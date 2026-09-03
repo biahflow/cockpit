@@ -2980,13 +2980,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Document'
+              $ref: '#/components/schemas/RequestSignatureRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Document'
+              $ref: '#/components/schemas/RequestSignatureRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Document'
+              $ref: '#/components/schemas/RequestSignatureRequest'
       security:
       - cookieAuth: []
       responses:
@@ -2994,7 +2994,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Document'
+                $ref: '#/components/schemas/RequestSignatureCreated'
           description: ''
   /api/v1/documents/{id}/unarchive/:
     post:
@@ -20164,6 +20164,62 @@ components:
           items: {}
       required:
       - items
+    RequestSignatureCreated:
+      type: object
+      properties:
+        signatures:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestSignatureCreatedItem'
+      required:
+      - signatures
+    RequestSignatureCreatedItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        signer_email:
+          type: string
+          format: email
+        signer_role:
+          type: string
+      required:
+      - id
+      - signer_email
+      - signer_role
+      - status
+    RequestSignatureRequest:
+      type: object
+      properties:
+        signers:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestSignatureSigner'
+        signer_email:
+          type: string
+          format: email
+    RequestSignatureSigner:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/RequestSignatureSignerRoleEnum'
+      required:
+      - email
+    RequestSignatureSignerRoleEnum:
+      enum:
+      - house
+      - counterparty
+      - witness
+      type: string
+      description: |-
+        * `house` - Biahflow
+        * `counterparty` - Parte contratante
+        * `witness` - Testemunha
     ReviewStateEnum:
       enum:
       - unknown

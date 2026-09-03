@@ -78,3 +78,76 @@ desligado e só e-mail os pendentes; após `mark-signed`, um novo lembrete lembr
 `mark-signed` de assinatura inexistente retorna 404. No webhook: HMAC errado → 401,
 evento fora do de-para → 200 sem mudar nada, e **reentrega do mesmo evento não altera
 `signed_at` nem duplica notificação** (`backend/tests/regression/test_esign_webhook_idempotent.py`).
+## Emenda (03/09/2026) — a assinatura tem lugar na página, e a rodada tem mais de uma pessoa
+
+A primeira assinatura real do produto foi concluída neste dia, e tudo o que esta FDD prometia
+funcionou: o arquivo subiu, o signatário assinou, a auditoria registrou, o webhook voltou e a
+solicitação virou `signed` sozinha. **E a assinatura não apareceu no campo de assinatura** — foi
+para uma página anexa, no fim do arquivo. O painel do fornecedor diz o motivo com todas as letras:
+*"esse signatário não possui campos de assinatura visíveis, a assinatura dele aparecerá somente na
+última página ao baixar o arquivo"*.
+
+Não é defeito do arquivo. A Autentique **não tem** detecção de âncora por texto (nada equivalente
+às *anchor tags* do DocuSign), então a linha `Assinatura: ______` do template não é lida por
+ninguém. Onde a assinatura aparece é propriedade da **solicitação**, e se declara em `positions`
+dentro de cada signatário do `createDocument` — campo que `request-signature` nunca mandou. Ao
+investigar o envio apareceu o segundo problema, maior: o template de contrato da casa tem **quatro**
+linhas de assinatura (a Biahflow, a parte contratante e duas testemunhas), que foi exatamente o caso
+do primeiro contrato real, e o portal só sabia pedir **um** signatário por solicitação. A decisão
+está na [ADR 0065](../adr/0065-a-assinatura-tem-lugar-na-pagina-e-a-rodada-e-que-fecha.md).
+
+### O que muda nas regras acima
+
+- **`request-signature` aceita uma lista.** O corpo canônico é
+  `{"signers": [{"email": …, "role": …}]}`, com `role` ∈ `house` · `counterparty` · `witness`
+  (`SignatureRequest.signer_role`, migração `0080`, default `counterparty` — toda linha já gravada
+  está certa sob esse default, e por isso não há backfill). O corpo antigo (`{"signer_email": …}`)
+  **continua aceito** e vira um único `counterparty`; a forma canônica vence quando as duas vêm no
+  mesmo corpo, e o alias morre na `/api/v2/` (`docs/ontology/aliases.md`). A resposta passa a
+  devolver a lista de solicitações criadas. Recusas de **400**: lista vazia, papel desconhecido e
+  e-mail repetido — este porque o fornecedor casa signatário por e-mail, e dois iguais tornam
+  ambíguo qual assinatura o webhook veio fechar.
+- **Uma chamada ao fornecedor, N signatários.** Os três assinam **o mesmo** documento: chamar o
+  fornecedor uma vez por pessoa criaria três documentos separados lá dentro, cada um com uma
+  assinatura, e nenhum deles seria o contrato que as três pessoas pensam ter assinado. Por isso o
+  adaptador Clicksign **recusa** mais de um signatário em vez de fazer laço — ele continua servindo
+  para o caso de um.
+- **A assinatura vai posicionada** quando dá: `z` é o **número da página** (a última, contada com
+  `pypdf` sobre os bytes que já buscávamos), e `x`/`y` são percentuais da página com origem no topo.
+  Só os `kind` com bloco de assinatura desenhado — `design_partner_agreement`, `nda` e
+  `commercial_contract` — são posicionados; a Proposta não tem bloco e o `kind` vazio não diz nada.
+  **Sem posição manda assim mesmo e registra o motivo no log**: o fluxo real de hoje usa `.docx`, e
+  recusar quebraria o que funciona. A testemunha sai com `action: "SIGN_AS_A_WITNESS"`, ocupa a
+  primeira linha livre de testemunha, e da terceira em diante vai sem posição — empilhar duas
+  assinaturas no mesmo ponto é pior que a página anexa. **As coordenadas x/y são estimativa
+  declarada, não medida**: o primeiro envio real é a medição, e ajustá-las é uma linha por papel.
+- **A casa entra sozinha** quando `ESIGN_HOUSE_SIGNER_EMAIL` está preenchido (vazio por padrão, e é
+  o que mantém a mudança reversível): quem envia não digita o próprio e-mail toda vez.
+- **"Assinado" passa a ser por rodada.** Todos os signatários criados numa chamada compartilham o
+  mesmo `document_ref`, e é essa a rodada; reenviar depois de uma recusa cria outra. `Document.is_signed`
+  era um `.exists()` — com um signatário, "alguém assinou" e "está assinado" eram a mesma frase, e
+  a propriedade estava certa por acidente. Agora exige uma rodada em que **todas** as solicitações
+  estão `signed` **com** `signed_at`.
+- **Aceitar exige todos; recusar exige um.** O artefato de contrato só vira `ACCEPTED` quando a
+  rodada fecha; uma recusa marca `REJECTED` na hora. Sem isso, a assinatura da **casa** aceitaria o
+  contrato, abriria o mandato de Design Partner (ADR 0061) e mandaria ao cliente o convite de marcar
+  o Discovery — anunciando um acordo que ele ainda não tinha assinado, sem nada ficar vermelho. E o
+  convite do Discovery passa a sair para o signatário `counterparty` da rodada, nunca para quem
+  assinou por último, que pode ser a casa ou a testemunha.
+
+### O que **não** muda
+
+A tela. Escolher contatos e papéis na SPA é `INTERFACE_CHANGE` e exige DAP aprovado antes de
+construir; até lá o alias `signer_email` é o que mantém o produto com caminho para pedir assinatura,
+e a rodada de três é montada por quem chama a API. Ficam de fora também: posicionar `NAME`/`CPF`/
+`DATE`, ordem de assinatura, verificações de segurança, entrega por WhatsApp/SMS, converter `.docx`
+para PDF do nosso lado, e reposicionar documento já enviado.
+
+### Regressão desta emenda
+
+`backend/tests/regression/test_o_alias_signer_email_sobrevive_na_v1.py` (o corpo antigo continua
+criando a solicitação de `counterparty`, e a forma nova vence quando as duas vêm juntas) e
+`backend/tests/regression/test_uma_rodada_de_tres_nao_abre_o_mandato_antes_da_hora.py` (a assinatura
+da casa não abre o mandato, não aceita o contrato e não dispara o convite). Os demais critérios —
+contagem de páginas, posições por papel, as duas linhas de testemunha, o `createDocument` único e as
+três recusas de 400 — estão em `backend/apps/core/tests/test_esign.py`.

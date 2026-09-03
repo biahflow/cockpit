@@ -2558,6 +2558,58 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         super().perform_create(serializer)
 
 
+def _signers_do_pedido(data: Any) -> list[esign.Signer]:
+    """A rodada de assinatura pedida no corpo — na forma nova, ou pelo alias `signer_email`.
+
+    `signers` é a forma canônica: uma lista de `{"email", "role"}`, na ordem em que os signatários
+    ocupam o bloco de assinatura do documento (duas testemunhas pegam as duas linhas, nessa ordem).
+    `signer_email` continua aceito e vira **um** signatário `counterparty` — a SPA ainda manda a
+    forma antiga, e a tela de escolher contatos e papéis depende de um DAP que ainda não existe;
+    quebrar agora deixaria o produto sem caminho nenhum. É o mecanismo de alias de entrada de
+    sempre (`docs/ontology/aliases.md` §2c), e a **forma nova vence** quando as duas vêm no mesmo
+    corpo. Morre na `/api/v2/`.
+
+    As três recusas são 400 (`InvalidInput`) porque é o **corpo** que está errado, não o estado:
+    lista vazia, papel fora do vocabulário, e e-mail repetido — este último porque o fornecedor casa
+    signatário por e-mail, e dois iguais tornam ambíguo qual solicitação o webhook vem fechar.
+    """
+    if "signers" in data:
+        pedidos = data.get("signers")
+        if not isinstance(pedidos, list) or not pedidos:
+            raise InvalidInput("Informe ao menos um signatário em «signers».")
+    else:
+        email_unico = str(data.get("signer_email", "")).strip()
+        if not email_unico:
+            raise InvalidInput("Informe o e-mail do signatário.")
+        pedidos = [{"email": email_unico, "role": SignatureRequest.SignerRole.COUNTERPARTY}]
+
+    signers: list[esign.Signer] = []
+    vistos: set[str] = set()
+    for pedido in pedidos:
+        if not isinstance(pedido, dict):
+            raise InvalidInput("Cada signatário é um objeto com «email» e «role».")
+        email = str(pedido.get("email", "")).strip()
+        if not email:
+            raise InvalidInput("Informe o e-mail do signatário.")
+        papel = str(pedido.get("role") or SignatureRequest.SignerRole.COUNTERPARTY).strip()
+        if papel not in SignatureRequest.SignerRole.values:
+            raise InvalidInput(f"Papel de signatário desconhecido: «{papel}».")
+        if email.lower() in vistos:
+            raise InvalidInput(
+                "O mesmo e-mail aparece duas vezes na lista de signatários. O fornecedor casa "
+                "signatário por e-mail, e dois iguais deixam ambíguo qual assinatura foi concluída."
+            )
+        vistos.add(email.lower())
+        signers.append(esign.Signer(email=email, role=papel))
+
+    casa = str(settings.ESIGN_HOUSE_SIGNER_EMAIL or "").strip()
+    # A casa entra sozinha quando o e-mail dela está configurado — e **não** entra duas vezes se
+    # quem enviou já a nomeou no corpo: seria o e-mail repetido que a regra acima recusa.
+    if casa and casa.lower() not in vistos:
+        signers.append(esign.Signer(email=casa, role=SignatureRequest.SignerRole.HOUSE))
+    return signers
+
+
 class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
@@ -2589,25 +2641,81 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
             return FileResponse(content, as_attachment=True, filename=document.original_name)
         return FileResponse(document.file.open("rb"), as_attachment=True, filename=document.original_name)
 
+    @extend_schema(
+        request=inline_serializer(
+            name="RequestSignatureRequest",
+            fields={
+                "signers": serializers.ListField(
+                    child=inline_serializer(
+                        name="RequestSignatureSigner",
+                        fields={
+                            "email": serializers.EmailField(),
+                            "role": serializers.ChoiceField(
+                                choices=SignatureRequest.SignerRole.choices, required=False
+                            ),
+                        },
+                    ),
+                    required=False,
+                ),
+                # Alias de entrada, morre na `/api/v2/` (`docs/ontology/aliases.md`): um único
+                # signatário `counterparty`. A forma canônica é `signers`, e ela vence quando as
+                # duas vêm no mesmo corpo.
+                "signer_email": serializers.EmailField(required=False),
+            },
+        ),
+        responses=inline_serializer(
+            name="RequestSignatureCreated",
+            fields={
+                "signatures": serializers.ListField(
+                    child=inline_serializer(
+                        name="RequestSignatureCreatedItem",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "status": serializers.CharField(),
+                            "signer_email": serializers.EmailField(),
+                            "signer_role": serializers.CharField(),
+                        },
+                    )
+                )
+            },
+        ),
+    )
     @action(detail=True, methods=["post"], url_path="request-signature")
     def request_signature(self, request: Request, pk: str | None = None) -> Response:
         document = self.get_object()
         if not esign.is_enabled():
             return Response({"detail": "Assinatura eletrônica desativada."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        signer_email = str(request.data.get("signer_email", "")).strip()
-        if not signer_email:
-            return Response({"detail": "Informe o e-mail do signatário."}, status=400)
+        signers = _signers_do_pedido(request.data)
         try:
-            ref = esign.send_for_signature(document, signer_email)
+            refs = esign.send_for_signature(document, signers)
         except esign.EsignProviderError as exc:
             logger.exception("solicitação de assinatura recusada para %s", document.original_name)
             raise EsignUnavailable() from exc
-        signature = SignatureRequest.objects.create(
-            document=document, signer_email=signer_email,
-            provider_ref=ref.provider_ref, document_ref=ref.document_ref, sign_url=ref.sign_url,
+        # Uma rodada, N solicitações, o **mesmo** `document_ref` — é ele que responde "esta rodada
+        # está assinada?" em `Document.is_signed`.
+        criadas = [
+            SignatureRequest.objects.create(
+                document=document, signer_email=signer.email, signer_role=signer.role,
+                provider_ref=ref.provider_ref, document_ref=ref.document_ref, sign_url=ref.sign_url,
+            )
+            for signer, ref in zip(signers, refs, strict=True)
+        ]
+        for signature in criadas:
+            esign.invite_signer(document, signature)  # no-op quando o fornecedor é quem convida
+        return Response(
+            {
+                "signatures": [
+                    {
+                        "id": signature.id,
+                        "status": signature.status,
+                        "signer_email": signature.signer_email,
+                        "signer_role": signature.signer_role,
+                    }
+                    for signature in criadas
+                ]
+            },
+            status=status.HTTP_201_CREATED,
         )
-        esign.invite_signer(document, signature)  # no-op quando o fornecedor é quem convida
-        return Response({"id": signature.id, "status": signature.status}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="remind-signature")
     def remind_signature(self, request: Request, pk: str | None = None) -> Response:
@@ -4280,21 +4388,23 @@ class DiscoveryBookingCreateView(APIView):
 
 
 def _discovery_attendee(engagement: Engagement) -> str:
-    """Quem o Google convida: quem assinou o acordo que abriu o mandato.
+    """Quem o Google convida: a **parte contratante** do acordo que abriu o mandato.
 
     O e-mail **não** vem do corpo da requisição, e é a decisão inteira: quem tem o link poderia,
     então, redirecionar o convite do Discovery para um endereço qualquer. O mandato já sabe de
     onde veio (`originating_design_partner_agreement`), e é dali que o endereço sai.
+
+    Era "quem assinou por último" (`order_by("-signed_at")`), e isso acertava por sorte enquanto o
+    acordo tinha um signatário só. Desde a issue #115 a rodada tem a casa e as testemunhas, e o
+    último a assinar pode ser qualquer um deles — o convite de calendário iria para dentro de casa,
+    ou para quem só testemunhou. Quem responde é `esign.email_da_contraparte`, o mesmo lugar que o
+    convite por e-mail consulta: duas buscas parecidas para a mesma pergunta divergiriam no
+    primeiro conserto, e esta já tinha divergido.
     """
     documento = engagement.originating_design_partner_agreement
     if documento is None:  # pragma: no cover - mandato de Design Partner sempre tem o acordo
         return ""
-    assinatura = (
-        documento.signature_requests.filter(status=SignatureRequest.Status.SIGNED)
-        .order_by("-signed_at", "-id")
-        .first()
-    )
-    return assinatura.signer_email if assinatura else ""
+    return esign.email_da_contraparte(documento, documento.rodada_assinada)
 
 
 class TaskSyncIntakeView(APIView):

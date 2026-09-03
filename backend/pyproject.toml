@@ -17,6 +17,10 @@ dependencies = [
   "openai>=2.52.1",
   "pgvector>=0.3",
   "psycopg[binary]>=3.2,<3.3",
+  # Conta as páginas do PDF que vai para o fornecedor de assinatura (ADR 0065). A Autentique
+  # posiciona a assinatura por **número de página** (`z`) e não aceita "última página": sem contar,
+  # não há como pedir a última. Biblioteca pura, BSD-3-Clause, sem dependência de runtime no 3.12.
+  "pypdf>=6,<7",
   "redis>=5.2,<7",
   # Rastreamento de erro (ADR 0012). Sempre instalado, inerte sem SENTRY_DSN.
   "sentry-sdk>=2,<3",

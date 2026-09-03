@@ -9,6 +9,12 @@ Dois lados, no mesmo molde do `tasksync.py`:
   transição `pending → signed/declined` de verdade. O `mark-signed` do `DocumentViewSet`
   segue como fallback manual para quando não há provedor configurado.
 
+Uma solicitação tem **N signatários numa rodada só** (issue #115, ADR 0065): a casa, a parte
+contratante e as testemunhas assinam o mesmo documento, então o fornecedor é chamado uma vez com a
+lista inteira. A rodada é o `document_ref` que ele devolve, e é ela — não "todas as solicitações do
+documento" — que responde se o instrumento está assinado. Onde cada assinatura aparece na página é
+propriedade da solicitação (`positions`), não do arquivo: a Autentique não lê âncora de texto.
+
 O fornecedor em uso é o **Autentique**; o Clicksign fica como segundo adaptador.
 `ESIGN_PROVIDER` escolhe qual vale e, sem um reconhecido, cai no `NullProvider` (só registra
 a intenção). Cada fornecedor traz seu próprio esquema de assinatura do webhook — header e
@@ -20,15 +26,17 @@ from __future__ import annotations
 
 import base64
 import hmac
+import io
 import json
 import logging
 import urllib.error
 import urllib.request
 import uuid
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol
 
+import pypdf
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
@@ -77,11 +85,31 @@ class SignatureRef:
     sign_url: str = ""  # link para o signatário assinar (vai no lembrete)
 
 
+@dataclass(frozen=True)
+class Signer:
+    """Um signatário da rodada: quem assina e **em que papel** (issue #115).
+
+    O papel é `SignatureRequest.SignerRole` — o vocabulário mora lá, num lugar só, e aqui só se
+    carrega o valor. Ele decide três coisas distintas, e nenhuma delas é derivável do e-mail: onde
+    a assinatura aparece na página (`POSICAO_POR_PAPEL`), qual `action` vai para o fornecedor
+    (testemunha assina como testemunha) e, na volta, para quem sai o convite do Discovery.
+    """
+
+    email: str
+    role: str
+
+
 class Provider(Protocol):
     """Contrato do adaptador de fornecedor (Autentique e Clicksign hoje)."""
 
-    def send(self, document: Document, signer_email: str) -> SignatureRef:
-        """Cria a solicitação no fornecedor e devolve as referências dela."""
+    def send(self, document: Document, signers: Sequence[Signer]) -> list[SignatureRef]:
+        """Cria **uma** solicitação com todos os signatários e devolve uma referência por signatário.
+
+        A lista é o contrato, e não um laço do chamador: os três signatários de um contrato assinam
+        **o mesmo** documento. Chamar o fornecedor uma vez por pessoa criaria três documentos
+        separados lá dentro, cada um com uma assinatura — o defeito exato que a issue #115 existe
+        para não ter, e que não faz barulho nenhum ao acontecer.
+        """
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
         """A entrega veio mesmo do fornecedor?"""
@@ -93,12 +121,13 @@ class Provider(Protocol):
 class NullProvider:
     """Sem fornecedor homologado: registra a intenção e não promete nada."""
 
-    def send(self, document: Document, signer_email: str) -> SignatureRef:
-        logger.info(
-            "Solicitação de assinatura sem provedor homologado doc=%s signer=%s",
-            document.pk, signer_email,
-        )
-        return SignatureRef()
+    def send(self, document: Document, signers: Sequence[Signer]) -> list[SignatureRef]:
+        for signer in signers:
+            logger.info(
+                "Solicitação de assinatura sem provedor homologado doc=%s signer=%s papel=%s",
+                document.pk, signer.email, signer.role,
+            )
+        return [SignatureRef() for _ in signers]
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
         return False
@@ -150,20 +179,129 @@ def aviso_de_entrega() -> str:
     return ""
 
 
-def _autentique_signer(signer_email: str) -> dict[str, str]:
+# --- Onde a assinatura aparece na página (issue #115, ADR 0065) ---------------------------------
+#
+# A Autentique **não tem** detecção de âncora por texto: a linha "Assinatura: ____" do documento
+# não é lida por ninguém. Onde a assinatura aparece é propriedade da *solicitação*, e se declara em
+# `positions` dentro de cada signatário do `createDocument`. Sem esse campo, o painel do fornecedor
+# diz o que disse na primeira assinatura real (03/09/2026): *"esse signatário não possui campos de
+# assinatura visíveis, a assinatura dele aparecerá somente na última página ao baixar o arquivo"*.
+#
+# Cada posição é `{x, y, z, element}`: `x`/`y` em **percentual 0–100** da largura/altura da página,
+# com origem no **topo**, e `z` é o **número da página** — não existe "última página", nem `z: -1`,
+# nem repetição em todas. Por isso a contagem de páginas (`paginas_do_pdf`) é pré-requisito, e não
+# refinamento.
+#
+# Os três valores vão como **string**, que é a forma que a documentação do fornecedor mostra nos
+# exemplos de `positions`; mandar número onde o exemplo mostra texto é a diferença entre uma
+# solicitação aceita e uma recusada por um detalhe que ninguém lembra de conferir.
+
+# ⚠️ ESTIMATIVA NÃO MEDIDA. Estas coordenadas **não puderam ser medidas**: não há conversor de
+# `.docx` para PDF nesta máquina, e o que vale é a geometria do PDF que a *Autentique* produz, não
+# a do Word. O primeiro envio real é a medição — abra o documento no painel do fornecedor, veja
+# onde cada campo caiu e ajuste os números aqui; é uma linha por papel. Elas colocam as quatro
+# assinaturas empilhadas na coluna da esquerda do bloco final do template, na ordem em que ele as
+# desenha: a casa, a parte contratante, e as duas linhas de testemunha.
+_POSICAO_POR_PAPEL: dict[str, tuple[str, str]] = {
+    # `SignatureRequest.SignerRole.HOUSE` — a linha "BIAHFLOW INOVA SIMPLES I.S."
+    "house": ("14", "56"),
+    # `…SignerRole.COUNTERPARTY` — "[RAZÃO SOCIAL DA PARTE B]" / "[RAZÃO SOCIAL DO PARCEIRO]"
+    "counterparty": ("14", "68"),
+}
+# As duas linhas de "Testemunhas:". Elas são **de quem for** — o template não reserva uma por lado
+# —, então a primeira testemunha da lista ocupa a linha 1 e a segunda, a linha 2. Da terceira em
+# diante não há linha, e ela vai **sem posição**: empilhar duas assinaturas no mesmo ponto produz um
+# documento ilegível, que é pior que uma assinatura na página anexa.
+_POSICOES_DA_TESTEMUNHA: tuple[tuple[str, str], ...] = (("14", "80"), ("14", "88"))
+
+# Os `Document.Kind` que têm bloco de assinatura desenhado. A Proposta não tem, e o `kind` vazio
+# não diz nada — nos dois casos a solicitação sai **sem** posição, com o motivo no log, em vez de
+# carimbar uma assinatura no meio de um texto corrido. Molde de `DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT`
+# (`models.py`): a decisão mora numa constante, não numa condição espalhada.
+DOCUMENT_KINDS_COM_BLOCO_DE_ASSINATURA = frozenset(
+    {"design_partner_agreement", "nda", "commercial_contract"}
+)
+
+
+def _acao_do_papel(role: str) -> str:
+    """`SIGN`, ou `SIGN_AS_A_WITNESS` para quem testemunha (valores do `SignerInput`)."""
+    return "SIGN_AS_A_WITNESS" if role == "witness" else "SIGN"
+
+
+def posicoes_da_rodada(
+    document: Document, signers: Sequence[Signer], conteudo: bytes
+) -> list[dict[str, str] | None]:
+    """Uma posição por signatário, alinhada com `signers` — `None` para quem vai sem posição.
+
+    Sem posição **manda assim mesmo** e registra o motivo. Não recusa: o fluxo real de hoje usa
+    `.docx`, e recusar quebraria o que funciona hoje para ganhar um posicionamento que aquele
+    formato não permite calcular.
+    """
+    sem_posicao: list[dict[str, str] | None] = [None for _ in signers]
+    if document.kind not in DOCUMENT_KINDS_COM_BLOCO_DE_ASSINATURA:
+        logger.info(
+            "documento %s (kind=%r) não tem bloco de assinatura; assinaturas sem posição",
+            document.pk, document.kind,
+        )
+        return sem_posicao
+    paginas = paginas_do_pdf(conteudo)
+    if paginas is None:
+        logger.info(
+            "documento %s não é um PDF legível; assinaturas sem posição", document.pk
+        )
+        return sem_posicao
+
+    pagina = str(paginas)  # a última página, que é onde o bloco de assinatura do template mora
+    testemunhas = 0
+    posicoes: list[dict[str, str] | None] = []
+    for signer in signers:
+        if signer.role == "witness":
+            if testemunhas >= len(_POSICOES_DA_TESTEMUNHA):
+                logger.info(
+                    "documento %s tem só %d linhas de testemunha; %s assina sem posição",
+                    document.pk, len(_POSICOES_DA_TESTEMUNHA), signer.email,
+                )
+                posicoes.append(None)
+                continue
+            x, y = _POSICOES_DA_TESTEMUNHA[testemunhas]
+            testemunhas += 1
+        else:
+            ponto = _POSICAO_POR_PAPEL.get(signer.role)
+            if ponto is None:  # pragma: no cover - a view recusa papel desconhecido com 400
+                logger.info(
+                    "papel %r sem posição declarada; %s assina sem posição",
+                    signer.role, signer.email,
+                )
+                posicoes.append(None)
+                continue
+            x, y = ponto
+        posicoes.append({"x": x, "y": y, "z": pagina, "element": "SIGNATURE"})
+    return posicoes
+
+
+def _autentique_signer(
+    signer: Signer, position: dict[str, str] | None = None
+) -> dict[str, object]:
     """Signatário no formato do Autentique, conforme quem avisa (ver `ESIGN_DELIVERY`).
 
     Na entrega por link o fornecedor não manda convite — e exige `name`, que derivamos do
     e-mail — mas devolve o `short_link`, que o portal usa no convite e no lembrete.
+
+    Sem posição o formato é **o mesmo de antes da issue #115**, chave por chave: é o que mantém o
+    modo `link` e o contrato da `/api/v1/` idênticos para o documento que não é PDF.
     """
-    if not delivers_by_link():
-        return {"email": signer_email, "action": "SIGN"}
-    return {
-        "email": signer_email,
-        "name": signer_email.split("@")[0],
-        "action": "SIGN",
-        "delivery_method": "DELIVERY_METHOD_LINK",
-    }
+    if delivers_by_link():
+        dados: dict[str, object] = {
+            "email": signer.email,
+            "name": signer.email.split("@")[0],
+            "action": _acao_do_papel(signer.role),
+            "delivery_method": "DELIVERY_METHOD_LINK",
+        }
+    else:
+        dados = {"email": signer.email, "action": _acao_do_papel(signer.role)}
+    if position is not None:
+        dados["positions"] = [position]
+    return dados
 
 
 class AutentiqueProvider:
@@ -171,20 +309,26 @@ class AutentiqueProvider:
 
     DEFAULT_BASE = "https://api.autentique.com.br/v2/graphql"
 
-    def send(self, document: Document, signer_email: str) -> SignatureRef:
+    def send(self, document: Document, signers: Sequence[Signer]) -> list[SignatureRef]:
         if not settings.ESIGN_API_TOKEN:
             logger.info("Autentique sem ESIGN_API_TOKEN; solicitação só registrada localmente")
-            return SignatureRef()
+            return [SignatureRef() for _ in signers]
         content = _document_bytes(document)
         if not content:
             logger.warning("Documento %s sem conteúdo; nada enviado ao Autentique", document.pk)
-            return SignatureRef()
+            return [SignatureRef() for _ in signers]
+        posicoes = posicoes_da_rodada(document, signers, content)
         operations = json.dumps(
             {
                 "query": _AUTENTIQUE_CREATE,
                 "variables": {
                     "document": {"name": document.original_name},
-                    "signers": [_autentique_signer(signer_email)],
+                    # Um `createDocument` com N signatários, nunca N chamadas: é a mesma folha de
+                    # papel que os três assinam.
+                    "signers": [
+                        _autentique_signer(signer, posicao)
+                        for signer, posicao in zip(signers, posicoes, strict=True)
+                    ],
                     "file": None,
                     "sandbox": bool(settings.ESIGN_SANDBOX),
                 },
@@ -196,7 +340,7 @@ class AutentiqueProvider:
             content,
         )
         data = self._post(body, content_type)
-        return self._parse_created(data, signer_email)
+        return self._parse_created(data, signers)
 
     @staticmethod
     def _parse_ping(data: dict | None) -> tuple[bool, str]:
@@ -250,19 +394,46 @@ class AutentiqueProvider:
         )
 
     @staticmethod
-    def _parse_created(data: dict | None, signer_email: str) -> SignatureRef:
-        """Lê a resposta do `createDocument` (separada do I/O para ficar testável)."""
+    def _parse_created(
+        data: dict | None, signers: Sequence[Signer]
+    ) -> list[SignatureRef]:
+        """Lê a resposta do `createDocument` (separada do I/O para ficar testável).
+
+        Uma referência por signatário **pedido**, casada por e-mail, e nenhuma inventada. A versão
+        anterior escolhia *um* signatário e caía num fallback `signatures[0]` quando o e-mail não
+        casava: com um signatário só ele acertava por sorte, mas numa lista de três pegaria calado
+        a referência de outra pessoa — e o webhook passaria a fechar a assinatura errada.
+
+        O `document_ref` é o mesmo para todos (é o `id` do documento criado) e **é a rodada**: as
+        solicitações que o compartilham são as que precisam estar todas assinadas para o documento
+        contar como assinado (`Document.is_signed`).
+        """
         created = ((data or {}).get("data") or {}).get("createDocument") or {}
-        signatures = created.get("signatures") or []
-        chosen = next(
-            (s for s in signatures if str(s.get("email", "")).lower() == signer_email.lower()),
-            signatures[0] if signatures else {},
-        )
-        return SignatureRef(
-            provider_ref=str(chosen.get("public_id", "")),
-            document_ref=str(created.get("id", "")),
-            sign_url=str((chosen.get("link") or {}).get("short_link", "")),
-        )
+        document_ref = str(created.get("id", ""))
+        por_email = {
+            str(assinatura.get("email", "")).lower(): assinatura
+            for assinatura in created.get("signatures") or []
+        }
+        refs: list[SignatureRef] = []
+        for signer in signers:
+            assinatura = por_email.get(signer.email.lower())
+            if assinatura is None:
+                logger.warning(
+                    "Autentique não devolveu assinatura para %s no documento %s",
+                    signer.email, document_ref or "(sem referência)",
+                )
+                # Sem `provider_ref` — e é `send_for_signature` que transforma isso em falha alta,
+                # em vez de gravar uma solicitação que o webhook nunca poderá fechar.
+                refs.append(SignatureRef(document_ref=document_ref))
+                continue
+            refs.append(
+                SignatureRef(
+                    provider_ref=str(assinatura.get("public_id", "")),
+                    document_ref=document_ref,
+                    sign_url=str((assinatura.get("link") or {}).get("short_link", "")),
+                )
+            )
+        return refs
 
     def _post(self, body: bytes, content_type: str) -> dict | None:  # pragma: no cover - I/O
         return _http_raw(
@@ -291,15 +462,23 @@ class ClicksignProvider:
 
     DEFAULT_BASE = "https://sandbox.clicksign.com"
 
-    def send(self, document: Document, signer_email: str) -> SignatureRef:
+    def send(self, document: Document, signers: Sequence[Signer]) -> list[SignatureRef]:
+        if len(signers) > 1:
+            # **Recusa, e não laço.** `_create_signature_request` faz um upload por chamada, então
+            # repeti-la produziria N documentos separados no Clicksign, cada um com uma assinatura —
+            # e nenhum deles seria o contrato que as três pessoas pensam ter assinado. Falhar alto
+            # aqui é a diferença entre um adaptador incompleto e um adaptador que mente.
+            raise EsignProviderError(
+                "o adaptador Clicksign não implementa múltiplos signatários numa solicitação"
+            )
         if not settings.ESIGN_API_TOKEN:
             logger.info("Clicksign sem ESIGN_API_TOKEN; solicitação só registrada localmente")
-            return SignatureRef()
+            return [SignatureRef() for _ in signers]
         content = _document_bytes(document)
         if not content:
             logger.warning("Documento %s sem conteúdo; nada enviado ao Clicksign", document.pk)
-            return SignatureRef()
-        return self._create_signature_request(document, signer_email, content)
+            return [SignatureRef() for _ in signers]
+        return [self._create_signature_request(document, signers[0].email, content)]
 
     def verify(self, body: bytes, headers: Mapping[str, str]) -> bool:
         secret = settings.ESIGN_WEBHOOK_SECRET
@@ -390,23 +569,66 @@ def has_provider() -> bool:
     return not isinstance(get_provider(), NullProvider)
 
 
-def send_for_signature(document: Document, signer_email: str) -> SignatureRef:
-    """Envia o documento para assinatura e devolve as referências do fornecedor.
+def send_for_signature(document: Document, signers: Sequence[Signer]) -> list[SignatureRef]:
+    """Envia o documento para assinatura e devolve uma referência **por signatário**.
 
     Levanta `EsignProviderError` quando **havia um fornecedor** e ele não devolveu referência: sem
     `provider_ref` a solicitação não existe do lado dele, e gravá-la aqui produziria uma assinatura
     que ninguém assina, que o webhook nunca fecha (não há o que casar) e que o lembrete ainda
     cobraria de uma pessoa de verdade — sem link, porque `sign_url` também vem vazio.
 
+    A guarda vale **por signatário** desde a issue #115: numa rodada de três, dois voltarem e um não
+    é exatamente o caso em que gravar o que voltou deixa o documento pendente para sempre — a rodada
+    nunca fecha, porque a solicitação que falta não tem como ser assinada.
+
     Sem fornecedor, referência vazia é **correta**: o `NullProvider` registra a intenção e o
     `mark-signed` manual é o caminho previsto. A distinção é toda esta função.
+
+    **A rodada é um fato nosso, e por isso ela é cunhada aqui quando o fornecedor não a dá.** Ela
+    nasce no instante em que a casa pede as assinaturas, e só *coincide* com o `id` do
+    `createDocument` quando existe um fornecedor para emiti-lo. Deixar `document_ref` vazio jogaria
+    todas as solicitações do documento na mesma rodada (`Document.rodada_assinada`), e um documento
+    recusado, reenviado e assinado à mão nunca mais contaria como assinado — no modo que o
+    `mark-signed` manual existe para servir.
     """
-    ref = get_provider().send(document, signer_email)
-    if has_provider() and not ref.provider_ref:
-        raise EsignProviderError(
-            f"{settings.ESIGN_PROVIDER} não devolveu referência para {document.pk}"
-        )
-    return ref
+    refs = list(get_provider().send(document, signers))
+    if has_provider():
+        # `strict=True`: adaptador que devolve lista de tamanho diferente do pedido é defeito de
+        # programação, e o par signatário↔referência abaixo já estaria trocado.
+        for signer, ref in zip(signers, refs, strict=True):
+            if not ref.provider_ref:
+                raise EsignProviderError(
+                    f"{settings.ESIGN_PROVIDER} não devolveu referência para {document.pk} "
+                    f"({signer.role})"
+                )
+    if refs and not any(ref.document_ref for ref in refs):
+        # O prefixo é o que torna a referência auto-explicativa no banco e impede colisão com um
+        # id de fornecedor. `not any`, e não `not all`: os signatários de uma chamada vêm do mesmo
+        # `createDocument` e ou todos têm a referência, ou nenhum tem.
+        rodada = f"local:{uuid.uuid4().hex}"
+        refs = [replace(ref, document_ref=rodada) for ref in refs]
+    return refs
+
+
+def paginas_do_pdf(conteudo: bytes) -> int | None:
+    """Quantas páginas o PDF tem — `None` quando não é PDF ou não se consegue ler.
+
+    **Nunca levanta**, e essa é a decisão inteira: ela é auxílio de posicionamento, não a operação.
+    Um PDF corrompido tem de produzir uma assinatura sem posição — que é o comportamento de hoje,
+    ruim mas funcional —, e não uma solicitação de assinatura que falha.
+
+    O reconhecimento é pelo **conteúdo** (`%PDF`) e não pela extensão do nome: `Document.original_name`
+    é digitado por gente, e `ALLOWED_DOCUMENT_EXTENSIONS` (`serializers.py`) aceita muito mais
+    formatos que PDF — inclusive o `.docx` que o fluxo real usa hoje.
+    """
+    if not conteudo.startswith(b"%PDF"):
+        logger.debug("conteúdo do documento não é PDF; nada a contar")
+        return None
+    try:
+        return len(pypdf.PdfReader(io.BytesIO(conteudo)).pages)
+    except Exception as exc:  # noqa: BLE001 - ver a docstring: contar página não derruba o envio
+        logger.info("PDF ilegível ao contar páginas (%s); a assinatura vai sem posição", exc)
+        return None
 
 
 def _document_bytes(document: Document) -> bytes:
@@ -493,11 +715,54 @@ def find_signature(event: Event) -> SignatureRequest | None:
     return None
 
 
+def email_da_contraparte(document: Document, document_ref: str | None) -> str:
+    """O e-mail da **parte contratante** de uma rodada — nunca o de quem assinou por último.
+
+    Enquanto o único signatário era o cliente, "quem assinou por último" e "o cliente" eram a mesma
+    pessoa. Com a casa e uma testemunha na mesma rodada deixaram de ser, e o que dependia daquele
+    atalho passava a apontar para quem não vai marcar Discovery nenhum. São **dois** os sítios que
+    dependiam: o convite por e-mail (`apply_decision`, abaixo) e o convidado do evento no Google
+    (`views._discovery_attendee`) — daí esta função ser pública e não haver duas consultas parecidas.
+
+    Sem `counterparty` na rodada — o que não deveria acontecer, porque a view sempre cria ao menos
+    um — devolve vazio e diz por quê no log: quem chama trata a ausência, e nenhum dos dois pode
+    levantar por causa disso.
+    """
+    from .models import SignatureRequest
+
+    if document_ref is None:
+        return ""
+    contraparte = (
+        document.signature_requests.filter(
+            document_ref=document_ref,
+            signer_role=SignatureRequest.SignerRole.COUNTERPARTY,
+        )
+        .order_by("id")
+        .first()
+    )
+    if contraparte is None:
+        logger.warning(
+            "rodada %s do documento %s não tem signatário «counterparty»; "
+            "quem depende do endereço da contraparte fica sem ele",
+            document_ref or "(sem referência)", document.pk,
+        )
+        return ""
+    return contraparte.signer_email
+
+
 def _close_contract_artifacts(document, signature_status: str) -> None:  # type: ignore[no-untyped-def]
-    """Fecha o artefato de contrato ligado ao documento com a decisão do signatário (FDD 016)."""
+    """Fecha o artefato de contrato ligado ao documento com a decisão do signatário (FDD 016).
+
+    **A assimetria é deliberada: aceitar exige todos, recusar exige um.** Uma assinatura basta para
+    o contrato estar recusado — não há o que esperar depois de alguém dizer não. Aceitar, não: com
+    a casa, o cliente e a testemunha na mesma rodada, marcar `ACCEPTED` na primeira assinatura faria
+    o contrato ser aceito pela assinatura da **própria casa**, antes de o cliente abrir o link.
+    """
     from .models import Artifact, SignatureRequest
 
     if signature_status == SignatureRequest.Status.SIGNED:
+        if not document.is_signed:
+            return
         decision = Artifact.Status.ACCEPTED
     elif signature_status == SignatureRequest.Status.DECLINED:
         decision = Artifact.Status.REJECTED
@@ -566,7 +831,9 @@ def apply_decision(signature_pk: int, new_status: str) -> SignatureRequest:
         # aviso interno, porque é o mesmo degrau: o mandato nasceu. Best-effort de propósito
         # (`discovery_booking.enviar_convite` nunca levanta): a assinatura já está aplicada e o
         # webhook do fornecedor reentregaria em laço um evento que já teve efeito.
-        discovery_booking.enviar_convite(engagement, signature.signer_email)
+        discovery_booking.enviar_convite(
+            engagement, email_da_contraparte(document, signature.document_ref)
+        )
     return signature
 
 

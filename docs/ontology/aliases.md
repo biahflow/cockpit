@@ -29,6 +29,7 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
 | chave `ai_opportunity` (só leitura) | `ai_potential` | `serializers.py` | `/api/v2/` |
 | chave `client_consent` (só leitura) | `account_consent` | `serializers.py` | `/api/v2/` |
+| chave de entrada `signer_email` (um signatário) | `signers[]`, lista de `{email, role}` | `views.py` (`_signers_do_pedido`) | `/api/v2/` |
 | valores `esqueceu` / `nao_pode` / `insatisfeito` | `forgot` / `unable_to_pay` / `dissatisfied` | `Activity.cobranca_sinal` e serializers | junto do renome para `DunningSignal`; alias morre na `/api/v2/` |
 | degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
 | valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
@@ -57,6 +58,18 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > para `ai_potential` (migração `0071`) e `client_consent` renomeado para `account_consent`
 > (migração `0072`). Os aliases de rota, payload e enum continuam com prazo na `/api/v2/`; por
 > isso encerrar a issue não torna a allowlist zero nem revoga os critérios operacionais registrados.
+
+> **`signer_email` é alias de *entrada*, e não renome de campo — é a segunda linha da tabela com
+> essa natureza, junto de `gate_outcome`.** Nada foi rebatizado: o `request-signature` passou a
+> aceitar uma **lista** de signatários com papel (`signers`), porque a casa, a parte contratante e as
+> testemunhas assinam o mesmo documento e só a lista permite pedir isso numa chamada (ADR 0065). A
+> chave antiga continua sendo aceita e vira um único `counterparty`; a canônica vence quando as duas
+> vêm no mesmo corpo, pela regra da §2c. Ela sobrevive porque a SPA ainda a escreve e a tela de
+> escolher contatos e papéis é `INTERFACE_CHANGE` sem DAP aprovado — remover o alias antes disso
+> deixaria o produto sem caminho nenhum para pedir assinatura. A regressão que a §2c exige está em
+> `backend/tests/regression/test_o_alias_signer_email_sobrevive_na_v1.py`, e ela não é formalidade:
+> quem escreve a chave antiga é o navegador, então sem o teste a linha que a normaliza não tem
+> chamador **dentro** do repositório.
 
 ### Já pagos pela #67 — 28/08/2026
 

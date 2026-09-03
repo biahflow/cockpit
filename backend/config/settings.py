@@ -298,6 +298,12 @@ SPECTACULAR_SETTINGS = {
         # componente independentemente de qual serializer o esquema encontrar primeiro.
         "KpiUnitEnum": "apps.core.models.KpiUnit",
         "KpiDirectionEnum": "apps.core.models.KpiDirection",
+        # `User.role` já ocupava o nome `RoleEnum` quando o corpo do `request-signature` (ADR 0065)
+        # trouxe um segundo campo chamado `role` — o papel do signatário. Sem o override o desempate
+        # renomeia o componente **antigo** para `Role8d9Enum`, quebrando quem já lê `RoleEnum` por
+        # causa de um campo novo que nada tem a ver com ele. Mesmo defeito e mesma correção do
+        # `SourceEnum` acima; o papel do signatário fica com o nome derivado do próprio componente.
+        "RoleEnum": "apps.core.models.User.Role",
     },
     # A issue #67 fecha com dois critérios de aceite que ainda faltavam, e este é o segundo:
     # anunciar no próprio contrato quais chaves de payload são o alias legado da `/api/v1/`
@@ -534,6 +540,11 @@ ESIGN_SANDBOX = os.getenv("ESIGN_SANDBOX", "true").lower() == "true"
 # Quem avisa o signatário: "email" (o fornecedor manda o convite, padrão) ou "link" (o
 # fornecedor devolve o link de assinatura e o portal se encarrega de entregar).
 ESIGN_DELIVERY = os.getenv("ESIGN_DELIVERY", "email").lower()
+# O e-mail com que a **casa** assina (ADR 0065). Preenchido, o Pulse acrescenta um signatário
+# `house` a toda rodada de assinatura — quem envia não digita o próprio e-mail toda vez. **Vazio
+# por padrão**, e é o que torna a entrega reversível: sem ele, a rodada tem exatamente os
+# signatários que o corpo do pedido nomeou, como antes desta ADR.
+ESIGN_HOUSE_SIGNER_EMAIL = os.getenv("ESIGN_HOUSE_SIGNER_EMAIL", "")
 
 # Gateway de pagamento (FDD 028): cobrança emitida no fornecedor + webhook de baixa assinado.
 # Ligado por padrão (ADR 0018) e sem provedor nomeado por padrão — o que significa `NullProvider`:
