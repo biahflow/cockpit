@@ -67,3 +67,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0059 — A suíte não atravessa a rede para provar um adapter
 - 0060 — Publicável é campo próprio, e publicar é o ato de revisão humana
 - 0061 — A assinatura abre o mandato, e o que ela abre se declara antes
+- 0062 — O fallback de WhatsApp não assume quando não sabe

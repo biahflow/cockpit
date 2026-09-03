@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -32,7 +33,7 @@ from django.core import signing
 from django.core.mail import send_mail
 from django.utils import timezone
 
-from . import flags, kickoff
+from . import flags, kickoff, notifications
 from .booking import BOOKING_HORIZON_DAYS
 
 logger = logging.getLogger(__name__)
@@ -94,15 +95,22 @@ def engagement_from_token(token: str) -> Engagement:
 
 
 def discovery_agendado(engagement: Engagement) -> Booking | None:
-    """A reserva viva do Discovery deste mandato, se já houver uma (decisão C1: não remarca)."""
+    """A sessão de Discovery deste mandato, marcada ou já realizada (decisão C1: não remarca).
+
+    **Realizada conta**, e a exclusão é só de `CANCELED`. Filtrar por `SCHEDULED` abriria um buraco
+    que nenhuma das duas metades enxerga sozinha: o job `sessions_held` passa a sessão para `held`
+    no dia seguinte ao dela, e o link do convite vale duas semanas — o cliente reabriria a página
+    depois da conversa, encontraria horários oferecidos de novo e marcaria um **segundo** Discovery,
+    ganhando um convite do Google para uma sessão que ninguém vai fazer.
+
+    A pergunta que esta função responde não é "há sessão no futuro?", é **"este mandato já teve seu
+    Discovery marcado?"** — e o que responde "não" a ela é o cancelamento, não o tempo passar.
+    """
     from .models import Booking
 
     return (
-        Booking.objects.filter(
-            engagement=engagement,
-            status=Booking.Status.SCHEDULED,
-            archived_at__isnull=True,
-        )
+        Booking.objects.filter(engagement=engagement, archived_at__isnull=True)
+        .exclude(status=Booking.Status.CANCELED)
         .order_by("starts_at")
         .first()
     )
@@ -163,6 +171,131 @@ def registrar_sessao_no_projeto(project: Project, engagement: Engagement) -> Boo
         tarefa.status = Task.Status.DONE
         tarefa.save(update_fields=["status", "completed_at", "updated_at"])
     return reserva
+
+
+# O Discovery Sprint dura de **5 a 7 dias** — é o que o convite promete ao cliente — e o template
+# de kickoff do degrau fecha no Executive Readout em D+7 (`kickoff.KICKOFF_TEMPLATES`). Constante
+# nomeada e não `+ 7` solto na criação: o número responde "quanto dura o Discovery", e um literal
+# no meio da linha não diz isso a quem for encurtar o sprint depois.
+DURACAO_DO_DISCOVERY_SPRINT_EM_DIAS = 7
+
+# A oração que o kickoff anuncia no e-mail e na notificação. Aqui não houve venda **nem** clique de
+# ninguém da casa: quem deu a partida foi o cliente.
+ORIGEM_DA_SESSAO_MARCADA = "quando o cliente marcou a sessão de Discovery"
+
+
+def _avisar_a_casa(engagement: Engagement, mensagem: str) -> None:
+    """Diz a quem responde pelo mandato que o projeto ficou para a mão. **Nunca levanta.**
+
+    Quem chama já está no caminho da falha, e a resposta do agendamento é 201 de qualquer jeito
+    (ver `abrir_projeto_da_sessao`): deixar o aviso derrubar a rota pública seria trocar o defeito
+    silencioso por um erro na cara do cliente que acabou de escolher o horário.
+    """
+    try:
+        notifications.notify(
+            [engagement.owner], "booking", mensagem, f"/contas/{engagement.account_id}"
+        )
+    except Exception:  # noqa: BLE001 - ver docstring: o aviso não derruba o agendamento
+        logger.exception("aviso do Discovery do mandato %s não foi gravado", engagement.pk)
+
+
+def abrir_projeto_da_sessao(engagement: Engagement, reserva: Booking) -> Project | None:
+    """O projeto nasce no instante em que o cliente marca o horário. Devolve-o, ou `None`.
+
+    Era o último passo manual do caminho feliz: alguém abria o detalhe da conta e clicava em
+    "Novo projeto". No instante da reserva **tudo já está determinado** — o mandato existe, o
+    degrau é o Discovery Sprint (é para isso que o acordo foi assinado) e as datas saem da sessão,
+    porque o dia dela é o dia 0.
+
+    **Best-effort, e essa é a decisão inteira.** Falhe o que falhar aqui, o agendamento segue 201:
+    o cliente marcou o horário, e o projeto é consequência interna da casa — derrubar a reserva
+    por causa dela seria punir o cliente por um problema nosso. Fica o log e o aviso interno, no
+    molde de `kickoff.finalize`.
+
+    Duas condições, e as duas são necessárias:
+
+    - **nenhum projeto vivo do degrau no mandato.** É a mesma pergunta que a guarda de duplo clique
+      faz, e pela mesma razão: um mandato origina vários projetos por desenho (ADR 0050), mas o
+      Discovery Sprint dele é um só;
+    - **existe um `Service` ativo no degrau.** Sem ele o projeto cairia no template genérico de
+      `kickoff.template_for` e nasceria **sem os marcos que são a metodologia** — sem walkthrough,
+      sem custo do estado atual, sem Executive Readout — e nada ficaria vermelho. Criar assim é
+      pior do que não criar: a reserva do cliente continua valendo e alguém cria o projeto na mão,
+      sabendo o que faltou.
+    """
+    try:
+        project = _criar_projeto_da_sessao(engagement, reserva)
+    except Exception:  # noqa: BLE001 - ver docstring: o projeto não derruba o agendamento
+        logger.exception(
+            "projeto do Discovery do mandato %s não foi criado (reserva %s)",
+            engagement.pk,
+            reserva.pk,
+        )
+        _avisar_a_casa(
+            engagement,
+            f"{engagement.account.name} marcou o Discovery, mas o projeto não nasceu — "
+            "veja o log. Crie o projeto na mão.",
+        )
+        return None
+    if project is None:
+        return None
+    try:
+        # Fora da transação, como nos outros dois chamadores: são efeitos externos (Drive, e-mail).
+        # **Em `try` próprio, e não junto do de cima**: o projeto já existe aqui, e um anúncio que
+        # falha não pode fazer o aviso interno dizer "o projeto não nasceu" — mandaria alguém criar
+        # na mão um projeto que está lá.
+        kickoff.finalize(project, origem=ORIGEM_DA_SESSAO_MARCADA)
+    except Exception:  # noqa: BLE001 - o anúncio do kickoff não desfaz o projeto
+        logger.exception("kickoff do projeto %s do Discovery não completou", project.pk)
+    return project
+
+
+def _criar_projeto_da_sessao(engagement: Engagement, reserva: Booking) -> Project | None:
+    from .models import Project, Service
+
+    ja_existe = Project.objects.filter(
+        engagement=engagement,
+        service__tier=Service.Tier.DISCOVERY_SPRINT,
+        archived_at__isnull=True,
+    ).exists()
+    if ja_existe:
+        return None
+    # No máximo um, pela restrição de banco "um `Service` ativo por `tier`" — o `first()` é para
+    # o tipo, não para desempate.
+    degrau = Service.objects.filter(
+        tier=Service.Tier.DISCOVERY_SPRINT, active=True, archived_at__isnull=True
+    ).order_by("id").first()
+    if degrau is None:
+        logger.warning(
+            "Discovery do mandato %s agendado sem degrau ativo no catálogo: projeto não criado",
+            engagement.pk,
+        )
+        _avisar_a_casa(
+            engagement,
+            f"{engagement.account.name} marcou o Discovery, mas o projeto não nasceu: não há "
+            "Discovery Sprint ativo no catálogo. Crie o degrau e o projeto na mão.",
+        )
+        return None
+
+    # A data **local** da reserva, e não a UTC: uma sessão das 21h viraria o dia seguinte, e o
+    # cronograma inteiro nasceria deslocado. É a mesma armadilha de `registrar_sessao_no_projeto`.
+    inicio = timezone.localtime(reserva.starts_at).date()
+    conta = engagement.account
+
+    def salvar() -> Project:
+        return Project.objects.create(
+            engagement=engagement,
+            name=f"Discovery Sprint — {conta.name}",
+            # **O dono é o do mandato, e é a diferença que mais confunde quem comparar com a
+            # action.** Lá o dono é `request.user`; aqui a rota é pública e não há usuário
+            # autenticado nenhum — quem responde pelo trabalho é quem responde pelo mandato.
+            owner=engagement.owner,
+            service=degrau,
+            start_date=inicio,
+            due_date=inicio + timedelta(days=DURACAO_DO_DISCOVERY_SPRINT_EM_DIAS),
+        )
+
+    return kickoff.criar_projeto_do_mandato(engagement, salvar)
 
 
 @dataclass(frozen=True)

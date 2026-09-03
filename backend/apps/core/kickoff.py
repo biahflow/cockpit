@@ -8,22 +8,29 @@ Nada aqui bloqueia a conversão — os efeitos externos são tolerantes a falha.
 Desde o DAP `dap-engagement-r3` há **dois** chamadores, e não um: a conversão de uma oportunidade
 ganha e a criação direta a partir de um `Engagement` (`POST /engagements/{id}/create-project/`).
 O cronograma é o mesmo nos dois; o que muda é a origem que o `finalize` anuncia.
+
+Desde a ADR 0061 são **três**, e o terceiro não tem gente na frente: o cliente marca a sessão de
+Discovery pelo link do convite e o projeto nasce dali. É por isso que `criar_projeto_do_mandato`
+existe — o ato "nasce um projeto do mandato" é um só, e duas cópias dele divergiriam na primeira
+vez que alguém mexesse numa.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.core.mail import send_mail
+from django.db import transaction
 
 from . import drive, notifications
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from .models import Project
+    from .models import Engagement, Project
 
 # Cronograma padrão: cada marco tem um deslocamento em dias a partir do início e suas tarefas.
 KICKOFF_TEMPLATE: list[dict] = [
@@ -152,6 +159,56 @@ def seed_work_items(project: Project) -> tuple[int, int]:
             )
             tasks += 1
     return milestones, tasks
+
+
+def criar_projeto_do_mandato(engagement: Engagement, salvar: Callable[[], Project]) -> Project:
+    """Faz nascer um projeto do mandato: trava, grava e semeia tudo o que vem junto.
+
+    **Uma definição só do ato**, e é a razão de esta função existir. Dois caminhos criam projeto a
+    partir de um `Engagement` — o botão (`POST /engagements/{id}/create-project/`) e a rota pública
+    em que o cliente marca a sessão de Discovery (ADR 0061) —, e repetir o corpo da transação no
+    segundo produziria duas definições que divergem na primeira manutenção: alguém acrescenta um
+    passo de semeadura num lugar, e o projeto nascido pelo outro caminho sai incompleto sem nada
+    ficar vermelho. Regressão:
+    `tests/regression/test_a_rota_publica_e_o_botao_criam_o_projeto_igual.py`.
+
+    O que fica **de fora**, de propósito: a validação de quem chamou (papel, mandato encerrado,
+    degrau de aquisição, serializer) — porque ela é diferente nos dois — e o `finalize`, que é
+    efeito externo e roda depois do commit, na mão de quem chamou.
+
+    `salvar` é quem monta o projeto, e é parâmetro porque as duas origens montam de formas
+    legítimas e diferentes: a action grava o que o `ProjectSerializer` validou, e a rota pública
+    deriva tudo da sessão marcada, sem `request.user` nenhum. O que esta função garante é o que
+    tem de valer nas duas: a trava, a ordem e a semeadura em volta.
+
+    **A trava não é a mesma da conversão**, e a diferença é sutil (FDD 046, emenda de 02/09): lá o
+    `select_for_update` sustenta um "converte uma vez só"; aqui não há o que impedir — um mandato
+    origina vários projetos por desenho (ADR 0050). Ela existe porque `seed_work_items` **não** é
+    idempotente: serializa duas requisições simultâneas para que o duplo clique produza dois
+    pedidos em fila, e não dois cronogramas gravados um por cima do outro.
+    """
+    # Local, e não no topo: `discovery_booking` importa este módulo (ele lê
+    # `TAREFA_DE_AGENDAR_O_DISCOVERY`), então o import no topo fecharia um ciclo. `invoices` vem
+    # junto pela vizinhança, não por necessidade.
+    from . import discovery_booking, invoices
+    from .models import Engagement as EngagementModel
+
+    with transaction.atomic():
+        # O valor não interessa — o efeito é a linha do mandato ficar bloqueada até o fim da
+        # transação, e é só disso que a serialização precisa.
+        EngagementModel.objects.select_for_update().get(pk=engagement.pk)
+        project = salvar()
+        seed_work_items(project)
+        # Depois de semear, porque é a tarefa semeada que ela resolve — e dentro da transação pela
+        # mesma razão das faturas: é escrita no banco, não efeito externo. Sem isto o projeto nasce
+        # dizendo "Próxima reunião: A agendar" com a sessão já marcada pelo cliente, e com a tarefa
+        # de agendar pendente logo depois de a automação a ter feito.
+        discovery_booking.registrar_sessao_no_projeto(project, engagement)
+        # Dentro da transação pela razão da conversão: é escrita no banco, não efeito externo.
+        # Devolve 0 quando o valor contratado é zero — o Design Partner recebe o degrau sem
+        # cobrança —, e isso é o cronograma correto, não uma falha.
+        invoices.seed_invoices(project)
+    return project
 
 
 # De onde o projeto veio, em uma oração — e é **parâmetro** desde que o mandato passou a originar

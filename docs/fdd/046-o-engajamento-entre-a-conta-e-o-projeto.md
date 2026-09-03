@@ -346,6 +346,11 @@ e o segundo é legítimo. A trava existe porque `kickoff.seed_work_items` **não
 serializa duas requisições simultâneas para que o duplo clique produza dois pedidos em fila, e não
 dois cronogramas gravados um por cima do outro.
 
+*(Emenda de 02/09, 3: a transação inteira — trava, gravação e semeadura — mudou de lugar para
+`kickoff.criar_projeto_do_mandato` quando a rota pública de agendamento passou a fazer nascer o
+mesmo projeto (ADR 0061). A regra não mudou; o que mudou é haver **uma** definição dela. Ver a
+emenda de 02/09, 3, da FDD 013.)*
+
 O mandato da rota entra no **corpo** antes da validação, em vez de `engagement_optional` mais um
 `save(engagement=…)`. Com a segunda forma, duas chaves passariam a ser ignoradas em silêncio só
 nesta rota: um `engagement` divergente seria sobrescrito — 201 para um pedido que escolheu outro

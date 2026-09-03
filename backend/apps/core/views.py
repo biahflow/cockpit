@@ -1363,7 +1363,9 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         projetos por desenho (D1, ADR 0050), e o segundo é legítimo. A trava existe porque
         `kickoff.seed_work_items` **não** é idempotente: ela apenas serializa duas requisições
         simultâneas para que o duplo clique produza dois pedidos em fila, e não dois projetos com
-        dois cronogramas gravados por cima um do outro.
+        dois cronogramas gravados por cima um do outro. Ela mora em
+        `kickoff.criar_projeto_do_mandato`, junto do resto do ato, desde que a rota pública do
+        agendamento passou a fazer nascer o mesmo projeto (ADR 0061).
         """
         engagement = self.get_object()
         if request.user.role not in {User.Role.ADMIN, User.Role.SALES} and not request.user.is_superuser:
@@ -1407,24 +1409,17 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
                             "venda, ela não é a venda. Escolha um degrau da escada."},
                 status=400,
             )
-        with transaction.atomic():
-            # O valor não interessa — o efeito é a linha do mandato ficar bloqueada até o fim da
-            # transação, e é só disso que a serialização precisa.
-            Engagement.objects.select_for_update().get(pk=engagement.pk)
-            # Sem `originating_commercial_opportunity`: aqui não houve venda, e inventar uma origem
-            # comercial contaminaria o funil e o ciclo médio, que leem esse campo como fato
-            # histórico. Projeto de mandato sem venda é o caso do Design Partner (ADR 0053).
-            project = serializer.save(owner=request.user)
-            kickoff.seed_work_items(project)
-            # Depois de semear, porque é a tarefa semeada que ela resolve — e dentro da transação
-            # pela mesma razão das faturas: é escrita no banco, não efeito externo. Sem isto o
-            # projeto nasce dizendo "Próxima reunião: A agendar" com a sessão já marcada pelo
-            # cliente, e com a tarefa de agendar pendente logo depois de a automação a ter feito.
-            discovery_booking.registrar_sessao_no_projeto(project, engagement)
-            # Dentro da transação pela razão da conversão: é escrita no banco, não efeito externo.
-            # Devolve 0 quando o valor contratado é zero — o Design Partner recebe o degrau sem
-            # cobrança —, e isso é o cronograma correto, não uma falha.
-            invoices.seed_invoices(project)
+        # A transação inteira — trava, gravação e semeadura — mora em `kickoff`, porque a rota
+        # pública em que o cliente marca a sessão de Discovery faz nascer o **mesmo** projeto
+        # (ADR 0061) e duas cópias do ato divergiriam na primeira manutenção. O que fica aqui é o
+        # que só esta rota tem: as guardas acima e o dono, que lá não existe.
+        #
+        # Sem `originating_commercial_opportunity`: aqui não houve venda, e inventar uma origem
+        # comercial contaminaria o funil e o ciclo médio, que leem esse campo como fato histórico.
+        # Projeto de mandato sem venda é o caso do Design Partner (ADR 0053).
+        project = kickoff.criar_projeto_do_mandato(
+            engagement, lambda: serializer.save(owner=request.user)
+        )
         kickoff.finalize(project, origem=f"a partir do engagement '{engagement.name}'")
         return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
 
@@ -4255,6 +4250,11 @@ class DiscoveryBookingCreateView(APIView):
             return _discovery_erro(
                 DISCOVERY_AGENDA_FORA, "calendar_unavailable", status.HTTP_503_SERVICE_UNAVAILABLE
             )
+        # **Depois** da reserva e **fora** da transação dela: o projeto do Discovery nasce aqui, e
+        # não num clique posterior de alguém da casa (ADR 0061). Best-effort por dentro — falhe o
+        # que falhar, a resposta abaixo continua 201, porque o cliente marcou o horário e o projeto
+        # é consequência interna.
+        discovery_booking.abrir_projeto_da_sessao(engagement, created)
         return Response(
             {"starts_at": created.starts_at, "link": created.calendar_link},
             status=status.HTTP_201_CREATED,

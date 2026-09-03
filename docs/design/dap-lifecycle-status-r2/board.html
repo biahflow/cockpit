@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAP — "cliente" para de nomear a entidade · r2</title>
+<style>
+  :root {
+    --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+    --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+    --brand-50:#fdf1ec; --brand-500:#bd4a30; --brand-700:#9c3c26;
+    --success:#047857; --success-50:#ecfdf5; --danger:#b91c1c; --danger-50:#fef2f2;
+    --shadow-card:0 1px 2px rgba(18,17,15,.06);
+    --text-body:.875rem; --text-label:.75rem; --text-meta:.6875rem;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px 20px 64px;background:var(--canvas);color:var(--ink);
+    font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+    font-size:var(--text-body);line-height:1.375rem;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1160px;margin:0 auto}
+  .eyebrow{font-size:var(--text-meta);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brand-500)}
+  h1{font-size:2rem;line-height:2.375rem;margin:6px 0 8px;letter-spacing:-.02em}
+  h2{font-size:1.25rem;margin:0 0 6px;letter-spacing:-.01em}
+  p.lead{color:var(--muted);margin:0 0 4px;max-width:78ch}
+  .rule{height:1px;background:var(--line);margin:40px 0 28px;border:0}
+  .note{color:var(--muted);font-size:var(--text-label);margin:8px 0 0;max-width:78ch}
+  .opt{font-size:var(--text-meta);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .rec{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--success-50);color:var(--success);letter-spacing:0}
+  .grid2{display:grid;gap:20px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .panel{border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:20px;box-shadow:var(--shadow-card)}
+  .form-label{display:block;font-size:var(--text-label);font-weight:600;margin:0 0 4px}
+  .field{width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;font-size:var(--text-body);background:var(--surface)}
+  .field+.form-label{margin-top:12px}
+  .state{display:inline-flex;border-radius:999px;padding:2px 9px;font-size:var(--text-meta);font-weight:600}
+  .state--off{background:var(--surface-subtle);color:var(--muted)}
+  .page-head h3{margin:2px 0 4px;font-size:1.5rem;letter-spacing:-.02em}
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:8px 12px;border:1px solid var(--line-strong);background:var(--surface);font-weight:600;font-size:var(--text-body)}
+  mark{background:#fde68a;padding:0 2px;border-radius:3px}
+  table{border-collapse:collapse;width:100%;font-size:var(--text-body)}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:var(--text-label);color:var(--muted);font-weight:700}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8125rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Design Approval Package · r2</p>
+  <h1>"Cliente" para de nomear a entidade</h1>
+  <p class="lead">
+    A r1 decidiu que a entidade é <strong>Conta</strong> e que "Cliente" é o rótulo de um dos
+    estados dela — e renomeou o menu, a rota e a listagem. Declarou fora de escopo as outras telas.
+    Esta revisão estende a decisão a elas, porque a mesma ambiguidade que a r1 resolveu na
+    listagem continua inteira no detalhe.
+  </p>
+
+  <hr class="rule">
+  <h2>O que motivou rever o escopo</h2>
+  <div class="panel" style="max-width:560px">
+    <div class="page-head">
+      <p class="eyebrow">Relacionamento</p>
+      <h3>Rio Home Care</h3>
+      <p style="color:var(--muted);margin:0">Dados cadastrais e contatos do <mark>cliente</mark>.</p>
+    </div>
+    <div style="margin-top:14px"><span class="state state--off">Prospect — ainda não fechou</span></div>
+  </div>
+  <p class="note">
+    Uma conta marcada "ainda não fechou", sob um cabeçalho que a chama de cliente. Foi essa tela que
+    gerou a pergunta: <em>"ela já é cliente?"</em>
+  </p>
+
+  <hr class="rule">
+  <h2>Decisão A — a palavra</h2>
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">A1 — "Conta" nas oito <span class="rec">recomendada</span></p>
+      <div class="panel">
+        <div class="page-head">
+          <p class="eyebrow">Relacionamento</p><h3>Rio Home Care</h3>
+          <p style="color:var(--muted);margin:0 0 12px">Dados cadastrais e contatos <mark>da conta</mark>.</p>
+        </div>
+        <span class="btn">🗑 Arquivar <mark>conta</mark></span>
+        <div style="height:16px"></div>
+        <strong>Dados <mark>da conta</mark></strong>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <strong style="display:block;margin-bottom:10px">Nova oportunidade</strong>
+        <label class="form-label"><mark>Conta</mark></label>
+        <select class="field"><option>Rio Home Care</option></select>
+        <p class="note">Oportunidade se abre para quem <strong>ainda não fechou</strong> — é o que prospect significa.</p>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <strong style="display:block;margin-bottom:10px">Nova fatura</strong>
+        <label class="form-label"><mark>Conta</mark></label>
+        <select class="field"><option>Rio Home Care</option></select>
+        <p class="note">O select oferece <strong>todas</strong> as contas, sem filtrar por estado — o rótulo antigo prometia um recorte que não existe.</p>
+      </div>
+    </div>
+    <div>
+      <p class="opt">A3 — manter tudo</p>
+      <div class="panel">
+        <div class="page-head">
+          <p class="eyebrow">Relacionamento</p><h3>Rio Home Care</h3>
+          <p style="color:var(--muted);margin:0 0 12px">Dados cadastrais e contatos do <mark>cliente</mark>.</p>
+        </div>
+        <span class="btn">🗑 Arquivar <mark>cliente</mark></span>
+        <div style="height:16px"></div>
+        <strong>Dados do <mark>cliente</mark></strong>
+      </div>
+      <p class="note">
+        O menu já diz "Contas" e a rota é <code>/contas</code>. O mesmo registro chamado de duas
+        coisas a dois cliques — que é o que o mapa de linguagem existe para impedir.
+      </p>
+    </div>
+  </div>
+
+  <hr class="rule">
+  <h2>O que <strong>não</strong> muda</h2>
+  <div class="grid2">
+    <div class="panel">
+      <p class="opt" style="margin-bottom:10px">A pastilha do estado</p>
+      <span class="state" style="background:var(--success-50);color:var(--success)">Cliente</span>
+      <span class="state state--off" style="margin-left:6px">Prospect</span>
+      <span class="state state--off" style="margin-left:6px">Inativo</span>
+      <p class="note">É o rótulo de <code>active</code>, e é o ponto inteiro da r1. Trocá-lo desfaria a decisão.</p>
+    </div>
+    <div class="panel">
+      <p class="opt" style="margin-bottom:10px">De quem é a pendência</p>
+      <span class="state state--off">Fornecedor</span>
+      <span class="state state--off" style="margin-left:6px">Cliente</span>
+      <p class="note">Outro eixo: responde <em>quem deve a próxima ação</em>. Ali "Conta" seria errado.</p>
+    </div>
+  </div>
+  <p class="note" style="margin-top:14px">
+    Também não muda a prosa em que "cliente" nomeia a pessoa ou a empresa como parte — "o cliente
+    declarou insatisfação", "enviar ao cliente". A regra é sobre nomear o <strong>registro</strong>.
+  </p>
+
+  <hr class="rule">
+  <h2>O que este pacote não decide</h2>
+  <table>
+    <tr><th>Assunto</th><th>Por quê</th></tr>
+    <tr><td>Filtrar o select do Financeiro por estado</td><td>É comportamento, não copy. Faturar antes de fechar acontece; o rótulo é que não devia afirmar o contrário.</td></tr>
+    <tr><td>Rotas e chaves de payload</td><td>Seguem para a <code>/api/v2/</code>, como a <code>aliases.md</code> registra.</td></tr>
+    <tr><td>Copy de Leads e do Dashboard</td><td>A r1 as citou; não entraram neste inventário e ficam para quando alguém as medir.</td></tr>
+  </table>
+</div>
+</body>
+</html>

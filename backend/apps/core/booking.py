@@ -348,6 +348,47 @@ def book_discovery(engagement: Engagement, slot_start: datetime, attendee_email:
     )
 
 
+def fechar_sessoes_realizadas(agora: datetime | None = None) -> tuple[int, int]:
+    """O que já aconteceu deixa de estar "agendado". Devolve (reservas, reuniões) fechadas.
+
+    **Nada no sistema fazia isso**, e o buraco não era cosmético: `Booking` e `Meeting` nasciam
+    `scheduled` e ficavam `scheduled` para sempre, então a casa nunca ficava sabendo que a conversa
+    aconteceu. É por isso que a travessia da sessão para o projeto precisou de guarda de degrau
+    (`discovery_booking.registrar_sessao_no_projeto`): a reserva continua "viva" meses depois.
+
+    Os dois modelos num lugar só porque a pergunta é uma só — "esta sessão já aconteceu?" —, e são
+    dois modelos para "reunião marcada" por razão histórica (FDD 046, emenda de 02/09/2026, 2): a
+    `Booking` é quem bloqueia o horário na agenda, a `Meeting` é o fato do projeto. Duas funções
+    responderiam a mesma pergunta e divergiriam na primeira mudança de corte.
+
+    O corte de cada uma é o que ela sabe: a reserva tem hora de fim, e fecha quando o fim passou; a
+    `Meeting.date` é `DateField`, e um dia só termina quando vira o dia seguinte (`date__lt`, no
+    molde de `invoices.mark_overdue` — vencer hoje não é atrasar hoje).
+
+    **Idempotente por construção**, não por guarda: o filtro por `status` exclui exatamente o que a
+    rodada anterior mudou, então a segunda execução do dia atualiza zero linhas. Reserva
+    **cancelada** e linha **arquivada** ficam de fora — cancelada não aconteceu, e arquivada saiu
+    da vista de propósito.
+    """
+    from .models import Booking, Meeting
+
+    agora = agora or timezone.now()
+    reservas = Booking.objects.filter(
+        status=Booking.Status.SCHEDULED, ends_at__lt=agora, archived_at__isnull=True
+    ).update(
+        # `.update()` passa por cima de `auto_now`; sem isto uma mudança de estado em massa não
+        # deixaria carimbo nenhum.
+        status=Booking.Status.HELD,
+        updated_at=agora,
+    )
+    reunioes = Meeting.objects.filter(
+        status=Meeting.Status.SCHEDULED,
+        date__lt=timezone.localdate(agora),
+        archived_at__isnull=True,
+    ).update(status=Meeting.Status.HELD, updated_at=agora)
+    return reservas, reunioes
+
+
 def _send_confirmation(lead: Lead, slot_start: datetime) -> None:
     from django.core.mail import send_mail
 

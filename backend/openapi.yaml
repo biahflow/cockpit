@@ -3225,7 +3225,9 @@ paths:
         projetos por desenho (D1, ADR 0050), e o segundo é legítimo. A trava existe porque
         `kickoff.seed_work_items` **não** é idempotente: ela apenas serializa duas requisições
         simultâneas para que o duplo clique produza dois pedidos em fila, e não dois projetos com
-        dois cronogramas gravados por cima um do outro.
+        dois cronogramas gravados por cima um do outro. Ela mora em
+        `kickoff.criar_projeto_do_mandato`, junto do resto do ato, desde que a rota pública do
+        agendamento passou a fazer nascer o mesmo projeto (ADR 0061).
       parameters:
       - in: path
         name: id

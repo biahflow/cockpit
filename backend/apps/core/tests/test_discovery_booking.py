@@ -8,6 +8,9 @@ O que este arquivo afirma, em ordem de importância:
   "não há horário livre" quando o que houve foi a agenda não responder;
 * o token de pré-venda **não** abre a porta do Discovery, nem o contrário (salts distintos);
 * mandato com Discovery marcado recusa o segundo (C1, sem remarcação);
+* **marcar o horário faz nascer o projeto** (ADR 0061) — com o degrau, o dono do mandato e as
+  datas da sessão —, e nada disso pode derrubar o agendamento: sem degrau ativo no catálogo o
+  projeto **não** nasce e a reserva continua valendo, com aviso interno dizendo o que faltou;
 * o convite sai **uma** vez quando o mandato nasce, com o link e o nome certos;
 * SMTP fora do ar **não** desfaz a assinatura nem o mandato;
 * flag desligada tira as duas rotas do ar e cala o e-mail;
@@ -25,14 +28,28 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core import booking, calendar_sync, design_partner, discovery_booking, esign
+from apps.core import (
+    booking,
+    calendar_sync,
+    design_partner,
+    discovery_booking,
+    esign,
+    kickoff,
+    notifications,
+)
 from apps.core.models import (
     Booking,
     Contact,
     Document,
     Engagement,
     Lead,
+    Meeting,
+    Milestone,
+    Notification,
+    Project,
+    Service,
     SignatureRequest,
+    Task,
     User,
 )
 from apps.core.views import BOOKING_TOKEN_SALT
@@ -300,6 +317,197 @@ def test_reabrir_o_link_mostra_o_horario_marcado(monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["scheduled_at"] is not None
     assert resp.json()["slots"] == []
+
+
+# --- marcar o horário faz nascer o projeto (ADR 0061) -------------------------------------------
+
+
+def _agenda_livre(monkeypatch) -> None:
+    monkeypatch.setattr(calendar_sync, "freebusy", lambda a, b: [])
+    monkeypatch.setattr(calendar_sync, "create_timed_event", lambda **kw: ("ev", "http://cal/ev"))
+
+
+def _marcar(engagement, slot):
+    return APIClient().post(
+        reverse("discovery-booking-create"),
+        {"token": discovery_booking.token_for(engagement), "slot_start": slot.isoformat()},
+        format="json",
+    )
+
+
+@pytest.mark.django_db
+@LIGADA
+def test_marcar_a_sessao_faz_nascer_o_projeto_do_discovery(monkeypatch):
+    """O último passo manual do caminho feliz deixa de existir.
+
+    No instante da reserva tudo já está determinado: o mandato existe, o degrau é o Discovery
+    Sprint (é para isso que o acordo foi assinado) e o dia da sessão é o dia 0. O 201 não basta —
+    o que se afirma é o **projeto certo**: degrau, dono, datas e os marcos que são a metodologia.
+    """
+    _agenda_livre(monkeypatch)
+    engagement = _mandato()
+    slot = _at(_next_monday(), 9)
+
+    resp = _marcar(engagement, slot)
+
+    assert resp.status_code == 201
+    projeto = Project.objects.get(engagement=engagement)
+    assert projeto.name == f"Discovery Sprint — {engagement.account.name}"
+    assert projeto.service.tier == Service.Tier.DISCOVERY_SPRINT
+    # A rota é pública e não tem usuário autenticado: quem responde pelo projeto é quem responde
+    # pelo mandato. É a diferença que mais confunde quem comparar com a action.
+    assert projeto.owner_id == engagement.owner_id
+    assert projeto.start_date == timezone.localtime(slot).date()
+    assert projeto.due_date == projeto.start_date + timedelta(
+        days=discovery_booking.DURACAO_DO_DISCOVERY_SPRINT_EM_DIAS
+    )
+    esperado = kickoff.KICKOFF_TEMPLATES["discovery_sprint"]
+    titulos = list(
+        Milestone.objects.filter(project=projeto).order_by("due_date").values_list("title", flat=True)
+    )
+    assert len(titulos) == len(esperado)
+    assert titulos[-1] == "Executive Readout"
+    # A travessia da sessão vem junto, porque é a mesma função que a action usa: a reunião existe
+    # e a tarefa de agendar já nasce cumprida.
+    assert Meeting.objects.filter(
+        project=projeto, title=discovery_booking.TITULO_DA_SESSAO_DE_DISCOVERY
+    ).exists()
+    agendar = Task.objects.get(project=projeto, title=kickoff.TAREFA_DE_AGENDAR_O_DISCOVERY)
+    assert agendar.status == Task.Status.DONE
+
+
+@pytest.mark.django_db
+@LIGADA
+def test_mandato_que_ja_tem_o_projeto_do_degrau_nao_ganha_o_segundo(monkeypatch):
+    """A mesma pergunta da guarda de duplo clique, e pela mesma razão: um mandato origina vários
+    projetos por desenho (ADR 0050), mas o Discovery Sprint dele é **um**."""
+    _agenda_livre(monkeypatch)
+    engagement = _mandato()
+    ja_existe = Project.objects.create(
+        engagement=engagement,
+        name="Discovery feito na mão",
+        owner=engagement.owner,
+        service=Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT),
+        start_date=timezone.localdate(),
+        due_date=timezone.localdate() + timedelta(days=7),
+    )
+
+    resp = _marcar(engagement, _at(_next_monday(), 9))
+
+    assert resp.status_code == 201
+    assert list(Project.objects.filter(engagement=engagement)) == [ja_existe]
+
+
+@pytest.mark.django_db
+@LIGADA
+def test_marcar_duas_vezes_nao_faz_nascer_o_segundo_projeto(monkeypatch):
+    """A remarcação já era recusada (C1); o que se afirma aqui é que o segundo pedido também não
+    deixa um projeto para trás."""
+    _agenda_livre(monkeypatch)
+    engagement = _mandato()
+
+    primeira = _marcar(engagement, _at(_next_monday(), 9))
+    segunda = _marcar(engagement, _at(_next_monday(), 10))
+
+    assert primeira.status_code == 201
+    assert segunda.status_code == 409
+    assert Project.objects.filter(engagement=engagement).count() == 1
+
+
+@pytest.mark.django_db
+@LIGADA
+def test_sem_degrau_ativo_o_projeto_nao_nasce_e_a_reserva_continua_valendo(monkeypatch):
+    """A metade que impede um projeto de nascer **sem metodologia**.
+
+    Sem `Service` no degrau, o projeto cairia no template genérico de `kickoff.template_for` e
+    nasceria sem walkthrough, sem custo do estado atual e sem Executive Readout — e nada ficaria
+    vermelho. Criar assim é pior que não criar: a reserva do cliente vale, e o aviso interno diz o
+    que faltou para alguém criar o projeto na mão.
+    """
+    _agenda_livre(monkeypatch)
+    engagement = _mandato()
+    Service.objects.filter(tier=Service.Tier.DISCOVERY_SPRINT).update(active=False)
+
+    resp = _marcar(engagement, _at(_next_monday(), 9))
+
+    assert resp.status_code == 201
+    assert Booking.objects.filter(engagement=engagement).count() == 1
+    assert not Project.objects.filter(engagement=engagement).exists()
+    aviso = Notification.objects.filter(user=engagement.owner, kind="booking").latest("id")
+    assert "Discovery Sprint ativo no catálogo" in aviso.message
+
+
+@pytest.mark.django_db
+@LIGADA
+def test_falha_ao_criar_o_projeto_nao_derruba_o_agendamento(monkeypatch):
+    """O cliente marcou o horário; o projeto é consequência interna da casa.
+
+    Derrubar a reserva por causa dela seria punir o cliente por um problema nosso — e o horário
+    ficaria parecendo livre para o outro fluxo, que é o defeito que `Booking` existe para impedir.
+    """
+    _agenda_livre(monkeypatch)
+    engagement = _mandato()
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("o banco recusou")
+
+    monkeypatch.setattr(kickoff, "criar_projeto_do_mandato", explode)
+
+    resp = _marcar(engagement, _at(_next_monday(), 9))
+
+    assert resp.status_code == 201
+    assert Booking.objects.filter(engagement=engagement).count() == 1
+    assert not Project.objects.filter(engagement=engagement).exists()
+    aviso = Notification.objects.filter(user=engagement.owner, kind="booking").latest("id")
+    assert "o projeto não nasceu" in aviso.message
+
+
+@pytest.mark.django_db
+@LIGADA
+def test_o_anuncio_do_kickoff_que_falha_nao_desfaz_o_projeto(monkeypatch):
+    """O projeto já existe quando o `finalize` roda: um anúncio que falha não pode fazer o aviso
+    interno dizer "o projeto não nasceu" e mandar alguém criar na mão o que está lá."""
+    _agenda_livre(monkeypatch)
+    engagement = _mandato()
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("o Drive e o SMTP caíram juntos")
+
+    monkeypatch.setattr(kickoff, "finalize", explode)
+
+    resp = _marcar(engagement, _at(_next_monday(), 9))
+
+    assert resp.status_code == 201
+    assert Project.objects.filter(engagement=engagement).count() == 1
+    assert not Notification.objects.filter(message__contains="o projeto não nasceu").exists()
+
+
+@pytest.mark.django_db
+@LIGADA
+def test_nem_o_aviso_interno_derruba_o_agendamento(monkeypatch):
+    """O aviso é o último elo do caminho de falha, e ele não pode virar o erro que a rota devolve
+    ao cliente que acabou de escolher o horário."""
+    _agenda_livre(monkeypatch)
+    engagement = _mandato()
+    original = notifications.notify
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("o banco recusou")
+
+    def falha_so_no_aviso_do_projeto(users, kind, message, url="", project=None):
+        # Só o aviso do caminho de falha explode: o da reserva é de outro chamador, e derrubá-lo
+        # testaria outra coisa.
+        if "o projeto não nasceu" in message:
+            raise RuntimeError("nem o aviso")
+        return original(users, kind, message, url, project)
+
+    monkeypatch.setattr(kickoff, "criar_projeto_do_mandato", explode)
+    monkeypatch.setattr(notifications, "notify", falha_so_no_aviso_do_projeto)
+
+    resp = _marcar(engagement, _at(_next_monday(), 9))
+
+    assert resp.status_code == 201
+    assert Booking.objects.filter(engagement=engagement).count() == 1
 
 
 # --- os dois salts não se confundem ------------------------------------------------------------

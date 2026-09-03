@@ -421,6 +421,10 @@ SCHEDULER_BACKUP_CHECK_AT = os.getenv("SCHEDULER_BACKUP_CHECK_AT", "09:00")
 # **Antes** do digest das 07:30, e a ordem é o ponto: quem lê o dia — tela, resumo, qualquer aviso
 # futuro — precisa encontrar o vencimento já apurado, não a apurar.
 SCHEDULER_INVOICES_AT = os.getenv("SCHEDULER_INVOICES_AT", "06:00")
+# **Antes do digest das 07:30**, pela mesma razão de ordem: quem lê o dia precisa encontrar a
+# sessão de ontem já fechada, não anunciada como agendada. Nada no sistema transicionava `Booking`
+# ou `Meeting` para "realizada" antes deste job — elas ficavam `scheduled` para sempre.
+SCHEDULER_SESSIONS_AT = os.getenv("SCHEDULER_SESSIONS_AT", "06:30")
 # **Depois** do vencimento das 06:00, e a ordem é a entrega: a régua pergunta "que degrau cabe
 # hoje?" ao estado da fatura, e rodar antes da apuração faria o D+1 ser lido como D+0. Às 09:30
 # porque cobrança é conversa de horário comercial — a RFC 0004 pede "teto duro de frequência e de
@@ -546,6 +550,35 @@ PAYMENTS_WEBHOOK_SECRET = os.getenv("PAYMENTS_WEBHOOK_SECRET", "")
 # Janela de aceitação do carimbo do webhook. É o que faz uma entrega **capturada** parar de valer:
 # sem ela, um corpo assinado hoje é reproduzível para sempre.
 PAYMENTS_WEBHOOK_TOLERANCE_SECONDS = _env_int("PAYMENTS_WEBHOOK_TOLERANCE_SECONDS", 300)
+
+# Mensagens por WhatsApp (ADR 0031: canal novo, não gate novo). **Dois provedores ao mesmo tempo**,
+# e é por isso que a variável é uma lista ordenada e não um `WHATSAPP_PROVIDER` singular como o
+# e-sign e o gateway: aqui o segundo nome não é a alternativa da instalação, é o fallback da
+# primeira. `WHATSAPP_PROVIDERS="zapi,uazapi"` tenta na ordem escrita.
+#
+# **Nasce desligada**, como `DUNNING_ENABLED` e `DISCOVERY_BOOKING_ENABLED`, e por um motivo a mais:
+# nada no produto chama este adaptador ainda. Ligar antes de existir chamador não faz nada; ligar
+# depois é ato de operação, não de deploy.
+#
+# Vazio em `WHATSAPP_PROVIDERS` significa `NullProvider` — registra a intenção e não manda nada —,
+# e nesse modo `configured()` passa sem exigir credencial alguma, no precedente do `ESIGN_PROVIDER`
+# (`flags._whatsapp_missing`). Nomeado um provedor, as credenciais **dele** viram obrigatórias.
+WHATSAPP_ENABLED = _env_bool("WHATSAPP_ENABLED", False)
+WHATSAPP_PROVIDERS = os.getenv("WHATSAPP_PROVIDERS", "")
+# Z-API: instância e token vão na URL; o `Client-Token` é a validação por token da **conta**, que
+# só existe se quem administra a ligou no painel — por isso ele não é obrigatório.
+WHATSAPP_ZAPI_INSTANCE_ID = os.getenv("WHATSAPP_ZAPI_INSTANCE_ID", "")
+WHATSAPP_ZAPI_TOKEN = os.getenv("WHATSAPP_ZAPI_TOKEN", "")
+WHATSAPP_ZAPI_CLIENT_TOKEN = os.getenv("WHATSAPP_ZAPI_CLIENT_TOKEN", "")
+# Vazio = cada adaptador usa a própria URL padrão (`Provider.DEFAULT_BASE`).
+WHATSAPP_ZAPI_API_BASE = os.getenv("WHATSAPP_ZAPI_API_BASE", "")
+# UAZAPI: token no header, e a base muda por instância (`https://{subdomínio}.uazapi.com`).
+WHATSAPP_UAZAPI_TOKEN = os.getenv("WHATSAPP_UAZAPI_TOKEN", "")
+WHATSAPP_UAZAPI_API_BASE = os.getenv("WHATSAPP_UAZAPI_API_BASE", "")
+# Teto de espera por provedor. Ele importa mais aqui do que nas outras integrações: passar do teto
+# produz `UNCERTAIN`, que por decisão **não** cai para o próximo provedor — um timeout curto demais
+# transforma entrega lenta em mensagem não enviada, e um longo demais segura quem chamou.
+WHATSAPP_TIMEOUT_SECONDS = _env_int("WHATSAPP_TIMEOUT_SECONDS", 15)
 
 # Enriquecimento de lead (FDD 030): dado cadastral público de CNPJ alimentando a qualificação que
 # já existe. Nome neutro pela razão de `PAYMENTS_*` e `ESIGN_*` — o provedor é trocável.

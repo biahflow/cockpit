@@ -153,6 +153,27 @@ def _probe_enrichment() -> tuple[bool, str]:
     return ping()
 
 
+def _probe_whatsapp() -> tuple[bool, str]:
+    """Pergunta a **cada** provedor se a instância está conectada. Não manda mensagem nenhuma.
+
+    Sonda todos, e não só o primeiro, porque a resolução é uma cadeia de fallback: com o segundo
+    provedor quebrado a integração parece saudável até o dia em que o primeiro cair — que é
+    justamente o dia em que o fallback existe para servir, e o único em que ninguém quer descobrir
+    que ele não funciona.
+    """
+    from . import whatsapp
+
+    if not whatsapp.has_provider():
+        return True, f"nenhum provedor: {NAO_SONDAVEL}"
+    linhas: list[str] = []
+    ok = True
+    for provider in whatsapp.get_providers():
+        aceito, detalhe = provider.ping()
+        ok = ok and aceito
+        linhas.append(f"{provider.name}: {detalhe}")
+    return ok, "; ".join(linhas)
+
+
 def _probe_storage() -> tuple[bool, str]:
     """Escreve, lê e apaga um objeto de sonda. Ao contrário do e-mail, aqui o ciclo completo é
     barato e é o único que prova o que importa: `objectAdmin` sem `create` ou sem `delete` deixa
@@ -183,6 +204,7 @@ PROBES = {
     "portal": _probe_portal,
     "enrichment": _probe_enrichment,
     "storage": _probe_storage,
+    "whatsapp": _probe_whatsapp,
 }
 
 
