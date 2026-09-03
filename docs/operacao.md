@@ -113,7 +113,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   (convidar participante em evento). **Chave de conta de serviço não é caminho**: muitas
   organizações a proíbem por política, e foi o que bloqueou a homologação do Google.
 - `docker compose up -d --build api`.
-- **Testar:** subir um documento → conferir a estrutura `{Cliente}/{1-Projetos|2-Áreas|3-Recursos}/` no Shared Drive.
+- **Testar:** subir um documento → conferir a estrutura `{Conta}/{Contratos|Propostas|NDAs|Acordos de Design Partner|Outros}/` no Shared Drive (a subpasta segue a finalidade do documento, `Document.kind` — issue #113); a pasta do projeto criada pelo kickoff fica em `{Conta}/Projetos/{Projeto}`.
 
 ### 4. Calendário e Assinatura
 - Calendário: `CALENDAR_ENABLED=true` + `GOOGLE_CALENDAR_ID` (mesma identidade do Drive, mas o

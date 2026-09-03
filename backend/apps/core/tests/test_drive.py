@@ -7,14 +7,44 @@ from .factories import AccountFactory, CommercialOpportunityFactory, ProjectFact
 
 
 @pytest.mark.django_db
-def test_para_bucket_for_follows_link_type():
+@pytest.mark.parametrize("kind, pasta", list(drive.PASTA_POR_FINALIDADE.items()))
+def test_pasta_do_documento_segue_a_finalidade(kind: str, pasta: str):
+    account = AccountFactory()
+
+    assert drive.pasta_do_documento(Document(kind=kind, account=account)) == pasta
+
+
+@pytest.mark.django_db
+def test_pasta_do_documento_sem_finalidade_cai_em_outros():
+    account = AccountFactory()
+
+    assert drive.pasta_do_documento(Document(account=account)) == drive.PASTA_SEM_FINALIDADE
+    assert drive.pasta_do_documento(Document(kind="", account=account)) == drive.PASTA_SEM_FINALIDADE
+
+
+def test_mapa_de_pasta_e_exaustivo_sobre_document_kind():
+    """Paga o preço de o mapa ser uma segunda definição do rótulo de `Document.Kind`: sem este
+    teste, um `Kind` novo cairia calado em 'Outros' e ninguém veria (issue #113)."""
+    chaves_do_kind = {value for value, _ in Document.Kind.choices}
+
+    assert set(drive.PASTA_POR_FINALIDADE) == chaves_do_kind
+
+
+@pytest.mark.django_db
+def test_pasta_do_documento_nao_depende_do_vinculo():
+    """A troca de critério (issue #113): o mesmo `kind` em vínculos diferentes dá a mesma pasta —
+    o vínculo decidia antes, e não decide mais."""
     account = AccountFactory()
     opportunity = CommercialOpportunityFactory(account=account)
     project = ProjectFactory(engagement__account=account)
 
-    assert drive.para_bucket_for(Document(account=account)) == drive.CLIENT_BUCKET
-    assert drive.para_bucket_for(Document(commercial_opportunity=opportunity)) == drive.OPPORTUNITY_BUCKET
-    assert drive.para_bucket_for(Document(project=project)) == drive.PROJECT_BUCKET
+    pasta_conta = drive.pasta_do_documento(Document(kind="nda", account=account))
+    pasta_oportunidade = drive.pasta_do_documento(
+        Document(kind="nda", commercial_opportunity=opportunity)
+    )
+    pasta_projeto = drive.pasta_do_documento(Document(kind="nda", project=project))
+
+    assert pasta_conta == pasta_oportunidade == pasta_projeto == "NDAs"
 
 
 @pytest.mark.django_db
