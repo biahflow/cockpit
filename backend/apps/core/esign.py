@@ -134,6 +134,22 @@ def delivers_by_link() -> bool:
     return settings.ESIGN_DELIVERY == "link"
 
 
+# Frase escrita num lugar só (issue #112): nomeia o que foi **observado** — a combinação não
+# entregou o convite numa rodada de homologação —, nunca a causa. Três hipóteses sobrevivem
+# (sandbox não dispara convite; o signatário era o dono da conta; atraso maior que a janela do
+# teste) e nenhuma está provada; escrever "o sandbox não manda e-mail" aqui seria inventar causa.
+_AVISO_SANDBOX_COM_ENTREGA_POR_EMAIL = (
+    "sandbox com entrega por e-mail: combinação não observada entregando o convite (issue #112)"
+)
+
+
+def aviso_de_entrega() -> str:
+    """Vazio quando não há o que avisar; a frase quando a combinação é a não observada."""
+    if settings.ESIGN_SANDBOX and not delivers_by_link():
+        return _AVISO_SANDBOX_COM_ENTREGA_POR_EMAIL
+    return ""
+
+
 def _autentique_signer(signer_email: str) -> dict[str, str]:
     """Signatário no formato do Autentique, conforme quem avisa (ver `ESIGN_DELIVERY`).
 

@@ -91,14 +91,26 @@ def _probe_calendar() -> tuple[bool, str]:
 
 
 def _probe_esign() -> tuple[bool, str]:
-    """Pergunta ao fornecedor quem é o dono do token, sem criar documento."""
+    """Pergunta ao fornecedor quem é o dono do token, sem criar documento.
+
+    O aviso de `esign.aviso_de_entrega()` (issue #112) se anexa ao `detail` nos **dois** caminhos
+    — com provedor sondável e sem —, e nunca vira reprovação: aviso não é reprovação, e
+    transformá-lo em `False` faria `check_integrations` sair com código 1 no default de fábrica
+    (`ESIGN_SANDBOX=true` + `ESIGN_DELIVERY=email`), treinando quem opera a ignorar o comando —
+    o mesmo argumento que o módulo já faz sobre `NAO_SONDAVEL` (linhas 32-34 acima).
+    """
     from . import esign
 
     provider = esign.get_provider()
     ping = getattr(provider, "ping", None)
     if ping is None:
-        return True, f"{settings.ESIGN_PROVIDER or 'nenhum provedor'}: {NAO_SONDAVEL}"
-    return ping()
+        ok, detalhe = True, f"{settings.ESIGN_PROVIDER or 'nenhum provedor'}: {NAO_SONDAVEL}"
+    else:
+        ok, detalhe = ping()
+    aviso = esign.aviso_de_entrega()
+    if aviso:
+        detalhe = "; ".join([detalhe, aviso])
+    return ok, detalhe
 
 
 def _probe_payments() -> tuple[bool, str]:

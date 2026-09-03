@@ -131,6 +131,29 @@ def test_remind_pending_returns_zero_without_pending(mailoutbox):
     assert mailoutbox == []
 
 
+# --- aviso de entrega (issue #112) --------------------------------------------------------------
+
+
+def test_aviso_de_entrega_vazio_com_entrega_por_link():
+    with override_settings(ESIGN_SANDBOX=True, ESIGN_DELIVERY="link"):
+        assert esign.aviso_de_entrega() == ""
+
+
+def test_aviso_de_entrega_vazio_com_sandbox_desligado():
+    with override_settings(ESIGN_SANDBOX=False, ESIGN_DELIVERY="email"):
+        assert esign.aviso_de_entrega() == ""
+
+
+def test_aviso_de_entrega_avisa_so_na_combinacao_sandbox_com_email():
+    """A combinação não observada entregando o convite (issue #112): sandbox ligado **e** entrega
+    por e-mail — os dois defaults de fábrica. A frase nomeia o que foi observado, não a causa."""
+    with override_settings(ESIGN_SANDBOX=True, ESIGN_DELIVERY="email"):
+        aviso = esign.aviso_de_entrega()
+
+    assert aviso != ""
+    assert "issue #112" in aviso
+
+
 # --- resolução do provedor ---------------------------------------------------
 
 
