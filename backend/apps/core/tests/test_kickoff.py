@@ -1,10 +1,12 @@
+import logging
 from datetime import timedelta
 
 import pytest
+from django.test import override_settings
 from django.utils import timezone
 
-from apps.core import kickoff
-from apps.core.models import Milestone, Notification, Service, Task
+from apps.core import kickoff, whatsapp
+from apps.core.models import Contact, Milestone, Notification, Project, Service, Task
 
 from .factories import ProjectFactory, ServiceFactory, UserFactory
 
@@ -130,3 +132,186 @@ def test_finalize_skips_email_without_owner_address(mailoutbox):
 
     assert len(mailoutbox) == 0
     assert Notification.objects.filter(user=owner, kind="kickoff").count() == 1
+
+
+# --- O grupo do cliente no WhatsApp (issue #110) -----------------------------------------------
+#
+# O adaptador de WhatsApp existia inteiro e **sem um único chamador** — nascer sem chamador e ficar
+# sem chamador são a mesma dívida. O chamador é o kickoff: ao nascer o projeto, a casa abre o grupo
+# do cliente e guarda a referência no projeto.
+
+LIGADO_NO_WHATSAPP = override_settings(
+    WHATSAPP_ENABLED=True,
+    WHATSAPP_PROVIDERS="zapi",
+    WHATSAPP_ZAPI_INSTANCE_ID="inst",
+    WHATSAPP_ZAPI_TOKEN="tok",
+)
+
+
+class GrupoFalso:
+    """Substitui `whatsapp.create_group`; guarda o que foi pedido. Nada toca a rede (ADR 0059)."""
+
+    def __init__(self, resultado: whatsapp.GroupResult | None = None) -> None:
+        self.resultado = resultado or whatsapp.GroupResult(
+            whatsapp.Delivery.DELIVERED,
+            provider="zapi",
+            group_id="120363431743499021@g.us",
+            invite_url="https://chat.whatsapp.com/GONwbGG",
+        )
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def __call__(self, name: str, participants) -> whatsapp.GroupResult:
+        self.calls.append((name, list(participants)))
+        return self.resultado
+
+
+@pytest.fixture
+def grupo(monkeypatch: pytest.MonkeyPatch):
+    def instalar(resultado: whatsapp.GroupResult | None = None) -> GrupoFalso:
+        fake = GrupoFalso(resultado)
+        monkeypatch.setattr(whatsapp, "create_group", fake)
+        return fake
+
+    return instalar
+
+
+def _projeto_com_contatos(*, tier: str | None = Service.Tier.DISCOVERY_SPRINT) -> Project:
+    service = Service.objects.get(tier=tier) if tier else None
+    project = ProjectFactory(service=service)
+    conta = project.engagement.account
+    Contact.objects.create(account=conta, first_name="Ana", phone="+55 11 99999-0001")
+    Contact.objects.create(account=conta, first_name="Bruno", phone="5511999990002")
+    return project
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_o_kickoff_abre_o_grupo_do_cliente_e_guarda_a_referencia(grupo):
+    chamadas = grupo()
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+
+    project.refresh_from_db()
+    assert project.whatsapp_group_id == "120363431743499021@g.us"
+    assert project.whatsapp_group_invite_url == "https://chat.whatsapp.com/GONwbGG"
+    nome, participantes = chamadas.calls[0]
+    assert nome == f"{project.engagement.account.name} · {project.name}"
+    assert participantes == ["+55 11 99999-0001", "5511999990002"]
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_a_qualification_call_nao_ganha_grupo(grupo):
+    """Conversa de trinta a quarenta e cinco minutos não precisa de canal dedicado."""
+    chamadas = grupo()
+    project = _projeto_com_contatos(tier=Service.Tier.QUALIFICATION_CALL)
+
+    kickoff.finalize(project)
+
+    project.refresh_from_db()
+    assert chamadas.calls == []
+    assert project.whatsapp_group_id == ""
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_sem_nenhum_telefone_o_grupo_nao_e_criado_e_o_motivo_fica_no_log(grupo, caplog):
+    """O "cala quando não sabe" de `receives_billing`: sem telefone não há grupo a criar."""
+    chamadas = grupo()
+    project = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT))
+    Contact.objects.create(account=project.engagement.account, first_name="Sem", phone="")
+
+    with caplog.at_level(logging.INFO, logger="apps.core.kickoff"):
+        kickoff.finalize(project)
+
+    assert chamadas.calls == []
+    assert any("telefone" in registro.message for registro in caplog.records)
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_contato_arquivado_nao_entra_no_grupo_do_cliente(grupo):
+    """`archive()` é como a casa demite um contato; arquivado no grupo é acesso não pretendido."""
+    chamadas = grupo()
+    project = _projeto_com_contatos()
+    demitido = Contact.objects.create(
+        account=project.engagement.account, first_name="Carla", phone="5511999990003"
+    )
+    demitido.archive()
+
+    kickoff.finalize(project)
+
+    assert "5511999990003" not in chamadas.calls[0][1]
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_projeto_sem_servico_ganha_grupo(grupo):
+    """O default é ganhar: serviço avulso é trabalho de entrega de verdade."""
+    chamadas = grupo()
+    project = _projeto_com_contatos(tier=None)
+
+    kickoff.finalize(project)
+
+    assert len(chamadas.calls) == 1
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_finalize_duas_vezes_cria_um_grupo_so(grupo):
+    """`finalize` é best-effort e pode ser reexecutado — sem a guarda, nasce o **segundo** grupo.
+
+    É literalmente o erro caro que a issue #111 nomeia, e aqui ele chegaria ao cliente: duas
+    janelas de conversa com o mesmo nome, e ninguém sabendo em qual falar.
+    """
+    chamadas = grupo()
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+    kickoff.finalize(project)
+
+    assert len(chamadas.calls) == 1
+    project.refresh_from_db()
+    assert project.whatsapp_group_id == "120363431743499021@g.us"
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_o_convite_entra_no_email_e_na_notificacao_quando_existe(grupo, mailoutbox):
+    grupo()
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+
+    kickoff_mail = next(mail for mail in mailoutbox if project.name in mail.subject)
+    assert "https://chat.whatsapp.com/GONwbGG" in kickoff_mail.body
+    aviso = Notification.objects.get(user=project.owner, kind="kickoff")
+    assert "https://chat.whatsapp.com/GONwbGG" in aviso.message
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_sem_grupo_o_email_e_a_notificacao_nao_mencionam_grupo_nenhum(grupo, mailoutbox):
+    """"Grupo: —" seria pior que o silêncio: anuncia um canal e não entrega nenhum."""
+    grupo(whatsapp.GroupResult(whatsapp.Delivery.UNCERTAIN, provider="zapi", detail="timeout"))
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+
+    project.refresh_from_db()
+    assert project.whatsapp_group_id == ""
+    kickoff_mail = next(mail for mail in mailoutbox if project.name in mail.subject)
+    assert "Grupo" not in kickoff_mail.body
+    aviso = Notification.objects.get(user=project.owner, kind="kickoff")
+    assert "Grupo" not in aviso.message
+
+
+@pytest.mark.django_db
+def test_com_a_flag_desligada_o_kickoff_nao_procura_grupo(grupo):
+    chamadas = grupo()
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+
+    assert chamadas.calls == []

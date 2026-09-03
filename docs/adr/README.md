@@ -69,3 +69,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0061 — A assinatura abre o mandato, e o que ela abre se declara antes
 - 0062 — O fallback de WhatsApp não assume quando não sabe
 - 0063 — O estado de publicação sai com a frase, porque o rótulo já mora no servidor
+- 0064 — O teto é por operação, e a resposta incerta se reconcilia

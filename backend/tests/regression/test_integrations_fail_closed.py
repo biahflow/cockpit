@@ -734,6 +734,46 @@ def test_kickoff_sem_pasta_no_drive_deixa_rastro(
     assert any("drive" in r.message.lower() or "pasta" in r.message.lower() for r in caplog.records)
 
 
+@override_settings(
+    WHATSAPP_ENABLED=True,
+    WHATSAPP_PROVIDERS="zapi",
+    WHATSAPP_ZAPI_INSTANCE_ID="inst",
+    WHATSAPP_ZAPI_TOKEN="tok",
+)
+def test_kickoff_sem_grupo_no_whatsapp_deixa_rastro_e_nao_desfaz_o_projeto(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, mailoutbox: list
+) -> None:
+    """O gêmeo do teste do Drive, para o efeito externo que a issue #110 acrescentou.
+
+    O grupo do cliente é o segundo efeito externo do kickoff, e vale a mesma regra: o projeto já
+    existe quando `finalize` roda, e derrubá-lo porque o provedor de WhatsApp caiu trocaria um
+    canal ausente por uma conversão que responde 500. O que **não** pode acontecer é o silêncio.
+    """
+    import logging
+
+    from apps.core import kickoff, whatsapp
+    from apps.core.models import Contact
+    from apps.core.tests.factories import ProjectFactory, UserFactory
+
+    def _recusa_do_whatsapp(*a: object, **k: object):
+        raise RuntimeError("provedor fora do ar")
+
+    monkeypatch.setattr(whatsapp, "create_group", _recusa_do_whatsapp)
+    projeto = ProjectFactory(owner=UserFactory(email="dono@example.test"))
+    Contact.objects.create(
+        account=projeto.engagement.account, first_name="Ana", phone="5511999990001"
+    )
+
+    with caplog.at_level(logging.ERROR):
+        kickoff.finalize(projeto)  # não levanta: o kickoff segue
+
+    projeto.refresh_from_db()
+    assert projeto.pk is not None
+    assert projeto.whatsapp_group_id == ""
+    assert any(mail for mail in mailoutbox if projeto.name in mail.subject), "o e-mail sai igual"
+    assert any("whatsapp" in r.message.lower() for r in caplog.records)
+
+
 # --- assinatura: a solicitação é o pedido ao fornecedor (rodada 4) ------------------------------
 #
 # Terceira encarnação do padrão das rodadas 1 e 3 — e a pior das três, porque aqui o silêncio é

@@ -556,9 +556,10 @@ PAYMENTS_WEBHOOK_TOLERANCE_SECONDS = _env_int("PAYMENTS_WEBHOOK_TOLERANCE_SECOND
 # e-sign e o gateway: aqui o segundo nome não é a alternativa da instalação, é o fallback da
 # primeira. `WHATSAPP_PROVIDERS="zapi,uazapi"` tenta na ordem escrita.
 #
-# **Nasce desligada**, como `DUNNING_ENABLED` e `DISCOVERY_BOOKING_ENABLED`, e por um motivo a mais:
-# nada no produto chama este adaptador ainda. Ligar antes de existir chamador não faz nada; ligar
-# depois é ato de operação, não de deploy.
+# **Nasce desligada**, como `DUNNING_ENABLED` e `DISCOVERY_BOOKING_ENABLED`. Desde a issue #110 há
+# chamador — o kickoff abre o grupo do cliente ao nascer o projeto —, e é justamente por isso que
+# ligar continua sendo ato de operação e não de deploy: ligada, a primeira conversão passa a criar
+# grupo de verdade, com um número não oficial que fala com clientes (ADR 0062).
 #
 # Vazio em `WHATSAPP_PROVIDERS` significa `NullProvider` — registra a intenção e não manda nada —,
 # e nesse modo `configured()` passa sem exigir credencial alguma, no precedente do `ESIGN_PROVIDER`
@@ -579,6 +580,16 @@ WHATSAPP_UAZAPI_API_BASE = os.getenv("WHATSAPP_UAZAPI_API_BASE", "")
 # produz `UNCERTAIN`, que por decisão **não** cai para o próximo provedor — um timeout curto demais
 # transforma entrega lenta em mensagem não enviada, e um longo demais segura quem chamou.
 WHATSAPP_TIMEOUT_SECONDS = _env_int("WHATSAPP_TIMEOUT_SECONDS", 15)
+# **Criar grupo é outra ordem de grandeza, e por isso tem teto próprio** (ADR 0064, issue #111).
+# Mandar texto é falar com o provedor; criar grupo é o provedor falando com a rede do WhatsApp e
+# esperando o grupo existir do outro lado. Na primeira chamada real contra a UAZAPI, em
+# 03/09/2026, o teto de 15s estourou, o adaptador devolveu `UNCERTAIN` sem id — e **o grupo tinha
+# sido criado** (`120363431743499021@g.us`, 11:47:18Z), com a referência dele perdida.
+#
+# O que se mediu foi que 15s é curto. **Não** se mediu quanto a UAZAPI leva de fato: 90 é folga
+# escolhida, não número apurado. É exatamente por isso que a reconciliação existe e o teto maior
+# não vem sozinho — um teto maior torna o caso raro, e caso raro não tratado é o pior tipo.
+WHATSAPP_GROUP_TIMEOUT_SECONDS = _env_int("WHATSAPP_GROUP_TIMEOUT_SECONDS", 90)
 
 # Enriquecimento de lead (FDD 030): dado cadastral público de CNPJ alimentando a qualificação que
 # já existe. Nome neutro pela razão de `PAYMENTS_*` e `ESIGN_*` — o provedor é trocável.

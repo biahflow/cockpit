@@ -13,9 +13,17 @@ O canal também **não muda o gate**: a ADR 0031 decidiu que "WhatsApp é canal 
 e a FDD 036 repete. O degrau determinístico sai sozinho; texto gerado por IA continua sendo pedido,
 revisado e enviado por uma pessoa — trocar e-mail por WhatsApp não afrouxa nada disso.
 
-**Nada no produto manda mensagem ainda.** Esta entrega é o adaptador e a sonda; o chamador vem
-depois. Construir o adaptador antes do chamador é deliberado, para o desenho do fallback ser
-decidido sozinho e não no meio de outra feature.
+**O chamador é o kickoff, e ele só cria grupo** (issue #110). Ao nascer o projeto,
+`kickoff.finalize` abre o grupo do cliente e **guarda** a referência em `Project` — mandar
+mensagem ao grupo depois de criado (`send_group_text`) segue sem chamador, e isso é deliberado
+nesta rodada. O adaptador nasceu antes do chamador de propósito, para o desenho do fallback ser
+decidido sozinho e não no meio de outra feature; o preço disso foi uma temporada inteira sem
+ninguém exercitá-lo, e o defeito que a primeira chamada real encontrou está na ADR 0064.
+
+**Criar grupo tem teto próprio, e resposta incerta é reconciliada** (ADR 0064). `_request` aceita
+`timeout` por operação, porque mandar texto e criar grupo estão em ordens de grandeza diferentes
+de latência; e `create_group` que termina em `UNCERTAIN` pergunta ao **mesmo** provedor se o grupo
+nasceu, aceitando só o casamento exato e único de nome.
 
 O molde é o de `esign.py` e `payments.py` — `Protocol`, adaptadores, `NullProvider`, `_PROVIDERS`,
 flag, sonda —, com **duas divergências deliberadas**:
@@ -158,14 +166,29 @@ class HttpAnswer:
     error: BaseException | None = None
 
 
+def _timeout(timeout: float | None) -> float:
+    """O teto efetivo da chamada — **por operação**, e não um só para tudo (ADR 0064).
+
+    Fora de `_request` pelo motivo de `classify`: `_request` é a única função que toca a rede e
+    fica fora da cobertura, então uma regra escondida dentro dela é uma regra que nenhum teste
+    alcança. Quem não passa nada fica exatamente onde estava, no teto de mensagem.
+    """
+    return timeout or settings.WHATSAPP_TIMEOUT_SECONDS
+
+
 def _request(  # pragma: no cover - I/O com o fornecedor
-    url: str, headers: Mapping[str, str], payload: dict | None = None, method: str = "POST"
+    url: str,
+    headers: Mapping[str, str],
+    payload: dict | None = None,
+    method: str = "POST",
+    timeout: float | None = None,
 ) -> HttpAnswer:
     """Fala com o provedor e devolve o que voltou. **Nunca levanta** — classificar é de quem lê."""
     data = json.dumps(payload).encode() if payload is not None else None
     request = urllib.request.Request(url, data=data, method=method, headers=dict(headers))
+    espera = _timeout(timeout)
     try:
-        with urllib.request.urlopen(request, timeout=settings.WHATSAPP_TIMEOUT_SECONDS) as answer:
+        with urllib.request.urlopen(request, timeout=espera) as answer:
             return HttpAnswer(status_code=answer.status, body=_body(answer.read()))
     except urllib.error.HTTPError as exc:
         # 4xx/5xx é resposta, não falha de transporte: o corpo é justamente o que diz o motivo.
@@ -174,12 +197,28 @@ def _request(  # pragma: no cover - I/O com o fornecedor
         return HttpAnswer(error=exc)
 
 
+# A chave sob a qual um JSON que não é objeto (uma lista no topo) é entregue a quem lê o corpo.
+_ITEMS = "items"
+
+
 def _body(raw: bytes) -> dict:  # pragma: no cover - só existe para `_request`
+    """O corpo do provedor como `dict` — **inclusive quando ele vem como lista**.
+
+    O retorno é `dict` porque `classify`/`_provider_error` dereferenciam `body.get(...)`; devolver
+    a lista crua quebraria os dois. Mas descartá-la, que era o que este `return` fazia, é pior e
+    mais silencioso: uma listagem de grupos é justamente a resposta que os fornecedores mandam
+    como array no topo, e a reconciliação (`find_group`) receberia `{}` — nunca acharia nada, sem
+    erro nenhum aparecendo. Embrulhar preserva o dado e mantém o tipo.
+    """
     try:
         parsed = json.loads(raw) if raw else {}
     except ValueError:
         return {}
-    return parsed if isinstance(parsed, dict) else {}
+    if isinstance(parsed, dict):
+        return parsed
+    if isinstance(parsed, list):
+        return {_ITEMS: parsed}
+    return {}
 
 
 # --- Classificação: da resposta (ou da falta dela) para um dos quatro estados ---
@@ -255,6 +294,15 @@ class Provider(Protocol):
     def ping(self) -> tuple[bool, str]:
         """A instância está conectada? Leitura pura — **não manda mensagem** (FDD 024)."""
 
+    # **`find_group` não entra aqui, e a ausência é a decisão** (ADR 0064). Listar grupos por nome
+    # é capacidade *opcional*: a UAZAPI documenta `GET /group/list`, e a Z-API **não tem endpoint
+    # verificado** para isso. Declará-lo obrigatório no Protocol obrigaria a inventar o caminho da
+    # Z-API, e endpoint suposto em código de produção é pior do que capacidade ausente — a
+    # ausência ao menos aparece no `detail`. Quem consome resolve por
+    # `getattr(provider, "find_group", None)`, o mesmo padrão com que `integrations._probe_esign`
+    # e `_probe_payments` tratam o `ping` opcional. A Z-API entra no dia em que o endpoint for
+    # **verificado** na documentação dela, não suposto.
+
 
 class NullProvider:
     """Sem provedor configurado: registra a intenção e **não promete nada**.
@@ -324,6 +372,7 @@ class ZApiProvider:
                 # `autoInvite`: quem não pode ser adicionado direto recebe convite privado, em vez
                 # de ficar de fora sem ninguém notar.
                 {"groupName": name, "phones": [_to(p) for p in participants], "autoInvite": True},
+                timeout=settings.WHATSAPP_GROUP_TIMEOUT_SECONDS,
             )
         )
 
@@ -401,7 +450,18 @@ class UazapiProvider:
                 self._url("group/create"),
                 self._headers(),
                 {"name": name, "participants": [_to(p) for p in participants]},
+                timeout=settings.WHATSAPP_GROUP_TIMEOUT_SECONDS,
             )
+        )
+
+    def find_group(self, name: str) -> GroupResult:  # pragma: no cover - I/O com o fornecedor
+        """Procura um grupo já existente por nome — a reconciliação depois do `UNCERTAIN`.
+
+        `GET /group/list` é o único endpoint de listagem **verificado** entre os dois provedores
+        (issue #111), e é por isso que este método existe aqui e não no Protocol.
+        """
+        return self.read_group_list(
+            name, _request(self._url("group/list"), self._headers(), method="GET")
         )
 
     def send_group_text(self, group_ref: str, body: str) -> MessageResult:  # pragma: no cover
@@ -428,6 +488,43 @@ class UazapiProvider:
             cls.name,
             str(answer.body.get("JID", "")),
             str(answer.body.get("invite_link", "")),
+            detail,
+        )
+
+    @classmethod
+    def read_group_list(cls, name: str, answer: HttpAnswer) -> GroupResult:
+        """A listagem em um `GroupResult`: `DELIVERED` **só** no casamento exato e único.
+
+        **"Exatamente um" é a regra inteira, e não zelo.** Dois grupos com o mesmo nome significam
+        que não se sabe qual é o que acabou de nascer; escolher um seria gravar a referência
+        errada, e uma referência errada é pior do que nenhuma — com ela, quem opera acha que sabe.
+        Sem ela, sabe que não sabe, e o `detail` diz por quê.
+
+        O nome é comparado com `strip()` dos dois lados e **nada mais**: não se normaliza acento
+        nem caixa, porque o nome é o que a casa mandou criar, e "normalizar" abriria casamento
+        falso entre dois grupos que o WhatsApp considera diferentes.
+        """
+        status, detail = classify(answer)
+        if status is not Delivery.DELIVERED:
+            return GroupResult(status, provider=cls.name, detail=detail)
+        procurado = (name or "").strip()
+        casaram = [
+            grupo
+            for grupo in _group_list(answer.body)
+            if str(grupo.get("name") or grupo.get("subject") or "").strip() == procurado
+        ]
+        if len(casaram) != 1:
+            achados = "nenhum grupo" if not casaram else f"{len(casaram)} grupos"
+            return GroupResult(
+                Delivery.UNCERTAIN,
+                provider=cls.name,
+                detail=f"reconciliação inconclusiva: {achados} com o nome '{procurado}'",
+            )
+        achado = casaram[0]
+        return _created_group(
+            cls.name,
+            str(achado.get("JID") or achado.get("id") or ""),
+            str(achado.get("invite_link") or ""),
             detail,
         )
 
@@ -469,6 +566,21 @@ def _created_group(provider: str, group_id: str, invite_url: str, detail: str) -
     return GroupResult(
         Delivery.DELIVERED, provider=provider, group_id=group_id, invite_url=invite_url
     )
+
+
+def _group_list(body: dict) -> list[dict]:
+    """Os grupos de uma listagem, nas **duas** formas em que ela pode chegar.
+
+    A documentação da UAZAPI não fixa se `GET /group/list` responde um array no topo ou um objeto
+    com os grupos numa chave, e adivinhar uma delas faria a reconciliação falhar em silêncio na
+    outra. O array no topo chega aqui sob `_ITEMS`, embrulhado por `_body` — que é o motivo de
+    aquele embrulho existir.
+    """
+    for chave in ("groups", _ITEMS):
+        valor = body.get(chave)
+        if isinstance(valor, list):
+            return [item for item in valor if isinstance(item, dict)]
+    return []
 
 
 _SO_DIGITOS = re.compile(r"\D")
@@ -562,18 +674,64 @@ def send_text(to: str, body: str) -> MessageResult:
     return _first_that_delivers("send_text", lambda provider: provider.send_text(to, body))
 
 
+RECONCILIADO = "recuperado por reconciliação depois de resposta incerta"
+
+
+def _reconcile_group(name: str, result: GroupResult) -> GroupResult:
+    """Depois de um `UNCERTAIN`, pergunta ao **mesmo** provedor se o grupo nasceu mesmo.
+
+    Um `UNCERTAIN` na criação é o pior estado que existe aqui: o grupo pode estar do outro lado,
+    com o id perdido — foi o que aconteceu em 03/09/2026 (issue #111). Reconciliar é a única
+    forma de recuperar a referência sem arriscar o erro caro, que é criar o segundo grupo.
+
+    **Contra o provedor da última tentativa, e não contra todos**: um grupo criado pela Z-API não
+    existe do lado da UAZAPI — é a mesma razão já escrita na docstring de `send_group_text`.
+
+    A capacidade é **opcional** (`getattr`, no padrão de `integrations._probe_esign`): provedor
+    que não sabe listar grupos devolve o resultado intacto, e nada estoura.
+    """
+    ultimo = result.attempts[-1].provider if result.attempts else result.provider
+    provider = next((p for p in get_providers() if p.name == ultimo), None)
+    find_group = getattr(provider, "find_group", None)
+    if find_group is None:
+        return result
+    achado: GroupResult = find_group(name)
+    attempts = (*result.attempts, Attempt(ultimo, achado.status, f"find_group: {achado.detail}"))
+    if achado.status is not Delivery.DELIVERED:
+        logger.warning(
+            "WhatsApp reconciliação de grupo por %s: %s (%s)",
+            ultimo, achado.status.value, achado.detail or "sem detalhe",
+        )
+        return replace(result, attempts=attempts)
+    logger.info("WhatsApp reconciliação de grupo por %s: referência recuperada", ultimo)
+    return replace(
+        achado,
+        # Quem lê o log precisa separar "respondeu na hora" de "achamos depois": os dois chegam
+        # como `DELIVERED`, e sem esta frase a diferença some.
+        detail=f"{RECONCILIADO} ({result.detail or 'sem detalhe'})",
+        attempts=attempts,
+    )
+
+
 def create_group(name: str, participants: Sequence[str]) -> GroupResult:
     """Cria um grupo pelo primeiro provedor que aceitar e devolve a referência dele.
 
-    O portal **não guarda** essa referência em modelo nenhum: não há campo, e criar um é outra
-    decisão. Quem chamar precisa fazer alguma coisa com o que volta.
+    Desde a issue #110 há um chamador, e ele **guarda** a referência: `kickoff.finalize` grava o
+    id e o link de convite em `Project.whatsapp_group_id`/`whatsapp_group_invite_url`. A gravação
+    é de quem chama — este módulo não conhece modelo nenhum —, e é a existência dela que torna a
+    reconciliação abaixo útil: recuperar um id que ninguém guardaria não serviria para nada.
+
+    Resposta incerta passa por `_reconcile_group` antes de voltar (ADR 0064).
     """
     if not is_enabled():
         logger.info("WhatsApp %s: grupo '%s' não criado", DESLIGADA, name)
         return GroupResult(Delivery.UNAVAILABLE, detail=DESLIGADA)
-    return _first_that_delivers(
+    result = _first_that_delivers(
         "create_group", lambda provider: provider.create_group(name, participants)
     )
+    if result.status is Delivery.UNCERTAIN:
+        return _reconcile_group(name, result)
+    return result
 
 
 def send_group_text(group_ref: str, body: str) -> MessageResult:

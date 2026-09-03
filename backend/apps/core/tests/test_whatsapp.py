@@ -35,17 +35,29 @@ class Rede:
 
     def __init__(self, *answers: HttpAnswer) -> None:
         self.answers = list(answers)
-        self.calls: list[tuple[str, dict, dict | None, str]] = []
+        # O `timeout` entra **no fim** da tupla de propósito: dezenas de asserções já leem
+        # `calls[n][2]` (payload) e `calls[n][3]` (método), e mudar a posição delas trocaria a
+        # correção de um teto pela reescrita da suíte inteira.
+        self.calls: list[tuple[str, dict, dict | None, str, float | None]] = []
 
     def __call__(
-        self, url: str, headers: dict, payload: dict | None = None, method: str = "POST"
+        self,
+        url: str,
+        headers: dict,
+        payload: dict | None = None,
+        method: str = "POST",
+        timeout: float | None = None,
     ) -> HttpAnswer:
-        self.calls.append((url, dict(headers), payload, method))
+        self.calls.append((url, dict(headers), payload, method, timeout))
         return self.answers.pop(0)
 
     @property
     def urls(self) -> list[str]:
         return [call[0] for call in self.calls]
+
+    @property
+    def timeouts(self) -> list[float | None]:
+        return [call[4] for call in self.calls]
 
 
 @pytest.fixture
@@ -341,7 +353,7 @@ def test_zapi_monta_a_url_com_instancia_e_token_e_manda_o_texto(rede):
 
     resultado = whatsapp.send_text("+55 (11) 99999-9999", "coordenação")
 
-    url, headers, payload, method = chamadas.calls[0]
+    url, headers, payload, method, _ = chamadas.calls[0]
     assert url == "https://api.z-api.io/instances/inst/token/tok/send-text"
     assert method == "POST"
     assert payload == {"phone": "5511999999999", "message": "coordenação"}
@@ -364,7 +376,7 @@ def test_zapi_leva_o_client_token_da_conta_e_respeita_a_base(rede):
 
     whatsapp.send_text("5511999999999", "oi")
 
-    url, headers, _, _ = chamadas.calls[0]
+    url, headers, _, _, _ = chamadas.calls[0]
     assert url.startswith("https://proxy.interno/instances/inst/token/tok/")
     assert headers["Client-Token"] == "conta"
 
@@ -376,7 +388,7 @@ def test_uazapi_leva_o_token_no_header(rede):
 
     whatsapp.send_text("5511999999999", "oi")
 
-    url, headers, payload, _ = chamadas.calls[1]
+    url, headers, payload, _, _ = chamadas.calls[1]
     assert url == "https://free.uazapi.com/send/text"
     assert headers["token"] == "uaz"
     assert payload == {"number": "5511999999999", "text": "oi"}
@@ -430,6 +442,203 @@ def test_grupo_criado_sem_id_e_incerto():
     resultado = whatsapp.ZApiProvider.read_group(HttpAnswer(status_code=200, body={}))
     assert resultado.status is Delivery.UNCERTAIN
     assert resultado.group_id == ""
+
+
+# --- O teto por operação (ADR 0064, issue #111) -----------------------------------------------
+#
+# Criar grupo não é falar com o provedor: é o provedor falando com a rede do WhatsApp e esperando
+# o grupo existir. Em 03/09/2026 o teto único de 15s estourou, o adaptador devolveu `UNCERTAIN`
+# sem id — e o grupo **tinha** nascido do outro lado.
+
+
+def test_o_teto_default_e_o_de_mensagem_e_o_de_grupo_e_proprio():
+    """A regra do teto mora fora de `_request` justamente para caber num teste."""
+    assert whatsapp._timeout(None) == 15
+    assert whatsapp._timeout(90) == 90
+
+
+@pytest.mark.django_db
+@LIGADO
+def test_mandar_texto_usa_o_teto_de_mensagem_e_criar_grupo_usa_o_de_grupo(rede):
+    chamadas = rede(ZAPI_OK, HttpAnswer(status_code=200, body={"phone": "1203-group"}))
+
+    whatsapp.send_text("5511999999999", "oi")
+    whatsapp.create_group("Projeto ACME", ["5511999999999"])
+
+    # `None` no envio significa "sem teto próprio", e `_timeout` o resolve no de mensagem.
+    assert chamadas.timeouts == [None, 90]
+    assert whatsapp._timeout(chamadas.timeouts[0]) == 15
+
+
+@pytest.mark.django_db
+@LIGADO
+@override_settings(WHATSAPP_TIMEOUT_SECONDS=7, WHATSAPP_GROUP_TIMEOUT_SECONDS=300)
+def test_mexer_num_teto_nao_mexe_no_outro(rede):
+    chamadas = rede(ZAPI_OK, HttpAnswer(status_code=200, body={"phone": "1203-group"}))
+
+    whatsapp.send_text("5511999999999", "oi")
+    whatsapp.create_group("Projeto ACME", ["5511999999999"])
+
+    assert chamadas.timeouts == [None, 300]
+    assert whatsapp._timeout(chamadas.timeouts[0]) == 7
+
+
+# --- A reconciliação depois do `UNCERTAIN` (ADR 0064) -----------------------------------------
+
+SO_UAZAPI = override_settings(
+    WHATSAPP_ENABLED=True, WHATSAPP_PROVIDERS="uazapi", WHATSAPP_UAZAPI_TOKEN="uaz"
+)
+SO_ZAPI = override_settings(
+    WHATSAPP_ENABLED=True,
+    WHATSAPP_PROVIDERS="zapi",
+    WHATSAPP_ZAPI_INSTANCE_ID="inst",
+    WHATSAPP_ZAPI_TOKEN="tok",
+)
+GRUPO_ACHADO = {"JID": "120363431743499021@g.us", "name": "ACME · Discovery"}
+
+
+def test_um_array_no_topo_nao_se_perde_na_leitura_do_corpo():
+    """`_body` devolvia `{}` para qualquer JSON que não fosse objeto.
+
+    Uma listagem de grupos é justamente o que chega como array no topo: a reconciliação receberia
+    um corpo vazio, nunca acharia nada e **não erraria** — o pior modo de falha possível aqui.
+    """
+    assert whatsapp._body(b'[{"JID": "1203@g.us"}]') == {"items": [{"JID": "1203@g.us"}]}
+    assert whatsapp._body(b'{"groups": []}') == {"groups": []}
+    assert whatsapp._body(b"3") == {}
+    assert whatsapp._body(b"nao e json") == {}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param({"groups": [GRUPO_ACHADO]}, id="objeto-com-chave"),
+        pytest.param({"items": [GRUPO_ACHADO]}, id="array-no-topo-embrulhado"),
+    ],
+)
+def test_a_listagem_e_lida_nas_duas_formas_de_corpo(body: dict):
+    """A documentação do fornecedor não fixa qual das duas vem, e adivinhar uma falha na outra."""
+    achado = whatsapp.UazapiProvider.read_group_list(
+        "ACME · Discovery", HttpAnswer(status_code=200, body=body)
+    )
+
+    assert achado.status is Delivery.DELIVERED
+    assert achado.group_id == "120363431743499021@g.us"
+
+
+@pytest.mark.django_db
+@SO_UAZAPI
+def test_grupo_incerto_e_reconciliado_quando_o_nome_casa_exatamente_uma_vez(rede):
+    """O defeito medido em 03/09/2026: o teto estourou e o grupo tinha nascido do outro lado."""
+    chamadas = rede(
+        HttpAnswer(error=TimeoutError("timed out")),
+        HttpAnswer(status_code=200, body={"groups": [GRUPO_ACHADO, {"name": "Outra conta"}]}),
+    )
+
+    grupo = whatsapp.create_group("ACME · Discovery", ["5511999999999"])
+
+    assert grupo.status is Delivery.DELIVERED
+    assert grupo.group_id == "120363431743499021@g.us"
+    # Quem lê o log precisa separar "respondeu na hora" de "achamos depois".
+    assert whatsapp.RECONCILIADO in grupo.detail
+    assert "timeout" in grupo.detail
+    # O rastro continua respondendo "por onde isto passou?": a tentativa e a reconciliação.
+    assert [a.status for a in grupo.attempts] == [Delivery.UNCERTAIN, Delivery.DELIVERED]
+    assert chamadas.calls[1][3] == "GET"
+    assert chamadas.urls[1] == "https://free.uazapi.com/group/list"
+
+
+@pytest.mark.django_db
+@SO_UAZAPI
+def test_nenhum_casamento_de_nome_continua_incerto(rede):
+    rede(
+        HttpAnswer(error=TimeoutError("timed out")),
+        HttpAnswer(status_code=200, body={"groups": [{"name": "Outra conta · Outro"}]}),
+    )
+
+    grupo = whatsapp.create_group("ACME · Discovery", ["5511999999999"])
+
+    assert grupo.status is Delivery.UNCERTAIN
+    assert grupo.group_id == ""
+
+
+@pytest.mark.django_db
+@SO_UAZAPI
+def test_dois_grupos_com_o_mesmo_nome_continuam_incertos_e_nada_e_escolhido(rede):
+    """Escolher entre dois seria gravar a referência errada — pior do que não gravar nenhuma."""
+    rede(
+        HttpAnswer(error=TimeoutError("timed out")),
+        HttpAnswer(
+            status_code=200,
+            body={"groups": [GRUPO_ACHADO, {"JID": "999@g.us", "name": "ACME · Discovery"}]},
+        ),
+    )
+
+    grupo = whatsapp.create_group("ACME · Discovery", ["5511999999999"])
+
+    assert grupo.status is Delivery.UNCERTAIN
+    assert grupo.group_id == ""
+    assert "2 grupos" in grupo.attempts[-1].detail
+
+
+@pytest.mark.django_db
+@SO_ZAPI
+def test_provedor_que_nao_sabe_listar_grupos_nao_estoura_e_segue_incerto(rede):
+    """A Z-API não tem endpoint de listagem **verificado**, e a capacidade é opcional (`getattr`)."""
+    chamadas = rede(HttpAnswer(error=TimeoutError("timed out")))
+
+    grupo = whatsapp.create_group("ACME · Discovery", ["5511999999999"])
+
+    assert grupo.status is Delivery.UNCERTAIN
+    assert not hasattr(whatsapp.ZApiProvider, "find_group")
+    assert len(chamadas.calls) == 1, "sem capacidade de listar, não há segunda chamada"
+
+
+@pytest.mark.django_db
+@SO_UAZAPI
+def test_o_caminho_feliz_nao_chama_a_reconciliacao(rede):
+    chamadas = rede(HttpAnswer(status_code=200, body={"JID": "1203@g.us", "invite_link": "u"}))
+
+    grupo = whatsapp.create_group("ACME · Discovery", ["5511999999999"])
+
+    assert grupo.status is Delivery.DELIVERED
+    assert whatsapp.RECONCILIADO not in grupo.detail
+    assert len(chamadas.calls) == 1, "grupo criado na hora não se reconcilia com ninguém"
+
+
+def test_a_reconciliacao_nao_normaliza_acento_nem_caixa():
+    """O nome é o que a casa mandou criar; normalizar abriria casamento falso."""
+    quase = HttpAnswer(status_code=200, body={"groups": [{"name": "acme · discovery"}]})
+
+    assert whatsapp.UazapiProvider.read_group_list("ACME · Discovery", quase).status is (
+        Delivery.UNCERTAIN
+    )
+    # Espaço em volta, sim: é ruído de digitação, não outro nome.
+    com_espaco = HttpAnswer(
+        status_code=200,
+        body={"groups": [{"JID": "1203@g.us", "name": " ACME · Discovery "}]},
+    )
+    assert whatsapp.UazapiProvider.read_group_list(
+        "ACME · Discovery", com_espaco
+    ).status is Delivery.DELIVERED
+
+
+def test_listagem_com_corpo_irreconhecivel_nao_inventa_grupo():
+    """200 com um corpo que não traz lista nenhuma é lacuna, e lacuna não vira palpite."""
+    achado = whatsapp.UazapiProvider.read_group_list(
+        "ACME · Discovery", HttpAnswer(status_code=200, body={"detalhe": "sem grupos"})
+    )
+
+    assert achado.status is Delivery.UNCERTAIN
+    assert "nenhum grupo" in achado.detail
+
+
+def test_listagem_que_o_provedor_recusa_nao_vira_reconciliacao():
+    recusada = HttpAnswer(status_code=401, body={"error": "token"})
+    achado = whatsapp.UazapiProvider.read_group_list("ACME · Discovery", recusada)
+
+    assert achado.status is Delivery.UNAVAILABLE
+    assert achado.group_id == ""
 
 
 @pytest.mark.django_db

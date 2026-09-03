@@ -546,6 +546,21 @@ class Project(TimestampedModel):
     actual_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     drive_folder_id = models.CharField(max_length=128, blank=True, default="")
+    # O grupo do cliente no WhatsApp, aberto pelo kickoff (issue #110, emenda de 03/09/2026 na
+    # FDD 008). Referência de fornecedor morando num modelo do domínio, no precedente do
+    # `drive_folder_id` acima e do `payment_customer_ref` da conta.
+    #
+    # **São dois campos porque são dois fatos**, e não a mesma coisa em formatos diferentes: o JID
+    # identifica o grupo para mandar mensagem depois (`whatsapp.send_group_text`), e o link de
+    # convite é o que se entrega a uma pessoa. A UAZAPI pode devolver o primeiro sem o segundo, e
+    # espremer os dois num campo só obrigaria a adivinhar qual chegou.
+    #
+    # **A referência mora no projeto, e a consequência é conhecida e aceita** (decisão de
+    # 03/09/2026): um mandato com Discovery → Feasibility → PROVE abre **três** grupos com o mesmo
+    # cliente. Se algum dia for revisitada, o lugar natural é o `Engagement` — que é, por
+    # definição (ADR 0050), "o mesmo trabalho". Ficou fora desta rodada de propósito.
+    whatsapp_group_id = models.CharField(max_length=128, blank=True, default="")
+    whatsapp_group_invite_url = models.URLField(blank=True, default="")
     # AI Score de maturidade/oportunidade de IA (Fase 4 — FDD 014). Gerado a partir da
     # transcrição de uma reunião (Discovery/Assessment) e revisado por humano antes de cruzar
     # ao portal do cliente. Vazio até a IA rodar; só publica quando `ai_score_reviewed`.

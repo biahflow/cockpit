@@ -25,7 +25,13 @@ from typing import TYPE_CHECKING
 from django.core.mail import send_mail
 from django.db import transaction
 
-from . import drive, notifications
+from . import drive, notifications, whatsapp
+
+# `Service` no topo, e não no corpo como `Milestone`/`Task`: `DEGRAUS_SEM_GRUPO_DE_WHATSAPP` é
+# constante de módulo e precisa do enum na importação. Não fecha ciclo — `models` não importa
+# este módulo, e o import local ali embaixo existe por causa de `discovery_booking`, não de
+# `models`.
+from .models import Service
 
 logger = logging.getLogger(__name__)
 
@@ -219,15 +225,103 @@ def criar_projeto_do_mandato(engagement: Engagement, salvar: Callable[[], Projec
 ORIGEM_PADRAO = "a partir de uma oportunidade ganha"
 
 
-def _send_kickoff_email(project: Project, origem: str) -> None:
+# Os degraus que **não** ganham grupo de WhatsApp no kickoff (issue #110, decisão de 03/09/2026).
+# Um lugar só: reexpressar o critério na chamada produziria a segunda definição do alcance, e as
+# duas divergiriam na primeira vez que a escada mudasse.
+#
+# **Projeto sem serviço, ou com `tier` vazio, ganha grupo — e isso é o default, não esquecimento.**
+# O único degrau excluído pela decisão foi a Qualification Call: uma conversa de trinta a quarenta
+# e cinco minutos não precisa de canal dedicado. Serviço avulso é trabalho de entrega de verdade,
+# e inverter este default "arrumando" o código seis meses depois tiraria o grupo justamente de
+# quem o usaria.
+DEGRAUS_SEM_GRUPO_DE_WHATSAPP = frozenset({Service.Tier.QUALIFICATION_CALL})
+
+
+def _participantes_do_grupo(project: Project) -> list[str]:
+    """Os contatos vivos da conta que têm telefone — quem entra no grupo do cliente.
+
+    Arquivado não entra: `archive()` é como a casa demite um contato, e um contato arquivado num
+    grupo de cliente é acesso que ninguém pretendeu conceder. A conta canônica é
+    `engagement.account` — `Project.client` não existe desde a Fase 6.
+    """
+    return list(
+        project.engagement.account.contacts.filter(archived_at__isnull=True)
+        .exclude(phone="")
+        .values_list("phone", flat=True)
+    )
+
+
+def abrir_grupo_de_whatsapp(project: Project) -> str:
+    """Abre o grupo do cliente no WhatsApp e guarda a referência no projeto; devolve o convite.
+
+    O que volta é o **link de convite** (`""` quando não há grupo), porque é o único pedaço da
+    referência que se entrega a uma pessoa: o e-mail e a notificação do kickoff o levam quando ele
+    existe, e não mencionam grupo nenhum quando não existe.
+
+    A gravação é daqui porque `finalize` roda **depois** do commit da criação do projeto: não há
+    transação aberta para carregar o campo junto, e ninguém salva o projeto por nós.
+    """
+    if not whatsapp.is_enabled():
+        # Sai calado: `whatsapp.create_group` já registra a intenção quando a flag está desligada,
+        # e repetir a linha aqui só dobraria o log de toda instalação sem WhatsApp.
+        return ""
+    tier = project.service.tier if project.service else ""
+    if tier in DEGRAUS_SEM_GRUPO_DE_WHATSAPP:
+        logger.info(
+            "kickoff: projeto %s é do degrau '%s' e não ganha grupo de WhatsApp", project.pk, tier
+        )
+        return ""
+    if project.whatsapp_group_id:
+        # **A guarda que impede o erro caro.** `finalize` é best-effort e pode ser reexecutado (a
+        # conversão que repete, o retry de quem opera); sem ela, a segunda execução cria o
+        # **segundo grupo** com o mesmo cliente — que é literalmente o duplicado que a issue #111
+        # nomeia. O link já conhecido volta: o grupo existe, e é ele que se entrega.
+        logger.info("kickoff: projeto %s já tem grupo de WhatsApp", project.pk)
+        return project.whatsapp_group_invite_url
+    participantes = _participantes_do_grupo(project)
+    if not participantes:
+        # "Cala quando não sabe", o mesmo de `receives_billing`: sem nenhum telefone não há grupo
+        # a criar, e um grupo só com a casa dentro seria um canal que o cliente nunca vê.
+        logger.info(
+            "kickoff: conta do projeto %s não tem contato com telefone; grupo não criado",
+            project.pk,
+        )
+        return ""
+    nome = f"{project.engagement.account.name} · {project.name}"
+    result = whatsapp.create_group(nome, participantes)
+    if result.status is not whatsapp.Delivery.DELIVERED:
+        logger.warning(
+            "kickoff: grupo de WhatsApp do projeto %s ficou em '%s' (%s)",
+            project.pk, result.status.value, result.detail or "sem detalhe",
+        )
+        return ""
+    project.whatsapp_group_id = result.group_id
+    project.whatsapp_group_invite_url = result.invite_url
+    project.save(
+        update_fields=["whatsapp_group_id", "whatsapp_group_invite_url", "updated_at"]
+    )
+    logger.info(
+        # Telefone em log é dado pessoal: quem identifica o suficiente são os quatro últimos
+        # dígitos, e `whatsapp._mask` é a única definição desse corte.
+        "kickoff: grupo de WhatsApp do projeto %s criado por %s com %s",
+        project.pk, result.provider, ", ".join(whatsapp._mask(p) for p in participantes),
+    )
+    return result.invite_url
+
+
+def _send_kickoff_email(project: Project, origem: str, convite_do_grupo: str = "") -> None:
     recipient = project.owner.email
     if not recipient:
         return
+    # A linha do grupo só existe quando o grupo existe. "Grupo: —" seria pior do que o silêncio:
+    # anuncia um canal e não entrega nenhum. Parametrizado pela razão de `origem`.
+    grupo = f"\nGrupo do cliente no WhatsApp: {convite_do_grupo}\n" if convite_do_grupo else ""
     send_mail(
         f"Kickoff do projeto {project.name}",
         f"O projeto '{project.name}' foi criado {origem}.\n\n"
         f"Cliente: {project.engagement.account.name}\n"
-        f"Período: {project.start_date} a {project.due_date}\n\n"
+        f"Período: {project.start_date} a {project.due_date}\n"
+        f"{grupo}\n"
         f"Um cronograma inicial de marcos e tarefas já foi criado para revisão.",
         None,
         [recipient],
@@ -242,6 +336,9 @@ def finalize(project: Project, origem: str = ORIGEM_PADRAO) -> None:
     são duas origens de verdade — a conversão de uma oportunidade ganha e a criação direta a
     partir do mandato. Uma frase só serve às duas mensagens (e-mail e notificação) de propósito:
     duas variantes do mesmo fato divergiriam na primeira edição.
+
+    O grupo do cliente no WhatsApp entra **antes** do e-mail, e a ordem é o requisito: é o e-mail
+    que entrega o convite, e ele não pode sair antes de o link existir.
     """
     try:
         drive.ensure_project_folder(project)
@@ -249,10 +346,18 @@ def finalize(project: Project, origem: str = ORIGEM_PADRAO) -> None:
         # Best-effort é a decisão certa; o `pass` mudo é que não era. Sem log, o projeto ficava
         # **sem pasta e ninguém sabendo** — e a pasta é onde a entrega guarda tudo depois.
         logger.exception("kickoff: pasta do Drive não criada para o projeto %s", project.pk)
-    _send_kickoff_email(project, origem)
+    convite_do_grupo = ""
+    try:
+        convite_do_grupo = abrir_grupo_de_whatsapp(project)
+    except Exception:  # noqa: BLE001 - best-effort: o kickoff não falha porque o WhatsApp caiu
+        # Mesmo desenho do Drive acima, e pela mesma razão de não ser `pass`: sem log, o projeto
+        # nasceria sem canal com o cliente e ninguém saberia por quê.
+        logger.exception("kickoff: grupo de WhatsApp não criado para o projeto %s", project.pk)
+    _send_kickoff_email(project, origem, convite_do_grupo)
+    grupo = f" Grupo do cliente no WhatsApp: {convite_do_grupo}" if convite_do_grupo else ""
     notifications.notify(
         [project.owner], "kickoff",
-        f"Projeto '{project.name}' criado {origem}.",
+        f"Projeto '{project.name}' criado {origem}.{grupo}",
         f"/projetos/{project.id}",
         # No-op aqui pelo invariante `_owner_is_always_a_member`, mas a regra é "URL de projeto ⇒
         # guarda": exceção que depende de um invariante alheio é o que apodrece primeiro.
