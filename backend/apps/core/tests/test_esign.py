@@ -714,6 +714,100 @@ def test_webhook_ignores_unknown_event_and_unlinked_signature():
     assert SignatureRequest.objects.get(provider_ref="req-1").status == "pending"
 
 
+# A geometria **real** dos dois instrumentos da casa, medida em 03/09/2026 sobre os PDFs
+# (`Contrato_Design_Partner`, 7 páginas; `NDA_Mutuo`, 5). Os números entram como fixture porque é
+# exatamente o que o defeito exigia provar: as mesmas quatro linhas ficam a **dez pontos
+# percentuais** de distância entre um documento e outro, e um mapa fixo por papel erraria um dos
+# dois. Os PDFs não entram no repositório — são instrumentos de cliente real.
+CONTRATO = [
+    (29.56, 23.39, "__________________,"),   # a linha da data, 19 caracteres
+    (29.56, 41.45, "______"),
+    (37.24, 27.66, "_" * 47),                 # BIAHFLOW INOVA SIMPLES I.S.
+    (39.30, 35.86, "BIAHFLOW"),
+    (48.58, 27.66, "_" * 47),                 # [RAZÃO SOCIAL DO PARCEIRO]
+    (50.64, 46.31, "HOME"),
+    (60.64, 12.08, "Testemunhas:"),
+    (66.89, 14.05, "_" * 43),
+    (77.06, 14.05, "_" * 43),
+]
+NDA = [
+    (19.05, 23.39, "__________________,"),
+    (26.74, 27.66, "_" * 47),
+    (38.08, 27.66, "_" * 47),
+    (50.13, 12.08, "Testemunhas:"),
+    (56.39, 14.05, "_" * 43),
+    (66.55, 14.05, "_" * 43),
+]
+
+
+def _itens(medido) -> list[esign.ItemDeTexto]:
+    return [esign.ItemDeTexto(y=y, x=x, texto=t) for y, x, t in medido]
+
+
+@pytest.mark.parametrize(
+    "medido, paginas, partes, testemunhas",
+    [
+        (CONTRATO, 7, ((27.66, 37.24), (27.66, 48.58)), ((14.05, 66.89), (14.05, 77.06))),
+        (NDA, 5, ((27.66, 26.74), (27.66, 38.08)), ((14.05, 56.39), (14.05, 66.55))),
+    ],
+    ids=["contrato", "nda"],
+)
+def test_as_ancoras_saem_do_proprio_documento(medido, paginas, partes, testemunhas):
+    """A medição que derrubou o mapa fixo: as mesmas linhas, dez pontos percentuais de distância.
+
+    O contrato tem mais texto na última página que o NDA, e a razão social do cliente empurra o
+    bloco dentro do **mesmo** template. Coordenada cravada acerta o documento em que foi medida e
+    erra o próximo, sem nada ficar vermelho.
+    """
+    ancoras = esign.ancoras_de_assinatura(paginas, _itens(medido))
+
+    assert ancoras is not None
+    assert ancoras.pagina == paginas
+    assert ancoras.partes == partes
+    assert ancoras.testemunhas == testemunhas
+
+
+def test_a_linha_da_data_nao_e_confundida_com_assinatura():
+    """O limiar de 20 sublinhados é medido, não escolhido: as linhas de assinatura têm 43–47
+    caracteres e a linha de data logo acima tem no máximo 19 por corrida. Sem ele, a primeira
+    "linha de assinatura" encontrada seria a data — três linhas acima do lugar certo."""
+    ancoras = esign.ancoras_de_assinatura(7, _itens(CONTRATO))
+
+    assert ancoras is not None
+    assert all(y > 30 for _, y in ancoras.partes), "a linha da data (y≈29,6%) entrou como parte"
+
+
+def test_sem_as_duas_linhas_de_parte_nao_ha_ancora():
+    """Achar uma linha só significa que este documento não tem o bloco que a casa desenha, e
+    posicionar a partir de palpite é pior que mandar para a página anexa."""
+    uma_so = [(40.0, 27.66, "_" * 47), (60.0, 12.08, "Testemunhas:")]
+
+    assert esign.ancoras_de_assinatura(3, _itens(uma_so)) is None
+    assert esign.ancoras_de_assinatura(3, []) is None
+
+
+def test_sem_rotulo_de_testemunha_as_linhas_sao_todas_de_parte():
+    """Um instrumento sem testemunhas continua posicionando as duas partes."""
+    sem_rotulo = [(30.0, 27.66, "_" * 47), (45.0, 27.66, "_" * 47)]
+
+    ancoras = esign.ancoras_de_assinatura(2, _itens(sem_rotulo))
+
+    assert ancoras is not None
+    assert ancoras.partes == ((27.66, 30.0), (27.66, 45.0))
+    assert ancoras.testemunhas == ()
+
+
+def test_a_leitura_do_pdf_nunca_levanta():
+    """A costura de I/O: PDF de verdade devolve a contagem; o resto devolve `None` sem estourar."""
+    lido = esign._itens_da_ultima_pagina(_pdf(4))
+    assert lido is not None and lido[0] == 4
+
+    assert esign._itens_da_ultima_pagina(b"PK\x03\x04isto-e-um-docx") is None
+    assert esign._itens_da_ultima_pagina(b"") is None
+    assert esign._itens_da_ultima_pagina(b"%PDF-1.4 truncado no meio") is None
+    assert esign._itens_da_ultima_pagina(_pdf(2)[:120]) is None
+
+
 @pytest.mark.django_db
 @override_settings(ESIGN_ENABLED=True, ESIGN_PROVIDER="clicksign", ESIGN_API_TOKEN="tok",
                    ESIGN_WEBHOOK_SECRET=SECRET)
@@ -800,10 +894,15 @@ def _enviar(
     kind: str,
     conteudo: bytes,
     signers: list[esign.Signer],
+    ancoras: tuple[int, list] | None = None,
 ) -> list[dict]:
     """Manda a rodada pelo `AutentiqueProvider` e devolve os signatários do payload."""
     capturado: dict[str, bytes] = {}
     monkeypatch.setattr(esign, "_document_bytes", lambda document: conteudo)
+    if ancoras is not None:
+        # Um PDF em branco não tem bloco de assinatura — e desde a medição de 03/09/2026 isso é
+        # verdade no código também. Quem quer posição declara a geometria da última página.
+        monkeypatch.setattr(esign, "_itens_da_ultima_pagina", lambda _: ancoras)
     monkeypatch.setattr(
         esign.AutentiqueProvider,
         "_post",
@@ -820,34 +919,34 @@ def _papeis(*papeis: str) -> list[esign.Signer]:
     return [esign.Signer(email=f"{papel}{i}@x.test", role=papel) for i, papel in enumerate(papeis)]
 
 
-# --- contar as páginas -------------------------------------------------------
-
-
-def test_paginas_do_pdf_conta_o_pdf_e_nunca_levanta():
-    """Ela é auxílio de posicionamento, não a operação: PDF ilegível vira assinatura sem posição,
-    e **nunca** uma solicitação que falha — o fluxo real de hoje manda `.docx`."""
-    assert esign.paginas_do_pdf(_pdf(4)) == 4
-    assert esign.paginas_do_pdf(_pdf(1)) == 1
-    # Reconhecimento pelo conteúdo, não pela extensão: o `.docx` do fluxo real cai aqui.
-    assert esign.paginas_do_pdf(b"PK\x03\x04isto-e-um-docx") is None
-    assert esign.paginas_do_pdf(b"") is None
-    # PDF truncado: o `pypdf` levanta, e quem chama não pode ver a exceção.
-    assert esign.paginas_do_pdf(b"%PDF-1.4 truncado no meio") is None
-    assert esign.paginas_do_pdf(_pdf(2)[:120]) is None
-
-
 # --- os papéis e as posições -------------------------------------------------
 
 
-def test_o_mapa_de_posicoes_cobre_exatamente_os_papeis_declarados():
+@pytest.mark.django_db
+def test_todo_papel_declarado_ganha_posicao(monkeypatch: pytest.MonkeyPatch):
     """A geometria mora em `esign.py` e o vocabulário em `models.py`; este teste é a ponte.
 
-    Sem ele, um papel novo em `SignerRole` nasceria sem posição e a assinatura dele voltaria calada
-    para a página anexa — que é o defeito que esta issue existe para consertar.
+    Sem ele, um papel novo em `SignerRole` cairia no `else` de `posicoes_da_rodada` e a assinatura
+    dele voltaria calada para a página anexa — o defeito que esta issue existe para consertar.
+
+    A asserção é sobre **comportamento** e não sobre um mapa: desde a medição de 03/09/2026 a
+    posição é lida do documento, e não há mapa `papel → (x, y)` para conferir.
     """
-    com_posicao = set(esign._POSICAO_POR_PAPEL) | {SignatureRequest.SignerRole.WITNESS.value}
-    assert com_posicao == set(SignatureRequest.SignerRole.values)
-    assert len(esign._POSICOES_DA_TESTEMUNHA) == 2
+    monkeypatch.setattr(esign, "_itens_da_ultima_pagina", lambda _: (7, _itens(CONTRATO)))
+    documento = _instrumento(Document.Kind.COMMERCIAL_CONTRACT)
+    signers = [
+        esign.Signer(email=f"{papel}@x.test", role=papel)
+        for papel in SignatureRequest.SignerRole.values
+    ]
+
+    posicoes = esign.posicoes_da_rodada(documento, signers, b"%PDF-falso")
+
+    assert all(p is not None for p in posicoes), (
+        f"papel sem posição: {[s.role for s, p in zip(signers, posicoes, strict=True) if p is None]}"
+    )
+    assert len({(p["x"], p["y"]) for p in posicoes}) == len(signers), (
+        "dois papéis assinariam no mesmo ponto"
+    )
 
 
 def test_os_kinds_com_bloco_de_assinatura_existem_no_document_kind():
@@ -860,13 +959,14 @@ def test_o_contrato_em_pdf_posiciona_na_ultima_pagina(monkeypatch: pytest.Monkey
     enviados = _enviar(
         monkeypatch,
         kind=Document.Kind.COMMERCIAL_CONTRACT,
-        conteudo=_pdf(4),
+        conteudo=_pdf(7),
         signers=_papeis("house", "counterparty", "witness"),
+        ancoras=(7, _itens(CONTRATO)),
     )
 
     posicoes = [signer["positions"] for signer in enviados]
     assert [len(p) for p in posicoes] == [1, 1, 1]
-    assert {p[0]["z"] for p in posicoes} == {"4"}  # a última página, contada do PDF
+    assert {p[0]["z"] for p in posicoes} == {"7"}  # a última página, lida do PDF
     assert {p[0]["element"] for p in posicoes} == {"SIGNATURE"}
     # Cada papel assina no **seu** lugar: três assinaturas no mesmo ponto seriam ilegíveis.
     assert len({(p[0]["x"], p[0]["y"]) for p in posicoes}) == 3
@@ -916,15 +1016,17 @@ def test_as_duas_testemunhas_ocupam_as_duas_linhas_e_a_terceira_fica_sem(
         enviados = _enviar(
             monkeypatch,
             kind=Document.Kind.NDA,
-            conteudo=_pdf(2),
+            conteudo=_pdf(5),
             signers=_papeis("witness", "witness", "witness"),
+            ancoras=(5, _itens(NDA)),
         )
 
-    primeira, segunda = esign._POSICOES_DA_TESTEMUNHA
-    assert (enviados[0]["positions"][0]["x"], enviados[0]["positions"][0]["y"]) == primeira
-    assert (enviados[1]["positions"][0]["x"], enviados[1]["positions"][0]["y"]) == segunda
+    # As duas linhas medidas do NDA real (y=56,39% e 66,55%), já deslocadas para cima da linha.
+    assert enviados[0]["positions"][0]["y"] == f"{56.39 - esign._ACIMA_DA_LINHA:.1f}"
+    assert enviados[1]["positions"][0]["y"] == f"{66.55 - esign._ACIMA_DA_LINHA:.1f}"
+    assert enviados[0]["positions"][0]["x"] == f"{14.05 + esign._APOS_O_INICIO_DA_LINHA:.1f}"
     assert "positions" not in enviados[2]
-    assert "linhas de testemunha" in caplog.text
+    assert "linha(s) de testemunha" in caplog.text
 
 
 @pytest.mark.django_db

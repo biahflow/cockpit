@@ -5,8 +5,8 @@
 **Depende de:** ADR 0007 (assinatura eletrônica: fornecedor e webhook) · ADR 0061 (a assinatura
 abre o mandato, e o que ela abre se declara antes) · ADR 0059 (a suíte não atravessa a rede para
 provar um adapter) · FDD 009 (emenda de 03/09/2026)
-**Implementada por:** `backend/apps/core/esign.py` (`paginas_do_pdf`, `posicoes_da_rodada`,
-`_POSICAO_POR_PAPEL`, `Signer`, `_parse_created`, `email_da_contraparte`) ·
+**Implementada por:** `backend/apps/core/esign.py` (`ancoras_de_assinatura`,
+`_itens_da_ultima_pagina`, `posicoes_da_rodada`, `Signer`, `_parse_created`, `email_da_contraparte`) ·
 `SignatureRequest.SignerRole`, `Document.rodada_assinada` e `Document.is_signed` em
 `backend/apps/core/models.py` · `_signers_do_pedido`, `DocumentViewSet.request_signature` e
 `_discovery_attendee` em `backend/apps/core/views.py` · `ESIGN_HOUSE_SIGNER_EMAIL` em
@@ -37,33 +37,68 @@ por solicitação.
 
 ## Decisão
 
-### 1. A página sai da contagem do PDF, e por isso entra uma dependência
+### 1. A posição sai do próprio documento, e por isso entra uma dependência
 
 Cada `position` é `{x, y, z, element}`: `x`/`y` em percentual 0–100 da página com origem no topo, e
 `z` é o **número da página**. Não existe "última página", `z: -1`, página negativa nem repetição em
 todas — o campo é um número de página e ponto.
 
-Como o bloco de assinatura mora na última página do instrumento, e a API não aceita pedir "a
-última", o número **precisa ser contado**. Ele não é dedutível de nenhum outro dado que o portal já
-tenha: não está no `Document`, não vem do Drive, e o nome do arquivo não diz. Por isso entra
-**`pypdf`** (BSD-3-Clause, sem dependência de runtime no Python 3.12) — a única dependência nova, e
-o único jeito de responder a pergunta.
+Nem a página nem as coordenadas são dedutíveis de algum outro dado que o portal já tenha: não estão
+no `Document`, não vêm do Drive, e o nome do arquivo não diz. **O documento precisa ser lido.** Por
+isso entra **`pypdf`** (BSD-3-Clause, sem dependência de runtime no Python 3.12) — a única
+dependência nova, e o único jeito de responder as duas perguntas.
 
-`esign.paginas_do_pdf` **nunca levanta**: ela é auxílio de posicionamento, não a operação. PDF
-corrompido, ilegível ou arquivo que não é PDF devolvem `None`, e a solicitação sai **sem** posição,
-com o motivo no log. Recusar seria pior que o defeito: o fluxo real de hoje envia `.docx`, e
-converter `.docx` para PDF do nosso lado está fora de escopo. O reconhecimento é pelo conteúdo
-(`%PDF`) e não pela extensão, porque `original_name` é digitado por gente.
+A leitura **nunca levanta**: ela é auxílio de posicionamento, não a operação. PDF corrompido,
+ilegível ou arquivo que não é PDF devolvem `None`, e a solicitação sai **sem** posição, com o motivo
+no log — que é o comportamento de antes desta ADR, ruim mas funcional. Recusar seria pior que o
+defeito. O reconhecimento é pelo conteúdo (`%PDF`) e não pela extensão, porque `original_name` é
+digitado por gente: um `contrato.pdf` que na verdade é `.docx` cai aqui, e cai certo.
+
+Converter `.docx` do nosso lado continua fora de escopo, e agora sem custo: os instrumentos da casa
+passam a ir em PDF, que é o que torna o posicionamento **exato** em vez de aproximado.
 
 Só três `Document.Kind` têm bloco de assinatura desenhado — `design_partner_agreement`, `nda` e
 `commercial_contract`. A Proposta não tem, e o `kind` vazio não diz nada: nos dois casos a
 assinatura vai sem posição, porque carimbá-la no meio de um texto corrido é pior que mandá-la para
 a página anexa.
 
-**As coordenadas x/y são estimativa declarada, não medida.** Não há conversor de `.docx` para PDF
-nesta máquina, e o que vale é a geometria do PDF que a *Autentique* produz, não a do Word. O
-primeiro envio real é a medição: abrir o documento no painel do fornecedor, ver onde cada campo
-caiu, e ajustar os números — é uma linha por papel, num lugar só (`_POSICAO_POR_PAPEL`).
+**A posição é lida do próprio documento, e não cravada por papel.** A primeira versão desta ADR
+tinha um mapa fixo `papel → (x, y)`, declarado como estimativa porque não havia como medir. Os PDFs
+dos dois instrumentos reais chegaram no mesmo dia, e a medição derrubou o mapa antes de ele chegar a
+produção:
+
+| linha | Contrato | NDA |
+| --- | --- | --- |
+| casa | 37,24% | 26,74% |
+| parte contratante | 48,58% | 38,08% |
+| testemunha 1 | 66,89% | 56,39% |
+| testemunha 2 | 77,06% | 66,55% |
+
+**Dez pontos percentuais** entre um documento e outro, porque a última página do contrato carrega
+mais texto que a do NDA. E o problema não é ter dois templates: a razão social, o endereço e o
+objeto do cliente entram no texto e empurram o bloco dentro do **mesmo** template. Um número cravado
+acerta o documento em que foi medido e erra o próximo, sem nada ficar vermelho — que é a forma de
+defeito que esta ADR inteira existe para não produzir.
+
+A Autentique não tem detecção de âncora por texto, mas **nós temos o PDF em mãos** e o `pypdf` já é
+dependência. Então a âncora é lida aqui: as corridas de sublinhado da última página são as linhas de
+assinatura, e o rótulo `Testemunhas:` separa as de parte das de testemunha. O limiar de 20
+sublinhados também é medido, não escolhido — as linhas de assinatura têm 43 a 47 caracteres e a
+linha de data logo acima tem no máximo 19 por corrida; sem o limiar, a primeira "linha de
+assinatura" encontrada seria a data.
+
+Achar menos de duas linhas de parte devolve `None`, e a solicitação sai sem posição: significa que o
+documento não tem o bloco que a casa desenha, e posicionar a partir de palpite é pior do que mandar
+para a página anexa.
+
+**Sobrou um número não medido, e só um:** o deslocamento que põe a assinatura *acima* da linha
+(`_ACIMA_DA_LINHA`, 2,2% ≈ 18pt). A documentação do fornecedor não diz se `x`/`y` são o canto
+superior esquerdo ou o centro do elemento, e o primeiro envio real resolve. Eram oito números no
+escuro; é um.
+
+A separação segue o molde do módulo: `_itens_da_ultima_pagina` é I/O e fica fora da cobertura;
+`ancoras_de_assinatura` é pura e é testada com a geometria real dos dois instrumentos, que entra
+como fixture — os PDFs não entram no repositório, porque são documentos de cliente.
 
 ### 2. A solicitação tem N signatários numa chamada — nunca N chamadas
 
@@ -153,9 +188,11 @@ vêm juntas, pela regra de `docs/ontology/aliases.md` §2c; o alias morre na `/a
 - **Uma dependência nova.** `pypdf` é a primeira biblioteca de manipulação de arquivo do backend, e
   ela só é usada para contar páginas. Se algum dia contarmos com outra coisa, o ponto de troca é
   uma função.
-- **As coordenadas vão ser ajustadas.** Elas estão declaradas como estimativa no código, e o
-  primeiro envio real é a medição. Isso é dívida conhecida com um lugar só para pagar, não
-  incerteza espalhada.
+- **O instrumento precisa ir como PDF para ser posicionado.** `.docx` não tem geometria até
+  alguém convertê-lo, e quem converte é o fornecedor — depois de nós. Os templates da casa
+  passam a ir em PDF, e é o que torna o posicionamento exato em vez de aproximado.
+- **Um deslocamento continua por medir**, e só ele: se a assinatura sair sobre o rótulo, aumenta;
+  se sair solta acima da linha, diminui. Um lugar só para pagar.
 - **O Clicksign fica mais incompleto do que estava**, e agora diz isso em voz alta. O adaptador
   homologado é o Autentique; o segundo continua servindo para o caso de um signatário.
 - **A tela ainda não escolhe papéis.** Escolher contatos e papéis na SPA é `INTERFACE_CHANGE` e
@@ -170,6 +207,9 @@ vêm juntas, pela regra de `docs/ontology/aliases.md` §2c; o alias morre na `/a
   Autentique não tem o recurso; escrever isso como se tivesse seria inventar API.
 - **`z` fixo em 1, ou "todas as páginas".** O bloco de assinatura fica na última, e a API não aceita
   repetição nem página relativa. Cravar `1` acertaria só o contrato de uma página.
+- **Mapa fixo de coordenadas por papel.** Foi a primeira versão desta decisão, e a medição dos dois
+  instrumentos reais a derrubou no mesmo dia: dez pontos percentuais de diferença entre eles, e o
+  texto do cliente empurrando o bloco dentro de cada um.
 - **Chamar o fornecedor uma vez por signatário.** Produz N documentos separados, cada um com uma
   assinatura, e nenhum deles é o contrato. É exatamente o defeito silencioso que esta ADR existe
   para não ter.

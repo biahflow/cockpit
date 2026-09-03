@@ -29,6 +29,7 @@ import hmac
 import io
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 import uuid
@@ -189,30 +190,150 @@ def aviso_de_entrega() -> str:
 #
 # Cada posição é `{x, y, z, element}`: `x`/`y` em **percentual 0–100** da largura/altura da página,
 # com origem no **topo**, e `z` é o **número da página** — não existe "última página", nem `z: -1`,
-# nem repetição em todas. Por isso a contagem de páginas (`paginas_do_pdf`) é pré-requisito, e não
-# refinamento.
-#
-# Os três valores vão como **string**, que é a forma que a documentação do fornecedor mostra nos
-# exemplos de `positions`; mandar número onde o exemplo mostra texto é a diferença entre uma
-# solicitação aceita e uma recusada por um detalhe que ninguém lembra de conferir.
+# nem repetição em todas. É por isso que o documento precisa ser lido: a página do bloco de
+# assinatura não é dedutível de nenhum outro dado que o portal já tenha.
 
-# ⚠️ ESTIMATIVA NÃO MEDIDA. Estas coordenadas **não puderam ser medidas**: não há conversor de
-# `.docx` para PDF nesta máquina, e o que vale é a geometria do PDF que a *Autentique* produz, não
-# a do Word. O primeiro envio real é a medição — abra o documento no painel do fornecedor, veja
-# onde cada campo caiu e ajuste os números aqui; é uma linha por papel. Elas colocam as quatro
-# assinaturas empilhadas na coluna da esquerda do bloco final do template, na ordem em que ele as
-# desenha: a casa, a parte contratante, e as duas linhas de testemunha.
-_POSICAO_POR_PAPEL: dict[str, tuple[str, str]] = {
-    # `SignatureRequest.SignerRole.HOUSE` — a linha "BIAHFLOW INOVA SIMPLES I.S."
-    "house": ("14", "56"),
-    # `…SignerRole.COUNTERPARTY` — "[RAZÃO SOCIAL DA PARTE B]" / "[RAZÃO SOCIAL DO PARCEIRO]"
-    "counterparty": ("14", "68"),
-}
-# As duas linhas de "Testemunhas:". Elas são **de quem for** — o template não reserva uma por lado
-# —, então a primeira testemunha da lista ocupa a linha 1 e a segunda, a linha 2. Da terceira em
-# diante não há linha, e ela vai **sem posição**: empilhar duas assinaturas no mesmo ponto produz um
-# documento ilegível, que é pior que uma assinatura na página anexa.
-_POSICOES_DA_TESTEMUNHA: tuple[tuple[str, str], ...] = (("14", "80"), ("14", "88"))
+# **A posição é lida do próprio documento, e não cravada por papel.** A primeira versão desta ADR
+# tinha um mapa fixo `papel → (x, y)`, declarado como estimativa. A medição dos dois templates reais
+# em PDF (03/09/2026) mostrou que ele não podia funcionar: as mesmas quatro linhas ficam a **dez
+# pontos percentuais** de distância entre um e outro, porque a última página do contrato carrega
+# mais texto que a do NDA.
+#
+#     linha              Contrato   NDA
+#     casa               37,24%     26,74%
+#     parte contratante  48,58%     38,08%
+#     testemunha 1       66,89%     56,39%
+#     testemunha 2       77,06%     66,55%
+#
+# E o problema não é ter dois templates: é que a razão social, o endereço e o objeto do cliente
+# entram no texto e empurram o bloco dentro do **mesmo** template. Um número cravado acerta o
+# documento em que foi medido e erra o próximo, sem nada ficar vermelho.
+#
+# A Autentique não tem detecção de âncora por texto — mas nós temos o PDF em mãos, e `pypdf` já é
+# dependência por causa da contagem de páginas. Então a âncora é lida aqui: acham-se as linhas de
+# assinatura (corridas de sublinhado) da última página, e o rótulo "Testemunhas:" separa as de parte
+# das de testemunha. Validado contra os dois documentos reais, que produzem exatamente duas de cada.
+
+# Corrida de sublinhado que conta como linha de assinatura. **Vinte é o limiar e ele é medido**: as
+# linhas de assinatura dos templates têm 43–47 caracteres, e a linha de data logo acima
+# ("__________________, ______ de __________________ de 20____.") tem no máximo 19 por corrida.
+# Sem o limiar, a primeira "linha de assinatura" encontrada seria a data.
+_LINHA_DE_ASSINATURA = re.compile(r"_{20,}")
+
+# O rótulo que separa as duas metades do bloco. Acima dele estão as linhas das partes (a casa
+# primeiro, depois a contraparte — é a ordem em que o template as desenha); abaixo, as das
+# testemunhas.
+_ROTULO_DAS_TESTEMUNHAS = "Testemunhas"
+
+# A assinatura fica **acima** da linha, como uma assinatura à mão. `y` cresce para baixo (origem no
+# topo), então subir é diminuir. 2,2% de uma A4 são ~18pt, a altura de uma assinatura.
+#
+# ⚠️ **Este deslocamento é o único número não medido que sobrou**, e é assim porque a documentação
+# do fornecedor não diz se `x`/`y` são o canto superior esquerdo ou o centro do elemento. O primeiro
+# envio real resolve: se a assinatura sair sobre o texto do rótulo, aumente; se sair solta acima,
+# diminua. Antes desta medição eram oito números no escuro; agora é um.
+_ACIMA_DA_LINHA = 2.2
+# E um pouco à direita de onde a linha começa, para a assinatura não vazar pela esquerda.
+_APOS_O_INICIO_DA_LINHA = 3.0
+
+
+@dataclass(frozen=True)
+class ItemDeTexto:
+    """Um pedaço de texto da página, já em percentual — a entrada da leitura de âncoras.
+
+    Percentual e não ponto: é a unidade em que a Autentique recebe a posição, e converter na
+    fronteira (onde se conhece a dimensão da página) evita carregar `mediabox` mundo adentro.
+    `y` tem origem no **topo**, como o `positions` do fornecedor — e ao contrário do PDF, cuja
+    origem é embaixo. A conversão acontece uma vez, em `_itens_da_ultima_pagina`.
+    """
+
+    y: float
+    x: float
+    texto: str
+
+
+@dataclass(frozen=True)
+class Ancoras:
+    """As linhas de assinatura encontradas na última página, já na ordem do documento."""
+
+    pagina: int
+    partes: tuple[tuple[float, float], ...]  # (x, y) da casa e da contraparte, nessa ordem
+    testemunhas: tuple[tuple[float, float], ...]
+
+
+def ancoras_de_assinatura(pagina: int, itens: Sequence[ItemDeTexto]) -> Ancoras | None:
+    """As linhas de assinatura da página, separadas pelo rótulo "Testemunhas:".
+
+    Função **pura**, e é o ponto inteiro: a leitura do PDF é I/O e fica fora da cobertura, mas a
+    regra que decide o que é linha de assinatura e a quem ela pertence é testada com a geometria
+    real dos dois templates. Mesmo desenho de `classify` neste módulo.
+
+    Devolve `None` quando não encontra **as duas** linhas de parte. Achar uma só, ou nenhuma,
+    significa que este documento não tem o bloco que a casa desenha — e posicionar assinatura a
+    partir de um palpite é pior do que mandá-la para a página anexa, que é o que acontece sem
+    `positions`.
+    """
+    linhas = sorted(
+        {(item.y, item.x) for item in itens if _LINHA_DE_ASSINATURA.search(item.texto)}
+    )
+    rotulo = min(
+        (item.y for item in itens if _ROTULO_DAS_TESTEMUNHAS in item.texto), default=None
+    )
+    if rotulo is None:
+        partes, testemunhas = linhas, []
+    else:
+        partes = [linha for linha in linhas if linha[0] < rotulo]
+        testemunhas = [linha for linha in linhas if linha[0] > rotulo]
+    if len(partes) < 2:
+        return None
+    return Ancoras(
+        pagina=pagina,
+        # As duas **últimas** acima do rótulo, e não as duas primeiras: se um dia entrar uma linha
+        # de sublinhado longa mais acima na página, é o bloco de assinatura que fica colado ao
+        # rótulo, não ela.
+        partes=tuple((x, y) for y, x in partes[-2:]),
+        testemunhas=tuple((x, y) for y, x in testemunhas),
+    )
+
+
+def _itens_da_ultima_pagina(  # pragma: no cover - I/O de PDF, como `_request` é I/O de rede
+    conteudo: bytes,
+) -> tuple[int, list[ItemDeTexto]] | None:
+    """Lê a última página do PDF e devolve seus textos posicionados em percentual.
+
+    **Nunca levanta**: posicionar é auxílio, não a operação. PDF corrompido, ilegível ou arquivo
+    que não é PDF devolvem `None`, e a solicitação sai sem posição — que é o comportamento de
+    antes da issue #115, ruim mas funcional. Recusar seria pior que o defeito.
+
+    A posição de um texto no PDF é a matriz de texto composta com a de transformação corrente
+    (`cm ∘ tm`) — usar só a `tm` devolve a posição relativa dentro do bloco e coloca o documento
+    inteiro na mesma altura, que foi o primeiro resultado ao medir os templates reais.
+    """
+    if not conteudo.startswith(b"%PDF"):
+        return None
+    try:
+        leitor = pypdf.PdfReader(io.BytesIO(conteudo))
+        pagina = leitor.pages[-1]
+        largura, altura = float(pagina.mediabox.width), float(pagina.mediabox.height)
+        if largura <= 0 or altura <= 0:
+            return None
+        itens: list[ItemDeTexto] = []
+
+        def visitar(texto, cm, tm, fonte, tamanho) -> None:  # type: ignore[no-untyped-def]
+            limpo = (texto or "").strip()
+            if not limpo:
+                return
+            x = cm[0] * tm[4] + cm[2] * tm[5] + cm[4]
+            y = cm[1] * tm[4] + cm[3] * tm[5] + cm[5]
+            itens.append(
+                ItemDeTexto(y=(altura - y) / altura * 100, x=x / largura * 100, texto=limpo)
+            )
+
+        pagina.extract_text(visitor_text=visitar)
+        return len(leitor.pages), itens
+    except Exception as exc:  # noqa: BLE001 - ler o PDF não derruba o envio
+        logger.info("PDF ilegível ao procurar as linhas de assinatura (%s)", exc)
+        return None
 
 # Os `Document.Kind` que têm bloco de assinatura desenhado. A Proposta não tem, e o `kind` vazio
 # não diz nada — nos dois casos a solicitação sai **sem** posição, com o motivo no log, em vez de
@@ -244,39 +365,64 @@ def posicoes_da_rodada(
             document.pk, document.kind,
         )
         return sem_posicao
-    paginas = paginas_do_pdf(conteudo)
-    if paginas is None:
+    lido = _itens_da_ultima_pagina(conteudo)
+    if lido is None:
+        logger.info("documento %s não é um PDF legível; assinaturas sem posição", document.pk)
+        return sem_posicao
+    ancoras = ancoras_de_assinatura(*lido)
+    if ancoras is None:
         logger.info(
-            "documento %s não é um PDF legível; assinaturas sem posição", document.pk
+            "documento %s não tem o bloco de assinatura da casa na última página; "
+            "assinaturas sem posição",
+            document.pk,
         )
         return sem_posicao
 
-    pagina = str(paginas)  # a última página, que é onde o bloco de assinatura do template mora
+    # A casa assina na primeira linha de parte e a contraparte na segunda — é a ordem em que o
+    # template as desenha, e não uma convenção deste módulo.
+    casa, contraparte = ancoras.partes
+    pagina = str(ancoras.pagina)
     testemunhas = 0
     posicoes: list[dict[str, str] | None] = []
     for signer in signers:
         if signer.role == "witness":
-            if testemunhas >= len(_POSICOES_DA_TESTEMUNHA):
+            if testemunhas >= len(ancoras.testemunhas):
+                # Empilhar duas assinaturas no mesmo ponto produz um documento ilegível, que é pior
+                # que uma assinatura na página anexa.
                 logger.info(
-                    "documento %s tem só %d linhas de testemunha; %s assina sem posição",
-                    document.pk, len(_POSICOES_DA_TESTEMUNHA), signer.email,
+                    "documento %s tem %d linha(s) de testemunha; %s assina sem posição",
+                    document.pk, len(ancoras.testemunhas), signer.email,
                 )
                 posicoes.append(None)
                 continue
-            x, y = _POSICOES_DA_TESTEMUNHA[testemunhas]
+            ponto = ancoras.testemunhas[testemunhas]
             testemunhas += 1
-        else:
-            ponto = _POSICAO_POR_PAPEL.get(signer.role)
-            if ponto is None:  # pragma: no cover - a view recusa papel desconhecido com 400
-                logger.info(
-                    "papel %r sem posição declarada; %s assina sem posição",
-                    signer.role, signer.email,
-                )
-                posicoes.append(None)
-                continue
-            x, y = ponto
-        posicoes.append({"x": x, "y": y, "z": pagina, "element": "SIGNATURE"})
+        elif signer.role == "house":
+            ponto = casa
+        elif signer.role == "counterparty":
+            ponto = contraparte
+        else:  # pragma: no cover - a view recusa papel desconhecido com 400
+            logger.info("papel %r sem linha no documento; %s assina sem posição",
+                        signer.role, signer.email)
+            posicoes.append(None)
+            continue
+        posicoes.append(_posicao(ponto, pagina))
     return posicoes
+
+
+def _posicao(ponto: tuple[float, float], pagina: str) -> dict[str, str]:
+    """A posição no formato do fornecedor, já deslocada para cima da linha.
+
+    Os três valores vão como **string**, que é a forma dos exemplos de `positions` da documentação
+    da Autentique. Uma casa decimal basta: a página tem ~600pt de largura, então 0,1% é meio ponto.
+    """
+    x, y = ponto
+    return {
+        "x": f"{max(0.0, min(100.0, x + _APOS_O_INICIO_DA_LINHA)):.1f}",
+        "y": f"{max(0.0, min(100.0, y - _ACIMA_DA_LINHA)):.1f}",
+        "z": pagina,
+        "element": "SIGNATURE",
+    }
 
 
 def _autentique_signer(
@@ -608,27 +754,6 @@ def send_for_signature(document: Document, signers: Sequence[Signer]) -> list[Si
         rodada = f"local:{uuid.uuid4().hex}"
         refs = [replace(ref, document_ref=rodada) for ref in refs]
     return refs
-
-
-def paginas_do_pdf(conteudo: bytes) -> int | None:
-    """Quantas páginas o PDF tem — `None` quando não é PDF ou não se consegue ler.
-
-    **Nunca levanta**, e essa é a decisão inteira: ela é auxílio de posicionamento, não a operação.
-    Um PDF corrompido tem de produzir uma assinatura sem posição — que é o comportamento de hoje,
-    ruim mas funcional —, e não uma solicitação de assinatura que falha.
-
-    O reconhecimento é pelo **conteúdo** (`%PDF`) e não pela extensão do nome: `Document.original_name`
-    é digitado por gente, e `ALLOWED_DOCUMENT_EXTENSIONS` (`serializers.py`) aceita muito mais
-    formatos que PDF — inclusive o `.docx` que o fluxo real usa hoje.
-    """
-    if not conteudo.startswith(b"%PDF"):
-        logger.debug("conteúdo do documento não é PDF; nada a contar")
-        return None
-    try:
-        return len(pypdf.PdfReader(io.BytesIO(conteudo)).pages)
-    except Exception as exc:  # noqa: BLE001 - ver a docstring: contar página não derruba o envio
-        logger.info("PDF ilegível ao contar páginas (%s); a assinatura vai sem posição", exc)
-        return None
 
 
 def _document_bytes(document: Document) -> bytes:
