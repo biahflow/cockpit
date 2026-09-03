@@ -21,7 +21,7 @@ from decimal import Decimal
 import pytest
 from django.utils import timezone
 
-from apps.core import cobranca, health
+from apps.core import cobranca, health, satisfacao
 from apps.core.models import Account, Invoice, Satisfacao
 from apps.core.tests.factories import AccountFactory, InvoiceFactory, ProjectFactory
 
@@ -38,6 +38,16 @@ def _registrar(account, fonte: str, **kwargs):  # type: ignore[no-untyped-def]
         # O dia real, e não `HOJE`: o Health Score não recebe "hoje" por parâmetro (é função pura
         # sobre o agora), e um registro com data futura não é o estado de hoje — deixaria os
         # testes de saúde passando por ausência de sinal em vez de por ausência de vazamento.
+        #
+        # **O default vale só para o motor 1.** O motor 2 recebe `hoje` por parâmetro e o congela
+        # em `HOJE`, então lá o default é a armadilha simétrica: `vigente` recorta
+        # `inicio <= happened_on <= hoje` (`satisfacao.py:73`), e um registro carimbado com o dia
+        # real fica **no futuro** em relação a `HOJE` e sai do recorte. Foi o que aconteceu em
+        # 2026-09-03, quando o relógio passou de `HOJE`: `test_a_declarada_troca_a_escada` ficou
+        # vermelho, e os três testes de percebida ficaram verdes **pelo motivo errado** — por
+        # ausência de sinal, não por ausência de vazamento, que é exatamente o defeito descrito
+        # no topo deste arquivo. Por isso todo teste do motor 2 passa `happened_on=HOJE`, e
+        # `test_o_registro_do_motor_2_esta_vigente_em_hoje` guarda essa precondição.
         "happened_on": timezone.localdate(),
         "note": "O cliente/eu achei que a entrega do marco 2 decepcionou.",
     }
@@ -103,9 +113,32 @@ def test_o_lote_e_o_individual_concordam_sobre_a_fonte() -> None:
 # --- Motor 2: a escada da régua de cobrança -----------------------------------
 
 
+def test_o_registro_do_motor_2_esta_vigente_em_hoje() -> None:
+    """A precondição dos cinco testes abaixo, afirmada em vez de suposta.
+
+    Três deles esperam que a escada **não** mude, e um registro fora da janela de `vigente` os
+    deixa verdes sem provar nada: passariam por ausência de sinal, não por ausência de vazamento —
+    o defeito exato que o topo deste arquivo descreve, chegando pela porta do calendário em vez da
+    do filtro.
+
+    Foi o que aconteceu em 2026-09-03. `HOJE` é uma quarta-feira congelada e `_registrar` carimbava
+    `timezone.localdate()`; enquanto o relógio real não passou de `HOJE` os dois coincidiam, e no
+    dia seguinte o registro virou futuro (`inicio <= happened_on <= hoje`, `satisfacao.py:73`).
+    `test_a_declarada_troca_a_escada` ficou vermelho e os outros três ficaram verdes pelo motivo
+    errado — que é o caso pior, porque não avisa.
+
+    Esta guarda é o que torna aquele silêncio impossível: se alguém devolver o dia real ao motor 2,
+    é **este** teste que fica vermelho, e ele diz o porquê no nome.
+    """
+    account = AccountFactory()
+    registro = _registrar(account, Satisfacao.Fonte.DECLARADA, happened_on=HOJE)
+
+    assert satisfacao.vigente([registro], HOJE, fonte=Satisfacao.Fonte.DECLARADA) is registro
+
+
 def test_a_percebida_nao_troca_a_escada() -> None:
     account = AccountFactory()
-    _registrar(account, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(account, Satisfacao.Fonte.PERCEBIDA, happened_on=HOJE)
 
     assert cobranca.regua_para(account, HOJE) is cobranca.PADRAO
 
@@ -116,14 +149,14 @@ def test_a_percebida_nao_alcanca_nem_o_cliente_de_relacao_longa() -> None:
     antigo = AccountFactory()
     Account.objects.filter(pk=antigo.pk).update(created_at=timezone.now() - timedelta(days=800))
     antigo.refresh_from_db()
-    _registrar(antigo, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(antigo, Satisfacao.Fonte.PERCEBIDA, happened_on=HOJE)
 
     assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_LONGA
 
 
 def test_a_declarada_troca_a_escada() -> None:
     account = AccountFactory()
-    _registrar(account, Satisfacao.Fonte.DECLARADA)
+    _registrar(account, Satisfacao.Fonte.DECLARADA, happened_on=HOJE)
 
     assert cobranca.regua_para(account, HOJE) is cobranca.RELACAO_TENSA
 
@@ -132,7 +165,7 @@ def test_a_percebida_nao_muda_o_degrau_que_sai_hoje() -> None:
     """O teste de comportamento por trás dos três acima: em D+12 a régua padrão manda o `firme`, e
     é justamente esse degrau que a tensão tira."""
     com_percebida = AccountFactory()
-    _registrar(com_percebida, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(com_percebida, Satisfacao.Fonte.PERCEBIDA, happened_on=HOJE)
     invoice = InvoiceFactory(
         account=com_percebida, status=Invoice.Status.OVERDUE, number="2026-0001",
         amount=Decimal("1000.00"), due_date=HOJE - timedelta(days=12),
@@ -146,7 +179,7 @@ def test_a_percebida_nao_cala_a_regua_nem_a_declarada() -> None:
     escada; ela nunca vira silêncio (RFC 0004, "Segurança")."""
     for fonte in (Satisfacao.Fonte.PERCEBIDA, Satisfacao.Fonte.DECLARADA):
         account = AccountFactory()
-        _registrar(account, fonte)
+        _registrar(account, fonte, happened_on=HOJE)
         invoice = InvoiceFactory(
             account=account, status=Invoice.Status.OVERDUE, number=f"2026-1{fonte[:3]}",
             amount=Decimal("1000.00"), due_date=HOJE - timedelta(days=12),
