@@ -451,9 +451,20 @@ export function AccountDetailPage({ id }: { id: number }) {
         <button className="btn" type="submit" disabled={creatingProjectBusy}>{creatingProjectBusy ? "Criando…" : "Criar projeto"}</button>
       </form>
     </Modal>}
+    {/* O aviso do que continua no ar (issue #114). Arquivar a conta **não** despublica o
+        Discovery, e não deve: só um ato humano publica e só um ato humano despublica (ADR 0060) —
+        cascatear aqui seria o oposto dessa decisão. O que faltava era quem arquiva saber, então a
+        confirmação diz quantos são e aponta para a tela que os lista; quem opera decide.
+        Com zero publicados a frase **não aparece**: "0 registros publicados" é ruído, não aviso.
+        O número vem pronto do backend (`published_count`, de `publication.py`) — a tela não
+        reexpressa "publicado e vivo", que é a segunda definição que aquele módulo existe para
+        não ter. */}
     {isArchiving && <ConfirmDialog
       title="Arquivar cliente"
-      message={<>O cliente <strong className="text-ink">{client.name}</strong> e os contatos dele saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
+      message={<>
+        <p>O cliente <strong className="text-ink">{client.name}</strong> e os contatos dele saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</p>
+        {client.published_count > 0 && <p className="mt-3">Esta conta tem <strong className="text-ink">{client.published_count} {client.published_count === 1 ? "registro publicado" : "registros publicados"}</strong> para o cliente. Arquivar não os retira. <a className="inline-flex items-center gap-1.5 font-semibold text-ink underline underline-offset-2" href={`/contas/${client.id}/publicacao`}>Ver o que está publicado <Eye className="size-3.5" /></a></p>}
+      </>}
       confirmLabel="Arquivar" busy={busy}
       onCancel={() => setArchiving(false)} onConfirm={() => void archiveClient()}
     />}

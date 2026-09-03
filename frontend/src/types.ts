@@ -46,7 +46,10 @@ export type Analytics = {
 // cliente de fato, `inactive` já foi e hoje não tem trabalho em andamento. `status` continua
 // saindo com o mesmo valor — é alias da `/api/v1/` e morre na `/api/v2/`.
 export type AccountLifecycleStatus = "prospect" | "active" | "inactive";
-export type Account = { id: number; name: string; legal_name: string; tax_id: string; owner: number; lifecycle_status: AccountLifecycleStatus; status: AccountLifecycleStatus; vertical: number | null; vertical_name: string };
+// `published_count` é derivado e só-leitura (issue #114): quantos registros do Discovery desta
+// conta o cliente está vendo agora. Arquivar a conta **não** os despublica — só um ato humano
+// despublica (ADR 0060) —, então a confirmação de arquivar avisa em vez de cascatear.
+export type Account = { id: number; name: string; legal_name: string; tax_id: string; owner: number; lifecycle_status: AccountLifecycleStatus; status: AccountLifecycleStatus; vertical: number | null; vertical_name: string; published_count: number };
 // `receives_billing` marca quem recebe cobrança (FDD 036). Sem ninguém marcado, o degrau **não**
 // vira e-mail ao cliente: vira escalada interna com o motivo escrito — a casa cala quando não sabe
 // em vez de chutar o destinatário de um e-mail sobre dinheiro.

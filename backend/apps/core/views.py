@@ -849,7 +849,25 @@ class AccountViewSet(ArchiveModelViewSet):
         # tem mais o reverso `projects` (era o related_name de `Project.client`, removido); o
         # caminho canônico até o projeto passa pelo mandato: `engagements__projects`.
         scope = project_scope_q(self.request.user, "engagements__projects")
-        return queryset.filter(scope).distinct() if scope else queryset
+        queryset = queryset.filter(scope).distinct() if scope else queryset
+        # `published_count` (issue `#114`): quanto do Discovery desta conta o cliente está vendo,
+        # para a confirmação de arquivar poder avisar. Vem por subconsulta correlacionada e não
+        # por `Count` com `JOIN` — cinco joins multiplicariam as linhas entre si, e o `.distinct()`
+        # acima esconderia o número errado em vez de corrigi-lo. Anotado **depois** do escopo
+        # porque o recorte é da conta, não do leitor: dois usuários veem o mesmo número.
+        #
+        # **Só onde o serializer lê.** `get_queryset` aqui serve também ao `/clients/overview/`,
+        # que monta dicionário próprio e nunca toca em `AccountSerializer`: anotar sempre faria o
+        # grid de contas — a tela mais carregada do produto — rodar cinco `COUNT` correlacionados
+        # por linha que ninguém lê. A contagem de *queries* não mudaria (por isso o orçamento de
+        # `test_aggregate_query_budget` passa dos dois jeitos), e é exatamente o que torna esse
+        # desperdício invisível: ele cresce com a carteira sem nada ficar vermelho. As demais
+        # ações caem no `getattr(obj, "published_count", None)` do serializer, que conta o objeto
+        # na mão — cinco `COUNT` sobre **uma** linha, que é o caso que aquele ramo existe para
+        # servir.
+        if self.action not in {"list", "retrieve"}:
+            return queryset
+        return queryset.annotate(**publication.anotacao_de_contagem_publicada())
 
     def perform_destroy(self, instance: Account) -> None:
         """Arquiva o cliente e, junto, os contatos dele — recusando se ainda houver trabalho aberto.

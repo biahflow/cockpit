@@ -12372,6 +12372,9 @@ components:
           type: string
           readOnly: true
           default: ''
+        published_count:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -12385,6 +12388,7 @@ components:
       - id
       - name
       - owner
+      - published_count
       - status
       - updated_at
       - vertical_name
@@ -15959,6 +15963,9 @@ components:
           type: string
           readOnly: true
           default: ''
+        published_count:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time

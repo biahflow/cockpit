@@ -147,9 +147,14 @@ let services: unknown[] = [
   servico({ id: 1, name: "Qualification Call", tier: "qualification_call", tier_display: "Qualification Call", category: "acquisition", category_display: "Aquisição", list_price: "0.00" }),
 ];
 
+// Quantos registros do Discovery da conta o cliente está vendo (issue #114). Zero por padrão: o
+// aviso de arquivamento não deve aparecer nas telas que não são sobre ele, e cada teste do aviso
+// povoa o seu.
+let publicados = 0;
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "" });
+    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "", published_count: publicados });
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
     if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve(contacts);
@@ -176,6 +181,7 @@ beforeEach(() => {
   engagements = [];
   opportunities = [oportunidade()];
   documents = [documento()];
+  publicados = 0;
   services = [
     servico(),
     servico({ id: 1, name: "Qualification Call", tier: "qualification_call", tier_display: "Qualification Call", category: "acquisition", category_display: "Aquisição", list_price: "0.00" }),
@@ -921,4 +927,64 @@ test("sem sessão marcada o modal abre vazio, em vez de chutar datas", async () 
 
   expect(screen.getByLabelText("Início")).toHaveValue("");
   expect(screen.getByLabelText("Prazo final")).toHaveValue("");
+});
+
+
+/* -------------------------------------------------------------------------------------------
+   O aviso do que continua publicado ao arquivar (issue #114).
+
+   Arquivar a conta **não** despublica o Discovery, e não deve: só um ato humano publica e só um
+   ato humano despublica (ADR 0060). O aviso é o que faltava — e ele **informa, não bloqueia**.
+   ------------------------------------------------------------------------------------------- */
+
+test("a confirmação de arquivar avisa quantos registros continuam publicados, com link para a tela", async () => {
+  const user = userEvent.setup();
+  publicados = 5;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar cliente" }));
+  expect(dialogo.getByText("5 registros publicados")).toBeInTheDocument();
+  expect(dialogo.getByText(/Arquivar não os retira/)).toBeInTheDocument();
+  expect(dialogo.getByRole("link", { name: /Ver o que está publicado/ })).toHaveAttribute("href", "/contas/1/publicacao");
+});
+
+test("com um único registro publicado a frase vai no singular", async () => {
+  const user = userEvent.setup();
+  publicados = 1;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar cliente" }));
+  expect(dialogo.getByText("1 registro publicado")).toBeInTheDocument();
+});
+
+test("sem nada publicado a frase não aparece — «0 registros publicados» é ruído, não aviso", async () => {
+  const user = userEvent.setup();
+  publicados = 0;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar cliente" }));
+  expect(dialogo.getByText(/saem das listagens ativas/)).toBeInTheDocument();
+  expect(dialogo.queryByText(/registros? publicados?/)).not.toBeInTheDocument();
+  expect(dialogo.queryByRole("link", { name: /Ver o que está publicado/ })).not.toBeInTheDocument();
+});
+
+test("o aviso informa e não bloqueia: arquivar continua saindo como DELETE", async () => {
+  const user = userEvent.setup();
+  publicados = 3;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "DELETE" })));
 });

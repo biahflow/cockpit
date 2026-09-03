@@ -280,12 +280,34 @@ class AccountSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Account
     # `lifecycle_status` e a chave `status` continua saindo com o mesmo valor, até a `/api/v2/`.
     # A escrita pela chave antiga vem do mixin acima.
     status = serializers.CharField(source="lifecycle_status", read_only=True)
+    published_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = ["id", "name", "legal_name", "tax_id", "owner", "lifecycle_status", "status",
-                  "vertical", "vertical_name", "created_at", "updated_at"]
+                  "vertical", "vertical_name", "published_count", "created_at", "updated_at"]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    # O decorador é o mesmo de `get_projects_count`, e pelo mesmo motivo: sem ele o drf-spectacular
+    # copia o docstring inteiro para a `description` do campo no `openapi.yaml`, e o raciocínio
+    # interno vira contrato publicado.
+    @extend_schema_field(serializers.IntegerField())
+    def get_published_count(self, obj: Account) -> int:
+        """Quantos registros do Discovery desta conta o cliente está vendo agora (issue `#114`).
+
+        Quem decide o recorte é `publication.py`, e este método não o reexpressa — reescrever
+        "publicado e vivo" aqui seria a segunda definição que aquele módulo existe para não ter.
+
+        **Dois caminhos, e o segundo não é preciosismo.** Na listagem e no detalhe o valor chega
+        anotado por `AccountViewSet.get_queryset` (uma consulta, não cinco por linha). Fora do
+        viewset — a resposta do `POST`, um `Account` montado em teste, o serializer reusado por
+        outro código — a anotação não existe, e ler `obj.published_count` direto levantaria
+        `AttributeError`, ou seja, 500 num caminho que hoje funciona. Daí o `None` como sentinela
+        em vez de `0`: conta sem nada publicado é `0` de verdade, e confundir os dois faria a
+        ausência de anotação passar por resposta.
+        """
+        anotado = getattr(obj, "published_count", None)
+        return publication.contagem_publicada(obj) if anotado is None else int(anotado)
 
     def validate_lifecycle_status(self, value: str) -> str:
         """O estado é afirmado por quem cadastra, mas o que o sistema observou não se desdiz.
