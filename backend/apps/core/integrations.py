@@ -213,7 +213,18 @@ def _faltando(name: str) -> str:
 
 
 def _executar(name: str) -> tuple[bool, str]:
-    """Roda a sonda e traduz exceção em reprovação. Nunca propaga."""
+    """Roda a sonda e traduz exceção em reprovação. Nunca propaga.
+
+    **Integração sem sonda passa, e não é lacuna.** `FLAGS` e `PROBES` são dois registros do mesmo
+    mundo e nada os obriga a concordar: nem toda integração tem o que sondar sem gastar um efeito
+    de verdade. `esign`, `payments` e `portal` já respondiam `NAO_SONDAVEL` por essa razão, com
+    sonda própria escrita só para dizer isso; quem não tem sonda nenhuma passa a dizer o mesmo
+    aqui, em vez de estourar `KeyError` e reprovar o comando inteiro com o nome da chave como
+    diagnóstico. A guarda mora neste ponto, e não em `probe`, porque `_forcado` também chama daqui
+    — e era por ele que o defeito passava ao conferir credencial antes de ligar a integração.
+    """
+    if name not in PROBES:
+        return True, NAO_SONDAVEL
     try:
         return PROBES[name]()
     except Exception as exc:  # noqa: BLE001 - diagnóstico não pode estourar
