@@ -2,7 +2,7 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Em aprovação**
+Status: **Aprovado**
 Data: 2026-09-03
 Produzido por: Claude Code (harness), a partir da issue `#115`
 
@@ -112,8 +112,9 @@ objeto do pedido, e obrigaria a carregar de novo o que a listagem já tem em mã
 
 **Contra-argumento registrado.** A2 daria espaço para pré-visualizar o documento ao lado da lista de
 signatários — que é o que se faria se algum dia a tela precisasse mostrar *onde* cada assinatura vai
-cair na página. Foi recusada porque essa necessidade não existe hoje: as coordenadas são fixas por
-papel e não editáveis (ADR 0065). Se um dia forem, este pacote volta em r2.
+cair na página. Foi recusada porque essa necessidade não existe hoje: desde a emenda de 03/09/2026
+na ADR 0065 a posição é **lida do próprio documento** (as linhas de assinatura são encontradas no
+PDF), e não há coordenada para alguém revisar na tela. Se um dia houver, este pacote volta em r2.
 
 ### Decisão B — como a tela sabe a conta-dona, para oferecer os contatos
 
@@ -241,8 +242,9 @@ precisar da resposta agregada, ela é derivável de relance: todas as linhas ver
 
 ## O que este pacote NÃO decide
 
-- **As coordenadas x/y.** São estimativa declarada no backend (ADR 0065) e a medição é o primeiro
-  envio real. A tela não as expõe nem as edita.
+- **As coordenadas x/y.** Saem da leitura do próprio PDF (ADR 0065, emenda de 03/09/2026). A tela
+  não as expõe nem as edita; o único número ainda por medir é o deslocamento acima da linha, e ele
+  mora no backend.
 - **Ordem de assinatura** (quem assina primeiro), verificações de segurança, entrega por
   WhatsApp/SMS. O `SignerInput` do fornecedor aceita; nós não usamos, e usar é decisão de produto.
 - **Reposicionar documento já enviado.** Sem backfill, por decisão da `#115`.
@@ -253,9 +255,11 @@ precisar da resposta agregada, ela é derivável de relance: todas as linhas ver
 
 ## Riscos e o que pode voltar em r2
 
-1. **O aviso de E pode virar ruído** se todo documento for `.docx`. Se, na prática, ninguém nunca
-   mandar PDF, o aviso aparece sempre e deixa de ser lido — e aí a decisão certa não é tirá-lo, é
-   passar os templates para PDF na origem.
+1. ~~**O aviso de E pode virar ruído** se todo documento for `.docx`.~~ **Resolvido em 03/09/2026**,
+   e pela saída que o próprio risco apontava: os instrumentos da casa passam a ir em **PDF**. O aviso
+   volta a ser exceção em vez de regra — e, mais que isso, a medição dos PDFs reais trocou a
+   coordenada cravada pela âncora lida do documento (emenda na ADR 0065), o que torna o
+   posicionamento exato em vez de aproximado.
 2. **D depende de a tela poder saber que a casa entra.** Se `flags` não puder responder isso sem
    expor o valor, a linha fica sem endereço — e vale conferir se "Você (Biahflow)" sem e-mail ainda
    responde a pergunta que D existe para responder.
@@ -270,8 +274,8 @@ precisar da resposta agregada, ela é derivável de relance: todas as linhas ver
 | --- | --- |
 | Revisão | r1 |
 | Decisões | A · B · C · D · E · F |
-| Aprovador | _pendente_ |
-| Data | _pendente_ |
+| Aprovador | Daniel Campos |
+| Data | 2026-09-03 |
 | Evidência pós-build | `BROWSER_REQUIRED` — captura das quatro telas do board renderizadas na SPA |
 
 Aprovar este pacote autoriza planejar e construir **a revisão que ele descreve**. Mudança de
