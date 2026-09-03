@@ -254,3 +254,37 @@ def frase_do_impedimento(obj: Publicavel, dependentes: list[Model]) -> str:
     tomou é pior que o 409 que diz qual estado impede e como sair dele.
     """
     return _IMPEDIMENTO[type(obj).__name__].format(quantos=len(dependentes))
+
+
+def estado_de_publicacao(obj: Publicavel) -> dict[str, Any]:
+    """O campo derivado `publication_state` que a tela de publicação consome (issue `#108`, DAP
+    `dap-publicacao-discovery-r1` decisão E1) — chaves **e** frases, para o front não reexpressar
+    o rótulo que já existe aqui (`ROTULOS`, `_IMPEDIMENTO`).
+
+    **Cada ramo calcula só o lado que pode variar, e a omissão é medida, não economia
+    arbitrária.** Um registro **não publicado** não pode ter dependente publicado — é a invariante
+    exata que as cinco portas de `publish/`/`unpublish/` defendem, então `blocked_by` é sempre
+    `0` e `blocked_phrase` sempre `""` nesse ramo. Um registro **publicado** já passou pelo que
+    faltava para subir, então `missing` é sempre `[]` e `missing_phrase` sempre `""` no outro.
+    Calcular os dois lados sempre dobraria a consulta por linha (`dependentes_publicados_de` e
+    `o_que_falta_para_publicar` andam nas mesmas tabelas que este módulo já evita duplicar) sem o
+    resultado poder mudar de valor — a mesma economia que fez `o_que_falta_para_publicar` nunca
+    chamar `dependentes_publicados_de` nem o inverso.
+    """
+    if obj.published_at is not None:
+        presos = dependentes_publicados_de(obj)
+        return {
+            "state": "published",
+            "missing": [],
+            "missing_phrase": "",
+            "blocked_by": len(presos),
+            "blocked_phrase": frase_do_impedimento(obj, presos) if presos else "",
+        }
+    faltas = o_que_falta_para_publicar(obj)
+    return {
+        "state": "ready" if not faltas else "blocked",
+        "missing": faltas,
+        "missing_phrase": frase_do_que_falta(faltas),
+        "blocked_by": 0,
+        "blocked_phrase": "",
+    }

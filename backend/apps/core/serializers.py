@@ -1002,6 +1002,27 @@ class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Sati
         return attrs
 
 
+class PublicationStateSerializer(serializers.Serializer):
+    """O campo derivado `publication_state` (issue `#108`, DAP `dap-publicacao-discovery-r1`
+    decisão E1), reusado pelos cinco serializers publicáveis via `source="*"` — `source="*"`
+    entrega o objeto inteiro a `to_representation`, que delega por inteiro a
+    `publication.estado_de_publicacao`.
+
+    Um serializer comum (não de modelo) em vez de cinco `SerializerMethodField` sem tipo: assim o
+    drf-spectacular gera um componente de verdade, e não um `object` solto repetido cinco vezes.
+    Nenhum campo daqui decide nada — a regra e as frases moram só em `publication.py`.
+    """
+
+    state = serializers.ChoiceField(choices=["published", "ready", "blocked"], read_only=True)
+    missing = serializers.ListField(child=serializers.CharField(), read_only=True)
+    missing_phrase = serializers.CharField(read_only=True)
+    blocked_by = serializers.IntegerField(read_only=True)
+    blocked_phrase = serializers.CharField(read_only=True)
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        return publication.estado_de_publicacao(instance)
+
+
 class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process]):
     """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
@@ -1024,16 +1045,17 @@ class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     client_name = serializers.CharField(source="account.name", read_only=True)
     custo = serializers.SerializerMethodField()
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = Process
         fields = ["id", "account", "client", "client_name", "name", "position", "source_project",
                   "source_meeting", "registered_by", "volume_mes", "tempo_horas", "pessoas",
                   "custo_hora", "retrabalho_mes", "erros_mes", "perdas_mes", "espera_mes",
-                  "risco_mes", "custo", "published_at", "published_by",
+                  "risco_mes", "custo", "published_at", "published_by", "publication_state",
                   "created_at", "updated_at"]
         read_only_fields = ["id", "client_name", "registered_by", "custo", "published_at",
-                            "published_by", "created_at", "updated_at"]
+                            "published_by", "publication_state", "created_at", "updated_at"]
 
     @extend_schema_field(serializers.DictField())
     def get_custo(self, processo: Process) -> dict[str, Any]:
@@ -1186,15 +1208,17 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
     """
 
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = Evidence
         fields = ["id", "account", "discovery", "process", "step", "kind", "kind_display",
                   "raw_excerpt", "reference", "source_session", "source_meeting", "captured_at",
                   "captured_by", "content_hash", "published_at", "published_by",
-                  "created_at", "updated_at"]
+                  "publication_state", "created_at", "updated_at"]
         read_only_fields = ["id", "kind_display", "captured_by", "content_hash",
-                            "published_at", "published_by", "created_at", "updated_at"]
+                            "published_at", "published_by", "publication_state",
+                            "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """A mesma regra do `clean()` do modelo — o `save()` do DRF não chama `full_clean`."""
@@ -1310,14 +1334,17 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
     epistemic_status_display = serializers.CharField(
         source="get_epistemic_status_display", read_only=True
     )
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = Finding
         fields = ["id", "account", "process", "step", "statement", "epistemic_status",
                   "epistemic_status_display", "confidence", "reviewed_by", "reviewed_at",
-                  "evidences", "published_at", "published_by", "created_at", "updated_at"]
+                  "evidences", "published_at", "published_by", "publication_state",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "epistemic_status_display", "reviewed_at",
-                            "published_at", "published_by", "created_at", "updated_at"]
+                            "published_at", "published_by", "publication_state",
+                            "created_at", "updated_at"]
 
     def validate_epistemic_status(self, value: str) -> str:
         if self.instance is None:
@@ -1409,14 +1436,16 @@ class PainPointSerializer(serializers.ModelSerializer[PainPoint]):
 
     impact_type_display = serializers.CharField(source="get_impact_type_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = PainPoint
         fields = ["id", "account", "process", "step", "title", "description", "impact_type",
                   "impact_type_display", "impact_estimate", "findings", "status",
-                  "status_display", "published_at", "published_by", "created_at", "updated_at"]
+                  "status_display", "published_at", "published_by", "publication_state",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "impact_type_display", "status_display", "published_at",
-                            "published_by", "created_at", "updated_at"]
+                            "published_by", "publication_state", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """As mesmas regras do `clean()` — o `save()` do DRF não chama `full_clean` —, mais o M2M."""
@@ -1478,6 +1507,7 @@ class ImprovementOpportunitySerializer(serializers.ModelSerializer[ImprovementOp
     score = serializers.SerializerMethodField()
     assessment_version = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
     # `conta -> {id da oportunidade: posição}`, memorizado por serialização.
     _ranking_cache: dict[int, dict[int, int]] | None = None
 
@@ -1485,9 +1515,11 @@ class ImprovementOpportunitySerializer(serializers.ModelSerializer[ImprovementOp
         model = ImprovementOpportunity
         fields = ["id", "account", "engagement", "title", "desired_change", "impact_hypothesis",
                   "pain_points", "status", "status_display", "score", "assessment_version",
-                  "rank", "published_at", "published_by", "created_at", "updated_at"]
+                  "rank", "published_at", "published_by", "publication_state",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "status_display", "score", "assessment_version", "rank",
-                            "published_at", "published_by", "created_at", "updated_at"]
+                            "published_at", "published_by", "publication_state",
+                            "created_at", "updated_at"]
 
     @extend_schema_field(serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True))
     def get_score(self, obj: ImprovementOpportunity) -> str | None:

@@ -55,3 +55,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 049 — A medição morava dentro do ativo de solução
 - 050 — A cadeia de medição parava na fronteira do cliente
 - 051 — O Discovery chegava ao cliente como documento
+- 052 — Publicar o Discovery era uma chamada de API

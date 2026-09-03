@@ -88,6 +88,24 @@ export type GithubPullState = "unknown" | "none" | "draft" | "open" | "closed" |
 export type GithubReviewState = "unknown" | "pending" | "approved" | "changes_requested";
 export type GithubCiState = "unknown" | "pending" | "success" | "failure";
 export type GithubDeliveryProjection = { id: number; project: number; handoff: number | null; repository: string; issue_number: number; issue_url: string; projection_status: GithubProjectionStatus; state: GithubProjectionState; stale_after_seconds: number; issue_state: GithubIssueState; pr_state: GithubPullState; pr_number: number | null; pr_url: string; head_sha: string; head_ref: string; review_state: GithubReviewState; ci_state: GithubCiState; observed_at: string | null; last_event_at: string | null; last_delivery_id: string; last_event_type: string; last_error_code: string; last_error_message: string; created_at: string; updated_at: string };
+// A marca de publicável do Discovery (FDD 051, ADR 0060) e o campo derivado que a acompanha nos
+// **cinco** recursos que atravessam para o portal do cliente — `Process`, `Evidence`, `Finding`,
+// `PainPoint` e `ImprovementOpportunity`.
+//
+// **As frases vêm do servidor e não se reescrevem aqui** (DAP `dap-publicacao-discovery-r1`,
+// decisão E1): `missing_phrase` é `publication.frase_do_que_falta` e `blocked_phrase` é
+// `publication.frase_do_impedimento`, os mesmos textos que compõem o 400 e o 409 das actions. Um
+// mapa chave→rótulo em TypeScript seria a segunda definição da mesma copy, e as duas divergem no
+// primeiro conserto sem nada ficar vermelho.
+//
+// As **chaves** continuam saindo e não são decoração: é por elas que a tela sabe *o que* precisa
+// subir junto num lote, sem parsear texto em português.
+export type PublicationRequirement = "published_evidence" | "published_finding" | "published_pain_point" | "published_process";
+// Três estados, e a superfície desenha **dois selos** (decisão D1): `published` é "Visível ao
+// cliente"; `ready` e `blocked` são os dois "Oculto do cliente", e o que os separa é a frase da
+// linha, não uma terceira pastilha. `blocked_by` só é maior que zero no ramo publicado — um
+// registro que não atravessou não pode ter dependente publicado.
+export type PublicationState = { state: "published" | "ready" | "blocked"; missing: PublicationRequirement[]; missing_phrase: string; blocked_by: number; blocked_phrase: string };
 // O Discovery estruturado (FDD 039, ADR 0034) — o **dado** do mapa da operação, que não é o
 // `Artifact` de `kind=discovery` (a narrativa entregue ao cliente): aquele se lê, este se soma.
 // Liga ao cliente e não ao projeto, porque o processo mapeado sobrevive à venda que o descobriu.
@@ -95,7 +113,7 @@ export type GithubDeliveryProjection = { id: number; project: number; handoff: n
 // **Os nove insumos são `string | null` e nulo é "não apurado", nunca zero.** Zerar afirmaria que
 // executar o processo não custa nada; o backend devolve o que faltou em `custo.nao_apurado` em vez
 // de somar zero, e a tela precisa poder dizer a mesma coisa.
-export type Process = { id: number; account: number; client: number; client_name: string; name: string; position: number; source_project: number | null; source_meeting: number | null; registered_by: number | null; volume_mes: number | null; tempo_horas: string | null; pessoas: number | null; custo_hora: string | null; retrabalho_mes: string | null; erros_mes: string | null; perdas_mes: string | null; espera_mes: string | null; risco_mes: string | null; custo: CustoEstadoAtual; created_at: string; updated_at: string };
+export type Process = { id: number; account: number; client: number; client_name: string; name: string; position: number; source_project: number | null; source_meeting: number | null; registered_by: number | null; volume_mes: number | null; tempo_horas: string | null; pessoas: number | null; custo_hora: string | null; retrabalho_mes: string | null; erros_mes: string | null; perdas_mes: string | null; espera_mes: string | null; risco_mes: string | null; custo: CustoEstadoAtual; published_at: string | null; published_by: number | null; publication_state: PublicationState; created_at: string; updated_at: string };
 // A conta do custo do estado atual, derivada e só de leitura. **Os valores são texto**, como
 // `Invoice.amount`: dinheiro em `number` soma centavos com erro, e este total existe para ser
 // levado a uma reunião. `nao_apurado` é o que separa "não há insumo" de "medimos e deu zero" —
@@ -128,13 +146,13 @@ export type EvidenceKind = "interview" | "observation" | "artifact" | "system" |
 // existir. A conclusão que a casa tirou dali mora em `Finding.statement`, nunca aqui: misturar as
 // duas refaria a fusão que este split desfaz. `content_hash` é o carimbo de integridade do trecho,
 // derivado e só de leitura.
-export type Evidence = { id: number; account: number; discovery: number | null; process: number | null; step: number | null; kind: EvidenceKind; kind_display: string; raw_excerpt: string; reference: string; source_session: number | null; source_meeting: number | null; captured_at: string; captured_by: number | null; content_hash: string; created_at: string; updated_at: string };
+export type Evidence = { id: number; account: number; discovery: number | null; process: number | null; step: number | null; kind: EvidenceKind; kind_display: string; raw_excerpt: string; reference: string; source_session: number | null; source_meeting: number | null; captured_at: string; captured_by: number | null; content_hash: string; published_at: string | null; published_by: number | null; publication_state: PublicationState; created_at: string; updated_at: string };
 // FATO / HIPÓTESE / DESCONHECIDO com o nome canônico da ontologia (`language-map` §4). O rótulo não
 // tem default no banco (ADR 0034), e há uma proibição a mais: **um select não promove a `fact`
 // sozinho**. Promover exige revisor humano e evidência viva, e o backend responde 400 — a tela que
 // oferecer o valor sem pedir as duas coisas produz um erro que quem clica não entende.
 export type EpistemicStatus = "fact" | "hypothesis" | "unknown";
-export type Finding = { id: number; account: number; process: number | null; step: number | null; statement: string; epistemic_status: EpistemicStatus; epistemic_status_display: string; confidence: number | null; reviewed_by: number | null; reviewed_at: string | null; evidences: number[]; created_at: string; updated_at: string };
+export type Finding = { id: number; account: number; process: number | null; step: number | null; statement: string; epistemic_status: EpistemicStatus; epistemic_status_display: string; confidence: number | null; reviewed_by: number | null; reviewed_at: string | null; evidences: number[]; published_at: string | null; published_by: number | null; publication_state: PublicationState; created_at: string; updated_at: string };
 // A cadeia do PRIORITIZE (FDD 048, ADR 0054): dor → oportunidade de melhoria → avaliação →
 // hipótese. **Nenhuma tela consome estes tipos ainda**, exatamente como os do split da Fase 3
 // logo acima, e pelo mesmo motivo: é o recorte da fatia, não esquecimento — a superfície tem DAP
@@ -147,12 +165,12 @@ export type PainPointStatus = "observed" | "confirmed" | "discarded";
 // nada. A tela mostra `—` no nulo, como `Process.custo_do_estado_atual` já faz com `nao_apurado`.
 // `confirmed` exige ao menos um achado vivo em `findings`, e o backend responde 400 — um select
 // que ofereça o valor sem exigir o vínculo produz um erro que quem clica não entende.
-export type PainPoint = { id: number; account: number; process: number | null; step: number | null; title: string; description: string; impact_type: PainPointImpactType; impact_type_display: string; impact_estimate: string | null; findings: number[]; status: PainPointStatus; status_display: string; created_at: string; updated_at: string };
+export type PainPoint = { id: number; account: number; process: number | null; step: number | null; title: string; description: string; impact_type: PainPointImpactType; impact_type_display: string; impact_estimate: string | null; findings: number[]; status: PainPointStatus; status_display: string; published_at: string | null; published_by: number | null; publication_state: PublicationState; created_at: string; updated_at: string };
 export type ImprovementOpportunityStatus = "open" | "assessing" | "prioritized" | "discarded";
 // `score`, `assessment_version` e `rank` são **derivados e só de leitura**: saem da avaliação
 // vigente (a de maior versão não arquivada) e da ordenação por score dentro da conta. Os três
 // vêm `null` juntos quando ninguém avaliou — é o `—` do desenho, e nunca `0`.
-export type ImprovementOpportunity = { id: number; account: number; engagement: number | null; title: string; desired_change: string; impact_hypothesis: string; pain_points: number[]; status: ImprovementOpportunityStatus; status_display: string; score: string | null; assessment_version: number | null; rank: number | null; created_at: string; updated_at: string };
+export type ImprovementOpportunity = { id: number; account: number; engagement: number | null; title: string; desired_change: string; impact_hypothesis: string; pain_points: number[]; status: ImprovementOpportunityStatus; status_display: string; score: string | null; assessment_version: number | null; rank: number | null; published_at: string | null; published_by: number | null; publication_state: PublicationState; created_at: string; updated_at: string };
 // **A avaliação é imutável**: repriorizar é um `POST` de versão nova, e `PUT`/`PATCH` respondem
 // 405. `version`, `weights` e `score` saem do servidor; `weights` é a cópia congelada dos pesos
 // que produziram aquele score, para que mudar a fórmula amanhã não reescreva o número de ontem.

@@ -165,6 +165,12 @@ afirmação sobre a operação de um cliente pode ser mostrada a ele; marcar o q
 - **A superfície de publicação fica devendo.** Publicar hoje é chamada de API. A tela é pacote
   próprio com DAP, porque decidir *o que o cliente vê* merece board revisado e não um botão
   improvisado ao lado de "Arquivar".
+  **Emenda (03/09/2026):** paga, e do jeito que esta consequência pedia — DAP
+  `docs/design/dap-publicacao-discovery-r1/` revisado e aprovado antes do planejamento, tela em
+  `/contas/:id/publicacao` (FDD 052, issue #108). A construção corrigiu um fato do enunciado: o
+  `unpublish` **não** derruba dependentes, é **recusado** por eles, então o item publicado tem dois
+  estados e não um — solto e preso —, e são quatro por item ao todo. O contrato que a tela consome
+  é a ADR 0063.
 - **A regressão da FDD 039 foi emendada e não perdeu asserção nenhuma.**
   `test_processo_nao_volta_ao_cliente.py` guarda um cenário em que nada está publicado, e por isso
   o nome do processo, o do passo, o `pessoas` da etapa, o achado em `hypothesis` e os nove insumos

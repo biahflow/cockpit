@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, Coins, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, Briefcase, Coins, Eye, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, createProjectFromEngagement, getConfig } from "../api";
@@ -636,6 +636,13 @@ export function AccountDetailPage({ id }: { id: number }) {
           priorização, pelo mesmo motivo: valor é sempre de uma conta, e nenhum dos dois entra no
           menu lateral. */}
       <a className="btn btn--secondary" href={`/contas/${id}/valor`}><Coins className="size-4" />Abrir o valor gerado</a>
+      {/* A porta da publicação do Discovery (DAP `dap-publicacao-discovery-r1`, decisão **A1**) —
+          a terceira da faixa, pelo mesmo motivo das duas anteriores: o que o cliente vê é sempre
+          de uma conta, e nenhuma das três entra no menu lateral. O ícone é o mesmo `Eye` do selo
+          "Visível ao cliente": a porta e o estado que ela governa dizem a mesma coisa com o mesmo
+          glifo. Sem contador — quantos itens estão pendentes é informação da tela de destino, e um
+          número aqui obrigaria esta página a buscar os cinco recursos a cada carga. */}
+      <a className="btn btn--secondary" href={`/contas/${id}/publicacao`}><Eye className="size-4" />Abrir a publicação</a>
     </div>
 
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">

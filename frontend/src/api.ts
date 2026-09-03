@@ -1,5 +1,5 @@
 import { reportError, setLastRequestId } from "./observability";
-import type { AgentReply, AppConfig, FeasibilityAssessment, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
+import type { AgentReply, AppConfig, Evidence, FeasibilityAssessment, Finding, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Process, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
 
@@ -234,6 +234,51 @@ export function createImprovementOpportunity(payload: ImprovementOpportunityPayl
 
 export function updateImprovementOpportunity(id: number, payload: Partial<ImprovementOpportunityPayload> & { status?: ImprovementOpportunity["status"] }): Promise<ImprovementOpportunity> {
   return api<ImprovementOpportunity>(`/improvement-opportunities/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+// ---------- A marca de publicável do Discovery (FDD 051, ADR 0060) ----------
+// Dez funções para cinco recursos, consumidas pela tela `/contas/:id/publicacao` (DAP
+// `dap-publicacao-discovery-r1`, decisão A1). São `POST` em action e **não** `PATCH` de
+// `published_at`, pela razão de `startProveExperiment` logo acima: o que vale depende do estado
+// corrente — qual sustentação está publicada e viva agora —, e só o servidor o conhece.
+//
+// **Nenhuma delas decide se pode.** A tela conhece só a *ordem* da cadeia (decisão F1) e dispara
+// os `POST` nela; quem recusa é o servidor, com 400 listando o que falta ou 409 quando o registro
+// já está no estado pedido ou quando algo publicado depende dele. Reexpressar a regra aqui
+// habilitaria o botão de um `POST` que o servidor nega, sem nada ficar vermelho.
+//
+// A rota do processo continua sendo `/processos/` — ela morre na `/api/v2/`
+// (`docs/ontology/aliases.md`); as outras quatro já nascem com o nome canônico.
+
+export function publishProcess(id: number): Promise<Process> {
+  return api<Process>(`/processos/${id}/publish/`, { method: "POST" });
+}
+export function unpublishProcess(id: number): Promise<Process> {
+  return api<Process>(`/processos/${id}/unpublish/`, { method: "POST" });
+}
+export function publishEvidence(id: number): Promise<Evidence> {
+  return api<Evidence>(`/evidence/${id}/publish/`, { method: "POST" });
+}
+export function unpublishEvidence(id: number): Promise<Evidence> {
+  return api<Evidence>(`/evidence/${id}/unpublish/`, { method: "POST" });
+}
+export function publishFinding(id: number): Promise<Finding> {
+  return api<Finding>(`/findings/${id}/publish/`, { method: "POST" });
+}
+export function unpublishFinding(id: number): Promise<Finding> {
+  return api<Finding>(`/findings/${id}/unpublish/`, { method: "POST" });
+}
+export function publishPainPoint(id: number): Promise<PainPoint> {
+  return api<PainPoint>(`/pain-points/${id}/publish/`, { method: "POST" });
+}
+export function unpublishPainPoint(id: number): Promise<PainPoint> {
+  return api<PainPoint>(`/pain-points/${id}/unpublish/`, { method: "POST" });
+}
+export function publishImprovementOpportunity(id: number): Promise<ImprovementOpportunity> {
+  return api<ImprovementOpportunity>(`/improvement-opportunities/${id}/publish/`, { method: "POST" });
+}
+export function unpublishImprovementOpportunity(id: number): Promise<ImprovementOpportunity> {
+  return api<ImprovementOpportunity>(`/improvement-opportunities/${id}/unpublish/`, { method: "POST" });
 }
 
 export type PriorityAssessmentPayload = {

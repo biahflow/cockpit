@@ -22,6 +22,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/contas/1/processos/1", name: "Processo mapeado", role: "admin" },
   { path: "/contas/1/priorizacao", name: "Priorização", role: "admin" },
   { path: "/contas/1/valor", name: "Valor gerado", role: "admin" },
+  { path: "/contas/1/publicacao", name: "Publicação do Discovery", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
@@ -58,6 +59,31 @@ export const ROUTES: readonly Screen[] = [
  * de uma razão social real.
  */
 const NOME_LONGO = "Indústria Metalúrgica São Bernardo do Campo Participações S.A.";
+
+/**
+ * A marca de publicável (FDD 051, ADR 0060) e o campo derivado que a tela de publicação consome
+ * (DAP `dap-publicacao-discovery-r1`, decisão B1).
+ *
+ * **Os quatro estados por item entram na amostra**, e não é completude: eles são quatro
+ * superfícies diferentes — pastilha escura sólida contra pastilha cinza, frase do impedimento,
+ * frase do que falta, caixa de seleção presente ou ausente, botão habilitado ou desabilitado. Um
+ * mock com tudo no mesmo estado aprovaria a tela sem que metade dela tivesse renderizado uma vez,
+ * que é o modo de falha que o comentário de `/api/v1/processos/` já registra um nível acima.
+ */
+const visivel = (presos = 0, impedimento = "") => ({
+  published_at: `${HOJE}T09:00:00Z`, published_by: 1,
+  publication_state: { state: "published", missing: [], missing_phrase: "", blocked_by: presos, blocked_phrase: impedimento },
+});
+const oculto = (falta?: { chave: string; frase: string }) => ({
+  published_at: null, published_by: null,
+  publication_state: {
+    state: falta ? "blocked" : "ready",
+    missing: falta ? [falta.chave] : [], missing_phrase: falta ? falta.frase : "",
+    blocked_by: 0, blocked_phrase: "",
+  },
+});
+const FALTA_ACHADO = { chave: "published_finding", frase: "ao menos um achado publicado e vivo" };
+const FALTA_DOR = { chave: "published_pain_point", frase: "ao menos uma dor publicada e viva" };
 /** Um token sem espaço nem hífen: reproduz o conteúdo que não oferece ponto natural de quebra. */
 export const TITULO_DE_LINHA_INQUEBRAVEL = "Inconsistenciacadastralidentificadaautomaticamentenoprocessodefaturamentomensal";
 const HOJE = "2026-08-05";
@@ -144,6 +170,12 @@ const processos = serie(3, index => ({
     nao_apurado: ["Perdas", "Espera", "Risco"],
     sustentacao: index === 1 ? "sustentado" : "hipotese",
   },
+  // O primeiro mapa é a **âncora** de um achado e de uma dor publicados: é o visível·preso, com o
+  // botão desabilitado e a frase do 409 na linha. O segundo está oculto·pronto — e é ele que
+  // bloqueia o achado ancorado nele. O terceiro é visível·solto.
+  ...(index === 1
+    ? visivel(2, "Este processo é a âncora de 2 achado(s) ou dor(es) publicado(s). Despublique-os primeiro.")
+    : index === 2 ? oculto() : visivel()),
   created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
 }));
 
@@ -172,19 +204,36 @@ const findings = [
   { epistemic_status: "unknown", epistemic_status_display: "Desconhecido",
     statement: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
 ].map((registro, indice) => ({
-  id: indice + 1, account: 1, process: 1, step: null, confidence: null,
+  id: indice + 1, account: 1,
+  // O terceiro achado é **ancorado no segundo mapa**, que está oculto: é o que produz o
+  // oculto·bloqueado por âncora — "Falta: o processo que ele cita publicado e vivo" —, e é também o
+  // que dá à árvore da tela de publicação um segundo mapa com filho, em vez de um só.
+  process: indice === 2 ? 2 : 1, step: null, confidence: null,
   reviewed_by: registro.epistemic_status === "fact" ? 1 : null,
   reviewed_at: registro.epistemic_status === "fact" ? `${HOJE}T09:00:00Z` : null,
-  evidences: [indice + 1], created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  evidences: [indice + 1],
+  // O fato publicado prende a evidência que o sustenta e é preso pela dor que ele sustenta — os
+  // dois lados da cadeia, na mesma linha. A hipótese está pronta; o desconhecido, bloqueado.
+  ...(indice === 0
+    ? visivel(1, "Este é o último achado publicado e vivo de 1 dor(es) publicada(s). Despublique a dor primeiro, ou publique outro achado.")
+    : indice === 1 ? oculto() : oculto({ chave: "published_process", frase: "o processo que ele cita publicado e vivo" })),
+  created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
 }));
 const evidence = [
   { kind: "data", kind_display: "Dado (volume, tempo, custo, erro)" },
   { kind: "interview", kind_display: "Entrevista (o que dizem)" },
   { kind: "observation", kind_display: "Observação (o que fazem)" },
 ].map((registro, indice) => ({
-  id: indice + 1, account: 1, discovery: null, process: 1, step: null, raw_excerpt: "Trecho da fonte.",
+  id: indice + 1, account: 1, discovery: null, process: indice === 2 ? 2 : 1, step: null,
+  raw_excerpt: "Trecho da fonte.",
   reference: "", source_session: null, source_meeting: 1, captured_at: `${HOJE}T09:00:00Z`,
-  captured_by: 1, content_hash: "abc", created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  captured_by: 1, content_hash: "abc",
+  // A primeira é a **última sustentação publicada** do fato publicado: visível·presa, com o botão
+  // desabilitado. As outras duas estão ocultas·prontas — a folha da escada não pede nada para subir.
+  ...(indice === 0
+    ? visivel(1, "Esta é a última evidência publicada e viva de 1 achado(s) publicado(s) como fato. Despublique o achado primeiro, ou publique outra evidência.")
+    : oculto()),
+  created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   ...registro,
 }));
 
@@ -471,27 +520,35 @@ const FIXTURES: Record<string, unknown> = {
     { id: 1, title: "Retrabalho na conciliação de pagamentos de convênio dos três maiores planos",
       impact_type: "financial", impact_type_display: "Financeiro", findings: [1, 2] },
     { id: 2, title: "Agenda dupla por falha de sincronização entre as unidades da rede",
-      impact_type: "operational", impact_type_display: "Operacional", findings: [] },
+      impact_type: "operational", impact_type_display: "Operacional", findings: [1] },
     { id: 3, title: "Tempo de espera na recepção acima de quarenta minutos em dia de pico",
-      impact_type: "experience", impact_type_display: "Experiência", findings: [3] },
-  ].map(registro => ({
+      impact_type: "experience", impact_type_display: "Experiência", findings: [1] },
+  ].map((registro, indice) => ({
     account: 1, process: 1, step: null, description: "", impact_estimate: null,
     status: "observed", status_display: "Observado",
+    // A primeira só cita o achado que ainda não subiu: oculta·bloqueada. A segunda cita o fato
+    // publicado e está oculta·pronta. A terceira é visível·presa pela oportunidade que a agrupa.
+    ...(indice === 0 ? oculto(FALTA_ACHADO) : indice === 1 ? oculto()
+      : visivel(1, "Esta é a última dor publicada e viva de 1 oportunidade(s) de melhoria publicada(s). Despublique a oportunidade primeiro, ou publique outra dor.")),
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
   "/api/v1/improvement-opportunities/": [
     { id: 1, title: "Padronizar o checklist de documentação exigida para faturamento TISS",
-      pain_points: [1], status: "prioritized", status_display: "Priorizada",
+      pain_points: [3], status: "prioritized", status_display: "Priorizada",
       score: "78.00", assessment_version: 2, rank: 1 },
     { id: 2, title: "Automatizar a confirmação de agendamento por WhatsApp em todas as unidades",
-      pain_points: [], status: "assessing", status_display: "Em avaliação",
+      pain_points: [1], status: "assessing", status_display: "Em avaliação",
       score: "64.00", assessment_version: 1, rank: 2 },
     // A que ninguém avaliou: score, versão e rank saem **nulos juntos**, e é o `—` do desenho.
     { id: 3, title: "Consolidar o prontuário eletrônico entre as unidades da rede",
       pain_points: [], status: "open", status_display: "Aberta",
       score: null, assessment_version: null, rank: null },
-  ].map(registro => ({
+  ].map((registro, indice) => ({
     account: 1, engagement: null, desired_change: "", impact_hypothesis: "",
+    // O topo da escada: a primeira é **visível·solta** — nada pende dela, e o botão de ocultar
+    // dela é o único habilitado da tela. As outras duas estão bloqueadas por falta de dor
+    // publicada, e é a segunda que mostra a caixa de seleção **vazia** num item bloqueado.
+    ...(indice === 0 ? visivel() : oculto(FALTA_DOR)),
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
   "/api/v1/priority-assessments/": [

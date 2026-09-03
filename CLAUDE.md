@@ -273,7 +273,12 @@ Key cross-cutting patterns to preserve:
   exige o mapa citado publicado e vivo, despublicá-lo ou arquivá-lo é 409 enquanto algo publicado
   o citar, e **mover a âncora por baixo de um registro publicado é 400** — senão `process_id`
   aponta para fora de `processes[]`. São **cinco** portas, e a quinta é a única que não passa
-  perto de `published_at`: quem responde às três perguntas é `publication.py`, num lugar só. Nunca
+  perto de `published_at`: quem responde às três perguntas é `publication.py`, num lugar só.
+  **Publicar deixou de ser só chamada de API na FDD 052**: a superfície é `/contas/:id/publicacao`
+  (selo de leitura na `ProcessDetailPage`, porta no detalhe da conta), e a regra que não pode se
+  perder ali é a ADR 0063 — o estado sai nos cinco serializers como `publication_state`, **com a
+  frase junto**, e a frase de recusa é a de `publication.py`; um mapa chave→rótulo em TypeScript
+  seria a segunda definição da copy que o 400 e o 409 já usam. Nunca
   cruzam `raw_excerpt`, `content_hash`, os nove insumos do custo, `rationale`/`weights`/`formula_key`,
   `assumptions`, e **nem `rank`** — ele ordena as oportunidades **não publicadas** junto, e
   recalculá-lo entre as publicadas seria a segunda definição que a ADR 0054 recusou; quem responde é

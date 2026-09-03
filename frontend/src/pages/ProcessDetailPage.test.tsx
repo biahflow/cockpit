@@ -41,13 +41,34 @@ function custo(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * A marca de publicável (FDD 051, ADR 0060), no estado em que tudo nasce: **nada é publicado por
+ * decisão** — a ADR 0060 recusou o backfill de propósito, e a migração `0075` não tem `RunPython`.
+ * O selo de leitura desta tela (DAP `dap-publicacao-discovery-r1`, decisão A1) lê daqui.
+ */
+const oculto = (estado: "ready" | "blocked" = "ready", falta = "") => ({
+  published_at: null, published_by: null,
+  publication_state: {
+    state: estado, missing: falta ? ["published_evidence"] : [], missing_phrase: falta,
+    blocked_by: 0, blocked_phrase: "",
+  },
+});
+const visivel = (presos = 0, impedimento = "") => ({
+  published_at: "2026-08-20T10:00:00Z", published_by: 1,
+  publication_state: {
+    state: "published", missing: [], missing_phrase: "",
+    blocked_by: presos, blocked_phrase: impedimento,
+  },
+});
+
 function processoMapeado(overrides: Record<string, unknown> = {}) {
   return {
     id: 1, account: 4, client: 4, client_name: "Cliente A", name: "Faturamento manual de notas",
     position: 1, source_project: 2, source_meeting: 3, registered_by: 1,
     volume_mes: 400, tempo_horas: "0.50", pessoas: 2, custo_hora: "80.00",
     retrabalho_mes: "3200.00", erros_mes: null, perdas_mes: null, espera_mes: null, risco_mes: null,
-    custo: custo(), created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
+    custo: custo(), ...oculto(),
+    created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
     ...overrides,
   };
 }
@@ -59,7 +80,7 @@ function evidence(overrides: Record<string, unknown> = {}) {
     kind: "interview", kind_display: "Entrevista (o que dizem)",
     raw_excerpt: "A gente refaz a conferência inteira quando a nota volta.", reference: "",
     source_session: null, source_meeting: 3, captured_at: "2026-08-10T10:00:00Z",
-    captured_by: 1, content_hash: "abc", created_at: "2026-08-10T10:00:00Z",
+    captured_by: 1, content_hash: "abc", ...oculto(), created_at: "2026-08-10T10:00:00Z",
     updated_at: "2026-08-10T10:00:00Z", ...overrides,
   };
 }
@@ -70,7 +91,7 @@ function finding(overrides: Record<string, unknown> = {}) {
     id: 20, account: 4, process: 1, step: null,
     statement: "A equipe acredita que metade do retrabalho vem de cadastro desatualizado.",
     epistemic_status: "hypothesis", epistemic_status_display: "Hipótese",
-    confidence: null, reviewed_by: null, reviewed_at: null, evidences: [7],
+    confidence: null, reviewed_by: null, reviewed_at: null, evidences: [7], ...oculto(),
     created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z", ...overrides,
   };
 }
@@ -82,7 +103,7 @@ function painPoint(overrides: Record<string, unknown> = {}) {
     title: "Retrabalho na conciliação de pagamentos de convênio", description: "",
     impact_type: "financial", impact_type_display: "Financeiro", impact_estimate: null,
     findings: [], status: "observed", status_display: "Observado",
-    created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
+    ...oculto(), created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
     ...overrides,
   };
 }
@@ -503,4 +524,30 @@ test("descartar a dor manda o PATCH — e confirmar não é oferecido aqui", asy
   await waitFor(() => expect(mocks.updatePainPoint).toHaveBeenCalledWith(11, { status: "discarded" }));
   await waitFor(() => expect(screen.getByText("Descartado")).toBeInTheDocument());
   expect(screen.getByLabelText(/^Reabrir pain point:/)).toBeInTheDocument();
+});
+
+test("o selo de publicação é leitura — e não se confunde com os dois vizinhos da mesma linha", async () => {
+  // Decisão **D1** do DAP `dap-publicacao-discovery-r1`: na linha do achado convivem o selo
+  // epistêmico ("Fato"/"Hipótese") e o de publicação; na da dor, "Sem oportunidade" e "Oculto do
+  // cliente" — os dois `state--off`, cinzas, na mesma faixa. O que os separa é a copy e o ícone.
+  processo = processoMapeado(visivel(2, "Este processo é a âncora de 2 achado(s) ou dor(es) publicado(s). Despublique-os primeiro."));
+  findings = [finding(visivel())];
+  evidencias = [evidence()];
+  dores = [painPoint()];
+  stub();
+  render(<ProcessDetailPage clientId={4} id={1} />);
+  await screen.findByRole("heading", { name: "Faturamento manual de notas" });
+
+  // O mapa publicado, no cabeçalho, ao lado de "Arquivar processo".
+  expect(screen.getAllByText("Visível ao cliente")).toHaveLength(2);
+  const dor = within(linhaDe("Retrabalho na conciliação de pagamentos de convênio"));
+  expect(dor.getByText("Sem oportunidade")).toBeInTheDocument();
+  expect(dor.getByText("Oculto do cliente")).toBeInTheDocument();
+
+  // **Acrescenta selo, não acrescenta ação** (decisão A1): publicar e ocultar moram na tela da
+  // conta, e daqui só se vai até lá.
+  expect(screen.queryByRole("button", { name: /Publicar/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Ocultar do cliente/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Abrir a publicação do Discovery desta conta/ }))
+    .toHaveAttribute("href", "/contas/4/publicacao");
 });

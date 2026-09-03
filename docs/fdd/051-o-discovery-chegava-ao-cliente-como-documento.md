@@ -345,6 +345,10 @@ O `docs/ontology/language-map.md` **não foi editado**: é espelho fiel e não s
 - **Superfície de publicação neste produto.** Nenhuma tela muda nesta fatia. Publicar hoje é uma
   chamada de API; a tela que a expõe é pacote próprio, com DAP, porque decidir *o que o cliente vê*
   merece um board revisado e não um botão improvisado ao lado de "Arquivar".
+  **Emenda (03/09/2026):** a pendência foi paga. O pacote é
+  `docs/design/dap-publicacao-discovery-r1/` (r1, **A1 · B1 · C1 · D1 · E1 · F1 · G1** mais a oitava
+  decisão), a tela é `/contas/:id/publicacao`, e o que foi construído está na **FDD 052** — com o
+  contrato do campo derivado `publication_state` na **ADR 0063**.
 - **Descer as guardas do snapshot um nível.** Agora há quatro listas novas com chaves aninhadas que
   nenhuma das duas guardas fixa. Continua sendo a pendência deliberada da FDD 047: descer um nível
   toca a guarda de todo mundo e merece decisão própria, com ADR.

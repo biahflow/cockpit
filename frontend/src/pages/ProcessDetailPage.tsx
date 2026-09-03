@@ -1,10 +1,10 @@
-import { ArrowLeft, BadgeCheck, Coins, Flame, Plus, Quote, Trash2, Workflow } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Coins, Eye, Flame, Plus, Quote, Trash2, Workflow } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { api, createPainPoint, listImprovementOpportunities, listPainPointsByProcess, updatePainPoint } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog } from "../components/Modal";
-import { SUSTENTACAO_LABEL, sustentacaoBadgeClass } from "../components/StatusDot";
+import { PublicacaoBadge, SUSTENTACAO_LABEL, epistemicoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
 import type { Evidence, EvidenceKind, EpistemicStatus, Finding, ImprovementOpportunity, PainPoint, PainPointImpactType, Process, ProcessStep } from "../types";
@@ -95,13 +95,9 @@ const KIND_LABEL: Record<EvidenceKind, string> = {
   system: "Sistema (ERP, CRM, CAD, WhatsApp)",
   data: "Dado (volume, tempo, custo, erro)",
 };
-// Variante, nunca a cor (ADR 0026): um `bg-emerald-50` escrito aqui é a segunda definição de
-// "fato", e ela diverge da primeira sem nada ficar vermelho. `unknown` é `state--off` — o neutro de
-// "Desligada"/"Arquivado" —, porque nomear o que ainda não se sabe **não é falha**: é o Discovery
-// fazendo o trabalho. Pintá-lo de vermelho mandaria apagar a linha mais honesta do mapa.
-const STATUS_BADGE: Record<EpistemicStatus, string> = {
-  fact: "state--1", hypothesis: "state--2", unknown: "state--off",
-};
+// O mapa de variante do rótulo epistêmico mora em `components/StatusDot.tsx` desde que ganhou a
+// segunda tela que o lê (a de publicação do Discovery) — uma cópia por tela é a segunda definição
+// de "fato", e ela diverge da primeira sem nada ficar vermelho (ADR 0026).
 
 /**
  * O rascunho do pain point (FDD 048, DAP priorização r1 — decisão **E1**).
@@ -295,7 +291,13 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
     />}
     <header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div><p className="eyebrow">Discovery estruturado</p><h1>{processo.name}</h1><p>O mapa da operação de {processo.client_name} — o dado que se soma, não a narrativa que se entrega.</p></div>
-      <button type="button" className="btn btn--secondary btn--secondary-danger shrink-0 self-start sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar processo</button>
+      {/* O selo diz se **este mapa** atravessa para a aba Discovery do portal do cliente. Leitura,
+          sem ação: publicar e ocultar moram em `/contas/:id/publicacao` (DAP
+          `dap-publicacao-discovery-r1`, decisão A1), porque o ato é sobre o conjunto. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
+        <PublicacaoBadge estado={processo.publication_state.state} />
+        <button type="button" className="btn btn--secondary btn--secondary-danger" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar processo</button>
+      </div>
     </header>
     {error && <p role="alert" className="alert--error">{error}</p>}
 
@@ -412,7 +414,12 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
           {/* Fora de `.row-main`: `.row-main span`/`strong` sobrescrevem display e cor de qualquer
               primitiva aninhada ali dentro, e o `.state` perderia a própria pele em silêncio. */}
           <div className="row-meta">
-            <span className={`state ${STATUS_BADGE[finding.epistemic_status]}`}>{finding.epistemic_status_display}</span>
+            <span className={`state ${epistemicoBadgeClass(finding.epistemic_status)}`}>{finding.epistemic_status_display}</span>
+            {/* **Leitura, sem ação** (DAP `dap-publicacao-discovery-r1`, decisão A1): quem publica
+                é `/contas/:id/publicacao`, e daqui só se vai até lá. O selo é o último da faixa e
+                o único com ícone — é assim que ele não se confunde com o "Fato"/"Hipótese" ao
+                lado, que responde outra pergunta na mesma linha (decisão D1). */}
+            <PublicacaoBadge estado={finding.publication_state.state} />
             {/* Some quando já é fato: não há para onde promover, e um botão inerte na linha diria que
                 existe um grau acima. O `aria-label` nomeia o achado porque a tela tem um botão destes
                 por linha, e "Promover a fato" repetido cinco vezes não localiza nenhum deles. */}
@@ -453,10 +460,18 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
               dor já virou trabalho de priorização; "sem oportunidade" é o neutro, não um aviso. */}
           <div className="row-meta">
             <span className={`state ${dor.status === "discarded" ? "state--3" : oportunidade ? "state--1" : "state--off"}`}>{dor.status === "discarded" ? dor.status_display : oportunidade ? "Agrupado" : "Sem oportunidade"}</span>
+            {/* O caso mais apertado da decisão D1: "Sem oportunidade" e "Oculto do cliente" são os
+                dois `state--off`, cinzas, na mesma linha. O que os separa é o ícone de olho e a
+                copy — nenhuma das duas divide palavra com a outra. */}
+            <PublicacaoBadge estado={dor.publication_state.state} />
             <button type="button" className="btn btn--secondary ml-auto" aria-label={`${dor.status === "discarded" ? "Reabrir" : "Descartar"} pain point: ${dor.title}`} onClick={() => void mudarSituacaoDaDor(dor)}>{dor.status === "discarded" ? "Reabrir" : "Descartar"}</button>
           </div>
         </div>;
       })}</div> : <p className="empty-state">Nenhum pain point registrado. A dor entra pela tela do processo, ao lado da evidência que a sustenta.</p>}
     </section>
+
+    {/* A porta para o ato. Os selos acima são leitura; publicar e ocultar são decisão sobre o
+        conjunto do Discovery da conta, e moram lá (decisão A1). */}
+    <a className="back-link" href={`/contas/${clientId}/publicacao`}><Eye className="size-4" />Abrir a publicação do Discovery desta conta</a>
   </section>;
 }

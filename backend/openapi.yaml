@@ -14261,6 +14261,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -14277,6 +14281,7 @@ components:
       - id
       - kind
       - kind_display
+      - publication_state
       - published_at
       - published_by
       - updated_at
@@ -14461,6 +14466,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -14474,6 +14483,7 @@ components:
       - created_at
       - epistemic_status_display
       - id
+      - publication_state
       - published_at
       - published_by
       - reviewed_at
@@ -14723,6 +14733,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -14736,6 +14750,7 @@ components:
       - assessment_version
       - created_at
       - id
+      - publication_state
       - published_at
       - published_by
       - rank
@@ -15871,6 +15886,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -15885,6 +15904,7 @@ components:
       - id
       - impact_type
       - impact_type_display
+      - publication_state
       - published_at
       - published_by
       - status_display
@@ -16898,6 +16918,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -17038,6 +17062,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -17209,6 +17237,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -17823,6 +17855,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -18022,6 +18058,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -19302,6 +19342,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        publication_state:
+          allOf:
+          - $ref: '#/components/schemas/PublicationState'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -19318,6 +19362,7 @@ components:
       - custo
       - id
       - name
+      - publication_state
       - published_at
       - published_by
       - registered_by
@@ -19954,6 +19999,42 @@ components:
         * `planned` - Planejado
         * `running` - Em execução
         * `concluded` - Concluído
+    PublicationState:
+      type: object
+      description: |-
+        O campo derivado `publication_state` (issue `#108`, DAP `dap-publicacao-discovery-r1`
+        decisão E1), reusado pelos cinco serializers publicáveis via `source="*"` — `source="*"`
+        entrega o objeto inteiro a `to_representation`, que delega por inteiro a
+        `publication.estado_de_publicacao`.
+
+        Um serializer comum (não de modelo) em vez de cinco `SerializerMethodField` sem tipo: assim o
+        drf-spectacular gera um componente de verdade, e não um `object` solto repetido cinco vezes.
+        Nenhum campo daqui decide nada — a regra e as frases moram só em `publication.py`.
+      properties:
+        state:
+          allOf:
+          - $ref: '#/components/schemas/StateEnum'
+          readOnly: true
+        missing:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        missing_phrase:
+          type: string
+          readOnly: true
+        blocked_by:
+          type: integer
+          readOnly: true
+        blocked_phrase:
+          type: string
+          readOnly: true
+      required:
+      - blocked_by
+      - blocked_phrase
+      - missing
+      - missing_phrase
+      - state
     Qualification:
       type: object
       description: A avaliação de um lead (ADR 0049). `outcome` é obrigatório e não
@@ -20399,6 +20480,16 @@ components:
       description: |-
         * `linear` - linear
         * `github` - github
+    StateEnum:
+      enum:
+      - published
+      - ready
+      - blocked
+      type: string
+      description: |-
+        * `published` - published
+        * `ready` - ready
+        * `blocked` - blocked
     Task:
       type: object
       properties:

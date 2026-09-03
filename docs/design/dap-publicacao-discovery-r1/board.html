@@ -1,0 +1,1299 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — Publicação do Discovery · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-100:#fadfd4; --brand-200:#dd8b62; --brand-500:#bd4a30;
+  --brand-600:#a8412a; --brand-700:#9c3c26; --brand-900:#5c2317;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --info:#1d4ed8; --info-50:#eff6ff;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  --slate-600:#475569; --slate-700:#334155;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --shadow-pop:0 16px 40px -16px rgba(18,17,15,.28);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650;margin:28px 0 10px}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:var(--text-body)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface-subtle);font-weight:650}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.grid--2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.spec--pick{border-style:solid;border-color:var(--brand-200);box-shadow:0 0 0 3px rgba(221,139,98,.12)}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+
+/* ---- primitivas espelhadas de src/index.css (mesmo subconjunto do molde dap-priorizacao-r1) ---- */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:24px;box-shadow:var(--shadow-card)}
+/* `.panel--flush` real não redeclara borda/fundo — combina com `.panel` no markup (index.css:201). */
+.panel--flush{overflow:hidden;padding:0}
+.panel-heading{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel-heading h2{margin:0;font-size:var(--text-title);line-height:var(--lh-title);font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);border:0;padding:0}
+.panel-rows>.row+.row{border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px 24px}
+.row-main{min-width:0;flex:1;overflow-wrap:anywhere}
+.row-main strong{display:block;font-size:var(--text-body);font-weight:600;color:var(--ink)}
+.row-main span{display:block;margin-top:.125rem;font-size:var(--text-label);line-height:1.05rem;color:var(--muted)}
+/* O cluster de selos da linha, sempre numa linha própria dentro da mesma `.row`
+   (`flex:1 1 100%` força a quebra num `.row` `flex-wrap`). index.css:230. */
+.row-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1 1 100%;margin-top:2px}
+.metric-icon{display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;
+  border-radius:var(--radius-control);background:var(--brand-50);color:var(--brand-500)}
+.metric-card{display:grid;gap:8px;border-radius:var(--radius-card);border:1px solid var(--line);
+  background:var(--surface);padding:16px;box-shadow:var(--shadow-card)}
+.metric-card span{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500;color:var(--muted)}
+.metric-card strong{font-size:1.75rem;line-height:2rem;font-weight:650;letter-spacing:-.03em;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.state{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:4px 10px;
+  font-size:11px;line-height:1rem;font-weight:600;white-space:nowrap}
+.state--0{background:var(--info-50);color:var(--info)}
+.state--1{background:var(--success-50);color:var(--success)}
+.state--2{background:var(--warning-50);color:var(--warning)}
+.state--3{background:var(--danger-50);color:var(--danger)}
+.state--off{background:var(--slate-100);color:var(--slate-600)}
+/* O sólido escuro — `bg-ink text-white`, index.css:414. É o único selo sólido do produto, e é
+   isso (mais o ícone) que separa o de publicação dos dois pastel vizinhos. */
+.state--active{background:var(--ink);color:#fff}
+.field{width:100%;border-radius:var(--radius-control);border:1px solid var(--line-strong);
+  background:#fff;padding:12px;font-size:var(--text-body);color:var(--slate-700);font-family:inherit}
+.field::placeholder{color:#a8a29e}
+.form-label{display:grid;gap:8px;font-size:var(--text-body);font-weight:500;color:var(--slate-700)}
+.form-grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit;white-space:nowrap}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+/* O único botão vermelho do produto: só o `ConfirmDialog` o usa (index.css:305). */
+.btn--danger{background:var(--danger);color:#fff;border-color:transparent}
+.btn--icon{width:44px;height:44px;min-height:0;padding:0;flex:0 0 auto}
+.btn[disabled],.btn--secondary[disabled]{border-color:var(--line);background:var(--line);color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;border-radius:var(--radius-card);
+  border:1px solid var(--line);background:var(--surface);padding:24px;box-shadow:var(--shadow-card)}
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;
+  border:1px solid var(--line);background:#fff;padding:6px 12px;font-size:var(--text-body);
+  font-weight:600;color:var(--muted)}
+.filter-chip--on{border-color:var(--brand-500);background:var(--brand-50);color:var(--brand-700)}
+.empty-state{border-radius:var(--radius-card);border:1px dashed var(--line);
+  background:rgba(248,250,252,.6);padding:24px 16px;text-align:center;
+  font-size:var(--text-body);color:var(--muted)}
+.alert--error{border-radius:var(--radius-card);border:1px solid var(--danger-50);
+  background:var(--danger-50);padding:16px;font-size:var(--text-body);color:var(--danger);margin:0 0 16px}
+.type-title{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650}
+.type-label{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--18{width:18px;height:18px}
+/* Ícone dentro de `.state`: `size-3` — o mesmo corpo de `PowerOff` em `CobrancaPage.tsx:467`
+   e de `Lock` em `ProjectDetailPage.tsx:941`, os dois já dentro de um selo. */
+.ico--12{width:12px;height:12px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+.skeleton{background:var(--slate-200);border-radius:12px}
+.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
+.stack{display:grid;gap:16px}
+.actions{display:flex;gap:6px;flex:0 0 auto;margin-left:auto}
+.back-link{display:inline-flex;align-items:center;gap:8px;font-size:var(--text-body);font-weight:600;
+  color:var(--brand-600);text-decoration:none}
+.page-head{margin-bottom:24px;display:grid;gap:6px}
+.page-head p{margin:0;max-width:60ch;color:var(--slate-600);font-size:var(--text-body)}
+/* A hierarquia visual **é** a cadeia (decisão C1): recuo e filete à esquerda, e nada mais.
+   Posicionamento puro — nenhuma cor, raio ou corpo de texto próprio; o filete é `line` e o
+   fundo de nível é `canvas`/`surface-subtle`, os dois já da paleta. */
+.nest{border-top:1px solid var(--line);background:var(--canvas)}
+.nest+.row{border-top:1px solid var(--line)}
+.nest>.panel-rows>.row{padding-left:56px}
+.nest .nest{background:var(--surface-subtle)}
+.nest .nest>.panel-rows>.row{padding-left:88px}
+.check{width:16px;height:16px;flex:0 0 auto;accent-color:var(--brand-500)}
+/* O overlay do `ConfirmDialog`, desenhado sem JS: `bg-ink/45` + painel `rounded-2xl bg-white p-5
+   shadow-2xl` — cópia literal de `components/Modal.tsx:78-95`, não valor novo deste pacote. */
+.overlay{position:relative;display:grid;place-items:center;padding:32px 16px;
+  background:rgba(18,17,15,.45);border-radius:var(--radius-card)}
+.dialog{width:100%;max-width:32rem;border-radius:16px;background:#fff;padding:24px;
+  box-shadow:var(--shadow-pop)}
+.dialog h2{margin:0;font-size:1.125rem;line-height:1.75rem;font-weight:600;color:var(--ink);border:0;padding:0}
+.mobile{max-width:342px;margin:0 auto}
+.mobile .panel{padding:20px}
+.mobile .row{padding:16px 20px}
+.mobile .nest>.panel-rows>.row{padding-left:36px}
+.mobile .nest .nest>.panel-rows>.row{padding-left:52px}
+.mobile .form-grid{grid-template-columns:1fr}
+.mobile .row .actions{width:100%}
+@media (max-width:560px){
+  .wrap{padding:28px 16px 64px}
+  .grid,.grid--2{grid-template-columns:minmax(0,1fr)}
+  .grid>*,.spec,.stage{min-width:0}
+  .form-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{padding:10px}
+  .spec{padding:10px}
+  .panel-heading{flex-wrap:wrap}
+  .panel-heading>.btn{width:100%}
+  table{display:block;overflow-x:auto}
+  h1{font-size:1.5rem;line-height:1.875rem}
+}
+code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package</p>
+<h1>Publicação do Discovery — a tela que decide o que o cliente vê</h1>
+<p class="lede">Classificação <code>INTERFACE_CHANGE</code> · <code>BROWSER_REQUIRED</code> ·
+Revisão <strong>1</strong> · Status <strong>Aguardando aprovação</strong> · 2026-09-03 · Issue
+<code>#108</code></p>
+<p class="note">Renderização auto-contida: abre sem build, sem toolchain e sem rede — sem
+<code>&lt;script&gt;</code> nenhum. Toda cor, corpo de texto, raio e sombra desta página é cópia
+literal dos tokens de <code>frontend/src/index.css</code>, com três exceções que vêm de arquivo de
+componente e estão nomeadas — a seção 8 reproduz as duas tabelas de procedência do
+<code>README.md</code>. A fonte Inter não é embutida; sem ela a página cai no
+fallback declarado no próprio token <code>--font-sans</code>, e o que muda é o desenho da letra,
+não a decisão em aprovação.</p>
+<p class="note"><strong>Este artefato é evidência para um gate humano.</strong> Não é
+implementação: nenhuma linha de <code>frontend/src/</code> ou <code>backend/</code> muda com esta
+entrega — as duas capturas (<code>board-desktop.png</code>, <code>board-mobile.png</code>) são o
+que a aprovação de fato referencia, porque um HTML depende de fonte, navegador e plataforma para
+renderizar.</p>
+<p class="note"><strong>Sete decisões, e elas não estão no mesmo estágio.</strong>
+<strong>A1 · B1 · C1</strong> foram escolha direta do aprovador em 2026-09-03;
+<strong>D · E · F · G</strong> são proposta do harness, e o registro de aprovação do
+<code>README.md</code> anota as quatro recomendações — <strong>D1 · E1 · F1 · G1</strong> — como
+aceitas na mesma data. A tela da seção 1 é o resultado das sete; a seção 2 guarda as alternativas
+recusadas, com o contra-argumento escrito junto, porque é isso que permite reabrir a decisão sem
+refazer o raciocínio.</p>
+<p class="note"><strong>O que este artefato submete é o visual, e ele é a segunda aprovação.</strong>
+As sete decisões foram escolhidas <em>antes</em> de este board e as capturas existirem —
+<code>design-approval.md</code> é literal sobre o ponto: <em>"a rendering depends on fonts, browser,
+and platform; the frozen capture is what the approval actually refers to"</em>. Decisão e visual são
+duas aprovações; só a primeira tem registro. A segunda é abrir
+<code>board-desktop.png</code> e <code>board-mobile.png</code> e dizer se o desenho cumpre o que as
+sete decisões prometem.</p>
+<p class="note"><strong>Uma correção de fato que muda o desenho.</strong> <code>unpublish</code>
+não derruba dependentes: ele é <em>recusado</em> por eles (409, <code>views.py:363-368</code>).
+Não existe "quem cai se este sair", existe "quem impede este de sair" — e por isso o item tem
+<strong>quatro</strong> estados, não três: visível·solto, visível·preso, oculto·pronto e
+oculto·bloqueado. Os quatro convivem na mesma tela da seção 1.</p>
+
+<h2>1 · A tela <code>/contas/:id/publicacao</code>, por inteiro</h2>
+<p class="note">Estado de sucesso, desktop, sob as sete decisões — <strong>A1 · B1 · C1</strong>
+(escolha direta) e <strong>D1 · E1 · F1 · G1</strong> (recomendações do harness, aceitas no
+registro de aprovação). Dados de exemplo:
+Transportadora Rota Norte, uma operação de logística — nenhum dado real, nenhum "Lorem ipsum".
+A hierarquia visual <strong>é</strong> a cadeia: mapa → achado → evidência aninhada sob o achado →
+dor, e a oportunidade no fim, porque ela agrupa dores de mais de um mapa.</p>
+
+<div class="stage">
+<a class="back-link"><svg class="ico" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Voltar para a conta</a>
+<header class="page-head" style="margin-top:12px">
+  <p class="eyebrow">Discovery estruturado</p>
+  <h1 style="font-size:1.75rem;line-height:2.125rem">Publicação do Discovery — Transportadora Rota Norte</h1>
+  <p>O que estiver visível aqui atravessa para a aba Discovery do portal do cliente. O que estiver oculto não existe para ele.</p>
+</header>
+
+<div class="toolbar" style="margin-bottom:24px">
+  <div class="filter-bar">
+    <span class="filter-chip filter-chip--on">5 visíveis ao cliente</span>
+    <span class="filter-chip">4 prontos para publicar</span>
+    <span class="filter-chip">4 bloqueados</span>
+  </div>
+  <div class="actions"><button class="btn">Publicar selecionados (7)</button></div>
+</div>
+
+<section class="panel panel--flush" style="margin-bottom:24px">
+  <div class="panel-heading" style="padding:16px 24px;border-bottom:1px solid var(--line);margin-bottom:0;align-items:center">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+      <div><h2>Mapas, achados, evidências e dores</h2>
+      <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 mapas · 4 achados · 3 evidências · 2 dores</p></div>
+    </div>
+  </div>
+  <div class="panel-rows">
+
+    <!-- ================= MAPA 1 — visível · preso ================= -->
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+      <div class="row-main">
+        <strong>Conferência de carga na expedição</strong>
+        <span>Mapa do processo · 7 etapas · levantado no Discovery de 12/08/2026</span>
+        <span>Este processo é a âncora de 2 achado(s) ou dor(es) publicado(s). Despublique-os primeiro.</span>
+      </div>
+      <div class="row-meta">
+        <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+        <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+      </div>
+    </div>
+
+    <div class="nest">
+      <div class="panel-rows">
+
+        <!-- Achado A — fato, visível · preso -->
+        <div class="row">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+          <div class="row-main">
+            <strong>O conferente refaz a conferência da carga porque o coletor não sincroniza com o WMS</strong>
+            <span>Achado · ancorado em "Conferência de carga na expedição"</span>
+            <span>Este é o último achado publicado e vivo de 1 dor(es) publicada(s). Despublique a dor primeiro, ou publique outro achado.</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--1">Fato</span>
+            <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+            <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+          </div>
+        </div>
+
+        <!-- Evidência A1 — visível · presa -->
+        <div class="nest">
+          <div class="panel-rows">
+            <div class="row">
+              <div class="row-main">
+                <strong>Entrevista com o supervisor de expedição — 12/08/2026</strong>
+                <span>Evidência · trecho de entrevista, registrado por Marina Kobayashi</span>
+                <span>Esta é a última evidência publicada e viva de 1 achado(s) publicado(s) como fato. Despublique o achado primeiro, ou publique outra evidência.</span>
+              </div>
+              <div class="row-meta">
+                <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+                <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Achado B — hipótese, oculto · pronto -->
+        <div class="row">
+          <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: O empilhamento fora do padrão na doca 3 explica parte das avarias">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+          <div class="row-main">
+            <strong>O empilhamento fora do padrão na doca 3 explica parte das avarias registradas</strong>
+            <span>Achado · ancorado em "Conferência de carga na expedição"</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--2">Hipótese</span>
+            <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+          </div>
+        </div>
+
+        <!-- Evidência B1 — oculta · pronta -->
+        <div class="nest">
+          <div class="panel-rows">
+            <div class="row">
+              <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Observação de campo na doca 3">
+              <div class="row-main">
+                <strong>Observação de campo na doca 3 — 14/08/2026</strong>
+                <span>Evidência · observação direta, registrada por Rafael Nunes</span>
+              </div>
+              <div class="row-meta">
+                <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Achado C — fato, oculto · bloqueado, marcado junto com a evidência que o destrava -->
+        <div class="row">
+          <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Cada nota fiscal reemitida por divergência de volume">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+          <div class="row-main">
+            <strong>Cada nota fiscal reemitida por divergência de volume consome 40 minutos de um analista</strong>
+            <span>Achado · ancorado em "Conferência de carga na expedição"</span>
+            <span>Falta: ao menos uma evidência publicada e viva</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--1">Fato</span>
+            <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+          </div>
+        </div>
+
+        <!-- Evidência C1 — oculta · pronta -->
+        <div class="nest">
+          <div class="panel-rows">
+            <div class="row">
+              <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Planilha de reemissões do setor fiscal">
+              <div class="row-main">
+                <strong>Planilha de reemissões do setor fiscal — 3º trimestre</strong>
+                <span>Evidência · dado do cliente, referência sem trecho transcrito</span>
+              </div>
+              <div class="row-meta">
+                <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dor P1 — visível · presa -->
+        <div class="row">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+          <div class="row-main">
+            <strong>Retrabalho na conferência de carga por falta de sincronização do coletor</strong>
+            <span>Dor · impacto operacional · confirmada</span>
+            <span>Esta é a última dor publicada e viva de 1 oportunidade(s) de melhoria publicada(s). Despublique a oportunidade primeiro, ou publique outra dor.</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+            <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+          </div>
+        </div>
+
+        <!-- Dor P2 — oculta · bloqueada, marcada: foi ela que puxou o achado C para o lote -->
+        <div class="row">
+          <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Reemissão de nota fiscal por divergência de volume">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+          <div class="row-main">
+            <strong>Reemissão de nota fiscal por divergência de volume entre a carga e o romaneio</strong>
+            <span>Dor · impacto financeiro · confirmada</span>
+            <span>Falta: ao menos um achado publicado e vivo</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ================= MAPA 2 — oculto · pronto ================= -->
+    <div class="row">
+      <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Roteirização de entregas">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+      <div class="row-main">
+        <strong>Roteirização de entregas</strong>
+        <span>Mapa do processo · 5 etapas · levantado no Discovery de 19/08/2026</span>
+      </div>
+      <div class="row-meta">
+        <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+      </div>
+    </div>
+
+    <div class="nest">
+      <div class="panel-rows">
+        <!-- Achado D — hipótese, oculto · bloqueado pela âncora, marcado com o mapa que o destrava -->
+        <div class="row">
+          <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: A roteirização manual acrescenta cerca de 90 km por dia">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+          <div class="row-main">
+            <strong>A roteirização manual acrescenta cerca de 90 km por dia à frota de entrega urbana</strong>
+            <span>Achado · ancorado em "Roteirização de entregas"</span>
+            <span>Falta: o processo que ele cita publicado e vivo</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--2">Hipótese</span>
+            <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section class="panel panel--flush">
+  <div class="panel-heading" style="padding:16px 24px;border-bottom:1px solid var(--line);margin-bottom:0;align-items:center">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+      <div><h2>Improvement Opportunities</h2>
+      <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">O topo da escada — agrupa dores de mais de um mapa, e por isso fica fora da árvore</p></div>
+    </div>
+  </div>
+  <div class="panel-rows">
+    <!-- O1 — visível · solta: nada depende dela, o botão é o único habilitado da tela -->
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+      <div class="row-main">
+        <strong>Sincronizar o coletor de expedição com o WMS em tempo real</strong>
+        <span>Oportunidade de melhoria · 1 dor agrupada · Opportunity Score 74</span>
+      </div>
+      <div class="row-meta">
+        <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+        <div class="actions"><button class="btn btn--secondary">Ocultar do cliente</button></div>
+      </div>
+    </div>
+    <!-- O2 — oculta · bloqueada, e não marcada: a caixa existe e está vazia -->
+    <div class="row">
+      <input type="checkbox" class="check" aria-label="Selecionar para publicar: Padronizar o empilhamento e a checagem de avaria na doca 3">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+      <div class="row-main">
+        <strong>Padronizar o empilhamento e a checagem de avaria na doca 3</strong>
+        <span>Oportunidade de melhoria · 1 dor agrupada · Opportunity Score 58</span>
+        <span>Falta: ao menos uma dor publicada e viva</span>
+      </div>
+      <div class="row-meta">
+        <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+
+<p class="note"><strong>Os quatro estados estão todos aí, e é de propósito que convivam.</strong>
+<em>Visível · preso</em>: o mapa 1, o achado A, a evidência A1 e a dor P1 — botão desabilitado e a
+frase do 409 na linha. <em>Visível · solto</em>: a oportunidade "Sincronizar o coletor" — o único
+botão habilitado da tela, porque nada publicado pende dela. <em>Oculto · pronto</em>: o achado B,
+as evidências B1 e C1 e o mapa 2 — nada falta, e a linha não traz frase. <em>Oculto ·
+bloqueado</em>: o achado C, a dor P2, o achado D e a oportunidade "Padronizar o empilhamento" —
+com a frase do que falta na linha. Os oito itens não publicados têm caixa de seleção, os quatro
+bloqueados inclusive: o que separa os dois estados é a frase, não a caixa.</p>
+
+<p class="note"><strong>A caixa existe em todo item não publicado, e marcar cascateia nos dois
+sentidos</strong> (decisão F1). <em>Para baixo</em>, marcando a subárvore: o mapa 2 foi marcado e
+levou o achado D junto. <em>Para cima</em>, marcando o que aquele item precisa que suba antes: a
+dor P2 foi marcada e levou o achado C, que já tinha a evidência C1 marcada embaixo dele. É por isso
+que o item bloqueado é selecionável — na conta em que nada foi publicado ainda, <strong>todo filho
+está bloqueado até o pai subir</strong>, e sem a cascata o lote deixaria de fora justamente o caso
+mais comum: o operador voltaria a publicar um por vez, esperando a tela recarregar entre cliques.
+A frase do que falta continua na linha, e o papel dela muda de "por que você não pode" para "o que
+precisa ir junto" — é a mesma frase do servidor nos dois casos. A oportunidade "Padronizar o
+empilhamento" mostra o outro lado: bloqueada, com a caixa disponível e vazia, porque quem seleciona
+escolheu deixá-la para depois.</p>
+
+<p class="note"><strong>O selo é sempre o último da <code>.row-meta</code>, e sempre com ícone.</strong>
+Na linha do achado A ele divide a faixa com o <code>state--1</code> "Fato"
+(<code>STATUS_BADGE</code>, <code>ProcessDetailPage.tsx:102-104</code>); na do achado B, com o
+<code>state--2</code> "Hipótese". É exatamente essa convivência que a decisão D julga: o selo de
+publicação é o único sólido escuro, o único com ícone de olho, e o único que não usa a palavra
+<em>hipótese</em>. A seção 2 põe D1 e D2 lado a lado nessas mesmas linhas.</p>
+
+<p class="note"><strong>Toda frase da linha vem do servidor</strong> (decisão E1): o impedimento é
+<code>publication.frase_do_impedimento</code> literal — inclusive a contagem e o
+"despublique … primeiro" —, e o que segue "Falta:" é <code>publication.frase_do_que_falta</code>
+literal. Só o rótulo <code>Falta:</code> é da superfície. Nenhuma delas é reescrita em TypeScript,
+que é o que o critério de aceite da issue proíbe.</p>
+
+<p class="note"><strong>O que o operador vê e o que o cliente vê não são a mesma coisa.</strong> A
+evidência aparece aqui pela fonte e pela data — <code>raw_excerpt</code> e
+<code>content_hash</code> não atravessam para o portal, e o board não os desenha nem aqui, para
+não sugerir que atravessam.</p>
+
+<p class="note"><strong>Os sete selecionados sobem numa ordem só</strong> — a evidência C1 antes do
+achado C, o achado C antes da dor P2; o mapa 2 antes do achado D. A tela conhece <strong>a
+ordem</strong> da cadeia (decisão F1) e nada mais: ela nunca decide <em>se</em> um item pode subir.
+Quem decide é o servidor, item a item; concluir "isto vai passar" seria reexpressar a regra.
+Publicá-los destrava a oportunidade "Padronizar o empilhamento", que ficou fora do lote por escolha
+de quem seleciona — e não porque a tela a tenha impedido.</p>
+
+<h2>2 · As quatro decisões propostas pelo harness</h2>
+<p class="note">Desenhadas lado a lado: a recomendação e a alternativa que ela recusa.
+<strong>A · B · C não aparecem aqui</strong> porque foram escolha direta do aprovador — a tela da
+seção 1 é o resultado delas. <strong>D · E · F · G</strong> são a proposta do harness, e as quatro
+recomendações estão anotadas como aceitas no registro de aprovação; o que este board acrescenta é o
+<em>desenho</em> delas, que é o que ainda não foi aprovado. A alternativa fica desenhada de
+propósito: sem o contra-argumento à vista, reabrir a decisão mais tarde custaria refazer o
+raciocínio do zero.</p>
+
+<h3>Decisão D — dois selos, ou quatro</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>D1 — recomendada · dois selos + frase</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>O conferente refaz a conferência da carga</strong></div>
+        <div class="row-meta">
+          <span class="state state--1">Fato</span>
+          <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+        </div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>O empilhamento fora do padrão explica parte das avarias</strong><span>Nada falta — pronto para publicar</span></div>
+        <div class="row-meta">
+          <span class="state state--2">Hipótese</span>
+          <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+        </div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Cada nota reemitida consome 40 minutos de um analista</strong><span>Falta: ao menos uma evidência publicada e viva</span></div>
+        <div class="row-meta">
+          <span class="state state--1">Fato</span>
+          <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+        </div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>A roteirização manual acrescenta 90 km por dia</strong><span>Nenhuma classificação epistêmica registrada · Falta: o processo que ele cita publicado e vivo</span></div>
+        <div class="row-meta">
+          <span class="state state--off">Desconhecido</span>
+          <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+        </div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">Três eixos separam o selo de publicação dos vizinhos, e
+    nenhum é só matiz. <strong>Forma</strong>: é o único sólido escuro, e o único com ícone —
+    <code>state--1</code> e <code>state--2</code> são pastel e nunca têm ícone.
+    <strong>Copy</strong>: "Visível/Oculto" não compartilha uma palavra com
+    "Fato"/"Hipótese"/"Desconhecido". <strong>Posição</strong>: sempre o último da faixa. Repare na
+    quarta linha: mesmo com dois <code>state--off</code> lado a lado, o ícone e a copy dizem qual é
+    qual. O que falta vira frase em <code>.row-main span</code>, junto da ação.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>D2 — alternativa · quatro selos coloridos</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>O conferente refaz a conferência da carga</strong></div>
+        <div class="row-meta">
+          <span class="state state--1">Fato</span>
+          <span class="state state--1">Publicado</span>
+        </div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>O empilhamento fora do padrão explica parte das avarias</strong></div>
+        <div class="row-meta">
+          <span class="state state--2">Hipótese</span>
+          <span class="state state--off">Pronto</span>
+        </div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Cada nota reemitida consome 40 minutos de um analista</strong></div>
+        <div class="row-meta">
+          <span class="state state--1">Fato</span>
+          <span class="state state--2">Bloqueado</span>
+        </div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>A roteirização manual acrescenta 90 km por dia</strong></div>
+        <div class="row-meta">
+          <span class="state state--off">Desconhecido</span>
+          <span class="state state--off">Pronto</span>
+        </div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0"><strong>A colisão é medida, não estética.</strong> Na
+    terceira linha, "Bloqueado" em <code>state--2</code> fica âmbar ao lado de um "Fato" verde e a
+    um clique de uma "Hipótese" âmbar que significa outra coisa. Na quarta, "Pronto" em
+    <code>state--off</code> fica cinza <em>colado</em> num "Desconhecido" cinza: mesma pastilha,
+    mesma cor, significados diferentes, mesma linha. E na primeira, "Publicado" em
+    <code>state--1</code> repete o verde de "Fato" — o operador lê duas confirmações e não sabe
+    qual pergunta cada uma responde. A paleta de <code>.state</code> já está inteira ocupada por
+    <code>STATUS_BADGE</code> e <code>sustentacaoBadgeClass</code>.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: D1.</strong> A pergunta que o selo responde é binária — <em>o
+cliente vê isto?</em> "Preso" e "bloqueado" não são estados de visibilidade: são respostas a
+"posso mudar isto?", que é pergunta de ação e por isso mora junto da ação, como frase.
+<strong>Contra-argumento registrado:</strong> D2 deixaria os quatro estados legíveis sem ler frase
+nenhuma, e a faixa de contadores ficaria redundante com as linhas em vez de complementá-las.</p>
+
+<h3>Decisão E — o campo derivado carrega frases, ou só chaves</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>E1 — recomendada · chaves <em>e</em> frases, do servidor</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Cada nota reemitida consome 40 minutos de um analista</strong><span>Falta: ao menos uma evidência publicada e viva</span></div>
+        <div class="row-meta"><span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span></div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Retrabalho na conferência de carga</strong><span>Esta é a última dor publicada e viva de 1 oportunidade(s) de melhoria publicada(s). Despublique a oportunidade primeiro, ou publique outra dor.</span></div>
+        <div class="row-meta">
+          <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+          <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+        </div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">As frases já existem no backend e já são copy de
+    produto: <code>publication.ROTULOS</code> (<code>publication.py:82-87</code>) e
+    <code>_IMPEDIMENTO</code> (<code>:91-103</code>) compõem a mensagem do 400 e do 409 que o
+    operador leria de qualquer jeito. <strong>As chaves continuam saindo</strong> —
+    <code>missing: ["published_evidence"]</code> — e é isso que permite teste e ramificação futura
+    sem parsear texto.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>E2 — alternativa · só chaves, no molde do PROVE</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Cada nota reemitida consome 40 minutos de um analista</strong><span style="color:var(--danger)">Falta: evidência publicada <em>← frase escrita em TypeScript</em></span></div>
+        <div class="row-meta"><span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span></div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Retrabalho na conferência de carga</strong><span style="color:var(--danger)">Presa por 1 oportunidade <em>← segunda redação da mesma recusa</em></span></div>
+        <div class="row-meta">
+          <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+          <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+        </div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">Mantém a simetria com
+    <code>ProveExperiment.missing_to_start</code>, que é molde vivo do produto — e cobra a
+    duplicação: a mesma frase passa a sair de dois lugares, e as duas divergem no primeiro
+    conserto. Quem clicar mesmo assim lê a redação do servidor no 400, diferente da que a linha
+    mostrava.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: E1.</strong> A diferença para o PROVE é factual, não de
+gosto: lá os rótulos <em>não existiam</em> no backend; aqui existem, em português, e já são a
+mensagem da API. <code>ImprovementOpportunity</code> não tem entrada em <code>ROTULOS</code> nem em
+<code>_IMPEDIMENTO</code> — ela é o topo da escada, sai com <code>blocked_by: 0</code> e
+<code>blocked_phrase: ""</code>, e isso é estado normal, não lacuna.</p>
+
+<h3>Decisão F — lote na ordem da cadeia, ou um botão por item</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>F1 — recomendada · seleção que cascateia nos dois sentidos + ordem canônica</figcaption>
+    <div class="stage">
+      <div class="toolbar" style="padding:12px 16px;margin-bottom:12px">
+        <div class="filter-bar">
+          <span class="filter-chip filter-chip--on">5 visíveis</span>
+          <span class="filter-chip">4 prontos</span>
+          <span class="filter-chip">4 bloqueados</span>
+        </div>
+        <div class="actions"><button class="btn">Publicar selecionados (7)</button></div>
+      </div>
+      <div class="panel panel--flush"><div class="panel-rows">
+        <div class="row" style="padding:10px 16px">
+          <input type="checkbox" class="check" checked aria-label="Selecionar a subárvore de Roteirização de entregas">
+          <div class="row-main"><strong>Roteirização de entregas</strong><span>↓ Marcar o mapa marca o que pende dele</span></div>
+        </div>
+        <div class="nest"><div class="panel-rows">
+          <div class="row" style="padding:10px 16px 10px 44px">
+            <input type="checkbox" class="check" checked aria-label="Selecionar achado bloqueado: A roteirização manual acrescenta 90 km por dia">
+            <div class="row-main"><strong>A roteirização manual acrescenta 90 km por dia</strong><span>↑ Bloqueado, e selecionável: marcá-lo marca o mapa que precisa subir antes</span><span>Falta: o processo que ele cita publicado e vivo</span></div>
+          </div>
+        </div></div>
+      </div></div>
+      <p class="type-meta" style="color:var(--muted);margin:10px 0 0;text-align:center">
+        Process&nbsp;<svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="m9 18 6-6-6-6"/></svg>&nbsp;Evidence&nbsp;<svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="m9 18 6-6-6-6"/></svg>&nbsp;Finding&nbsp;<svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="m9 18 6-6-6-6"/></svg>&nbsp;PainPoint&nbsp;<svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="m9 18 6-6-6-6"/></svg>&nbsp;ImprovementOpportunity
+      </p>
+    </div>
+    <p class="note" style="margin-bottom:0"><strong>A caixa existe em todo item não publicado,
+    inclusive no bloqueado</strong>, e a marca cascateia nos dois sentidos: para baixo marcando a
+    subárvore, para cima marcando o que aquele item precisa que suba antes. É isso que faz o lote
+    existir — na conta em que nada foi publicado ainda, todo filho está bloqueado até o pai subir.
+    A tela conhece <strong>a ordem</strong> da cadeia e só a ordem: ela dispara os <code>POST</code>
+    um a um nessa sequência. Ela nunca decide <em>se</em> um item pode ser publicado — quem decide é
+    o servidor, item a item, e cada falha volta com a frase dele. Ordenar não é reexpressar a regra;
+    concluir "isto vai passar" seria.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>F2 — alternativa · sem lote, um botão por item</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row" style="padding:10px 16px">
+        <div class="row-main"><strong>Roteirização de entregas</strong></div>
+        <div class="row-meta"><span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto</span><div class="actions"><button class="btn btn--secondary">Publicar</button></div></div>
+      </div>
+      <div class="row" style="padding:10px 16px">
+        <div class="row-main"><strong>Planilha de reemissões do setor fiscal</strong></div>
+        <div class="row-meta"><span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto</span><div class="actions"><button class="btn btn--secondary">Publicar</button></div></div>
+      </div>
+      <div class="row" style="padding:10px 16px">
+        <div class="row-main"><strong>Observação de campo na doca 3</strong></div>
+        <div class="row-meta"><span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto</span><div class="actions"><button class="btn btn--secondary">Publicar</button></div></div>
+      </div>
+      <div class="row" style="padding:10px 16px">
+        <div class="row-main"><strong>O empilhamento fora do padrão explica parte das avarias</strong><span style="color:var(--danger)">…e mais onze cliques, na ordem que quem clica precisa deduzir</span></div>
+        <div class="row-meta"><span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto</span><div class="actions"><button class="btn btn--secondary">Publicar</button></div></div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">Mais simples de implementar, e é o operador que paga:
+    publicar um Discovery vira quinze cliques em ordem que ele deduz por tentativa e erro — clicar
+    fora de ordem devolve 400 e ele volta um degrau. F3 (endpoint de lote no backend) removeria
+    isso por completo, ao custo de superfície de API nova e de um segundo lugar que precisa
+    concordar sobre a ordem; a issue não o pede.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: F1.</strong> Publicar um Discovery é decisão sobre o conjunto
+— é a decisão A já tomada. <strong>Contra-argumento registrado:</strong> F1 põe no front um
+conhecimento (a ordem) que hoje só existe no backend, ainda que não seja a regra em si.</p>
+
+<h3>Decisão G — ocultar do cliente</h3>
+<div class="grid grid--2">
+  <figure class="spec spec--pick"><figcaption>G1 — recomendada · botão ausente no preso, diálogo no solto</figcaption>
+    <div class="stage"><div class="panel panel--flush"><div class="panel-rows">
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Retrabalho na conferência de carga</strong><span>Esta é a última dor publicada e viva de 1 oportunidade(s) de melhoria publicada(s). Despublique a oportunidade primeiro, ou publique outra dor.</span></div>
+        <div class="row-meta">
+          <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+          <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+        </div>
+      </div>
+      <div class="row" style="padding:12px 16px">
+        <div class="row-main"><strong>Sincronizar o coletor de expedição com o WMS</strong><span>Nada publicado depende desta oportunidade</span></div>
+        <div class="row-meta">
+          <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+          <div class="actions"><button class="btn btn--secondary">Ocultar do cliente</button></div>
+        </div>
+      </div>
+    </div></div></div>
+    <p class="note" style="margin-bottom:0">O botão desabilitado esconde a razão de quem não lê a
+    linha — e é exatamente por isso que a frase do impedimento fica <strong>na linha</strong>, e
+    não num <code>title=</code>. No item solto, o <code>ConfirmDialog</code> antes de executar: é a
+    seção 3.</p>
+  </figure>
+
+  <figure class="spec"><figcaption>G2 — alternativa · botão sempre habilitado, 409 depois do clique</figcaption>
+    <div class="stage">
+      <div class="panel panel--flush"><div class="panel-rows">
+        <div class="row" style="padding:12px 16px">
+          <div class="row-main"><strong>Retrabalho na conferência de carga</strong></div>
+          <div class="row-meta">
+            <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+            <div class="actions"><button class="btn btn--secondary">Ocultar do cliente</button></div>
+          </div>
+        </div>
+      </div></div>
+      <p class="alert--error" role="alert" style="margin:12px 0 0"><svg class="ico" viewBox="0 0 24 24" style="vertical-align:-3px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Esta é a última dor publicada e viva de 1 oportunidade(s) de melhoria publicada(s). Despublique a oportunidade primeiro, ou publique outra dor. O estado mudou desde que esta tela carregou — recarregue para ver o que vale agora.</p>
+    </div>
+    <p class="note" style="margin-bottom:0"><strong>É o botão que sempre falha</strong> — o defeito
+    que <code>CLAUDE.md</code> nomeia para o PROVE: habilitar o botão de um <code>POST</code> que o
+    servidor nega. E o alerta chega com a orientação de 409 (<code>erros.ts:16</code>) sugerindo
+    recarregar, quando nada mudou: o estado impeditivo já estava na tela quando ela carregou.</p>
+  </figure>
+</div>
+<p class="note"><strong>Recomendação: G1.</strong> O diálogo no caso solto não é cerimônia: ocultar
+é retirar do cliente algo que ele <strong>já está vendo</strong>, e o <code>ConfirmDialog</code> já
+é o padrão da casa para isso em oito páginas, incluindo a <code>ProcessDetailPage:287</code>.</p>
+
+<h2>3 · Os demais estados</h2>
+<p class="note">Um por <code>.stage</code>. Todos os da tabela "Estados desenhados" do
+<code>README.md</code>, menos um — a justificativa do que falta está no fim desta seção.</p>
+
+<h3>Carregando</h3>
+<div class="stage">
+  <div class="stack">
+    <div class="skeleton" style="height:40px;width:320px"></div>
+    <div class="skeleton" style="height:56px"></div>
+    <div style="height:280px;border-radius:12px;background:#fff"></div>
+  </div>
+</div>
+<p class="note" style="margin-bottom:0">Mesmo esqueleto de <code>ProcessDetailPage.tsx:196</code> —
+não um estado de carregamento novo. <strong>Sem texto de espera</strong>: um "Carregando…" escrito
+ao lado de um esqueleto diz duas vezes a mesma coisa, e a segunda não é lida.</p>
+
+<hr class="sep">
+
+<h3>Vazio — a conta não tem Discovery</h3>
+<div class="stage">
+  <section class="panel">
+    <div class="panel-heading">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+        <div><h2>Mapas, achados, evidências e dores</h2>
+        <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">Nenhum processo</p></div>
+      </div>
+    </div>
+    <p class="empty-state">Nenhum processo mapeado para esta conta.</p>
+  </section>
+</div>
+<p class="note" style="margin-bottom:0">A mesma frase que a <code>AccountDetailPage</code> já usa
+na seção "Processos mapeados" — sem publicação não há o que publicar, e a tela não inventa uma
+segunda redação para o mesmo vazio.</p>
+
+<hr class="sep">
+
+<h3>Vazio — nada pendente</h3>
+<div class="stage">
+  <div class="toolbar" style="margin-bottom:16px">
+    <div class="filter-bar">
+      <span class="filter-chip filter-chip--on">13 visíveis ao cliente</span>
+      <span class="filter-chip">0 prontos para publicar</span>
+      <span class="filter-chip">0 bloqueados</span>
+    </div>
+    <div class="actions"><button class="btn" disabled>Publicar selecionados (0)</button></div>
+  </div>
+  <p class="empty-state" style="margin-bottom:16px">Todo o Discovery desta conta já está visível ao cliente. Nada aguarda publicação.</p>
+  <div class="panel panel--flush"><div class="panel-rows">
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+      <div class="row-main"><strong>Conferência de carga na expedição</strong><span>Este processo é a âncora de 4 achado(s) ou dor(es) publicado(s). Despublique-os primeiro.</span></div>
+      <div class="row-meta">
+        <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+        <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+      </div>
+    </div>
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+      <div class="row-main"><strong>Roteirização de entregas</strong><span>Este processo é a âncora de 1 achado(s) ou dor(es) publicado(s). Despublique-os primeiro.</span></div>
+      <div class="row-meta">
+        <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+        <div class="actions"><button class="btn btn--secondary" disabled>Ocultar do cliente</button></div>
+      </div>
+    </div>
+  </div></div>
+</div>
+<p class="note" style="margin-bottom:0"><strong>A árvore continua listada</strong>, e isso é a
+diferença entre os dois vazios: aqui não falta conteúdo, falta pendência. Esconder a lista tiraria
+justamente a resposta à pergunta que traz alguém a esta tela — <em>o que o cliente está vendo?</em>
+— e deixaria a ocultação sem porta.</p>
+
+<hr class="sep">
+
+<h3>Erro de carga</h3>
+<div class="stage">
+  <p class="alert--error" role="alert"><svg class="ico" viewBox="0 0 24 24" style="vertical-align:-3px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Não foi possível carregar o Discovery desta conta.</p>
+</div>
+<p class="note" style="margin-bottom:0">Texto de <code>mensagemDeFalha</code>
+(<code>erros.ts:25-32</code>): o <code>detail</code> do backend vem na frente e a orientação por
+código vem atrás, quando existe. <code>.alert--error</code> e não <code>.state--3</code> — um selo
+rotula uma linha, um alerta interrompe a tela, e só o segundo leva <code>role="alert"</code>.</p>
+
+<hr class="sep">
+
+<h3>Lote em progresso</h3>
+<div class="stage">
+  <div class="toolbar" style="margin-bottom:16px">
+    <div class="filter-bar">
+      <span class="filter-chip filter-chip--on">5 visíveis ao cliente</span>
+      <span class="filter-chip">4 prontos para publicar</span>
+      <span class="filter-chip">4 bloqueados</span>
+    </div>
+    <div class="actions"><button class="btn" disabled>Aguarde…</button></div>
+  </div>
+  <div class="panel panel--flush"><div class="panel-rows">
+    <div class="row">
+      <input type="checkbox" class="check" checked disabled aria-label="Roteirização de entregas">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+      <div class="row-main"><strong>Roteirização de entregas</strong><span><svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px;color:var(--success)"><path d="M20 6 9 17l-5-5"/></svg> Publicado agora — 1º na ordem da cadeia</span></div>
+      <div class="row-meta">
+        <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+      </div>
+    </div>
+    <div class="row">
+      <input type="checkbox" class="check" checked disabled aria-label="Planilha de reemissões do setor fiscal">
+      <div class="row-main"><strong>Planilha de reemissões do setor fiscal — 3º trimestre</strong><span>Publicando… — 2º na ordem da cadeia</span></div>
+      <div class="row-meta">
+        <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+      </div>
+    </div>
+    <div class="row">
+      <input type="checkbox" class="check" checked disabled aria-label="Observação de campo na doca 3">
+      <div class="row-main"><strong>Observação de campo na doca 3 — 14/08/2026</strong><span>Na fila — 3º na ordem da cadeia</span></div>
+      <div class="row-meta">
+        <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+      </div>
+    </div>
+  </div></div>
+</div>
+<p class="note" style="margin-bottom:0"><strong>Nenhum selo novo para "publicando".</strong> O item
+em curso continua oculto — porque ele <em>está</em> oculto até o <code>POST</code> voltar —, e o
+que muda é a frase da linha e a caixa de seleção travada. Inventar um terceiro selo aqui refaria a
+colisão que a decisão D recusa. "Aguarde…" no botão é a copy que o <code>ConfirmDialog</code> já
+usa (<code>Modal.tsx:119</code>).</p>
+
+<hr class="sep">
+
+<h3>Lote com falha parcial</h3>
+<div class="stage">
+  <p class="alert--error" role="alert"><svg class="ico" viewBox="0 0 24 24" style="vertical-align:-3px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> 2 de 9 itens não foram publicados. Os 7 que passaram continuam visíveis ao cliente — nada foi desfeito.</p>
+  <div class="panel panel--flush"><div class="panel-rows">
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+      <div class="row-main"><strong>Roteirização de entregas</strong><span><svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px;color:var(--success)"><path d="M20 6 9 17l-5-5"/></svg> Publicado</span></div>
+      <div class="row-meta">
+        <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+        <div class="actions"><button class="btn btn--secondary">Ocultar do cliente</button></div>
+      </div>
+    </div>
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+      <div class="row-main">
+        <strong>Cada nota fiscal reemitida por divergência de volume consome 40 minutos de um analista</strong>
+        <span style="color:var(--danger)"><svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Publicar exige ao menos uma evidência publicada e viva. O que o cliente vê precisa ter sustentação publicada embaixo.</span>
+      </div>
+      <div class="row-meta">
+        <span class="state state--1">Fato</span>
+        <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+      </div>
+    </div>
+    <div class="row">
+      <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+      <div class="row-main">
+        <strong>Padronizar o empilhamento e a checagem de avaria na doca 3</strong>
+        <span style="color:var(--danger)"><svg class="ico ico--12" viewBox="0 0 24 24" style="vertical-align:-2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Publicar exige ao menos uma dor publicada e viva. O que o cliente vê precisa ter sustentação publicada embaixo.</span>
+      </div>
+      <div class="row-meta">
+        <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+      </div>
+    </div>
+  </div></div>
+</div>
+<p class="note" style="margin-bottom:0"><strong>Estado desenhado, não caso de borda.</strong> Nove
+selecionados, dois recusados: os sete que passaram ficam publicados, os dois recusados recebem o
+motivo <strong>do servidor</strong> na própria linha, e nada é desfeito. Desfazer os sete para
+"deixar a tela consistente" apagaria sete decisões humanas por causa de duas recusas — é o
+argumento das duas guardas de arquivamento (FDD 045, FDD 048).</p>
+
+<hr class="sep">
+
+<h3>Diálogo de ocultar</h3>
+<div class="stage" style="padding:0">
+  <div class="overlay">
+    <div class="dialog">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2>Ocultar do cliente</h2>
+        <span style="display:grid;width:32px;height:32px;place-items:center;border-radius:var(--radius-control);color:var(--slate-600)">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </span>
+      </div>
+      <div style="font-size:var(--text-body);color:var(--slate-600)">A oportunidade
+        <strong style="color:var(--ink)">Sincronizar o coletor de expedição com o WMS em tempo real</strong>
+        sai da aba Discovery do portal do cliente — ele deixa de ver o que está vendo hoje. Nada é
+        apagado: o registro continua aqui, e publicar de novo é um clique.</div>
+      <div style="margin-top:24px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:12px">
+        <button class="btn btn--secondary">Cancelar</button>
+        <button class="btn btn--danger">Ocultar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note" style="margin-bottom:0"><code>ConfirmDialog</code> de
+<code>components/Modal.tsx:106-121</code>, sem uma linha nova: <code>.btn--secondary</code> para
+"Cancelar", <code>.btn--danger</code> para confirmar — o único botão vermelho do produto, e ele só
+aparece quando a ação já foi pedida. A geometria do painel (overlay <code>bg-ink/45</code>, cartão
+<code>rounded-2xl</code> + <code>shadow</code>) é cópia literal de <code>Modal.tsx:78-95</code>, e
+não valor deste pacote — ela é a primeira linha da segunda tabela da seção 8, a dos três valores
+que vêm de componente e não da folha.</p>
+
+<hr class="sep">
+
+<h3>Não autorizado — <strong>não desenhado, e declarado</strong></h3>
+<div class="stage">
+  <div class="panel reserved" style="text-align:center">
+    <p class="type-label" style="color:var(--brand-700);margin:0 0 6px;text-transform:uppercase;letter-spacing:.06em">Estado inalcançável</p>
+    <p class="note" style="margin:0 auto;max-width:60ch">Os três papéis têm os cinco recursos
+    (<code>permissions.py:159-166</code> Vendas, <code>:205-216</code> Entrega; admin pelo
+    <code>is_admin_role</code>), e sem sessão o <code>App</code> nunca resolve a rota
+    (<code>App.tsx:99</code>). Não há caminho que leve alguém autenticado a esta tela sem poder
+    ler o que ela mostra. <strong>Declarado, não omitido.</strong></p>
+  </div>
+</div>
+
+<h2>4 · <code>ProcessDetailPage</code> — o selo de leitura, sem ação</h2>
+<p class="note">Recorte do cabeçalho do processo (<code>:296-299</code>), de uma linha de achado
+(<code>:415</code>) e de uma linha de dor (<code>:428-460</code>). <strong>Acrescenta selo, não
+acrescenta ação</strong> (decisão A1): quem publica é a tela da seção 1, e daqui só se vai até
+lá.</p>
+<div class="stage">
+  <header class="page-head" style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px">
+    <div>
+      <p class="eyebrow">Discovery estruturado</p>
+      <h1 style="font-size:1.75rem;line-height:2.125rem">Conferência de carga na expedição</h1>
+      <p>O mapa da operação de Transportadora Rota Norte — o dado que se soma, não a narrativa que se entrega.</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+      <button class="btn btn--secondary">Arquivar processo</button>
+    </div>
+  </header>
+
+  <section class="panel panel--flush" style="margin-bottom:16px">
+    <div class="panel-heading" style="padding:16px 24px;border-bottom:1px solid var(--line);margin-bottom:0;align-items:center">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+        <div><h2>Achados</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">3 achados · nunca só entrevista, e nunca hipótese apresentada como fato</p></div>
+      </div>
+    </div>
+    <div class="panel-rows">
+      <div class="row">
+        <span style="display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;border-radius:var(--radius-card);background:var(--slate-100);color:var(--slate-600)"><svg class="ico" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+        <div class="row-main"><strong>O conferente refaz a conferência da carga porque o coletor não sincroniza com o WMS</strong><span>Entrevista</span></div>
+        <div class="row-meta">
+          <span class="state state--1">Fato</span>
+          <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+        </div>
+      </div>
+      <div class="row">
+        <span style="display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;border-radius:var(--radius-card);background:var(--slate-100);color:var(--slate-600)"><svg class="ico" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6h3a1 1 0 0 1 1 1v3a2 2 0 0 1-2 2H4a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></svg></span>
+        <div class="row-main"><strong>O empilhamento fora do padrão na doca 3 explica parte das avarias registradas</strong><span>Observação de campo</span></div>
+        <div class="row-meta">
+          <span class="state state--2">Hipótese</span>
+          <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+          <div class="actions"><button class="btn btn--secondary">Promover a fato</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel panel--flush" style="margin-bottom:16px">
+    <div class="panel-heading" style="padding:16px 24px;border-bottom:1px solid var(--line);margin-bottom:0;align-items:center">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+        <div><h2>Pain points</h2><p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">2 dores observadas neste processo</p></div>
+      </div>
+    </div>
+    <div class="panel-rows">
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+        <div class="row-main"><strong>Retrabalho na conferência de carga por falta de sincronização do coletor</strong><span>Impacto: Operacional · agrupado em "Sincronizar o coletor de expedição com o WMS em tempo real"</span></div>
+        <div class="row-meta">
+          <span class="state state--1">Agrupado</span>
+          <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+          <div class="actions"><button class="btn btn--secondary">Descartar</button></div>
+        </div>
+      </div>
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+        <div class="row-main"><strong>Reemissão de nota fiscal por divergência de volume entre a carga e o romaneio</strong><span>Impacto: Financeiro</span></div>
+        <div class="row-meta">
+          <span class="state state--off">Sem oportunidade</span>
+          <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+          <div class="actions"><button class="btn btn--secondary">Descartar</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <a class="back-link">Abrir a publicação do Discovery desta conta<svg class="ico" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a>
+</div>
+<p class="note"><strong>Três selos numa linha, e nenhum se confunde com o outro.</strong> Na
+segunda linha de dor convivem "Sem oportunidade" (<code>state--off</code>, cinza, sem ícone) e
+"Oculto do cliente" (<code>state--off</code>, cinza, <strong>com</strong> ícone de olho cortado) —
+é o caso mais apertado da decisão D, e é o ícone mais a copy que o resolvem. Trocar por D2 poria
+ali um terceiro cinza escrito "Pronto".</p>
+<p class="note" style="margin-bottom:0"><strong>Nenhuma ação de publicação aqui.</strong> Os botões
+"Promover a fato" e "Descartar" já existem e não mudam; o único acréscimo além do selo é o link
+para a tela da seção 1.</p>
+
+<h2>5 · A porta de entrada, em <code>AccountDetailPage</code></h2>
+<p class="note">Terceiro botão da faixa que já tem "Abrir a priorização" e "Abrir o valor gerado"
+(<code>AccountDetailPage.tsx:633-638</code>). A faixa fica <strong>fora</strong> de qualquer painel,
+como já está hoje, e a tela <strong>não entra no menu lateral</strong>: publicação é sempre de uma
+conta, e um item de menu que abre perguntando "qual conta?" é um beco (DAP priorização r1 decisão
+A1; DAP <code>dap-prove-e-valor-r1</code> decisão D1).</p>
+<div class="stage">
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    <a class="btn btn--secondary"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Abrir a priorização</a>
+    <a class="btn btn--secondary"><svg class="ico" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>Abrir o valor gerado</a>
+    <a class="btn btn--secondary"><svg class="ico" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Abrir a publicação</a>
+  </div>
+</div>
+<p class="note" style="margin-bottom:0">O ícone é o mesmo <code>Eye</code> do selo "Visível ao
+cliente" — a porta e o estado que ela governa dizem a mesma coisa com o mesmo glifo. Nenhum dos
+três botões ganha contador: quantos itens estão pendentes é informação da tela de destino, e um
+número no botão obrigaria esta página a buscar os cinco recursos a cada carga.</p>
+
+<h2>6 · O elemento reservado</h2>
+<table>
+<tr><th>Elemento</th><th>Esta feature</th><th>Reservado para</th><th>Vira real quando</th></tr>
+<tr><td>Tela <code>/contas/:id/publicacao</code> com os quatro estados</td><td>entrega</td><td>—</td><td>—</td></tr>
+<tr><td>Publicação e ocultação em lote</td><td>entrega</td><td>—</td><td>—</td></tr>
+<tr><td>Selo de leitura na <code>ProcessDetailPage</code></td><td>entrega</td><td>—</td><td>—</td></tr>
+<tr><td><strong>Pré-visualização "como o cliente vê"</strong></td><td>desenha espaço apenas</td><td>issue própria</td><td>Existir um render do bloco do One deste lado; hoje o único jeito de conferir é abrir o portal</td></tr>
+<tr><td><strong>Histórico de publicação</strong> (quem publicou o quê, quando)</td><td><strong>não desenha</strong></td><td>issue própria</td><td>Existir mais que o carimbo do último ato — <code>published_by</code> guarda um autor, não uma trilha</td></tr>
+</table>
+<div class="stage" style="margin-top:14px">
+  <div class="panel reserved">
+    <div class="panel-heading">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <div><h2>Como o cliente vê</h2>
+        <p style="margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)">O bloco de Discovery do portal do cliente, renderizado deste lado</p></div>
+      </div>
+    </div>
+    <p class="note" style="margin:0;max-width:none">Espaço reservado. Hoje o único jeito de
+    conferir o que atravessou é abrir o portal do cliente e ler a aba Discovery de lá — e o que
+    sobe é a projeção de <code>portal.build_snapshot</code>, não esta lista. A pré-visualização
+    vira real quando existir um render daquele bloco deste lado, em issue própria.</p>
+  </div>
+  <p class="type-meta" style="margin:6px 0 0;color:var(--brand-700);font-weight:700">HACHURADO = RESERVADO</p>
+  <p class="note" style="margin:6px 0 0"><strong>Inerte, e de propósito.</strong> Não há botão
+  desligado aqui: é um bloco que anuncia o que virá. Botão inerte é defeito, não placeholder — e um
+  "Pré-visualizar" desabilitado prometeria que a função existe e está fora do ar.</p>
+  <p class="note" style="margin:6px 0 0"><strong>O histórico de publicação não é desenhado nem como
+  reservado.</strong> <code>published_by</code> guarda <em>um</em> autor — o do último ato —, não
+  uma trilha; desenhar uma lista de "quem publicou o quê, quando" sugeriria um dado que o schema
+  não tem. Quando existir a trilha, existe o desenho, em issue própria.</p>
+</div>
+
+<h2>7 · Mobile — 390px</h2>
+<p class="note">A mesma tela da seção 1, na largura em que <code>e2e/responsive.spec.ts</code>
+mede. A faixa de contadores, a árvore com os quatro estados e o item bloqueado selecionável.
+<strong>É recorte do topo da mesma árvore</strong>, não uma tela menor: os contadores e a contagem
+do botão são os da conta inteira — treze itens —, e o que cabe aqui são os sete primeiros.</p>
+<div class="stage">
+  <div class="mobile">
+    <a class="back-link" style="font-size:var(--text-label)"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Voltar para a conta</a>
+    <div class="page-head" style="margin:10px 0 14px;gap:4px">
+      <p class="eyebrow">Discovery estruturado</p>
+      <h1 style="font-size:1.25rem;line-height:1.625rem;margin:0">Publicação do Discovery — Transportadora Rota Norte</h1>
+    </div>
+
+    <div class="toolbar" style="padding:16px;margin-bottom:16px">
+      <div class="filter-bar">
+        <span class="filter-chip filter-chip--on">5 visíveis</span>
+        <span class="filter-chip">4 prontos</span>
+        <span class="filter-chip">4 bloqueados</span>
+      </div>
+      <button class="btn" style="width:100%">Publicar selecionados (7)</button>
+    </div>
+
+    <section class="panel panel--flush">
+      <div class="panel-rows">
+        <!-- mapa: visível · preso -->
+        <div class="row" style="align-items:flex-start">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+          <div class="row-main">
+            <strong>Conferência de carga na expedição</strong>
+            <span>Mapa do processo · 7 etapas</span>
+            <span>Este processo é a âncora de 2 achado(s) ou dor(es) publicado(s). Despublique-os primeiro.</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+            <div class="actions"><button class="btn btn--secondary" disabled style="width:100%">Ocultar do cliente</button></div>
+          </div>
+        </div>
+        <div class="nest">
+          <div class="panel-rows">
+            <!-- achado: fato, visível · preso -->
+            <div class="row" style="align-items:flex-start">
+              <div class="row-main">
+                <strong>O conferente refaz a conferência da carga porque o coletor não sincroniza com o WMS</strong>
+                <span>Achado</span>
+              </div>
+              <div class="row-meta">
+                <span class="state state--1">Fato</span>
+                <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+              </div>
+            </div>
+            <!-- evidência aninhada: visível · presa -->
+            <div class="nest">
+              <div class="panel-rows">
+                <div class="row" style="align-items:flex-start">
+                  <div class="row-main">
+                    <strong>Entrevista com o supervisor de expedição — 12/08/2026</strong>
+                    <span>Evidência</span>
+                  </div>
+                  <div class="row-meta">
+                    <span class="state state--active"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>Visível ao cliente</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- achado: hipótese, oculto · pronto -->
+            <div class="row" style="align-items:flex-start">
+              <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: O empilhamento fora do padrão na doca 3">
+              <div class="row-main">
+                <strong>O empilhamento fora do padrão na doca 3 explica parte das avarias registradas</strong>
+                <span>Achado</span>
+              </div>
+              <div class="row-meta">
+                <span class="state state--2">Hipótese</span>
+                <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+              </div>
+            </div>
+            <!-- achado: fato, oculto · BLOQUEADO, e marcado -->
+            <div class="row" style="align-items:flex-start">
+              <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Cada nota fiscal reemitida por divergência de volume">
+              <div class="row-main">
+                <strong>Cada nota fiscal reemitida por divergência de volume consome 40 minutos de um analista</strong>
+                <span>Achado</span>
+                <span>Falta: ao menos uma evidência publicada e viva</span>
+              </div>
+              <div class="row-meta">
+                <span class="state state--1">Fato</span>
+                <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+              </div>
+            </div>
+            <!-- dor: oculta · BLOQUEADA, e marcada — foi ela que puxou o achado acima -->
+            <div class="row" style="align-items:flex-start">
+              <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Reemissão de nota fiscal por divergência de volume">
+              <div class="row-main">
+                <strong>Reemissão de nota fiscal por divergência de volume entre a carga e o romaneio</strong>
+                <span>Dor · impacto financeiro</span>
+                <span>Falta: ao menos um achado publicado e vivo</span>
+              </div>
+              <div class="row-meta">
+                <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- mapa 2: oculto · pronto -->
+        <div class="row" style="align-items:flex-start">
+          <input type="checkbox" class="check" checked aria-label="Selecionar para publicar: Roteirização de entregas">
+          <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></svg></span>
+          <div class="row-main">
+            <strong>Roteirização de entregas</strong>
+            <span>Mapa do processo · 5 etapas</span>
+          </div>
+          <div class="row-meta">
+            <span class="state state--off"><svg class="ico ico--12" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>Oculto do cliente</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<p class="note"><strong>Nada rola na horizontal.</strong> <code>.row</code> já é
+<code>flex-wrap</code> e <code>.row-meta</code> é <code>flex:1 1 100%</code>
+(<code>index.css:213, 230</code>): o cluster de selos cai numa linha própria dentro da mesma
+<code>.row</code>, e o botão "Ocultar do cliente" ocupa a largura inteira. Sem isso, "Reemissão"
+sem hífen alargaria a página em 390px — o defeito que a <code>.row-meta</code> nasceu para
+fechar.</p>
+<p class="note" style="margin-bottom:0"><strong>O recuo é o que sobrevive ao celular.</strong> A
+cadeia se lê pelo filete à esquerda e por 16px de recuo por nível, e não por colunas — três níveis
+de recuo somam 52px numa tela de 342px de conteúdo, e o título ainda quebra em vez de estourar.</p>
+
+<h2>8 · Procedência de cada valor visual</h2>
+<p class="note">Reprodução das <strong>duas</strong> tabelas do <code>README.md</code>.
+<strong>Nada neste pacote é valor novo.</strong> Quase tudo é cópia literal de
+<code>frontend/src/index.css</code>, lido em 2026-09-03; três elementos vêm de arquivo de
+componente e não da folha, e estão nomeados na segunda tabela.</p>
+<table>
+<tr><th>Valor</th><th>Origem</th><th>Novo?</th></tr>
+<tr><td><code>.panel</code>, <code>.panel--flush</code>, <code>.panel-heading</code>, <code>.panel-rows</code></td><td><code>index.css:194-210</code></td><td>não</td></tr>
+<tr><td><code>.row</code>, <code>.row-main</code>, <code>.row-meta</code></td><td><code>index.css:213-233</code></td><td>não</td></tr>
+<tr><td><code>.state</code> + <code>--active</code> (visível)</td><td><code>index.css:402, 414</code></td><td>não</td></tr>
+<tr><td><code>.state--off</code> (oculto)</td><td><code>index.css:411</code></td><td>não</td></tr>
+<tr><td><code>.state--1/--2</code> (selos vizinhos, só para mostrar a convivência)</td><td><code>index.css:404-405</code></td><td>não</td></tr>
+<tr><td><code>.btn</code>, <code>.btn--secondary</code>, <code>.btn--danger</code></td><td><code>index.css</code> <code>@layer components</code></td><td>não</td></tr>
+<tr><td><code>.empty-state</code></td><td><code>index.css:334</code></td><td>não</td></tr>
+<tr><td><code>.alert--error</code></td><td><code>index.css:338</code></td><td>não</td></tr>
+<tr><td><code>.eyebrow</code>, <code>.page-head</code>, <code>.back-link</code></td><td><code>index.css:237, 245-252</code></td><td>não</td></tr>
+<tr><td><code>.filter-chip</code> (contadores do cabeçalho)</td><td><code>index.css:351-355</code></td><td>não</td></tr>
+<tr><td>Ícones <code>Eye</code> / <code>EyeOff</code></td><td><code>lucide-react</code>, mesma família de <code>PowerOff</code> (<code>CobrancaPage.tsx:467</code>) e <code>Lock</code> (<code>ProjectDetailPage.tsx:941</code>), ambos já dentro de <code>.state</code> com <code>size-3</code></td><td>não</td></tr>
+<tr><td><code>ink</code> <code>#12110f</code>, <code>brand-500</code> <code>#bd4a30</code>, <code>canvas</code> <code>#fafaf9</code>, <code>line</code> <code>#e7e5e4</code></td><td><code>index.css:38-85</code></td><td>não</td></tr>
+<tr><td><code>.toolbar</code> (faixa dos contadores)</td><td><code>index.css:330</code></td><td>não</td></tr>
+<tr><td><code>.filter-bar</code> (agrupador dos <code>.filter-chip</code>)</td><td><code>index.css:350</code></td><td>não</td></tr>
+<tr><td>Papéis <code>--text-display/-title/-body/-label/-meta</code></td><td><code>index.css</code>, fundações r2 (ADR 0043)</td><td>não</td></tr>
+</table>
+<p class="note"><strong>A coluna "Novo?" não tem um único "sim"</strong> — ao contrário do DAP da
+priorização, onde <code>.row-meta</code> era primitiva nova e estava em aprovação. Aqui ela já
+existe em <code>index.css:230</code>, com consumidores, e este pacote apenas a usa.</p>
+<p class="note"><strong>Três elementos não vêm da folha</strong>, e são a segunda tabela do
+<code>README.md</code> — reproduzida aqui inteira. Origem em <code>frontend/src/</code> continua
+sendo procedência; a distinção fica escrita em vez de diluída, e nenhum dos três é pendência.</p>
+<table>
+<tr><th>Valor</th><th>Origem</th><th>Novo?</th></tr>
+<tr><td>Geometria do <code>ConfirmDialog</code> — overlay <code>bg-ink/45</code>, painel <code>rounded-2xl bg-white p-5 shadow-2xl</code>, botão de fechar <code>size-8 rounded-lg</code></td><td><code>components/Modal.tsx:78-95</code> — o diálogo é componente, não classe de folha</td><td>não</td></tr>
+<tr><td>Caixa de seleção — <code>size-4 rounded border-slate-300</code>, marca em <code>brand-500</code></td><td><code>pages/JourneyConfigPage.tsx:88-89</code>, a única seleção múltipla do produto hoje</td><td>não</td></tr>
+<tr><td>Recuo da árvore (<code>.nest</code> neste board) — filete <code>line</code>, fundos <code>canvas</code> e <code>surface-subtle</code>, <code>padding-left</code></td><td>posicionamento sobre tokens que já existem (<code>index.css:42, 47, 49</code>); nenhuma cor nova</td><td>não</td></tr>
+</table>
+<p class="note"><strong>O recuo da árvore não é valor visual</strong>, e é o mesmo argumento com que
+a <code>.row-meta</code> foi aprovada no DAP da priorização: filete <code>1px solid line</code>,
+fundo <code>canvas</code> no primeiro nível e <code>surface-subtle</code> no segundo, mais
+<code>padding-left</code> — os três tokens já estão na paleta, e compor posição sobre token
+existente não é valor visual novo. Se a implementação precisar de uma primitiva para isto, ela é
+decisão à parte e entra pelo mesmo caminho que a <code>.row-meta</code> entrou — não por julgamento
+na hora.</p>
+<p class="note" style="margin-bottom:0">Design system referenciado:
+<code>frontend/src/index.css</code> e a skill <code>portal-design</code> (matiz <strong>clay</strong>
+<code>#bd4a30</code> — este é o portal operacional; roxo é o do cliente e nunca aparece aqui). Se
+este pacote e essa fonte divergirem, <strong>a fonte vence e este pacote está velho</strong>.
+Contraste: o único par que este pacote introduz em combinação nova é branco sobre <code>ink</code>
+no <code>.state--active</code> — <strong>18,9:1</strong>, o mesmo par já medido para texto do
+produto.</p>
+
+</div>
+</body>
+</html>
