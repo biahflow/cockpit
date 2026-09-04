@@ -37,6 +37,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 from apps.core import ai, journey
 from apps.core import serializers as modulo_de_serializers
 from apps.core.models import (
+    Activity,
     Case,
     CobrancaContato,
     CobrancaSuspensao,
@@ -82,7 +83,14 @@ from apps.core.tests.factories import (
     UserFactory,
     digital_employee_medido,
 )
-from apps.core.versioning import V1, V2, VersaoPeloCaminho, frase_da_chave_sem_sucessora, versao_de
+from apps.core.versioning import (
+    V1,
+    V2,
+    VersaoPeloCaminho,
+    frase_da_chave_removida,
+    frase_da_chave_sem_sucessora,
+    versao_de,
+)
 
 
 @pytest.fixture
@@ -961,3 +969,106 @@ def test_o_filtro_com_valor_canonico_continua_funcionando_na_v2(admin_client: AP
     resposta = admin_client.get("/api/v2/digital-employee-blueprints/?area=commercial")
 
     assert [b["name"] for b in resposta.json()] == ["SDR"]
+
+
+# ---------------------------------------------------------------------------------------------
+# 9. Os TRÊS renomes juntos — Activity.DunningSignal (issue #122, fatia 5.2)
+#
+# Diferente da seção 8: ali só o VALOR mudou (a classe já nascia inglesa). Aqui classe, campo
+# (`cobranca_sinal` → `dunning_signal`) e valor atravessam juntos (D10), e o campo é `read_only` —
+# não há `ALIASES_DE_ENTRADA`/`VALORES_DE_ENTRADA` a testar, porque não há caminho de escrita
+# direta. O que a v2 recusa é a CHAVE (mecanismo da seção 3/8 de `ALIASES_DEPRECIADOS`), não o
+# valor — o valor nunca chega a ser aceito na v2 porque a chave já morreu ali.
+# ---------------------------------------------------------------------------------------------
+
+
+def _migracao_0085() -> Any:
+    """O módulo da migração, importado por caminho — `0085...` não é identificador Python."""
+    return importlib.import_module("apps.core.migrations.0085_o_sinal_de_cobranca_fala_ingles")
+
+
+@pytest.mark.django_db
+def test_a_migracao_0085_traduz_os_tres_pares_do_sinal_e_a_reversa_e_simetrica() -> None:
+    """A segunda migração de VALOR do repositório, e a primeira depois de um `RenameField`.
+
+    O banco de teste já rodou a `0085` (o schema tem `dunning_signal` com os choices ingleses); o
+    que falta comprovar é que o `RunPython` traduz as três linhas certas nos dois sentidos, sobre o
+    nome de coluna **novo** — o mesmo molde de teste da `0084`, adaptado ao campo renomeado.
+    """
+    from django.apps import apps as registro_de_apps
+
+    modulo = _migracao_0085()
+    pares = modulo._PARES_PT_PARA_EN
+
+    activities = {antigo: ActivityFactory() for antigo, _novo in pares}
+    for antigo, activity in activities.items():
+        Activity.objects.filter(pk=activity.pk).update(dunning_signal=antigo)
+
+    modulo.traduzir_para_ingles(registro_de_apps, None)
+    for antigo, novo in pares:
+        activities[antigo].refresh_from_db()
+        assert activities[antigo].dunning_signal == novo
+
+    modulo.traduzir_para_portugues(registro_de_apps, None)
+    for antigo, _novo in pares:
+        activities[antigo].refresh_from_db()
+        assert activities[antigo].dunning_signal == antigo
+
+
+@pytest.mark.django_db
+def test_nenhuma_activity_tem_sinal_pt_e_os_choices_sao_os_novos() -> None:
+    """A prova de estado, complementar à de função: o enum atual só conhece os choices novos."""
+    ActivityFactory()
+
+    valores_portugueses = {"esqueceu", "nao_pode", "insatisfeito"}
+    persistidos = set(Activity.objects.values_list("dunning_signal", flat=True))
+
+    assert not (persistidos & valores_portugueses)
+    assert tuple(Activity.DunningSignal.values) == ("forgot", "unable_to_pay", "dissatisfied")
+
+
+@pytest.mark.django_db
+def test_a_leitura_da_v1_emite_os_quatro_e_a_v2_so_os_canonicos(admin_client: APIClient) -> None:
+    """`GET /activities/` — o par canônico e o par legado na v1, e só o canônico na v2."""
+    activity = ActivityFactory(dunning_signal=Activity.DunningSignal.DISSATISFIED)
+
+    da_v1 = admin_client.get(f"/api/v1/activities/{activity.pk}/").json()
+    da_v2 = admin_client.get(f"/api/v2/activities/{activity.pk}/").json()
+
+    assert da_v1["dunning_signal"] == "dissatisfied"
+    assert da_v1["dunning_signal_display"] == "Insatisfeito"
+    assert da_v1["cobranca_sinal"] == "dissatisfied"
+    assert da_v1["cobranca_sinal_display"] == "Insatisfeito"
+
+    assert da_v2["dunning_signal"] == "dissatisfied"
+    assert da_v2["dunning_signal_display"] == "Insatisfeito"
+    assert "cobranca_sinal" not in da_v2
+    assert "cobranca_sinal_display" not in da_v2
+
+
+@pytest.mark.django_db
+def test_a_chave_legada_do_sinal_no_corpo_da_v2_e_400_dizendo_a_canonica(
+    admin_client: APIClient,
+) -> None:
+    """A lacuna do read-only (decisão 3a): `cobranca_sinal` era ignorado em silêncio na v2."""
+    activity = ActivityFactory()
+
+    resposta = admin_client.patch(
+        f"/api/v2/activities/{activity.pk}/", {"cobranca_sinal": "forgot"}, format="json"
+    )
+
+    assert resposta.status_code == 400
+    assert resposta.data["cobranca_sinal"] == [
+        frase_da_chave_removida("cobranca_sinal", "dunning_signal")
+    ]
+    activity.refresh_from_db()
+    assert activity.dunning_signal == ""
+
+    # A contraprova: a v1 continua aceitando a chave legada — read-only, então ignorada, como
+    # sempre foi (regressão de `test_o_sinal_nao_se_grava_por_patch`).
+    ignorado = admin_client.patch(
+        f"/api/v1/activities/{activity.pk}/", {"cobranca_sinal": "forgot"}, format="json"
+    )
+    assert ignorado.status_code == 200
+    activity.refresh_from_db()
+    assert activity.dunning_signal == ""

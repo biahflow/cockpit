@@ -77,7 +77,10 @@ _CHAVE_LEGADA_DO_GATE: tuple[str, ...] = ("gate_outcome",)
 
 ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     "Account": ("status",),
-    "Activity": ("client", "opportunity"),
+    # `cobranca_sinal`/`cobranca_sinal_display` entraram na issue #122, fatia 5.2, junto do renome
+    # de `Activity.CobrancaSinal` para `DunningSignal` (D10). Sem `ALIASES_DE_ENTRADA`: o campo é
+    # `read_only` — ver o comentário do `ActivitySerializer`.
+    "Activity": ("client", "opportunity", "cobranca_sinal", "cobranca_sinal_display"),
     "Artifact": ("opportunity",),
     "CobrancaContato": ("client", "client_name"),
     "CobrancaSuspensao": ("client", "client_name"),
@@ -162,6 +165,8 @@ CANONICO_DA_CHAVE: dict[str, str | None] = {
     "processo": "process",
     "kpi_baseline": None,
     "kpi_current": None,
+    "cobranca_sinal": "dunning_signal",
+    "cobranca_sinal_display": "dunning_signal_display",
 }
 
 _PREFIXO_PATCHED = re.compile(r"^Patched(.+)$")

@@ -12,9 +12,10 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 23, depois que a Fase 6
-#     removeu `ai_opportunity`, `Project.client` e `client_consent`), que conta **dívidas
-#     distintas** — linhas deste arquivo, não ocorrências no código.
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 22, depois que a Fase 6
+#     removeu `ai_opportunity`, `Project.client` e `client_consent`, e a issue #122 (fatia 5.2)
+#     pagou `Activity.CobrancaSinal`), que conta **dívidas distintas** — linhas deste arquivo, não
+#     ocorrências no código.
 #
 # A entrada **não carrega número de linha**, de propósito: dívida declarada não pode ser reaberta
 # por alguém ter inserido um import acima dela. Ela carrega a **contagem**, que é a outra metade
@@ -124,10 +125,15 @@ backend/apps/core/openapi_aliases.py::outcome-como-decisao-de-gate::gate_outcome
 #     a Fase 3 a dividiu em `Evidence` + `Finding`, e trocar o nome sem dividir preservaria o
 #     defeito de linguagem que a divisão existe para corrigir. Por isso não há linha a estreitar
 #     aqui: pagar a dívida foi apagar a classe, não renomeá-la.
-#   * `Pendencia`, `Decisao`, `Risco`, `Satisfacao` e a família `Cobranca*` **ainda não têm nome
-#     canônico** — a Ontology v1 não os cobre. Registrá-los aqui é o que impede que a ausência de
-#     decisão vire ausência de dívida. O nome entra primeiro no language-map (§8), depois no
-#     Pulse; até lá a linha fica.
+#   * `Activity.CobrancaSinal` **saiu na issue #122, fatia 5.2**: virou `Activity.DunningSignal`,
+#     com o campo (`dunning_signal`) e o valor persistido (`forgot`/`unable_to_pay`/`dissatisfied`,
+#     D10) renomeados juntos. É o primeiro nome da família `Cobranca*` a ganhar canônico — os
+#     outros três (`CobrancaContato`, `CobrancaSuspensao`, o `resource`/viewset de cobrança) ainda
+#     não têm, e continuam abaixo.
+#   * `Pendencia`, `Decisao`, `Risco`, `Satisfacao` e o resto da família `Cobranca*` **ainda não
+#     têm nome canônico** — a Ontology v1 não os cobre. Registrá-los aqui é o que impede que a
+#     ausência de decisão vire ausência de dívida. O nome entra primeiro no language-map (§8),
+#     depois no Pulse; até lá a linha fica.
 #
 # As **chaves de payload** (`processo` e `etapa` no corpo e na resposta de etapa e evidência) não
 # aparecem aqui porque a regra casa declaração de campo de modelo (`… = models.…`), e o alias é um
@@ -135,7 +141,6 @@ backend/apps/core/openapi_aliases.py::outcome-como-decisao-de-gate::gate_outcome
 # `backend/tests/regression/test_o_alias_de_processo_sobrevive_na_v1.py`.
 # ---------------------------------------------------------------------------------------------
 backend/apps/core/models.py::modelo-em-portugues::CobrancaContato::1
-backend/apps/core/models.py::modelo-em-portugues::CobrancaSinal::1
 backend/apps/core/models.py::modelo-em-portugues::CobrancaSuspensao::1
 backend/apps/core/models.py::modelo-em-portugues::Decisao::1
 backend/apps/core/models.py::modelo-em-portugues::Pendencia::1

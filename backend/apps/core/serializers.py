@@ -462,22 +462,35 @@ class ActivitySerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Activity]
         source="commercial_opportunity", read_only=True
     )
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    dunning_signal_display = serializers.CharField(
+        source="get_dunning_signal_display", read_only=True
+    )
+
+    # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): as duas chaves antigas saem
+    # com o mesmo valor da canônica e morrem na `/api/v2/`, junto do renome para `DunningSignal`
+    # (issue #122, fatia 5.2). **Sem `ALIASES_DE_ENTRADA` nem `VALORES_DE_ENTRADA`**: o campo é
+    # `read_only` — só `POST /activities/{id}/classificar/` grava — e não há caminho de escrita
+    # para normalizar. A entrada em `ALIASES_DEPRECIADOS["Activity"]` (`openapi_aliases.py`) é o
+    # que faz o mixin remover as duas na v2.
+    cobranca_sinal = serializers.CharField(source="dunning_signal", read_only=True)
     cobranca_sinal_display = serializers.CharField(
-        source="get_cobranca_sinal_display", read_only=True
+        source="get_dunning_signal_display", read_only=True
     )
 
     class Meta:
         model = Activity
         fields = ["id", "account", "client", "commercial_opportunity", "opportunity", "invoice",
                   "kind", "kind_display", "happened_on",
-                  "summary", "notes", "cobranca_sinal", "cobranca_sinal_display", "owner",
+                  "summary", "notes", "dunning_signal", "dunning_signal_display",
+                  "cobranca_sinal", "cobranca_sinal_display", "owner",
                   "created_at", "updated_at"]
-        # `cobranca_sinal` é só de leitura: ele é lavrado por `POST /activities/{id}/classificar/`,
+        # `dunning_signal` é só de leitura: ele é lavrado por `POST /activities/{id}/classificar/`,
         # que carrega a `AiInteraction` que o produziu. Um `PATCH` com o campo cru gravaria a mesma
         # coluna sem procedência nenhuma — a distinção que a FDD 028 já fez entre "campo" e "ato"
         # no `status` da fatura.
-        read_only_fields = ["id", "kind_display", "cobranca_sinal", "cobranca_sinal_display",
-                            "owner", "created_at", "updated_at"]
+        read_only_fields = ["id", "kind_display", "dunning_signal", "dunning_signal_display",
+                            "cobranca_sinal", "cobranca_sinal_display", "owner",
+                            "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         account = cast(Account | None, attrs.get("account", getattr(self.instance, "account", None)))

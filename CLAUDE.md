@@ -355,7 +355,7 @@ Key cross-cutting patterns to preserve:
   `Project.client` (migração `0070`), `ai_opportunity`→`ai_potential` (migração `0071`) e
   `client_consent`→`account_consent` (migração `0072`) também saíram na Fase 6; sobram as rotas
   e chaves de payload (`/api/v2/`, que agora pode nascer). O que a guarda ainda tolera está em
-  `docs/ontology/legacy-allowlist.txt` (teto **23**), e o prazo de cada alias, em
+  `docs/ontology/legacy-allowlist.txt` (teto **22**), e o prazo de cada alias, em
   `docs/ontology/aliases.md` (§2b as seis pks, §2c campo vs. chave).
 - **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
   `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP

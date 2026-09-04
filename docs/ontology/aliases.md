@@ -34,7 +34,7 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chaves `client_vertical` / `client_vertical_name` (só leitura) | `account_vertical` / `account_vertical_name` | `serializers.py` | `/api/v2/` (pago na fatia 4a) |
 | chave `clients` que envolve a lista de `GET /clients/overview/` | `accounts` | `views.py` | `/api/v2/` (pago na fatia 4a — **troca**, não convive) |
 | chave de entrada `signer_email` (um signatário) | `signers[]`, lista de `{email, role}` | `views.py` (`_signers_do_pedido`) | `/api/v2/` |
-| valores `esqueceu` / `nao_pode` / `insatisfeito` | `forgot` / `unable_to_pay` / `dissatisfied` | `Activity.cobranca_sinal` e serializers | junto do renome para `DunningSignal`; alias morre na `/api/v2/` |
+| chaves `cobranca_sinal` / `cobranca_sinal_display` (só leitura; classe/campo/valor pagos na fatia 5.2 da #122, 04/09/2026 — só resta a leitura) | `dunning_signal` / `dunning_signal_display` | `ActivitySerializer` | `/api/v2/` |
 | degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
 | valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
 | valor de entrada `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` (área do blueprint; **valor persistido já pago**, fatia 5.1, 04/09/2026 — só resta a entrada) | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA` e `DigitalEmployeeBlueprintViewSet.filter_valores_legados` | `/api/v2/` |
@@ -62,6 +62,23 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > de `ALIASES_DE_ENTRADA` que já existia para chave). Até as fatias das outras três famílias
 > chegarem, os valores portugueses delas seguem sendo os persistidos e expostos pela `/api/v1/`;
 > nenhum valor novo nasce em português.
+
+> **A família 2 (`Activity.CobrancaSinal`) foi a segunda a mudar** (fatia 5.2 da issue #122,
+> 04/09/2026) — e a primeira em que os **três** renomes (classe, campo e valor) chegam juntos: ao
+> contrário do blueprint, cuja classe já nascera inglesa, `CobrancaSinal` ainda dizia errado nos
+> três níveis, e D10 exige que os três atravessem na mesma fatia quando isso acontece — adiar
+> qualquer um deixaria `DunningSignal` (classe inglesa) persistindo `esqueceu`/`nao_pode`/
+> `insatisfeito` num campo chamado `cobranca_sinal`, a contradição que a decisão existe para
+> fechar. A migração (`0085_o_sinal_de_cobranca_fala_ingles`) encadeia `RenameField` (a coluna
+> renomeia, linha e pk sobrevivem — §2b) e só depois o molde de tradução de valor da `0084`, no
+> mesmo arquivo. O campo é **só de leitura** (a escrita é a action `classificar`), então não há
+> `ALIASES_DE_ENTRADA` nem `VALORES_DE_ENTRADA` a declarar — o que sobrevive na `/api/v1/` é o
+> alias de leitura das duas chaves (`cobranca_sinal`/`cobranca_sinal_display`), pelo mecanismo de
+> sempre (§2c). O prompt de `classificar` passou a pedir os três tokens canônicos ingleses
+> diretamente à IA — pedir em português e traduzir a resposta depois deixaria no prompt a aparência
+> de que o modelo decide o idioma (mesmo argumento da FDD 039) —, e `views.sinal_do_texto` tolera
+> os três tokens legados por barato custo de release, traduzindo-os antes de validar contra o
+> vocabulário novo.
 
 > **O recorte físico da Fase 6 foi concluído; a issue #70 foi encerrada por decisão do mantenedor.** Tabelas renomeadas
 > (migração `0069`), dual-write e `Evidencia` removidos (migração `0068`), `Project.client`
@@ -448,9 +465,16 @@ posição, porque não existe uso legítimo do nome antigo.
 
 ## Termos ainda sem nome canônico
 
-`Pendencia`, `Decisao`, `Risco`, `Satisfacao` e a família `Cobranca*` estão em português no modelo
-e **a Ontology v1 não os cobre** — não há para onde renomeá-los ainda. Eles estão na allowlist
-mesmo assim, e isso é deliberado: sem a linha, a ausência de decisão viraria ausência de dívida.
+`Pendencia`, `Decisao`, `Risco`, `Satisfacao` e o resto da família `Cobranca*` (`CobrancaContato`,
+`CobrancaSuspensao`, o `resource`/viewset de cobrança) estão em português no modelo e **a Ontology
+v1 não os cobre** — não há para onde renomeá-los ainda. Eles estão na allowlist mesmo assim, e isso
+é deliberado: sem a linha, a ausência de decisão viraria ausência de dívida.
+
+`Activity.CobrancaSinal` **saiu desta lista na fatia 5.2 da issue #122** (04/09/2026): tem nome
+canônico (`DunningSignal`) e código que o usa desde essa fatia, então continuar aqui seria negar
+uma decisão já tomada. Era o único membro da família `Cobranca*` com nome próprio já cunhado no
+language-map (`activity.dunning_signal`, §4) — o que faltava era a classe, o campo e o valor
+persistido atravessarem, e a fatia 5.2 pagou os três juntos (D10).
 
 `recebido_do_cliente` — a chave do painel de cobrança que diz quanto a conta já pagou — entra na
 mesma lista, e por escrito, desde a fatia 4a da #122. Ela **não é alias de `client`**: é um nome

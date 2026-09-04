@@ -918,11 +918,22 @@ def test_rascunhar_sem_degrau_aplicavel_recusa(
 def test_o_sinal_e_lido_do_json_e_o_desconhecido_e_descartado() -> None:
     from apps.core.views import sinal_do_texto
 
-    assert sinal_do_texto('{"sinal": "nao_pode"}') == "nao_pode"
-    assert sinal_do_texto('Claro!\n```json\n{"sinal": "esqueceu"}\n```') == "esqueceu"
+    assert sinal_do_texto('{"sinal": "unable_to_pay"}') == "unable_to_pay"
+    assert sinal_do_texto('Claro!\n```json\n{"sinal": "forgot"}\n```') == "forgot"
     assert sinal_do_texto('{"sinal": "com_raiva"}') == ""
     assert sinal_do_texto("não consegui classificar") == ""
-    assert sinal_do_texto('["esqueceu"]') == ""
+    assert sinal_do_texto('["forgot"]') == ""
+
+
+@pytest.mark.django_db
+def test_o_sinal_legado_e_tolerado_e_traduzido_para_o_canonico() -> None:
+    """Tolerância de release (issue #122, fatia 5.2): a IA pode responder com cache ou variação
+    do prompt anterior, e os três tokens antigos ainda traduzem — nunca persistem como vieram."""
+    from apps.core.views import sinal_do_texto
+
+    assert sinal_do_texto('{"sinal": "esqueceu"}') == "forgot"
+    assert sinal_do_texto('{"sinal": "nao_pode"}') == "unable_to_pay"
+    assert sinal_do_texto('{"sinal": "insatisfeito"}') == "dissatisfied"
 
 
 @pytest.mark.django_db
@@ -935,19 +946,38 @@ def test_classificar_grava_o_sinal_e_nao_age(
         account=invoice.account, invoice=invoice, summary="Cliente disse que o caixa apertou."
     )
     monkeypatch.setattr(
-        ai, "complete", lambda s, u, **_: ('{"sinal": "nao_pode"}', {"prompt_tokens": 1})
+        ai, "complete", lambda s, u, **_: ('{"sinal": "unable_to_pay"}', {"prompt_tokens": 1})
     )
 
     resp = admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
 
     assert resp.status_code == 200
     activity.refresh_from_db()
-    assert activity.cobranca_sinal == Activity.CobrancaSinal.NAO_PODE
+    assert activity.dunning_signal == Activity.DunningSignal.UNABLE_TO_PAY
     # Classificar é leitura: nada foi suspenso, renegociado nem cobrado.
     assert CobrancaSuspensao.objects.count() == 0
     assert CobrancaContato.objects.count() == 0
     invoice.refresh_from_db()
     assert invoice.status == Invoice.Status.ISSUED
+
+
+@pytest.mark.django_db
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_classificar_com_sinal_legado_grava_o_canonico_pela_tolerancia(
+    admin_api: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O prompt pede os canônicos, mas a IA pode responder com cache do prompt anterior — a
+    tolerância de release (issue #122, fatia 5.2) grava o canônico, nunca o token legado."""
+    activity = ActivityFactory()
+    monkeypatch.setattr(
+        ai, "complete", lambda s, u, **_: ('{"sinal": "esqueceu"}', {"prompt_tokens": 1})
+    )
+
+    resp = admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
+
+    assert resp.status_code == 200
+    activity.refresh_from_db()
+    assert activity.dunning_signal == Activity.DunningSignal.FORGOT
 
 
 @pytest.mark.django_db
@@ -963,7 +993,7 @@ def test_classificar_sem_sinal_utilizavel_e_502(
 
     assert resp.status_code == 502
     activity.refresh_from_db()
-    assert activity.cobranca_sinal == ""
+    assert activity.dunning_signal == ""
 
 
 @pytest.mark.django_db
@@ -975,7 +1005,7 @@ def test_o_sinal_nao_se_grava_por_patch(admin_api: APIClient) -> None:
     )
     assert resp.status_code == 200
     activity.refresh_from_db()
-    assert activity.cobranca_sinal == ""
+    assert activity.dunning_signal == ""
 
 
 @pytest.mark.django_db
@@ -1250,7 +1280,7 @@ def test_o_painel_sem_projeto_ativo_nao_inventa_health(admin_api: APIClient) -> 
 
 @pytest.mark.django_db
 def test_o_painel_traz_o_sinal_da_ia_como_leitura_por_registrar(admin_api: APIClient) -> None:
-    """O `cobranca_sinal` ganha leitor (FDD 038): a resposta classificada aparece na linha como
+    """O `dunning_signal` ganha leitor (FDD 038): a resposta classificada aparece na linha como
     **leitura ainda não registrada**, com data, e é o atalho para uma pessoa registrar.
 
     Não é satisfação: nada aqui move o Health Score nem a escada — só o registro humano move
@@ -1259,18 +1289,18 @@ def test_o_painel_traz_o_sinal_da_ia_como_leitura_por_registrar(admin_api: APICl
     account = AccountFactory()
     _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
     velha = ActivityFactory(
-        account=account, cobranca_sinal=Activity.CobrancaSinal.ESQUECEU,
+        account=account, dunning_signal=Activity.DunningSignal.FORGOT,
         happened_on=timezone.localdate() - timedelta(days=9),
     )
     ultima = ActivityFactory(
-        account=account, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+        account=account, dunning_signal=Activity.DunningSignal.DISSATISFIED,
         happened_on=timezone.localdate() - timedelta(days=2),
     )
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
 
     assert linha["sinal_activity"] == ultima.pk != velha.pk
-    assert linha["sinal_kind"] == Activity.CobrancaSinal.INSATISFEITO
+    assert linha["sinal_kind"] == Activity.DunningSignal.DISSATISFIED
     assert linha["sinal_display"] == "Insatisfeito"
     assert linha["sinal_em"] == str(ultima.happened_on)
     # A leitura da IA **não** é registro: a escada segue a padrão e a satisfação vigente é nenhuma.
@@ -1285,7 +1315,7 @@ def test_o_sinal_some_da_linha_depois_de_registrado(admin_api: APIClient) -> Non
     account = AccountFactory()
     _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
     activity = ActivityFactory(
-        account=account, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+        account=account, dunning_signal=Activity.DunningSignal.DISSATISFIED,
         happened_on=timezone.localdate() - timedelta(days=2),
     )
 

@@ -374,7 +374,7 @@ test("a saúde mostrada é a da entrega do cliente, e sem projeto ativo não se 
 test("o sinal da IA aparece rotulado como leitura por registrar, distinto da satisfação vigente", async () => {
   mocks.api.mockImplementation(stub([linha({
     satisfacao_nivel: "neutro", satisfacao_fonte: "percebida", satisfacao_dias: 30,
-    sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
+    sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
   })]));
   render(<CobrancaPage />);
   const cartao = (await screen.findByRole("heading", { name: "Imobiliária Aurora" })).closest("article");
@@ -396,7 +396,7 @@ test("sem sinal pendente a linha não oferece o atalho", async () => {
 
 test("o atalho registra a satisfação declarada, com a data do que aconteceu e o nível derivado", async () => {
   mocks.api.mockImplementation(stub([linha({
-    sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
+    sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
   })]));
   render(<CobrancaPage />);
   await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
@@ -422,7 +422,7 @@ test("o atalho registra a satisfação declarada, com a data do que aconteceu e 
 
 test("o sinal que fala de dinheiro nasce neutro, e não insatisfeito", async () => {
   mocks.api.mockImplementation(stub([linha({
-    sinal_kind: "nao_pode", sinal_display: "Não pôde pagar", sinal_em: "2026-08-14", sinal_activity: 32,
+    sinal_kind: "unable_to_pay", sinal_display: "Não pôde pagar", sinal_em: "2026-08-14", sinal_activity: 32,
   })]));
   render(<CobrancaPage />);
   await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
@@ -431,7 +431,7 @@ test("o sinal que fala de dinheiro nasce neutro, e não insatisfeito", async () 
 });
 
 test("registrado o sinal, a linha é recarregada e o atalho some", async () => {
-  const comSinal = linha({ sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31 });
+  const comSinal = linha({ sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31 });
   let registrado = false;
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     if (path === "/satisfacoes/" && options?.method === "POST") { registrado = true; return Promise.resolve({}); }

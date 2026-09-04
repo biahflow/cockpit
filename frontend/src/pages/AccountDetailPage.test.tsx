@@ -20,7 +20,7 @@ vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 function atividade(overrides: Record<string, unknown> = {}) {
   return {
-    id: 9, client: 1, commercial_opportunity: null, opportunity: null, invoice: null, cobranca_sinal: "", cobranca_sinal_display: "",
+    id: 9, client: 1, commercial_opportunity: null, opportunity: null, invoice: null, dunning_signal: "", dunning_signal_display: "",
     kind: "call", kind_display: "Ligação", happened_on: "2026-08-10", summary: "Alinhamento de escopo",
     notes: "Cliente confirmou prazo.", owner: 1,
     created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
@@ -43,7 +43,7 @@ function satisfacaoRegistro(overrides: Record<string, unknown> = {}) {
 }
 
 // Vazia por padrão: os testes que não são sobre satisfação não devem ver um "Insatisfeito" ou um
-// "Promotor" a mais na tela — colidiria com o texto de outros selos (o `cobranca_sinal_display`
+// "Promotor" a mais na tela — colidiria com o texto de outros selos (o `dunning_signal_display`
 // de Interações, por exemplo, também usa "Insatisfeito"). Cada teste de satisfação povoa a sua.
 let satisfacoes: unknown[] = [];
 
@@ -410,7 +410,7 @@ test("classificar chama a rota e o sinal gravado volta com a conduta, não só c
   await screen.findByRole("heading", { name: "Cliente A" });
 
   // A segunda carga já traz o sinal lavrado pelo backend — a tela não o adivinha.
-  atividades = [atividade({ invoice: 4, cobranca_sinal: "insatisfeito", cobranca_sinal_display: "Insatisfeito" })];
+  atividades = [atividade({ invoice: 4, dunning_signal: "dissatisfied", dunning_signal_display: "Insatisfeito" })];
   await user.click(screen.getByLabelText("Classificar resposta: Alinhamento de escopo"));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
@@ -425,7 +425,7 @@ test("classificar chama a rota e o sinal gravado volta com a conduta, não só c
 });
 
 test("a interação já classificada não oferece classificar de novo", async () => {
-  atividades = [atividade({ cobranca_sinal: "esqueceu", cobranca_sinal_display: "Esqueceu" })];
+  atividades = [atividade({ dunning_signal: "forgot", dunning_signal_display: "Esqueceu" })];
   render(<AccountDetailPage id={1} />);
   await screen.findByText("Alinhamento de escopo");
 

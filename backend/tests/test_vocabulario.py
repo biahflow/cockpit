@@ -357,7 +357,11 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # sai do mapa e as duas linhas saem daqui juntas. Um mecanismo de depreciação não sobrevive ao que
 # ele deprecia; ler esta linha como permanente transformaria em dívida eterna a única dívida deste
 # arquivo que já tem data marcada.
-TETO_DA_ALLOWLIST = 23
+#
+# A issue #122, fatia 5.2, pagou `Activity.CobrancaSinal`: a classe virou `DunningSignal`, o campo
+# e o valor persistido acompanharam (D10), e a linha `modelo-em-portugues::CobrancaSinal` saiu do
+# modelo — o teto desceu de 23 para 22.
+TETO_DA_ALLOWLIST = 22
 
 
 def test_nenhum_termo_banido_novo() -> None:
@@ -438,21 +442,26 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
     migração `0084` traduziu o valor persistido para inglês, e o que este teste passa a congelar
     para ela é o **estado novo**: o português continua vivo só como alias de **entrada** da
     `/api/v1/` (`DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA`), nunca mais como o que
-    persiste ou o que a API emite. As outras três famílias (cobrança e satisfação) seguem
+    persiste ou o que a API emite.
+
+    A família 2 (`Activity.CobrancaSinal`) atravessou na fatia 5.2 — a migração `0085` renomeou
+    classe, campo (`dunning_signal`) e valor juntos (D10), e aqui também o português continua vivo
+    só como alias de **leitura** da `/api/v1/` (`cobranca_sinal`/`cobranca_sinal_display`), nunca
+    mais como o que persiste. As famílias 1 e 3 (degraus de cobrança e satisfação) seguem
     congeladas em português até a fatia que as atravessar.
     """
     from apps.core import cobranca
     from apps.core.models import Activity, CobrancaContato, DigitalEmployeeBlueprint, Satisfacao
 
     legados = {
-        "Activity.CobrancaSinal": tuple(Activity.CobrancaSinal.values),
+        "Activity.DunningSignal": tuple(Activity.DunningSignal.values),
         "CobrancaContato.Degrau": tuple(CobrancaContato.Degrau.values),
         "Satisfacao.Fonte": tuple(Satisfacao.Fonte.values),
         "Satisfacao.Nivel": tuple(Satisfacao.Nivel.values),
         "DigitalEmployeeBlueprint.Area": tuple(DigitalEmployeeBlueprint.Area.values),
     }
     assert legados == {
-        "Activity.CobrancaSinal": ("esqueceu", "nao_pode", "insatisfeito"),
+        "Activity.DunningSignal": ("forgot", "unable_to_pay", "dissatisfied"),
         "CobrancaContato.Degrau": (
             "pre_aviso",
             "lembrete",

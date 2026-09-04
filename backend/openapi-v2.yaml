@@ -364,8 +364,8 @@ paths:
         Lê a resposta do cliente e grava o sinal — **e não age** (FDD 036, camada 4).
 
         Os três valores não são etiquetas de humor: cada um manda para uma conduta diferente e a
-        mesma régua estraga os três se tratá-los igual. `esqueceu` já se resolveu com o lembrete;
-        `nao_pode` pede renegociação, e cedo; `insatisfeito` não é problema de cobrança — é
+        mesma régua estraga os três se tratá-los igual. `forgot` já se resolveu com o lembrete;
+        `unable_to_pay` pede renegociação, e cedo; `dissatisfied` não é problema de cobrança — é
         problema de relação disfarçado, e é onde insistir piora tudo.
 
         Gravar o sinal é o fim do que a IA faz aqui. Renegociar, dar desconto, suspender e escalar
@@ -12436,11 +12436,11 @@ components:
           maxLength: 255
         notes:
           type: string
-        cobranca_sinal:
+        dunning_signal:
           allOf:
-          - $ref: '#/components/schemas/CobrancaSinalEnum'
+          - $ref: '#/components/schemas/DunningSignalEnum'
           readOnly: true
-        cobranca_sinal_display:
+        dunning_signal_display:
           type: string
           readOnly: true
         owner:
@@ -12457,9 +12457,9 @@ components:
           readOnly: true
       required:
       - account
-      - cobranca_sinal
-      - cobranca_sinal_display
       - created_at
+      - dunning_signal
+      - dunning_signal_display
       - happened_on
       - id
       - kind
@@ -13171,16 +13171,6 @@ components:
       properties:
         degrau:
           type: string
-    CobrancaSinalEnum:
-      enum:
-      - esqueceu
-      - nao_pode
-      - insatisfeito
-      type: string
-      description: |-
-        * `esqueceu` - Esqueceu
-        * `nao_pode` - Não pôde pagar
-        * `insatisfeito` - Insatisfeito
     CobrancaSuspensao:
       type: object
       description: |-
@@ -13930,6 +13920,16 @@ components:
         * `nda` - NDA
         * `commercial_contract` - Contrato comercial
         * `proposal` - Proposta
+    DunningSignalEnum:
+      enum:
+      - forgot
+      - unable_to_pay
+      - dissatisfied
+      type: string
+      description: |-
+        * `forgot` - Esqueceu
+        * `unable_to_pay` - Não pôde pagar
+        * `dissatisfied` - Insatisfeito
     Engagement:
       type: object
       properties:
@@ -15954,11 +15954,11 @@ components:
           maxLength: 255
         notes:
           type: string
-        cobranca_sinal:
+        dunning_signal:
           allOf:
-          - $ref: '#/components/schemas/CobrancaSinalEnum'
+          - $ref: '#/components/schemas/DunningSignalEnum'
           readOnly: true
-        cobranca_sinal_display:
+        dunning_signal_display:
           type: string
           readOnly: true
         owner:

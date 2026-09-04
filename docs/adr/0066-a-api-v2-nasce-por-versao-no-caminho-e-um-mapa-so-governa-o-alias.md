@@ -380,3 +380,61 @@ tratamento: corpo tem validador que fala por conta própria, filtro não tem nen
 - `backend/tests/test_vocabulario.py::test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2`
   passa a congelar `DigitalEmployeeBlueprint.Area` em inglês; as outras três famílias continuam
   congeladas em português.
+
+## Emenda (issue #122, fatia 5.2 — 04/09/2026) — os três renomes chegam juntos pela primeira vez, e a família 2 atravessa
+
+A fatia 5.1 estabeleceu os dois moldes reaproveitáveis (migração de valor com reversa; normalização
+de entrada de valor no mixin) sobre a única das quatro famílias em português cuja **classe** já
+nascera inglesa. `Activity.CobrancaSinal` é a segunda família a atravessar, e a primeira em que os
+**três** renomes — classe, campo, valor — chegam na mesma fatia: D10 (§4 do language-map) trata o
+valor de um enum como parte do mesmo contrato de idioma da classe e do campo, e uma classe ainda em
+português não tinha para onde adiar sozinha.
+
+### 11. `RenameField` antes da tradução de valor, no mesmo arquivo
+
+`0085_o_sinal_de_cobranca_fala_ingles.py` encadeia três operações na ordem: `RenameField`
+(`cobranca_sinal` → `dunning_signal`, coluna renomeada, linha e pk sobrevivem — §2b), `AlterField`
+trocando `choices` para os três valores ingleses, e `RunPython` traduzindo as linhas existentes
+(molde exato da `0084`, com reversa simétrica). O `RenameField` vem primeiro porque o `RunPython`
+já opera sobre o nome de coluna novo — não há estado intermediário em que a migração fale metade
+dos dois nomes de campo.
+
+### 12. Campo `read_only` não ganha `ALIASES_DE_ENTRADA` nem `VALORES_DE_ENTRADA`
+
+`Activity.dunning_signal` só é gravado pela action `classificar` — nunca por `POST`/`PATCH` direto
+(a distinção "campo" vs. "ato" da FDD 028). Sem caminho de escrita, não há o que normalizar: o
+`ActivitySerializer` ganhou as duas chaves-alias de leitura de sempre (`cobranca_sinal`,
+`cobranca_sinal_display`, `source=` apontando para o campo canônico) e uma entrada nova em
+`ALIASES_DEPRECIADOS["Activity"]`, que é o que faz o mixin também **recusar** as duas no corpo da
+v2 — a mesma lacuna que a decisão 3 desta ADR fechou para `client`/`kpi_baseline`. É a primeira
+família de D10 em que o mecanismo de valor (fatia 5.1) e o mecanismo de chave (decisão 2 desta ADR)
+convivem no mesmo serializer: um mapa para a chave que sai da resposta, e nenhum mapa de valor
+porque não há entrada de valor a aceitar.
+
+### 13. O prompt pede os canônicos; a extração tolera os legados
+
+O prompt de `classificar` dizia à IA para responder `"esqueceu"`/`"nao_pode"`/`"insatisfeito"`.
+Passar a pedir os três tokens ingleses diretamente — em vez de manter o prompt em português e
+traduzir a resposta depois — é o mesmo argumento da FDD 039 sobre não deixar no prompt a aparência
+de que o modelo decide o vocabulário: quem decide é o código, e o prompt já pede o que o código
+persiste. `views.sinal_do_texto` ganhou `_SINAIS_LEGADOS`, um mapa de três entradas que traduz o
+token antigo para o canônico antes de validar contra `Activity.DunningSignal.values` — tolerância
+barata de release para a IA responder com cache ou variação do prompt anterior, não um segundo
+caminho de entrada permanente: não há alias de escrita para o cliente da API, só para o texto que o
+modelo pode devolver.
+
+### Consequências
+
+- `backend/apps/core/migrations/0085_o_sinal_de_cobranca_fala_ingles.py` é a segunda migração de
+  valor do repositório, e a primeira a combinar `RenameField` com o molde de tradução da `0084`.
+- `openapi.yaml` ganha `dunning_signal`/`dunning_signal_display` (marcados `deprecated` nas duas
+  chaves legadas correspondentes) e o enum do sinal passa a listar os três valores ingleses;
+  `openapi-v2.yaml` não emite as duas chaves legadas.
+- `docs/ontology/legacy-allowlist.txt` perde a linha `modelo-em-portugues::CobrancaSinal`, e
+  `TETO_DA_ALLOWLIST` desce de 23 para 22 (`backend/tests/test_vocabulario.py`).
+- `test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2` passa a congelar
+  `Activity.DunningSignal` em inglês; as famílias 1 (degraus de cobrança) e 3 (satisfação) seguem
+  congeladas em português.
+- `docs/ontology/aliases.md` §"Termos ainda sem nome canônico" deixa de citar `Activity.CobrancaSinal`
+  — tem nome canônico e código que o usa —, mantendo `CobrancaContato`, `CobrancaSuspensao` e o
+  restante da família `Cobranca*` sem nome ainda.

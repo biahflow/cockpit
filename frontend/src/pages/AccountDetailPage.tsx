@@ -10,7 +10,7 @@ import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
 import { canWriteBeyondDelivery } from "../roles";
 import { rotuloDoDegrau } from "../tiers";
-import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, CommercialOpportunity, Contact, DocumentEntry, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Service, Vertical } from "../types";
+import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CommercialOpportunity, Contact, DocumentEntry, DunningSignal, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Service, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -115,10 +115,10 @@ function resumoDeEngagements(engagements: Engagement[]): string {
  * A IA **grava o sinal e não age** (ADR 0031): a linha abaixo é leitura, não comando. Renegociar,
  * escalar, suspender e dar desconto seguem sendo atos humanos, com autor e carimbo.
  */
-const condutaDoSinal: Record<Exclude<CobrancaSinal, "">, string> = {
-  esqueceu: "o lembrete já resolveu — não há o que fazer além de aguardar o pagamento.",
-  nao_pode: "pede renegociação, e cedo: tratar agora custa menos do que deixar correr.",
-  insatisfeito: "não é problema de cobrança — é problema de relação disfarçado, e é onde insistir piora tudo.",
+const condutaDoSinal: Record<Exclude<DunningSignal, "">, string> = {
+  forgot: "o lembrete já resolveu — não há o que fazer além de aguardar o pagamento.",
+  unable_to_pay: "pede renegociação, e cedo: tratar agora custa menos do que deixar correr.",
+  dissatisfied: "não é problema de cobrança — é problema de relação disfarçado, e é onde insistir piora tudo.",
 };
 
 export function AccountDetailPage({ id }: { id: number }) {
@@ -748,14 +748,14 @@ export function AccountDetailPage({ id }: { id: number }) {
               valores roteiam condutas diferentes, e é por isso que o rótulo aparece na linha. */}
           {/* Texto e não `.state`: `.row-main span` já define `block`/`text-xs`, e um selo aninhado
               aqui perderia a própria pele para a regra da linha sem nada ficar vermelho. */}
-          {activity.cobranca_sinal && <span>Resposta à cobrança: <strong className="font-semibold text-ink">{activity.cobranca_sinal_display}</strong> — {condutaDoSinal[activity.cobranca_sinal]}</span>}
+          {activity.dunning_signal && <span>Resposta à cobrança: <strong className="font-semibold text-ink">{activity.dunning_signal_display}</strong> — {condutaDoSinal[activity.dunning_signal]}</span>}
           {activity.notes && <span>{activity.notes}</span>}
         </div>
         {/* Só com a flag `ai` ligada e só enquanto não houver sinal: reclassificar sobrescreveria a
             leitura que alguém já usou para decidir. A régua funciona com a IA desligada — o que
             some daqui é o botão, não um degrau (ADR 0031). */}
         {canWriteActivities && <div className="row-meta justify-end">
-          {iaLigada && !activity.cobranca_sinal && <button type="button" className="btn btn--secondary" disabled={classificando === activity.id} aria-label={`Classificar resposta: ${activity.summary}`} onClick={() => void classificar(activity)}><Sparkles className="size-4" />{classificando === activity.id ? "Lendo…" : "Classificar resposta"}</button>}
+          {iaLigada && !activity.dunning_signal && <button type="button" className="btn btn--secondary" disabled={classificando === activity.id} aria-label={`Classificar resposta: ${activity.summary}`} onClick={() => void classificar(activity)}><Sparkles className="size-4" />{classificando === activity.id ? "Lendo…" : "Classificar resposta"}</button>}
           <button className="rounded-lg p-2 text-slate-600 hover:bg-red-50 hover:text-danger" aria-label={`Arquivar interação: ${activity.summary}`} onClick={() => void archiveActivity(activity)}><Trash2 className="size-4" /></button>
         </div>}
       </div>)}</div> : <p className="empty-state">Nenhuma interação registrada.</p>}

@@ -67,13 +67,17 @@ const TENSAO_CAUSA: Record<CobrancaTensaoCausa, string> = {
 };
 
 // O nível que o formulário do atalho nasce marcando, por sinal lido (FDD 038). É **palpite
-// editável**, não classificação: `insatisfeito` é a única leitura que afirma algo sobre a relação,
+// editável**, não classificação: `dissatisfied` é a única leitura que afirma algo sobre a relação,
 // e as outras duas falam de dinheiro, não de satisfação — daí `neutro`, que é o nível que não é
 // alerta. Quem salva escolhe, e é a escolha dela que vira registro (ADR 0032).
+//
+// As CHAVES falam inglês desde a issue #122, fatia 5.2 (`Activity.DunningSignal`, D10); os
+// VALORES são níveis de satisfação (`Satisfacao.Nivel`, outra família) e continuam pt-BR até a
+// fatia 5.3 — `insatisfeito` aqui é o nível, não o sinal, e as duas famílias não traduzem juntas.
 const NIVEL_SUGERIDO: Record<Exclude<CobrancaPainelLinha["sinal_kind"], null>, SatisfacaoNivel> = {
-  esqueceu: "neutro",
-  nao_pode: "neutro",
-  insatisfeito: "insatisfeito",
+  forgot: "neutro",
+  unable_to_pay: "neutro",
+  dissatisfied: "insatisfeito",
 };
 
 /** "há 12 dias" — a idade que faz alguém perguntar de novo (FDD 037). O corte é do backend. */

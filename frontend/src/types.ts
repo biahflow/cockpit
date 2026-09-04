@@ -63,14 +63,15 @@ export type Contact = { id: number; account: number; first_name: string; last_na
 // CRM na leitura FDE. `commercial_opportunity` é opcional e, quando preenchida, tem de ser do
 // mesmo cliente (o backend recusa com 400; ver `docs/metodologia-fde.md`).
 export type ActivityKind = "call" | "meeting" | "email" | "note";
-// `cobranca_sinal` é lavrado por `POST /activities/{id}/classificar/` e é **só de leitura** aqui: a
-// IA grava o sinal e não age (ADR 0031). Os três valores roteiam condutas diferentes — `esqueceu` já
-// se resolveu com o lembrete, `nao_pode` pede renegociação, `insatisfeito` não é problema de
-// cobrança e é onde insistir piora tudo.
-export type CobrancaSinal = "" | "esqueceu" | "nao_pode" | "insatisfeito";
+// `dunning_signal` é lavrado por `POST /activities/{id}/classificar/` e é **só de leitura** aqui:
+// a IA grava o sinal e não age (ADR 0031). Os três valores roteiam condutas diferentes — `forgot`
+// já se resolveu com o lembrete, `unable_to_pay` pede renegociação, `dissatisfied` não é problema
+// de cobrança e é onde insistir piora tudo. O valor fala inglês desde a issue #122, fatia 5.2
+// (D10); o alias pt-BR (`cobranca_sinal`) só existe na `/api/v1/`, que a SPA não consome.
+export type DunningSignal = "" | "forgot" | "unable_to_pay" | "dissatisfied";
 // `opportunity` era **alias de leitura** da `/api/v1/` para `commercial_opportunity`
 // (`docs/ontology/aliases.md` §2c); a `/api/v2/` não o emite mais.
-export type Activity = { id: number; account: number; commercial_opportunity: number | null; invoice: number | null; cobranca_sinal: CobrancaSinal; cobranca_sinal_display: string; kind: ActivityKind; kind_display: string; happened_on: string; summary: string; notes: string; owner: number | null; created_at: string; updated_at: string };
+export type Activity = { id: number; account: number; commercial_opportunity: number | null; invoice: number | null; dunning_signal: DunningSignal; dunning_signal_display: string; kind: ActivityKind; kind_display: string; happened_on: string; summary: string; notes: string; owner: number | null; created_at: string; updated_at: string };
 export type WorkItemStatus = "todo" | "in_progress" | "done";
 export type Party = "provider" | "client";
 export type Milestone = { id: number; project: number; title: string; description: string; owner: number; due_date: string; completed_at: string | null; status: WorkItemStatus; party: Party; is_overdue: boolean };
@@ -429,7 +430,7 @@ export type CobrancaPainelLinha = {
   // A leitura da IA sobre a última resposta do cliente que **ninguém registrou ainda** (ADR 0032).
   // Os quatro são nulos juntos. Não é satisfação — é uma resposta lida —, e some da linha assim que
   // alguém registrar a satisfação apontando para aquela interação.
-  sinal_kind: Exclude<CobrancaSinal, ""> | null; sinal_display: string | null;
+  sinal_kind: Exclude<DunningSignal, ""> | null; sinal_display: string | null;
   sinal_em: string | null; sinal_activity: number | null;
 };
 export type CobrancaTensaoCausa = "satisfacao" | "entrega" | "ambas";

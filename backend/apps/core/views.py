@@ -648,6 +648,18 @@ def processos_do_texto(text: str) -> list[dict]:
     return extraidos
 
 
+# Tolerância de release (issue #122, fatia 5.2): o prompt de `classificar` passou a pedir os três
+# tokens canônicos ingleses diretamente — pedir em português e traduzir depois deixaria no prompt
+# a aparência de que o modelo decide o idioma, o mesmo argumento da FDD 039. Mas a IA pode ter
+# cache ou variação e devolver o token antigo; um mapa de três entradas evita descartar uma
+# resposta que ainda soa certa. Vale só aqui — a v2 não traduz nem recusa valor (§2c/D10).
+_SINAIS_LEGADOS: dict[str, str] = {
+    "esqueceu": Activity.DunningSignal.FORGOT,
+    "nao_pode": Activity.DunningSignal.UNABLE_TO_PAY,
+    "insatisfeito": Activity.DunningSignal.DISSATISFIED,
+}
+
+
 def sinal_do_texto(text: str) -> str:
     """Extrai o sinal de cobrança do que o modelo devolveu. Função pura, mesmo molde de
     `decisoes_do_texto` e pela mesma razão: **o modelo não obedece à instrução de formato o tempo
@@ -659,8 +671,6 @@ def sinal_do_texto(text: str) -> str:
     ninguém sabe ler. Descartado, a chamada devolve ``""`` e quem a invoca responde 502, que é
     diferente de gravar "não sei" em silêncio.
     """
-    from .models import Activity
-
     inicio, fim = text.find("{"), text.rfind("}")
     if inicio == -1 or fim <= inicio:
         return ""
@@ -671,7 +681,8 @@ def sinal_do_texto(text: str) -> str:
     if not isinstance(bruto, dict):
         return ""
     sinal = str(bruto.get("sinal") or "").strip().lower()
-    return sinal if sinal in Activity.CobrancaSinal.values else ""
+    sinal = _SINAIS_LEGADOS.get(sinal, sinal)
+    return sinal if sinal in Activity.DunningSignal.values else ""
 
 
 def _ai_run(  # type: ignore[no-untyped-def]
@@ -1071,21 +1082,25 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         """Lê a resposta do cliente e grava o sinal — **e não age** (FDD 036, camada 4).
 
         Os três valores não são etiquetas de humor: cada um manda para uma conduta diferente e a
-        mesma régua estraga os três se tratá-los igual. `esqueceu` já se resolveu com o lembrete;
-        `nao_pode` pede renegociação, e cedo; `insatisfeito` não é problema de cobrança — é
+        mesma régua estraga os três se tratá-los igual. `forgot` já se resolveu com o lembrete;
+        `unable_to_pay` pede renegociação, e cedo; `dissatisfied` não é problema de cobrança — é
         problema de relação disfarçado, e é onde insistir piora tudo.
 
         Gravar o sinal é o fim do que a IA faz aqui. Renegociar, dar desconto, suspender e escalar
         seguem humanos (ADR 0006, ADR 0031).
         """
         activity = self.get_object()
+        # O prompt pede os TRÊS CANÔNICOS ingleses diretamente — não pt-BR traduzido depois. Pedir
+        # em português e traduzir a resposta deixaria no prompt a aparência de que o modelo decide
+        # o idioma do dado (mesmo argumento da FDD 039); `sinal_do_texto` ainda tolera o token
+        # legado por barato custo de release (`_SINAIS_LEGADOS`, cache/variação do modelo).
         system = (
             "Você classifica a resposta de um cliente a uma cobrança. Devolva APENAS um objeto "
             'JSON, sem texto antes ou depois, com a chave "sinal" e um destes três valores: '
-            '"esqueceu" (apenas não lembrou e vai pagar), "nao_pode" (tem dificuldade financeira '
-            'ou de fluxo de caixa) ou "insatisfeito" (está retendo o pagamento por insatisfação '
-            "com a entrega ou com a relação). Use APENAS o material fornecido: se ele não permitir "
-            "decidir, devolva um objeto vazio em vez de inferir."
+            '"forgot" (apenas não lembrou e vai pagar), "unable_to_pay" (tem dificuldade '
+            'financeira ou de fluxo de caixa) ou "dissatisfied" (está retendo o pagamento por '
+            "insatisfação com a entrega ou com a relação). Use APENAS o material fornecido: se "
+            "ele não permitir decidir, devolva um objeto vazio em vez de inferir."
         )
 
         def grava(text: str, interaction) -> dict:  # type: ignore[no-untyped-def]
@@ -1095,7 +1110,7 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
                 # valor qualquer. A coluna roteia conduta; um valor chutado manda alguém insistir
                 # com quem está insatisfeito.
                 raise _ExtracaoSemResultado()
-            Activity.objects.filter(pk=activity.pk).update(cobranca_sinal=sinal)
+            Activity.objects.filter(pk=activity.pk).update(dunning_signal=sinal)
             activity.refresh_from_db()
             return {"activity": ActivitySerializer(activity).data}
 

@@ -1,7 +1,7 @@
 """Regressão: a IA lê a resposta do cliente; **quem registra é gente** (ADR 0032, ADR 0006).
 
-A FDD 036 dá à IA a tarefa de classificar a resposta a uma cobrança em `esqueceu` / `nao_pode` /
-`insatisfeito`, e a FDD 038 finalmente dá um **leitor** a esse campo: o painel mostra a leitura e
+A FDD 036 dá à IA a tarefa de classificar a resposta a uma cobrança em `forgot` / `unable_to_pay` /
+`dissatisfied`, e a FDD 038 finalmente dá um **leitor** a esse campo: o painel mostra a leitura e
 oferece o atalho para registrá-la. O atalho é a tentação, e é o que este arquivo cerca — entre
 "mostrar um formulário pré-preenchido" e "gravar o registro" há uma linha de código e a decisão
 inteira da ADR 0032.
@@ -48,7 +48,7 @@ def admin_api() -> APIClient:
 def insatisfeito(monkeypatch: pytest.MonkeyPatch) -> None:
     """A IA devolvendo o sinal mais perigoso dos três: o que muda comportamento quando registrado."""
     monkeypatch.setattr(
-        ai, "complete", lambda s, u, **_: ('{"sinal": "insatisfeito"}', {"prompt_tokens": 1})
+        ai, "complete", lambda s, u, **_: ('{"sinal": "dissatisfied"}', {"prompt_tokens": 1})
     )
 
 
@@ -78,7 +78,7 @@ def test_classificar_nao_cria_satisfacao(admin_api: APIClient, insatisfeito: Non
 
     assert resposta.status_code == 200
     activity.refresh_from_db()
-    assert activity.cobranca_sinal == Activity.CobrancaSinal.INSATISFEITO
+    assert activity.dunning_signal == Activity.DunningSignal.DISSATISFIED
     # O sinal foi gravado; o **registro** não. São coisas diferentes, e a diferença é quem afirma.
     assert not Satisfacao.objects.exists()
 
@@ -145,7 +145,7 @@ def test_so_o_registro_humano_move_a_escada(admin_api: APIClient, insatisfeito: 
 def test_o_atalho_nao_atravessa_o_cliente(admin_api: APIClient) -> None:
     """A fronteira do `source_activity`: o id vem do corpo da requisição, e a resposta de **outro**
     cliente viraria a satisfação declarada deste — a linha que troca a escada e tira 20 pontos."""
-    alheia = ActivityFactory(cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO)
+    alheia = ActivityFactory(dunning_signal=Activity.DunningSignal.DISSATISFIED)
     account = AccountFactory()
 
     resposta = admin_api.post(

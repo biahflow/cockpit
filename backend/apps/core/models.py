@@ -1501,18 +1501,23 @@ class Activity(TimestampedModel):
         EMAIL = "email", "E-mail"
         NOTE = "note", "Nota"
 
-    class CobrancaSinal(models.TextChoices):
+    class DunningSignal(models.TextChoices):
         """Os três problemas que a mesma régua estraga (RFC 0004, camada 4).
 
         Não é sentimento nem etiqueta de CRM: cada valor manda para um lugar diferente.
-        `esqueceu` já se resolveu com o lembrete; `nao_pode` pede renegociação, e cedo;
-        `insatisfeito` não é problema de cobrança — é problema de relação disfarçado, e insistir
+        `forgot` já se resolveu com o lembrete; `unable_to_pay` pede renegociação, e cedo;
+        `dissatisfied` não é problema de cobrança — é problema de relação disfarçado, e insistir
         piora tudo. A IA **grava o sinal e não age** (ADR 0031).
+
+        O valor fala inglês desde a issue #122, fatia 5.2 (D10 do language-map, `docs/ontology/
+        aliases.md`): classe, campo (`dunning_signal`) e valor mudaram juntos, no molde que a
+        fatia 5.1 (`DigitalEmployeeBlueprint.Area`) estabeleceu. Os rótulos pt-BR não mudam —
+        rótulo é superfície, valor é contrato.
         """
 
-        ESQUECEU = "esqueceu", "Esqueceu"
-        NAO_PODE = "nao_pode", "Não pôde pagar"
-        INSATISFEITO = "insatisfeito", "Insatisfeito"
+        FORGOT = "forgot", "Esqueceu"
+        UNABLE_TO_PAY = "unable_to_pay", "Não pôde pagar"
+        DISSATISFIED = "dissatisfied", "Insatisfeito"
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="activities")
     commercial_opportunity = models.ForeignKey(
@@ -1525,8 +1530,8 @@ class Activity(TimestampedModel):
     invoice = models.ForeignKey(
         "Invoice", on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
     )
-    cobranca_sinal = models.CharField(
-        max_length=16, choices=CobrancaSinal.choices, blank=True, default=""
+    dunning_signal = models.CharField(
+        max_length=16, choices=DunningSignal.choices, blank=True, default=""
     )
     kind = models.CharField(max_length=16, choices=Kind.choices)
     happened_on = models.DateField()
@@ -1606,7 +1611,7 @@ class Satisfacao(TimestampedModel):
         Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
     )
     # A outra proveniência: a resposta de cobrança que a IA classificou (FDD 038). É ela que dá
-    # **leitor** ao `Activity.cobranca_sinal`, que até aqui era gravado e nunca lido por motor
+    # **leitor** ao `Activity.dunning_signal`, que até aqui era gravado e nunca lido por motor
     # nenhum. O painel usa esta ligação para parar de oferecer o atalho depois do registro — sem
     # ela, o mesmo sinal insistiria para sempre, mesmo já registrado.
     #

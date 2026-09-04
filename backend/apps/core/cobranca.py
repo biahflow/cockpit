@@ -404,7 +404,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     ).values("source_activity_id")
     for activity in (
         Activity.objects.filter(account_id__in=clientes, archived_at__isnull=True)
-        .exclude(cobranca_sinal="")
+        .exclude(dunning_signal="")
         # Subconsulta explícita, e **não** `.exclude(satisfacoes__archived_at__isnull=True)`: o
         # `exclude` sobre relação reversa monta um LEFT JOIN, e para a atividade sem nenhuma
         # satisfação a coluna vem nula — ou seja, ele excluiria justamente os sinais por registrar,
@@ -1061,8 +1061,8 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             # A leitura da IA que **ninguém registrou ainda** (ADR 0032). Vai rotulada como leitura
             # justamente para não se confundir com a satisfação vigente logo acima: aquela é
             # registro, esta é uma resposta lida. Some da linha quando alguém registrar.
-            "sinal_kind": sinal.cobranca_sinal if sinal else None,
-            "sinal_display": sinal.get_cobranca_sinal_display() if sinal else None,
+            "sinal_kind": sinal.dunning_signal if sinal else None,
+            "sinal_display": sinal.get_dunning_signal_display() if sinal else None,
             "sinal_em": sinal.happened_on if sinal else None,
             "sinal_activity": sinal.pk if sinal else None,
             "reincidente": reincidente(invoice.account, dia, ignorando=invoice, contexto=contexto),

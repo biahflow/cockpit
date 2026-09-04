@@ -475,7 +475,7 @@ const FIXTURES: Record<string, unknown> = {
     // O sinal por registrar (FDD 038): selo neutro, data e o botão do atalho — superfície nova, e o
     // axe precisa medir o contraste dela ao lado do selo colorido da satisfação vigente, que é
     // justamente o par que a tela não pode deixar parecer a mesma coisa.
-    sinal_kind: indice === 1 ? "insatisfeito" : indice === 3 ? "nao_pode" : null,
+    sinal_kind: indice === 1 ? "dissatisfied" : indice === 3 ? "unable_to_pay" : null,
     sinal_display: indice === 1 ? "Insatisfeito" : indice === 3 ? "Não pôde pagar" : null,
     sinal_em: indice === 1 || indice === 3 ? VENCIDO : null,
     sinal_activity: indice === 1 ? 11 : indice === 3 ? 13 : null,
@@ -498,8 +498,8 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v2/activities/": serie(3, index => ({
     id: index, account: 1, commercial_opportunity: null,
     invoice: index === 1 ? 1 : null,
-    cobranca_sinal: index === 1 ? "nao_pode" : "",
-    cobranca_sinal_display: index === 1 ? "Não pôde pagar" : "",
+    dunning_signal: index === 1 ? "unable_to_pay" : "",
+    dunning_signal_display: index === 1 ? "Não pôde pagar" : "",
     kind: "call", kind_display: "Ligação", happened_on: HOJE,
     summary: `Retorno do financeiro sobre a fatura em aberto — ${NOME_LONGO}`,
     notes: "Pediu para reprogramar o pagamento para o próximo ciclo de faturamento.",
