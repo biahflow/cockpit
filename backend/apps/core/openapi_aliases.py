@@ -134,6 +134,12 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
 ALIASES_DEPRECIADOS_DE_DICT_CRU: dict[str, tuple[str, ...]] = {
     "CobrancaPainelLinha": ("client", "client_name"),
     "DeliveryTimelineOverview": ("client_name",),
+    # `client_id`/`status` do overview de conta (issue #122, fatia 4c): a lacuna que a emenda da
+    # fatia 4a da ADR 0066 declarou por escrito — "dívida de resposta, não de contrato", porque
+    # `AccountOverviewList`/`AccountOverviewDetail` não tinham item tipado. Com o item tipado, o
+    # esquema passa a ver as duas chaves, e é isto que as move de "dívida de resposta" para aqui.
+    "AccountOverviewRow": ("client_id", "status"),
+    "AccountOverviewDetail": ("client_id", "status"),
 }
 
 # A união, e a única coisa que os hooks do drf-spectacular leem.
@@ -160,6 +166,7 @@ ALIASES_DEPRECIADOS_NO_ESQUEMA: dict[str, tuple[str, ...]] = {
 # referência conta ocorrências de texto, e a allowlist deste arquivo só declara uma.
 CANONICO_DA_CHAVE: dict[str, str | None] = {
     "client": "account",
+    "client_id": "account_id",
     "client_name": "account_name",
     "client_vertical": "account_vertical",
     "client_vertical_name": "account_vertical_name",

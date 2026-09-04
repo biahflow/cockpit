@@ -47,8 +47,11 @@ atenção humana. Esta FDD assume que a medição justificou seguir.
   sinal de ROI negativo do `health.py` e o bloco de ROI **que já vai à tela do cliente**.
   Esta FDD adota `actual_value` como **valor contratado** e a soma das faturas pagas como
   **recebido**, sem alterar nenhum consumidor existente — o ROI segue lendo o que sempre leu.
-  Trocar a fonte do ROI é mudança de contrato e **exige ADR**, que esta FDD deixa pendente e
-  nomeada em vez de resolver por conta própria.
+  Trocar a fonte do ROI é mudança de contrato e **exigia ADR**, que esta FDD deixou pendente e
+  nomeada em vez de resolver por conta própria. **A [ADR 0067](../adr/0067-o-roi-continua-saindo-do-contratado-e-o-recebido-ganha-nome-proprio.md)
+  (04/09/2026) decidiu, e a decisão é não trocar:** o ROI segue no contratado nos seis leitores, e
+  o recebido ganha nome próprio quando for construído — nunca o rótulo do ROI. O que esta FDD
+  adotou como estado provisório virou decisão registrada.
 - **Acesso.** `resource = "invoice"` no `RolePermission`, que nega por padrão: admin escreve
   e emite; Vendas lê; Entrega **não alcança** — dado financeiro não pertence ao recorte de
   projeto, e o `ProjectScopedMixin` não se aplica mesmo quando há `Project` ligado.
@@ -86,7 +89,9 @@ com dono e prazo. Dependem da régua existir.
 **Emissão de NFS-e.** É pântano municipal e merece fornecedor próprio; entra quando houver
 faturamento real para emitir sobre.
 
-**Trocar a fonte do ROI de `actual_value` para faturas pagas.** Nomeado acima, **pede ADR**.
+**Trocar a fonte do ROI de `actual_value` para faturas pagas.** Nomeado acima, e **decidido pela
+ADR 0067** (04/09/2026): não se troca. Fica fora desta FDD e de qualquer outra — o que resta é o
+*recebido* nascer com nome próprio, quando alguém precisar dele.
 
 **A nota de crédito.** Citada nas Regras como alternativa ao cancelamento, ficou de fora por
 recomendação — ver "O que a construção decidiu". Cancelar com motivo obrigatório, mais uma nova
