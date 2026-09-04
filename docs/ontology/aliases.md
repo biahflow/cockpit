@@ -33,6 +33,8 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chaves `client` / `client_name` do painel de cobrança e `client_name` da visão compacta da entrega | `account` / `account_name` | `cobranca.py`, `views.py` | `/api/v2/` (pago nas fatias 3a e 4a) |
 | chaves `client_vertical` / `client_vertical_name` (só leitura) | `account_vertical` / `account_vertical_name` | `serializers.py` | `/api/v2/` (pago na fatia 4a) |
 | chave `clients` que envolve a lista de `GET /clients/overview/` | `accounts` | `views.py` | `/api/v2/` (pago na fatia 4a — **troca**, não convive) |
+| chaves `client_id` / `status` de cada linha crua de `GET /clients/overview/` e do detalhe dela | `account_id` / `lifecycle_status` | `views.py` | `/api/v2/` (pago na fatia 4c) |
+| chave `roi.by_client` que envolve o recorte do ROI por conta em `GET /analytics/` | `roi.by_account` | `views.py` | `/api/v2/` (pago na fatia 4d — **troca**, não convive) |
 | chave de entrada `signer_email` (um signatário) | `signers[]`, lista de `{email, role}` | `views.py` (`_signers_do_pedido`) | `/api/v2/` |
 | chaves `cobranca_sinal` / `cobranca_sinal_display` (só leitura; classe/campo/valor pagos na fatia 5.2 da #122, 04/09/2026 — só resta a leitura) | `dunning_signal` / `dunning_signal_display` | `ActivitySerializer` | `/api/v2/` |
 | chaves `degrau` / `degrau_display` (só leitura) e valor de entrada `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` (**classe, tabela, campo e valor persistido já pagos**, fatia 5.4, 04/09/2026 — só restam a leitura e a entrada) | `dunning_step` / `dunning_step_display` e `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `DunningContactSerializer`, `views.VALORES_LEGADOS_DO_DEGRAU` (corpo das actions e filtro) | `/api/v2/` |
@@ -411,6 +413,46 @@ A regressão da §2c está em
 
 O que resta para as fatias seguintes da #122: a travessia da SPA para a `/api/v2/` (fatia 4b) e as
 famílias de enum ainda em português (fatia 5) — nenhuma delas nasce antes da anterior.
+
+### O recorte do ROI por conta troca de chave — fatia 4d da #122, 04/09/2026
+
+`roi.by_client` de `GET /analytics/` era a última chave «client» que a fatia 4a deixou de fora, e a
+razão de ter ficado está escrita no comentário que ela deixou no `@extend_schema` de
+`AnalyticsView`: **tipá-la a faria aparecer no `openapi-v2.yaml`**, e `test_nenhuma_chave_client_sobra_na_v2`
+varre o contrato inteiro reprovando toda propriedade com «client». O esquema, por isso, ficava
+silencioso sobre ela — um objeto sem `additionalProperties: false` admite a chave —, que é o menos
+ruim entre calar e mentir, mas não deixava de ser dívida: a única chave do `roi` sem tipo, num
+contrato cujo critério de aceite é o artefato.
+
+Ela **troca**, não convive, pelo precedente de `clients`/`accounts` da fatia 4a e de
+`processos`/`processes` da 3a: a chave envolve a lista inteira do recorte, e duplicá-la pagaria o
+recorte duas vezes. O par **não** entra em `ALIASES_DEPRECIADOS_DE_DICT_CRU` — aquele mapa marca a
+propriedade como depreciada na v1 e a **remove** da v2, e aqui não há o que remover, porque a chave
+da v2 já nasce `by_account`. É o mesmo motivo pelo qual `clients`/`accounts` também não está em mapa
+nenhum.
+
+**São dois mecanismos, e a fatia precisa dos dois.** `openapi_aliases.chave_da_geracao` lê
+`OPENAPI_ALVO` e decide a chave na **geração do esquema**; `versioning.versao_de` lê a versão do
+caminho e decide a chave **em runtime**. Nada liga um ao outro — `request.version` não existe na
+hora de montar o contrato, e `OPENAPI_ALVO` não existe na hora de responder —, então mexer em só um
+deles publicaria um contrato que discorda do corpo devolvido, que é a mentira publicada que a
+decisão 5 da ADR 0066 recusa. Com os dois, `openapi.yaml` descreve `by_client` tipado e
+`openapi-v2.yaml` descreve `by_account` tipado, e nenhum dos dois tem a chave do outro.
+
+**A SPA fez parte da fatia, e não de uma seguinte.** `frontend/src/api.ts` já aponta para
+`/api/v2`, então trocar a chave só no servidor deixaria `data.roi.by_account` `undefined`, e
+`RoiTable` faz `rows.map` sem guarda — a tela de Indicadores **quebraria no render**, não
+renderizaria uma tabela vazia. Aqui a falha é barulhenta por acidente da implementação do
+componente, não por desenho: o mesmo descompasso numa tabela que tolerasse `undefined` sairia
+como seção vazia e ninguém saberia. É a mesma travessia que a fatia 4a fez em `AccountsPage`
+quando `clients` virou `accounts`. O **rótulo** da tela continua dizendo "ROI por cliente": "Cliente" é rótulo legítimo de
+interface para a conta em `lifecycle_status=active` (`language-map.md` §4), e o que morre na
+`/api/v2/` é a chave de payload, nunca o texto.
+
+A regressão está em `backend/tests/test_aliases_da_v2.py`
+(`test_o_recorte_do_roi_por_conta_troca_a_chave_por_versao`), e ela cria conta com projeto, receita
+e custo de propósito: um recorte vazio sai `[]` nas duas versões e passaria o teste sem provar nada
+sobre a chave que o envolve.
 
 ## As três regras
 

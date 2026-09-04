@@ -42,7 +42,12 @@ export type Analytics = {
   avg_ticket: number;
   avg_cycle_days: number | null;
   pipeline: { id: number; name: string; kind: string; position: number; opportunity_count: number; estimated_total: number | null }[];
-  roi: { revenue: number; cost: number; roi: number | null; by_client: RoiRow[]; by_service: RoiRow[] };
+  // `by_account` é o recorte por conta. Ele **trocou** de nome com a `/api/v2/` (era `by_client`
+  // na `/api/v1/`, e a chave envolve a lista inteira, então não convive — `docs/ontology/aliases.md`);
+  // a SPA fala a `/api/v2/`, então só a canônica existe aqui. O rótulo da tela continua dizendo
+  // "ROI por cliente": "Cliente" é rótulo legítimo de interface (`language-map.md` §4), e o que
+  // muda é a chave de payload.
+  roi: { revenue: number; cost: number; roi: number | null; by_account: RoiRow[]; by_service: RoiRow[] };
 };
 // Onde a conta está na relação com a casa. **"Cliente" é o rótulo de `active`, não o nome da
 // entidade** (`docs/ontology/language-map.md` §4): `prospect` ainda não fechou, `active` é

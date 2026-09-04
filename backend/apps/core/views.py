@@ -5204,17 +5204,28 @@ class AnalyticsView(APIView):
                         "revenue": _dinheiro_do_agregado(),
                         "cost": _dinheiro_do_agregado(),
                         "roi": serializers.FloatField(allow_null=True),
-                        # **`by_client` sai na resposta e não está declarado aqui — de propósito,
-                        # e é dívida, não descuido.** Tipar a chave a faria aparecer em
-                        # `openapi-v2.yaml`, e `tests/test_openapi_aliases.py`
-                        # (`test_nenhuma_chave_client_sobra_na_v2`) varre o contrato da v2 inteiro
-                        # reprovando toda propriedade com «client» — é a guarda da fatia 4a, que
-                        # mede no artefato e não no mapa. Declará-la exige a fatia de ontologia
-                        # que falta: emitir `by_account` como canônica, registrar o par em
-                        # `ALIASES_DEPRECIADOS_DE_DICT_CRU` e deixar `_sem_chaves_legadas` tirá-la
-                        # da v2 — sem isso a v2 perderia o recorte sem substituto. Enquanto ela
-                        # não vem, o esquema fica **silencioso** sobre `by_client` (objeto sem
-                        # `additionalProperties: false` admite a chave), e não mentindo sobre ela.
+                        # **O recorte por conta troca de chave por versão** — `by_client` na
+                        # `/api/v1/`, `by_account` na `/api/v2/` — e não convive, pelo precedente
+                        # de `clients`/`accounts` em `AccountViewSet.overview` e de
+                        # `processos`/`processes` na action de IA: a chave envolve a lista
+                        # inteira, e duplicá-la pagaria o recorte duas vezes.
+                        #
+                        # É a troca que destravou **tipar** a chave aqui, o que esta declaração
+                        # antes não podia fazer: enquanto a v2 também emitia `by_client`,
+                        # declará-la a faria aparecer em `openapi-v2.yaml` e reprovar
+                        # `test_nenhuma_chave_client_sobra_na_v2` — a guarda da fatia 4a, que
+                        # mede no artefato e não no mapa. O esquema ficava silencioso sobre ela
+                        # (objeto sem `additionalProperties: false` admite a chave), que é o menos
+                        # ruim entre calar e mentir, mas ainda era dívida. Com a troca não há o
+                        # que calar: cada contrato descreve a chave que a sua versão emite.
+                        #
+                        # O par **não** entra em `ALIASES_DEPRECIADOS_DE_DICT_CRU`. Aquele mapa
+                        # marca a propriedade como depreciada na v1 e a **remove** da v2; aqui a
+                        # chave da v2 já nasce `by_account`, então não há o que remover — o mesmo
+                        # motivo pelo qual `clients`/`accounts` também não está em mapa nenhum.
+                        chave_da_geracao("by_client", "by_account"): RoiBreakdownRowSerializer(
+                            many=True
+                        ),
                         "by_service": RoiBreakdownRowSerializer(many=True),
                     },
                 ),
@@ -5258,7 +5269,7 @@ class AnalyticsView(APIView):
 
         revenue = projects.aggregate(v=Sum("actual_value"))["v"] or Decimal("0")
         cost = projects.aggregate(v=Sum("cost"))["v"] or Decimal("0")
-        by_client = [
+        by_account = [
             {"label": row["engagement__account__name"], "revenue": row["rev"] or 0, "cost": row["cost"] or 0,
              "roi": _roi(row["rev"] or Decimal("0"), row["cost"] or Decimal("0"))}
             for row in projects.values("engagement__account__name").annotate(rev=Sum("actual_value"), cost=Sum("cost")).order_by("-rev")
@@ -5357,6 +5368,13 @@ class AnalyticsView(APIView):
             key=lambda row: (-row["won"], -row["leads"], row["source"]),
         )
 
+        # A chave do recorte por conta é escolhida **aqui** pela versão da requisição, e no
+        # `@extend_schema` acima pelo alvo da geração (`chave_da_geracao`). São dois mecanismos
+        # distintos — `request.version` não existe na hora de montar o esquema, e `OPENAPI_ALVO`
+        # não existe na hora de responder — e mexer em só um deles publicaria um contrato que
+        # discorda do corpo devolvido, que é o defeito que a decisão 5 da ADR 0066 recusa.
+        chave_do_recorte_por_conta = "by_account" if versao_de(request) == V2 else "by_client"
+
         return Response({
             "funnel": {
                 "leads": {"total": leads.count(), "by_status": leads_by_status},
@@ -5371,7 +5389,7 @@ class AnalyticsView(APIView):
             "avg_cycle_days": avg_cycle,
             "pipeline": stages,
             "roi": {"revenue": revenue, "cost": cost, "roi": _roi(revenue, cost),
-                    "by_client": by_client, "by_service": by_service},
+                    chave_do_recorte_por_conta: by_account, "by_service": by_service},
         })
 
 
