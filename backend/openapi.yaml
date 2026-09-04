@@ -1278,8 +1278,13 @@ paths:
   /api/v1/clients/overview/:
     get:
       operationId: v1_clients_overview_retrieve
-      description: Lista agregada p/ o grid de contas (honra `?lifecycle_status=`
-        e o alias `?status=`).
+      description: |-
+        Lista agregada p/ o grid de contas (honra `?lifecycle_status=` e o alias `?status=`).
+
+        A chave que envolve a lista **troca** por versão — `clients` na `/api/v1/`, `accounts` na
+        `/api/v2/` —, e não convive como o resto do payload legado: duplicar aqui pagaria o corpo
+        inteiro do grid duas vezes. É o precedente da fatia 3a (`processos`/`processes` na action
+        de IA), aplicado ao segundo caso da mesma forma (issue #122, fatia 4a).
       tags:
       - v1
       security:
@@ -10342,6 +10347,10 @@ paths:
         Agregador que **estreita à mão** por `visible_to` (o mesmo contrato dos outros do
         dashboard) e tem teste próprio: a Entrega não pode ver a jornada de projeto de que não
         participa. Só projetos não-concluídos entram — o dashboard é sobre o que está em curso.
+
+        `_build_timeline_overview` emite `account_name` e `client_name` com o mesmo valor — o
+        comportamento de todo alias de leitura da v1 —, e a remoção do legado é daqui, e não do
+        agregador: ele não conhece a versão da requisição, pelo motivo do painel de cobrança.
       tags:
       - v1
       security:
@@ -12845,6 +12854,15 @@ components:
           type: string
           readOnly: true
           default: ''
+        account_name:
+          type: string
+          description: |-
+            Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
+
+            Deixá-la para o frontend faria a resposta da API carregar o nome mesmo assim, e "não
+            aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
+            nunca são projetados, anonimizado ou não: o case não precisa deles.
+          readOnly: true
         client_name:
           type: string
           description: |-
@@ -12854,6 +12872,7 @@ components:
             aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
             nunca são projetados, anonimizado ou não: o case não precisa deles.
           readOnly: true
+          deprecated: true
         metrics:
           readOnly: true
         health_snapshot:
@@ -12898,6 +12917,7 @@ components:
           readOnly: true
       required:
       - account_consent
+      - account_name
       - client_consent
       - client_name
       - consent_recorded_at
@@ -12988,9 +13008,13 @@ components:
           type: integer
           readOnly: true
           deprecated: true
+        account_name:
+          type: string
+          readOnly: true
         client_name:
           type: string
           readOnly: true
+          deprecated: true
         degrau:
           allOf:
           - $ref: '#/components/schemas/DegrauEnum'
@@ -13032,6 +13056,7 @@ components:
           readOnly: true
       required:
       - account
+      - account_name
       - ai_interaction
       - body
       - canal
@@ -13075,8 +13100,10 @@ components:
           type: string
         client:
           type: integer
+          deprecated: true
         client_name:
           type: string
+          deprecated: true
         amount:
           type: string
           format: decimal
@@ -13234,10 +13261,15 @@ components:
           type: integer
           readOnly: true
           deprecated: true
+        account_name:
+          type: string
+          readOnly: true
+          default: ''
         client_name:
           type: string
           readOnly: true
           default: ''
+          deprecated: true
         owner:
           type: integer
         until:
@@ -13270,6 +13302,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account_name
       - client
       - client_name
       - created_at
@@ -13579,8 +13612,11 @@ components:
           type: integer
         project_name:
           type: string
+        account_name:
+          type: string
         client_name:
           type: string
+          deprecated: true
         current_phase_name:
           type: string
           nullable: true
@@ -13597,6 +13633,7 @@ components:
           type: string
           nullable: true
       required:
+      - account_name
       - blocker_note
       - canonical_stage
       - client_name
@@ -14869,9 +14906,13 @@ components:
           type: integer
           readOnly: true
           deprecated: true
+        account_name:
+          type: string
+          readOnly: true
         client_name:
           type: string
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true
@@ -14964,6 +15005,7 @@ components:
           readOnly: true
       required:
       - account
+      - account_name
       - amount
       - cancel_reason
       - cancelled_at
@@ -16194,6 +16236,15 @@ components:
           type: string
           readOnly: true
           default: ''
+        account_name:
+          type: string
+          description: |-
+            Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
+
+            Deixá-la para o frontend faria a resposta da API carregar o nome mesmo assim, e "não
+            aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
+            nunca são projetados, anonimizado ou não: o case não precisa deles.
+          readOnly: true
         client_name:
           type: string
           description: |-
@@ -16203,6 +16254,7 @@ components:
             aparece" passaria a depender de todo consumidor lembrar de escondê-lo. Razão social e CNPJ
             nunca são projetados, anonimizado ou não: o case não precisa deles.
           readOnly: true
+          deprecated: true
         metrics:
           readOnly: true
         health_snapshot:
@@ -16271,10 +16323,15 @@ components:
           type: integer
           readOnly: true
           deprecated: true
+        account_name:
+          type: string
+          readOnly: true
+          default: ''
         client_name:
           type: string
           readOnly: true
           default: ''
+          deprecated: true
         owner:
           type: integer
         until:
@@ -17340,9 +17397,13 @@ components:
           type: integer
           readOnly: true
           deprecated: true
+        account_name:
+          type: string
+          readOnly: true
         client_name:
           type: string
           readOnly: true
+          deprecated: true
         project:
           type: integer
           nullable: true
@@ -18042,9 +18103,13 @@ components:
           type: integer
           readOnly: true
           deprecated: true
+        account_name:
+          type: string
+          readOnly: true
         client_name:
           type: string
           readOnly: true
+          deprecated: true
         name:
           type: string
           maxLength: 255
@@ -18314,13 +18379,22 @@ components:
           nullable: true
         ai_score_reviewed:
           type: boolean
+        account_vertical:
+          type: integer
+          readOnly: true
+        account_vertical_name:
+          type: string
+          readOnly: true
+          default: ''
         client_vertical:
           type: integer
           readOnly: true
+          deprecated: true
         client_vertical_name:
           type: string
           readOnly: true
           default: ''
+          deprecated: true
     PatchedProjectChecklistItem:
       type: object
       description: Item do quality gate de um projeto — só `checked` é editável (FDD
@@ -19326,9 +19400,13 @@ components:
           type: integer
           readOnly: true
           deprecated: true
+        account_name:
+          type: string
+          readOnly: true
         client_name:
           type: string
           readOnly: true
+          deprecated: true
         name:
           type: string
           maxLength: 255
@@ -19421,6 +19499,7 @@ components:
           readOnly: true
       required:
       - account
+      - account_name
       - client
       - client_name
       - created_at
@@ -19630,14 +19709,25 @@ components:
           nullable: true
         ai_score_reviewed:
           type: boolean
+        account_vertical:
+          type: integer
+          readOnly: true
+        account_vertical_name:
+          type: string
+          readOnly: true
+          default: ''
         client_vertical:
           type: integer
           readOnly: true
+          deprecated: true
         client_vertical_name:
           type: string
           readOnly: true
           default: ''
+          deprecated: true
       required:
+      - account_vertical
+      - account_vertical_name
       - ai_opportunity
       - ai_scored_at
       - client

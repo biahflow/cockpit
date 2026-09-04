@@ -52,9 +52,12 @@ from apps.core.models import (
     Satisfacao,
     SignatureRequest,
     User,
+    Vertical,
 )
 from apps.core.openapi_aliases import (
     ALIASES_DEPRECIADOS,
+    ALIASES_DEPRECIADOS_DE_DICT_CRU,
+    ALIASES_DEPRECIADOS_NO_ESQUEMA,
     CANONICO_DA_CHAVE,
     excluir_a_v2_do_contrato,
 )
@@ -139,6 +142,34 @@ def test_todo_componente_do_mapa_tem_serializer_que_executa_a_remocao() -> None:
     assert relatorio == [], (
         "ALIASES_DEPRECIADOS e a adoção do mixin divergiram — o mapa anuncia uma depreciação que "
         "ninguém executa:\n  " + "\n  ".join(relatorio)
+    )
+
+
+def test_o_mapa_de_dict_cru_nao_tem_serializer_e_nao_se_sobrepoe_ao_outro() -> None:
+    """A guarda simétrica da de cima, para o segundo mapa não virar a saída fácil dela.
+
+    `ALIASES_DEPRECIADOS_DE_DICT_CRU` existe porque um `inline_serializer` não tem
+    `<Componente>Serializer` por onde `AliasesDaV1Mixin` passe — a remoção é da view
+    (`views._sem_chaves_legadas`). Sem esta guarda, mover uma entrada legítima para lá seria o jeito
+    de fazer a guarda de cima calar sobre um componente que **tem** serializer: o mapa anunciaria a
+    depreciação, o mixin não a executaria, e a v2 continuaria emitindo a chave.
+
+    A segunda metade — os dois mapas disjuntos — é o que impede a mesma entrada de existir duas
+    vezes com listas diferentes, que é a divergência silenciosa de sempre.
+    """
+    com_serializer = [
+        componente
+        for componente in ALIASES_DEPRECIADOS_DE_DICT_CRU
+        if hasattr(modulo_de_serializers, f"{componente}Serializer")
+    ]
+
+    assert com_serializer == [], (
+        "componente com serializer declarado em ALIASES_DEPRECIADOS_DE_DICT_CRU — ele pertence a "
+        f"ALIASES_DEPRECIADOS, onde o mixin o executa: {com_serializer}"
+    )
+    assert not (set(ALIASES_DEPRECIADOS) & set(ALIASES_DEPRECIADOS_DE_DICT_CRU))
+    assert set(ALIASES_DEPRECIADOS_NO_ESQUEMA) == (
+        set(ALIASES_DEPRECIADOS) | set(ALIASES_DEPRECIADOS_DE_DICT_CRU)
     )
 
 
@@ -627,6 +658,108 @@ def test_status_continua_funcionando_em_componente_sem_entrada_no_mapa(
     assert resposta.data["status"] == "paused"
 
 
+# ---------------------------------------------------------------------------------------------
+# 6. As chaves «client» residuais, que nunca tinham entrado no mapa (issue #122, fatia 4a)
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_o_nome_da_conta_sai_pelos_dois_nomes_na_v1_e_so_pelo_canonico_na_v2(
+    admin_client: APIClient,
+) -> None:
+    """`client_name` era projeção sem canônica: a v2 nasceria sem nome nenhum para a conta.
+
+    Um representativo dos cinco `ModelSerializer` que a fatia 4a acertou — a iteração de
+    `test_a_v2_nao_emite_o_alias_e_a_v1_continua_emitindo` já cobre a **ausência** nos outros
+    quatro; o que se afirma aqui é a metade que ela não vê, a canônica **presente** nas duas.
+    """
+    fatura = InvoiceFactory()
+
+    da_v1 = admin_client.get(f"/api/v1/invoices/{fatura.pk}/").json()
+    da_v2 = admin_client.get(f"/api/v2/invoices/{fatura.pk}/").json()
+
+    assert da_v1["account_name"] == da_v1["client_name"] == fatura.account.name
+    assert da_v2["account_name"] == fatura.account.name
+    assert "client_name" not in da_v2
+
+
+@pytest.mark.django_db
+def test_a_vertical_do_projeto_sai_pelos_dois_nomes_na_v1_e_so_pelo_canonico_na_v2(
+    admin_client: APIClient,
+) -> None:
+    """`client_vertical`/`client_vertical_name` — projeção sobre `engagement.account.vertical`.
+
+    Nunca houve coluna `Project.client_vertical`: o campo do modelo é `Account.vertical`, e o que
+    a fatia 4a paga é a **chave de payload** (`docs/ontology/aliases.md` §2c).
+    """
+    vertical = Vertical.objects.create(name="Igrejas", slug="igrejas")
+    conta = AccountFactory(vertical=vertical)
+    projeto = ProjectFactory(engagement=EngagementFactory(account=conta))
+
+    da_v1 = admin_client.get(f"/api/v1/projects/{projeto.pk}/").json()
+    da_v2 = admin_client.get(f"/api/v2/projects/{projeto.pk}/").json()
+
+    assert da_v1["account_vertical"] == da_v1["client_vertical"] == vertical.pk
+    assert da_v1["account_vertical_name"] == da_v1["client_vertical_name"] == "Igrejas"
+    assert da_v2["account_vertical"] == vertical.pk
+    assert da_v2["account_vertical_name"] == "Igrejas"
+    assert "client_vertical" not in da_v2
+    assert "client_vertical_name" not in da_v2
+
+
+@pytest.mark.django_db
+def test_a_visao_agregada_de_contas_troca_a_chave_por_versao(admin_client: APIClient) -> None:
+    """`clients` na v1, `accounts` na v2 — a chave envolve a lista inteira, então **troca**.
+
+    Mesmo precedente de `processos`/`processes` na action de IA (fatia 3a): duplicar pagaria o
+    corpo do grid duas vezes, e aqui — ao contrário do resto do payload legado — não há um par que
+    saia junto.
+    """
+    conta = AccountFactory()
+
+    da_v1 = admin_client.get("/api/v1/clients/overview/").json()
+    da_v2 = admin_client.get("/api/v2/accounts/overview/").json()
+
+    assert [linha["client_id"] for linha in da_v1["clients"]] == [conta.pk]
+    assert "accounts" not in da_v1
+    assert [linha["client_id"] for linha in da_v2["accounts"]] == [conta.pk]
+    assert "clients" not in da_v2
+
+
+@pytest.mark.django_db
+def test_a_visao_compacta_da_entrega_tem_os_dois_nomes_na_v1_e_so_o_canonico_na_v2(
+    admin_client: APIClient,
+) -> None:
+    """O segundo dict cru, e por isso o segundo chamador de `views._sem_chaves_legadas`."""
+    projeto = ProjectFactory()
+
+    (linha_v1,) = admin_client.get("/api/v1/projects/timeline-overview/").json()
+    (linha_v2,) = admin_client.get("/api/v2/projects/timeline-overview/").json()
+
+    nome = projeto.engagement.account.name
+    assert linha_v1["account_name"] == linha_v1["client_name"] == nome
+    assert linha_v2["account_name"] == nome
+    assert "client_name" not in linha_v2
+
+
+@pytest.mark.django_db
+def test_o_alias_de_nome_no_corpo_da_v2_e_recusado(admin_client: APIClient) -> None:
+    """A recusa por componente vale para as chaves novas: `client_name` diz `account_name`.
+
+    Não há escrita por nenhuma das duas (são projeção), e é justamente por isso que a recusa
+    importa: sem ela a chave cairia no campo `read_only` do DRF, aceita e ignorada — o modo de
+    falha mudo que a decisão 3 da ADR 0066 recusou.
+    """
+    fatura = InvoiceFactory()
+
+    resposta = admin_client.patch(
+        f"/api/v2/invoices/{fatura.pk}/", {"client_name": "Outra Conta"}, format="json"
+    )
+
+    assert resposta.status_code == 400
+    assert "use 'account_name'" in str(resposta.data["client_name"])
+
+
 def test_todo_valor_nao_nulo_de_canonico_da_chave_cobre_aliases_depreciados() -> None:
     """A guarda do mapa novo: toda chave de `ALIASES_DEPRECIADOS` tem entrada em `CANONICO_DA_CHAVE`.
 
@@ -635,7 +768,9 @@ def test_todo_valor_nao_nulo_de_canonico_da_chave_cobre_aliases_depreciados() ->
     "sem sucessora" para uma chave que tem uma.
     """
     todas_as_chaves_depreciadas = {
-        chave for propriedades in ALIASES_DEPRECIADOS.values() for chave in propriedades
+        chave
+        for propriedades in ALIASES_DEPRECIADOS_NO_ESQUEMA.values()
+        for chave in propriedades
     }
 
     assert todas_as_chaves_depreciadas <= set(CANONICO_DA_CHAVE)

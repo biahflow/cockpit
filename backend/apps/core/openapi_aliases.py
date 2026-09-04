@@ -41,6 +41,12 @@ O mapa cobre dois mecanismos, e os dois produzem a mesma forma no esquema (uma p
 serializer que herde `AliasesDaV1Mixin` seria uma chave anunciada como depreciada no esquema e
 ainda saindo na resposta da v2 — ver `backend/tests/test_aliases_da_v2.py`.
 
+**São dois mapas desde a fatia 4a, e o segundo existe para essa guarda continuar valendo.**
+`ALIASES_DEPRECIADOS_DE_DICT_CRU` lista os componentes de `inline_serializer` — o painel de
+cobrança e a visão compacta da entrega —, cujo alias a **view** remove à mão porque não há
+serializer por onde o mixin passar. Os hooks leem a união (`ALIASES_DEPRECIADOS_NO_ESQUEMA`), que é
+o único ponto em que a origem da propriedade deixa de importar; o mixin lê só o primeiro.
+
 **Nota sobre a referência à chave do gate.** `outcome-como-decisao-de-gate`
 (`backend/tests/test_vocabulario.py`) é a única regra do vocabulário que casa **referência**, não
 declaração — o identificador inteiro está errado em qualquer posição. `ALIASES_DEPRECIADOS`
@@ -73,9 +79,9 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     "Account": ("status",),
     "Activity": ("client", "opportunity"),
     "Artifact": ("opportunity",),
-    "CobrancaContato": ("client",),
-    "CobrancaSuspensao": ("client",),
-    "Case": ("client_consent",),
+    "CobrancaContato": ("client", "client_name"),
+    "CobrancaSuspensao": ("client", "client_name"),
+    "Case": ("client_consent", "client_name"),
     "CommercialOpportunity": ("client",),
     "Contact": ("client",),
     # `kpi_baseline`/`kpi_current` são a exceção da §2d: a **escrita** por elas parou na ADR 0055
@@ -84,14 +90,47 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     # mapa não a cumpria — entrada que faltava, não alias novo (issue #122).
     "DigitalEmployee": ("kpi_baseline", "kpi_current"),
     "Document": ("client", "opportunity"),
-    "Invoice": ("client",),
+    "Invoice": ("client", "client_name"),
     "Lead": ("client", "opportunity"),
     "PhaseEvent": _CHAVE_LEGADA_DO_GATE,
-    "Process": ("client",),
+    "Process": ("client", "client_name"),
     "ProcessStep": ("processo",),
-    "Project": ("opportunity", "client", "ai_opportunity"),
+    # `client_vertical`/`client_vertical_name` são **projeção**, e nunca foram coluna: o campo do
+    # modelo é `Account.vertical`, e estas duas chaves atravessam `engagement.account` para o
+    # detalhe do projeto pedir o catálogo já resolvido (FDD 026). Por isso não há `RenameField` a
+    # fazer — o que a fatia 4a paga é a **chave de payload**, que é onde o nome errado estava
+    # (`docs/ontology/aliases.md` §2c). As canônicas (`account_vertical`/`account_vertical_name`)
+    # saem ao lado na v1 e sozinhas na v2, como todo par desta tabela.
+    "Project": (
+        "opportunity", "client", "ai_opportunity", "client_vertical", "client_vertical_name",
+    ),
     "ProjectPhase": _CHAVE_LEGADA_DO_GATE,
     "Satisfacao": ("client",),
+}
+
+# Os componentes que **não têm serializer** e por isso não podem estar no mapa acima: são
+# `inline_serializer` de `@extend_schema`, descrevendo um dicionário cru que a view monta à mão.
+#
+# A separação não é organização, é a diferença de **quem executa a remoção**. `AliasesDaV1Mixin` lê
+# `ALIASES_DEPRECIADOS` e some com a chave na resposta da v2; um dict cru não passa por serializer
+# nenhum, então quem o faz é a própria view (`views._sem_chaves_legadas`, chamada quando
+# `versao_de(request) == V2`). Guardar os dois casos no mesmo dicionário quebraria a guarda que
+# `backend/tests/test_aliases_da_v2.py` mantém sobre o primeiro — "todo componente do mapa tem um
+# serializer que executa a remoção" —, e afrouxá-la para caber estes dois abriria a porta para o
+# caso que ela existe para pegar: a entrada nova que anuncia uma depreciação que ninguém executa.
+#
+# O que os dois casos **têm** em comum é o esquema, e é por isso que os hooks abaixo leem a união
+# (`ALIASES_DEPRECIADOS_NO_ESQUEMA`) e não um dos dois: para quem lê o contrato, a origem da
+# propriedade é indiferente — ela sai `deprecated` na v1 e ausente na v2 nos dois casos.
+ALIASES_DEPRECIADOS_DE_DICT_CRU: dict[str, tuple[str, ...]] = {
+    "CobrancaPainelLinha": ("client", "client_name"),
+    "DeliveryTimelineOverview": ("client_name",),
+}
+
+# A união, e a única coisa que os hooks do drf-spectacular leem.
+ALIASES_DEPRECIADOS_NO_ESQUEMA: dict[str, tuple[str, ...]] = {
+    **ALIASES_DEPRECIADOS,
+    **ALIASES_DEPRECIADOS_DE_DICT_CRU,
 }
 
 # O nome canônico de cada chave legada que aparece em `ALIASES_DEPRECIADOS` — a quarta consumidora
@@ -112,6 +151,9 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
 # referência conta ocorrências de texto, e a allowlist deste arquivo só declara uma.
 CANONICO_DA_CHAVE: dict[str, str | None] = {
     "client": "account",
+    "client_name": "account_name",
+    "client_vertical": "account_vertical",
+    "client_vertical_name": "account_vertical_name",
     "status": "lifecycle_status",
     "opportunity": "commercial_opportunity",
     _CHAVE_LEGADA_DO_GATE[0]: "gate_decision",
@@ -140,6 +182,23 @@ def alvo_da_geracao() -> str:
     return os.environ.get("OPENAPI_ALVO", V1).strip().lower() or V1
 
 
+def chave_da_geracao(legada: str, canonica: str) -> str:
+    """A chave que **troca** por versão, dita no vocabulário do esquema (issue #122, fatia 4a).
+
+    O par leitura-legada/leitura-canônica de `ALIASES_DEPRECIADOS` convive: as duas chaves saem na
+    v1 e só a canônica na v2. Há um caso em que isso não vale — a chave que **envolve a lista
+    inteira** —, porque duplicá-la pagaria o corpo da resposta duas vezes. O precedente é a fatia
+    3a (`processos`/`processes` na action de IA); a fatia 4a aplica o mesmo a `clients`/`accounts`
+    em `GET /accounts/overview/`.
+
+    Quando a chave troca, o **componente** também troca, e é isso que esta função entrega: a view
+    escolhe a chave da resposta por `versao_de(request)`, e o `@extend_schema` escolhe a do esquema
+    pelo alvo da geração. Sem ela, o `openapi-v2.yaml` descreveria `clients` numa resposta que só
+    tem `accounts` — a mentira publicada que a decisão 5 da ADR 0066 recusa.
+    """
+    return canonica if alvo_da_geracao() == V2 else legada
+
+
 def marcar_aliases_depreciados(
     result: dict[str, Any], generator: Any, request: Any, public: bool
 ) -> dict[str, Any]:
@@ -161,7 +220,7 @@ def marcar_aliases_depreciados(
     for nome_componente, schema in schemas.items():
         casado = _PREFIXO_PATCHED.match(nome_componente)
         nome_base = casado.group(1) if casado else nome_componente
-        propriedades_alias = ALIASES_DEPRECIADOS.get(nome_base)
+        propriedades_alias = ALIASES_DEPRECIADOS_NO_ESQUEMA.get(nome_base)
         if not propriedades_alias:
             continue
         propriedades = schema.get("properties", {})
@@ -195,7 +254,7 @@ def remover_aliases_do_contrato(
     for nome_componente, schema in schemas.items():
         casado = _PREFIXO_PATCHED.match(nome_componente)
         nome_base = casado.group(1) if casado else nome_componente
-        propriedades_alias = ALIASES_DEPRECIADOS.get(nome_base)
+        propriedades_alias = ALIASES_DEPRECIADOS_NO_ESQUEMA.get(nome_base)
         if not propriedades_alias:
             continue
         propriedades = schema.get("properties", {})

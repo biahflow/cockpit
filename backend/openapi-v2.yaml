@@ -186,8 +186,13 @@ paths:
   /api/v2/accounts/overview/:
     get:
       operationId: accounts_overview_retrieve
-      description: Lista agregada p/ o grid de contas (honra `?lifecycle_status=`
-        e o alias `?status=`).
+      description: |-
+        Lista agregada p/ o grid de contas (honra `?lifecycle_status=` e o alias `?status=`).
+
+        A chave que envolve a lista **troca** por versão — `clients` na `/api/v1/`, `accounts` na
+        `/api/v2/` —, e não convive como o resto do payload legado: duplicar aqui pagaria o corpo
+        inteiro do grid duas vezes. É o precedente da fatia 3a (`processos`/`processes` na action
+        de IA), aplicado ao segundo caso da mesma forma (issue #122, fatia 4a).
       tags:
       - accounts
       security:
@@ -10342,6 +10347,10 @@ paths:
         Agregador que **estreita à mão** por `visible_to` (o mesmo contrato dos outros do
         dashboard) e tem teste próprio: a Entrega não pode ver a jornada de projeto de que não
         participa. Só projetos não-concluídos entram — o dashboard é sobre o que está em curso.
+
+        `_build_timeline_overview` emite `account_name` e `client_name` com o mesmo valor — o
+        comportamento de todo alias de leitura da v1 —, e a remoção do legado é daqui, e não do
+        agregador: ele não conhece a versão da requisição, pelo motivo do painel de cobrança.
       tags:
       - projects
       security:
@@ -12395,11 +12404,11 @@ components:
     AccountOverviewList:
       type: object
       properties:
-        clients:
+        accounts:
           type: array
           items: {}
       required:
-      - clients
+      - accounts
     Activity:
       type: object
       properties:
@@ -12825,7 +12834,7 @@ components:
           type: string
           readOnly: true
           default: ''
-        client_name:
+        account_name:
           type: string
           description: |-
             Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
@@ -12874,7 +12883,7 @@ components:
           readOnly: true
       required:
       - account_consent
-      - client_name
+      - account_name
       - consent_recorded_at
       - consent_recorded_by
       - created_at
@@ -12959,7 +12968,7 @@ components:
         account:
           type: integer
           readOnly: true
-        client_name:
+        account_name:
           type: string
           readOnly: true
         degrau:
@@ -13003,11 +13012,11 @@ components:
           readOnly: true
       required:
       - account
+      - account_name
       - ai_interaction
       - body
       - canal
       - canal_display
-      - client_name
       - created_at
       - degrau
       - degrau_display
@@ -13042,10 +13051,6 @@ components:
         account:
           type: integer
         account_name:
-          type: string
-        client:
-          type: integer
-        client_name:
           type: string
         amount:
           type: string
@@ -13122,8 +13127,6 @@ components:
       - account
       - account_name
       - amount
-      - client
-      - client_name
       - dias_de_atraso
       - due_date
       - health_level
@@ -13200,7 +13203,7 @@ components:
         account:
           type: integer
           nullable: true
-        client_name:
+        account_name:
           type: string
           readOnly: true
           default: ''
@@ -13236,7 +13239,7 @@ components:
           format: date-time
           readOnly: true
       required:
-      - client_name
+      - account_name
       - created_at
       - created_by
       - id
@@ -13534,7 +13537,7 @@ components:
           type: integer
         project_name:
           type: string
-        client_name:
+        account_name:
           type: string
         current_phase_name:
           type: string
@@ -13552,9 +13555,9 @@ components:
           type: string
           nullable: true
       required:
+      - account_name
       - blocker_note
       - canonical_stage
-      - client_name
       - current_phase_name
       - next_gate_name
       - project_id
@@ -14794,7 +14797,7 @@ components:
           readOnly: true
         account:
           type: integer
-        client_name:
+        account_name:
           type: string
           readOnly: true
         project:
@@ -14889,11 +14892,11 @@ components:
           readOnly: true
       required:
       - account
+      - account_name
       - amount
       - cancel_reason
       - cancelled_at
       - cancelled_by
-      - client_name
       - created_at
       - due_date
       - external_reference
@@ -16092,7 +16095,7 @@ components:
           type: string
           readOnly: true
           default: ''
-        client_name:
+        account_name:
           type: string
           description: |-
             Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
@@ -16161,7 +16164,7 @@ components:
         account:
           type: integer
           nullable: true
-        client_name:
+        account_name:
           type: string
           readOnly: true
           default: ''
@@ -17196,7 +17199,7 @@ components:
           readOnly: true
         account:
           type: integer
-        client_name:
+        account_name:
           type: string
           readOnly: true
         project:
@@ -17886,7 +17889,7 @@ components:
           readOnly: true
         account:
           type: integer
-        client_name:
+        account_name:
           type: string
           readOnly: true
         name:
@@ -18142,10 +18145,10 @@ components:
           nullable: true
         ai_score_reviewed:
           type: boolean
-        client_vertical:
+        account_vertical:
           type: integer
           readOnly: true
-        client_vertical_name:
+        account_vertical_name:
           type: string
           readOnly: true
           default: ''
@@ -19137,7 +19140,7 @@ components:
           readOnly: true
         account:
           type: integer
-        client_name:
+        account_name:
           type: string
           readOnly: true
         name:
@@ -19232,7 +19235,7 @@ components:
           readOnly: true
       required:
       - account
-      - client_name
+      - account_name
       - created_at
       - custo
       - id
@@ -19423,17 +19426,17 @@ components:
           nullable: true
         ai_score_reviewed:
           type: boolean
-        client_vertical:
+        account_vertical:
           type: integer
           readOnly: true
-        client_vertical_name:
+        account_vertical_name:
           type: string
           readOnly: true
           default: ''
       required:
+      - account_vertical
+      - account_vertical_name
       - ai_scored_at
-      - client_vertical
-      - client_vertical_name
       - created_at
       - due_date
       - engagement

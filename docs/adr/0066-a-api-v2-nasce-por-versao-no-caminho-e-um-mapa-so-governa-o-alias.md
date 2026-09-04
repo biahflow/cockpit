@@ -240,3 +240,70 @@ no v1 — `TITLE` não muda, porque a v2 não é produto novo (decisão da ADR).
 ou rota mudou nesta fatia: o `openapi.yaml` da v1 tem diff vazio, e é o próprio CI
 (`.github/workflows/quality.yml`) que passa a provar isso a cada geração — `git diff --exit-code`
 sobre os dois arquivos, na sequência dos dois comandos acima.
+
+## Emenda (issue #122, fatia 4a — 04/09/2026) — o que o contrato verdadeiro deixou à vista
+
+Ler o `openapi-v2.yaml` da fatia 3b foi o que mostrou o limite do mecanismo: o contrato só é
+verdadeiro sobre o que o mapa conhece, e havia dezesseis propriedades com «client» que **nunca
+tinham entrado nele** — `client_name` em onze componentes, a chave `clients` que envolve a resposta
+de `GET /accounts/overview/`, o par `client`/`client_name` do componente inline do painel de
+cobrança, e `client_vertical`/`client_vertical_name` no projeto.
+
+Elas escaparam da issue #67 por uma razão só, e é ela que dá o nome à decisão desta fatia: **nenhuma
+era renome de campo.** `client_name` sempre foi `source="account.name"`; `client_vertical` sempre
+atravessou `engagement.account.vertical`. A #67 renomeou classes e colunas, e projeção não tem
+coluna — então o renome passou ao lado, e o nome errado ficou onde mais dura, na chave de payload.
+Decisão do mantenedor em 04/09/2026: as dezesseis entram no escopo da #122 agora, pelo mecanismo
+que já existe — canônica aditiva na v1, legada ausente na v2.
+
+### 6. O mapa do esquema é a união de dois, e o segundo existe para a guarda continuar valendo
+
+`ALIASES_DEPRECIADOS` sempre teve uma guarda que é o que impede o contrato de mentir: todo
+componente listado precisa de um `<Componente>Serializer` que herde `AliasesDaV1Mixin` e execute a
+remoção. Dois dos componentes desta fatia — `CobrancaPainelLinha` e `DeliveryTimelineOverview` —
+são `inline_serializer` de `@extend_schema` sobre um dicionário cru, e não têm serializer nenhum:
+quem remove a chave na v2 é a view (`views._sem_chaves_legadas`, o antigo
+`_painel_sem_chaves_legadas`, generalizado ao ganhar o segundo chamador).
+
+Pô-los no mesmo dicionário exigiria afrouxar a guarda, e afrouxá-la desligaria exatamente o defeito
+que ela pega — a entrada nova que anuncia uma depreciação que ninguém executa. Por isso são dois
+mapas com nomes que dizem a diferença (`ALIASES_DEPRECIADOS` e
+`ALIASES_DEPRECIADOS_DE_DICT_CRU`), cada um com a sua guarda, e uma união
+(`ALIASES_DEPRECIADOS_NO_ESQUEMA`) que é a **única** coisa que os hooks do drf-spectacular leem —
+porque para quem lê o contrato a origem da propriedade é indiferente. Não são duas listas do mesmo
+fato: são dois fatos (quem executa a remoção) com uma consequência comum (o que sai do esquema).
+
+### 7. A chave que envolve a lista **troca**, e o esquema troca junto
+
+`GET /accounts/overview/` respondia `{"clients": [...]}`. Aqui não vale a convivência do resto do
+payload legado: a chave envolve o grid inteiro, e emitir as duas pagaria o corpo da resposta duas
+vezes. É o caso que a fatia 3a já tinha resolvido uma vez (`processos`/`processes` na action de IA),
+e o precedente se aplica igual — `clients` na v1, `accounts` na v2.
+
+O que a fatia 3a não precisou enfrentar é o **componente**: aquela action não tem `@extend_schema`,
+então não havia esquema a acertar. Esta tem, e um componente que dissesse `clients` numa resposta
+que só tem `accounts` seria a mesma mentira publicada que a decisão 5 recusa. `chave_da_geracao`
+(em `openapi_aliases.py`, ao lado de `alvo_da_geracao`) é o par do `versao_de(request)` da view: a
+view escolhe a chave da resposta pela versão da requisição, o `@extend_schema` escolhe a do esquema
+pelo alvo da geração.
+
+### Consequências
+
+- O `openapi.yaml` da v1 cresce e não perde nada: dezesseis propriedades canônicas novas e as
+  marcas `deprecated` nas legadas correspondentes. As sete regressões de alias existentes passam
+  sem edição, e a nova (`test_o_alias_de_nome_de_conta_sobrevive_na_v1.py`) é o que segura as
+  chaves desta fatia — pelo motivo de sempre, agravado aqui: sem coluna nem `ALIASES_DE_ENTRADA`,
+  não há nada além dela apontando para essas linhas de dentro do repositório.
+- O `openapi-v2.yaml` deixa de ter qualquer propriedade com «client», e o critério passou a ser
+  medido no artefato (`test_nenhuma_chave_client_sobra_na_v2`) em vez de no mapa — um teste que
+  itera o mapa não teria pegado nenhuma das dezesseis, que é como elas duraram até aqui. A única
+  tolerada é `recebido_do_cliente`, declarada em `docs/ontology/aliases.md` e com teste que a
+  remove da allowlist quando a fatia 5 a traduzir.
+- **Não houve migração.** O plano previa um `RenameField` de `Project.client_vertical`, e esse campo
+  nunca existiu: o campo do modelo é `Account.vertical` (migração `0030`), e as duas chaves são
+  projeção sobre ele. Fica registrado porque "renomear a coluna" e "renomear a chave" são coisas
+  distintas desde a ADR 0052, e este é o caso em que só a segunda tinha dívida.
+- Continua fora desta fatia, e declarado: `client_id` e `status` dentro de **cada linha** de
+  `/accounts/overview/`. São dict cru sem descrição no esquema (`ListField` sem item tipado), então
+  não aparecem em contrato nenhum e o critério de aceite desta fatia não os alcança — a dívida é de
+  resposta, não de contrato, e paga-se junto da fatia que atravessar a SPA.

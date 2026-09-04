@@ -905,6 +905,16 @@ class ProjectSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Project]):
     # A vertical do cliente, aqui, para o detalhe do projeto pedir o catálogo já resolvido sem
     # ter de carregar o cliente inteiro só por causa de um id (FDD 026).
     client = serializers.IntegerField(source="engagement.account_id", read_only=True)
+    account_vertical = serializers.IntegerField(
+        source="engagement.account.vertical_id", read_only=True
+    )
+    account_vertical_name = serializers.CharField(
+        source="engagement.account.vertical.name", read_only=True, default=""
+    )
+    # As duas legadas, mesmo valor das canônicas acima, e morrem na `/api/v2/` (issue #122, fatia
+    # 4a). **Não houve renome de campo aqui**: `client_vertical` nunca foi coluna — o campo do
+    # modelo é `Account.vertical`, e estas quatro chaves são projeção sobre `engagement.account`
+    # (FDD 026). O que a fatia paga é a chave de payload, que é o que a §2c trata.
     client_vertical = serializers.IntegerField(source="engagement.account.vertical_id", read_only=True)
     client_vertical_name = serializers.CharField(
         source="engagement.account.vertical.name", read_only=True, default=""
@@ -927,7 +937,8 @@ class ProjectSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Project]):
             "opportunity", "name", "description", "owner", "start_date", "due_date",
             "status", "service", "actual_value", "cost", "is_overdue", "created_at", "updated_at",
             "ai_maturity", "ai_potential", "ai_opportunity", "ai_dimensions", "ai_score_summary",
-            "ai_scored_at", "ai_score_reviewed", "client_vertical", "client_vertical_name",
+            "ai_scored_at", "ai_score_reviewed", "account_vertical", "account_vertical_name",
+            "client_vertical", "client_vertical_name",
         ]
         read_only_fields = [
             "id", "owner", "is_overdue", "created_at", "updated_at", "ai_scored_at",
@@ -1156,18 +1167,24 @@ class ProcessSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Process]):
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
     # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
+    # O mesmo par, um degrau adiante: `client_name` era projeção sem canônica — a v2 nasceria sem
+    # nome nenhum para o nome da conta. `account_name` é a canônica; a legada sai ao lado na v1 e
+    # some na v2 (issue #122, fatia 4a).
+    account_name = serializers.CharField(source="account.name", read_only=True)
     client_name = serializers.CharField(source="account.name", read_only=True)
     custo = serializers.SerializerMethodField()
     publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = Process
-        fields = ["id", "account", "client", "client_name", "name", "position", "source_project",
+        fields = ["id", "account", "client", "account_name", "client_name", "name", "position",
+                  "source_project",
                   "source_meeting", "registered_by", "volume_mes", "tempo_horas", "pessoas",
                   "custo_hora", "retrabalho_mes", "erros_mes", "perdas_mes", "espera_mes",
                   "risco_mes", "custo", "published_at", "published_by", "publication_state",
                   "created_at", "updated_at"]
-        read_only_fields = ["id", "client_name", "registered_by", "custo", "published_at",
+        read_only_fields = ["id", "account_name", "client_name", "registered_by", "custo",
+                            "published_at",
                             "published_by", "publication_state", "created_at", "updated_at"]
 
     @extend_schema_field(serializers.DictField())
@@ -2588,7 +2605,11 @@ class CaseSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Case]):
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     vertical_name = serializers.CharField(source="vertical.name", read_only=True, default="")
-    client_name = serializers.SerializerMethodField()
+    account_name = serializers.SerializerMethodField()
+    # `client_name` é o alias de leitura que morre na `/api/v2/` (issue #122, fatia 4a), e aponta
+    # para o **mesmo** método da canônica: duas implementações da anonimização divergiriam, e a
+    # divergência aqui vaza o nome que o cliente não autorizou.
+    client_name = serializers.SerializerMethodField(method_name="get_account_name")
     project_name = serializers.CharField(source="project.name", read_only=True)
     # Alias de leitura da `/api/v1/` — morre na v2.
     client_consent = serializers.BooleanField(source="account_consent", read_only=True)
@@ -2596,17 +2617,19 @@ class CaseSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Case]):
     class Meta:
         model = Case
         fields = ["id", "project", "project_name", "title", "summary", "vertical",
-                  "vertical_name", "client_name", "metrics", "health_snapshot", "roi_snapshot",
+                  "vertical_name", "account_name", "client_name", "metrics", "health_snapshot",
+                  "roi_snapshot",
                   "status", "status_display", "published_at", "account_consent", "client_consent",
                   "consent_recorded_at", "consent_recorded_by", "anonymized",
                   "created_at", "updated_at"]
         read_only_fields = ["id", "project", "project_name", "vertical", "vertical_name",
-                            "client_name", "metrics", "health_snapshot", "roi_snapshot",
+                            "account_name", "client_name", "metrics", "health_snapshot",
+                            "roi_snapshot",
                             "status_display", "published_at", "account_consent", "client_consent",
                             "consent_recorded_at", "consent_recorded_by",
                             "created_at", "updated_at"]
 
-    def get_client_name(self, case: Case) -> str:
+    def get_account_name(self, case: Case) -> str:
         """Vazio quando anonimizado — a anonimização vive aqui, e não na tela.
 
         Deixá-la para o frontend faria a resposta da API carregar o nome mesmo assim, e "não
@@ -2620,7 +2643,7 @@ class CaseSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Case]):
         return f"Uma empresa do setor {setor}" if setor else "Uma empresa cliente"
 
     def to_representation(self, instance: Case) -> dict[str, Any]:
-        """Apagar o `client_name` não bastava: o nome também vive no **texto**.
+        """Apagar o nome da conta não bastava: ele também vive no **texto**.
 
         O congelamento monta o título como "Cliente — Projeto", então um case anonimizado saía com
         o nome no título enquanto o campo dedicado vinha vazio — a permissão que o cliente deu
@@ -2703,6 +2726,9 @@ class InvoiceSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Invoice]):
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     method_display = serializers.CharField(source="get_method_display", read_only=True)
+    # `account_name` é a canônica e `client_name` o alias que morre na `/api/v2/` — o mesmo par de
+    # `account`/`client` acima (issue #122, fatia 4a).
+    account_name = serializers.CharField(source="account.name", read_only=True)
     client_name = serializers.CharField(source="account.name", read_only=True)
     project_name = serializers.CharField(source="project.name", read_only=True, default="")
     service_name = serializers.CharField(source="service.name", read_only=True, default="")
@@ -2711,7 +2737,8 @@ class InvoiceSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Invoice]):
     class Meta:
         model = Invoice
         fields = [
-            "id", "account", "client", "client_name", "project", "project_name", "service",
+            "id", "account", "client", "account_name", "client_name", "project", "project_name",
+            "service",
             "service_name",
             "number", "amount", "description", "due_date", "method", "method_display",
             "status", "status_display", "is_overdue", "issued_at", "issued_by", "paid_at",
@@ -2719,7 +2746,8 @@ class InvoiceSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Invoice]):
             "provider", "external_reference", "payment_url", "created_at", "updated_at",
         ]
         read_only_fields = [
-            "id", "client_name", "project_name", "service_name", "number", "method_display",
+            "id", "account_name", "client_name", "project_name", "service_name", "number",
+            "method_display",
             "status_display", "is_overdue", "issued_at", "issued_by", "paid_at", "settled_by",
             "cancelled_at", "cancelled_by", "cancel_reason",
             "provider", "external_reference", "payment_url", "created_at", "updated_at",
@@ -2767,12 +2795,16 @@ class CobrancaContatoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Co
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     degrau_display = serializers.CharField(source="get_degrau_display", read_only=True)
     canal_display = serializers.CharField(source="get_canal_display", read_only=True)
+    # `account_name` é a canônica e `client_name` o alias que morre na `/api/v2/` — o mesmo par de
+    # `account`/`client` acima (issue #122, fatia 4a).
+    account_name = serializers.CharField(source="account.name", read_only=True)
     client_name = serializers.CharField(source="account.name", read_only=True)
     invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
 
     class Meta:
         model = CobrancaContato
-        fields = ["id", "invoice", "invoice_number", "account", "client", "client_name", "degrau",
+        fields = ["id", "invoice", "invoice_number", "account", "client", "account_name",
+                  "client_name", "degrau",
                   "degrau_display", "canal", "canal_display", "sent_on", "subject", "to_email",
                   "body", "sent_by", "ai_interaction", "created_at"]
         read_only_fields = fields
@@ -2793,17 +2825,22 @@ class CobrancaSuspensaoSerializer(
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
     # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
+    # `account_name` é a canônica e `client_name` o alias que morre na `/api/v2/` — o mesmo par de
+    # `account`/`client` acima (issue #122, fatia 4a).
+    account_name = serializers.CharField(source="account.name", read_only=True, default="")
     client_name = serializers.CharField(source="account.name", read_only=True, default="")
     invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
     is_active = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = CobrancaSuspensao
-        fields = ["id", "invoice", "invoice_number", "account", "client", "client_name", "owner",
+        fields = ["id", "invoice", "invoice_number", "account", "client", "account_name",
+                  "client_name", "owner",
                   "until",
                   "reason", "created_by", "lifted_at", "lifted_by", "is_active",
                   "created_at", "updated_at"]
-        read_only_fields = ["id", "invoice_number", "client_name", "created_by", "lifted_at",
+        read_only_fields = ["id", "invoice_number", "account_name", "client_name", "created_by",
+                            "lifted_at",
                             "lifted_by", "is_active", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:

@@ -22,6 +22,15 @@ acima. As guardas abaixo cobrem, além da forma do artefato (só caminhos `/api/
 rotas legadas), o mecanismo que o produz: `openapi_aliases.alvo_da_geracao()` e o par de hooks
 `marcar_aliases_depreciados`/`remover_aliases_do_contrato`, testados diretamente por monkeypatch de
 `OPENAPI_ALVO` — sem depender de regenerar o arquivo em disco.
+
+**Os testes de contrato iteram a união (`ALIASES_DEPRECIADOS_NO_ESQUEMA`)**, e não o mapa dos
+serializers: para quem lê o `openapi.yaml`, a propriedade que a view remove à mão e a que o mixin
+remove são a mesma coisa. A distinção entre as duas é sobre **quem executa**, e quem a cobra é
+`test_aliases_da_v2.py`.
+
+A última guarda é de outro tipo e fecha a fatia 4a: nenhuma propriedade de componente do
+`openapi-v2.yaml` volta a dizer `client`. Ela não itera mapa nenhum — varre o artefato inteiro —,
+porque o defeito que pega é justamente a chave que **ninguém** pôs no mapa.
 """
 
 from __future__ import annotations
@@ -34,7 +43,7 @@ import yaml
 from django.conf import settings
 
 from apps.core.openapi_aliases import (
-    ALIASES_DEPRECIADOS,
+    ALIASES_DEPRECIADOS_NO_ESQUEMA,
     excluir_a_v2_do_contrato,
     marcar_aliases_depreciados,
     remover_aliases_do_contrato,
@@ -79,7 +88,7 @@ def test_toda_entrada_do_mapa_existe_no_contrato() -> None:
     """
     schemas = _schemas_do_contrato()
     relatorio: list[str] = []
-    for nome_componente, propriedades_alias in ALIASES_DEPRECIADOS.items():
+    for nome_componente, propriedades_alias in ALIASES_DEPRECIADOS_NO_ESQUEMA.items():
         schema = schemas.get(nome_componente)
         if schema is None:
             relatorio.append(f"{nome_componente}: componente não existe em openapi.yaml")
@@ -102,7 +111,7 @@ def test_toda_entrada_do_mapa_sai_depreciada() -> None:
     """(b) — cada propriedade do mapa sai com `deprecated: true` no `openapi.yaml` commitado."""
     schemas = _schemas_do_contrato()
     relatorio: list[str] = []
-    for nome_componente, propriedades_alias in ALIASES_DEPRECIADOS.items():
+    for nome_componente, propriedades_alias in ALIASES_DEPRECIADOS_NO_ESQUEMA.items():
         schema = schemas.get(nome_componente)
         if schema is None:
             # Já reportado pelo teste acima; não duplica a mensagem aqui.
@@ -156,7 +165,7 @@ def test_openapi_v2_nao_tem_as_chaves_alias_espelho_do_teste_da_v1() -> None:
     )
 
     relatorio: list[str] = []
-    for nome_componente, propriedades_alias in ALIASES_DEPRECIADOS.items():
+    for nome_componente, propriedades_alias in ALIASES_DEPRECIADOS_NO_ESQUEMA.items():
         schema = schemas.get(nome_componente)
         if schema is None:
             # Componente da v1 sem correspondente na v2 (nenhum hoje) — nada a verificar aqui.
@@ -174,6 +183,54 @@ def test_openapi_v2_nao_tem_as_chaves_alias_espelho_do_teste_da_v1() -> None:
         "manage.py spectacular --urlconf config.urls_v2_schema --file openapi-v2.yaml "
         "--validate` a partir de backend/:\n  " + "\n  ".join(relatorio)
     )
+
+
+# A única chave com «client» que o `openapi-v2.yaml` pode conter, e ela está declarada: o
+# `recebido_do_cliente` do painel de cobrança é pt-BR e pertence à família de nomes que a fatia 5
+# ainda vai traduzir (`docs/ontology/aliases.md`, "Termos ainda sem nome canônico"). Não é alias de
+# `client` — é um nome que nunca teve canônico —, e por isso não cabe em `ALIASES_DEPRECIADOS`.
+CHAVES_CLIENT_TOLERADAS_NA_V2 = frozenset({"recebido_do_cliente"})
+
+
+def test_nenhuma_chave_client_sobra_na_v2() -> None:
+    """A fatia 4a fechada, medida no artefato e não no mapa.
+
+    As guardas acima iteram `ALIASES_DEPRECIADOS_NO_ESQUEMA`, então só enxergam o que alguém já
+    declarou. Esta varre o `openapi-v2.yaml` inteiro pelo outro lado — toda propriedade de todo
+    componente —, que é o único jeito de pegar a classe de defeito da fatia 4a: `client_name`,
+    `clients`, `client_vertical` e o par do painel viveram meses no contrato **por nunca terem
+    entrado no mapa**, e um teste que lê o mapa passaria por cima de todos eles.
+
+    Vale para a chave, não para a prosa: `description` em português diz "cliente" o tempo todo, e
+    isso é o texto em volta do termo, que a `language-map.md` §1 manda traduzir.
+    """
+    schemas = _schemas_do_contrato_v2()
+    encontradas = sorted(
+        f"{componente}.{propriedade}"
+        for componente, schema in schemas.items()
+        for propriedade in ((schema or {}).get("properties") or {})
+        if "client" in propriedade and propriedade not in CHAVES_CLIENT_TOLERADAS_NA_V2
+    )
+
+    assert encontradas == [], (
+        "chave com «client» sobrevivendo em openapi-v2.yaml — a v2 é onde a chave de payload "
+        "legada morre (`docs/ontology/aliases.md` §2c):\n  " + "\n  ".join(encontradas)
+    )
+
+
+def test_a_chave_tolerada_na_v2_existe_de_fato() -> None:
+    """A allowlist acima não guarda linha desnecessária — o molde de `legacy-allowlist.txt`.
+
+    Sem isto, `recebido_do_cliente` continuaria isentado depois de a fatia 5 traduzi-lo, e a
+    isenção morta esconderia que a dívida foi paga.
+    """
+    propriedades = {
+        propriedade
+        for schema in _schemas_do_contrato_v2().values()
+        for propriedade in ((schema or {}).get("properties") or {})
+    }
+
+    assert CHAVES_CLIENT_TOLERADAS_NA_V2 <= propriedades
 
 
 def test_versao_do_documento_e_por_alvo() -> None:

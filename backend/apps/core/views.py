@@ -143,6 +143,7 @@ from .models import (
     Vertical,
     project_scope_q,
 )
+from .openapi_aliases import chave_da_geracao
 from .permissions import RolePermission
 from .serializers import (
     AVATAR_CONTENT_TYPES,
@@ -767,6 +768,27 @@ def build_overview_context(projects: Iterable[Project]) -> OverviewContext:
     )
 
 
+def _sem_chaves_legadas(
+    linhas: list[dict[str, Any]], *chaves: str
+) -> list[dict[str, Any]]:
+    """Tira as chaves-alias de cada linha de um agregador de **dict cru**, na `/api/v2/`.
+
+    Nasceu no painel de cobrança (issue #122, fatia 3a) e ganhou o segundo chamador na fatia 4a (a
+    visão compacta da entrega), então deixou de nomear um deles: a lista de chaves é do chamador,
+    porque é ele que sabe qual é o par legado do seu dicionário.
+
+    Um dict cru não passa por `ModelSerializer` nenhum, e é por isso que a remoção mora aqui em vez
+    de em `AliasesDaV1Mixin`: aquele mixin lê `ALIASES_DEPRECIADOS` por **componente do schema**,
+    e um dicionário montado à mão não tem serializer que resolva para um. O contrato, esse sim,
+    perde as chaves pelo mesmo mapa dos outros — `ALIASES_DEPRECIADOS_DE_DICT_CRU`, a metade da
+    união que os hooks do drf-spectacular leem (`apps/core/openapi_aliases.py`).
+    """
+    for linha in linhas:
+        for chave in chaves:
+            linha.pop(chave, None)
+    return linhas
+
+
 def build_account_overview(
     account: Account,
     projects: Iterable[Project] | None = None,
@@ -922,10 +944,21 @@ class AccountViewSet(ArchiveModelViewSet):
             engagement__account=account, archived_at__isnull=True
         ).select_related("engagement")
 
-    @extend_schema(responses=inline_serializer("AccountOverviewList", {"clients": serializers.ListField()}))
+    @extend_schema(
+        responses=inline_serializer(
+            "AccountOverviewList",
+            {chave_da_geracao("clients", "accounts"): serializers.ListField()},
+        )
+    )
     @action(detail=False, methods=["get"])
     def overview(self, request: Request) -> Response:
-        """Lista agregada p/ o grid de contas (honra `?lifecycle_status=` e o alias `?status=`)."""
+        """Lista agregada p/ o grid de contas (honra `?lifecycle_status=` e o alias `?status=`).
+
+        A chave que envolve a lista **troca** por versão — `clients` na `/api/v1/`, `accounts` na
+        `/api/v2/` —, e não convive como o resto do payload legado: duplicar aqui pagaria o corpo
+        inteiro do grid duas vezes. É o precedente da fatia 3a (`processos`/`processes` na action
+        de IA), aplicado ao segundo caso da mesma forma (issue #122, fatia 4a).
+        """
         accounts = list(self.get_queryset())
         # Um `_visible_projects` por cliente somava ~14 queries por linha do grid. Aqui os
         # projetos visíveis de todos os clientes vêm juntos e o contexto é montado uma vez —
@@ -938,7 +971,8 @@ class AccountViewSet(ArchiveModelViewSet):
         context = build_overview_context(
             [project for projects in by_client.values() for project in projects]
         )
-        return Response({"clients": [
+        chave = "accounts" if versao_de(request) == V2 else "clients"
+        return Response({chave: [
             build_account_overview(account, projects=by_client[account.pk], context=context)
             for account in accounts
         ]})
@@ -1686,6 +1720,10 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
             {
                 "project_id": serializers.IntegerField(),
                 "project_name": serializers.CharField(),
+                "account_name": serializers.CharField(),
+                # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): mesmo valor de
+                # `account_name`. Some da `/api/v2/` — a remoção é da view, porque isto é dict cru
+                # (issue #122, fatia 4a); o contrato a perde por `ALIASES_DEPRECIADOS_DE_DICT_CRU`.
                 "client_name": serializers.CharField(),
                 "current_phase_name": serializers.CharField(allow_null=True),
                 "canonical_stage": serializers.CharField(allow_blank=True),
@@ -1704,8 +1742,15 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         Agregador que **estreita à mão** por `visible_to` (o mesmo contrato dos outros do
         dashboard) e tem teste próprio: a Entrega não pode ver a jornada de projeto de que não
         participa. Só projetos não-concluídos entram — o dashboard é sobre o que está em curso.
+
+        `_build_timeline_overview` emite `account_name` e `client_name` com o mesmo valor — o
+        comportamento de todo alias de leitura da v1 —, e a remoção do legado é daqui, e não do
+        agregador: ele não conhece a versão da requisição, pelo motivo do painel de cobrança.
         """
-        return Response(_build_timeline_overview(request.user))
+        linhas = _build_timeline_overview(request.user)
+        if versao_de(request) == V2:
+            linhas = _sem_chaves_legadas(linhas, "client_name")
+        return Response(linhas)
 
     @action(detail=True, methods=["post"], url_path="next-steps")
     def next_steps(self, request: Request, pk: str | None = None) -> Response:
@@ -1803,6 +1848,9 @@ def _build_timeline_overview(user: User) -> list[dict[str, Any]]:
         rows.append({
             "project_id": project.pk,
             "project_name": project.name,
+            # O par canônico e o legado saem juntos, com o mesmo valor, como no painel de cobrança
+            # (issue #122, fatia 4a). Quem tira o legado na v2 é `timeline_overview`.
+            "account_name": project.engagement.account.name,
             "client_name": project.engagement.account.name,
             "current_phase_name": current.phase.name if current else None,
             "canonical_stage": current.phase.canonical_stage if current else "",
@@ -2343,20 +2391,6 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return Response(dados)
 
 
-def _painel_sem_chaves_legadas(linhas: list[dict[str, object]]) -> list[dict[str, object]]:
-    """Tira `client`/`client_name` de cada linha do painel na `/api/v2/` (issue #122, fatia 3a).
-
-    O painel é dict cru — não passa por `ModelSerializer` nenhum —, então `AliasesDaV1Mixin` não o
-    alcança: aquele mixin lê `ALIASES_DEPRECIADOS` por **componente do schema**, e este dicionário
-    não tem um. A filosofia é a mesma (a chave legada não sai na v2), só que aplicada à mão, aqui,
-    porque não há onde pendurar o mapa.
-    """
-    for linha in linhas:
-        linha.pop("client", None)
-        linha.pop("client_name", None)
-    return linhas
-
-
 class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
     """O que a casa já disse sobre suas faturas (FDD 036, camada 3 da RFC 0004).
 
@@ -2388,8 +2422,9 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
                 "account": serializers.IntegerField(),
                 "account_name": serializers.CharField(),
                 # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): mesmo valor de
-                # `account`/`account_name`. Some da `/api/v2/`, junto do resto do payload legado
-                # (issue #122, fatia 3a) — este componente descreve só a v1 (decisão 5, ADR 0066).
+                # `account`/`account_name`. Some da resposta da `/api/v2/` desde a fatia 3a, e do
+                # **contrato** dela desde a 4a — por `ALIASES_DEPRECIADOS_DE_DICT_CRU`, que é como
+                # um componente de `inline_serializer` entra no mesmo mapa dos outros.
                 "client": serializers.IntegerField(),
                 "client_name": serializers.CharField(),
                 "amount": serializers.DecimalField(max_digits=12, decimal_places=2),
@@ -2452,7 +2487,7 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
         """
         linhas = cobranca.painel()
         if versao_de(request) == V2:
-            linhas = _painel_sem_chaves_legadas(linhas)
+            linhas = _sem_chaves_legadas(linhas, "client", "client_name")
         return Response(linhas)
 
 

@@ -29,6 +29,10 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
 | chave `ai_opportunity` (só leitura) | `ai_potential` | `serializers.py` | `/api/v2/` |
 | chave `client_consent` (só leitura) | `account_consent` | `serializers.py` | `/api/v2/` |
+| chave `client_name` (só leitura) — case, fatura, processo, contato e suspensão de cobrança | `account_name` | `serializers.py` | `/api/v2/` (pago na fatia 4a) |
+| chaves `client` / `client_name` do painel de cobrança e `client_name` da visão compacta da entrega | `account` / `account_name` | `cobranca.py`, `views.py` | `/api/v2/` (pago nas fatias 3a e 4a) |
+| chaves `client_vertical` / `client_vertical_name` (só leitura) | `account_vertical` / `account_vertical_name` | `serializers.py` | `/api/v2/` (pago na fatia 4a) |
+| chave `clients` que envolve a lista de `GET /clients/overview/` | `accounts` | `views.py` | `/api/v2/` (pago na fatia 4a — **troca**, não convive) |
 | chave de entrada `signer_email` (um signatário) | `signers[]`, lista de `{email, role}` | `views.py` (`_signers_do_pedido`) | `/api/v2/` |
 | valores `esqueceu` / `nao_pode` / `insatisfeito` | `forgot` / `unable_to_pay` / `dissatisfied` | `Activity.cobranca_sinal` e serializers | junto do renome para `DunningSignal`; alias morre na `/api/v2/` |
 | degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
@@ -209,7 +213,46 @@ contratos estão montando. `info.version` marca a travessia: `2.0.0` na v2, `1.0
 mudou nesta fatia. Ver [ADR 0066](../adr/0066-a-api-v2-nasce-por-versao-no-caminho-e-um-mapa-so-governa-o-alias.md),
 emenda da fatia 3b, e o teste em `backend/tests/test_openapi_aliases.py`.
 
-O que resta para as fatias seguintes da #122: a travessia da SPA para a `/api/v2/` (fatia 4) e as
+### As chaves «client» que nunca tinham entrado no mapa — fatia 4a da #122, 04/09/2026
+
+O contrato da fatia 3b nasceu verdadeiro sobre o mapa que existia, e foi lê-lo que mostrou o que o
+mapa não tinha: `openapi-v2.yaml` ainda dizia `client_name` em onze componentes, `clients` na
+resposta do grid de contas, `client`/`client_vertical`/`client_vertical_name` — chaves que
+atravessaram a issue #67 inteira **sem serem alias de nada**, porque nenhuma delas era renome de
+campo. Eram projeções: `client_name` sempre foi `source="account.name"`, `client_vertical` sempre
+atravessou `engagement.account.vertical`. Não havendo coluna com o nome errado, o renome de classe
+passou ao lado delas, e o que sobrou foi o pior caso do §2c — o nome errado na **chave de
+payload**, que é onde ele mais dura. A decisão foi trazê-las todas para o mecanismo de sempre.
+
+Três tratamentos, e a diferença entre eles é quem consegue executar a remoção:
+
+- **Serializer** (`Case`, `Invoice`, `Process`, `CobrancaContato`, `CobrancaSuspensao`, e as duas
+  chaves de vertical em `Project`): a canônica entra ao lado, a legada vira alias de leitura e a
+  entrada do componente cresce em `ALIASES_DEPRECIADOS` — `AliasesDaV1Mixin` cuida do resto.
+- **Dict cru** (o painel de cobrança, que a fatia 3a já resolvia, e a visão compacta da entrega, que
+  entrou agora): o agregador emite os dois nomes e a **view** tira o legado na v2. O contrato,
+  esse, perde a chave pelo mesmo mapa dos outros — `ALIASES_DEPRECIADOS_DE_DICT_CRU`, a segunda
+  metade que os hooks do esquema leem. São dois dicionários porque a guarda "todo componente do
+  mapa tem um serializer que o executa" só vale para o primeiro, e afrouxá-la para caber o
+  `inline_serializer` desligaria justamente o defeito que ela pega.
+- **Chave que troca** (`clients` → `accounts` em `GET /accounts/overview/`): não convive, pelo
+  precedente de `processos`/`processes` da fatia 3a — ela envolve a lista inteira, e duplicá-la
+  pagaria o corpo do grid duas vezes. O esquema troca junto, por `openapi_aliases.chave_da_geracao`.
+
+O critério de aceite é o artefato, não o mapa: nenhuma propriedade de componente do
+`openapi-v2.yaml` diz `client`, e a única exceção — `recebido_do_cliente` — está declarada abaixo.
+A guarda é `test_nenhuma_chave_client_sobra_na_v2`, e ela varre o contrato inteiro em vez de iterar
+o mapa, porque as quatro chaves desta fatia sobreviveram meses justamente por **não estarem** nele.
+A regressão da §2c está em
+`backend/tests/regression/test_o_alias_de_nome_de_conta_sobrevive_na_v1.py`.
+
+> **Não houve migração, e a ausência é o achado.** O plano desta fatia previa um `RenameField` de
+> `Project.client_vertical`; esse campo **nunca existiu** — o campo do modelo é `Account.vertical`
+> (migração `0030`), e as duas chaves são projeção sobre ele. Registrado aqui porque "renomear a
+> coluna" e "renomear a chave" são coisas diferentes desde a ADR 0052, e este é o caso em que só a
+> segunda existia.
+
+O que resta para as fatias seguintes da #122: a travessia da SPA para a `/api/v2/` (fatia 4b) e as
 famílias de enum ainda em português (fatia 5) — nenhuma delas nasce antes da anterior.
 
 ## As três regras
@@ -401,6 +444,13 @@ posição, porque não existe uso legítimo do nome antigo.
 `Pendencia`, `Decisao`, `Risco`, `Satisfacao` e a família `Cobranca*` estão em português no modelo
 e **a Ontology v1 não os cobre** — não há para onde renomeá-los ainda. Eles estão na allowlist
 mesmo assim, e isso é deliberado: sem a linha, a ausência de decisão viraria ausência de dívida.
+
+`recebido_do_cliente` — a chave do painel de cobrança que diz quanto a conta já pagou — entra na
+mesma lista, e por escrito, desde a fatia 4a da #122. Ela **não é alias de `client`**: é um nome
+que nunca teve canônico, então não cabe em `ALIASES_DEPRECIADOS` nem morre na `/api/v2/` por conta
+disso. É a única chave com «client» que a guarda do contrato da v2 tolera
+(`test_nenhuma_chave_client_sobra_na_v2`), e a isenção tem teste próprio para não sobreviver ao dia
+em que a fatia 5 traduzir a família de cobrança inteira.
 
 O caminho é o da §8 do language-map: o termo entra primeiro na página do Notion, depois aqui,
 depois no Pulse.
