@@ -2665,7 +2665,20 @@ class DunningContactViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet
                 "recebido_do_cliente": serializers.DecimalField(
                     max_digits=12, decimal_places=2
                 ),
-                "suspensao": serializers.DictField(allow_null=True),
+                # O dicionário **inteiro** é `None` quando não há suspensão vigente
+                # (`cobranca.painel`) — não é um objeto de campos nulos. `inline_serializer` e não
+                # classe de módulo porque esta forma tem um consumidor só; o componente
+                # `CobrancaSuspensao` do CRUD é outra coisa (tem motivo, autor, timestamps).
+                "suspensao": inline_serializer(
+                    "CobrancaPainelSuspensao",
+                    {
+                        "id": serializers.IntegerField(),
+                        "until": serializers.DateField(),
+                        "owner": serializers.IntegerField(),
+                        "owner_name": serializers.CharField(),
+                    },
+                    allow_null=True,
+                ),
                 "regua_ligada": serializers.BooleanField(),
             },
             many=True,
@@ -5019,6 +5032,79 @@ def _lead_source(opportunity_path: str) -> Subquery:
     )
 
 
+def _dinheiro_do_agregado(**kwargs: Any) -> serializers.DecimalField:
+    """Dinheiro de dicionário montado à mão: **número** no JSON, e é isto que o esquema diz.
+
+    `coerce_to_string=False` não é preferência de formatação — é a única declaração verdadeira
+    aqui. Estas linhas não passam por serializer nenhum (são agregadores devolvendo `dict` cru), e
+    o encoder JSON do DRF converte `Decimal` em `float`: `Decimal("5000.00")` chega ao cliente
+    como `5000.0`. Com o padrão (`COERCE_DECIMAL_TO_STRING`), o esquema prometeria
+    `type: string` para um campo que trafega número, e um cliente gerado a partir do contrato
+    quebraria na primeira resposta — pior que o `items: {}` que esta fatia veio remover.
+    `ProcessSerializer.get_custo` e `cobranca._dinheiro` documentam o mesmo encoder pela outra
+    saída: lá a conversão para texto é explícita, e ali `DecimalField` (string) é o certo.
+
+    Uma função, e não uma instância de módulo: campo de serializer só se vincula a um serializer,
+    então cada chamador pede a sua (a razão de `_account_overview_row_fields` também ser função).
+    """
+    return serializers.DecimalField(
+        max_digits=14, decimal_places=2, coerce_to_string=False, **kwargs
+    )
+
+
+# As três sub-formas abaixo são descritas por **mais de uma** resposta agregada, e por isso cada
+# uma é classe de módulo — pela razão medida no comentário de `AccountOverviewRoiSerializer`
+# (acima): `inline_serializer` faz `type(name, (Serializer,), fields)` a cada chamada, e duas
+# classes de mesmo nome disputando um componente é exatamente o que o drf-spectacular acusa como
+# schema "muito provavelmente incorreto". A classe nasce uma vez; cada uso a instancia de novo.
+#
+# Nas três, a docstring é a `description` do componente no `openapi.yaml` e quem a lê é quem
+# consome a API; o porquê de manutenção fica no comentário, que não atravessa (o molde de
+# `DigitalEmployeeSerializer`).
+
+
+# A mesma linha em `risk.assess_project` e `health.assess_project_health`: quem lê `/risk/` e
+# `/health/` desenha a mesma lista.
+class AssessmentSignalSerializer(serializers.Serializer):
+    """Um sinal da avaliação e o peso com que ele entrou no escore."""
+
+    label = serializers.CharField()
+    detail = serializers.CharField()
+    weight = serializers.IntegerField()
+
+
+# `/analytics/` e `/dashboard/` diferem no filtro (o painel não conta oportunidade arquivada; a
+# análise conta) e não na forma: é a mesma linha, e descrevê-la duas vezes seria duas definições
+# do mesmo fato.
+class PipelineStageRowSerializer(serializers.Serializer):
+    """Uma etapa do funil com o agregado das oportunidades dela."""
+
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    # `CharField`, não `ChoiceField(choices=PipelineStage.Kind.choices)`: ver o comentário do
+    # `status` de `AccountOverviewPhaseSerializer` sobre o ruído de nomeação de enum
+    # (`Status31cEnum`/`KindC64Enum`) que reusar o enum do modelo numa linha de agregação gera.
+    kind = serializers.CharField()
+    position = serializers.IntegerField()
+    opportunity_count = serializers.IntegerField()
+    # `None` na etapa sem oportunidade nenhuma: `Sum` de queryset vazio é `NULL`, e o `/dashboard/`
+    # e a `/analytics/` emitem esse `None` cru — não é zero, é "não há o que somar".
+    estimated_total = _dinheiro_do_agregado(allow_null=True)
+
+
+# Os dois recortes do ROI (por conta e por serviço) têm a mesma forma — uma classe, duas
+# instâncias, nunca duas declarações paralelas.
+class RoiBreakdownRowSerializer(serializers.Serializer):
+    """Uma linha de recorte do ROI. `roi` é nulo quando o custo é zero — divisão que não existe
+    não vira zero.
+    """
+
+    label = serializers.CharField()
+    revenue = _dinheiro_do_agregado()
+    cost = _dinheiro_do_agregado()
+    roi = serializers.FloatField(allow_null=True)
+
+
 class AnalyticsView(APIView):
     resource = "analytics"
     permission_classes = [RolePermission]
@@ -5027,12 +5113,111 @@ class AnalyticsView(APIView):
         responses=inline_serializer(
             "AnalyticsResponse",
             {
-                "funnel": serializers.DictField(),
+                "funnel": inline_serializer(
+                    "AnalyticsFunnel",
+                    {
+                        # `by_status` é `DictField` **com `child`**, e isso não é o defeito que
+                        # esta fatia remove: as chaves são dinâmicas de verdade (só aparece o
+                        # status que ocorre nos dados), então o que se pode afirmar é o tipo do
+                        # valor. `DictField()` sem `child` é que não afirmava nada.
+                        "leads": inline_serializer(
+                            "FunnelLeads",
+                            {
+                                "total": serializers.IntegerField(),
+                                "by_status": serializers.DictField(
+                                    child=serializers.IntegerField()
+                                ),
+                            },
+                        ),
+                        # `FunnelCommercialOpportunities`, e não `FunnelOpportunities`: o
+                        # componente é superfície de nome (`language-map` §5 bane `Opportunity`
+                        # sem qualificador), e o que se conta aqui é `CommercialOpportunity`. A
+                        # **chave** continua `opportunities` — chave de payload não se renomeia
+                        # fora da `/api/v2/`.
+                        "opportunities": inline_serializer(
+                            "FunnelCommercialOpportunities",
+                            {
+                                "open": serializers.IntegerField(),
+                                "won": serializers.IntegerField(),
+                                "lost": serializers.IntegerField(),
+                            },
+                        ),
+                        "projects": inline_serializer(
+                            "FunnelProjects",
+                            {
+                                "total": serializers.IntegerField(),
+                                "by_status": serializers.DictField(
+                                    child=serializers.IntegerField()
+                                ),
+                            },
+                        ),
+                        "by_tier": inline_serializer(
+                            "FunnelTierRow",
+                            {
+                                "tier": serializers.CharField(),
+                                "label": serializers.CharField(),
+                                "total": serializers.IntegerField(),
+                                "open": serializers.IntegerField(),
+                                "won": serializers.IntegerField(),
+                                "lost": serializers.IntegerField(),
+                                "estimated_total": _dinheiro_do_agregado(),
+                                # `None` quando ninguém ganhou nem perdeu naquele degrau —
+                                # denominador zero não é taxa zero.
+                                "win_rate": serializers.FloatField(allow_null=True),
+                            },
+                            many=True,
+                        ),
+                        "by_stage": inline_serializer(
+                            "FunnelStageRow",
+                            {
+                                "kind": serializers.CharField(),
+                                "label": serializers.CharField(),
+                                "total": serializers.IntegerField(),
+                                "sent": serializers.IntegerField(),
+                                "accepted": serializers.IntegerField(),
+                                "rejected": serializers.IntegerField(),
+                                "acceptance_rate": serializers.FloatField(allow_null=True),
+                                "reached": serializers.IntegerField(),
+                            },
+                            many=True,
+                        ),
+                        "by_source": inline_serializer(
+                            "FunnelSourceRow",
+                            {
+                                "source": serializers.CharField(),
+                                "leads": serializers.IntegerField(),
+                                "won": serializers.IntegerField(),
+                                "projects": serializers.IntegerField(),
+                                "revenue": _dinheiro_do_agregado(),
+                            },
+                            many=True,
+                        ),
+                    },
+                ),
                 "win_rate": serializers.FloatField(allow_null=True),
                 "avg_ticket": serializers.FloatField(),
                 "avg_cycle_days": serializers.FloatField(allow_null=True),
-                "pipeline": serializers.ListField(),
-                "roi": serializers.DictField(),
+                "pipeline": PipelineStageRowSerializer(many=True),
+                "roi": inline_serializer(
+                    "AnalyticsRoi",
+                    {
+                        "revenue": _dinheiro_do_agregado(),
+                        "cost": _dinheiro_do_agregado(),
+                        "roi": serializers.FloatField(allow_null=True),
+                        # **`by_client` sai na resposta e não está declarado aqui — de propósito,
+                        # e é dívida, não descuido.** Tipar a chave a faria aparecer em
+                        # `openapi-v2.yaml`, e `tests/test_openapi_aliases.py`
+                        # (`test_nenhuma_chave_client_sobra_na_v2`) varre o contrato da v2 inteiro
+                        # reprovando toda propriedade com «client» — é a guarda da fatia 4a, que
+                        # mede no artefato e não no mapa. Declará-la exige a fatia de ontologia
+                        # que falta: emitir `by_account` como canônica, registrar o par em
+                        # `ALIASES_DEPRECIADOS_DE_DICT_CRU` e deixar `_sem_chaves_legadas` tirá-la
+                        # da v2 — sem isso a v2 perderia o recorte sem substituto. Enquanto ela
+                        # não vem, o esquema fica **silencioso** sobre `by_client` (objeto sem
+                        # `additionalProperties: false` admite a chave), e não mentindo sobre ela.
+                        "by_service": RoiBreakdownRowSerializer(many=True),
+                    },
+                ),
             },
         )
     )
@@ -5194,7 +5379,41 @@ class RiskView(APIView):
     resource = "risk"
     permission_classes = [RolePermission]
 
-    @extend_schema(responses=inline_serializer("RiskResponse", {"projects": serializers.ListField()}))
+    @extend_schema(
+        responses=inline_serializer(
+            "RiskResponse",
+            {
+                "projects": inline_serializer(
+                    "RiskProject",
+                    {
+                        "project_id": serializers.IntegerField(),
+                        "name": serializers.CharField(),
+                        "score": serializers.IntegerField(),
+                        "level": serializers.CharField(),
+                        "signals": AssessmentSignalSerializer(many=True),
+                        # `None` quando não há marco nenhum, ou quando o ritmo não permite prever
+                        # (`risk.assess_project`): a chave sai sempre, o valor é que falta.
+                        "forecast": inline_serializer(
+                            "RiskForecast",
+                            {
+                                # `DateField` e não `CharField`: `risk.py` já emite
+                                # `date.isoformat()`, que é byte a byte o que `DateField`
+                                # serializa (`format: date`). O componente descreve o **que
+                                # trafega**, e "data ISO" é mais informativo para quem gera
+                                # cliente do que "texto". Nada aqui serializa de fato — o
+                                # `inline_serializer` é só o esquema da resposta.
+                                "predicted_finish_date": serializers.DateField(),
+                                "delay_days": serializers.IntegerField(),
+                                "basis": serializers.CharField(),
+                            },
+                            allow_null=True,
+                        ),
+                    },
+                    many=True,
+                )
+            },
+        )
+    )
     def get(self, request: Request) -> Response:
         projects = Project.objects.visible_to(request.user).filter(
             archived_at__isnull=True
@@ -5207,7 +5426,26 @@ class HealthView(APIView):
     resource = "health"
     permission_classes = [RolePermission]
 
-    @extend_schema(responses=inline_serializer("HealthResponse", {"projects": serializers.ListField()}))
+    @extend_schema(
+        responses=inline_serializer(
+            "HealthResponse",
+            {
+                # A mesma cabeça da linha de risco e **sem `forecast`**: previsão de término é do
+                # risco de atraso, e a saúde mede outra coisa. Compartilham só o sinal.
+                "projects": inline_serializer(
+                    "HealthProject",
+                    {
+                        "project_id": serializers.IntegerField(),
+                        "name": serializers.CharField(),
+                        "score": serializers.IntegerField(),
+                        "level": serializers.CharField(),
+                        "signals": AssessmentSignalSerializer(many=True),
+                    },
+                    many=True,
+                )
+            },
+        )
+    )
     def get(self, request: Request) -> Response:
         # `select_related("engagement")`: `assess_projects_health` lê `project.engagement.account_id`
         # por projeto (satisfação é por conta). Antes da Fase 6 isso era `project.client_id`, campo
@@ -5225,7 +5463,27 @@ class RecommendationsView(APIView):
     resource = "analytics"
     permission_classes = [RolePermission]
 
-    @extend_schema(responses=inline_serializer("RecommendationsResponse", {"items": serializers.ListField()}))
+    @extend_schema(
+        responses=inline_serializer(
+            "RecommendationsResponse",
+            {
+                "items": inline_serializer(
+                    "RecommendationItem",
+                    {
+                        # `CharField`, não `ChoiceField`: `upsell`/`followup`/`prioritization`/
+                        # `deadline` são literais de `recommendations.py`, não `choices` de
+                        # modelo — não há enum de onde derivar, e inventar um aqui criaria a
+                        # segunda definição da lista.
+                        "kind": serializers.CharField(),
+                        "label": serializers.CharField(),
+                        "detail": serializers.CharField(),
+                        "url": serializers.CharField(),
+                    },
+                    many=True,
+                )
+            },
+        )
+    )
     def get(self, request: Request) -> Response:
         return Response({"items": recommendations.build_recommendations()})
 
@@ -5293,7 +5551,19 @@ class AiMetricsView(APIView):
     @extend_schema(responses=inline_serializer("AiMetrics", {
         "total": serializers.IntegerField(),
         "positive_rate": serializers.FloatField(allow_null=True),
-        "by_feature": serializers.ListField(),
+        "by_feature": inline_serializer(
+            "AiFeatureMetric",
+            {
+                # `AiInteraction.feature` é `CharField(max_length=32)` **sem `choices`** — o nome
+                # da feature é escrito por quem chama `_ai_run`. Não há enum a reusar aqui nem
+                # que se quisesse.
+                "feature": serializers.CharField(),
+                "count": serializers.IntegerField(),
+                "positive": serializers.IntegerField(),
+                "negative": serializers.IntegerField(),
+            },
+            many=True,
+        ),
     }))
     def get(self, request: Request) -> Response:
         if not request.user.is_admin_role:
@@ -5326,8 +5596,21 @@ class DashboardView(APIView):
             {
                 "active_projects": serializers.IntegerField(),
                 "overdue_count": serializers.IntegerField(),
-                "pipeline": serializers.ListField(),
-                "upcoming_tasks": serializers.ListField(),
+                # Lista **vazia** para Entrega (ver o comentário no `get`), e não ausente: a
+                # forma do contrato não muda com o papel de quem pergunta.
+                "pipeline": PipelineStageRowSerializer(many=True),
+                "upcoming_tasks": inline_serializer(
+                    "DashboardUpcomingTask",
+                    {
+                        "id": serializers.IntegerField(),
+                        "title": serializers.CharField(),
+                        # `.values()` entrega `due_date` como objeto `date`; o renderizador o
+                        # emite ISO, que é o que `DateField` descreve.
+                        "due_date": serializers.DateField(),
+                        "project_id": serializers.IntegerField(),
+                    },
+                    many=True,
+                ),
             },
         )
     )
@@ -5366,6 +5649,23 @@ class DashboardView(APIView):
         })
 
 
+# O estado de uma integração — `flags.status()`, o que o `GET` lista e o que o `PATCH` devolve.
+# Classe de módulo pela regra das outras três: a forma é a **mesma** nas duas rotas (o `PATCH`
+# devolve `flags.status(key)`, o `GET` devolve `flags.all_status()`), e descrevê-la duas vezes
+# seria duas definições do mesmo fato — o `GET` a descrevia como `DictField()` sem `child`, então
+# o item da lista não tinha chave nenhuma no contrato enquanto o `PATCH` tinha as seis.
+# O componente continua se chamando `ConfigFlag`, como já se chamava.
+class ConfigFlagSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    enabled = serializers.BooleanField()
+    configured = serializers.BooleanField()
+    toggleable = serializers.BooleanField()
+    # Os nomes de variável de ambiente que faltam para poder ligar — lista vazia quando não falta
+    # nada (`flags.missing`), que é o mesmo que `configured: true`.
+    missing = serializers.ListField(child=serializers.CharField())
+
+
 class ConfigView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -5374,7 +5674,7 @@ class ConfigView(APIView):
         "calendar_enabled": serializers.BooleanField(),
         "esign_enabled": serializers.BooleanField(),
         "esign_house_signer_email": serializers.CharField(allow_null=True),
-        "integrations": serializers.ListField(child=serializers.DictField()),
+        "integrations": ConfigFlagSerializer(many=True),
     }))
     def get(self, request: Request) -> Response:
         return Response({
@@ -5393,14 +5693,7 @@ class ConfigView(APIView):
             "key": serializers.CharField(),
             "enabled": serializers.BooleanField(),
         }),
-        responses=inline_serializer("ConfigFlag", {
-            "key": serializers.CharField(),
-            "label": serializers.CharField(),
-            "enabled": serializers.BooleanField(),
-            "configured": serializers.BooleanField(),
-            "toggleable": serializers.BooleanField(),
-            "missing": serializers.ListField(child=serializers.CharField()),
-        }),
+        responses=ConfigFlagSerializer,
     )
     def patch(self, request: Request) -> Response:
         if not request.user.is_admin_role:
