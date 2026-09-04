@@ -160,7 +160,11 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountOverviewDetail'
+          description: ''
   /api/v2/accounts/{id}/unarchive/:
     post:
       operationId: accounts_unarchive_create
@@ -3023,6 +3027,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       tags:
       - documents
       security:
@@ -3043,6 +3054,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       tags:
       - documents
       requestBody:
@@ -3073,31 +3091,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Um valor inteiro único que identifica este document.
-        required: true
-      tags:
-      - documents
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Document'
-          description: ''
-    put:
-      operationId: documents_update
-      description: |-
-        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
-        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
-        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       parameters:
       - in: path
         name: id
@@ -3107,53 +3107,6 @@ paths:
         required: true
       tags:
       - documents
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Document'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Document'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Document'
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Document'
-          description: ''
-    patch:
-      operationId: documents_partial_update
-      description: |-
-        Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
-
-        Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
-        nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: Um valor inteiro único que identifica este document.
-        required: true
-      tags:
-      - documents
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedDocument'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedDocument'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedDocument'
       security:
       - cookieAuth: []
       responses:
@@ -3170,6 +3123,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       parameters:
       - in: path
         name: id
@@ -3192,6 +3152,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       parameters:
       - in: path
         name: id
@@ -3218,6 +3185,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       parameters:
       - in: path
         name: id
@@ -3255,6 +3229,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       parameters:
       - in: path
         name: id
@@ -3292,6 +3273,13 @@ paths:
 
         Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
         nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+        `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+        documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+        divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+        pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+        arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+        arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
       parameters:
       - in: path
         name: id
@@ -12407,14 +12395,159 @@ components:
       - published_count
       - updated_at
       - vertical_name
+    AccountOverviewAiScore:
+      type: object
+      properties:
+        maturity:
+          type: integer
+          nullable: true
+        opportunity:
+          type: integer
+          nullable: true
+        dimensions: {}
+        summary:
+          type: string
+        scored_at:
+          type: string
+          format: date-time
+      required:
+      - dimensions
+      - maturity
+      - opportunity
+      - scored_at
+      - summary
+    AccountOverviewDetail:
+      type: object
+      properties:
+        account_id:
+          type: integer
+        name:
+          type: string
+        lifecycle_status:
+          type: string
+        roi:
+          $ref: '#/components/schemas/AccountOverviewRoi'
+        health:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewHealth'
+          nullable: true
+        risk_level:
+          type: string
+          nullable: true
+        phase:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewPhase'
+          nullable: true
+        next_meeting:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewNextMeeting'
+          nullable: true
+        ai_score:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewAiScore'
+          nullable: true
+      required:
+      - account_id
+      - lifecycle_status
+      - name
+      - roi
+    AccountOverviewHealth:
+      type: object
+      properties:
+        score:
+          type: integer
+        level:
+          type: string
+        project_id:
+          type: integer
+      required:
+      - level
+      - project_id
+      - score
     AccountOverviewList:
       type: object
       properties:
         accounts:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/AccountOverviewRow'
       required:
       - accounts
+    AccountOverviewNextMeeting:
+      type: object
+      properties:
+        title:
+          type: string
+        date:
+          type: string
+          format: date
+      required:
+      - date
+      - title
+    AccountOverviewPhase:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+      required:
+      - name
+      - status
+    AccountOverviewRoi:
+      type: object
+      properties:
+        revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        roi:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - cost
+      - revenue
+      - roi
+    AccountOverviewRow:
+      type: object
+      properties:
+        account_id:
+          type: integer
+        name:
+          type: string
+        lifecycle_status:
+          type: string
+        roi:
+          $ref: '#/components/schemas/AccountOverviewRoi'
+        health:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewHealth'
+          nullable: true
+        risk_level:
+          type: string
+          nullable: true
+        phase:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewPhase'
+          nullable: true
+        next_meeting:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewNextMeeting'
+          nullable: true
+        ai_score:
+          allOf:
+          - $ref: '#/components/schemas/AccountOverviewAiScore'
+          nullable: true
+      required:
+      - account_id
+      - lifecycle_status
+      - name
+      - roi
     Activity:
       type: object
       properties:
@@ -16563,61 +16696,6 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedDocument:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        account:
-          type: integer
-          nullable: true
-        commercial_opportunity:
-          type: integer
-          nullable: true
-        project:
-          type: integer
-          nullable: true
-        kind:
-          oneOf:
-          - $ref: '#/components/schemas/DocumentKindEnum'
-          - $ref: '#/components/schemas/BlankEnum'
-        file:
-          type: string
-          format: uri
-        drive_link:
-          type: string
-          format: uri
-          readOnly: true
-        original_name:
-          type: string
-          readOnly: true
-        uploaded_by:
-          type: integer
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        signature_requests:
-          type: array
-          items:
-            $ref: '#/components/schemas/SignatureRequest'
-          readOnly: true
-        originated_engagement:
-          type: integer
-          nullable: true
-          readOnly: true
-        owning_account:
-          type: integer
-          nullable: true
-          readOnly: true
-        signature_positioning_gap:
-          nullable: true
-          readOnly: true
-          oneOf:
-          - $ref: '#/components/schemas/SignaturePositioningGapEnum'
-          - $ref: '#/components/schemas/NullEnum'
     PatchedEngagement:
       type: object
       properties:

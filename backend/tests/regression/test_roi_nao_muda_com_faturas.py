@@ -7,7 +7,12 @@ somar faturas num commit de terça, e o número muda em seis lugares de uma vez 
 de ROI que `portal.build_snapshot` **já entrega à tela do cliente**.
 
 A FDD 028 decidiu: `actual_value` é o **valor contratado**, a soma das faturas pagas é o
-**recebido**, e nenhum consumidor muda. Trocar a fonte é mudança de contrato e exige ADR próprio.
+**recebido**, e nenhum consumidor muda. Trocar a fonte é mudança de contrato e exigia ADR próprio.
+
+**A ADR 0067 (04/09/2026) é essa decisão, e ela é: a fonte não muda.** O ROI segue saindo do
+contratado nos seis leitores, e o recebido ganha nome próprio quando for construído — nunca o
+rótulo do ROI. Este teste deixou de ser um congelamento à espera de decisão e passou a ser a
+guarda **daquela** decisão: um PR que faça o `_roi` somar faturas contradiz uma ADR aceita.
 
 O teste é diferencial de propósito. Ele não afirma que o ROI vale tal número — afirma que o corpo
 inteiro das respostas é **idêntico** antes e depois, o que continua valendo quando alguém mexer

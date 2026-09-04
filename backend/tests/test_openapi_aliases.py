@@ -323,6 +323,77 @@ def test_com_alvo_v1_os_hooks_mantem_o_comportamento_de_hoje(
     assert "status" in account["required"]
 
 
+# Schema mínimo para o teste **direto** de `marcar_aliases_depreciados`, isolado dos outros dois
+# hooks: `_rodar_hooks` sempre os chama em cadeia e nunca inclui a forma `Patched*`, que é
+# exatamente o pedaço que `_PREFIXO_PATCHED` existe para cobrir. `Task` entra como componente fora
+# do mapa que tem um campo **de verdade** chamado `status` — a mesma string da chave-alias de
+# `Account` —, para provar que quem decide é o componente estar em `ALIASES_DEPRECIADOS`, nunca o
+# nome da propriedade coincidir com um alias de outro lugar.
+def _schema_bruto_com_patched() -> dict[str, Any]:
+    return {
+        "components": {
+            "schemas": {
+                "Account": {
+                    "properties": {
+                        "status": {"type": "string"},
+                        "lifecycle_status": {"type": "string"},
+                    },
+                },
+                "PatchedAccount": {
+                    "properties": {
+                        "status": {"type": "string"},
+                        "lifecycle_status": {"type": "string"},
+                    },
+                },
+                "Task": {
+                    "properties": {"status": {"type": "string"}},
+                },
+            }
+        }
+    }
+
+
+def test_marcar_aliases_depreciados_e_direto_e_cobre_o_patched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Teste direto de `marcar_aliases_depreciados`, no molde dos que já existem para os outros
+    dois hooks — sem passar pelo `_rodar_hooks`, que só exercita o trio junto e nunca inclui a
+    forma `Patched*`.
+    """
+    monkeypatch.delenv("OPENAPI_ALVO", raising=False)
+
+    resultado = marcar_aliases_depreciados(
+        result=_schema_bruto_com_patched(), generator=None, request=None, public=True
+    )
+
+    schemas = resultado["components"]["schemas"]
+    assert schemas["Account"]["properties"]["status"]["deprecated"] is True
+    assert "deprecated" not in schemas["Account"]["properties"]["lifecycle_status"]
+
+    # A forma `Patched*` casa pelo regex e ganha a mesma marca — sem isto o `PatchedAccount` do
+    # corpo de `PATCH` sairia do `openapi.yaml` anunciando `status` como campo comum.
+    assert schemas["PatchedAccount"]["properties"]["status"]["deprecated"] is True
+    assert "deprecated" not in schemas["PatchedAccount"]["properties"]["lifecycle_status"]
+
+    # `Task` não está em `ALIASES_DEPRECIADOS_NO_ESQUEMA`: o `status` dela é campo real, e o hook
+    # não pode marcá-lo só porque o nome coincide com o alias de outro componente.
+    assert "deprecated" not in schemas["Task"]["properties"]["status"]
+
+
+def test_marcar_aliases_depreciados_e_no_op_no_alvo_v2(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No alvo v2 o hook não anota nada — quem remove é `remover_aliases_do_contrato` — e o
+    esquema sai bit a bit igual ao que entrou, incluindo o `Task` fora do mapa.
+    """
+    monkeypatch.setenv("OPENAPI_ALVO", "v2")
+    schema = _schema_bruto_com_patched()
+
+    resultado = marcar_aliases_depreciados(
+        result=schema, generator=None, request=None, public=True
+    )
+
+    assert resultado == _schema_bruto_com_patched()
+
+
 def test_alvo_da_geracao_normaliza_maiuscula_e_espaco(monkeypatch: pytest.MonkeyPatch) -> None:
     """`alvo_da_geracao` não é sensível a maiúscula/espaço — é lido de um env var digitado à mão
     no comando do CI e do desenvolvedor.

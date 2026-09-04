@@ -133,8 +133,9 @@ export type CustoEstadoAtual = { parcelas: { label: string; valor: string }[]; t
 // — os homônimos `_mes` do `Process` são dinheiro e quantidade, e não se confundem.
 // **`process` é a canônica e `processo` é o alias da `/api/v1/`** (`docs/ontology/aliases.md`
 // §2c): a fatia 4 da issue #67 renomeou o campo do modelo, e a chave antiga continua saindo no GET
-// e sendo aceita na escrita até a `/api/v2/`. As telas leem e escrevem a canônica.
-export type ProcessStep = { id: number; process: number; processo: number; name: string; position: number; pessoas: string; sistema: string; dados: string; tempo: string; erro: string; retrabalho: string };
+// da `/api/v1/` e sendo aceita na escrita — mas morre na `/api/v2/`, que é a que esta SPA fala
+// (`src/api.ts`). O alias não entra aqui: declará-lo seria o tipo afirmando o que a API não manda.
+export type ProcessStep = { id: number; process: number; name: string; position: number; pessoas: string; sistema: string; dados: string; tempo: string; erro: string; retrabalho: string };
 // O split Evidence/Finding e o Discovery (FDD 045, ADR 0049). O `ProcessDetailPage` **consome**
 // `Finding`/`Evidence` desde a Fase 6 (ADR 0052), que removeu a `Evidencia` fundida e o dual-write:
 // a tela lista os achados do split e promove a fato por ali. As demais superfícies (tela de
@@ -448,9 +449,12 @@ export type CobrancaPainelLinha = {
 export type CobrancaTensaoCausa = "satisfacao" | "entrega" | "ambas";
 // `dunning_step`/`dunning_step_display` e não `degrau`/`degrau_display`: a SPA lê a `/api/v2/`, e
 // lá o par legado não sai (`ALIASES_DEPRECIADOS`). Na `/api/v1/` os dois continuam saindo, para
-// quem integrou antes da fatia 5.4.
-export type DunningContact = { id: number; invoice: number; invoice_number: string; account: number; client_name: string; dunning_step: DunningStep; dunning_step_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
-export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; account: number | null; client_name: string; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };
+// quem integrou antes da fatia 5.4. Pela mesma razão o tipo não declara `client_name`: morreu na
+// `/api/v2/` junto do resto do alias `client`/`client_name` (issue #122, fatia 4a).
+export type DunningContact = { id: number; invoice: number; invoice_number: string; account: number; dunning_step: DunningStep; dunning_step_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
+// `client_name` morreu na `/api/v2/` junto do resto do alias `client`/`client_name` (issue #122,
+// fatia 4a) — pelo mesmo motivo do `DunningContact` acima.
+export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; account: number | null; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };
 // A chave `degrau` fica: ela é do corpo e da resposta das actions `rascunhar`/`enviar`, e chave de
 // action não muda de nome por versão (o precedente de `signers` era substituição, não renome). O
 // **valor** dentro dela é o canônico — a v1 traduz o legado, a v2 o recusa.

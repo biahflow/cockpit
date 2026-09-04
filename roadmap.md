@@ -387,8 +387,12 @@ um radar que ele respeita.
       **expira em 24 h**, e um link para uma fatura de quinze dias morre antes de o cliente abrir.
       **O Stripe não foi homologado** — o roteiro existe (runbook, seção 5), a rodada não. As
       quatro rodadas anteriores acharam defeito cada uma. As camadas 3 e 4 saíram deste recorte e
-      são o item seguinte. Ficam de fora, e nomeadas: a nota de crédito, a NFS-e e **trocar a fonte
-      do ROI**, que segue pedindo ADR próprio. Ver RFC 0004, FDD 028 e ADR 0021.
+      são o item seguinte. Ficam de fora, e nomeadas: a nota de crédito e a NFS-e. **A fonte do ROI
+      foi decidida em 04/09/2026 pela ADR 0067**, e a decisão é não trocá-la: o ROI continua saindo
+      do contratado (`actual_value`), e o *recebido* — a soma das faturas pagas — ganha nome próprio
+      quando for construído, nunca o rótulo do ROI. Nada mudou no código, e é esse o ponto: a
+      próxima pessoa a olhar `_roi` encontra a razão escrita em vez de um silêncio que convida ao
+      commit de terça. Ver RFC 0004, FDD 028, ADR 0021 e ADR 0067.
 - [x] **A régua que cobra sem estragar a relação — camadas 3 e 4 da RFC 0004.** A FDD 028
       deixou o portal sabendo quem está vencido e **avisando ninguém** — o docstring de
       `mark_overdue` dizia isso com todas as letras, e era o começo desta fatia. Agora existe a

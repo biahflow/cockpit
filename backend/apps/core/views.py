@@ -829,17 +829,93 @@ def _sem_chaves_legadas(
     de em `AliasesDaV1Mixin`: aquele mixin lê `ALIASES_DEPRECIADOS` por **componente do schema**,
     e um dicionário montado à mão não tem serializer que resolva para um. O contrato, esse sim,
     perde as chaves pelo mesmo mapa dos outros — `ALIASES_DEPRECIADOS_DE_DICT_CRU`, a metade da
-    união que os hooks do drf-spectacular leem (`apps/core/openapi_aliases.py`). Exceção: o par
-    `client_id`/`status` do overview de conta não tem entrada lá, porque `AccountOverviewList`
-    declara `items` sem tipo (`ListField()` sem `child=`) e `AccountOverviewDetail` não declara
-    propriedade nenhuma — o esquema não vê essas chaves, então a remoção aqui é dívida de
-    **resposta**, não de contrato (a lacuna que a ADR 0066, emenda da fatia 4a, declarou por
-    escrito).
+    união que os hooks do drf-spectacular leem (`apps/core/openapi_aliases.py`). O par `client_id`/
+    `status` do overview de conta entrou nesse mapa quando `AccountOverviewList`/
+    `AccountOverviewDetail` ganharam item tipado — antes disso o esquema não via as duas chaves, e
+    a remoção aqui era dívida de resposta, não de contrato (a lacuna que a ADR 0066, emenda da
+    fatia 4a, declarou por escrito — fechada fora da série de fatias da issue #122, que já havia
+    encerrado).
     """
     for linha in linhas:
         for chave in chaves:
             linha.pop(chave, None)
     return linhas
+
+
+# As cinco sub-formas de uma linha do overview de conta, cada uma classe de verdade (não
+# `inline_serializer`): `_account_overview_row_fields()` é chamada duas vezes — uma para o item da
+# lista, outra para o detalhe — e `inline_serializer` cria uma classe nova a cada chamada
+# (`type(name, (Serializer,), fields)`); duas classes de nomes iguais e identidades diferentes é
+# exatamente o que o drf-spectacular avisa como schema "muito provavelmente incorreto". Uma classe
+# módulo-level nascida uma vez, instanciada de novo em cada chamada, não tem esse problema — é
+# instância que se vincula ao serializer pai, a classe é a mesma nos dois lugares.
+class AccountOverviewRoiSerializer(serializers.Serializer):
+    revenue = serializers.DecimalField(max_digits=14, decimal_places=2)
+    cost = serializers.DecimalField(max_digits=14, decimal_places=2)
+    roi = serializers.FloatField(allow_null=True)
+
+
+class AccountOverviewHealthSerializer(serializers.Serializer):
+    score = serializers.IntegerField()
+    level = serializers.CharField()
+    project_id = serializers.IntegerField()
+
+
+class AccountOverviewPhaseSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    # `CharField`, não `ChoiceField(choices=ProjectPhase.Status.choices)`: o valor só pode ser
+    # "active" de qualquer forma (`build_overview_context` só carrega a fase `ACTIVE`), e reusar o
+    # enum aqui — numa linha de agregação, não no recurso `ProjectPhase` — fez o drf-spectacular
+    # tropeçar em "status" de vários componentes e gerar nomes de enum em hash
+    # (`Status31cEnum`/`StatusC64Enum`) que não existiam antes desta mudança.
+    status = serializers.CharField()
+
+
+class AccountOverviewNextMeetingSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    date = serializers.DateField()
+
+
+class AccountOverviewAiScoreSerializer(serializers.Serializer):
+    maturity = serializers.IntegerField(allow_null=True)
+    opportunity = serializers.IntegerField(allow_null=True)
+    dimensions = serializers.JSONField()
+    summary = serializers.CharField()
+    scored_at = serializers.DateTimeField()
+
+
+def _account_overview_row_fields() -> dict[str, Any]:
+    """Os campos de uma linha do overview de conta — o que `build_account_overview` de fato monta.
+
+    Existia como `serializers.ListField()` sem `child=`: o esquema não descrevia nenhuma chave da
+    linha, então `ALIASES_DEPRECIADOS`/`ALIASES_DEPRECIADOS_DE_DICT_CRU` não tinham o que indexar
+    ali e `client_id`/`status` sobreviveram invisíveis até a fatia 4c (ADR 0066). Extraída para
+    função porque `AccountOverviewList` (a lista) e `AccountOverviewDetail` (uma linha sozinha)
+    descrevem o **mesmo** dicionário — duas declarações lado a lado divergiriam no dia em que
+    `build_account_overview` ganhasse um campo. Cada chamador pede a sua própria chamada (nunca
+    reaproveita o dicionário devolvido): campo de serializer só se vincula a um serializer, e
+    reusar a mesma instância nos dois lugares quebraria o segundo bind.
+    """
+    return {
+        # `client_id`/`status` são os legados (`docs/ontology/aliases.md` §2c): saem na v1
+        # marcados `deprecated` (via `ALIASES_DEPRECIADOS_DE_DICT_CRU`) e somem na v2 por
+        # `_sem_chaves_legadas`. `account_id`/`lifecycle_status` são as canônicas, mesmo valor.
+        # `CharField`, não `ChoiceField`: ver o comentário do `status` de `AccountOverviewPhaseSerializer`
+        # sobre o ruído de nomeação de enum que reusar `Account.LifecycleStatus.choices` aqui gerava.
+        "client_id": serializers.IntegerField(),
+        "account_id": serializers.IntegerField(),
+        "name": serializers.CharField(),
+        "status": serializers.CharField(),
+        "lifecycle_status": serializers.CharField(),
+        "roi": AccountOverviewRoiSerializer(),
+        # As quatro abaixo saem `None` quando o cliente não tem projeto ativo —
+        # `build_account_overview` devolve cedo nesse caso, sem tocar em nenhuma delas.
+        "health": AccountOverviewHealthSerializer(required=False, allow_null=True),
+        "risk_level": serializers.CharField(required=False, allow_null=True),
+        "phase": AccountOverviewPhaseSerializer(required=False, allow_null=True),
+        "next_meeting": AccountOverviewNextMeetingSerializer(required=False, allow_null=True),
+        "ai_score": AccountOverviewAiScoreSerializer(required=False, allow_null=True),
+    }
 
 
 def build_account_overview(
@@ -1003,12 +1079,11 @@ class AccountViewSet(ArchiveModelViewSet):
     @extend_schema(
         responses=inline_serializer(
             "AccountOverviewList",
-            # `items` fica sem tipo (`serializers.ListField()` sem `child=`): o esquema não
-            # descreve as chaves de cada linha, então `ALIASES_DEPRECIADOS`/
-            # `ALIASES_DEPRECIADOS_DE_DICT_CRU` não têm o que indexar aqui — a remoção de
-            # `client_id`/`status` abaixo é dívida de **resposta**, não de contrato (issue #122,
-            # fatia 4c, pagando a lacuna declarada na emenda da fatia 4a da ADR 0066).
-            {chave_da_geracao("clients", "accounts"): serializers.ListField()},
+            {
+                chave_da_geracao("clients", "accounts"): serializers.ListField(
+                    child=inline_serializer("AccountOverviewRow", _account_overview_row_fields())
+                )
+            },
         )
     )
     @action(detail=False, methods=["get"])
@@ -1023,7 +1098,7 @@ class AccountViewSet(ArchiveModelViewSet):
         # Cada linha também carrega `client_id`/`status` (legados) ao lado de `account_id`/
         # `lifecycle_status` (canônicos) — os dois somem na `/api/v2/` via `_sem_chaves_legadas`
         # (issue #122, fatia 4c). Comentário, não docstring: drf-spectacular usa a docstring como
-        # `description` do endpoint, e o esquema desta fatia tem de ter diff vazio nos dois yamls.
+        # `description` do endpoint, e ela não muda só porque o item da resposta ganhou tipo.
         accounts = list(self.get_queryset())
         # Um `_visible_projects` por cliente somava ~14 queries por linha do grid. Aqui os
         # projetos visíveis de todos os clientes vêm juntos e o contexto é montado uma vez —
@@ -1045,7 +1120,9 @@ class AccountViewSet(ArchiveModelViewSet):
         chave = "accounts" if versao_de(request) == V2 else "clients"
         return Response({chave: linhas})
 
-    @extend_schema(responses=inline_serializer("AccountOverviewDetail", {}))
+    @extend_schema(
+        responses=inline_serializer("AccountOverviewDetail", _account_overview_row_fields())
+    )
     @action(detail=True, methods=["get"], url_path="overview")
     def overview_detail(self, request: Request, pk: str | None = None) -> Response:
         account = self.get_object()
@@ -2828,9 +2905,17 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
 
     Entrega só enxerga os documentos dos projetos de que participa; proposta e contrato, que
     nascem ligados à oportunidade, ficam fora do alcance dela (FDD 016, FDD 017, RFC 0003).
+
+    `http_method_names` não inclui `put` nem `patch`, no molde de `PriorityAssessmentViewSet`: o
+    documento é o próprio arquivo, e trocá-lo por baixo do registro deixaria três fatos
+    divergindo em silêncio — o carimbo `content_is_pdf` (calculado do arquivo **anterior**, e lido
+    pela tela de assinatura), `drive_file_id`/`drive_link` (que continuariam apontando para o
+    arquivo velho) e uma assinatura já pedida sobre o conteúdo antigo. Quem precisa de outro
+    arquivo envia outro documento — é `POST` que tem as guardas de extensão/tamanho.
     """
 
     resource = "document"
+    http_method_names = ["get", "post", "delete", "head", "options"]
     queryset = Document.objects.select_related(
         "account", "commercial_opportunity", "project", "uploaded_by",
         "originated_design_partner_engagement",
