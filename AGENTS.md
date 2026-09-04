@@ -39,6 +39,28 @@ a Engineering OS global; não a substitui.
 5. Para corrigir defeitos, escreva primeiro um teste de regressão em `backend/tests/regression/` ou na suíte mais próxima.
 6. Execute lint, tipos, testes e build aplicáveis antes da entrega. Não desative verificações de qualidade para concluir uma tarefa.
 7. Use exclusão lógica quando houver registros de negócio; não elimine dados operacionais sem requisito explícito.
+8. **Cite código por símbolo, não por número de linha — e não "conserte" a linha de um documento
+   congelado.** Em documento novo, escreva `publication.estado_de_publicacao` ou `PublicacaoBadge`,
+   nunca `publication.py:259`: o nome é estável por construção e é verificável (um `grep` por
+   símbolo que não existe devolve vazio, enquanto uma linha errada aponta para código plausível e
+   não acusa nada). Os dois tipos de documento se comportam de formas opostas quando o código
+   anda:
+   - **DAP e ADR são evidência congelada.** Um pacote `Status: Approved` descreve o código do
+     momento em que o gate humano aconteceu. Reescrevê-lo para acompanhar o repositório
+     transformaria evidência de aprovação em documentação viva, e ele deixaria de provar o que foi
+     aprovado e quando — a decisão está escrita em `docs/design/dap-engagement-r1/README.md` e
+     repetida na errata do `dap-publicacao-discovery-r1`. Uma citação envelhecida ali **não é
+     dívida**; é o registro funcionando. Não a corrija.
+   - **FDD é documento vivo** e acompanha o que foi construído (item 3 acima).
+
+   A exceção que continua sendo defeito: citação que **nasceu errada**, apontando para o lugar
+   errado já no commit que a escreveu. Isso não é envelhecimento, é erro de entrega, e se conserta
+   em qualquer um dos dois tipos. O ADR 0067 é o caso registrado — o próprio PR que o criou
+   deslocou duas das citações dele, e uma delas escondia um leitor trocado.
+
+   Corrigir número de linha em massa não funciona: a errata de 03/09/2026 do
+   `dap-publicacao-discovery-r1`, escrita para atualizar cinco coordenadas de `serializers.py`,
+   estava obsoleta em menos de 24 horas.
 
 
 ## Corpus de conhecimento (FDD 029)

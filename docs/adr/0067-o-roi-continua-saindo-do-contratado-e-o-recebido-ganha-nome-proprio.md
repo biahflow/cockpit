@@ -33,12 +33,21 @@ Todos leem `project.actual_value` diretamente, e são o que a troca moveria de u
 
 | Leitor | Onde | O que faz com o número |
 | --- | --- | --- |
-| Contexto do agente comercial | `apps/core/agents.py:190,194` | soma a receita ativa e a receita por conta |
-| Health Score | `apps/core/health.py:127` | penaliza margem negativa (`actual_value - cost < 0`) |
-| Visão da conta | `apps/core/views.py:869` | soma a receita dos projetos visíveis |
-| Indicadores | `apps/core/views.py:4997-5082` | ROI agregado, por conta, por serviço, e o funil |
-| **Portal do cliente** | `apps/core/portal.py:653` | **`revenue`/`cost` que atravessam ao cliente** |
-| `Case` | `apps/core/cases.py:77` | congela receita, custo e ROI no caso publicado |
+| Contexto do agente **financeiro** | `agents.build_finance_context` | soma a receita ativa e a receita por conta |
+| Health Score | `health.assess_project_health` | penaliza margem negativa (`actual_value - cost < 0`) |
+| Visão da conta | `views.build_account_overview` | soma a receita dos projetos visíveis |
+| Indicadores | `views.AnalyticsView` e `views._roi` | ROI agregado, por conta, por serviço, e o funil |
+| **Portal do cliente** | `portal.build_snapshot` | **`revenue`/`cost` que atravessam ao cliente** |
+| `Case` | `cases._roi_snapshot` | congela receita, custo e ROI no caso publicado |
+
+> Os seis são citados pelo **símbolo**, não por número de linha, e a troca corrigiu mais do que
+> coordenadas. Duas citações nasceram erradas: o mesmo PR que criou este documento (#124) inseriu os
+> serializers de `build_account_overview` acima delas e empurrou as duas — o registro já apontava
+> para o lugar errado no instante em que foi commitado. E a primeira linha nomeava o agente
+> **comercial**, quando quem lê `actual_value` em `agents.py` é `build_finance_context`, o
+> financeiro; a coordenada certa escondia o leitor errado. Símbolo é estável por construção, e é
+> verificável: `grep` por um nome que não existe devolve vazio, enquanto um número de linha errado
+> aponta para código plausível e não acusa nada.
 
 ### Onde os dois números divergem — por construção, não por defeito
 
@@ -51,7 +60,7 @@ Todos leem `project.actual_value` diretamente, e são o que a troca moveria de u
 4. **Design Partner**: o Discovery é gratuito por decisão (ADR 0053), e o valor concedido vive como
    desconto no `estimated_value`. Não há fatura a pagar, e não deveria haver ROI negativo por isso.
 5. **A semente do cronograma já depende do contratado**: `invoices.contracted_value`
-   (`apps/core/invoices.py:100-120`) usa `actual_value` **primeiro**, e o docstring diz por quê —
+   (`invoices.contracted_value`) usa `actual_value` **primeiro**, e o docstring diz por quê —
    *"semear um cronograma que não soma exatamente isso faria os dois números se contradizerem no
    primeiro dia"*. Ou seja: as faturas derivam do contratado. Fazer o ROI derivar das faturas
    fecharia um ciclo em que o número explica a si mesmo.

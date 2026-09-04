@@ -164,8 +164,9 @@ existir um sistema de tabela com mais de um consumidor. A allowlist permanece va
   `.btn--ghost` e `.card-grid` (zero consumidores) e os apelidos `accent-200`/`accent-700` (zero
   usos); entrou `.btn--secondary-danger` (4). `.btn--danger` trocou `bg-red-700` por `bg-danger` —
   mesma tinta, mas a única primitiva de perigo estava fora do token de perigo.
-- **Os três banners verdes escritos à mão ficam.** `TeamPage.tsx:40`, `ProjectDetailPage.tsx:552` e
-  `CommercialPage.tsx:121` dizem sucesso em `emerald`, e `.alert--ok` é tinta de **marca**
+- **Os três banners verdes escritos à mão ficam.** O `notice` de `TeamPage.tsx`, o "Jornada de
+  transformação concluída" de `ProjectDetailPage.tsx` e o "Projeto criado" de
+  `CommercialPage.tsx` dizem sucesso em `emerald`, e `.alert--ok` é tinta de **marca**
   (`brand-50/60`), não verde. Trocá-los mudaria a cor de três confirmações para laranja, que é o
   desenho da fatia anterior aplicado ao caso errado; dar uma variante verde ao `.alert--ok` criaria
   uma segunda gramática de sucesso. Três ocorrências não decidem isso — fica nomeado, não
