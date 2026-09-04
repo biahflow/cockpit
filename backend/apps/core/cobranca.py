@@ -41,6 +41,7 @@ from django.utils import timezone
 
 from . import flags
 from . import satisfaction as satisfaction_module
+from .dinheiro import dinheiro
 
 if TYPE_CHECKING:
     from .models import (
@@ -1005,17 +1006,9 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
     contexto = contexto_do_painel(invoices, dia)
     ligada = is_enabled()
 
-    def _dinheiro(valor: Decimal) -> str:
-        """Dinheiro sai como **string**, no formato em que o `InvoiceSerializer` já o entrega.
-
-        Estas linhas não passam por serializer (é um agregador, não um queryset), e o encoder JSON
-        do DRF converte `Decimal` em **float** — `40000.00` vira `40000.0`, e valores como
-        `10000.01` passam a depender do binário. Além do erro de centavo, teríamos duas
-        representações do mesmo campo na mesma API: `amount` string em `/invoices/` e número aqui,
-        com o SPA obrigado a saber qual é qual.
-        """
-        return f"{valor:.2f}"
-
+    # O dinheiro deste painel sai como texto por `dinheiro.dinheiro` — o argumento inteiro está
+    # na docstring de lá. O fechamento que morava aqui era a primeira das três definições da mesma
+    # regra; a ADR 0068 as reduziu a uma.
     linhas: list[dict[str, object]] = []
     for invoice in invoices:
         avaliacao = avaliar(invoice, dia, contexto=contexto)
@@ -1037,7 +1030,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             "account_name": invoice.account.name,
             "client": invoice.account_id,
             "client_name": invoice.account.name,
-            "amount": _dinheiro(invoice.amount),
+            "amount": dinheiro(invoice.amount),
             "due_date": invoice.due_date,
             "status": invoice.status,
             "status_display": invoice.get_status_display(),
@@ -1084,7 +1077,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             "regua": _nome_da_regua(regua),
             # O "valor do cliente" que a RFC pede à vista: o que a casa já recebeu dele, e não o
             # que ela estimou ganhar. Custo, margem e ROI continuam fora — aqui como no rascunho.
-            "recebido_do_cliente": _dinheiro(
+            "recebido_do_cliente": dinheiro(
                 contexto.recebido_por_cliente.get(invoice.account_id, Decimal("0"))
             ),
             "suspensao": (

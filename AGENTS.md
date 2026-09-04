@@ -65,8 +65,10 @@ a Engineering OS global; não a substitui.
 
 ## Corpus de conhecimento (FDD 029)
 
-`backend/apps/core/knowledge_corpus.jsonl` é **derivado** de `docs/` e `PRD.md` e vive commitado,
-como o `openapi.yaml` e o `openapi-v2.yaml`. Mexeu em ADR, FDD, RFC, runbook, `PRD.md`, `docs/architecture.md`,
+`backend/apps/core/knowledge_corpus.jsonl` é **derivado** e vive commitado, como o `openapi.yaml` e
+o `openapi-v2.yaml`. A fonte não é `docs/` inteiro: é o manifesto explícito `KB_SOURCES`
+(`backend/apps/core/knowledge.py`), e o que fica de fora está decidido e comentado lá. Mexeu em
+ADR, FDD, RFC, runbook, `PRD.md`, `docs/architecture.md`, `docs/metodologia-fde.md`,
 `docs/operacao.md` ou `docs/captacao-de-leads.md`? Rode:
 
 ```bash
@@ -76,3 +78,8 @@ cd backend && uv run python manage.py build_knowledge_corpus
 e commite o `.jsonl` junto. O CI reprova se ele estiver defasado. A fricção é de propósito: é o que
 faz "mudei a metodologia" ser um ato visível e revisado, em vez de o índice divergir do repositório
 em silêncio.
+
+**Mexer só em `docs/ontology/` não pede regeneração**, e a ausência é decisão: o `language-map.md` e
+o `aliases.md` são normativos para quem escreve código aqui dentro, não material de consulta para
+quem pergunta de negócio ao agente. O motivo está escrito junto de `KB_SOURCES`. Se o comando não
+mudar o `.jsonl`, é isso — não é sinal de que ele falhou.

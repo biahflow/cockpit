@@ -209,6 +209,16 @@ class Kind:
 # nada; `roadmap.md` é lista de status cujas linhas velhas seriam citadas como correntes — que é o
 # modo de falha que a FDD 029 nomeia; e `CLAUDE.md`/`AGENTS.md` são instrução para agente, não
 # metodologia. Um glob engoliria os quatro sem ninguém decidir.
+#
+# **`docs/ontology/` fica de fora, e a ausência é decisão, não esquecimento** (04/09/2026). O
+# `language-map.md` e o `aliases.md` são normativos — mas para quem escreve código aqui dentro:
+# dizem como batizar classe, campo e rota, e quando um alias morre. Quem consulta este corpus é o
+# usuário do Pulse perguntando de negócio ao agente comercial, de entrega ou financeiro, e para ele
+# "a chave `client` morre na `/api/v2/`" é ruído com aparência de resposta. O vocabulário de
+# domínio que ele **precisa** (Account, Engagement, os degraus da escada, o gate do PROVE) já chega
+# pelas ADRs e FDDs indexadas acima, ditas na linguagem de quem pergunta. Se um dia o mapa de
+# linguagem virar material de consulta para pessoas — e não só para código —, o lugar é uma peça
+# própria, escrita para esse leitor, não o espelho normativo inteiro.
 # O terceiro campo é o slug da **área padrão**. Declarar a área é o mesmo ato que já se faz com o
 # tipo — não é adivinhação. E não muda o estado do primeiro dia: as áreas nascem **sem dono**, então
 # tudo continua "em falta". O ganho aparece depois: nomear um dono para "Operação" cobre os sete

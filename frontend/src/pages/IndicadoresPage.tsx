@@ -62,8 +62,8 @@ export function IndicadoresPage() {
       <section className="panel sm:p-6">
         <h2 className="font-semibold text-ink">Financeiro</h2>
         <div className="mt-5 grid grid-cols-2 gap-4">
-          <div><p className="text-xs text-slate-600">Receita realizada</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(data.roi.revenue)}</p></div>
-          <div><p className="text-xs text-slate-600">Custo</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(data.roi.cost)}</p></div>
+          <div><p className="text-xs text-slate-600">Receita realizada</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(Number(data.roi.revenue))}</p></div>
+          <div><p className="text-xs text-slate-600">Custo</p><p className="mt-1 text-2xl font-semibold text-ink">{money.format(Number(data.roi.cost))}</p></div>
           <div><p className="text-xs text-slate-600">Pipeline estimado</p><p className="mt-1 text-2xl font-semibold text-accent">{money.format(pipelineValue)}</p></div>
           <div className="flex items-center gap-2"><PiggyBank className="size-5 text-accent" /><span className="text-sm text-slate-600">ROI = (receita − custo) / custo</span></div>
         </div>
@@ -133,13 +133,22 @@ function FunnelRow({ label, value, tone = "default" }: { label: string; value: n
 }
 
 function RoiTable({ title, rows }: { title: string; rows: RoiRow[] }) {
-  const max = Math.max(1, ...rows.map(row => row.revenue));
+  // `revenue`/`cost` chegam como texto decimal (ADR 0068), então a conversão acontece **uma vez
+  // por linha** e alimenta tanto a barra quanto os dois valores.
+  //
+  // Quem obriga a conversão é o TypeScript, não o runtime: `Math.max` e `/` aplicam `ToNumber` a
+  // string, e `"9000"/2` dá 4500 como se esperaria. É por isso que a conversão é **explícita** e
+  // não uma coerção deixada acontecer — sem o tipo reclamando, a diferença entre somar texto e
+  // somar número some da leitura, e `"9" + 1` não erra igual a `"9" / 1`. Mesmo motivo do
+  // `Number()` que `FinanceiroPage` e `CobrancaPage` já escrevem.
+  const receitas = rows.map(row => Number(row.revenue));
+  const max = Math.max(1, ...receitas);
   return <section className="panel panel--flush">
     <div className="border-b px-5 py-4 sm:px-6"><h2 className="font-semibold text-ink">{title}</h2></div>
-    {rows.length ? <div className="divide-y">{rows.map(row => <div className="px-5 py-3 sm:px-6" key={row.label}>
+    {rows.length ? <div className="divide-y">{rows.map((row, index) => <div className="px-5 py-3 sm:px-6" key={row.label}>
       <div className="flex items-center justify-between text-sm"><span className="font-medium text-ink">{row.label}</span><span className={`font-semibold ${row.roi != null && row.roi < 0 ? "text-danger" : "text-accent"}`}>ROI {row.roi == null ? "—" : `${Math.round(row.roi * 100)}%`}</span></div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-ink" style={{ width: `${Math.max(4, row.revenue / max * 100)}%` }} /></div>
-      <div className="mt-1 flex justify-between text-xs text-slate-600"><span>Receita {money.format(row.revenue)}</span><span>Custo {money.format(row.cost)}</span></div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-ink" style={{ width: `${Math.max(4, receitas[index] / max * 100)}%` }} /></div>
+      <div className="mt-1 flex justify-between text-xs text-slate-600"><span>Receita {money.format(receitas[index])}</span><span>Custo {money.format(Number(row.cost))}</span></div>
     </div>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Sem dados financeiros ainda. Preencha receita/custo nos projetos.</p>}
   </section>;
 }

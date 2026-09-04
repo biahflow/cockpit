@@ -69,6 +69,7 @@ from . import (
     risk,
     tasksync,
 )
+from .dinheiro import dinheiro
 from .exceptions import (
     AiProviderUnavailable,
     CalendarProviderUnavailable,
@@ -850,8 +851,13 @@ def _sem_chaves_legadas(
 # módulo-level nascida uma vez, instanciada de novo em cada chamada, não tem esse problema — é
 # instância que se vincula ao serializer pai, a classe é a mesma nos dois lugares.
 class AccountOverviewRoiSerializer(serializers.Serializer):
+    # `DecimalField` sem `coerce_to_string=False`: dinheiro trafega como **texto** (ADR 0068), e
+    # quem converte o valor é `dinheiro.dinheiro` em `build_account_overview` — o esquema declara,
+    # a view converte, e as duas metades precisam concordar. Esta declaração já dizia `string`
+    # antes da ADR 0068; era o corpo que discordava dela.
     revenue = serializers.DecimalField(max_digits=14, decimal_places=2)
     cost = serializers.DecimalField(max_digits=14, decimal_places=2)
+    # `roi` é razão, não dinheiro: nasce de uma divisão, não tem centavo a perder e fica `float`.
     roi = serializers.FloatField(allow_null=True)
 
 
@@ -955,7 +961,10 @@ def build_account_overview(
         "name": account.name,
         "status": account.lifecycle_status,
         "lifecycle_status": account.lifecycle_status,
-        "roi": {"revenue": revenue, "cost": cost, "roi": _roi(revenue, cost)},
+        # Texto, e não `Decimal` cru: este dicionário vai direto ao renderizador, que
+        # transformaria `Decimal("40000.00")` em `40000.0` — o esquema já prometia `string` aqui
+        # (`AccountOverviewRoiSerializer`) e era o corpo que mentia (ADR 0068).
+        "roi": {"revenue": dinheiro(revenue), "cost": dinheiro(cost), "roi": _roi(revenue, cost)},
         "health": None,
         "risk_level": None,
         "phase": None,
@@ -2560,6 +2569,10 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         responses=inline_serializer(
             name="InvoiceSummary",
             fields={
+                # Os três em **texto**, na mesma forma de `Invoice.amount` (ADR 0068). O
+                # `max_digits=12` acompanha o do campo do modelo e é o que fixa o `pattern` do
+                # contrato — mudá-lo para o 14 dos agregados de `/analytics/` seria trocar o
+                # contrato desta rota de carona numa fatia que veio para o corpo parar de mentir.
                 "open": serializers.DecimalField(max_digits=12, decimal_places=2),
                 "overdue": serializers.DecimalField(max_digits=12, decimal_places=2),
                 "paid": serializers.DecimalField(max_digits=12, decimal_places=2),
@@ -2575,6 +2588,10 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
 
         Agregado no banco e não em laço de Python porque este endpoint entra na mesma disciplina
         do gate de custo de query da ADR 0014: o custo não pode crescer com a base.
+
+        Os três totais saem em **texto**, como `Invoice.amount` na listagem ao lado — é o que o
+        esquema desta rota já prometia, e o `default=Decimal("0")` garante que nenhum deles seja
+        nulo (aqui "não há fatura na faixa" **é** zero recebido, ao contrário do funil).
         """
         faixas = {
             "open": Q(status=Invoice.Status.ISSUED),
@@ -2585,7 +2602,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
             **{nome: Sum("amount", filter=q, default=Decimal("0")) for nome, q in faixas.items()},
             **{f"{nome}_count": Count("id", filter=q) for nome, q in faixas.items()},
         )
-        return Response(dados)
+        return Response({**dados, **{nome: dinheiro(dados[nome]) for nome in faixas}})
 
 
 class DunningContactViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
@@ -5032,24 +5049,14 @@ def _lead_source(opportunity_path: str) -> Subquery:
     )
 
 
-def _dinheiro_do_agregado(**kwargs: Any) -> serializers.DecimalField:
-    """Dinheiro de dicionário montado à mão: **número** no JSON, e é isto que o esquema diz.
-
-    `coerce_to_string=False` não é preferência de formatação — é a única declaração verdadeira
-    aqui. Estas linhas não passam por serializer nenhum (são agregadores devolvendo `dict` cru), e
-    o encoder JSON do DRF converte `Decimal` em `float`: `Decimal("5000.00")` chega ao cliente
-    como `5000.0`. Com o padrão (`COERCE_DECIMAL_TO_STRING`), o esquema prometeria
-    `type: string` para um campo que trafega número, e um cliente gerado a partir do contrato
-    quebraria na primeira resposta — pior que o `items: {}` que esta fatia veio remover.
-    `ProcessSerializer.get_custo` e `cobranca._dinheiro` documentam o mesmo encoder pela outra
-    saída: lá a conversão para texto é explícita, e ali `DecimalField` (string) é o certo.
-
-    Uma função, e não uma instância de módulo: campo de serializer só se vincula a um serializer,
-    então cada chamador pede a sua (a razão de `_account_overview_row_fields` também ser função).
-    """
-    return serializers.DecimalField(
-        max_digits=14, decimal_places=2, coerce_to_string=False, **kwargs
-    )
+# `_dinheiro_do_agregado(coerce_to_string=False)` morava aqui. Ele nasceu no PR #125 descrevendo
+# honestamente o defeito — o esquema dizia `number` porque era `number` que trafegava — e morreu na
+# ADR 0068, que trocou o corpo em vez do contrato: os agregados passaram a converter o `Decimal`
+# com `dinheiro.dinheiro`, e o que sobrava do envelope era um `DecimalField` padrão. Um invólucro
+# que não acrescenta nada é a mesma dívida de uma classe CSS sem consumidor, então as declarações
+# abaixo dizem `serializers.DecimalField(...)` por extenso — a mesma linha que
+# `AccountOverviewRoiSerializer` e `InvoiceSummary` já usavam, o que é o ponto de "uma
+# representação só".
 
 
 # As três sub-formas abaixo são descritas por **mais de uma** resposta agregada, e por isso cada
@@ -5088,8 +5095,10 @@ class PipelineStageRowSerializer(serializers.Serializer):
     position = serializers.IntegerField()
     opportunity_count = serializers.IntegerField()
     # `None` na etapa sem oportunidade nenhuma: `Sum` de queryset vazio é `NULL`, e o `/dashboard/`
-    # e a `/analytics/` emitem esse `None` cru — não é zero, é "não há o que somar".
-    estimated_total = _dinheiro_do_agregado(allow_null=True)
+    # e a `/analytics/` emitem esse `None` cru — não é zero, é "não há o que somar". Quando há o
+    # que somar, o total sai em **texto** (ADR 0068): quem converte é `_linhas_de_etapa`, logo
+    # adiante, e `dinheiro.dinheiro` preserva o nulo justamente para não apagar a distinção.
+    estimated_total = serializers.DecimalField(max_digits=14, decimal_places=2, allow_null=True)
 
 
 # Os dois recortes do ROI (por conta e por serviço) têm a mesma forma — uma classe, duas
@@ -5100,9 +5109,20 @@ class RoiBreakdownRowSerializer(serializers.Serializer):
     """
 
     label = serializers.CharField()
-    revenue = _dinheiro_do_agregado()
-    cost = _dinheiro_do_agregado()
+    revenue = serializers.DecimalField(max_digits=14, decimal_places=2)
+    cost = serializers.DecimalField(max_digits=14, decimal_places=2)
     roi = serializers.FloatField(allow_null=True)
+
+
+def _linhas_de_etapa(linhas: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """As linhas de `PipelineStageRowSerializer` com o dinheiro já em texto (ADR 0068).
+
+    Uma função pela mesma razão de a forma ser uma classe de módulo: `/analytics/` e `/dashboard/`
+    diferem no filtro e não na linha, e converter o `estimated_total` dentro de cada uma seria duas
+    definições do mesmo fato — a segunda esqueceria o `None` no dia em que alguém "simplificasse" a
+    primeira.
+    """
+    return [{**linha, "estimated_total": dinheiro(linha["estimated_total"])} for linha in linhas]
 
 
 class AnalyticsView(APIView):
@@ -5160,7 +5180,9 @@ class AnalyticsView(APIView):
                                 "open": serializers.IntegerField(),
                                 "won": serializers.IntegerField(),
                                 "lost": serializers.IntegerField(),
-                                "estimated_total": _dinheiro_do_agregado(),
+                                "estimated_total": serializers.DecimalField(
+                                    max_digits=14, decimal_places=2
+                                ),
                                 # `None` quando ninguém ganhou nem perdeu naquele degrau —
                                 # denominador zero não é taxa zero.
                                 "win_rate": serializers.FloatField(allow_null=True),
@@ -5188,21 +5210,27 @@ class AnalyticsView(APIView):
                                 "leads": serializers.IntegerField(),
                                 "won": serializers.IntegerField(),
                                 "projects": serializers.IntegerField(),
-                                "revenue": _dinheiro_do_agregado(),
+                                "revenue": serializers.DecimalField(
+                                    max_digits=14, decimal_places=2
+                                ),
                             },
                             many=True,
                         ),
                     },
                 ),
                 "win_rate": serializers.FloatField(allow_null=True),
+                # `avg_ticket` **não** é dinheiro pelo critério da ADR 0068, embora seja um valor
+                # em reais: ele é um quociente (`Avg`), e não a soma exata de valores gravados.
+                # Fixá-lo em duas casas seria arredondar uma estatística — decisão de produto, não
+                # de formatação —, e é a mesma razão de `win_rate` e `roi` ficarem `float`.
                 "avg_ticket": serializers.FloatField(),
                 "avg_cycle_days": serializers.FloatField(allow_null=True),
                 "pipeline": PipelineStageRowSerializer(many=True),
                 "roi": inline_serializer(
                     "AnalyticsRoi",
                     {
-                        "revenue": _dinheiro_do_agregado(),
-                        "cost": _dinheiro_do_agregado(),
+                        "revenue": serializers.DecimalField(max_digits=14, decimal_places=2),
+                        "cost": serializers.DecimalField(max_digits=14, decimal_places=2),
                         "roi": serializers.FloatField(allow_null=True),
                         # **O recorte por conta troca de chave por versão** — `by_client` na
                         # `/api/v1/`, `by_account` na `/api/v2/` — e não convive, pelo precedente
@@ -5244,7 +5272,7 @@ class AnalyticsView(APIView):
         win_rate = won / (won + lost) if (won + lost) else None
         avg_ticket = opps.filter(stage__kind=PipelineStage.Kind.WON).aggregate(v=Avg("estimated_value"))["v"] or 0
 
-        stages = list(
+        stages = _linhas_de_etapa(
             PipelineStage.objects.annotate(
                 opportunity_count=Count("opportunities", filter=Q(opportunities__archived_at__isnull=True)),
                 estimated_total=Sum("opportunities__estimated_value", filter=Q(opportunities__archived_at__isnull=True)),
@@ -5269,13 +5297,20 @@ class AnalyticsView(APIView):
 
         revenue = projects.aggregate(v=Sum("actual_value"))["v"] or Decimal("0")
         cost = projects.aggregate(v=Sum("cost"))["v"] or Decimal("0")
+        # Os dois recortes com o dinheiro em texto (ADR 0068). O piso é `Decimal("0")` e não `0`:
+        # aqui o recorte **existe** porque há projeto nele, então "sem receita registrada" é zero
+        # de verdade — o nulo que sobrevive é o do funil, onde não há linha a somar.
         by_account = [
-            {"label": row["engagement__account__name"], "revenue": row["rev"] or 0, "cost": row["cost"] or 0,
+            {"label": row["engagement__account__name"],
+             "revenue": dinheiro(row["rev"] or Decimal("0")),
+             "cost": dinheiro(row["cost"] or Decimal("0")),
              "roi": _roi(row["rev"] or Decimal("0"), row["cost"] or Decimal("0"))}
             for row in projects.values("engagement__account__name").annotate(rev=Sum("actual_value"), cost=Sum("cost")).order_by("-rev")
         ]
         by_service = [
-            {"label": row["service__name"] or "Sem serviço", "revenue": row["rev"] or 0, "cost": row["cost"] or 0,
+            {"label": row["service__name"] or "Sem serviço",
+             "revenue": dinheiro(row["rev"] or Decimal("0")),
+             "cost": dinheiro(row["cost"] or Decimal("0")),
              "roi": _roi(row["rev"] or Decimal("0"), row["cost"] or Decimal("0"))}
             for row in projects.values("service__name").annotate(rev=Sum("actual_value"), cost=Sum("cost")).order_by("-rev")
         ]
@@ -5293,7 +5328,13 @@ class AnalyticsView(APIView):
                 "open": tier_opps.filter(stage__kind=PipelineStage.Kind.OPEN).count(),
                 "won": tier_won,
                 "lost": tier_lost,
-                "estimated_total": tier_opps.aggregate(v=Sum("estimated_value"))["v"] or 0,
+                # O degrau sem oportunidade nenhuma vale `"0.00"`, e não `null`: a linha do degrau
+                # sai sempre (o laço é sobre `Service.Tier.choices`), então aqui "não há venda
+                # neste degrau" **é** zero estimado — a forma declarada em `FunnelTierRow`, que
+                # nunca foi nulável.
+                "estimated_total": dinheiro(
+                    tier_opps.aggregate(v=Sum("estimated_value"))["v"] or Decimal("0")
+                ),
                 "win_rate": tier_won / (tier_won + tier_lost) if (tier_won + tier_lost) else None,
             })
 
@@ -5361,7 +5402,7 @@ class AnalyticsView(APIView):
                     "leads": entered.get(origin, 0),
                     "won": won_by_source.get(origin, 0),
                     "projects": closed_by_source.get(origin, (0, Decimal("0")))[0],
-                    "revenue": closed_by_source.get(origin, (0, Decimal("0")))[1],
+                    "revenue": dinheiro(closed_by_source.get(origin, (0, Decimal("0")))[1]),
                 }
                 for origin in set(entered) | set(won_by_source) | set(closed_by_source)
             ),
@@ -5388,7 +5429,8 @@ class AnalyticsView(APIView):
             "avg_ticket": avg_ticket,
             "avg_cycle_days": avg_cycle,
             "pipeline": stages,
-            "roi": {"revenue": revenue, "cost": cost, "roi": _roi(revenue, cost),
+            "roi": {"revenue": dinheiro(revenue), "cost": dinheiro(cost),
+                    "roi": _roi(revenue, cost),
                     chave_do_recorte_por_conta: by_account, "by_service": by_service},
         })
 
@@ -5640,7 +5682,7 @@ class DashboardView(APIView):
         # O funil traz valor estimado de **todas** as oportunidades, inclusive as não-ganhas,
         # que o `CommercialOpportunityViewSet` já esconde de Entrega. O painel não pode ser o canal
         # lateral disso. O campo permanece (a forma do contrato não muda), vazio.
-        stages = [] if is_delivery else list(PipelineStage.objects.annotate(
+        stages = [] if is_delivery else _linhas_de_etapa(PipelineStage.objects.annotate(
             opportunity_count=Count("opportunities"), estimated_total=Sum("opportunities__estimated_value")
         ).values("id", "name", "kind", "position", "opportunity_count", "estimated_total"))
         visible = Project.objects.visible_to(request.user).filter(archived_at__isnull=True)

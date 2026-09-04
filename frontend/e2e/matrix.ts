@@ -305,7 +305,7 @@ const FIXTURES: Record<string, unknown> = {
     accounts: clientes.map(cliente => ({
       account_id: cliente.id, name: cliente.name,
       lifecycle_status: cliente.lifecycle_status,
-      roi: { revenue: 180000, cost: 90000, roi: 1 },
+      roi: { revenue: "180000.00", cost: "90000.00", roi: 1 },
       health: { score: 42, level: "crítico", project_id: cliente.id },
       risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
       next_meeting: { title: "Comitê quinzenal de acompanhamento", date: HOJE },
@@ -315,7 +315,7 @@ const FIXTURES: Record<string, unknown> = {
   },
   "/api/v2/accounts/1/overview/": {
     account_id: 1, name: clientes[0].name, lifecycle_status: "active",
-    roi: { revenue: 180000, cost: 90000, roi: 1 },
+    roi: { revenue: "180000.00", cost: "90000.00", roi: 1 },
     health: { score: 42, level: "crítico", project_id: 1 },
     risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
     next_meeting: { title: "Comitê quinzenal de acompanhamento", date: HOJE },
@@ -693,9 +693,9 @@ const FIXTURES: Record<string, unknown> = {
       opportunities: { open: 9, won: 6, lost: 3 },
       projects: { total: 12, by_status: { active: 8, completed: 4 } },
       by_tier: [
-        { tier: "discovery_sprint", label: "Discovery Sprint", total: 10, open: 4, won: 5, lost: 1, estimated_total: 0, win_rate: 0.83 },
-        { tier: "feasibility", label: "Technical Feasibility (T.O.E.)", total: 8, open: 3, won: 4, lost: 1, estimated_total: 320000, win_rate: 0.8 },
-        { tier: "prove", label: "PROVE (piloto)", total: 5, open: 2, won: 2, lost: 1, estimated_total: 900000, win_rate: 0.67 },
+        { tier: "discovery_sprint", label: "Discovery Sprint", total: 10, open: 4, won: 5, lost: 1, estimated_total: "0.00", win_rate: 0.83 },
+        { tier: "feasibility", label: "Technical Feasibility (T.O.E.)", total: 8, open: 3, won: 4, lost: 1, estimated_total: "320000.00", win_rate: 0.8 },
+        { tier: "prove", label: "PROVE (piloto)", total: 5, open: 2, won: 2, lost: 1, estimated_total: "900000.00", win_rate: 0.67 },
       ],
       by_stage: [
         { kind: "discovery", label: "Discovery", total: 12, sent: 10, accepted: 8, rejected: 1, acceptance_rate: 0.8, reached: 12 },
@@ -707,18 +707,18 @@ const FIXTURES: Record<string, unknown> = {
       // rolagem, mas um mock que não reconcilia com o funil de cima seria a própria tela que a
       // FDD 030 recusa — e alguém a leria como exemplo do formato certo.
       by_source: [
-        { source: "indicacao", leads: 6, won: 3, projects: 3, revenue: 540000 },
-        { source: "site", leads: 28, won: 2, projects: 2, revenue: 180000 },
-        { source: "direto", leads: 0, won: 1, projects: 1, revenue: 95000 },
+        { source: "indicacao", leads: 6, won: 3, projects: 3, revenue: "540000.00" },
+        { source: "site", leads: 28, won: 2, projects: 2, revenue: "180000.00" },
+        { source: "direto", leads: 0, won: 1, projects: 1, revenue: "95000.00" },
       ],
     },
     win_rate: 0.67, avg_ticket: 150000, avg_cycle_days: 38, pipeline: etapas,
     roi: {
-      revenue: 1440000, cost: 720000, roi: 1,
+      revenue: "1440000.00", cost: "720000.00", roi: 1,
       // `by_account`: a chave do recorte por conta trocou de nome na `/api/v2/`, que é a versão
       // que este mock serve (`docs/ontology/aliases.md`).
-      by_account: clientes.map(c => ({ label: c.name, revenue: 180000, cost: 90000, roi: 1 })),
-      by_service: [{ label: "Discovery + Assessment", revenue: 640000, cost: 300000, roi: 1.13 }],
+      by_account: clientes.map(c => ({ label: c.name, revenue: "180000.00", cost: "90000.00", roi: 1 })),
+      by_service: [{ label: "Discovery + Assessment", revenue: "640000.00", cost: "300000.00", roi: 1.13 }],
     },
   },
   "/api/v2/notifications/": serie(4, index => ({
