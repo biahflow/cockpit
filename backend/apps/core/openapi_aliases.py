@@ -57,10 +57,11 @@ de procurar no mapa, para as duas formas do mesmo recurso saírem marcadas junta
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
-from .versioning import PREFIXO_DA_V2
+from .versioning import PREFIXO_DA_V2, V1, V2
 
 # Espelho de `docs/ontology/aliases.md` §2c. Cada entrada morre quando o campo dela morrer —
 # na `/api/v2/` — e nenhuma antes, porque a chave continua respondendo até lá.
@@ -124,6 +125,21 @@ CANONICO_DA_CHAVE: dict[str, str | None] = {
 _PREFIXO_PATCHED = re.compile(r"^Patched(.+)$")
 
 
+def alvo_da_geracao() -> str:
+    """O alvo desta geração de esquema: `'v1'` (default) ou `'v2'`, lido de `OPENAPI_ALVO`.
+
+    Por que env, e não introspecção do `generator`. Os hooks do drf-spectacular recebem os
+    endpoints já enumerados (`PREPROCESSING_HOOKS`, `endpoints=`) ou o esquema já montado
+    (`POSTPROCESSING_HOOKS`, `result=`/`generator=`) — nenhum dos dois carrega **qual urlconf**
+    produziu aquilo, então nada aqui dentro consegue inferir sozinho se a geração corrente é a da
+    v1 ou a da v2. O comando da v2 (`OPENAPI_ALVO=v2 manage.py spectacular --urlconf
+    config.urls_v2_schema --file openapi-v2.yaml`) declara o alvo explicitamente; sem ele,
+    `excluir_a_v2_do_contrato` esvaziaria a geração da v2 inteira, filtrando os únicos caminhos que
+    o urlconf dedicado enumera.
+    """
+    return os.environ.get("OPENAPI_ALVO", V1).strip().lower() or V1
+
+
 def marcar_aliases_depreciados(
     result: dict[str, Any], generator: Any, request: Any, public: bool
 ) -> dict[str, Any]:
@@ -134,7 +150,13 @@ def marcar_aliases_depreciados(
     propriedade que o mapa cita mas o schema não tem, passa direto: é o teste
     `test_openapi_aliases.py` que garante que o mapa não apodrece (entrada morta) nem fica atrás do
     código (alias novo sem entrada).
+
+    No-op quando o alvo da geração é v2 (`alvo_da_geracao`): a v2 não *anuncia* a depreciação, ela
+    **remove** — quem faz isso é `remover_aliases_do_contrato`, logo abaixo, no mesmo par
+    filtra/inclui de `excluir_a_v2_do_contrato`.
     """
+    if alvo_da_geracao() == V2:
+        return result
     schemas = result.get("components", {}).get("schemas", {})
     for nome_componente, schema in schemas.items():
         casado = _PREFIXO_PATCHED.match(nome_componente)
@@ -150,22 +172,61 @@ def marcar_aliases_depreciados(
     return result
 
 
-def excluir_a_v2_do_contrato(endpoints: list[Any]) -> list[Any]:
-    """`PREPROCESSING_HOOKS`: o `openapi.yaml` descreve a `/api/v1/`, e só ela — por ora.
+def remover_aliases_do_contrato(
+    result: dict[str, Any], generator: Any, request: Any, public: bool
+) -> dict[str, Any]:
+    """`POSTPROCESSING_HOOKS`: no alvo v2, remove cada propriedade-alias do componente e de `required`.
 
-    A fatia 1 da issue #122 monta a `/api/v2/` sobre **os mesmos serializers**, e por isso sobre os
-    mesmos componentes do esquema. Publicá-la agora emitiria ~240 caminhos novos apontando para
-    componentes que ainda mostram as chaves-alias — e `deprecated: true` não é `ausente`. O
+    O espelho exato de `marcar_aliases_depreciados`, na outra direção: onde aquele anota o que
+    ainda sai na v1, este apaga o que a v2 promete não sair — a mesma leitura de
+    `ALIASES_DEPRECIADOS`, o mesmo despir do prefixo `Patched`. É o que torna o `openapi-v2.yaml`
+    verdadeiro (ADR 0066, decisão 5): a chave não fica marcada como obsoleta, ela simplesmente não
+    está lá.
+
+    Tirar também de `required`, quando presente, é o que mantém o esquema válido: um `required`
+    apontando para uma propriedade que `properties` não tem mais reprova o `--validate` do
+    spectacular tão bem quanto reprovaria qualquer cliente gerado a partir do contrato.
+
+    No-op quando o alvo é v1 (o default) — quem cuida daquele caso é `marcar_aliases_depreciados`.
+    """
+    if alvo_da_geracao() != V2:
+        return result
+    schemas = result.get("components", {}).get("schemas", {})
+    for nome_componente, schema in schemas.items():
+        casado = _PREFIXO_PATCHED.match(nome_componente)
+        nome_base = casado.group(1) if casado else nome_componente
+        propriedades_alias = ALIASES_DEPRECIADOS.get(nome_base)
+        if not propriedades_alias:
+            continue
+        propriedades = schema.get("properties", {})
+        obrigatorias = schema.get("required")
+        for nome_propriedade in propriedades_alias:
+            propriedades.pop(nome_propriedade, None)
+            if isinstance(obrigatorias, list) and nome_propriedade in obrigatorias:
+                obrigatorias.remove(nome_propriedade)
+    return result
+
+
+def excluir_a_v2_do_contrato(endpoints: list[Any]) -> list[Any]:
+    """`PREPROCESSING_HOOKS`: o `openapi.yaml` da v1 descreve a `/api/v1/`, e só ela.
+
+    A `/api/v2/` monta-se sobre **os mesmos serializers**, e por isso sobre os mesmos componentes
+    do esquema quando a geração é a da v1. Publicá-la ali emitiria ~240 caminhos novos apontando
+    para componentes que ainda mostram as chaves-alias — e `deprecated: true` não é `ausente`. O
     contrato diria que `GET /api/v2/accounts/` devolve `status`, que é justamente o que a v2 não
     faz: seria uma mentira publicada, pior que o silêncio de não descrevê-la.
 
-    A v2 entra no contrato quando a forma dele for verdadeira — na fatia 3, como artefato próprio
-    (`openapi-v2.yaml`), quando as chaves tiverem morrido de fato e os componentes puderem diferir.
-
     Roda **antes** da montagem, e não depois: filtrar aqui mantém o prefixo comum que o
     drf-spectacular estima a partir dos caminhos (`/api/v1`) e, com ele, todo `operationId` do
-    arquivo commitado inalterado.
+    `openapi.yaml` commitado inalterado.
+
+    No-op quando o alvo da geração é v2 (`alvo_da_geracao`): o urlconf dedicado
+    (`config.urls_v2_schema`) já enumera só a árvore `/api/v2/`, então filtrar aqui esvaziaria a
+    geração inteira — é exatamente por isso que o alvo é uma variável de ambiente explícita, e não
+    algo que este hook tentasse inferir do `generator`.
     """
+    if alvo_da_geracao() == V2:
+        return endpoints
     return [
         endpoint for endpoint in endpoints if not str(endpoint[0]).startswith(PREFIXO_DA_V2)
     ]

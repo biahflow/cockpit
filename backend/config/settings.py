@@ -260,9 +260,17 @@ if REDIS_URL:
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
+# O alvo desta geração de esquema (issue #122, fatia 3b): `v1` (default, o `openapi.yaml` de
+# sempre) ou `v2` (`OPENAPI_ALVO=v2 manage.py spectacular --urlconf config.urls_v2_schema --file
+# openapi-v2.yaml`). Lido aqui só para a identidade do documento — `apps.core.openapi_aliases`
+# tem o próprio `alvo_da_geracao()`, porque os hooks não recebem este dict.
+_OPENAPI_ALVO = os.getenv("OPENAPI_ALVO", "v1").strip().lower()
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Biahflow API",
-    "VERSION": "1.0.0",
+    # A v2 não é produto novo — é o mesmo produto sob outro prefixo (ADR 0066) —, então o `TITLE`
+    # não muda; só a versão do documento marca a travessia.
+    "VERSION": "2.0.0" if _OPENAPI_ALVO == "v2" else "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "ENUM_NAME_OVERRIDES": {
         "ProjectStatusEnum": "apps.core.models.Project.Status",
@@ -325,13 +333,22 @@ SPECTACULAR_SETTINGS = {
     # continuar aqui, explícita: é o default do pacote (deduplica enum que se repete entre
     # serializers, como `GateDecisionEnum`), e declarar `POSTPROCESSING_HOOKS` sem ela desligaria
     # a deduplicação em vez de só acrescentar a nossa.
+    # `marcar_aliases_depreciados` marca `deprecated: true` no alvo v1 (default) e não faz nada no
+    # v2; `remover_aliases_do_contrato` faz o oposto — remove a chave-alias (e de `required`) no
+    # alvo v2 e não faz nada no v1. Os dois sempre registrados, e cada geração usa só o seu, porque
+    # o alvo (`openapi_aliases.alvo_da_geracao`) é o mesmo env var das duas — ver ADR 0066, emenda
+    # da fatia 3b.
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
         "apps.core.openapi_aliases.marcar_aliases_depreciados",
+        "apps.core.openapi_aliases.remover_aliases_do_contrato",
     ],
-    # A `/api/v2/` existe no roteador e **não** no contrato publicado — ainda (issue #122, fatia 1).
-    # O porquê está no próprio hook: nesta fatia as duas versões compartilham componente, e um
-    # componente que ainda mostra as chaves-alias descreveria a v2 mentindo. O default do pacote é
+    # A `/api/v2/` existe no roteador desde a fatia 1; até a fatia 3b ela não tinha contrato
+    # publicado — as duas versões compartilhavam componente, e um componente que ainda mostra as
+    # chaves-alias descreveria a v2 mentindo. Agora ela tem o próprio artefato (`openapi-v2.yaml`),
+    # gerado a partir do urlconf dedicado `config.urls_v2_schema` com `OPENAPI_ALVO=v2`: este hook
+    # continua filtrando a v2 fora do `openapi.yaml` da v1 (comportamento de sempre) e vira no-op
+    # quando o alvo já é v2, porque aí não sobra caminho de v1 para filtrar. O default do pacote é
     # a lista vazia, então aqui não há nada de terceiro a preservar, ao contrário dos
     # `POSTPROCESSING_HOOKS` acima.
     "PREPROCESSING_HOOKS": ["apps.core.openapi_aliases.excluir_a_v2_do_contrato"],

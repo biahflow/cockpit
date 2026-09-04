@@ -198,6 +198,20 @@ Regra dos testes em `backend/tests/test_aliases_da_v2.py`. O que resta para as f
 #122: o contrato próprio `openapi-v2.yaml` (fatia 3b), a travessia da SPA para a `/api/v2/` (fatia
 4) e as famílias de enum ainda em português (fatia 5) — nenhuma delas nasce antes da anterior.
 
+### O contrato da v2 nasceu, e nasceu verdadeiro — fatia 3b da #122, 04/09/2026
+
+`backend/openapi-v2.yaml` é o artefato: só caminhos `/api/v2/…` e componentes sem as chaves-alias
+que `ALIASES_DEPRECIADOS` lista — a v2 não anuncia depreciação, ela simplesmente não emite a
+chave. Gerado por um comando próprio, com o urlconf dedicado à geração
+(`config.urls_v2_schema`) e `OPENAPI_ALVO=v2`, que é o que os hooks (`marcar_aliases_depreciados`/
+`remover_aliases_do_contrato`, os dois em `openapi_aliases.py`) leem para saber qual dos dois
+contratos estão montando. `info.version` marca a travessia: `2.0.0` na v2, `1.0.0` na v1, que não
+mudou nesta fatia. Ver [ADR 0066](../adr/0066-a-api-v2-nasce-por-versao-no-caminho-e-um-mapa-so-governa-o-alias.md),
+emenda da fatia 3b, e o teste em `backend/tests/test_openapi_aliases.py`.
+
+O que resta para as fatias seguintes da #122: a travessia da SPA para a `/api/v2/` (fatia 4) e as
+famílias de enum ainda em português (fatia 5) — nenhuma delas nasce antes da anterior.
+
 ## As três regras
 
 ### 1. Alias é dívida com data

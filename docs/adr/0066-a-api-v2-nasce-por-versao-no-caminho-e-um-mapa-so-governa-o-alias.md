@@ -203,3 +203,40 @@ gravável em `Invoice` e `Engagement`, que não estão no mapa; só os component
 `backend/tests/test_aliases_da_v2.py` ganhou a guarda simétrica à do mapa de depreciação: todo
 valor não nulo de `CANONICO_DA_CHAVE` cobre a união das chaves de `ALIASES_DEPRECIADOS`, para uma
 chave nova não nascer recusada sem frase.
+
+## Emenda (issue #122, fatia 3b — 04/09/2026) — o contrato nasceu, e o mecanismo é o alvo
+
+`backend/openapi-v2.yaml` passa a existir ao lado do `openapi.yaml`: o contrato da `/api/v2/`, com
+só os caminhos `/api/v2/…` e com componentes **sem** as chaves-alias — a promessa da decisão 5
+("a v2 entra no contrato quando a forma dele for verdadeira"), cumprida agora que as chaves morrem
+de fato desde a fatia 3a.
+
+O mecanismo é uma variável de ambiente, `OPENAPI_ALVO` (`v1`, o default, ou `v2`), e não
+introspecção do `generator`: os hooks do drf-spectacular recebem os endpoints já enumerados ou o
+esquema já montado, nunca o urlconf que os produziu, e nada nesses dois formatos permite inferir
+sozinho qual geração está em curso. `apps.core.openapi_aliases.alvo_da_geracao()` lê essa variável,
+e os três hooks passam a obedecê-la:
+
+- `excluir_a_v2_do_contrato` (o `PREPROCESSING_HOOKS` da decisão 5) vira **no-op** no alvo v2 — o
+  urlconf dedicado à geração (`config.urls_v2_schema`, mínimo: só inclui `apps.core.urls_v2`) já
+  enumera unicamente a árvore da v2, e filtrá-la ali de novo esvaziaria a geração inteira.
+- `marcar_aliases_depreciados` (a decisão 2 desta ADR) continua marcando `deprecated: true` no
+  alvo v1 e vira no-op no v2.
+- `remover_aliases_do_contrato`, hook novo, é o espelho exato: no-op no v1, e no v2 apaga cada
+  propriedade-alias de `properties` **e** de `required` quando presente — deixar `required`
+  apontando para uma propriedade removida reprova o `--validate` do spectacular tão bem quanto
+  reprovaria um cliente gerado a partir do contrato.
+
+Os dois comandos de geração, lado a lado:
+
+```bash
+uv run python manage.py spectacular --file openapi.yaml --validate
+OPENAPI_ALVO=v2 uv run python manage.py spectacular --urlconf config.urls_v2_schema \
+  --file openapi-v2.yaml --validate
+```
+
+`SPECTACULAR_SETTINGS["VERSION"]` segue o mesmo `OPENAPI_ALVO`: `"2.0.0"` no alvo v2, `"1.0.0"`
+no v1 — `TITLE` não muda, porque a v2 não é produto novo (decisão da ADR). Nenhum serializer, view
+ou rota mudou nesta fatia: o `openapi.yaml` da v1 tem diff vazio, e é o próprio CI
+(`.github/workflows/quality.yml`) que passa a provar isso a cada geração — `git diff --exit-code`
+sobre os dois arquivos, na sequência dos dois comandos acima.
