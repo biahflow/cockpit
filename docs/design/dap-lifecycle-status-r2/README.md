@@ -2,8 +2,8 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **2**
-Status: **Proposed**
-Data: 2026-09-02
+Status: **Aprovado**
+Data: 2026-09-02 · aprovado em 2026-09-03
 Produzido por: harness (Claude Code), sob `docs/engineering-os/workflows/design-approval.md`
 
 > Este artefato é evidência para um gate humano. A revisão 1 continua valendo integralmente; esta
