@@ -252,14 +252,17 @@ def _participantes_do_grupo(project: Project) -> list[str]:
 
 
 def abrir_grupo_de_whatsapp(project: Project) -> str:
-    """Abre o grupo do cliente no WhatsApp e guarda a referência no projeto; devolve o convite.
+    """Abre o grupo do WhatsApp do **mandato** e guarda a referência no `Engagement`; devolve o
+    convite. `Project.whatsapp_group_id`/`.whatsapp_group_invite_url` são legado desde 04/09/2026
+    (issue #119): guardam o acervo criado quando a referência era por projeto e não recebem
+    gravação nova.
 
     O que volta é o **link de convite** (`""` quando não há grupo), porque é o único pedaço da
     referência que se entrega a uma pessoa: o e-mail e a notificação do kickoff o levam quando ele
     existe, e não mencionam grupo nenhum quando não existe.
 
     A gravação é daqui porque `finalize` roda **depois** do commit da criação do projeto: não há
-    transação aberta para carregar o campo junto, e ninguém salva o projeto por nós.
+    transação aberta para carregar o campo junto, e ninguém salva o mandato por nós.
     """
     if not whatsapp.is_enabled():
         # Sai calado: `whatsapp.create_group` já registra a intenção quando a flag está desligada,
@@ -271,12 +274,23 @@ def abrir_grupo_de_whatsapp(project: Project) -> str:
             "kickoff: projeto %s é do degrau '%s' e não ganha grupo de WhatsApp", project.pk, tier
         )
         return ""
+    if project.engagement.whatsapp_group_id:
+        # **O ganho da issue #119.** O segundo projeto do mandato — Discovery → Feasibility →
+        # PROVE, por exemplo — entra no grupo que já existe em vez de abrir outro: o `Engagement` é
+        # "o mesmo trabalho" (ADR 0050), e um canal por projeto abria três grupos com o mesmo
+        # cliente.
+        logger.info("kickoff: mandato %s já tem grupo de WhatsApp", project.engagement_id)
+        return project.engagement.whatsapp_group_invite_url
     if project.whatsapp_group_id:
-        # **A guarda que impede o erro caro.** `finalize` é best-effort e pode ser reexecutado (a
-        # conversão que repete, o retry de quem opera); sem ela, a segunda execução cria o
-        # **segundo grupo** com o mesmo cliente — que é literalmente o duplicado que a issue #111
-        # nomeia. O link já conhecido volta: o grupo existe, e é ele que se entrega.
-        logger.info("kickoff: projeto %s já tem grupo de WhatsApp", project.pk)
+        # **Acervo de antes da #119, intocado de propósito.** Renomear ou migrar um grupo que já
+        # existe, com gente dentro, é efeito externo visível ao cliente — a decisão recusou os
+        # dois. A guarda também segue servindo de idempotência para o `finalize` reexecutado: sem
+        # ela, a segunda execução criaria o segundo grupo com o mesmo cliente, o erro caro que a
+        # issue #111 nomeia. Consequência conhecida e aceita: um mandato cujo primeiro projeto tem
+        # grupo legado ganha UM grupo de mandato quando o segundo projeto chegar — o cliente passa
+        # a ver dois grupos no total, e estabiliza dali. Adotar o grupo legado como grupo do
+        # mandato seria migrar, o que a decisão também recusou.
+        logger.info("kickoff: projeto %s já tem grupo de WhatsApp (legado)", project.pk)
         return project.whatsapp_group_invite_url
     participantes = _participantes_do_grupo(project)
     if not participantes:
@@ -287,7 +301,7 @@ def abrir_grupo_de_whatsapp(project: Project) -> str:
             project.pk,
         )
         return ""
-    nome = f"{project.engagement.account.name} · {project.name}"
+    nome = f"{project.engagement.account.name} · {project.engagement.name}"
     result = whatsapp.create_group(nome, participantes)
     if result.status is not whatsapp.Delivery.DELIVERED:
         logger.warning(
@@ -303,16 +317,16 @@ def abrir_grupo_de_whatsapp(project: Project) -> str:
             # grupo órfão, só `UNCERTAIN` cria (issue #117).
             notifications.notify(
                 [project.owner], "whatsapp",
-                f"A criação do grupo de WhatsApp do projeto '{project.name}' ficou incerta — pode "
+                f"A criação do grupo de WhatsApp de '{nome}' ficou incerta — pode "
                 "haver um grupo criado sem referência. Confira a lista de grupos no WhatsApp antes "
                 "de tentar de novo.",
                 f"/projetos/{project.id}",
                 project=project,
             )
         return ""
-    project.whatsapp_group_id = result.group_id
-    project.whatsapp_group_invite_url = result.invite_url
-    project.save(
+    project.engagement.whatsapp_group_id = result.group_id
+    project.engagement.whatsapp_group_invite_url = result.invite_url
+    project.engagement.save(
         update_fields=["whatsapp_group_id", "whatsapp_group_invite_url", "updated_at"]
     )
     logger.info(

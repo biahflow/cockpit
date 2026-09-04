@@ -113,16 +113,18 @@ def test_dois_grupos_com_o_mesmo_nome_nao_viram_um_palpite(monkeypatch) -> None:
 
 
 @SO_UAZAPI
-def test_o_kickoff_guarda_a_referencia_recuperada_no_projeto(monkeypatch) -> None:
+def test_o_kickoff_guarda_a_referencia_recuperada_no_mandato(monkeypatch) -> None:
     """A reconciliação só serve para alguma coisa porque existe quem guarde o que ela achou.
 
     É a costura entre as duas issues: a #110 criou o chamador que guarda, e sem ele o id
     recuperado morreria dentro do `GroupResult` do mesmo jeito que morreu no dia do incidente.
+    Desde a issue #119 (04/09/2026) quem guarda é o `Engagement`, não o `Project` — o nome
+    procurado na reconciliação também é o do mandato.
     """
     projeto = ProjectFactory(service=Service.objects.get(tier=Service.Tier.DISCOVERY_SPRINT))
     conta = projeto.engagement.account
     Contact.objects.create(account=conta, first_name="Ana", phone="5511999990001")
-    nome = f"{conta.name} · {projeto.name}"
+    nome = f"{conta.name} · {projeto.engagement.name}"
     rede = _Rede(
         HttpAnswer(error=TimeoutError("timed out")),
         HttpAnswer(status_code=200, body={"groups": [{**GRUPO_QUE_NASCEU, "name": nome}]}),
@@ -132,5 +134,8 @@ def test_o_kickoff_guarda_a_referencia_recuperada_no_projeto(monkeypatch) -> Non
     kickoff.finalize(projeto)
 
     projeto.refresh_from_db()
-    assert projeto.whatsapp_group_id == "120363431743499021@g.us"
-    assert projeto.whatsapp_group_invite_url == "https://chat.whatsapp.com/x"
+    assert projeto.whatsapp_group_id == ""
+    assert projeto.whatsapp_group_invite_url == ""
+    projeto.engagement.refresh_from_db()
+    assert projeto.engagement.whatsapp_group_id == "120363431743499021@g.us"
+    assert projeto.engagement.whatsapp_group_invite_url == "https://chat.whatsapp.com/x"

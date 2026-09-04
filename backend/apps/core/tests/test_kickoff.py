@@ -138,7 +138,10 @@ def test_finalize_skips_email_without_owner_address(mailoutbox):
 #
 # O adaptador de WhatsApp existia inteiro e **sem um único chamador** — nascer sem chamador e ficar
 # sem chamador são a mesma dívida. O chamador é o kickoff: ao nascer o projeto, a casa abre o grupo
-# do cliente e guarda a referência no projeto.
+# do cliente. Desde a issue #119 (04/09/2026) a referência é do **mandato** (`Engagement`), não do
+# projeto — um `Engagement` é "o mesmo trabalho" (ADR 0050), e um canal por projeto abria três
+# grupos com o mesmo cliente. Os grupos criados antes da revisão continuam em `Project`, e são
+# legado: ver `test_grupo_legado_do_projeto_fica_intocado`.
 
 LIGADO_NO_WHATSAPP = override_settings(
     WHATSAPP_ENABLED=True,
@@ -186,17 +189,21 @@ def _projeto_com_contatos(*, tier: str | None = Service.Tier.DISCOVERY_SPRINT) -
 
 @pytest.mark.django_db
 @LIGADO_NO_WHATSAPP
-def test_o_kickoff_abre_o_grupo_do_cliente_e_guarda_a_referencia(grupo):
+def test_o_kickoff_abre_o_grupo_do_mandato_e_guarda_a_referencia(grupo):
+    """Desde a issue #119, a referência é do `Engagement` — o projeto não ganha gravação nenhuma."""
     chamadas = grupo()
     project = _projeto_com_contatos()
 
     kickoff.finalize(project)
 
     project.refresh_from_db()
-    assert project.whatsapp_group_id == "120363431743499021@g.us"
-    assert project.whatsapp_group_invite_url == "https://chat.whatsapp.com/GONwbGG"
+    assert project.whatsapp_group_id == ""
+    assert project.whatsapp_group_invite_url == ""
+    project.engagement.refresh_from_db()
+    assert project.engagement.whatsapp_group_id == "120363431743499021@g.us"
+    assert project.engagement.whatsapp_group_invite_url == "https://chat.whatsapp.com/GONwbGG"
     nome, participantes = chamadas.calls[0]
-    assert nome == f"{project.engagement.account.name} · {project.name}"
+    assert nome == f"{project.engagement.account.name} · {project.engagement.name}"
     assert participantes == ["+55 11 99999-0001", "5511999990002"]
 
 
@@ -272,8 +279,55 @@ def test_finalize_duas_vezes_cria_um_grupo_so(grupo):
     kickoff.finalize(project)
 
     assert len(chamadas.calls) == 1
-    project.refresh_from_db()
-    assert project.whatsapp_group_id == "120363431743499021@g.us"
+    project.engagement.refresh_from_db()
+    assert project.engagement.whatsapp_group_id == "120363431743499021@g.us"
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_o_segundo_projeto_do_mandato_reusa_o_grupo(grupo):
+    """O ganho da issue #119: um mandato com Discovery → Feasibility → PROVE não abre três grupos
+    com o mesmo cliente (ADR 0050) — o segundo projeto entra no grupo que o primeiro já criou."""
+    chamadas = grupo()
+    project1 = _projeto_com_contatos()
+    project2 = ProjectFactory(
+        engagement=project1.engagement, service=project1.service, owner=project1.owner,
+        name="Segundo projeto do mandato",
+    )
+
+    kickoff.finalize(project1)
+    kickoff.finalize(project2)
+
+    assert len(chamadas.calls) == 1
+    project2.refresh_from_db()
+    assert project2.whatsapp_group_id == ""
+    project1.engagement.refresh_from_db()
+    assert project1.engagement.whatsapp_group_invite_url == "https://chat.whatsapp.com/GONwbGG"
+    aviso = Notification.objects.get(
+        user=project2.owner, kind="kickoff", url=f"/projetos/{project2.id}"
+    )
+    assert "https://chat.whatsapp.com/GONwbGG" in aviso.message
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_grupo_legado_do_projeto_fica_intocado(grupo, mailoutbox):
+    """O acervo de antes da #119 continua servindo, sem criação nova e sem gravação no mandato —
+    adotar o grupo legado como grupo do mandato seria migrar, o que a decisão recusou."""
+    chamadas = grupo()
+    project = _projeto_com_contatos()
+    project.whatsapp_group_id = "120363431743499099@g.us"
+    project.whatsapp_group_invite_url = "https://chat.whatsapp.com/LEGADO"
+    project.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+
+    kickoff.finalize(project)
+
+    assert chamadas.calls == []
+    kickoff_mail = next(mail for mail in mailoutbox if project.name in mail.subject)
+    assert "https://chat.whatsapp.com/LEGADO" in kickoff_mail.body
+    project.engagement.refresh_from_db()
+    assert project.engagement.whatsapp_group_id == ""
+    assert project.engagement.whatsapp_group_invite_url == ""
 
 
 @pytest.mark.django_db

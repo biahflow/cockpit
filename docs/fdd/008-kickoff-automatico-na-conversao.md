@@ -85,6 +85,12 @@ PROVE abre **três** grupos com o mesmo cliente. É consequência aceita nesta r
 revisitada, o lugar natural é o mandato — que é, por definição ([ADR 0050](../adr/0050-o-engagement-como-espinha-dorsal.md)),
 "o mesmo trabalho".
 
+> **Revisitada em 04/09/2026 (issue #119).** A previsão do parágrafo acima se confirmou na primeira
+> semana de uso: a referência do grupo passou ao `Engagement` para grupos novos, sem migrar os
+> grupos já criados — que ficam como legado congelado em `Project`. O nome do grupo novo também
+> mudou, de `{Conta} · {Projeto}` para `{Conta} · {Mandato}`. Ver a emenda correspondente na
+> [ADR 0064](../adr/0064-o-teto-e-por-operacao-e-a-resposta-incerta-se-reconcilia.md).
+
 **A superfície ficou fora desta rodada.** Mostrar o grupo no detalhe do projeto é
 `INTERFACE_CHANGE` e exige DAP aprovado **antes** de construir
 ([`workflows/design-approval.md`](../engineering-os/workflows/design-approval.md)); fica para issue

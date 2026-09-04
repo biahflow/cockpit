@@ -717,9 +717,11 @@ def create_group(name: str, participants: Sequence[str]) -> GroupResult:
     """Cria um grupo pelo primeiro provedor que aceitar e devolve a referência dele.
 
     Desde a issue #110 há um chamador, e ele **guarda** a referência: `kickoff.finalize` grava o
-    id e o link de convite em `Project.whatsapp_group_id`/`whatsapp_group_invite_url`. A gravação
-    é de quem chama — este módulo não conhece modelo nenhum —, e é a existência dela que torna a
-    reconciliação abaixo útil: recuperar um id que ninguém guardaria não serviria para nada.
+    id e o link de convite no dono do canal — `Engagement.whatsapp_group_id`/
+    `whatsapp_group_invite_url` desde a issue #119 (o par homônimo de `Project` é o legado de
+    antes). A gravação é de quem chama — este módulo não conhece modelo nenhum —, e é a existência
+    dela que torna a reconciliação abaixo útil: recuperar um id que ninguém guardaria não serviria
+    para nada.
 
     Resposta incerta passa por `_reconcile_group` antes de voltar (ADR 0064).
     """

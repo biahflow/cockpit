@@ -128,3 +128,33 @@ a mesma conclusão da ADR 0062 para o envio. Se algum passar a oferecer, esta AD
 **Reconciliar por polling num job do scheduler.** Rejeitada por ora: o `UNCERTAIN` é raro, a
 resposta do provedor é imediata, e uma pergunta síncrona logo depois resolve sem tabela nova. Se o
 volume justificar, o desenho correto é outbox — o mesmo que a ADR 0062 já reserva para o envio.
+
+## Emenda (issue #119, 04/09/2026) — a referência do grupo passa ao `Engagement`
+
+A FDD 008 (emenda de 03/09/2026) registrou, como consequência conhecida e aceita, que a referência
+do grupo morava em `Project` e que um `Engagement` com Discovery → Feasibility → PROVE abria
+**três** grupos com o mesmo cliente — e já antecipava que, se revisitada, o lugar natural seria o
+mandato ("o mesmo trabalho", ADR 0050). A primeira entrega real cobrou esse custo antes de completar
+uma semana, e a decisão (04/09/2026) foi revisitar.
+
+**A referência passa a ser do `Engagement` para grupos novos**, sem migrar os existentes:
+
+- `Engagement` ganha o mesmo par de campos que hoje está em `Project`
+  (`whatsapp_group_id`/`whatsapp_group_invite_url`), com o mesmo racional de dois fatos (JID para
+  mandar mensagem, link para entregar a uma pessoa);
+- `kickoff.abrir_grupo_de_whatsapp` grava o grupo novo em `project.engagement`, e o nome passa de
+  `{Conta} · {Projeto}` para `{Conta} · {Mandato}` — a reconciliação desta ADR casa por nome exato,
+  e continua funcionando porque o nome novo passa a existir por construção, sem precisar de
+  nenhuma mudança em `whatsapp.py`;
+- os campos de `Project` **não são migrados nem apagados**: viram legado congelado, e continuam
+  sendo lidos como guarda de idempotência para os grupos que já existem, com gente dentro. Renomear
+  ou apagar um grupo real é efeito externo visível ao cliente, e a decisão recusou os dois;
+- consequência aceita: um mandato cujo primeiro projeto já tem grupo legado ganha **um** grupo de
+  mandato quando o segundo projeto chegar — o cliente passa a ver dois grupos no total (o legado e
+  o do mandato), em vez dos três que o desenho anterior projetava a partir do terceiro projeto, e
+  estabiliza dali. Adotar o grupo legado como grupo do mandato seria migrar, o que a decisão também
+  recusou.
+
+`Engagement` continua **não** sendo fronteira de acesso (ADR 0050): pendurar o campo nele não abre
+caminho de acesso novo — quem participa do grupo continua saindo de `account.contacts`, e quem
+chama continua sendo o kickoff de um projeto. Ver a issue #119 e a emenda correspondente na FDD 008.

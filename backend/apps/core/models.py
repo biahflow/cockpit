@@ -283,6 +283,18 @@ class Engagement(TimestampedModel):
         blank=True,
         related_name="originated_design_partner_engagement",
     )
+    # O grupo do cliente no WhatsApp, aberto pelo kickoff — desde 04/09/2026 (issue #119) o grupo
+    # **novo** nasce aqui, e não mais em `Project` (o par legado continua em
+    # `Project.whatsapp_group_id`/`.whatsapp_group_invite_url`, ver o comentário lá). O racional é
+    # o que o comentário de 03/09/2026 já antecipava: o `Engagement` é, por definição (ADR 0050),
+    # "o mesmo trabalho" — um mandato com Discovery → Feasibility → PROVE abria três grupos com o
+    # mesmo cliente, um por projeto, e o custo caía sobre quem via a lista de grupos: o cliente.
+    #
+    # **São dois campos porque são dois fatos**, o mesmo par de sempre: o JID identifica o grupo
+    # para mandar mensagem depois (`whatsapp.send_group_text`), e o link de convite é o que se
+    # entrega a uma pessoa. A UAZAPI pode devolver o primeiro sem o segundo.
+    whatsapp_group_id = models.CharField(max_length=128, blank=True, default="")
+    whatsapp_group_invite_url = models.URLField(blank=True, default="")
 
     class Meta:
         ordering = ["-started_at", "-id"]
@@ -555,10 +567,15 @@ class Project(TimestampedModel):
     # convite é o que se entrega a uma pessoa. A UAZAPI pode devolver o primeiro sem o segundo, e
     # espremer os dois num campo só obrigaria a adivinhar qual chegou.
     #
-    # **A referência mora no projeto, e a consequência é conhecida e aceita** (decisão de
-    # 03/09/2026): um mandato com Discovery → Feasibility → PROVE abre **três** grupos com o mesmo
-    # cliente. Se algum dia for revisitada, o lugar natural é o `Engagement` — que é, por
-    # definição (ADR 0050), "o mesmo trabalho". Ficou fora desta rodada de propósito.
+    # **Legado, desde 04/09/2026 (issue #119).** A referência do grupo passou ao `Engagement`
+    # (`Engagement.whatsapp_group_id`/`.whatsapp_group_invite_url`) — exatamente a revisão que este
+    # comentário antecipava em 03/09/2026: o mandato é, por definição (ADR 0050), "o mesmo
+    # trabalho", e um canal por projeto abria três grupos com o mesmo cliente num mandato com
+    # Discovery → Feasibility → PROVE. Estes dois campos não recebem mais gravação nova; guardam a
+    # referência dos grupos que já existem de verdade, com gente dentro — removê-los apagaria essa
+    # referência, e renomear/migrar o grupo em si é efeito externo visível ao cliente, o que a
+    # decisão recusou. `kickoff.abrir_grupo_de_whatsapp` continua lendo-os, como guarda de
+    # idempotência para o acervo criado antes da revisão.
     whatsapp_group_id = models.CharField(max_length=128, blank=True, default="")
     whatsapp_group_invite_url = models.URLField(blank=True, default="")
     # AI Score de maturidade/oportunidade de IA (Fase 4 — FDD 014). Gerado a partir da
