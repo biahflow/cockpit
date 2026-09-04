@@ -14,27 +14,27 @@ vi.mock("../api", () => ({
         leads: { total: 3, by_status: { new: 3 } }, opportunities: { open: 2, won: 1, lost: 1 },
         projects: { total: 1, by_status: { active: 1 } },
         by_tier: [
-          { tier: "discovery_sprint", label: "Discovery Sprint", total: 2, open: 1, won: 1, lost: 0, estimated_total: 0, win_rate: 1 },
-          { tier: "prove", label: "PROVE (piloto)", total: 0, open: 0, won: 0, lost: 0, estimated_total: 0, win_rate: null },
+          { tier: "discovery_sprint", label: "Discovery Sprint", total: 2, open: 1, won: 1, lost: 0, estimated_total: "0.00", win_rate: 1 },
+          { tier: "prove", label: "PROVE (piloto)", total: 0, open: 0, won: 0, lost: 0, estimated_total: "0.00", win_rate: null },
         ],
         by_stage: [
           { kind: "assessment", label: "Assessment", total: 3, sent: 1, accepted: 2, rejected: 0, acceptance_rate: 1, reached: 2 },
           { kind: "contract", label: "Contrato", total: 0, sent: 0, accepted: 0, rejected: 0, acceptance_rate: null, reached: 0 },
         ],
         by_source: [
-          { source: "indicacao", leads: 4, won: 3, projects: 3, revenue: 90000 },
-          { source: "site", leads: 10, won: 1, projects: 1, revenue: 5000 },
-          { source: "evento-sebrae", leads: 2, won: 0, projects: 0, revenue: 0 },
+          { source: "indicacao", leads: 4, won: 3, projects: 3, revenue: "90000.00" },
+          { source: "site", leads: 10, won: 1, projects: 1, revenue: "5000.00" },
+          { source: "evento-sebrae", leads: 2, won: 0, projects: 0, revenue: "0.00" },
         ],
       },
       win_rate: 0.5, avg_ticket: 1000, avg_cycle_days: 12,
-      pipeline: [{ id: 1, name: "Prospecção", kind: "open", position: 0, opportunity_count: 2, estimated_total: 5000 }],
+      pipeline: [{ id: 1, name: "Prospecção", kind: "open", position: 0, opportunity_count: 2, estimated_total: "5000.00" }],
       // `by_account`, e não `by_client`: a SPA fala a `/api/v2/` (`api.ts`), onde a chave do
       // recorte por conta trocou de nome (`docs/ontology/aliases.md`). O mock com o nome legado
       // deixaria `rows` `undefined`, e `RoiTable` faz `rows.map` sem guarda — este teste falha
       // com `TypeError`, não com asserção. É o que o torna oráculo da chave: quem trocar o nome
       // de um lado só descobre aqui.
-      roi: { revenue: 1000, cost: 400, roi: 1.5, by_account: [{ label: "ACME", revenue: 1000, cost: 400, roi: 1.5 }], by_service: [{ label: "Consultoria", revenue: 1000, cost: 400, roi: 1.5 }] },
+      roi: { revenue: "1000.00", cost: "400.00", roi: 1.5, by_account: [{ label: "ACME", revenue: "1000.00", cost: "400.00", roi: 1.5 }], by_service: [{ label: "Consultoria", revenue: "1000.00", cost: "400.00", roi: 1.5 }] },
     });
   }),
 }));

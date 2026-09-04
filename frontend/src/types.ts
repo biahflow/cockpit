@@ -25,10 +25,15 @@ export type ServiceTier = "qualification_call" | "discovery_sprint" | "feasibili
 // gratuito e é degrau (ADR 0049).
 export type ServiceCategory = "acquisition" | "commercial";
 export type Service = { id: number; name: string; active: boolean; tier: ServiceTier; tier_display: string; category: ServiceCategory; category_display: string; list_price: string; summary: string };
-export type TierFunnelRow = { tier: ServiceTier; label: string; total: number; open: number; won: number; lost: number; estimated_total: number; win_rate: number | null };
+// **Dinheiro chega como `string`, e índice calculado como `number`** (ADR 0068). A API emite
+// decimal em texto para não perder centavo no `float` do JSON, e os agregados deixaram de ser a
+// exceção a essa regra: `estimated_total`, `revenue` e `cost` são texto;
+// `win_rate`, `acceptance_rate`, `roi` e `avg_ticket` são quocientes e continuam número. Formatar
+// converte com `Number()` na borda (`dinheiro.ts`); somar é do servidor.
+export type TierFunnelRow = { tier: ServiceTier; label: string; total: number; open: number; won: number; lost: number; estimated_total: string; win_rate: number | null };
 export type StageFunnelRow = { kind: ArtifactKind; label: string; total: number; sent: number; accepted: number; rejected: number; acceptance_rate: number | null; reached: number };
-export type SourceFunnelRow = { source: string; leads: number; won: number; projects: number; revenue: number };
-export type RoiRow = { label: string; revenue: number; cost: number; roi: number | null };
+export type SourceFunnelRow = { source: string; leads: number; won: number; projects: number; revenue: string };
+export type RoiRow = { label: string; revenue: string; cost: string; roi: number | null };
 export type Analytics = {
   funnel: {
     leads: { total: number; by_status: Record<string, number> };
@@ -41,13 +46,15 @@ export type Analytics = {
   win_rate: number | null;
   avg_ticket: number;
   avg_cycle_days: number | null;
-  pipeline: { id: number; name: string; kind: string; position: number; opportunity_count: number; estimated_total: number | null }[];
+  // `estimated_total` é `null` — nunca `"0.00"` — na etapa sem oportunidade nenhuma: "não há o
+  // que somar" e "somou zero" são fatos diferentes, e a API preserva a distinção.
+  pipeline: { id: number; name: string; kind: string; position: number; opportunity_count: number; estimated_total: string | null }[];
   // `by_account` é o recorte por conta. Ele **trocou** de nome com a `/api/v2/` (era `by_client`
   // na `/api/v1/`, e a chave envolve a lista inteira, então não convive — `docs/ontology/aliases.md`);
   // a SPA fala a `/api/v2/`, então só a canônica existe aqui. O rótulo da tela continua dizendo
   // "ROI por cliente": "Cliente" é rótulo legítimo de interface (`language-map.md` §4), e o que
   // muda é a chave de payload.
-  roi: { revenue: number; cost: number; roi: number | null; by_account: RoiRow[]; by_service: RoiRow[] };
+  roi: { revenue: string; cost: string; roi: number | null; by_account: RoiRow[]; by_service: RoiRow[] };
 };
 // Onde a conta está na relação com a casa. **"Cliente" é o rótulo de `active`, não o nome da
 // entidade** (`docs/ontology/language-map.md` §4): `prospect` ainda não fechou, `active` é
@@ -274,7 +281,9 @@ export type AccountOverview = {
   account_id: number;
   name: string;
   lifecycle_status: AccountLifecycleStatus;
-  roi: { revenue: number; cost: number; roi: number | null };
+  // Texto pela regra da ADR 0068 — e aqui o contrato não mudou: o esquema desta rota já dizia
+  // `string`, era o corpo que emitia número.
+  roi: { revenue: string; cost: string; roi: number | null };
   health: { score: number; level: HealthLevel; project_id: number } | null;
   risk_level: string | null;
   phase: { name: string; status: JourneyPhaseStatus } | null;

@@ -73,3 +73,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 0065 — A assinatura tem lugar na página, e é a rodada que fecha
 - 0066 — A /api/v2/ nasce por versão no caminho, e um mapa só governa o alias
 - 0067 — O ROI continua saindo do contratado, e o recebido ganha nome próprio
+- 0068 — Dinheiro atravessa a API como texto, e índice calculado continua número

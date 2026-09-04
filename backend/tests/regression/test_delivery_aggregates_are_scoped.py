@@ -84,7 +84,14 @@ def test_client_list_only_shows_clients_i_work_for(api: APIClient, mine, theirs)
 
 
 def test_client_overview_aggregates_only_my_projects(api: APIClient, delivery) -> None:  # type: ignore[no-untyped-def]
-    """O agregado é por cliente: estreitar a lista de clientes não bastaria."""
+    """O agregado é por cliente: estreitar a lista de clientes não bastaria.
+
+    A asserção compara **strings**: desde a ADR 0068 o ROI desta visão sai como texto de duas
+    casas, e é o que o esquema desta rota sempre prometeu. Comparar com `mine.actual_value` era
+    agnóstico à representação — `Decimal("100.00") == 100` é `True` —, e um teste que passa nas
+    duas não protege nenhuma. O que este arquivo mede continua sendo o **recorte**; a forma do
+    número tem guarda própria em `test_dinheiro_atravessa_como_texto.py`.
+    """
     shared = AccountFactory()
     mine = ProjectFactory(engagement__account=shared, actual_value=100, cost=40)
     ProjectMemberFactory(project=mine, user=delivery)
@@ -93,8 +100,8 @@ def test_client_overview_aggregates_only_my_projects(api: APIClient, delivery) -
     rows = api.get(reverse("client-overview")).data["clients"]
 
     assert len(rows) == 1
-    assert rows[0]["roi"]["revenue"] == mine.actual_value
-    assert rows[0]["roi"]["cost"] == mine.cost
+    assert rows[0]["roi"]["revenue"] == "100.00"
+    assert rows[0]["roi"]["cost"] == "40.00"
 
 
 def test_delivery_agent_context_only_mentions_my_projects(delivery, mine, theirs) -> None:  # type: ignore[no-untyped-def]

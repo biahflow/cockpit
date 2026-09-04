@@ -10,9 +10,9 @@ vi.mock("../api", () => ({ api: mocks.api }));
 beforeEach(() => {
   mocks.api.mockImplementation((path: string) => {
     if (path.startsWith("/accounts/overview/")) return Promise.resolve({ accounts: [
-      { account_id: 1, name: "Acme", lifecycle_status: "active", roi: { revenue: 0, cost: 0, roi: null }, health: { score: 40, level: "crítico", project_id: 9 }, risk_level: "alto", phase: { name: "Prove", status: "active" }, next_meeting: null },
-      { account_id: 2, name: "Beta", lifecycle_status: "prospect", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null },
-      { account_id: 3, name: "Gama", lifecycle_status: "inactive", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null },
+      { account_id: 1, name: "Acme", lifecycle_status: "active", roi: { revenue: "0.00", cost: "0.00", roi: null }, health: { score: 40, level: "crítico", project_id: 9 }, risk_level: "alto", phase: { name: "Prove", status: "active" }, next_meeting: null },
+      { account_id: 2, name: "Beta", lifecycle_status: "prospect", roi: { revenue: "0.00", cost: "0.00", roi: null }, health: null, risk_level: null, phase: null, next_meeting: null },
+      { account_id: 3, name: "Gama", lifecycle_status: "inactive", roi: { revenue: "0.00", cost: "0.00", roi: null }, health: null, risk_level: null, phase: null, next_meeting: null },
     ] });
     return Promise.resolve({});
   });
@@ -63,7 +63,7 @@ test("filtro sem resultado explica o filtro, não manda cadastrar a primeira con
   mocks.api.mockImplementation((path: string) => Promise.resolve(
     path === "/accounts/overview/?lifecycle_status=inactive"
       ? { accounts: [] }
-      : { accounts: [{ account_id: 1, name: "Acme", lifecycle_status: "active", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null }] },
+      : { accounts: [{ account_id: 1, name: "Acme", lifecycle_status: "active", roi: { revenue: "0.00", cost: "0.00", roi: null }, health: null, risk_level: null, phase: null, next_meeting: null }] },
   ));
   const user = userEvent.setup();
   render(<AccountsPage />);
