@@ -96,7 +96,10 @@ def test_entrega_sem_projeto_nenhum_no_mandato_nao_ve_o_mandato() -> None:
     api.force_authenticate(pessoa)
 
     assert api.get(reverse("engagement-list")).data == []
-    assert api.get(reverse("engagement-detail", args=[engagement.pk])).status_code in {403, 404}
+    # 404, não 403: `EngagementViewSet.get_queryset` já deriva a visibilidade dos projetos que a
+    # pessoa alcança (ver docstring da viewset), então `get_object()` filtra o mandato antes de
+    # `has_object_permission` ser avaliada — o queryset escopado é a camada que responde aqui.
+    assert api.get(reverse("engagement-detail", args=[engagement.pk])).status_code == 404
 
 
 def test_o_contrato_da_oportunidade_mantem_a_forma() -> None:
