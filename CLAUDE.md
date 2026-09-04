@@ -338,7 +338,8 @@ Key cross-cutting patterns to preserve:
   cada uma em lugar (`core_client`→`core_account`, etc.), preservando linha e pk. A **rota** e a
   **chave de payload** ficam para a
   `/api/v2/`: a chave legada continua saindo no `GET` (campo com `source=`, `read_only`) e sendo
-  aceita no `POST`/`PATCH` (`AliasDeEntradaMixin`, um mecanismo para todas), e **a canônica vence
+  aceita no `POST`/`PATCH` (`AliasesDaV1Mixin`, um mecanismo para todas — sensível à versão desde
+  a #122: na `/api/v2/` a chave legada é 400 dizendo o nome canônico, ADR 0066), e **a canônica vence
   quando as duas vêm no mesmo corpo**. Todo alias de escrita precisa de regressão, porque a SPA
   escreve o nome canônico: sem ela a linha do serializer não tem chamador aqui dentro, e a próxima
   varredura atrás do nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem

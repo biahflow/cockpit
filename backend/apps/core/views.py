@@ -217,6 +217,7 @@ from .serializers import (
     ValueLedgerEntrySerializer,
     VerticalSerializer,
 )
+from .versioning import V2, frase_do_parametro_removido, versao_de
 
 logger = logging.getLogger(__name__)
 
@@ -402,15 +403,24 @@ class QueryParamFilterMixin:
     # Sem isto o param antigo não
     # ficaria "sem efeito" — ele estouraria `FieldError`, porque o nome do param **é** o
     # caminho do ORM aqui. A canônica vence quando as duas vêm, como no corpo.
+    #
+    # Na `/api/v2/` (issue #122) o param legado é **recusado com 400** dizendo o canônico, pela
+    # razão exata da chave de corpo: aceito e ignorado, `?client=3` devolveria 200 com a lista
+    # inteira, e quem chamou leria isso como "este cliente tem tudo isso" em vez de "o filtro não
+    # existe". 400 e não 409 porque é o **pedido** que está errado, não o estado.
     filter_field_aliases: dict[str, str] = {}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()  # type: ignore[misc]
+        na_v2 = versao_de(self.request) == V2  # type: ignore[attr-defined]
         for field in self.filter_fields:
             value = self.request.query_params.get(field)  # type: ignore[attr-defined]
             legado = self.filter_field_aliases.get(field)
-            if not value and legado:
-                value = self.request.query_params.get(legado)  # type: ignore[attr-defined]
+            if legado and legado in self.request.query_params:  # type: ignore[attr-defined]
+                if na_v2:
+                    raise InvalidInput(frase_do_parametro_removido(legado, field))
+                if not value:
+                    value = self.request.query_params.get(legado)  # type: ignore[attr-defined]
             if value and value.isdigit():
                 queryset = queryset.filter(**{field: value})
         for field in self.filter_exact_fields:

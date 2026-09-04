@@ -90,6 +90,12 @@ alias. As **rotas** (`/clients/`, `/opportunities/`, `/processos/`, `/processo-e
 **chaves de payload** (`client`, `status`, `opportunity`, `gate_outcome`, `processo`, `etapa`)
 morrem na `/api/v2/` — que agora **pode nascer**, porque as tabelas já foram concluídas.
 
+> **`etapa` morreu antes do prazo, e não pela v2.** Ela era chave de payload da `Evidencia`, e a
+> Fase 6 (issue #70, migração `0068`) removeu a classe inteira com o dual-write. A lista acima a
+> mantém por ser história: o prazo dela **era** a `/api/v2/`, e o que a alcançou primeiro foi a
+> remoção do modelo que a emitia. Apagá-la daqui esconderia que uma dívida foi paga por um caminho
+> diferente do declarado — que é informação, não ruído.
+
 | Foi | É | Fatia |
 | --- | --- | --- |
 | `GateOutcome` / `gate_outcome` | `GateDecision` / `gate_decision` | 1 |
@@ -141,6 +147,34 @@ desgrudaria os registros externos em silêncio; por isso a §2b proíbe esse cam
 saíram do `Meta` sem nenhuma outra operação junto. A reversa reaplica o `db_table` legado. Com as
 tabelas concluídas, a `/api/v2/` — onde morrem as **rotas** e as **chaves de payload** — pode
 finalmente nascer.
+
+### A `/api/v2/` nasceu — fatia 1 da #122, 04/09/2026
+
+O mecanismo cabe em três frases. A versão sai do **prefixo do caminho**
+(`apps/core/versioning.py`), sobre os mesmos viewsets e os mesmos serializers — nenhuma rota da v1
+foi reescrita, porque o router da v2 é derivado do `registry` do da v1 com um dicionário de quatro
+renomes de prefixo. O **mesmo** `ALIASES_DEPRECIADOS` que marca `deprecated: true` no `openapi.yaml`
+passou a governar também a remoção dessas chaves na resposta da v2, lido por
+`serializers.AliasesDaV1Mixin`. E chave legada mandada para a v2 — no corpo ou na query string —
+recebe **400 dizendo o nome canônico**, nunca o silêncio com que o DRF ignora chave desconhecida.
+Ver [ADR 0066](../adr/0066-a-api-v2-nasce-por-versao-no-caminho-e-um-mapa-so-governa-o-alias.md).
+
+**Nascer a v2 não tira nenhuma linha da tabela de aliases vivos.** A regra 2 continua inteira: os
+aliases vivem enquanto a `/api/v1/` viver, e o sunset dela é uma decisão que ninguém tomou. O que
+mudou é que agora existe o lugar onde eles **não** estão.
+
+O que **ainda vive na v2** depois desta fatia, e morre na fatia 3 da mesma issue — são os aliases
+que não passam por serializer com `ALIASES_DE_ENTRADA`, então o mecanismo acima não os alcança:
+
+- `signer_email` no corpo da action `request-signature` e `outcome` no da `apply-gate` — aliases de
+  **entrada de action**, normalizados na view (`views._signers_do_pedido`, `journey.apply_gate`);
+- o dicionário cru de `GET /cobranca/painel/`, que emite `client`/`client_name` sem serializer;
+- a chave `processos` da action de IA.
+
+Alcançá-los pela metade seria pior que declarar a lacuna: a fatia 3 é a que os mata, com regressão
+por recurso e o contrato da v2 publicado como artefato próprio (`openapi-v2.yaml`). Até lá o
+`openapi.yaml` descreve **só** a `/api/v1/`, por um `PREPROCESSING_HOOKS` — publicar a v2 sobre
+componentes que ainda declaram as chaves-alias diria que ela devolve o que ela não devolve.
 
 ## As três regras
 

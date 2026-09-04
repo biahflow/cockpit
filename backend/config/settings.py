@@ -198,6 +198,12 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # A versão sai do prefixo do caminho (issue #122). Classe própria e não uma das do DRF:
+    # `URLPathVersioning` exigiria a versão como kwarg de toda rota e `NamespaceVersioning`
+    # renomearia o alvo de todo `reverse()` do repositório — o porquê inteiro está na docstring de
+    # `apps/core/versioning.py`. Sem `ALLOWED_VERSIONS`/`DEFAULT_VERSION`: a classe não os usa,
+    # porque tudo que não é `/api/v2/` já é `v1` por construção.
+    "DEFAULT_VERSIONING_CLASS": "apps.core.versioning.VersaoPeloCaminho",
     # Sem isto, `ProtectedError` sobe como 500 e a recusa de uma exclusão vira incidente no
     # Sentry em vez de instrução na tela (FDD 025). Ver `apps/core/exceptions.py`.
     "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
@@ -323,6 +329,12 @@ SPECTACULAR_SETTINGS = {
         "drf_spectacular.hooks.postprocess_schema_enums",
         "apps.core.openapi_aliases.marcar_aliases_depreciados",
     ],
+    # A `/api/v2/` existe no roteador e **não** no contrato publicado — ainda (issue #122, fatia 1).
+    # O porquê está no próprio hook: nesta fatia as duas versões compartilham componente, e um
+    # componente que ainda mostra as chaves-alias descreveria a v2 mentindo. O default do pacote é
+    # a lista vazia, então aqui não há nada de terceiro a preservar, ao contrário dos
+    # `POSTPROCESSING_HOOKS` acima.
+    "PREPROCESSING_HOOKS": ["apps.core.openapi_aliases.excluir_a_v2_do_contrato"],
 }
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG

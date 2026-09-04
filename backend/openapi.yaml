@@ -13652,12 +13652,14 @@ components:
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
           readOnly: true
+          deprecated: true
         kpi_current:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
           readOnly: true
+          deprecated: true
         hours_saved_month:
           type: string
           format: decimal
@@ -16511,12 +16513,14 @@ components:
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
           readOnly: true
+          deprecated: true
         kpi_current:
           type: string
           format: decimal
           pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
           nullable: true
           readOnly: true
+          deprecated: true
         hours_saved_month:
           type: string
           format: decimal

@@ -83,8 +83,10 @@ from .models import (
     ValueLedgerEntry,
     Vertical,
 )
+from .openapi_aliases import ALIASES_DEPRECIADOS
 from .priority import FORMULAS, ranking_da_conta
 from .prove import baseline_de, o_que_falta_para_iniciar, outcome_mais_recente_de
+from .versioning import V2, frase_da_chave_removida, versao_de
 
 logger = logging.getLogger(__name__)
 
@@ -112,16 +114,47 @@ def _corpo_mutavel(data: Any) -> Any:
     return copia
 
 
-# Aceita a chave legada da `/api/v1/` no corpo e a normaliza para a canônica.
+def _versao_do_contexto(serializer: Any) -> str:
+    """A versão da requisição que carrega este serializer — `v1` quando não há requisição.
+
+    Um lugar só, e não `context.get("request")` espalhado por vinte serializers: o fallback é a
+    metade que importa, porque um serializer instanciado **fora** de requisição (o portal, os
+    agentes, um teste de unidade) tem de manter a forma de sempre. Perder as chaves legadas por
+    omissão seria a v2 vazando para quem nunca a pediu.
+    """
+    return versao_de(serializer.context.get("request"))
+
+
+def _componente_do_serializer(serializer: Any) -> str:
+    """O nome do componente do OpenAPI — a chave de `ALIASES_DEPRECIADOS`.
+
+    É a mesma derivação do drf-spectacular (o nome da classe sem o sufixo `Serializer`), e
+    `COMPONENTE_OPENAPI` é a saída para quem não segue o padrão. Sem esta correspondência o mapa
+    dirigiria a depreciação no esquema e nada mais — e a v2 continuaria emitindo o que o contrato
+    diz que ela não tem.
+    """
+    declarado = getattr(serializer, "COMPONENTE_OPENAPI", "")
+    if declarado:
+        return str(declarado)
+    return type(serializer).__name__.removesuffix("Serializer")
+
+
+# A camada de compatibilidade da `/api/v1/`, sensível à versão (issue #122, fatia 1).
 #
-# A issue #67 renomeia o campo do modelo e a `docs/ontology/aliases.md` §2c mantém a chave de
-# payload: quem integrou com a v1 não tem como saber que o nome mudou. A **leitura** é resolvida
-# por um campo declarado com `source=`; a **escrita** precisa acontecer antes da validação, e é o
-# que este mixin faz.
+# A issue #67 renomeou o campo do modelo e a `docs/ontology/aliases.md` §2c manteve a chave de
+# payload: quem integrou com a v1 não tem como saber que o nome mudou. A `/api/v2/` é o prazo que
+# aquele documento sempre deu a essas chaves, e este mixin é onde as três coisas acontecem:
 #
-# Quando as duas chaves vêm no mesmo corpo, **a canônica vence** — um corpo com as duas é confusão
-# do chamador, e resolver pela nova é o que não trava quem já migrou. Mesma regra de `apply-gate`
-# desde a fatia 1.
+# * **escrita na v1** — a chave antiga é normalizada para a canônica antes da validação. Quando as
+#   duas vêm no mesmo corpo, **a canônica vence**: um corpo com as duas é confusão do chamador, e
+#   resolver pela nova é o que não trava quem já migrou (mesma regra de `apply-gate`).
+# * **escrita na v2** — a chave antiga é **recusada com 400 dizendo o nome canônico**. Ignorar em
+#   silêncio é o default do DRF para chave desconhecida, e produziria um `POST` que responde 201
+#   sem ter gravado o vínculo — o modo de falha mudo que a issue #122 decidiu não ter.
+# * **leitura na v2** — as chaves-alias somem da representação, e quem diz quais são é
+#   `openapi_aliases.ALIASES_DEPRECIADOS`, o **mesmo** mapa que marca `deprecated: true` no
+#   esquema. Uma segunda lista por serializer divergiria da primeira em silêncio, e o contrato
+#   passaria a prometer uma ausência que não acontece.
 #
 # Um mecanismo só, e não um `if` por serializer: o décimo oitavo esquece, e o defeito não deixa
 # nada vermelho aqui dentro — é o modo de falha que a ADR 0026 descreve para as primitivas de UI.
@@ -129,27 +162,44 @@ def _corpo_mutavel(data: Any) -> Any:
 # **Comentário e não docstring, e a razão é medida.** A regra do `CLAUDE.md` fala de mixin de
 # viewset, mas o drf-spectacular usa a docstring do **serializer** como `description` do
 # componente do mesmo jeito: com a docstring aqui, este raciocínio interno aparecia nos schemas
-# `Document`, `Activity`, `Artifact` e nos `Patched*` deles — seis blocos de texto sobre a issue
-# #67 virando contrato público em `openapi.yaml`.
-class AliasDeEntradaMixin:
+# `Document`, `Activity`, `Artifact` e nos `Patched*` deles — blocos de texto sobre a issue #67
+# virando contrato público em `openapi.yaml`.
+class AliasesDaV1Mixin:
 
     ALIASES_DE_ENTRADA: dict[str, str] = {}
 
     def to_internal_value(self, data: Any) -> Any:
         if self.ALIASES_DE_ENTRADA and hasattr(data, "keys"):
-            traduzir = {
-                canonica: antiga
-                for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
-                if antiga in data and canonica not in data
-            }
-            if traduzir:
-                data = _corpo_mutavel(data)
-                for canonica, antiga in traduzir.items():
-                    # Cópia e não `pop`: a chave legada continua declarada como campo
-                    # `read_only`, então o serializer a ignora — e `QueryDict.pop` devolveria a
-                    # **lista** de valores, não o valor.
-                    data[canonica] = data[antiga]
+            if _versao_do_contexto(self) == V2:
+                recusadas = {
+                    antiga: [frase_da_chave_removida(antiga, canonica)]
+                    for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
+                    if antiga in data
+                }
+                if recusadas:
+                    raise serializers.ValidationError(recusadas)
+            else:
+                traduzir = {
+                    canonica: antiga
+                    for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
+                    if antiga in data and canonica not in data
+                }
+                if traduzir:
+                    data = _corpo_mutavel(data)
+                    for canonica, antiga in traduzir.items():
+                        # Cópia e não `pop`: a chave legada continua declarada como campo
+                        # `read_only`, então o serializer a ignora — e `QueryDict.pop` devolveria
+                        # a **lista** de valores, não o valor.
+                        data[canonica] = data[antiga]
         return super().to_internal_value(data)  # type: ignore[misc]
+
+    def to_representation(self, instance: Any) -> Any:
+        dados = super().to_representation(instance)  # type: ignore[misc]
+        if _versao_do_contexto(self) != V2:
+            return dados
+        for chave in ALIASES_DEPRECIADOS.get(_componente_do_serializer(self), ()):
+            dados.pop(chave, None)
+        return dados
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
@@ -272,7 +322,7 @@ class ChangePasswordSerializer(serializers.Serializer):
         return attrs
 
 
-class AccountSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Account]):
+class AccountSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Account]):
     ALIASES_DE_ENTRADA = {"status": "lifecycle_status"}
 
     vertical_name = serializers.CharField(source="vertical.name", read_only=True, default="")
@@ -336,11 +386,11 @@ class AccountSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Account
         return value
 
 
-class ContactSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Contact]):
+class ContactSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Contact]):
     ALIASES_DE_ENTRADA = {"client": "account"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
 
     # Nome composto e só-leitura (issue #55, FDD 001): quem escreve manda `first_name`/
@@ -355,11 +405,11 @@ class ContactSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Contact
         read_only_fields = ["id", "name", "created_at", "updated_at"]
 
 
-class ActivitySerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Activity]):
+class ActivitySerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Activity]):
     ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity", "client": "account"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
@@ -475,7 +525,10 @@ class ProjectChecklistItemSerializer(serializers.ModelSerializer[ProjectChecklis
         ]
 
 
-class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
+# `AliasesDaV1Mixin` sem `ALIASES_DE_ENTRADA`: aqui não há escrita pela chave antiga — a decisão
+# entra pela action `apply-gate` —, e o que o mixin traz é a **outra** metade, a de tirar o alias
+# da leitura na `/api/v2/`. Vale para os cinco vizinhos que herdam pelo mesmo motivo.
+class ProjectPhaseSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[ProjectPhase]):
     """Fase da jornada de um projeto (estado). A equipe edita `target_date` e a justificativa.
 
     `gate_decision`/`gate_notes` são **read-only de propósito** (FDD 033): a decisão entra só pela
@@ -517,7 +570,7 @@ class ProjectPhaseSerializer(serializers.ModelSerializer[ProjectPhase]):
         ]
 
 
-class PhaseEventSerializer(serializers.ModelSerializer[PhaseEvent]):
+class PhaseEventSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[PhaseEvent]):
     """Uma linha do histórico append-only da jornada (FDD 042). Só-leitura — nunca se edita."""
 
     actor_name = serializers.SerializerMethodField()
@@ -543,12 +596,12 @@ class PhaseEventSerializer(serializers.ModelSerializer[PhaseEvent]):
 
 
 class CommercialOpportunitySerializer(
-    AliasDeEntradaMixin, serializers.ModelSerializer[CommercialOpportunity]
+    AliasesDaV1Mixin, serializers.ModelSerializer[CommercialOpportunity]
 ):
     ALIASES_DE_ENTRADA = {"client": "account"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
 
     stage_name = serializers.CharField(source="stage.name", read_only=True)
@@ -820,7 +873,7 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         self._bind_origin(updated)
         return updated
 
-class ProjectSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Project]):
+class ProjectSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Project]):
     ALIASES_DE_ENTRADA = {"ai_opportunity": "ai_potential"}
 
     is_overdue = serializers.SerializerMethodField()
@@ -978,7 +1031,7 @@ class RiscoSerializer(serializers.ModelSerializer[Risco]):
         read_only_fields = ["id", "owner", "resolved_at", "created_at", "updated_at"]
 
 
-class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Satisfacao]):
+class SatisfacaoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Satisfacao]):
     """O registro de satisfação (FDD 037).
 
     `registered_by` é só de leitura pelo motivo do `owner` do `Risco` acima: quem registrou sai da
@@ -989,7 +1042,7 @@ class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Sati
     ALIASES_DE_ENTRADA = {"client": "account"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     nivel_display = serializers.CharField(source="get_nivel_display", read_only=True)
     fonte_display = serializers.CharField(source="get_fonte_display", read_only=True)
@@ -1058,7 +1111,7 @@ class PublicationStateSerializer(serializers.Serializer):
         return publication.estado_de_publicacao(instance)
 
 
-class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process]):
+class ProcessSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Process]):
     """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
     `custo` é derivado e só de leitura: ele é a fórmula de `docs/metodologia-fde.md:118-119` aplicada
@@ -1076,7 +1129,7 @@ class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process
     ALIASES_DE_ENTRADA = {"client": "account"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     client_name = serializers.CharField(source="account.name", read_only=True)
     custo = serializers.SerializerMethodField()
@@ -1121,7 +1174,7 @@ class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process
         }
 
 
-class ProcessStepSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[ProcessStep]):
+class ProcessStepSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[ProcessStep]):
     """A etapa e o P-S-D-T-E-R dela (`docs/metodologia-fde.md:106-110`).
 
     Os seis campos saem na ordem das seis letras de propósito: é assim que a pergunta é feita na
@@ -1131,7 +1184,7 @@ class ProcessStepSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Pro
     ALIASES_DE_ENTRADA = {"processo": "process"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     processo = serializers.PrimaryKeyRelatedField(source="process", read_only=True)
 
     class Meta:
@@ -2182,7 +2235,7 @@ def _safe_original_name(name: str | None) -> str:
     return cleaned[:255] or "documento"
 
 
-class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Document]):
+class DocumentSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Document]):
     ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity", "client": "account"}
 
     # Aliases de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): as chaves antigas saem
@@ -2394,7 +2447,7 @@ class DigitalEmployeeBlueprintSerializer(serializers.ModelSerializer[DigitalEmpl
         return blueprints.variant_for(blueprint, self._vertical()) is not None
 
 
-class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
+class DigitalEmployeeSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[DigitalEmployee]):
     """O Funcionário Digital, que agora **referencia** um KPI em vez de possuí-lo (ADR 0055).
 
     `kpi_baseline` e `kpi_current` continuam saindo na `/api/v1/`, agora derivados das
@@ -2452,7 +2505,7 @@ class DigitalEmployeeSerializer(serializers.ModelSerializer[DigitalEmployee]):
         return attrs
 
 
-class ArtifactSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Artifact]):
+class ArtifactSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Artifact]):
     ALIASES_DE_ENTRADA = {"opportunity": "commercial_opportunity"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
@@ -2498,7 +2551,7 @@ class ArtifactSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Artifa
         return value
 
 
-class CaseSerializer(serializers.ModelSerializer[Case]):
+class CaseSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Case]):
     """O case de um projeto concluído (FDD 027).
 
     A lista de `read_only_fields` é a entrega, não burocracia: `metrics`, `health_snapshot` e
@@ -2602,7 +2655,7 @@ _FROZEN_ONCE_ISSUED = (
 )
 
 
-class InvoiceSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Invoice]):
+class InvoiceSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Invoice]):
     """A fatura (FDD 028).
 
     Duas travas que valem ser lidas juntas, porque a diferença entre elas é deliberada.
@@ -2621,7 +2674,7 @@ class InvoiceSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Invoice
     ALIASES_DE_ENTRADA = {"client": "account"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     method_display = serializers.CharField(source="get_method_display", read_only=True)
@@ -2676,7 +2729,7 @@ class InvoiceSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Invoice
         return attrs
 
 
-class CobrancaContatoSerializer(serializers.ModelSerializer[CobrancaContato]):
+class CobrancaContatoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[CobrancaContato]):
     """O que a casa já disse sobre uma fatura (FDD 036). **Só de leitura pelo router.**
 
     Nenhum campo é gravável aqui, e a ausência é a entrega: um `POST /cobranca/` criaria a prova de
@@ -2701,7 +2754,7 @@ class CobrancaContatoSerializer(serializers.ModelSerializer[CobrancaContato]):
 
 
 class CobrancaSuspensaoSerializer(
-    AliasDeEntradaMixin, serializers.ModelSerializer[CobrancaSuspensao]
+    AliasesDaV1Mixin, serializers.ModelSerializer[CobrancaSuspensao]
 ):
     """Suspender a cobrança — com dono, prazo e motivo, os três obrigatórios (RFC 0004).
 
@@ -2713,7 +2766,7 @@ class CobrancaSuspensaoSerializer(
     ALIASES_DE_ENTRADA = {"client": "account"}
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
-    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasDeEntradaMixin`.
+    # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     client_name = serializers.CharField(source="account.name", read_only=True, default="")
     invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
@@ -2912,11 +2965,12 @@ class OpenCommercialOpportunitySerializer(serializers.Serializer):
     )
 
 
-class LeadSerializer(serializers.ModelSerializer[Lead]):
+class LeadSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Lead]):
     # Aliases de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c); morrem na `/api/v2/`.
-    # Sem `AliasDeEntradaMixin` porque aqui não há escrita: os dois vínculos são lavrados por
-    # `POST /leads/{id}/convert/` e `POST /qualifications/{id}/open-opportunity/`, e as quatro
-    # chaves são só de leitura.
+    # `AliasesDaV1Mixin` sem `ALIASES_DE_ENTRADA` porque aqui não há escrita: os dois vínculos são
+    # lavrados por `POST /leads/{id}/convert/` e `POST /qualifications/{id}/open-opportunity/`, e
+    # as quatro chaves são só de leitura. O mixin entra pela metade que falta — tirá-las da
+    # resposta na `/api/v2/`, dirigido pelo mesmo `ALIASES_DEPRECIADOS` do esquema.
     opportunity = serializers.PrimaryKeyRelatedField(
         source="commercial_opportunity", read_only=True
     )
