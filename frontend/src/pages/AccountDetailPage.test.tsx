@@ -943,9 +943,9 @@ test("a confirmação de arquivar avisa quantos registros continuam publicados, 
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
-  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
 
-  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar cliente" }));
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar conta" }));
   expect(dialogo.getByText("5 registros publicados")).toBeInTheDocument();
   expect(dialogo.getByText(/Arquivar não os retira/)).toBeInTheDocument();
   expect(dialogo.getByRole("link", { name: /Ver o que está publicado/ })).toHaveAttribute("href", "/contas/1/publicacao");
@@ -957,9 +957,9 @@ test("com um único registro publicado a frase vai no singular", async () => {
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
-  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
 
-  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar cliente" }));
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar conta" }));
   expect(dialogo.getByText("1 registro publicado")).toBeInTheDocument();
 });
 
@@ -969,9 +969,9 @@ test("sem nada publicado a frase não aparece — «0 registros publicados» é 
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
-  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
 
-  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar cliente" }));
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar conta" }));
   expect(dialogo.getByText(/saem das listagens ativas/)).toBeInTheDocument();
   expect(dialogo.queryByText(/registros? publicados?/)).not.toBeInTheDocument();
   expect(dialogo.queryByRole("link", { name: /Ver o que está publicado/ })).not.toBeInTheDocument();
@@ -983,7 +983,7 @@ test("o aviso informa e não bloqueia: arquivar continua saindo como DELETE", as
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
-  await user.click(screen.getByRole("button", { name: "Arquivar cliente" }));
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
   await user.click(screen.getByRole("button", { name: "Arquivar" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "DELETE" })));

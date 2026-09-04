@@ -12,7 +12,7 @@ import type { Account, CommercialOpportunity, DocumentEntry, Project, SignerRole
 // A chave **é** o nome do campo no corpo do `POST /documents/`, então ela é a canônica: a SPA
 // não escreve o alias que a `/api/v1/` mantém para quem integrou antes do renome (#67).
 type LinkType = "account" | "commercial_opportunity" | "project";
-const linkLabel: Record<LinkType, string> = { account: "Cliente", commercial_opportunity: "Oportunidade", project: "Projeto" };
+const linkLabel: Record<LinkType, string> = { account: "Conta", commercial_opportunity: "Oportunidade", project: "Projeto" };
 // O papel na linha de assinatura (DAP r1, F1): com três signatários, "quem é quem" é a pergunta
 // que a lista passa a não responder. Um mapa só, no molde do `StatusDot` (ADR 0026).
 const SIGNER_ROLE_LABEL: Record<SignerRole, string> = { house: "Biahflow", counterparty: "Parte contratante", witness: "Testemunha" };
@@ -129,7 +129,7 @@ export function DocumentsPage() {
           // Só limpa o que o vínculo novo não oferece — trocar de Oportunidade para Projeto não
           // tem por que apagar um "NDA" já escolhido, e apagar seria perder o que a pessoa disse.
           if (kind && !finalidadesPara(novo).some(item => item.value === kind)) setKind("");
-        }}>{!isDelivery && <option value="account">Cliente</option>}{!isDelivery && <option value="commercial_opportunity">Oportunidade</option>}<option value="project">Projeto</option></select></label>
+        }}>{!isDelivery && <option value="account">Conta</option>}{!isDelivery && <option value="commercial_opportunity">Oportunidade</option>}<option value="project">Projeto</option></select></label>
         <label className="form-label">{linkLabel[linkType]}<select className="field" value={target} onChange={event => setTarget(event.target.value)} required><option value="">Selecione</option>{targets.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
         {/* Sempre visível, com as opções filtradas pelo vínculo (DAP r2, A1-r2). O que exige conta
             nunca foi o **campo** — era **abrir mandato**, porque `Engagement.clean()` compara a

@@ -460,17 +460,17 @@ export function AccountDetailPage({ id }: { id: number }) {
         reexpressa "publicado e vivo", que é a segunda definição que aquele módulo existe para
         não ter. */}
     {isArchiving && <ConfirmDialog
-      title="Arquivar cliente"
+      title="Arquivar conta"
       message={<>
-        <p>O cliente <strong className="text-ink">{client.name}</strong> e os contatos dele saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</p>
+        <p>A conta <strong className="text-ink">{client.name}</strong> e os contatos dela saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</p>
         {client.published_count > 0 && <p className="mt-3">Esta conta tem <strong className="text-ink">{client.published_count} {client.published_count === 1 ? "registro publicado" : "registros publicados"}</strong> para o cliente. Arquivar não os retira. <a className="inline-flex items-center gap-1.5 font-semibold text-ink underline underline-offset-2" href={`/contas/${client.id}/publicacao`}>Ver o que está publicado <Eye className="size-3.5" /></a></p>}
       </>}
       confirmLabel="Arquivar" busy={busy}
       onCancel={() => setArchiving(false)} onConfirm={() => void archiveClient()}
     />}
     <header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="eyebrow">Relacionamento</p><h1>{client.name}</h1><p>Dados cadastrais e contatos do cliente.</p></div>
-      {canArchive && <button type="button" className="btn btn--secondary btn--secondary-danger shrink-0 self-start sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar cliente</button>}
+      <div><p className="eyebrow">Relacionamento</p><h1>{client.name}</h1><p>Dados cadastrais e contatos da conta.</p></div>
+      {canArchive && <button type="button" className="btn btn--secondary btn--secondary-danger shrink-0 self-start sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar conta</button>}
     </header>
     {error && <p role="alert" className="alert--error">{error}</p>}
 
@@ -658,7 +658,7 @@ export function AccountDetailPage({ id }: { id: number }) {
 
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
       <form className="panel space-y-4 sm:p-6" onSubmit={event => void saveClient(event)} data-testid="client-form">
-        <h2 className="font-semibold text-ink">Dados do cliente</h2>
+        <h2 className="font-semibold text-ink">Dados da conta</h2>
         <Field label="Nome"><input className="field" value={form.name} onChange={event => { setForm({ ...form, name: event.target.value }); setSaved(false); }} required /></Field>
         <Field label="Razão social"><input className="field" value={form.legal_name} onChange={event => { setForm({ ...form, legal_name: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>
         <Field label="CNPJ / CPF"><input className="field" value={form.tax_id} onChange={event => { setForm({ ...form, tax_id: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>

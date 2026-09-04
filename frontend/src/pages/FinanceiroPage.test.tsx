@@ -118,7 +118,7 @@ test("o erro 409 da API vai para a tela", async () => {
 
 test("criar manda o rascunho e avisa que emitir é um passo à parte", async () => {
   render(<FinanceiroPage />);
-  await userEvent.selectOptions(await screen.findByLabelText("Cliente"), "1");
+  await userEvent.selectOptions(await screen.findByLabelText("Conta"), "1");
   await userEvent.type(screen.getByLabelText("Valor (R$)"), "1500");
   await userEvent.type(screen.getByLabelText("Vencimento"), "2026-10-01");
   await userEvent.type(screen.getByLabelText("Descrição"), "Parcela única");

@@ -124,7 +124,9 @@ Key cross-cutting patterns to preserve:
   `docs/design/dap-lifecycle-status-r1/`, decisões **A1 · B1 · C1**, e os mapas de rótulo e de
   variante moram em `frontend/src/components/AccountLifecycle.tsx` — um lugar só, no molde de
   `StatusDot` (ADR 0026). A rota da SPA é `/contas`; `/clientes*` redireciona e morre na
-  `/api/v2/`.
+  `/api/v2/`. A r2 (decisão **A1**, aprovada em 03/09/2026) estendeu "Conta" ao detalhe da conta,
+  aos formulários do Comercial e do Financeiro e ao alvo de vínculo de Documentos; "Cliente" segue
+  sendo só o rótulo do estado e o eixo de pendência (`Fornecedor`/`Cliente`).
 - **Opportunity → Project conversion** is the central business action: the
   `convert-to-project` `@action` on `CommercialOpportunityViewSet`. It requires the sale be in the
   "won" stage, enforces sales/admin role, and carries `CommercialOpportunity.service` over to

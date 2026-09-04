@@ -49,7 +49,7 @@ test("entrega só pode vincular documento a projeto", async () => {
 test("lista documentos com vínculo e link de download", async () => {
   render(<DocumentsPage />);
   expect(await screen.findByText("contrato.pdf")).toBeInTheDocument();
-  expect(screen.getByText("Cliente: Cliente A")).toBeInTheDocument();
+  expect(screen.getByText("Conta: Cliente A")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Baixar contrato.pdf" })).toHaveAttribute("href", "/api/v1/documents/1/download/");
 });
 
