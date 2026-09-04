@@ -93,3 +93,15 @@ fora, e segue sem chamador.
 
 O teto por operação e a reconciliação que sustentam essa criação estão na
 [ADR 0064](../adr/0064-o-teto-e-por-operacao-e-a-resposta-incerta-se-reconcilia.md).
+
+### `UNCERTAIN` pós-reconciliação avisa o dono do projeto (issue #117)
+
+Quando o `create_group` volta com `Delivery.UNCERTAIN` **depois** de a reconciliação da ADR 0064 já
+ter tentado e não ter resolvido, `abrir_grupo_de_whatsapp` chama `notifications.notify` para
+`project.owner` — a mesma fila do produto que já entrega o e-mail e a notificação de kickoff, e não
+uma escalada interna (esse é o padrão da cobrança, outro domínio). O `kind` é `"whatsapp"`, novo e
+separado de `"kickoff"`, porque a notificação de kickoff não pode passar a mencionar grupo quando
+não há grupo confirmado. A mensagem registra o fato **e** a saída — "ficou incerta" e "confira a
+lista de grupos no WhatsApp antes de tentar de novo" — porque avisar sem dizer o que fazer transfere
+o problema sem transferir a solução. `REFUSED` e `UNAVAILABLE` continuam só em log: são certeza de
+não-entrega, e certeza de não-entrega não cria grupo órfão.

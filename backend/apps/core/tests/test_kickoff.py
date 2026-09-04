@@ -315,3 +315,54 @@ def test_com_a_flag_desligada_o_kickoff_nao_procura_grupo(grupo):
     kickoff.finalize(project)
 
     assert chamadas.calls == []
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_uncertain_avisa_o_dono_do_projeto_pela_fila_do_produto(grupo):
+    """A dívida que a ADR 0062 nomeou: `UNCERTAIN` pós-reconciliação (ADR 0064) tem destinatário.
+
+    O fato e a saída, na mesma mensagem — avisar sem dizer o que fazer transfere o problema sem
+    transferir a solução (issue #117).
+    """
+    grupo(whatsapp.GroupResult(whatsapp.Delivery.UNCERTAIN, provider="zapi", detail="timeout"))
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+
+    aviso = Notification.objects.get(user=project.owner, kind="whatsapp")
+    assert "ficou incerta" in aviso.message
+    assert "Confira a lista de grupos" in aviso.message
+    assert aviso.url == f"/projetos/{project.id}"
+    # A notificação de kickoff continua existindo, uma só, e sem mencionar grupo — o teste das
+    # linhas 294-307 já cobre isso; aqui confirmamos que ele segue verde com o kind novo ao lado.
+    kickoff_notif = Notification.objects.get(user=project.owner, kind="kickoff")
+    assert "Grupo" not in kickoff_notif.message
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+@pytest.mark.parametrize("status", [whatsapp.Delivery.REFUSED, whatsapp.Delivery.UNAVAILABLE])
+def test_falha_certa_nao_avisa_o_dono_do_projeto(grupo, status):
+    """Certeza de não-entrega não cria grupo órfão — só `UNCERTAIN` avisa (issue #117).
+
+    O enum não tem um estado `FAILED`; `REFUSED` e `UNAVAILABLE` são os dois estados terminais de
+    não-entrega inequívoca que o spec de handoff nomeava por esse rótulo informal.
+    """
+    grupo(whatsapp.GroupResult(status, provider="zapi", detail="recusado"))
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+
+    assert not Notification.objects.filter(user=project.owner, kind="whatsapp").exists()
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_delivered_nao_avisa_o_dono_do_projeto(grupo):
+    grupo()
+    project = _projeto_com_contatos()
+
+    kickoff.finalize(project)
+
+    assert not Notification.objects.filter(user=project.owner, kind="whatsapp").exists()

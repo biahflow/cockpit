@@ -294,6 +294,21 @@ def abrir_grupo_de_whatsapp(project: Project) -> str:
             "kickoff: grupo de WhatsApp do projeto %s ficou em '%s' (%s)",
             project.pk, result.status.value, result.detail or "sem detalhe",
         )
+        if result.status is whatsapp.Delivery.UNCERTAIN:
+            # (a) `UNCERTAIN` é o único estado em que ninguém sabe se o cliente recebeu o grupo E o
+            # produto decidiu não tentar de novo — a dívida que a ADR 0062 nomeou e que o primeiro
+            # chamador (#110) não fechou. (b) Quando o status chega até aqui, a reconciliação da
+            # ADR 0064 já rodou dentro de `whatsapp.create_group` e não resolveu — não há checagem
+            # extra a fazer. (c) `REFUSED`/`UNAVAILABLE` não avisam: certeza de não-entrega não cria
+            # grupo órfão, só `UNCERTAIN` cria (issue #117).
+            notifications.notify(
+                [project.owner], "whatsapp",
+                f"A criação do grupo de WhatsApp do projeto '{project.name}' ficou incerta — pode "
+                "haver um grupo criado sem referência. Confira a lista de grupos no WhatsApp antes "
+                "de tentar de novo.",
+                f"/projetos/{project.id}",
+                project=project,
+            )
         return ""
     project.whatsapp_group_id = result.group_id
     project.whatsapp_group_invite_url = result.invite_url

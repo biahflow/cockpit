@@ -117,3 +117,21 @@ dos dois provedores a oferece. Se algum passar a oferecer, esta ADR merece revis
 **API oficial de grupos da Meta.** Não rejeitada — adiada. Exige Official Business Account
 (verificação junto à Meta) e limita grupos a 8 membros. O teto, aliás, trabalha a favor da regra de
 escopo: força o grupo a ser o time de trabalho, não "todo mundo".
+
+## Emenda (issue #117, 03/09/2026) — a dívida do `UNCERTAIN` fecha, pela fila do produto
+
+A linha acima — *"`UNCERTAIN` hoje só é registrada em log (…) é a dívida mais concreta desta
+entrega, e o primeiro chamador precisa fechá-la"* — está fechada. `kickoff.abrir_grupo_de_whatsapp`
+agora chama `notifications.notify` para `project.owner`, o mesmo destinatário do e-mail e da
+notificação de kickoff, quando o `create_group` devolve `UNCERTAIN` **depois** de a reconciliação
+da ADR 0064 já ter tentado e não resolvido — não há checagem extra a fazer no kickoff, porque a
+reconciliação já rodou dentro de `whatsapp.create_group`. `REFUSED` e `UNAVAILABLE` continuam só em
+log: são certeza de não-entrega, e certeza de não-entrega não cria grupo órfão.
+
+Três decisões, arbitradas fora deste documento e registradas aqui: (1) é notificação da fila do
+produto (`kind="whatsapp"`, novo e deliberado — não pode ser `"kickoff"`, que o teste
+`test_sem_grupo_o_email_e_a_notificacao_nao_mencionam_grupo_nenhum` afirma sem menção a grupo), não
+escalada interna — escalada é o padrão da cobrança, outro domínio; (2) vale só para o `UNCERTAIN`
+que sobrevive à reconciliação, nunca para todo `UNCERTAIN` cru; (3) a mensagem diz a saída ("Confira
+a lista de grupos no WhatsApp antes de tentar de novo"), não só o fato — avisar sem dizer o que
+fazer transfere o problema sem transferir a solução.
