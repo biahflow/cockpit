@@ -14,7 +14,7 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, discovery_booking, drive, esign, knowledge, publication
+from . import blueprints, discovery_booking, drive, esign, kickoff, knowledge, publication
 from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
@@ -637,6 +637,11 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         source="originating_design_partner_agreement.original_name", read_only=True, default=""
     )
     discovery_scheduled_at = serializers.SerializerMethodField()
+    # Par derivado com fallback, DAP `dap-grupo-de-whatsapp-r1` B1: o do próprio mandato quando
+    # existe, senão o do projeto vivo mais antigo com grupo legado. O nome do campo é o mesmo do
+    # modelo de propósito — para a `/api/v1/` o fato é um só, "o canal do mandato".
+    whatsapp_group_id = serializers.SerializerMethodField()
+    whatsapp_group_invite_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Engagement
@@ -649,7 +654,7 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
             "originating_design_partner_agreement",
             "originating_design_partner_agreement_name",
             "started_at", "ended_at", "success_definition", "projects_count",
-            "discovery_scheduled_at",
+            "discovery_scheduled_at", "whatsapp_group_id", "whatsapp_group_invite_url",
             "needs_review", "archived_at", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "archived_at", "created_at", "updated_at"]
@@ -714,6 +719,14 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         if reserva is None:
             return None
         return cast(str, serializers.DateTimeField().to_representation(reserva.starts_at))
+
+    @extend_schema_field(serializers.CharField())
+    def get_whatsapp_group_id(self, obj: Engagement) -> str:
+        return kickoff.grupo_do_mandato(obj)[0]
+
+    @extend_schema_field(serializers.CharField())
+    def get_whatsapp_group_invite_url(self, obj: Engagement) -> str:
+        return kickoff.grupo_do_mandato(obj)[1]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Repete no contrato HTTP a invariante 13 que `Engagement.clean()` sustenta no modelo.

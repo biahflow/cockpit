@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.core import kickoff, whatsapp
 from apps.core.models import Contact, Milestone, Notification, Project, Service, Task
 
-from .factories import ProjectFactory, ServiceFactory, UserFactory
+from .factories import EngagementFactory, ProjectFactory, ServiceFactory, UserFactory
 
 
 @pytest.mark.django_db
@@ -420,3 +420,69 @@ def test_delivered_nao_avisa_o_dono_do_projeto(grupo):
     kickoff.finalize(project)
 
     assert not Notification.objects.filter(user=project.owner, kind="whatsapp").exists()
+
+
+# --- O grupo do mandato na tela (issue #116, DAP dap-grupo-de-whatsapp-r1) ---------------------
+#
+# `grupo_do_mandato` responde outra pergunta que `abrir_grupo_de_whatsapp`: aqui é "o mandato tem
+# canal?" (leitura, com fallback pelo mandato inteiro), não "este kickoff deve criar?".
+
+
+@pytest.mark.django_db
+def test_grupo_proprio_do_mandato_vence_mesmo_com_legado_num_projeto():
+    engagement = EngagementFactory(
+        whatsapp_group_id="120363431743499021@g.us",
+        whatsapp_group_invite_url="https://chat.whatsapp.com/GONwbGG",
+    )
+    projeto = ProjectFactory(engagement=engagement)
+    projeto.whatsapp_group_id = "120363431743499099@g.us"
+    projeto.whatsapp_group_invite_url = "https://chat.whatsapp.com/LEGADO"
+    projeto.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+
+    assert kickoff.grupo_do_mandato(engagement) == (
+        "120363431743499021@g.us", "https://chat.whatsapp.com/GONwbGG",
+    )
+
+
+@pytest.mark.django_db
+def test_sem_grupo_proprio_cai_no_projeto_vivo_mais_antigo_com_legado():
+    engagement = EngagementFactory()
+    mais_antigo = ProjectFactory(engagement=engagement, name="Discovery")
+    mais_antigo.whatsapp_group_id = "antigo@g.us"
+    mais_antigo.whatsapp_group_invite_url = "https://chat.whatsapp.com/ANTIGO"
+    mais_antigo.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+    mais_novo = ProjectFactory(engagement=engagement, name="Continuidade")
+    mais_novo.whatsapp_group_id = "novo@g.us"
+    mais_novo.whatsapp_group_invite_url = "https://chat.whatsapp.com/NOVO"
+    mais_novo.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+
+    assert kickoff.grupo_do_mandato(engagement) == (
+        "antigo@g.us", "https://chat.whatsapp.com/ANTIGO",
+    )
+
+
+@pytest.mark.django_db
+def test_projeto_arquivado_com_grupo_nao_conta_como_fallback():
+    engagement = EngagementFactory()
+    arquivado = ProjectFactory(engagement=engagement)
+    arquivado.whatsapp_group_id = "arquivado@g.us"
+    arquivado.whatsapp_group_invite_url = "https://chat.whatsapp.com/ARQUIVADO"
+    arquivado.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+    arquivado.archive()
+
+    assert kickoff.grupo_do_mandato(engagement) == ("", "")
+
+
+@pytest.mark.django_db
+def test_sem_grupo_nenhum_devolve_par_vazio():
+    engagement = EngagementFactory()
+    ProjectFactory(engagement=engagement)
+
+    assert kickoff.grupo_do_mandato(engagement) == ("", "")
+
+
+@pytest.mark.django_db
+def test_jid_sem_link_atravessa_como_esta():
+    engagement = EngagementFactory(whatsapp_group_id="120363431743499021@g.us")
+
+    assert kickoff.grupo_do_mandato(engagement) == ("120363431743499021@g.us", "")

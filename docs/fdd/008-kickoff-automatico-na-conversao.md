@@ -97,6 +97,16 @@ revisitada, o lugar natural é o mandato — que é, por definição ([ADR 0050]
 própria. Mandar mensagem no grupo depois de criado (`whatsapp.send_group_text`) também ficou de
 fora, e segue sem chamador.
 
+> **Resolvida em 04/09/2026 (issue #116).** DAP `docs/design/dap-grupo-de-whatsapp-r1/` aprovado
+> (decisões **A1 · B1 · C1 · D1**): o grupo aparece na linha do mandato, seção "Engagements" do
+> detalhe da conta — não no projeto, porque desde a #119 o canal é do `Engagement`. O par
+> (`whatsapp_group_id`/`whatsapp_group_invite_url`) sai derivado num lugar só
+> (`kickoff.grupo_do_mandato`): o do próprio mandato quando existe, senão o do projeto vivo mais
+> antigo com grupo legado (decisão B1) — e **sem** recorte por papel, ao contrário de
+> `projects_count`, porque "o mandato tem grupo" é fato da relação com o cliente, não um número que
+> varia com quem olha. Sem grupo, a linha fica em silêncio (decisão C1): a mesma regra do e-mail de
+> kickoff, "Grupo: —" seria pior do que não dizer nada.
+
 O teto por operação e a reconciliação que sustentam essa criação estão na
 [ADR 0064](../adr/0064-o-teto-e-por-operacao-e-a-resposta-incerta-se-reconcilia.md).
 

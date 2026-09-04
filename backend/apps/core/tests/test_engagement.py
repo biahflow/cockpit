@@ -1121,3 +1121,100 @@ def test_o_aviso_do_kickoff_nao_estoura_o_limite_da_notificacao() -> None:
     aviso = Notification.objects.filter(kind="kickoff").latest("id")
     assert len(aviso.message) <= 255
     assert aviso.message.endswith("…")
+
+
+# --------------------------------- o grupo do mandato na tela (DAP dap-grupo-de-whatsapp-r1) ---
+#
+# `EngagementSerializer` emite o par derivado com fallback (decisão B1); a regra em si é fixada
+# em `apps/core/tests/test_kickoff.py::test_*` — aqui o que se afirma é que o contrato HTTP
+# entrega o que `kickoff.grupo_do_mandato` calcula, sem recorte por papel.
+
+
+def test_grupo_proprio_do_mandato_sai_na_api_mesmo_com_legado_num_projeto() -> None:
+    api, _ = _api()
+    engagement = EngagementFactory(
+        whatsapp_group_id="120363431743499021@g.us",
+        whatsapp_group_invite_url="https://chat.whatsapp.com/GONwbGG",
+    )
+    projeto = ProjectFactory(engagement=engagement)
+    projeto.whatsapp_group_id = "legado@g.us"
+    projeto.whatsapp_group_invite_url = "https://chat.whatsapp.com/LEGADO"
+    projeto.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+
+    resposta = api.get(reverse("engagement-detail", args=[engagement.pk]))
+
+    assert resposta.data["whatsapp_group_id"] == "120363431743499021@g.us"
+    assert resposta.data["whatsapp_group_invite_url"] == "https://chat.whatsapp.com/GONwbGG"
+
+
+def test_sem_grupo_proprio_a_api_cai_no_projeto_vivo_mais_antigo() -> None:
+    api, _ = _api()
+    engagement = EngagementFactory()
+    mais_antigo = ProjectFactory(engagement=engagement, name="Discovery")
+    mais_antigo.whatsapp_group_id = "antigo@g.us"
+    mais_antigo.whatsapp_group_invite_url = "https://chat.whatsapp.com/ANTIGO"
+    mais_antigo.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+    mais_novo = ProjectFactory(engagement=engagement, name="Continuidade")
+    mais_novo.whatsapp_group_id = "novo@g.us"
+    mais_novo.whatsapp_group_invite_url = "https://chat.whatsapp.com/NOVO"
+    mais_novo.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+
+    resposta = api.get(reverse("engagement-detail", args=[engagement.pk]))
+
+    assert resposta.data["whatsapp_group_id"] == "antigo@g.us"
+    assert resposta.data["whatsapp_group_invite_url"] == "https://chat.whatsapp.com/ANTIGO"
+
+
+def test_projeto_arquivado_nao_conta_como_fallback_na_api() -> None:
+    api, _ = _api()
+    engagement = EngagementFactory()
+    arquivado = ProjectFactory(engagement=engagement)
+    arquivado.whatsapp_group_id = "arquivado@g.us"
+    arquivado.whatsapp_group_invite_url = "https://chat.whatsapp.com/ARQUIVADO"
+    arquivado.save(update_fields=["whatsapp_group_id", "whatsapp_group_invite_url"])
+    arquivado.archive()
+
+    resposta = api.get(reverse("engagement-detail", args=[engagement.pk]))
+
+    assert resposta.data["whatsapp_group_id"] == ""
+    assert resposta.data["whatsapp_group_invite_url"] == ""
+
+
+def test_sem_grupo_nenhum_a_api_devolve_string_vazia_nos_dois_campos() -> None:
+    api, _ = _api()
+    engagement = EngagementFactory()
+    ProjectFactory(engagement=engagement)
+
+    resposta = api.get(reverse("engagement-detail", args=[engagement.pk]))
+
+    assert resposta.data["whatsapp_group_id"] == ""
+    assert resposta.data["whatsapp_group_invite_url"] == ""
+
+
+def test_jid_sem_link_atravessa_como_esta_na_api() -> None:
+    api, _ = _api()
+    engagement = EngagementFactory(whatsapp_group_id="120363431743499021@g.us")
+
+    resposta = api.get(reverse("engagement-detail", args=[engagement.pk]))
+
+    assert resposta.data["whatsapp_group_id"] == "120363431743499021@g.us"
+    assert resposta.data["whatsapp_group_invite_url"] == ""
+
+
+def test_o_fallback_do_grupo_nao_e_recortado_por_papel() -> None:
+    """Contraste deliberado com `projects_count` (recortada): o canal é da relação com o cliente,
+    e o mesmo fato não pode mudar conforme quem olha (DAP `dap-grupo-de-whatsapp-r1`, B1)."""
+    admin, _ = _api()
+    entrega, pessoa = _api(User.Role.DELIVERY)
+    engagement = EngagementFactory(
+        whatsapp_group_id="120363431743499021@g.us",
+        whatsapp_group_invite_url="https://chat.whatsapp.com/GONwbGG",
+    )
+    projeto = ProjectFactory(engagement=engagement)
+    ProjectMemberFactory(project=projeto, user=pessoa)
+
+    do_admin = admin.get(reverse("engagement-detail", args=[engagement.pk])).data
+    da_entrega = entrega.get(reverse("engagement-detail", args=[engagement.pk])).data
+
+    assert do_admin["whatsapp_group_invite_url"] == da_entrega["whatsapp_group_invite_url"]
+    assert da_entrega["whatsapp_group_invite_url"] == "https://chat.whatsapp.com/GONwbGG"

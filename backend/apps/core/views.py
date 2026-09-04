@@ -1284,6 +1284,10 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         "sponsor",
         "originating_commercial_opportunity",
         "originating_design_partner_agreement",
+    ).prefetch_related(
+        # O fallback do grupo de WhatsApp (DAP `dap-grupo-de-whatsapp-r1`, B1) lê os projetos do
+        # mandato em `kickoff.grupo_do_mandato`; sem o prefetch a listagem faz uma query por linha.
+        "projects",
     ).all()
     serializer_class = EngagementSerializer
     # `status` em `filter_exact_fields` e não em `filter_fields`: o primeiro conjunto só aplica

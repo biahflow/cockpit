@@ -95,7 +95,11 @@ function mandato(overrides: Record<string, unknown> = {}) {
     originating_design_partner_agreement: null,
     originating_design_partner_agreement_name: "",
     started_at: "2026-03-02", ended_at: null, success_definition: "",
-    projects_count: 3, needs_review: false, archived_at: null,
+    projects_count: 3, needs_review: false,
+    // Silêncio por padrão (decisão C1 do DAP `dap-grupo-de-whatsapp-r1`): os testes que não são
+    // sobre o grupo não devem ganhar um link ou um texto extra na faixa de meta da linha.
+    whatsapp_group_id: "", whatsapp_group_invite_url: "",
+    archived_at: null,
     created_at: "2026-03-02T10:00:00Z", updated_at: "2026-03-02T10:00:00Z",
     ...overrides,
   };
@@ -770,6 +774,43 @@ test("arquivar mandato com projeto vivo mostra a recusa do backend no topo da p�
   const alerta = await screen.findByRole("alert");
   expect(alerta).toHaveTextContent("Este engagement ainda tem 3 projeto(s) em aberto. Arquive esses projetos antes de arquivar o engagement.");
   expect(alerta).toHaveClass("alert--error");
+});
+
+// --- O grupo do cliente no WhatsApp na linha do mandato (DAP dap-grupo-de-whatsapp-r1, r1 A1·B1·C1·D1)
+
+test("com link de convite, a linha mostra o link discreto para o grupo", async () => {
+  engagements = [mandato({
+    whatsapp_group_id: "120363431743499021@g.us",
+    whatsapp_group_invite_url: "https://chat.whatsapp.com/GONwbGG",
+  })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  const link = painel.getByRole("link", { name: "Abrir o grupo de Transformação Financeira no WhatsApp" });
+  expect(link).toHaveAttribute("href", "https://chat.whatsapp.com/GONwbGG");
+  expect(link).toHaveAttribute("target", "_blank");
+  expect(within(link).getByText("Grupo no WhatsApp")).toBeInTheDocument();
+});
+
+test("com JID sem link, a linha mostra o texto sem affordance — e nenhum link", async () => {
+  engagements = [mandato({ whatsapp_group_id: "120363431743499021@g.us" })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.getByText("Grupo criado · sem link de convite")).toBeInTheDocument();
+  expect(painel.queryByRole("link", { name: /WhatsApp/ })).not.toBeInTheDocument();
+});
+
+test("sem grupo nenhum, a linha não mostra link nem texto — silêncio de propósito (C1)", async () => {
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.queryByRole("link", { name: /WhatsApp/ })).not.toBeInTheDocument();
+  expect(painel.queryByText(/Grupo/)).not.toBeInTheDocument();
 });
 
 // --- Criar projeto a partir do mandato (DAP `dap-engagement-r3`, decisões A1 · B2 · C1 · D1) ---

@@ -251,6 +251,34 @@ def _participantes_do_grupo(project: Project) -> list[str]:
     )
 
 
+def grupo_do_mandato(engagement: Engagement) -> tuple[str, str]:
+    """(JID, link de convite) do canal do mandato — ("", "") quando não há.
+
+    Espelha a ordem de guardas de `abrir_grupo_de_whatsapp`, mas responde **outra pergunta**: aqui
+    é "o mandato tem canal?" (leitura, com fallback pelo mandato inteiro); lá é "ESTE kickoff deve
+    criar?" (idempotência por projeto). Não unifique as duas.
+
+    **Deliberadamente NÃO recortada por `project_scope_q`** — contraste com
+    `EngagementSerializer.get_projects_count`, que É recortada. O canal é da relação com o
+    cliente; o mesmo fato ("o mandato tem grupo") não pode mudar conforme quem olha, e o grupo
+    morar num projeto é acidente histórico da issue #119 (legado), não vínculo de entrega.
+    """
+    if engagement.whatsapp_group_id:
+        return engagement.whatsapp_group_id, engagement.whatsapp_group_invite_url
+    # `.all()` sobre relação prefetched não dispara query nova; `.filter()` dispararia mesmo com
+    # o prefetch (é outro queryset), por isso o corte por arquivado e a busca do mais antigo são
+    # feitos em Python, não no banco.
+    candidatos = [
+        project
+        for project in engagement.projects.all()
+        if project.archived_at is None and project.whatsapp_group_id
+    ]
+    if not candidatos:
+        return "", ""
+    mais_antigo = min(candidatos, key=lambda project: (project.created_at, project.pk))
+    return mais_antigo.whatsapp_group_id, mais_antigo.whatsapp_group_invite_url
+
+
 def abrir_grupo_de_whatsapp(project: Project) -> str:
     """Abre o grupo do WhatsApp do **mandato** e guarda a referência no `Engagement`; devolve o
     convite. `Project.whatsapp_group_id`/`.whatsapp_group_invite_url` são legado desde 04/09/2026

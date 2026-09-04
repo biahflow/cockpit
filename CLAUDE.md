@@ -362,7 +362,12 @@ Key cross-cutting patterns to preserve:
   e **B1** (as duas pílulas de `commercial_model` sempre visíveis) — mudar a superfície exige
   revisão nova do pacote, não julgamento na hora. `projects_count` é **recortado por
   `project_scope_q`**, não é o total do mandato: dois usuários veem números diferentes para a mesma
-  linha, e é o mesmo comportamento de `/clients/overview/`. Ver a emenda de 28/08 na FDD 046.
+  linha, e é o mesmo comportamento de `/clients/overview/`. Ver a emenda de 28/08 na FDD 046. A
+  linha do mandato também mostra o grupo de WhatsApp do cliente, governada pelo DAP
+  `docs/design/dap-grupo-de-whatsapp-r1/` (A1 · B1 · C1 · D1): o par sai derivado com fallback pelo
+  legado, num lugar só (`kickoff.grupo_do_mandato`) e **sem** recorte por papel — contraste
+  deliberado com `projects_count`, porque "o mandato tem grupo" é fato da relação com o cliente, o
+  mesmo para quem olha.
 - **Pipeline invariants.** DB constraints enforce at most one "won" and one "lost"
   `PipelineStage`, and at most one active `Service` per product `tier`. DRF derives the
   serializer validation from these constraints — don't hand-roll a duplicate check.

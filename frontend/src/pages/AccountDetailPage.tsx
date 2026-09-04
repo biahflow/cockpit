@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, Coins, Eye, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, Briefcase, Coins, Eye, ExternalLink, HeartHandshake, Mail, MessageCircle, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { api, createProjectFromEngagement, getConfig } from "../api";
@@ -561,6 +561,16 @@ export function AccountDetailPage({ id }: { id: number }) {
         <div className="row-meta">
           <span className={`state ${engagementStatusBadge[engagement.status]}`}>{engagement.status_display}</span>
           <span className={`state ${engagementCommercialModelBadge[engagement.commercial_model]}`}>{engagement.commercial_model_display}</span>
+          {/* Superfície governada pelo DAP `dap-grupo-de-whatsapp-r1` (A1·B1·C1·D1): a ausência é
+              silêncio de propósito (regra do e-mail de kickoff, FDD 008), e a criação incerta já
+              notifica o dono do projeto pela #117 — esta linha não precisa de um terceiro estado. */}
+          {engagement.whatsapp_group_invite_url
+            ? <a className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-accent" href={engagement.whatsapp_group_invite_url} target="_blank" rel="noreferrer" aria-label={`Abrir o grupo de ${engagement.name} no WhatsApp`}>
+                <MessageCircle className="size-3.5" />Grupo no WhatsApp<ExternalLink className="size-3.5" />
+              </a>
+            : engagement.whatsapp_group_id
+              ? <span className="text-xs text-muted">Grupo criado · sem link de convite</span>
+              : null}
           {canWriteEngagements && <div className="ml-auto flex gap-1.5">
             {/* Decisão **D1**: todo mandato ativo oferece a ação, e não só `design_partner` — a
                 Transformation Partnership origina vários projetos pelo mesmo mandato. Mandato

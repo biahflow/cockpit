@@ -14056,6 +14056,12 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        whatsapp_group_id:
+          type: string
+          readOnly: true
+        whatsapp_group_invite_url:
+          type: string
+          readOnly: true
         needs_review:
           type: boolean
         archived_at:
@@ -14087,6 +14093,8 @@ components:
       - sponsor_name
       - status_display
       - updated_at
+      - whatsapp_group_id
+      - whatsapp_group_invite_url
     EngagementStatusEnum:
       enum:
       - active
@@ -16792,6 +16800,12 @@ components:
           type: string
           format: date-time
           nullable: true
+          readOnly: true
+        whatsapp_group_id:
+          type: string
+          readOnly: true
+        whatsapp_group_invite_url:
+          type: string
           readOnly: true
         needs_review:
           type: boolean

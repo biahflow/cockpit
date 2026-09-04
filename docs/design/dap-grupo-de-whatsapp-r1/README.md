@@ -2,8 +2,8 @@
 
 Classificação: `INTERFACE_CHANGE` · `BROWSER_REQUIRED`
 Revisão: **1**
-Status: **Proposto**
-Data: 2026-09-04
+Status: **Aprovado**
+Data: 2026-09-04 · aprovado em 2026-09-04
 Produzido por: Claude Code (harness), a partir da issue `#116`
 
 > Governado por `docs/engineering-os/workflows/design-approval.md`. Este artefato é evidência para
@@ -131,9 +131,9 @@ erro caro de sempre. O JID em si **não** aparece: não serve para uma pessoa.
 | Campo | Valor |
 | --- | --- |
 | Revisão | r1 |
-| Decisões | A · B · C · D |
-| Aprovador | — |
-| Data | — |
+| Decisões | **A1 · B1 · C1 · D1** |
+| Aprovador | Daniel Campos |
+| Data | 2026-09-04 |
 | Evidência pós-build | `BROWSER_REQUIRED` — captura da linha do mandato com o grupo, renderizada na SPA |
 
 Aprovar este pacote autoriza planejar e construir **a revisão que ele descreve**. Mudança de

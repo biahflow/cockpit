@@ -789,19 +789,27 @@ const FIXTURES: Record<string, unknown> = {
   // Sem esta chave a rota cairia no fallback de lista vazia e a matriz aprovaria o estado vazio no
   // lugar da seção — o modo de falha que o comentário de `/api/v1/processos/` acima já registra.
   "/api/v1/engagements/": [
+    // O primeiro leva o par completo (D1: link de convite) — o terceiro momento do board é o
+    // segundo desta lista, e o silêncio (C1) é o terceiro: um de cada estado que a linha desenha.
     { name: `Transformação do faturamento e do fiscal — ${NOME_LONGO}`,
       status: "active", status_display: "Ativo",
       commercial_model: "paid", commercial_model_display: "Pago",
       sponsor: 1, sponsor_name: "Maria de Lourdes Albuquerque",
-      started_at: "2026-03-02", ended_at: null, projects_count: 3 },
+      started_at: "2026-03-02", ended_at: null, projects_count: 3,
+      whatsapp_group_id: "120363431743499021@g.us",
+      whatsapp_group_invite_url: "https://chat.whatsapp.com/GONwbGG" },
+    // JID sem link de convite (D1): o texto sem affordance também entra na varredura do axe.
     { name: "Discovery Cartas Vivas", status: "paused", status_display: "Pausado",
       commercial_model: "design_partner", commercial_model_display: "Design partner",
       sponsor: null, sponsor_name: null,
-      started_at: "2026-06-01", ended_at: null, projects_count: 1 },
+      started_at: "2026-06-01", ended_at: null, projects_count: 1,
+      whatsapp_group_id: "120363431743499099@g.us", whatsapp_group_invite_url: "" },
+    // Sem grupo nenhum (C1): silêncio, sem traço nem estado.
     { name: "Piloto de atendimento 24h", status: "closed", status_display: "Encerrado",
       commercial_model: "paid", commercial_model_display: "Pago",
       sponsor: 2, sponsor_name: "Pessoa de contato 2",
-      started_at: "2026-02-10", ended_at: "2026-05-20", projects_count: 2 },
+      started_at: "2026-02-10", ended_at: "2026-05-20", projects_count: 2,
+      whatsapp_group_id: "", whatsapp_group_invite_url: "" },
   ].map((registro, indice) => ({
     id: indice + 1, account: 1, account_name: NOME_LONGO,
     mandate: "Reduzir o retrabalho do faturamento e fechar o mês sem conferência manual.",
