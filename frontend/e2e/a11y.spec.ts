@@ -71,6 +71,20 @@ for (const screen of ROUTES) {
       await expect(decisaoDaFase).toBeVisible();
     }
 
+    // A rodada de assinatura (DAP `dap-assinatura-com-papeis-r1`) só existe dentro de um diálogo,
+    // e o `.alert--warn` do aviso E1 é **cor nova** — sem abrir o modal aqui, a única superfície
+    // âmbar em forma de alerta do produto nunca passaria pela medição de contraste. O primeiro
+    // documento da fixture é o que vem com `signature_positioning_gap`, para o aviso renderizar.
+    if (screen.path === "/documentos") {
+      await page.getByRole("button", { name: /para assinatura$/ }).first().click();
+      const rodada = page.getByRole("dialog", { name: "Enviar para assinatura" });
+      await expect(rodada).toBeVisible();
+      await expect(rodada.getByText(/última página do relatório/)).toBeVisible();
+      // Os contatos da conta chegam depois do clique: sem esperar, o axe mede o modal antes de o
+      // seletor de contato existir.
+      await expect(rodada.getByLabel("Contato da conta")).toBeVisible();
+    }
+
     const { violations } = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();

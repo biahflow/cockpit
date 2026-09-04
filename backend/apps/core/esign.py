@@ -425,6 +425,32 @@ def _posicao(ponto: tuple[float, float], pagina: str) -> dict[str, str]:
     }
 
 
+def lacuna_de_posicionamento(document: Document) -> str | None:
+    """A lacuna de posicionamento que já dá para saber **sem** ler os bytes reais do arquivo.
+
+    `None` é "nenhuma lacuna conhecida", e não promessa de posição: a âncora pode faltar na hora
+    do envio, e quem decide de verdade continua sendo `posicoes_da_rodada`, lendo o documento.
+    Serve à tela, que precisa avisar antes do clique (DAP `dap-assinatura-com-papeis-r1`, E1).
+
+    Na mesma ordem de `posicoes_da_rodada`: primeiro a finalidade sem bloco de assinatura, depois
+    o conteúdo sabidamente não-PDF. "Sabidamente" exclui de propósito o documento que mora no
+    Drive e ainda não tem carimbo — farejar ali seria um download por linha da listagem.
+    """
+    if document.kind not in DOCUMENT_KINDS_COM_BLOCO_DE_ASSINATURA:
+        return "kind_without_block"
+    carimbo = document.content_is_pdf
+    if carimbo is None and not document.drive_file_id and document.file:
+        try:
+            with document.file.open("rb") as arquivo:
+                carimbo = arquivo.read(5).startswith(b"%PDF")
+        except Exception as exc:  # noqa: BLE001 - posicionar é auxílio, não a operação
+            logger.info("arquivo do documento %s ilegível ao farejar o tipo (%s)", document.pk, exc)
+            return None
+    if carimbo is False:
+        return "not_pdf"
+    return None
+
+
 def _autentique_signer(
     signer: Signer, position: dict[str, str] | None = None
 ) -> dict[str, object]:

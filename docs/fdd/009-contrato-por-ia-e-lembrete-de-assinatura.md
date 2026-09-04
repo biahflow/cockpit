@@ -143,6 +143,9 @@ e a rodada de três é montada por quem chama a API. Ficam de fora também: posi
 `DATE`, ordem de assinatura, verificações de segurança, entrega por WhatsApp/SMS, converter `.docx`
 para PDF do nosso lado, e reposicionar documento já enviado.
 
+> **A tela chegou na emenda seguinte (03/09/2026, issue #120).** O que este bloco reservava era o
+> DAP, e ele foi aprovado — ver abaixo.
+
 ### Regressão desta emenda
 
 `backend/tests/regression/test_o_alias_signer_email_sobrevive_na_v1.py` (o corpo antigo continua
@@ -151,3 +154,61 @@ criando a solicitação de `counterparty`, e a forma nova vence quando as duas v
 da casa não abre o mandato, não aceita o contrato e não dispara o convite). Os demais critérios —
 contagem de páginas, posições por papel, as duas linhas de testemunha, o `createDocument` único e as
 três recusas de 400 — estão em `backend/apps/core/tests/test_esign.py`.
+
+## Emenda (03/09/2026) — a tela que pede a rodada
+
+O DAP [`dap-assinatura-com-papeis-r1`](../design/dap-assinatura-com-papeis-r1/README.md) foi
+aprovado em r1 (decisões **A1 · B1 · C1 · D1 · E1 · F1**) e a superfície foi construída: o
+`window.prompt` que pedia um e-mail solto virou um modal na `DocumentsPage` que monta a rodada
+inteira — N signatários com papel — e envia numa chamada. Mudar essa superfície exige r2, e não
+julgamento na hora.
+
+O que a `/api/v1/` ganhou para a tela poder existir, tudo derivado e read-only:
+
+- **`DocumentSerializer.owning_account`** — a conta-dona, pela mesma regra de `drive.account_of`
+  (B1). É o que faz o modal buscar os contatos da conta em **uma** requisição. Não se confunde com
+  a chave `client`, que é o alias de leitura do vínculo direto: um contrato pendurado numa
+  oportunidade sai com `client: null` e conta-dona preenchida — fatos diferentes, nomes diferentes.
+- **`DocumentSerializer.signature_positioning_gap`** (`not_pdf` · `kind_without_block` · `null`),
+  de `esign.lacuna_de_posicionamento` (E1). É o aviso de que a assinatura **não** vai cair sobre as
+  linhas, dito antes do clique em vez de descoberto depois do 201. `null` é "nenhuma lacuna
+  conhecida" e **não** é promessa de posição: quem decide de verdade continua sendo
+  `posicoes_da_rodada`, lendo os bytes reais na hora do envio.
+- **`Document.content_is_pdf`** (migração `0082`) — carimbado **no upload**, único momento em que
+  os bytes estão em mãos: com o Drive ligado o arquivo só existe lá, e farejar na leitura custaria
+  um download por linha da listagem. `null` é "não medido", nunca `False`, e o legado do Drive fica
+  sem carimbo em vez de ganhar um valor inventado. Listar documentos **nunca** toca o Drive.
+- **`SignatureRequest.signer_role` no `GET`** — o campo existia e só o `POST` o devolvia; a lista de
+  assinaturas passa a dizer quem é a casa, quem é a parte e quem testemunha (F1). Os três selos de
+  status não mudam, e não há selo de "documento assinado": ele seria a segunda definição de
+  `Document.is_signed`.
+- **`/config/.esign_house_signer_email`** — sai **fora** de `integrations` de propósito: uma flag
+  responde "configurado?" sem revelar valor, e aqui o valor é a resposta (D1). Não é segredo — é o
+  e-mail com que a casa assina, e ele vai no próprio documento. É o que faz a linha fixa
+  "Você (Biahflow)" existir, e sumir inteira quando a variável está vazia.
+
+**A casa não vai no corpo do `POST`.** Quem a acrescenta é o servidor, a partir de
+`ESIGN_HOUSE_SIGNER_EMAIL` — dois caminhos para o mesmo fato é o que a decisão C recusa, e o segundo
+deles poderia nomear a casa com um e-mail que não é o dela. Pela mesma razão "Biahflow" não é opção
+do seletor de papel. O botão de enviar nasce desabilitado: a casa sozinha não é rodada, e um botão
+vivo para um `POST` que o servidor recusa é o defeito nomeado no `CLAUDE.md`.
+
+**O alias `signer_email` continua vivo, e agora ele só tem um chamador: a regressão.** A SPA passou
+a escrever `signers`, então nada dentro do repositório escreve mais a chave antiga — e é exatamente
+aí que uma varredura futura a removeria "pagando dívida", quebrando a `/api/v1/` de quem integrou
+sem nada ficar vermelho. Ver a nota atualizada em
+[`docs/ontology/aliases.md`](../ontology/aliases.md) §2c.
+
+Fica reservado no pacote, para um r2 com caso real: ordem de assinatura, agrupar a lista por rodada
+e editar coordenadas.
+
+### Regressão desta emenda
+
+`frontend/src/pages/DocumentsPage.test.tsx` (a rodada montada, a linha fixa da casa e o sumiço dela,
+a numeração das testemunhas com o aviso da terceira, o corpo do `POST` na ordem da lista e sem a
+casa, as duas frases do aviso E1 e os três papéis na lista) e, no backend,
+`apps/core/tests/test_esign.py` (a lacuna nos cinco caminhos, incluindo o do Drive que **não** pode
+tocar a rede) mais `apps/core/tests/test_api.py` (o carimbo no upload, a prova do `seek(0)` de que
+o Drive recebe o arquivo inteiro, a conta-dona nos três vínculos e o e-mail da casa no `/config/`).
+A varredura de acessibilidade abre o modal em `/documentos` nas três larguras — sem isso o
+`.alert--warn`, cor nova, nunca passaria pela medição de contraste.

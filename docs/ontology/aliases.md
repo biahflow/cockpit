@@ -64,12 +64,17 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > aceitar uma **lista** de signatários com papel (`signers`), porque a casa, a parte contratante e as
 > testemunhas assinam o mesmo documento e só a lista permite pedir isso numa chamada (ADR 0065). A
 > chave antiga continua sendo aceita e vira um único `counterparty`; a canônica vence quando as duas
-> vêm no mesmo corpo, pela regra da §2c. Ela sobrevive porque a SPA ainda a escreve e a tela de
-> escolher contatos e papéis é `INTERFACE_CHANGE` sem DAP aprovado — remover o alias antes disso
-> deixaria o produto sem caminho nenhum para pedir assinatura. A regressão que a §2c exige está em
-> `backend/tests/regression/test_o_alias_signer_email_sobrevive_na_v1.py`, e ela não é formalidade:
-> quem escreve a chave antiga é o navegador, então sem o teste a linha que a normaliza não tem
-> chamador **dentro** do repositório.
+> vêm no mesmo corpo, pela regra da §2c. A regressão que a §2c exige está em
+> `backend/tests/regression/test_o_alias_signer_email_sobrevive_na_v1.py`.
+>
+> **Desde a issue #120 essa regressão é o *único* chamador da chave antiga dentro do repositório**,
+> e é por isso que ela deixou de ser formalidade e passou a ser o que segura o alias. O DAP
+> `dap-assinatura-com-papeis-r1` foi aprovado e construído: a SPA agora escreve `signers`, com papel
+> por signatário. O argumento anterior — "sobrevive porque a SPA ainda a escreve" — **caducou**, e o
+> alias segue vivo por outro motivo, que é o de sempre: quem já integrou contra a `/api/v1/` manda a
+> chave antiga, e ela tem prazo na `/api/v2/`, não antes. Sem o teste, a linha que a normaliza
+> (`views._signers_do_pedido`) fica sem chamador daqui de dentro, e a próxima varredura atrás do
+> nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem nada ficar vermelho.
 
 ### Já pagos pela #67 — 28/08/2026
 

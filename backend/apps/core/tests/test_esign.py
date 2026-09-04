@@ -1418,3 +1418,73 @@ def test_rodada_sem_contraparte_nao_manda_convite_e_diz_por_que(
         assert esign.email_da_contraparte(document, "doc-1") == ""
 
     assert "counterparty" in caplog.text
+
+
+# --- a lacuna de posicionamento, decidida antes do envio ----------------------
+
+
+def _documento_com_kind(kind: str = Document.Kind.COMMERCIAL_CONTRACT, **campos) -> Document:
+    user = UserFactory()
+    return Document.objects.create(
+        account=AccountFactory(owner=user),
+        original_name="contrato.pdf",
+        uploaded_by=user,
+        kind=kind,
+        **campos,
+    )
+
+
+@pytest.mark.django_db
+def test_finalidade_sem_bloco_e_a_primeira_resposta_mesmo_com_o_carimbo_de_pdf():
+    """A ordem é a de `posicoes_da_rodada`: um PDF de Proposta não tem onde posicionar."""
+    document = _documento_com_kind(Document.Kind.PROPOSAL, content_is_pdf=True)
+    assert esign.lacuna_de_posicionamento(document) == "kind_without_block"
+
+
+@pytest.mark.django_db
+def test_o_carimbo_responde_quando_existe():
+    assert esign.lacuna_de_posicionamento(_documento_com_kind(content_is_pdf=False)) == "not_pdf"
+    assert esign.lacuna_de_posicionamento(_documento_com_kind(content_is_pdf=True)) is None
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_sem_carimbo_o_arquivo_local_e_farejado():
+    """A linha anterior à migração: os bytes estão à mão no disco, e ler cinco deles é barato."""
+    document = _documento_com_kind(
+        file=SimpleUploadedFile("contrato.docx", b"PK\x03\x04zip", content_type="application/zip"),
+    )
+    assert esign.lacuna_de_posicionamento(document) == "not_pdf"
+
+    pdf = _documento_com_kind(
+        file=SimpleUploadedFile("contrato.pdf", b"%PDF-1.7", content_type="application/pdf"),
+    )
+    assert esign.lacuna_de_posicionamento(pdf) is None
+
+
+@pytest.mark.django_db
+def test_sem_carimbo_e_no_drive_a_lacuna_fica_desconhecida_sem_tocar_a_rede(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Listar documentos nunca baixa arquivo: seria um download por linha da listagem."""
+    def explode(document: Document):  # pragma: no cover - o teste falha se for chamado
+        raise AssertionError("a lacuna não pode tocar o Drive")
+
+    monkeypatch.setattr(esign.drive, "download_document", explode)
+    document = _documento_com_kind(drive_file_id="drive-1")
+    assert esign.lacuna_de_posicionamento(document) is None
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_arquivo_local_ilegivel_nao_derruba_a_leitura(monkeypatch: pytest.MonkeyPatch):
+    """Posicionar é auxílio, não a operação — a mesma filosofia de `_itens_da_ultima_pagina`."""
+    document = _documento_com_kind(
+        file=SimpleUploadedFile("contrato.pdf", b"%PDF-1.7", content_type="application/pdf"),
+    )
+
+    def estoura(*args, **kwargs):
+        raise OSError("disco sumiu")
+
+    monkeypatch.setattr(type(document.file), "open", estoura)
+    assert esign.lacuna_de_posicionamento(document) is None

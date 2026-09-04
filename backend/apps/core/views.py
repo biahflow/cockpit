@@ -2621,6 +2621,10 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
     queryset = Document.objects.select_related(
         "account", "commercial_opportunity", "project", "uploaded_by",
         "originated_design_partner_engagement",
+        # A conta-dona derivada (`owning_account`, DAP r1 B1) segue o vínculo até
+        # `engagement.account`. Sem estes dois a listagem faz uma consulta por documento pendurado
+        # em oportunidade ou projeto — o campo é derivado, mas a cadeia é real.
+        "commercial_opportunity__account", "project__engagement__account",
     ).prefetch_related("signature_requests").all()
     serializer_class = DocumentSerializer
     filter_fields = ("account", "commercial_opportunity", "project")
@@ -5057,6 +5061,7 @@ class ConfigView(APIView):
         "ai_enabled": serializers.BooleanField(),
         "calendar_enabled": serializers.BooleanField(),
         "esign_enabled": serializers.BooleanField(),
+        "esign_house_signer_email": serializers.CharField(allow_null=True),
         "integrations": serializers.ListField(child=serializers.DictField()),
     }))
     def get(self, request: Request) -> Response:
@@ -5064,6 +5069,10 @@ class ConfigView(APIView):
             "ai_enabled": ai.is_enabled(),
             "calendar_enabled": calendar_sync.is_enabled(),
             "esign_enabled": esign.is_enabled(),
+            # Fora do mecanismo de flags de propósito (DAP `dap-assinatura-com-papeis-r1`, D): as
+            # flags respondem "configurado?" sem revelar valor, e aqui o valor **é** a resposta —
+            # é o e-mail com que a casa assina, e ele vai no próprio documento.
+            "esign_house_signer_email": str(settings.ESIGN_HOUSE_SIGNER_EMAIL or "").strip() or None,
             "integrations": flags.all_status(),
         })
 

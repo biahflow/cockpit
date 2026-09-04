@@ -217,10 +217,20 @@ export type ValueLedgerStatus = "draft" | "pending" | "approved";
 // `approved_at` é carimbado pelo servidor. `project` é opcional: valor é do mandato, e a fatia por
 // projeto existe quando alguém consegue atribuí-la.
 export type ValueLedgerEntry = { id: number; engagement: number; project: number | null; outcome_measurement: number; value_type: ValueType; value_type_display: string; amount: string | null; quantity: string | null; period_start: string; period_end: string; attribution_method: string; status: ValueLedgerStatus; status_display: string; approved_by: number | null; approved_at: string | null; created_at: string; updated_at: string };
-export type SignatureRequest = { id: number; signer_email: string; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
+// `signer_role` decide **onde** a assinatura cai na página e qual `action` vai para o fornecedor
+// (ADR 0065). "Biahflow" não é escolha da tela: quem atribui `house` é o servidor, a partir de
+// `ESIGN_HOUSE_SIGNER_EMAIL` (DAP `dap-assinatura-com-papeis-r1`, decisão C1).
+export type SignerRole = "house" | "counterparty" | "witness";
+export type SignatureRequest = { id: number; signer_email: string; signer_role: SignerRole; status: "pending" | "signed" | "declined"; sign_url: string; reminded_at: string | null; signed_at: string | null; created_at: string };
 // `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
 // (`docs/ontology/aliases.md` §2c); a escrita manda a canônica e o alias morre na `/api/v2/`.
-export type DocumentEntry = { id: number; kind: string; account: number | null; client: number | null; commercial_opportunity: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[]; originated_engagement: number | null };
+// `owning_account` é a conta-dona **derivada** (`drive.account_of` no servidor, um lugar só) e não
+// se confunde com `client`, que é o alias de leitura do vínculo direto: um contrato pendurado numa
+// oportunidade chega com `client: null` e conta-dona preenchida (DAP r1, decisão B1).
+// `signature_positioning_gap` é o que o servidor já sabe **antes** do envio sobre a assinatura não
+// cair sobre as linhas; `null` é "nenhuma lacuna conhecida", não promessa de posição (E1).
+export type SignaturePositioningGap = "not_pdf" | "kind_without_block";
+export type DocumentEntry = { id: number; kind: string; account: number | null; client: number | null; commercial_opportunity: number | null; opportunity: number | null; project: number | null; file: string; drive_link: string; original_name: string; uploaded_by: number; created_at: string; signature_requests: SignatureRequest[]; originated_engagement: number | null; owning_account: number | null; signature_positioning_gap: SignaturePositioningGap | null };
 export type ArtifactKind = "discovery" | "assessment" | "proposal" | "contract";
 export type ArtifactStatus = "draft" | "review" | "sent" | "accepted" | "rejected";
 // `opportunity` é **alias de leitura** da `/api/v1/` para `commercial_opportunity`
@@ -240,7 +250,10 @@ export type Invitation = { id: number; email: string; role: Role; expires_at: st
 // `missing` traz os nomes das variáveis de ambiente que faltam para a integração poder ligar. Sem
 // eles a tela só sabia dizer "faltam credenciais", e quem ia corrigir tinha de abrir o código.
 export type IntegrationFlag = { key: string; label: string; enabled: boolean; configured: boolean; toggleable: boolean; missing: string[] };
-export type AppConfig = { ai_enabled: boolean; calendar_enabled: boolean; esign_enabled: boolean; integrations: IntegrationFlag[] };
+// `esign_house_signer_email` sai **fora** de `integrations` de propósito: uma flag responde
+// "configurado?" sem revelar valor, e aqui o valor é a resposta — é o e-mail com que a casa
+// assina, e ele vai no próprio documento (DAP `dap-assinatura-com-papeis-r1`, decisão D1).
+export type AppConfig = { ai_enabled: boolean; calendar_enabled: boolean; esign_enabled: boolean; esign_house_signer_email: string | null; integrations: IntegrationFlag[] };
 export type RiskSignal = { label: string; detail: string; weight: number };
 export type RiskForecast = { predicted_finish_date: string; delay_days: number; basis: string };
 export type RiskAssessment = { project_id: number; name: string; score: number; level: string; signals: RiskSignal[]; forecast: RiskForecast | null };

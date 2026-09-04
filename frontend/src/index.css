@@ -343,6 +343,13 @@
   .alert--ok {
     @apply rounded-xl border border-success-50 bg-success-50 p-4 text-sm text-success;
   }
+  /* O aviso que não é falha: a operação vai sair, e o resultado é outro do que se esperava. É o
+     par âmbar de `.state--2` na forma de alerta — a rodada de assinatura de um documento sem
+     bloco (DAP `dap-assinatura-com-papeis-r1`, E1) sai 201 e a assinatura cai na página anexa.
+     `.alert--error` mentiria sobre isso, e um selo não interrompe a tela como um alerta. */
+  .alert--warn {
+    @apply rounded-xl border border-warning-50 bg-warning-50 p-4 text-sm text-warning;
+  }
 
   /* A barra de filtros acima de uma lista (Leads, Clientes). Portada do `.filter-chip` de lá:
      pastilha de contorno em repouso, tinta da marca quando ligada. O `bg-ink` de antes pintava o

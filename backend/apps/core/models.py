@@ -977,6 +977,10 @@ class Document(TimestampedModel):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
     kind = models.CharField(max_length=32, choices=Kind.choices, blank=True, default="")
     file = models.FileField(upload_to="documents/%Y/%m/", blank=True)
+    # Carimbado **no upload**, quando os bytes estão em mãos: com o Drive ligado o arquivo só
+    # existe lá, e farejar na leitura custaria um download por documento na listagem. `null` é a
+    # linha anterior ao carimbo — "não medido", nunca `False` (a regra do não-apurado).
+    content_is_pdf = models.BooleanField(null=True, default=None)
     drive_file_id = models.CharField(max_length=128, blank=True, default="")
     drive_link = models.URLField(blank=True, default="")
     original_name = models.CharField(max_length=255)

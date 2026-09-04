@@ -9,6 +9,9 @@ type AuthContextValue = {
   aiEnabled: boolean;
   calendarEnabled: boolean;
   esignEnabled: boolean;
+  /** O e-mail com que a casa assina, ou `null` quando não está configurado. É o que decide se a
+   * linha fixa "Você (Biahflow)" existe na rodada de assinatura (DAP r1, decisão D1). */
+  esignHouseSignerEmail: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Recarrega o usuário da sessão a partir de `/auth/me/`.
@@ -19,7 +22,7 @@ type AuthContextValue = {
   refreshUser: () => Promise<void>;
 };
 
-const EMPTY_CONFIG: AppConfig = { ai_enabled: false, calendar_enabled: false, esign_enabled: false, integrations: [] };
+const EMPTY_CONFIG: AppConfig = { ai_enabled: false, calendar_enabled: false, esign_enabled: false, esign_house_signer_email: null, integrations: [] };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -43,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     aiEnabled: user ? config.ai_enabled : false,
     calendarEnabled: user ? config.calendar_enabled : false,
     esignEnabled: user ? config.esign_enabled : false,
+    esignHouseSignerEmail: user ? config.esign_house_signer_email : null,
     async login(username, password) { setUser(await loginRequest(username, password)); },
     async logout() { await logoutRequest(); setUser(null); },
     async refreshUser() { setUser(await currentUser()); },

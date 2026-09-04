@@ -304,6 +304,13 @@ SPECTACULAR_SETTINGS = {
         # causa de um campo novo que nada tem a ver com ele. Mesmo defeito e mesma correção do
         # `SourceEnum` acima; o papel do signatário fica com o nome derivado do próprio componente.
         "RoleEnum": "apps.core.models.User.Role",
+        # E a outra metade do mesmo par, que a issue #120 destravou: com `signer_role` saindo
+        # também no `GET` (`SignatureRequestSerializer`), o **mesmo** conjunto passou a aparecer
+        # sob dois nomes de campo — `signer_role` no serializer e `role` no corpo da action. Sem
+        # o override, o desempate rebatiza o componente da action de `RequestSignatureSignerRoleEnum`
+        # para `Role072Enum`, o sufixo instável de sempre. Apontar para o `TextChoices` funde os
+        # dois num componente só, que é o que eles de fato são.
+        "SignerRoleEnum": "apps.core.models.SignatureRequest.SignerRole",
     },
     # A issue #67 fecha com dois critérios de aceite que ainda faltavam, e este é o segundo:
     # anunciar no próprio contrato quais chaves de payload são o alias legado da `/api/v1/`

@@ -13400,6 +13400,9 @@ components:
           type: boolean
         esign_enabled:
           type: boolean
+        esign_house_signer_email:
+          type: string
+          nullable: true
         integrations:
           type: array
           items:
@@ -13409,6 +13412,7 @@ components:
       - ai_enabled
       - calendar_enabled
       - esign_enabled
+      - esign_house_signer_email
       - integrations
     Contact:
       type: object
@@ -13947,6 +13951,16 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        owning_account:
+          type: integer
+          nullable: true
+          readOnly: true
+        signature_positioning_gap:
+          nullable: true
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/SignaturePositioningGapEnum'
+          - $ref: '#/components/schemas/NullEnum'
       required:
       - client
       - created_at
@@ -13955,6 +13969,8 @@ components:
       - opportunity
       - original_name
       - originated_engagement
+      - owning_account
+      - signature_positioning_gap
       - signature_requests
       - uploaded_by
     DocumentKindEnum:
@@ -15786,6 +15802,9 @@ components:
       - message
       - read
       - url
+    NullEnum:
+      enum:
+      - null
     ObservationTypeEnum:
       enum:
       - initial
@@ -16693,6 +16712,16 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        owning_account:
+          type: integer
+          nullable: true
+          readOnly: true
+        signature_positioning_gap:
+          nullable: true
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/SignaturePositioningGapEnum'
+          - $ref: '#/components/schemas/NullEnum'
     PatchedEngagement:
       type: object
       properties:
@@ -20207,19 +20236,9 @@ components:
           type: string
           format: email
         role:
-          $ref: '#/components/schemas/RequestSignatureSignerRoleEnum'
+          $ref: '#/components/schemas/SignerRoleEnum'
       required:
       - email
-    RequestSignatureSignerRoleEnum:
-      enum:
-      - house
-      - counterparty
-      - witness
-      type: string
-      description: |-
-        * `house` - Biahflow
-        * `counterparty` - Parte contratante
-        * `witness` - Testemunha
     ReviewStateEnum:
       enum:
       - unknown
@@ -20429,6 +20448,14 @@ components:
           type: string
       required:
       - waiting_party
+    SignaturePositioningGapEnum:
+      enum:
+      - not_pdf
+      - kind_without_block
+      type: string
+      description: |-
+        * `not_pdf` - not_pdf
+        * `kind_without_block` - kind_without_block
     SignatureRequest:
       type: object
       properties:
@@ -20438,6 +20465,10 @@ components:
         signer_email:
           type: string
           format: email
+          readOnly: true
+        signer_role:
+          allOf:
+          - $ref: '#/components/schemas/SignerRoleEnum'
           readOnly: true
         status:
           allOf:
@@ -20468,6 +20499,7 @@ components:
       - sign_url
       - signed_at
       - signer_email
+      - signer_role
       - status
     SignatureRequestStatusEnum:
       enum:
@@ -20479,6 +20511,16 @@ components:
         * `pending` - Pendente
         * `signed` - Assinado
         * `declined` - Recusado
+    SignerRoleEnum:
+      enum:
+      - house
+      - counterparty
+      - witness
+      type: string
+      description: |-
+        * `house` - Biahflow
+        * `counterparty` - Parte contratante
+        * `witness` - Testemunha
     SolutionHypothesis:
       type: object
       description: |-

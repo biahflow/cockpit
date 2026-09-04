@@ -272,6 +272,9 @@ const FIXTURES: Record<string, unknown> = {
   // texto "Falta no ambiente: X" — o mais longo da tela, que é o que a largura precisa aguentar.
   "/api/v1/config/": {
     ai_enabled: true, calendar_enabled: false, esign_enabled: true,
+    // Fora de `integrations` de propósito (DAP `dap-assinatura-com-papeis-r1`, D1): é o e-mail com
+    // que a casa assina, e é ele que faz a linha fixa "Você (Biahflow)" existir na rodada.
+    esign_house_signer_email: "daniel@biahflow.ai",
     integrations: [
       { key: "ai", label: "Assistente de IA", enabled: true, configured: true, toggleable: true, missing: [] },
       { key: "drive", label: "Documentos no Google Drive", enabled: false, configured: false, toggleable: true, missing: ["GOOGLE_DRIVE_ROOT_FOLDER_ID"] },
@@ -354,8 +357,13 @@ const FIXTURES: Record<string, unknown> = {
     file: "/media/x.pdf",
     drive_link: "", original_name: `Contrato de prestação de serviços — ${NOME_LONGO}.pdf`,
     uploaded_by: 1, created_at: `${HOJE}T09:00:00Z`, originated_engagement: null,
+    // A conta-dona derivada (decisão B1) é o que faz o modal buscar os contatos; e **um** dos seis
+    // sem posicionamento, porque o `.alert--warn` do aviso E1 é cor nova e precisa entrar na
+    // varredura de contraste do axe — o modal só abre a partir da primeira linha.
+    owning_account: index,
+    signature_positioning_gap: index === 1 ? "not_pdf" : null,
     signature_requests: index === 1
-      ? [{ id: 1, signer_email: "juridico@empresa.test", status: "signed", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: `${HOJE}T10:00:00Z`, created_at: `${HOJE}T09:00:00Z` }]
+      ? [{ id: 1, signer_email: "juridico@empresa.test", signer_role: "counterparty", status: "signed", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: `${HOJE}T10:00:00Z`, created_at: `${HOJE}T09:00:00Z` }]
       : [],
   })),
   "/api/v1/verticals/": serie(5, index => ({

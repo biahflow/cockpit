@@ -14,7 +14,7 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, discovery_booking, drive, knowledge, publication
+from . import blueprints, discovery_booking, drive, esign, knowledge, publication
 from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
@@ -2141,7 +2141,8 @@ class SignatureRequestSerializer(serializers.ModelSerializer[SignatureRequest]):
     class Meta:
         model = SignatureRequest
         fields = [
-            "id", "signer_email", "status", "sign_url", "reminded_at", "signed_at", "created_at",
+            "id", "signer_email", "signer_role", "status", "sign_url", "reminded_at", "signed_at",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -2179,6 +2180,11 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     signature_requests = SignatureRequestSerializer(many=True, read_only=True)
     originated_engagement = serializers.SerializerMethodField()
+    # A conta-dona **derivada** (DAP `dap-assinatura-com-papeis-r1`, B1) — não é a chave `client`,
+    # que é alias de leitura do vínculo direto. São fatos diferentes e não compartilham nome: um
+    # contrato pendurado em oportunidade ou projeto sai com `client: null` e conta-dona preenchida.
+    owning_account = serializers.SerializerMethodField()
+    signature_positioning_gap = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -2186,6 +2192,7 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
             "id", "account", "client", "commercial_opportunity", "opportunity", "project", "kind",
             "file", "drive_link", "original_name",
             "uploaded_by", "created_at", "signature_requests", "originated_engagement",
+            "owning_account", "signature_positioning_gap",
         ]
         read_only_fields = ["id", "drive_link", "original_name", "uploaded_by", "created_at"]
 
@@ -2195,6 +2202,19 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
             return obj.originated_design_partner_engagement.pk
         except Engagement.DoesNotExist:
             return None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_owning_account(self, obj: Document) -> int | None:
+        # `drive.account_of` é o lugar único da cadeia conta → oportunidade → projeto.engagement;
+        # reexpressá-la aqui seria a segunda definição de "de quem é este documento".
+        account = drive.account_of(obj)
+        return account.pk if account is not None else None
+
+    @extend_schema_field(
+        serializers.ChoiceField(choices=["not_pdf", "kind_without_block"], allow_null=True)
+    )
+    def get_signature_positioning_gap(self, obj: Document) -> str | None:
+        return esign.lacuna_de_posicionamento(obj)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         links = [
@@ -2224,9 +2244,16 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
 
     def create(self, validated_data: dict[str, object]) -> Document:
         uploaded_file = cast(UploadedFile, validated_data.pop("file"))
+        # O único momento em que os bytes estão em mãos (`Document.content_is_pdf`). O `seek(0)`
+        # não é higiene: `drive.upload_document` faz `uploaded_file.read()` cru, e sem rebobinar
+        # o Drive receberia o arquivo sem os cinco primeiros bytes — falha muda, porque aquele
+        # caminho é I/O e não roda nos testes.
+        prefixo = uploaded_file.read(5)
+        uploaded_file.seek(0)
         document = Document(
             **validated_data,
             original_name=_safe_original_name(uploaded_file.name),
+            content_is_pdf=prefixo.startswith(b"%PDF"),
             uploaded_by=self.context["request"].user,
         )
         if drive.is_enabled():
