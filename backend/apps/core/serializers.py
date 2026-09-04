@@ -83,10 +83,10 @@ from .models import (
     ValueLedgerEntry,
     Vertical,
 )
-from .openapi_aliases import ALIASES_DEPRECIADOS
+from .openapi_aliases import ALIASES_DEPRECIADOS, CANONICO_DA_CHAVE
 from .priority import FORMULAS, ranking_da_conta
 from .prove import baseline_de, o_que_falta_para_iniciar, outcome_mais_recente_de
-from .versioning import V2, frase_da_chave_removida, versao_de
+from .versioning import V2, frase_da_chave_removida, frase_da_chave_sem_sucessora, versao_de
 
 logger = logging.getLogger(__name__)
 
@@ -143,14 +143,21 @@ def _componente_do_serializer(serializer: Any) -> str:
 #
 # A issue #67 renomeou o campo do modelo e a `docs/ontology/aliases.md` §2c manteve a chave de
 # payload: quem integrou com a v1 não tem como saber que o nome mudou. A `/api/v2/` é o prazo que
-# aquele documento sempre deu a essas chaves, e este mixin é onde as três coisas acontecem:
+# aquele documento sempre deu a essas chaves, e este mixin é onde as quatro coisas acontecem:
 #
 # * **escrita na v1** — a chave antiga é normalizada para a canônica antes da validação. Quando as
 #   duas vêm no mesmo corpo, **a canônica vence**: um corpo com as duas é confusão do chamador, e
 #   resolver pela nova é o que não trava quem já migrou (mesma regra de `apply-gate`).
-# * **escrita na v2** — a chave antiga é **recusada com 400 dizendo o nome canônico**. Ignorar em
-#   silêncio é o default do DRF para chave desconhecida, e produziria um `POST` que responde 201
-#   sem ter gravado o vínculo — o modo de falha mudo que a issue #122 decidiu não ter.
+# * **escrita na v2, por `ALIASES_DE_ENTRADA`** — a chave antiga é **recusada com 400 dizendo o
+#   nome canônico**. Ignorar em silêncio é o default do DRF para chave desconhecida, e produziria
+#   um `POST` que responde 201 sem ter gravado o vínculo — o modo de falha mudo que a issue #122
+#   decidiu não ter.
+# * **escrita na v2, por `ALIASES_DEPRECIADOS`** (fatia 3a) — a mesma recusa para as chaves
+#   só-de-leitura, que nunca tiveram `ALIASES_DE_ENTRADA` porque não há tradução na v1 (o vínculo é
+#   lavrado por uma action própria, ou a escrita já parou antes da v2 existir, §2d). Sem isto,
+#   `POST /api/v2/projects/` com `client` voltaria a ser o campo `read_only` ignorando em silêncio
+#   — o mesmo modo de falha mudo, só que pela porta que `ALIASES_DE_ENTRADA` não cobre. O nome
+#   canônico de cada uma (ou a ausência dele, §2d) vem de `openapi_aliases.CANONICO_DA_CHAVE`.
 # * **leitura na v2** — as chaves-alias somem da representação, e quem diz quais são é
 #   `openapi_aliases.ALIASES_DEPRECIADOS`, o **mesmo** mapa que marca `deprecated: true` no
 #   esquema. Uma segunda lista por serializer divergiria da primeira em silêncio, e o contrato
@@ -169,28 +176,46 @@ class AliasesDaV1Mixin:
     ALIASES_DE_ENTRADA: dict[str, str] = {}
 
     def to_internal_value(self, data: Any) -> Any:
-        if self.ALIASES_DE_ENTRADA and hasattr(data, "keys"):
-            if _versao_do_contexto(self) == V2:
-                recusadas = {
-                    antiga: [frase_da_chave_removida(antiga, canonica)]
-                    for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
-                    if antiga in data
-                }
-                if recusadas:
-                    raise serializers.ValidationError(recusadas)
-            else:
-                traduzir = {
-                    canonica: antiga
-                    for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
-                    if antiga in data and canonica not in data
-                }
-                if traduzir:
-                    data = _corpo_mutavel(data)
-                    for canonica, antiga in traduzir.items():
-                        # Cópia e não `pop`: a chave legada continua declarada como campo
-                        # `read_only`, então o serializer a ignora — e `QueryDict.pop` devolveria
-                        # a **lista** de valores, não o valor.
-                        data[canonica] = data[antiga]
+        if not hasattr(data, "keys"):
+            return super().to_internal_value(data)  # type: ignore[misc]
+        if _versao_do_contexto(self) == V2:
+            recusadas = {
+                antiga: [frase_da_chave_removida(antiga, canonica)]
+                for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
+                if antiga in data
+            }
+            # A metade que a fatia 1 não alcançava (issue #122, fatia 3a): as chaves só-de-leitura
+            # de `ALIASES_DEPRECIADOS` nunca precisaram de `ALIASES_DE_ENTRADA` porque não há
+            # tradução na v1 — o vínculo é lavrado por uma action própria, ou (§2d) a escrita já
+            # parou antes da v2 existir. Mas mandá-las no corpo da v2 não pode voltar a ser
+            # ignorado em silêncio: seria o mesmo modo de falha mudo que a decisão 3 da ADR 0066
+            # recusa para `ALIASES_DE_ENTRADA`, só que pela porta que ela não cobria. O `if antiga
+            # not in recusadas` evita recusar duas vezes a chave que está nos dois mapas (como
+            # `ai_opportunity` em `Project`) com frases redundantes.
+            for antiga in ALIASES_DEPRECIADOS.get(_componente_do_serializer(self), ()):
+                if antiga in data and antiga not in recusadas:
+                    canonica_ou_none = CANONICO_DA_CHAVE.get(antiga)
+                    mensagem = (
+                        frase_da_chave_removida(antiga, canonica_ou_none)
+                        if canonica_ou_none is not None
+                        else frase_da_chave_sem_sucessora(antiga)
+                    )
+                    recusadas[antiga] = [mensagem]
+            if recusadas:
+                raise serializers.ValidationError(recusadas)
+        elif self.ALIASES_DE_ENTRADA:
+            traduzir = {
+                canonica: antiga
+                for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
+                if antiga in data and canonica not in data
+            }
+            if traduzir:
+                data = _corpo_mutavel(data)
+                for canonica, antiga in traduzir.items():
+                    # Cópia e não `pop`: a chave legada continua declarada como campo
+                    # `read_only`, então o serializer a ignora — e `QueryDict.pop` devolveria
+                    # a **lista** de valores, não o valor.
+                    data[canonica] = data[antiga]
         return super().to_internal_value(data)  # type: ignore[misc]
 
     def to_representation(self, instance: Any) -> Any:

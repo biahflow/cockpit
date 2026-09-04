@@ -163,18 +163,40 @@ Ver [ADR 0066](../adr/0066-a-api-v2-nasce-por-versao-no-caminho-e-um-mapa-so-gov
 aliases vivem enquanto a `/api/v1/` viver, e o sunset dela é uma decisão que ninguém tomou. O que
 mudou é que agora existe o lugar onde eles **não** estão.
 
-O que **ainda vive na v2** depois desta fatia, e morre na fatia 3 da mesma issue — são os aliases
-que não passam por serializer com `ALIASES_DE_ENTRADA`, então o mecanismo acima não os alcança:
+O que **ainda vivia na v2** depois desta fatia — e que a fatia 3a, abaixo, mata — eram os aliases
+que não passavam por serializer com `ALIASES_DE_ENTRADA`, então o mecanismo acima não os alcançava:
 
 - `signer_email` no corpo da action `request-signature` e `outcome` no da `apply-gate` — aliases de
   **entrada de action**, normalizados na view (`views._signers_do_pedido`, `journey.apply_gate`);
 - o dicionário cru de `GET /cobranca/painel/`, que emite `client`/`client_name` sem serializer;
 - a chave `processos` da action de IA.
 
-Alcançá-los pela metade seria pior que declarar a lacuna: a fatia 3 é a que os mata, com regressão
-por recurso e o contrato da v2 publicado como artefato próprio (`openapi-v2.yaml`). Até lá o
-`openapi.yaml` descreve **só** a `/api/v1/`, por um `PREPROCESSING_HOOKS` — publicar a v2 sobre
-componentes que ainda declaram as chaves-alias diria que ela devolve o que ela não devolve.
+> Alcançá-los pela metade seria pior que declarar a lacuna — e por isso ficaram declarados até a
+> fatia 3a resolvê-los de vez, e não meio resolvidos por um `if` avulso nesta fatia.
+
+### A fatia 3a mata os quatro pontos que restavam, mais uma lacuna — issue #122, 04/09/2026
+
+Os quatro pontos acima morreram: `signer_email` e `outcome` respondem 400 dizendo `signers` e
+`decision` na `/api/v2/` (a recusa mora na view, porque a action não passa por serializer); o
+painel de cobrança ganhou o par canônico (`account`/`account_name`) em toda linha, e a view tira os
+dois legados quando a requisição é da v2; e a chave da action de IA **troca** por versão —
+`processos` na v1, `processes` na v2 — em vez de conviver, porque duplicar a lista inteira pagaria
+o corpo duas vezes.
+
+**A lacuna que a fatia 1 registrou e não nomeou aqui**: um alias só-de-leitura mandado no *corpo*
+da v2 (`POST /api/v2/projects/` com `client: 5`) era ignorado em silêncio — o campo é `read_only`,
+o DRF descarta chave desconhecida, e a resposta 201 escondia que o vínculo não foi gravado. É o
+mesmo modo de falha mudo que a decisão 3 da ADR 0066 recusou para `ALIASES_DE_ENTRADA`, só que pela
+porta que aquele mecanismo não cobria — `AliasesDaV1Mixin.to_internal_value` passou a recusar
+também as chaves de `ALIASES_DEPRECIADOS[componente]` presentes no corpo, com o nome canônico de
+cada uma vindo de um mapa novo, `openapi_aliases.CANONICO_DA_CHAVE` (`None` para o par do §2d, cuja
+frase aponta para `/kpis/` e `/measurements/` em vez de um nome de campo). A recusa é sempre por
+**componente**, nunca por nome global de chave — `status` continua um campo real em `Invoice` e
+`Engagement`, e só é recusado nos componentes que `ALIASES_DEPRECIADOS` lista.
+
+Regra dos testes em `backend/tests/test_aliases_da_v2.py`. O que resta para as fatias seguintes da
+#122: o contrato próprio `openapi-v2.yaml` (fatia 3b), a travessia da SPA para a `/api/v2/` (fatia
+4) e as famílias de enum ainda em português (fatia 5) — nenhuma delas nasce antes da anterior.
 
 ## As três regras
 

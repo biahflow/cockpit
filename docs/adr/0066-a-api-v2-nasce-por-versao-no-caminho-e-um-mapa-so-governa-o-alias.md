@@ -162,3 +162,44 @@ decisão 5: `deprecated` descreve o que ainda sai, e na v2 elas não saem.
 **Uma lista de dados paralela para as 57 rotas das duas versões.** Recusada na decisão 4: derivar
 do `registry` entrega a mesma tabela única sem reescrever a v1 e sem tirar as duas dívidas de rota
 do alcance da guarda de vocabulário.
+
+## Emenda (issue #122, fatia 3a — 04/09/2026) — os quatro pontos que faltavam, e a lacuna do read-only
+
+A decisão 2 desta ADR já declarava que os aliases de corpo de `@action` (`signer_email`,
+`outcome`), o dicionário cru do painel de cobrança e a chave `processos` da action de IA não
+passavam por `serializers.AliasesDaV1Mixin` — nada com `source=` para o mapa ler, então o mecanismo
+central não os alcançava. A fatia 3a fecha os quatro à mão, cada um no seu lugar:
+
+- `signer_email` (`views._signers_do_pedido`) e `outcome` (`ProjectViewSet.apply_gate`) passam a
+  recusar a chave legada com o mesmo `InvalidInput` + `frase_da_chave_removida` da decisão 3, só
+  que chamado da view em vez do serializer — `_signers_do_pedido` passou a receber a versão do
+  chamador para isso.
+- `cobranca.painel()` passou a emitir **os dois pares** (`account`/`account_name` canônicos,
+  `client`/`client_name` legados) em cada linha — o mesmo comportamento de todo alias de leitura da
+  v1 — e a view (`CobrancaViewSet.painel`) remove os dois legados quando `versao_de(request) == V2`.
+  O helper (`_painel_sem_chaves_legadas`) é local porque o dict é cru: não há componente de schema
+  para `ALIASES_DEPRECIADOS` indexar.
+- A chave da action de IA (`MeetingViewSet.estruturar`) **troca** por versão em vez de conviver —
+  `processos` na v1, `processes` na v2 — porque duplicar a lista inteira pagaria o corpo da resposta
+  duas vezes; é a única das quatro em que a v1 e a v2 nunca compartilham a chave.
+
+**A lacuna que a decisão 3 não previa**: ela recusa a chave legada só para `ALIASES_DE_ENTRADA`, o
+mapa dos aliases que também precisam de **tradução** na v1. As chaves só-de-leitura de
+`ALIASES_DEPRECIADOS` — `client` em `Project`, `kpi_baseline`/`kpi_current` em `DigitalEmployee`,
+etc. — nunca precisaram de tradução, então não tinham `ALIASES_DE_ENTRADA`, e mandá-las no corpo da
+v2 caía no campo `read_only` do DRF: aceito e ignorado, o mesmo silêncio que a decisão 3 recusou
+para as outras. `AliasesDaV1Mixin.to_internal_value` passou a recusar também as chaves de
+`ALIASES_DEPRECIADOS[componente]` presentes no corpo, na v2. O nome canônico de cada uma (para a
+frase da recusa) vem de um mapa novo, `openapi_aliases.CANONICO_DA_CHAVE` — `None` para o par do
+§2d, cuja escrita já havia parado na `/api/v1/` (ADR 0055): a frase delas
+(`frase_da_chave_sem_sucessora`) aponta para `/kpis/` e `/measurements/`, porque não há campo
+canônico de escrita para apontar.
+
+A recusa continua por **componente**, nunca por nome global de chave — é a mesma leitura de
+`ALIASES_DEPRECIADOS` que já valia para `to_representation`. `status` continua um campo real e
+gravável em `Invoice` e `Engagement`, que não estão no mapa; só os componentes que
+`ALIASES_DEPRECIADOS` lista para `status` (`Account`) recusam a chave na v2.
+
+`backend/tests/test_aliases_da_v2.py` ganhou a guarda simétrica à do mapa de depreciação: todo
+valor não nulo de `CANONICO_DA_CHAVE` cobre a união das chaves de `ALIASES_DEPRECIADOS`, para uma
+chave nova não nascer recusada sem frase.

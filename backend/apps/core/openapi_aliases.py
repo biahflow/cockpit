@@ -93,6 +93,34 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     "Satisfacao": ("client",),
 }
 
+# O nome canônico de cada chave legada que aparece em `ALIASES_DEPRECIADOS` — a quarta consumidora
+# do mapa, desde a issue #122 fatia 3a. `AliasesDaV1Mixin.to_internal_value` já sabia recusar as
+# chaves de `ALIASES_DE_ENTRADA` na v2 (ali o nome canônico mora ao lado, porque também é preciso
+# traduzir na v1); as chaves só-de-leitura desta tabela nunca precisaram de tradução, então não
+# tinham onde guardar o canônico — e sem ele a recusa não teria o que dizer.
+#
+# `None` marca a exceção da §2d: `kpi_baseline`/`kpi_current` pararam de **aceitar** escrita ainda
+# na `/api/v1/` (ADR 0055), então não há campo canônico de escrita para apontar — a frase delas é
+# `versioning.frase_da_chave_sem_sucessora`, não `frase_da_chave_removida`.
+#
+# Guardado por `test_aliases_da_v2.py`: toda chave de `ALIASES_DEPRECIADOS` precisa de uma entrada
+# aqui, para uma chave nova não nascer recusada em silêncio (sem 400, sem frase).
+#
+# A chave do gate vem de `_CHAVE_LEGADA_DO_GATE`, e não de um segundo literal — pela mesma razão
+# que aquela constante existe (ver a nota no topo do módulo): a regra de vocabulário que casa essa
+# referência conta ocorrências de texto, e a allowlist deste arquivo só declara uma.
+CANONICO_DA_CHAVE: dict[str, str | None] = {
+    "client": "account",
+    "status": "lifecycle_status",
+    "opportunity": "commercial_opportunity",
+    _CHAVE_LEGADA_DO_GATE[0]: "gate_decision",
+    "ai_opportunity": "ai_potential",
+    "client_consent": "account_consent",
+    "processo": "process",
+    "kpi_baseline": None,
+    "kpi_current": None,
+}
+
 _PREFIXO_PATCHED = re.compile(r"^Patched(.+)$")
 
 

@@ -73,3 +73,16 @@ def frase_da_chave_removida(antiga: str, canonica: str) -> str:
 def frase_do_parametro_removido(antigo: str, canonico: str) -> str:
     """A mesma recusa, para o filtro de query string: `?client=` responde dizendo `?account=`."""
     return f"O parâmetro '?{antigo}=' não existe na /api/v2/; use '?{canonico}='."
+
+
+def frase_da_chave_sem_sucessora(antiga: str) -> str:
+    """A recusa de uma chave que não tem canônica de **escrita** — o par do §2d.
+
+    `kpi_baseline`/`kpi_current` pararam de aceitar escrita ainda na `/api/v1/` (ADR 0055, decisão
+    C1 do DAP `dap-prove-e-valor-r1`): a leitura é derivada e a gravação vive em `/kpis/` e
+    `/measurements/`. `frase_da_chave_removida` não serve aqui porque não há nome de campo para
+    apontar — dizer "use 'None'" mentiria sobre existir um sucessor direto.
+    """
+    return (
+        f"A chave '{antiga}' não existe na /api/v2/; a medição vive em /kpis/ e /measurements/."
+    )

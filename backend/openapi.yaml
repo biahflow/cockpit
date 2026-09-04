@@ -1365,6 +1365,11 @@ paths:
 
         Toda a decisão sai de `cobranca.painel()`, e nenhuma linha dela é recalculada aqui: a régua
         tem uma definição só, e a tela lê a mesma que o relógio executa.
+
+        `cobranca.painel()` emite os dois pares (`account`/`account_name` e `client`/
+        `client_name`, mesmo valor) — o comportamento de todo alias de leitura da `/api/v1/`. Na
+        `/api/v2/` os dois legados somem daqui, e não do agregador: ele não conhece a versão da
+        requisição, e não devia precisar conhecer para listar faturas.
       tags:
       - v1
       security:
@@ -12573,7 +12578,7 @@ components:
           allOf:
           - $ref: '#/components/schemas/GateDecisionEnum'
           description: |-
-            Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na `/api/v1/` e sai na `/api/v2/`.
+            Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na `/api/v1/`; saiu na `/api/v2/`, que recusa (400) e diz `decision`.
 
             * `go` - GO
             * `conditional_go` - CONDITIONAL GO
@@ -13064,6 +13069,10 @@ components:
           type: integer
         number:
           type: string
+        account:
+          type: integer
+        account_name:
+          type: string
         client:
           type: integer
         client_name:
@@ -13140,6 +13149,8 @@ components:
         regua_ligada:
           type: boolean
       required:
+      - account
+      - account_name
       - amount
       - client
       - client_name

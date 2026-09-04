@@ -1012,8 +1012,14 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
         linhas.append({
             "invoice": invoice.pk,
             "number": invoice.number,
-            # Chaves de payload da `/api/v1/`: o campo virou `account` e a chave não
-            # (`docs/ontology/aliases.md` §2c). Elas morrem na `/api/v2/`.
+            # O par canônico e o legado saem **juntos**, com o mesmo valor — o comportamento de
+            # todo alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c). Este painel é
+            # dict cru, sem serializer que faça isso sozinho (`AliasesDaV1Mixin` não alcança quem
+            # não é `ModelSerializer`), então os dois pares são escritos à mão aqui. A view remove
+            # `client`/`client_name` da resposta quando a requisição é da `/api/v2/` (issue #122,
+            # fatia 3a) — quem decide isso é ela, não este agregador, que não conhece a versão.
+            "account": invoice.account_id,
+            "account_name": invoice.account.name,
             "client": invoice.account_id,
             "client_name": invoice.account.name,
             "amount": _dinheiro(invoice.amount),

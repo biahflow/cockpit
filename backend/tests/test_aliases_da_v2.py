@@ -27,25 +27,37 @@ from typing import Any
 import pytest
 import yaml
 from django.conf import settings
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.request import Request
 from rest_framework.test import APIClient, APIRequestFactory
 
-from apps.core import journey
+from apps.core import ai, journey
 from apps.core import serializers as modulo_de_serializers
 from apps.core.models import (
     Case,
     CobrancaContato,
     CobrancaSuspensao,
     Contact,
+    DigitalEmployee,
     Document,
+    Invoice,
+    JourneyPhase,
+    Meeting,
     PhaseEvent,
+    PipelineStage,
+    Project,
     ProjectPhase,
     Satisfacao,
+    SignatureRequest,
     User,
 )
-from apps.core.openapi_aliases import ALIASES_DEPRECIADOS, excluir_a_v2_do_contrato
+from apps.core.openapi_aliases import (
+    ALIASES_DEPRECIADOS,
+    CANONICO_DA_CHAVE,
+    excluir_a_v2_do_contrato,
+)
 from apps.core.serializers import (
     AliasesDaV1Mixin,
     _componente_do_serializer,
@@ -56,6 +68,7 @@ from apps.core.tests.factories import (
     ActivityFactory,
     ArtifactFactory,
     CommercialOpportunityFactory,
+    EngagementFactory,
     InvoiceFactory,
     LeadFactory,
     ProcessFactory,
@@ -64,7 +77,7 @@ from apps.core.tests.factories import (
     UserFactory,
     digital_employee_medido,
 )
-from apps.core.versioning import V1, V2, VersaoPeloCaminho, versao_de
+from apps.core.versioning import V1, V2, VersaoPeloCaminho, frase_da_chave_sem_sucessora, versao_de
 
 
 @pytest.fixture
@@ -409,3 +422,220 @@ def test_o_hook_do_esquema_filtra_a_v2_e_preserva_a_v1() -> None:
     restantes = excluir_a_v2_do_contrato(endpoints=endpoints)
 
     assert [caminho for caminho, *_ in restantes] == ["/api/v1/accounts/", "/api/v1/contacts/"]
+
+
+# ---------------------------------------------------------------------------------------------
+# 5. Os quatro pontos que a fatia 1 não alcançava, e a lacuna do read-only (issue #122, fatia 3a)
+# ---------------------------------------------------------------------------------------------
+
+
+# Sem `ESIGN_PROVIDER`: o registro local do `NullProvider` (ADR 0059), longe da rede — o mesmo
+# ajuste da regressão `test_o_alias_signer_email_sobrevive_na_v1.py`.
+_REGISTRO_LOCAL_DE_ASSINATURA = override_settings(
+    ESIGN_ENABLED=True, ESIGN_PROVIDER="", ESIGN_HOUSE_SIGNER_EMAIL=""
+)
+
+
+@pytest.mark.django_db
+@_REGISTRO_LOCAL_DE_ASSINATURA
+def test_signer_email_e_400_na_v2_e_continua_criando_na_v1(admin_client: APIClient) -> None:
+    """`_signers_do_pedido` não passa por serializer — a recusa mora na view, não no mixin."""
+    document = Document.objects.create(
+        account=AccountFactory(), original_name="contrato.pdf", uploaded_by=UserFactory(),
+        kind=Document.Kind.COMMERCIAL_CONTRACT,
+    )
+
+    da_v2 = admin_client.post(
+        reverse("v2-document-request-signature", args=[document.pk]),
+        {"signer_email": "quem.assina@cliente.test"},
+        format="json",
+    )
+
+    assert da_v2.status_code == 400
+    assert "use 'signers'" in str(da_v2.data["detail"])
+    assert not SignatureRequest.objects.exists()
+
+    da_v1 = admin_client.post(
+        reverse("document-request-signature", args=[document.pk]),
+        {"signer_email": "quem.assina@cliente.test"},
+        format="json",
+    )
+
+    assert da_v1.status_code == 201
+    assert SignatureRequest.objects.get().signer_email == "quem.assina@cliente.test"
+
+
+def _fase_ativa_com_gate(project: Any) -> ProjectPhase:
+    """A mesma preparação de `test_o_alias_do_gate_sobrevive_na_v1.py`: a fase ativa exige gate."""
+    journey.materialize_journey(project)
+    ativa = ProjectPhase.objects.filter(
+        project=project, status=ProjectPhase.Status.ACTIVE
+    ).first()
+    assert ativa is not None
+    JourneyPhase.objects.filter(pk=ativa.phase_id).update(requires_gate=True)
+    ativa.refresh_from_db()
+    return ativa
+
+
+@pytest.mark.django_db
+def test_outcome_e_400_na_v2_e_decision_continua_funcionando(admin_client: APIClient) -> None:
+    """A recusa vem antes do `or` que lê as duas chaves — `outcome` nunca chega a ser lido na v2."""
+    project = ProjectFactory()
+    fase = _fase_ativa_com_gate(project)
+
+    recusado = admin_client.post(
+        reverse("v2-project-apply-gate", args=[project.pk]),
+        {"outcome": "no_go", "notes": "tentativa com o alias"},
+        format="json",
+    )
+
+    assert recusado.status_code == 400
+    assert "use 'decision'" in str(recusado.data["detail"])
+    fase.refresh_from_db()
+    assert fase.gate_decision == ""
+
+    aceito = admin_client.post(
+        reverse("v2-project-apply-gate", args=[project.pk]),
+        {"decision": "no_go", "notes": "pela chave canônica"},
+        format="json",
+    )
+
+    assert aceito.status_code == 200
+    fase.refresh_from_db()
+    assert fase.gate_decision == "no_go"
+
+
+@pytest.mark.django_db
+def test_o_painel_de_cobranca_tem_os_dois_pares_na_v1_e_so_o_canonico_na_v2(
+    admin_client: APIClient,
+) -> None:
+    """`cobranca.painel()` emite os dois; a view tira o par legado só na v2."""
+    invoice = InvoiceFactory(status=Invoice.Status.ISSUED)
+
+    (linha_v1,) = admin_client.get("/api/v1/cobranca/painel/").json()
+    (linha_v2,) = admin_client.get("/api/v2/cobranca/painel/").json()
+
+    assert linha_v1["account"] == invoice.account_id
+    assert linha_v1["account_name"] == invoice.account.name
+    assert linha_v1["client"] == invoice.account_id
+    assert linha_v1["client_name"] == invoice.account.name
+
+    assert linha_v2["account"] == invoice.account_id
+    assert linha_v2["account_name"] == invoice.account.name
+    assert "client" not in linha_v2
+    assert "client_name" not in linha_v2
+
+
+def _reuniao_de_discovery() -> Meeting:
+    return Meeting.objects.create(
+        project=ProjectFactory(), title="Discovery", date=timezone.localdate(),
+        transcript="O faturamento é conferido nota a nota.",
+    )
+
+
+def _responde_com(monkeypatch: pytest.MonkeyPatch, texto: str) -> None:
+    monkeypatch.setattr(
+        ai, "complete", lambda s, u, **_: (texto, {"prompt_tokens": 5, "completion_tokens": 3}),
+    )
+
+
+@pytest.mark.django_db
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_a_action_de_ia_troca_a_chave_por_versao(
+    admin_client: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`processos` na v1, `processes` na v2 — a chave troca, não convive (issue #122, fatia 3a)."""
+    mapa = '[{"name": "Faturamento mensal", "etapas": [], "achados": []}]'
+
+    reuniao_v1 = _reuniao_de_discovery()
+    _responde_com(monkeypatch, mapa)
+    da_v1 = admin_client.post(reverse("meeting-estruturar", args=[reuniao_v1.pk]))
+    assert da_v1.status_code == 200, da_v1.data
+    assert [p["name"] for p in da_v1.data["processos"]] == ["Faturamento mensal"]
+    assert "processes" not in da_v1.data
+
+    reuniao_v2 = _reuniao_de_discovery()
+    _responde_com(monkeypatch, mapa)
+    da_v2 = admin_client.post(reverse("v2-meeting-estruturar", args=[reuniao_v2.pk]))
+    assert da_v2.status_code == 200, da_v2.data
+    assert [p["name"] for p in da_v2.data["processes"]] == ["Faturamento mensal"]
+    assert "processos" not in da_v2.data
+
+
+@pytest.mark.django_db
+def test_o_alias_so_de_leitura_no_corpo_da_v2_e_recusado(admin_client: APIClient) -> None:
+    """A lacuna que a fatia 1 registrou: `client`/`kpi_baseline` eram `read_only` e ignorados."""
+    conta = AccountFactory()
+    engagement = EngagementFactory(account=conta)
+
+    projeto = admin_client.post(
+        "/api/v2/projects/",
+        {
+            "name": "Projeto novo",
+            "start_date": str(timezone.localdate()),
+            "due_date": str(timezone.localdate() + timedelta(days=10)),
+            "engagement": engagement.pk,
+            "client": conta.pk,
+        },
+        format="json",
+    )
+
+    assert projeto.status_code == 400
+    assert "use 'account'" in str(projeto.data["client"])
+    assert not Project.objects.exists()
+
+    ativo = DigitalEmployee.objects.create(project=ProjectFactory(), name="Triagem")
+
+    medicao = admin_client.patch(
+        f"/api/v2/digital-employees/{ativo.pk}/", {"kpi_baseline": "999.00"}, format="json"
+    )
+
+    assert medicao.status_code == 400
+    assert medicao.data["kpi_baseline"] == [frase_da_chave_sem_sucessora("kpi_baseline")]
+
+    # A contraprova: na v1 a mesma chave continua sendo aceita e ignorada (regressão da §2d).
+    ignorado = admin_client.patch(
+        f"/api/v1/digital-employees/{ativo.pk}/", {"kpi_baseline": "999.00"}, format="json"
+    )
+    assert ignorado.status_code == 200
+
+
+@pytest.mark.django_db
+def test_status_continua_funcionando_em_componente_sem_entrada_no_mapa(
+    admin_client: APIClient,
+) -> None:
+    """ARMADILHA: `status` é campo real de outros serializers — a recusa é por componente."""
+    conta = AccountFactory()
+    origem = CommercialOpportunityFactory(
+        account=conta, stage=PipelineStage.objects.get(kind="won")
+    )
+
+    resposta = admin_client.post(
+        "/api/v2/engagements/",
+        {
+            "account": conta.pk,
+            "name": "Mandato de teste",
+            "status": "paused",
+            # A invariante 13 (migração `0074`) exige o instrumento assinado que originou o
+            # mandato; o teste não é sobre proveniência, só sobre `status` continuar gravável.
+            "originating_commercial_opportunity": origem.pk,
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201, resposta.data
+    assert resposta.data["status"] == "paused"
+
+
+def test_todo_valor_nao_nulo_de_canonico_da_chave_cobre_aliases_depreciados() -> None:
+    """A guarda do mapa novo: toda chave de `ALIASES_DEPRECIADOS` tem entrada em `CANONICO_DA_CHAVE`.
+
+    Sem ela, uma chave nova em `ALIASES_DEPRECIADOS` seria recusada na v2 sem saber o que dizer —
+    `CANONICO_DA_CHAVE.get(antiga)` devolveria `None` por ausência, e a recusa mentiria dizendo
+    "sem sucessora" para uma chave que tem uma.
+    """
+    todas_as_chaves_depreciadas = {
+        chave for propriedades in ALIASES_DEPRECIADOS.values() for chave in propriedades
+    }
+
+    assert todas_as_chaves_depreciadas <= set(CANONICO_DA_CHAVE)

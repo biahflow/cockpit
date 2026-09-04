@@ -217,7 +217,7 @@ from .serializers import (
     ValueLedgerEntrySerializer,
     VerticalSerializer,
 )
-from .versioning import V2, frase_do_parametro_removido, versao_de
+from .versioning import V2, frase_da_chave_removida, frase_do_parametro_removido, versao_de
 
 logger = logging.getLogger(__name__)
 
@@ -1579,7 +1579,7 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
                     required=False,
                     help_text=(
                         "Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na "
-                        "`/api/v1/` e sai na `/api/v2/`."
+                        "`/api/v1/`; saiu na `/api/v2/`, que recusa (400) e diz `decision`."
                     ),
                 ),
                 "notes": serializers.CharField(required=False, allow_blank=True),
@@ -1600,8 +1600,12 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         """
         project = self.get_object()
         # `decision` é a chave canônica (D7, ADR 0052); `outcome` continua aceita como alias da
-        # `/api/v1/` e sai na `/api/v2/`. A precedência é da canônica: um corpo com as duas é
-        # confusão do chamador, e resolver pela nova é o que não trava quem já migrou.
+        # `/api/v1/`, com a mesma precedência dos aliases de serializer (a canônica vence quando
+        # as duas vêm no mesmo corpo — não trava quem já migrou). Na `/api/v2/` o alias morreu
+        # (issue #122, fatia 3a): a recusa vem antes do `or`, porque senão o `outcome` de um corpo
+        # só-com-`outcome` seria lido normalmente e a chave nunca chegaria a ser recusada.
+        if versao_de(request) == V2 and "outcome" in request.data:
+            raise InvalidInput(frase_da_chave_removida("outcome", "decision"))
         bruto = request.data.get("decision") or request.data.get("outcome", "")
         decision = str(bruto).strip()
         notes = str(request.data.get("notes", "") or "")
@@ -2339,6 +2343,20 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return Response(dados)
 
 
+def _painel_sem_chaves_legadas(linhas: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Tira `client`/`client_name` de cada linha do painel na `/api/v2/` (issue #122, fatia 3a).
+
+    O painel é dict cru — não passa por `ModelSerializer` nenhum —, então `AliasesDaV1Mixin` não o
+    alcança: aquele mixin lê `ALIASES_DEPRECIADOS` por **componente do schema**, e este dicionário
+    não tem um. A filosofia é a mesma (a chave legada não sai na v2), só que aplicada à mão, aqui,
+    porque não há onde pendurar o mapa.
+    """
+    for linha in linhas:
+        linha.pop("client", None)
+        linha.pop("client_name", None)
+    return linhas
+
+
 class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
     """O que a casa já disse sobre suas faturas (FDD 036, camada 3 da RFC 0004).
 
@@ -2367,6 +2385,11 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
             fields={
                 "invoice": serializers.IntegerField(),
                 "number": serializers.CharField(),
+                "account": serializers.IntegerField(),
+                "account_name": serializers.CharField(),
+                # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): mesmo valor de
+                # `account`/`account_name`. Some da `/api/v2/`, junto do resto do payload legado
+                # (issue #122, fatia 3a) — este componente descreve só a v1 (decisão 5, ADR 0066).
                 "client": serializers.IntegerField(),
                 "client_name": serializers.CharField(),
                 "amount": serializers.DecimalField(max_digits=12, decimal_places=2),
@@ -2421,8 +2444,16 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
 
         Toda a decisão sai de `cobranca.painel()`, e nenhuma linha dela é recalculada aqui: a régua
         tem uma definição só, e a tela lê a mesma que o relógio executa.
+
+        `cobranca.painel()` emite os dois pares (`account`/`account_name` e `client`/
+        `client_name`, mesmo valor) — o comportamento de todo alias de leitura da `/api/v1/`. Na
+        `/api/v2/` os dois legados somem daqui, e não do agregador: ele não conhece a versão da
+        requisição, e não devia precisar conhecer para listar faturas.
         """
-        return Response(cobranca.painel())
+        linhas = cobranca.painel()
+        if versao_de(request) == V2:
+            linhas = _painel_sem_chaves_legadas(linhas)
+        return Response(linhas)
 
 
 class CobrancaSuspensaoViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
@@ -2572,21 +2603,28 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         super().perform_create(serializer)
 
 
-def _signers_do_pedido(data: Any) -> list[esign.Signer]:
+def _signers_do_pedido(data: Any, versao: str) -> list[esign.Signer]:
     """A rodada de assinatura pedida no corpo — na forma nova, ou pelo alias `signer_email`.
 
     `signers` é a forma canônica: uma lista de `{"email", "role"}`, na ordem em que os signatários
     ocupam o bloco de assinatura do documento (duas testemunhas pegam as duas linhas, nessa ordem).
-    `signer_email` continua aceito e vira **um** signatário `counterparty` — a SPA ainda manda a
-    forma antiga, e a tela de escolher contatos e papéis depende de um DAP que ainda não existe;
-    quebrar agora deixaria o produto sem caminho nenhum. É o mecanismo de alias de entrada de
-    sempre (`docs/ontology/aliases.md` §2c), e a **forma nova vence** quando as duas vêm no mesmo
-    corpo. Morre na `/api/v2/`.
+    Na `/api/v1/`, `signer_email` continua aceito e vira **um** signatário `counterparty` — a SPA
+    ainda manda a forma antiga, e a tela de escolher contatos e papéis depende de um DAP que ainda
+    não existe; quebrar agora deixaria o produto sem caminho nenhum. É o mecanismo de alias de
+    entrada de sempre (`docs/ontology/aliases.md` §2c), e a **forma nova vence** quando as duas vêm
+    no mesmo corpo.
 
-    As três recusas são 400 (`InvalidInput`) porque é o **corpo** que está errado, não o estado:
-    lista vazia, papel fora do vocabulário, e e-mail repetido — este último porque o fornecedor casa
-    signatário por e-mail, e dois iguais tornam ambíguo qual solicitação o webhook vem fechar.
+    Morreu na `/api/v2/` (issue #122, fatia 3a): esta action não passa por serializer com
+    `ALIASES_DE_ENTRADA`, então `AliasesDaV1Mixin` não a alcança — a recusa mora aqui, e por isso
+    recebe a versão do chamador em vez de a redescobrir.
+
+    As três recusas de forma são 400 (`InvalidInput`) porque é o **corpo** que está errado, não o
+    estado: lista vazia, papel fora do vocabulário, e e-mail repetido — este último porque o
+    fornecedor casa signatário por e-mail, e dois iguais tornam ambíguo qual solicitação o webhook
+    vem fechar.
     """
+    if versao == V2 and "signer_email" in data:
+        raise InvalidInput(frase_da_chave_removida("signer_email", "signers"))
     if "signers" in data:
         pedidos = data.get("signers")
         if not isinstance(pedidos, list) or not pedidos:
@@ -2675,9 +2713,10 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
                     ),
                     required=False,
                 ),
-                # Alias de entrada, morre na `/api/v2/` (`docs/ontology/aliases.md`): um único
-                # signatário `counterparty`. A forma canônica é `signers`, e ela vence quando as
-                # duas vêm no mesmo corpo.
+                # Alias de entrada, morreu na `/api/v2/` (`docs/ontology/aliases.md`, issue #122
+                # fatia 3a): um único signatário `counterparty`. Na `/api/v1/` a forma canônica é
+                # `signers`, e ela vence quando as duas vêm no mesmo corpo; na `/api/v2/` esta
+                # chave é recusada com 400.
                 "signer_email": serializers.EmailField(required=False),
             },
         ),
@@ -2703,7 +2742,7 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         document = self.get_object()
         if not esign.is_enabled():
             return Response({"detail": "Assinatura eletrônica desativada."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        signers = _signers_do_pedido(request.data)
+        signers = _signers_do_pedido(request.data, versao_de(request))
         try:
             refs = esign.send_for_signature(document, signers)
         except esign.EsignProviderError as exc:
@@ -2949,10 +2988,13 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                         )
                         achado_novo.evidences.add(evidence)
                 criados.append(processo)
-            # A chave `processos` do corpo **fica**: ela é chave de payload da `/api/v1/` e
-            # morre na `/api/v2/`, junto das rotas `/processos/` e `/processo-etapas/`
-            # (`docs/ontology/aliases.md` §2c).
-            return {"processos": ProcessSerializer(criados, many=True).data}
+            # A chave do corpo **troca** por versão, em vez de conviver: duplicar a lista inteira
+            # em duas chaves pagaria o corpo duas vezes, e aqui — ao contrário do resto do payload
+            # legado — não há um par que saia junto. Na `/api/v1/` continua `processos`; na
+            # `/api/v2/` é `processes`, o nome canônico (`docs/ontology/aliases.md` §2c, issue #122
+            # fatia 3a).
+            chave = "processes" if versao_de(request) == V2 else "processos"
+            return {chave: ProcessSerializer(criados, many=True).data}
 
         try:
             # `atomic` pela razão do `extrair_decisoes`: se a gravação falhar no quinto processo,
