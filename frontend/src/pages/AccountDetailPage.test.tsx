@@ -158,17 +158,17 @@ let publicados = 0;
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "", published_count: publicados });
+    if (path === "/accounts/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", vertical: null, vertical_name: "", published_count: publicados });
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
-    if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
+    if (path === "/accounts/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve(contacts);
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
-    if (path.startsWith("/processos")) return Promise.resolve(processos);
+    if (path.startsWith("/processes")) return Promise.resolve(processos);
     if (path === "/services/") return Promise.resolve(services);
     if (path.startsWith("/engagements")) return Promise.resolve(engagements);
-    if (path.startsWith("/opportunities/?account=")) return Promise.resolve(opportunities);
+    if (path.startsWith("/commercial-opportunities/?account=")) return Promise.resolve(opportunities);
     if (path.startsWith("/documents/?account=")) return Promise.resolve(documents);
     return Promise.resolve([]);
   });
@@ -216,7 +216,7 @@ test("salva o cliente, cria e remove contato", async () => {
   await user.clear(cliente.getByLabelText("Nome"));
   await user.type(cliente.getByLabelText("Nome"), "Cliente B");
   await user.click(cliente.getByRole("button", { name: "Salvar alterações" }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "PATCH" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({ method: "PATCH" })));
 
   await user.type(painel.getByLabelText("Nome"), "Maria");
   await user.type(painel.getByLabelText("E-mail"), "maria@x.com");
@@ -316,7 +316,7 @@ test("corrige a situação da conta e leva o `lifecycle_status` no PATCH", async
   await user.selectOptions(screen.getByLabelText("Situação"), "prospect");
   await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({
     method: "PATCH", body: expect.stringContaining("\"lifecycle_status\":\"prospect\""),
   })));
 });
@@ -331,7 +331,7 @@ test("atribui uma vertical ao cliente", async () => {
   await user.selectOptions(screen.getByLabelText("Vertical"), "7");
   await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({
     method: "PATCH", body: expect.stringContaining("\"vertical\":7"),
   })));
 });
@@ -1027,5 +1027,5 @@ test("o aviso informa e não bloqueia: arquivar continua saindo como DELETE", as
   await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
   await user.click(screen.getByRole("button", { name: "Arquivar" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "DELETE" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({ method: "DELETE" })));
 });

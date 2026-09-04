@@ -59,9 +59,7 @@ export function ValorPage({ accountId }: { accountId: number }) {
    * e é o que o `react-hooks/set-state-in-effect` cobra.
    */
   const load = useCallback(() => Promise.all([
-    // A **rota** da conta continua sendo `/clients/` — ela morre na `/api/v2/`
-    // (`docs/ontology/aliases.md`). As demais já nascem com o nome canônico.
-    api<Account>(`/clients/${accountId}/`),
+    api<Account>(`/accounts/${accountId}/`),
     api<Engagement[]>(`/engagements/?account=${accountId}`),
   ]).then(async ([loadedAccount, engagements]) => {
     // Uma chamada por mandato, e não uma só: a entrada pende do `Engagement` (valor é do mandato,

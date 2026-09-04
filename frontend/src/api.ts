@@ -1,7 +1,7 @@
 import { reportError, setLastRequestId } from "./observability";
 import type { AgentReply, AppConfig, Evidence, FeasibilityAssessment, Finding, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Process, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
 
-const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
+const baseUrl = import.meta.env.VITE_API_URL || "/api/v2";
 
 // Erro de API que carrega o `X-Request-ID` da resposta — o mesmo id que está na linha de log do
 // servidor e na tag do evento do Sentry (FDD 020). É o que transforma "deu erro" em uma
@@ -183,9 +183,9 @@ export function bookDiscovery(payload: { token: string; slot_start: string }): P
 // `/contas/:id/priorizacao` e pela seção de pain points do processo (DAP priorização r1).
 //
 // As rotas ficam **qualificadas** — `improvement-opportunities`, nunca `opportunities`: a rota da
-// venda é `/opportunities/`, e o mapa de linguagem §5 bane `Opportunity` sem qualificador
-// exatamente porque as duas colidiam. Uma chamada trocada aqui não estoura, ela lê o funil
-// comercial e o mostra como backlog de melhoria.
+// venda é `/commercial-opportunities/` (era `/opportunities/` na `/api/v1/`), e o mapa de
+// linguagem §5 bane `Opportunity` sem qualificador exatamente porque as duas colidiam. Uma
+// chamada trocada aqui não estoura, ela lê o funil comercial e o mostra como backlog de melhoria.
 
 export type PainPointPayload = {
   account: number;
@@ -247,14 +247,14 @@ export function updateImprovementOpportunity(id: number, payload: Partial<Improv
 // já está no estado pedido ou quando algo publicado depende dele. Reexpressar a regra aqui
 // habilitaria o botão de um `POST` que o servidor nega, sem nada ficar vermelho.
 //
-// A rota do processo continua sendo `/processos/` — ela morre na `/api/v2/`
-// (`docs/ontology/aliases.md`); as outras quatro já nascem com o nome canônico.
+// A rota do processo é `/processes/` (era `/processos/` na `/api/v1/`, `docs/ontology/aliases.md`);
+// as outras quatro já tinham nascido com o nome canônico.
 
 export function publishProcess(id: number): Promise<Process> {
-  return api<Process>(`/processos/${id}/publish/`, { method: "POST" });
+  return api<Process>(`/processes/${id}/publish/`, { method: "POST" });
 }
 export function unpublishProcess(id: number): Promise<Process> {
-  return api<Process>(`/processos/${id}/unpublish/`, { method: "POST" });
+  return api<Process>(`/processes/${id}/unpublish/`, { method: "POST" });
 }
 export function publishEvidence(id: number): Promise<Evidence> {
   return api<Evidence>(`/evidence/${id}/publish/`, { method: "POST" });
@@ -329,7 +329,8 @@ export function updateSolutionHypothesis(id: number, payload: Partial<SolutionHy
 // `/contas/:id/valor` (DAP `dap-prove-e-valor-r1`, decisões A1 · B1 · C1 · D1 · E1).
 //
 // **Nomes canônicos e nenhum alias**: estes cinco nascem com o nome do mapa de linguagem, então
-// aqui não há a assimetria de `/clients/` — a rota é a mesma palavra do modelo.
+// aqui não há a assimetria que a `/api/v1/` tinha em `/clients/` — a rota já era a mesma palavra
+// do modelo dos dois lados da versão.
 
 export function listFeasibilityAssessments(project: number): Promise<FeasibilityAssessment[]> {
   return api<FeasibilityAssessment[]>(`/feasibility-assessments/?project=${project}`);

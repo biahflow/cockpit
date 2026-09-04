@@ -10,7 +10,7 @@ vi.mock("../auth", () => ({ useAuth: () => ({ user: mocks.user }) }));
 
 function fatura(overrides: Record<string, unknown> = {}) {
   return {
-    id: 5, account: 1, client: 1, client_name: "Imobiliária Aurora",
+    id: 5, account: 1, account_name: "Imobiliária Aurora",
     project: 2, project_name: "Implantação", service: 1, service_name: "Implantação",
     number: "2026-0007", amount: "48750.90", description: "Implantação — entrada",
     due_date: "2026-09-10", method: "", method_display: "",
@@ -33,7 +33,7 @@ function stub(faturas: unknown[], sumario = resumo) {
     if ((options?.method ?? "GET") === "GET") {
       if (path.startsWith("/invoices/summary/")) return Promise.resolve(sumario);
       if (path.startsWith("/invoices/")) return Promise.resolve(faturas);
-      if (path.startsWith("/clients/")) return Promise.resolve([{ id: 1, name: "Imobiliária Aurora" }]);
+      if (path.startsWith("/accounts/")) return Promise.resolve([{ id: 1, name: "Imobiliária Aurora" }]);
     }
     return Promise.resolve({});
   };

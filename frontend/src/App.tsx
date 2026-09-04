@@ -89,7 +89,9 @@ function resolvePage(path: string): ReactNode {
 
 // `/clientes*` → `/contas*`. **Alias com data**, no espírito da `docs/ontology/aliases.md`: o link
 // antigo está no favorito de quem usa o produto, e link que morre é o mesmo defeito que a
-// `aliases.md` descreve para rota de API. Some na `/api/v2/`, junto da rota `/clients/`.
+// `aliases.md` descreve para rota de API. A rota de API já morreu na `/api/v2/` — a SPA atravessou
+// (issue #122) e não fala mais `/clients/` —, mas este alias de URL do navegador é outra coisa e
+// continua vivo enquanto houver favorito antigo apontando para `/clientes`.
 function rotaLegada(path: string): string | null {
   if (path !== "/clientes" && !path.startsWith("/clientes/")) return null;
   return `/contas${path.slice("/clientes".length)}`;

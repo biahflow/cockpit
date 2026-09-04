@@ -6,22 +6,22 @@ const services = [
 ];
 
 test("movimenta uma oportunidade pelo pipeline", async ({ page }) => {
-  await page.route("**/api/v1/auth/me/", route => route.fulfill({ json: { id: 1, username: "sales", first_name: "Bia", last_name: "", email: "bia@example.test", role: "sales", is_admin: false } }));
+  await page.route("**/api/v2/auth/me/", route => route.fulfill({ json: { id: 1, username: "sales", first_name: "Bia", last_name: "", email: "bia@example.test", role: "sales", is_admin: false } }));
   const stages = [
     { id: 1, name: "Prospecção", kind: "open", position: 10 },
     { id: 2, name: "Negociação", kind: "open", position: 20 },
   ];
   const opportunities = [{
-    id: 7, client: 1, title: "Diagnóstico Biahflow", scope: "", estimated_value: "1000.00",
+    id: 7, account: 1, title: "Diagnóstico Biahflow", scope: "", estimated_value: "1000.00",
     stage: 1, stage_name: "Prospecção", owner: 1, expected_close_date: "2026-08-10",
     service: 10, service_name: "Discovery Sprint", service_tier: "discovery_sprint",
   }];
-  await page.route("**/api/v1/pipeline-stages/", route => route.fulfill({ json: stages }));
-  await page.route("**/api/v1/opportunities/", route => route.fulfill({ json: opportunities }));
-  await page.route("**/api/v1/clients/", route => route.fulfill({ json: [] }));
-  await page.route("**/api/v1/services/", route => route.fulfill({ json: services }));
-  await page.route("**/api/v1/auth/csrf/", route => route.fulfill({ json: { csrfToken: "test" } }));
-  await page.route("**/api/v1/opportunities/7/", async route => {
+  await page.route("**/api/v2/pipeline-stages/", route => route.fulfill({ json: stages }));
+  await page.route("**/api/v2/commercial-opportunities/", route => route.fulfill({ json: opportunities }));
+  await page.route("**/api/v2/accounts/", route => route.fulfill({ json: [] }));
+  await page.route("**/api/v2/services/", route => route.fulfill({ json: services }));
+  await page.route("**/api/v2/auth/csrf/", route => route.fulfill({ json: { csrfToken: "test" } }));
+  await page.route("**/api/v2/commercial-opportunities/7/", async route => {
     opportunities[0].stage = 2;
     await route.fulfill({ json: opportunities[0] });
   });
@@ -35,14 +35,14 @@ test("movimenta uma oportunidade pelo pipeline", async ({ page }) => {
 });
 
 test("cria uma oportunidade escolhendo o nível de produto", async ({ page }) => {
-  await page.route("**/api/v1/auth/me/", route => route.fulfill({ json: { id: 1, username: "sales", first_name: "Bia", last_name: "", email: "bia@example.test", role: "sales", is_admin: false } }));
-  await page.route("**/api/v1/pipeline-stages/", route => route.fulfill({ json: [{ id: 1, name: "Prospecção", kind: "open", position: 10 }] }));
-  await page.route("**/api/v1/clients/", route => route.fulfill({ json: [{ id: 1, name: "ACME", legal_name: "", tax_id: "", owner: 1, status: "prospect" }] }));
-  await page.route("**/api/v1/services/", route => route.fulfill({ json: services }));
-  await page.route("**/api/v1/auth/csrf/", route => route.fulfill({ json: { csrfToken: "test" } }));
+  await page.route("**/api/v2/auth/me/", route => route.fulfill({ json: { id: 1, username: "sales", first_name: "Bia", last_name: "", email: "bia@example.test", role: "sales", is_admin: false } }));
+  await page.route("**/api/v2/pipeline-stages/", route => route.fulfill({ json: [{ id: 1, name: "Prospecção", kind: "open", position: 10 }] }));
+  await page.route("**/api/v2/accounts/", route => route.fulfill({ json: [{ id: 1, name: "ACME", legal_name: "", tax_id: "", owner: 1, lifecycle_status: "prospect" }] }));
+  await page.route("**/api/v2/services/", route => route.fulfill({ json: services }));
+  await page.route("**/api/v2/auth/csrf/", route => route.fulfill({ json: { csrfToken: "test" } }));
 
   let posted: Record<string, unknown> = {};
-  await page.route("**/api/v1/opportunities/", async route => {
+  await page.route("**/api/v2/commercial-opportunities/", async route => {
     if (route.request().method() === "POST") {
       posted = JSON.parse(route.request().postData() ?? "{}");
       return route.fulfill({ status: 201, json: { id: 8 } });

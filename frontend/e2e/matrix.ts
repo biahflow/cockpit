@@ -4,7 +4,7 @@
  * Uma tela nova entra na matriz por **uma linha** em `ROUTES`, não por um arquivo de teste novo.
  * É o que impede a matriz de envelhecer: o custo de cobrir a próxima página é uma linha.
  *
- * O mock é um `route` único sobre `/api/v1/**`, resolvido por `pathname` — mesmo padrão dos e2e
+ * O mock é um `route` único sobre `/api/v2/**`, resolvido por `pathname` — mesmo padrão dos e2e
  * que já existem (`login.spec.ts`, `dashboard.spec.ts`), que também não sobem backend.
  */
 
@@ -68,7 +68,7 @@ const NOME_LONGO = "Indústria Metalúrgica São Bernardo do Campo Participaçõ
  * superfícies diferentes — pastilha escura sólida contra pastilha cinza, frase do impedimento,
  * frase do que falta, caixa de seleção presente ou ausente, botão habilitado ou desabilitado. Um
  * mock com tudo no mesmo estado aprovaria a tela sem que metade dela tivesse renderizado uma vez,
- * que é o modo de falha que o comentário de `/api/v1/processos/` já registra um nível acima.
+ * que é o modo de falha que o comentário de `/api/v2/processes/` já registra um nível acima.
  */
 const visivel = (presos = 0, impedimento = "") => ({
   published_at: `${HOJE}T09:00:00Z`, published_by: 1,
@@ -103,14 +103,13 @@ const clientes = serie(8, index => ({
   tax_id: "12.345.678/0001-90", owner: 1,
   // Os três estados vivos entram na amostra: a pílula "Inativo" também precisa passar pelo axe.
   lifecycle_status: index % 3 === 0 ? "inactive" : index % 2 ? "active" : "prospect",
-  status: index % 3 === 0 ? "inactive" : index % 2 ? "active" : "prospect",
 }));
 
 const projetos = serie(8, index => ({
   id: index, name: `Implantação de agentes no faturamento — frente ${index}`, description: "",
-  client: index, owner: 1, start_date: "2026-05-01", due_date: VENCIDO, status: "active",
+  owner: 1, start_date: "2026-05-01", due_date: VENCIDO, status: "active",
   service: null, actual_value: "180000.00", cost: "90000.00", is_overdue: true,
-  ai_maturity: 62, ai_opportunity: 78, ai_dimensions: [{ label: "Dados", score: 55 }],
+  ai_maturity: 62, ai_potential: 78, ai_dimensions: [{ label: "Dados", score: 55 }],
   ai_score_summary: "Base de dados fragmentada entre ERP e planilhas.",
   ai_scored_at: `${HOJE}T12:00:00Z`, ai_score_reviewed: true,
 }));
@@ -126,7 +125,7 @@ const oportunidades = serie(8, index => {
   // tela não a oferece de novo.
   const etapa = index === 1 ? etapas[3] : etapas[index % 3];
   return {
-    id: index, account: index, client: index, contact: null,
+    id: index, account: index, contact: null,
     title: `Discovery e assessment de automação — ${NOME_LONGO}`,
     scope: "Mapeamento de processos e desenho de agentes.", estimated_value: "150000.00",
     stage: etapa.id, stage_name: etapa.name, stage_kind: etapa.kind,
@@ -154,7 +153,7 @@ const riscos = serie(8, index => ({
 // aprovaria três larguras sem que ele tivesse renderizado uma vez. Um processo sustentado e dois em
 // hipótese, para os dois selos aparecerem na lista do detalhe do cliente.
 const processos = serie(3, index => ({
-  id: index, account: 1, client: 1, client_name: NOME_LONGO,
+  id: index, account: 1, account_name: NOME_LONGO,
   name: `Faturamento manual de notas de serviço — frente ${index}`,
   position: index, source_project: 1, source_meeting: 1, registered_by: 1,
   volume_mes: 400, tempo_horas: "0.50", pessoas: 2, custo_hora: "80.00",
@@ -256,10 +255,10 @@ const MEDICOES_POR_KPI: Record<string, unknown[]> = {
 };
 
 const FIXTURES: Record<string, unknown> = {
-  "/api/v1/auth/csrf/": { csrfToken: "test" },
+  "/api/v2/auth/csrf/": { csrfToken: "test" },
   // O caminho feliz de `/agendar/:token` (DAP `dap-agendamento-discovery-r1`, decisão B1):
   // horários em dois dias, para o axe medir os dois cabeçalhos de dia e a grade de pastilhas.
-  "/api/v1/booking/discovery/slots/": {
+  "/api/v2/booking/discovery/slots/": {
     account: "Rio Home Care",
     slots: ["2026-09-10T13:00:00Z", "2026-09-10T15:00:00Z", "2026-09-11T13:00:00Z"],
     scheduled_at: null,
@@ -270,7 +269,7 @@ const FIXTURES: Record<string, unknown> = {
   // matriz media o cartão de erro; a trava de `fixtures.ts` existe por causa disto. Duas
   // integrações ficam sem credencial de propósito: é o caminho que estourava, e é o que exercita o
   // texto "Falta no ambiente: X" — o mais longo da tela, que é o que a largura precisa aguentar.
-  "/api/v1/config/": {
+  "/api/v2/config/": {
     ai_enabled: true, calendar_enabled: false, esign_enabled: true,
     // Fora de `integrations` de propósito (DAP `dap-assinatura-com-papeis-r1`, D1): é o e-mail com
     // que a casa assina, e é ele que faz a linha fixa "Você (Biahflow)" existir na rodada.
@@ -289,18 +288,22 @@ const FIXTURES: Record<string, unknown> = {
       { key: "cobranca", label: "Régua de cobrança", enabled: false, configured: true, toggleable: true, missing: [] },
     ],
   },
-  "/api/v1/dashboard/": {
+  "/api/v2/dashboard/": {
     pipeline: etapas, active_projects: 12, overdue_count: 5,
     upcoming_tasks: itensDeTrabalho.slice(0, 5).map(item => ({
       id: item.id, title: item.title, due_date: item.due_date, project_id: 1,
     })),
   },
-  "/api/v1/clients/": clientes,
-  "/api/v1/clients/1/": clientes[0],
-  "/api/v1/clients/overview/": {
-    clients: clientes.map(cliente => ({
+  "/api/v2/accounts/": clientes,
+  "/api/v2/accounts/1/": clientes[0],
+  "/api/v2/accounts/overview/": {
+    // `client_id` e `status` (redundante com `lifecycle_status`) dentro de cada linha continuam
+    // fora do contrato da v2 (ADR 0066, emenda da fatia 4a): é dict cru sem item tipado no
+    // esquema, e a v2 ainda os emite. `accounts:` é a chave que **envolve** a lista, essa sim
+    // trocada — era `clients:` na v1.
+    accounts: clientes.map(cliente => ({
       client_id: cliente.id, name: cliente.name,
-      lifecycle_status: cliente.lifecycle_status, status: cliente.status,
+      lifecycle_status: cliente.lifecycle_status, status: cliente.lifecycle_status,
       roi: { revenue: 180000, cost: 90000, roi: 1 },
       health: { score: 42, level: "crítico", project_id: cliente.id },
       risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
@@ -309,50 +312,50 @@ const FIXTURES: Record<string, unknown> = {
         summary: "Base fragmentada.", scored_at: `${HOJE}T12:00:00Z` },
     })),
   },
-  "/api/v1/clients/1/overview/": {
-    client_id: 1, name: clientes[0].name, lifecycle_status: "active", status: "active",
+  "/api/v2/accounts/1/overview/": {
+    client_id: 1, name: clientes[0].name, lifecycle_status: "active",
     roi: { revenue: 180000, cost: 90000, roi: 1 },
     health: { score: 42, level: "crítico", project_id: 1 },
     risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
     next_meeting: { title: "Comitê quinzenal de acompanhamento", date: HOJE },
     ai_score: null,
   },
-  "/api/v1/projects/": projetos,
-  "/api/v1/projects/1/": projetos[0],
-  "/api/v1/projects/1/risk/": riscos[0],
-  "/api/v1/projects/1/health/": saude[0],
-  "/api/v1/opportunities/": oportunidades,
-  "/api/v1/pipeline-stages/": etapas,
-  "/api/v1/milestones/": itensDeTrabalho,
-  "/api/v1/tasks/": itensDeTrabalho,
-  "/api/v1/risk/": { projects: riscos },
-  "/api/v1/health/": { projects: saude },
-  "/api/v1/recommendations/": {
+  "/api/v2/projects/": projetos,
+  "/api/v2/projects/1/": projetos[0],
+  "/api/v2/projects/1/risk/": riscos[0],
+  "/api/v2/projects/1/health/": saude[0],
+  "/api/v2/commercial-opportunities/": oportunidades,
+  "/api/v2/pipeline-stages/": etapas,
+  "/api/v2/milestones/": itensDeTrabalho,
+  "/api/v2/tasks/": itensDeTrabalho,
+  "/api/v2/risk/": { projects: riscos },
+  "/api/v2/health/": { projects: saude },
+  "/api/v2/recommendations/": {
     items: serie(5, index => ({
       kind: "followup", label: `Retomar contato com ${NOME_LONGO}`,
       detail: "Sem interação registrada há 21 dias.", url: `/contas/${index}`,
     })),
   },
-  "/api/v1/services/": serie(4, index => ({
+  "/api/v2/services/": serie(4, index => ({
     id: index, name: index === 1 ? "Discovery Sprint" : `Serviço avulso ${index}`,
     active: true, tier: index === 1 ? "discovery_sprint" : "",
     tier_display: index === 1 ? "Discovery Sprint" : "", list_price: "0.00",
     category: "commercial", category_display: "Comercial",
     summary: "Diagnóstico inicial gratuito de oportunidades de automação.",
   })),
-  "/api/v1/leads/": serie(8, index => ({
+  "/api/v2/leads/": serie(8, index => ({
     id: index, name: `Contato ${index}`, email: `contato${index}@empresa.test`,
     company: NOME_LONGO, phone: "(11) 99999-0000",
     message: "Gostaria de entender como reduzir o retrabalho no faturamento.",
     source: "site", status: "new", ai_fit: "high", ai_score: 82,
     ai_summary: "Dor clara em processo manual, porte compatível.",
     ai_recommended_action: "Agendar discovery express.",
-    qualified_at: null, client: null, commercial_opportunity: null, opportunity: null,
+    qualified_at: null, commercial_opportunity: null,
     qualification: null,
     qualification_outcome: "", created_at: `${HOJE}T09:00:00Z`,
   })),
-  "/api/v1/documents/": serie(6, index => ({
-    id: index, account: index, client: index, commercial_opportunity: null, opportunity: null,
+  "/api/v2/documents/": serie(6, index => ({
+    id: index, account: index, commercial_opportunity: null,
     project: null,
     file: "/media/x.pdf",
     drive_link: "", original_name: `Contrato de prestação de serviços — ${NOME_LONGO}.pdf`,
@@ -366,11 +369,11 @@ const FIXTURES: Record<string, unknown> = {
       ? [{ id: 1, signer_email: "juridico@empresa.test", signer_role: "counterparty", status: "signed", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: `${HOJE}T10:00:00Z`, created_at: `${HOJE}T09:00:00Z` }]
       : [],
   })),
-  "/api/v1/verticals/": serie(5, index => ({
+  "/api/v2/verticals/": serie(5, index => ({
     id: index, name: `Setor ${index} — indústria metalúrgica de base`, slug: `setor-${index}`,
     position: index, active: true,
   })),
-  "/api/v1/digital-employee-blueprints/": serie(4, index => ({
+  "/api/v2/digital-employee-blueprints/": serie(4, index => ({
     id: index, name: `SDR de ${NOME_LONGO}`, area: "comercial", area_display: "Comercial",
     description: "Qualifica lead fora do horário comercial e agenda a reunião de discovery.",
     kpi_label: "Leads qualificados por mês", kpi_unit: "count", kpi_direction: "up",
@@ -383,12 +386,12 @@ const FIXTURES: Record<string, unknown> = {
     })),
     resolved: null, has_variant: false,
   })),
-  "/api/v1/cases/": serie(4, index => ({
+  "/api/v2/cases/": serie(4, index => ({
     id: index, project: index, project_name: `Implantação de agentes — frente ${index}`,
     title: `${NOME_LONGO} — implantação de agentes no faturamento`,
     summary: "Triplicou a qualificação de leads e cortou o tempo de resposta pela metade.",
     vertical: 1, vertical_name: "Setor 1 — indústria metalúrgica de base",
-    client_name: NOME_LONGO,
+    account_name: NOME_LONGO,
     metrics: serie(3, m => ({
       employee_id: m, blueprint_id: m, name: `SDR de ${NOME_LONGO}`, area: "Comercial",
       kpi_label: "Leads qualificados por mês", kpi_unit: "count", kpi_direction: "up",
@@ -402,14 +405,14 @@ const FIXTURES: Record<string, unknown> = {
     status: index === 1 ? "published" : "draft",
     status_display: index === 1 ? "Publicado" : "Rascunho",
     published_at: index === 1 ? `${HOJE}T12:00:00Z` : null,
-    client_consent: index === 1, consent_recorded_at: index === 1 ? `${HOJE}T11:00:00Z` : null,
+    account_consent: index === 1, consent_recorded_at: index === 1 ? `${HOJE}T11:00:00Z` : null,
     consent_recorded_by: index === 1 ? 1 : null, anonymized: false,
     created_at: `${HOJE}T10:00:00Z`, updated_at: `${HOJE}T10:00:00Z`,
   })),
   // Uma fatura de cada estado que a tela desenha, incluindo a vencida — o pior caso de
   // comprimento é a linha vermelha com selo, valor e data juntos.
-  "/api/v1/invoices/": serie(5, index => ({
-    id: index, client: 1, client_name: NOME_LONGO,
+  "/api/v2/invoices/": serie(5, index => ({
+    id: index, account: 1, account_name: NOME_LONGO,
     project: index, project_name: `Implantação de agentes — frente ${index}`,
     service: 1, service_name: "Implantação",
     number: index === 1 ? "" : `2026-000${index}`,
@@ -432,14 +435,14 @@ const FIXTURES: Record<string, unknown> = {
   //
   // Uma linha por motivo de silêncio, mais uma com degrau: o `motivo` é o que a tela traduz, e um
   // mock com um só valor aprovaria quatro textos que nunca renderizaram.
-  "/api/v1/cobranca/painel/": [
+  "/api/v2/cobranca/painel/": [
     { motivo: "", degrau: "lembrete", rotulo: "Lembrete", dias: 4, suspensa: false },
     { motivo: "suspensa", degrau: null, rotulo: null, dias: 12, suspensa: true },
     { motivo: "degrau_gasto", degrau: null, rotulo: null, dias: 3, suspensa: false },
     { motivo: "teto_de_frequencia", degrau: null, rotulo: null, dias: 21, suspensa: false },
     { motivo: "sem_degrau", degrau: null, rotulo: null, dias: -2, suspensa: false },
   ].map((caso, indice) => ({
-    invoice: indice + 1, number: `2026-00${indice + 1}0`, client: 1, client_name: NOME_LONGO,
+    invoice: indice + 1, number: `2026-00${indice + 1}0`, account: 1, account_name: NOME_LONGO,
     amount: "48750.90", due_date: VENCIDO,
     status: caso.dias > 0 ? "overdue" : "issued",
     status_display: caso.dias > 0 ? "Vencida" : "Emitida",
@@ -480,8 +483,8 @@ const FIXTURES: Record<string, unknown> = {
       : null,
     regua_ligada: false,
   })),
-  "/api/v1/cobranca/": serie(2, index => ({
-    id: index, invoice: 1, invoice_number: "2026-0010", client: 1, client_name: NOME_LONGO,
+  "/api/v2/cobranca/": serie(2, index => ({
+    id: index, invoice: 1, invoice_number: "2026-0010", account: 1, client_name: NOME_LONGO,
     degrau: index === 1 ? "pre_aviso" : "lembrete",
     degrau_display: index === 1 ? "Pré-aviso" : "Lembrete",
     canal: "email", canal_display: "E-mail ao cliente", sent_on: HOJE,
@@ -491,8 +494,8 @@ const FIXTURES: Record<string, unknown> = {
   })),
   // A interação com sinal de cobrança lavrado (FDD 036, camada 4): sem ela a linha do sinal na
   // timeline do cliente nunca renderiza, e a matriz aprovaria uma superfície que não abriu.
-  "/api/v1/activities/": serie(3, index => ({
-    id: index, client: 1, commercial_opportunity: null, opportunity: null,
+  "/api/v2/activities/": serie(3, index => ({
+    id: index, account: 1, commercial_opportunity: null,
     invoice: index === 1 ? 1 : null,
     cobranca_sinal: index === 1 ? "nao_pode" : "",
     cobranca_sinal_display: index === 1 ? "Não pôde pagar" : "",
@@ -504,18 +507,18 @@ const FIXTURES: Record<string, unknown> = {
   // A satisfação do cliente (FDD 037, ADR 0032): uma declarada e uma percebida, para o axe medir
   // o selo de nível e o rótulo de fonte nos dois casos — sem as duas, o painel de Satisfação do
   // detalhe do cliente renderiza sempre a mesma metade da tela.
-  "/api/v1/satisfacoes/": [
+  "/api/v2/satisfacoes/": [
     { nivel: "insatisfeito", nivel_display: "Insatisfeito", fonte: "declarada", fonte_display: "Declarada pelo cliente", happened_on: HOJE, note: "Reclamou do prazo da última entrega na call de comitê." },
     { nivel: "promotor", nivel_display: "Promotor", fonte: "percebida", fonte_display: "Percebida por quem entrega", happened_on: VENCIDO, note: "" },
   ].map((registro, indice) => ({
-    id: indice + 1, client: 1, project: null, source_meeting: null,
+    id: indice + 1, account: 1, project: null, source_meeting: null,
     registered_by: 1, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
     ...registro,
   })),
   // O Discovery estruturado (FDD 039). **A chave é o pathname exato, com barra final**: uma rota
   // não mapeada cai no fallback de lista vazia, nunca em 404, então uma chave errada aqui passa em
   // silêncio e a matriz aprova uma tela que renderizou só o estado vazio.
-  "/api/v1/processos/": processos,
+  "/api/v2/processes/": processos,
   // A cadeia do PRIORITIZE (FDD 048), na tela que o DAP `dap-priorizacao-r1` aprovou.
   // **Uma linha de cada combinação que a tela sabe desenhar**, e não quatro iguais: a dor solta e
   // a já agrupada, a oportunidade ranqueada com versão e a **sem avaliação nenhuma** — que é a que
@@ -523,8 +526,8 @@ const FIXTURES: Record<string, unknown> = {
   // não pode deixar parecer a mesma coisa: "avaliada e vale zero" e "ninguém avaliou".
   //
   // Sem estas chaves as rotas cairiam no fallback de lista vazia e a matriz aprovaria o estado
-  // vazio no lugar da tela — o modo de falha que o comentário de `/api/v1/processos/` registra.
-  "/api/v1/pain-points/": [
+  // vazio no lugar da tela — o modo de falha que o comentário de `/api/v2/processes/` registra.
+  "/api/v2/pain-points/": [
     { id: 1, title: "Retrabalho na conciliação de pagamentos de convênio dos três maiores planos",
       impact_type: "financial", impact_type_display: "Financeiro", findings: [1, 2] },
     { id: 2, title: "Agenda dupla por falha de sincronização entre as unidades da rede",
@@ -540,7 +543,7 @@ const FIXTURES: Record<string, unknown> = {
       : visivel(1, "Esta é a última dor publicada e viva de 1 oportunidade(s) de melhoria publicada(s). Despublique a oportunidade primeiro, ou publique outra dor.")),
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
-  "/api/v1/improvement-opportunities/": [
+  "/api/v2/improvement-opportunities/": [
     { id: 1, title: "Padronizar o checklist de documentação exigida para faturamento TISS",
       pain_points: [3], status: "prioritized", status_display: "Priorizada",
       score: "78.00", assessment_version: 2, rank: 1 },
@@ -559,7 +562,7 @@ const FIXTURES: Record<string, unknown> = {
     ...(indice === 0 ? visivel() : oculto(FALTA_DOR)),
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
-  "/api/v1/priority-assessments/": [
+  "/api/v2/priority-assessments/": [
     { id: 2, version: 2, impact: 4, evidence_strength: 5, feasibility: 3, time_to_value: 4,
       economics: 3, score: "78.00", created_at: `${HOJE}T09:00:00Z`,
       rationale: "As glosas de TISS são o maior item do custo do estado atual do faturamento." },
@@ -570,7 +573,7 @@ const FIXTURES: Record<string, unknown> = {
     updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
   // As três situações da hipótese, para os três selos passarem pelo axe (decisão D1).
-  "/api/v1/solution-hypotheses/": [
+  "/api/v2/solution-hypotheses/": [
     { id: 1, statement: "Padronizar um checklist único de documentos por convênio", status: "chosen", status_display: "Escolhida" },
     { id: 2, statement: "Implementar OCR na entrada de guias para conferência automática", status: "proposed", status_display: "Proposta" },
     { id: 3, statement: "Terceirizar a auditoria de glosas para escritório especializado", status: "discarded", status_display: "Descartada" },
@@ -584,7 +587,7 @@ const FIXTURES: Record<string, unknown> = {
   // pastilhas `Pronto`/`Falta` e o botão desabilitado), o KPI com o par completo e o **sem
   // baseline** — que é o `— → 65` com a variação vazia, o estado que o pacote inteiro existe para
   // preservar. Sem ele o axe mediria só a metade bonita da tela.
-  "/api/v1/feasibility-assessments/": [{
+  "/api/v2/feasibility-assessments/": [{
     id: 1, solution_hypothesis: 1, project: 1,
     technical_verdict: "favorable", technical_verdict_display: "Favorável",
     technical_note: "A integração com o CRM sustenta o volume de pico sem timeout em 93% das chamadas simuladas.",
@@ -597,7 +600,7 @@ const FIXTURES: Record<string, unknown> = {
     evidence: [1, 2, 3], gate_decision: "conditional_go", gate_decision_display: "CONDITIONAL GO",
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   }],
-  "/api/v1/prove-experiments/": [{
+  "/api/v2/prove-experiments/": [{
     id: 9, solution_hypothesis: 1, project: 1,
     controlled_scope: "Rotear tickets do time de Suporte N1 durante o expediente comercial, com fallback humano automático.",
     started_at: null, ended_at: null, success_criteria: "",
@@ -607,7 +610,7 @@ const FIXTURES: Record<string, unknown> = {
     missing_to_start: ["success_criteria", "baseline"],
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   }],
-  "/api/v1/kpis/": [
+  "/api/v2/kpis/": [
     { id: 21, name: "Tempo de resposta", unit: "hours", unit_display: "Horas", direction: "down", direction_display: "Menor é melhor" },
     { id: 22, name: "Taxa de resolução no primeiro contato", unit: "percent", unit_display: "Percentual", direction: "up", direction_display: "Maior é melhor" },
   ].map(registro => ({
@@ -615,9 +618,9 @@ const FIXTURES: Record<string, unknown> = {
     owner: null, target: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
     ...registro,
   })),
-  "/api/v1/kpis/21/": { id: 21, project: 1, prove_experiment: 9, name: "Tempo de resposta", definition: "", formula: "", unit: "hours", unit_display: "Horas", direction: "down", direction_display: "Menor é melhor", data_source: "", cadence: "", owner: null, target: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z` },
-  "/api/v1/measurements/31/": { id: 31, kpi: 21, kind: "outcome", kind_display: "Outcome", value: "65.00", period_start: "2026-07-01", period_end: "2026-07-31", measured_at: "2026-07-24T10:00:00Z", source_evidence: [], confidence: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z` },
-  "/api/v1/solution-hypotheses/1/": {
+  "/api/v2/kpis/21/": { id: 21, project: 1, prove_experiment: 9, name: "Tempo de resposta", definition: "", formula: "", unit: "hours", unit_display: "Horas", direction: "down", direction_display: "Menor é melhor", data_source: "", cadence: "", owner: null, target: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z` },
+  "/api/v2/measurements/31/": { id: 31, kpi: 21, kind: "outcome", kind_display: "Outcome", value: "65.00", period_start: "2026-07-01", period_end: "2026-07-31", measured_at: "2026-07-24T10:00:00Z", source_evidence: [], confidence: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z` },
+  "/api/v2/solution-hypotheses/1/": {
     id: 1, improvement_opportunity: 1,
     statement: "Padronizar um checklist único de documentos por convênio",
     intervention: "", assumptions: "", expected_effect: "",
@@ -627,7 +630,7 @@ const FIXTURES: Record<string, unknown> = {
   // O Value Ledger de `/contas/1/valor`: uma aprovada, uma pendente e um rascunho **sem montante
   // apurado** — o `—` que não pode virar `R$ 0`, e a razão de a linha do total dizer o que ficou
   // de fora.
-  "/api/v1/value-ledger-entries/": [
+  "/api/v2/value-ledger-entries/": [
     { id: 51, outcome_measurement: 31, value_type: "cost_saving", value_type_display: "Redução de custo",
       amount: "18400.00", period_start: "2026-07-01", period_end: "2026-07-31",
       attribution_method: "direta (medição do PROVE)", status: "approved", status_display: "Aprovado",
@@ -644,11 +647,11 @@ const FIXTURES: Record<string, unknown> = {
     engagement: 1, project: 1, quantity: null,
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
-  "/api/v1/processos/1/": processos[0],
-  "/api/v1/processo-etapas/": processoEtapas,
-  "/api/v1/findings/": findings,
-  "/api/v1/evidence/": evidence,
-  "/api/v1/knowledge-pieces/": serie(5, index => ({
+  "/api/v2/processes/1/": processos[0],
+  "/api/v2/process-steps/": processoEtapas,
+  "/api/v2/findings/": findings,
+  "/api/v2/evidence/": evidence,
+  "/api/v2/knowledge-pieces/": serie(5, index => ({
     id: index, area: 1, area_name: "Operação",
     owner_name: index === 5 ? "" : "Maria de Lourdes Albuquerque",
     title: `Runbook — homologação de integrações e sondas do fornecedor ${index}`,
@@ -660,8 +663,8 @@ const FIXTURES: Record<string, unknown> = {
     next_review_at: index === 2 ? null : HOJE, is_gap: index === 4,
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   })),
-  "/api/v1/knowledge-pieces/summary/": { sem_dono: 2, vencido: 1, a_vencer: 1, corrente: 1 },
-  "/api/v1/knowledge-areas/": serie(3, index => ({
+  "/api/v2/knowledge-pieces/summary/": { sem_dono: 2, vencido: 1, a_vencer: 1, corrente: 1 },
+  "/api/v2/knowledge-areas/": serie(3, index => ({
     id: index, name: ["Operação", "Produto", "Comercial"][index - 1],
     slug: ["operacao", "produto", "comercial"][index - 1],
     position: index * 10, active: true,
@@ -669,11 +672,11 @@ const FIXTURES: Record<string, unknown> = {
     owner_name: index === 1 ? "Maria de Lourdes Albuquerque" : "",
     review_interval_days: 180,
   })),
-  "/api/v1/invoices/summary/": {
+  "/api/v2/invoices/summary/": {
     open: "97501.80", overdue: "48750.90", paid: "48750.90",
     open_count: 2, overdue_count: 1, paid_count: 1,
   },
-  "/api/v1/journey-phases/": serie(5, index => ({
+  "/api/v2/journey-phases/": serie(5, index => ({
     id: index, name: `Fase ${index} — implantação assistida`, description: "", active: true,
     position: index, deliverables: serie(3, d => ({ id: d, phase: index, name: `Entregável ${d}`, position: d })),
     // FDD 033: o contrato passou a enviar sempre os dois campos do gate; uma fase com gate e
@@ -683,7 +686,7 @@ const FIXTURES: Record<string, unknown> = {
       ? serie(2, c => ({ id: c, phase: index, text: `Item de qualidade ${c}`, position: c }))
       : [],
   })),
-  "/api/v1/analytics/": {
+  "/api/v2/analytics/": {
     funnel: {
       leads: { total: 40, by_status: { new: 12, contacted: 10, qualified: 14, discarded: 4 } },
       opportunities: { open: 9, won: 6, lost: 3 },
@@ -715,21 +718,21 @@ const FIXTURES: Record<string, unknown> = {
       by_service: [{ label: "Discovery + Assessment", revenue: 640000, cost: 300000, roi: 1.13 }],
     },
   },
-  "/api/v1/notifications/": serie(4, index => ({
+  "/api/v2/notifications/": serie(4, index => ({
     id: index, kind: "task", message: `Tarefa "Entrevistar área de faturamento" vence hoje (${index})`,
     url: "/projetos/1", read: index > 2, created_at: `${HOJE}T08:00:00Z`,
   })),
-  "/api/v1/users/": Object.values(usuarios),
-  "/api/v1/invitations/": serie(3, index => ({
+  "/api/v2/users/": Object.values(usuarios),
+  "/api/v2/invitations/": serie(3, index => ({
     id: index, email: `convidado${index}@empresa.test`, role: "delivery",
     expires_at: "2026-08-12T00:00:00Z", accepted_at: null, created_at: `${HOJE}T08:00:00Z`,
   })),
-  "/api/v1/project-members/": serie(4, index => ({
+  "/api/v2/project-members/": serie(4, index => ({
     id: index, project: 1, user: index, user_name: `Pessoa ${index}`,
     user_username: `pessoa${index}`, user_role: "delivery", added_by: 1,
     created_at: `${HOJE}T08:00:00Z`,
   })),
-  "/api/v1/project-phases/": serie(4, index => ({
+  "/api/v2/project-phases/": serie(4, index => ({
     id: index, project: 1, phase: index, phase_name: `Fase ${index} — implantação assistida`,
     phase_description: "", phase_position: index,
     status: index === 1 ? "done" : index === 2 ? "active" : "locked",
@@ -751,28 +754,28 @@ const FIXTURES: Record<string, unknown> = {
       ? serie(2, c => ({ id: c, project_phase: index, text: `Item de qualidade ${c}`, position: c, checked: c === 1, checked_at: c === 1 ? `${HOJE}T08:00:00Z` : null }))
       : [],
   })),
-  // O ativo **referencia** o KPI desde a decisão C1: `kpi` aponta para o indicador e
-  // `kpi_baseline`/`kpi_current` continuam saindo derivados. Um deles fica **sem baseline**, para o
-  // axe medir o `— → 65` e o "variação —" e não só o par completo.
-  "/api/v1/digital-employees/": serie(3, index => ({
-    id: index, project: 1, blueprint: null, kpi: index === 3 ? null : 21,
+  // O ativo **referencia** o KPI desde a decisão C1 (ADR 0055) — `kpi_baseline`/`kpi_current` não
+  // saem mais da `/api/v2/`, e o painel lê o par pelas medições do KPI referenciado. O primeiro
+  // aponta para o KPI 21 (par completo, `— → 65`); o segundo, para o 22 (**sem baseline**, para o
+  // axe medir o "variação —" e não só o par completo); o terceiro não referencia KPI nenhum.
+  "/api/v2/digital-employees/": serie(3, index => ({
+    id: index, project: 1, blueprint: null, kpi: index === 1 ? 21 : index === 2 ? 22 : null,
     name: `Agente de conciliação ${index}`, area: "Financeiro",
     description: "Concilia notas fiscais com o extrato bancário.", status: "active",
     kpi_label: "Horas poupadas", kpi_value: "120",
     kpi_unit: "hours", kpi_direction: "down",
-    kpi_baseline: index === 2 ? null : "260.00", kpi_current: "65.00",
     hours_saved_month: "120.0", roi_month: "18000.00",
   })),
-  "/api/v1/meetings/": serie(4, index => ({
+  "/api/v2/meetings/": serie(4, index => ({
     id: index, project: 1, title: `Comitê quinzenal de acompanhamento ${index}`,
     date: HOJE, recording_url: "", transcript: "Cliente relatou processo manual.", status: "held",
   })),
-  "/api/v1/pendencias/": serie(4, index => ({
+  "/api/v2/pendencias/": serie(4, index => ({
     id: index, project: 1, title: `Liberar acesso ao ERP para a equipe ${index}`,
     description: "", status: "open", party: "client", owner: null, resolved_at: null,
   })),
-  "/api/v1/contacts/": serie(4, index => ({
-    id: index, client: 1, first_name: "Pessoa", last_name: `de contato ${index}`,
+  "/api/v2/contacts/": serie(4, index => ({
+    id: index, account: 1, first_name: "Pessoa", last_name: `de contato ${index}`,
     name: `Pessoa de contato ${index}`,
     email: `pessoa${index}@empresa.test`, phone: "(11) 98888-0000", job_title: "Gerente de operações",
     // Um marcado e três não: o selo "Recebe cobrança" (FDD 036) precisa renderizar, e a linha sem
@@ -787,8 +790,8 @@ const FIXTURES: Record<string, unknown> = {
   // azul, que é justamente o par que a tela não pode deixar parecer a mesma coisa.
   //
   // Sem esta chave a rota cairia no fallback de lista vazia e a matriz aprovaria o estado vazio no
-  // lugar da seção — o modo de falha que o comentário de `/api/v1/processos/` acima já registra.
-  "/api/v1/engagements/": [
+  // lugar da seção — o modo de falha que o comentário de `/api/v2/processes/` acima já registra.
+  "/api/v2/engagements/": [
     // O primeiro leva o par completo (D1: link de convite) — o terceiro momento do board é o
     // segundo desta lista, e o silêncio (C1) é o terceiro: um de cada estado que a linha desenha.
     { name: `Transformação do faturamento e do fiscal — ${NOME_LONGO}`,
@@ -823,11 +826,11 @@ const FIXTURES: Record<string, unknown> = {
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
     ...registro,
   })),
-  "/api/v1/artifacts/": serie(4, index => ({
+  "/api/v2/artifacts/": serie(4, index => ({
     id: index, kind: "proposal", kind_display: "Proposta", status: "draft",
     status_display: "Rascunho", title: `Proposta — ${NOME_LONGO}`,
     content: "Rascunho gerado por IA para revisão humana.", commercial_opportunity: 1,
-    opportunity: 1, project: null,
+    project: null,
     source_meeting: null, document: null, ai_interaction: 1, created_by: 1,
     sent_at: null, decided_at: null, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   })),
@@ -841,14 +844,14 @@ const FIXTURES: Record<string, unknown> = {
  * sem estar em nenhuma equipe (RFC 0003) — o estado vazio faz parte da matriz.
  */
 export async function mockApi(page: Page, role: Role | null): Promise<void> {
-  await page.route("**/api/v1/**", (route: Route) => {
+  await page.route("**/api/v2/**", (route: Route) => {
     const { pathname } = new URL(route.request().url());
-    if (pathname === "/api/v1/auth/me/") {
+    if (pathname === "/api/v2/auth/me/") {
       return role
         ? route.fulfill({ json: usuarios[role] })
         : route.fulfill({ status: 403, json: { detail: "Credenciais ausentes." } });
     }
-    if (role === "delivery" && (pathname === "/api/v1/projects/" || pathname === "/api/v1/clients/")) {
+    if (role === "delivery" && (pathname === "/api/v2/projects/" || pathname === "/api/v2/accounts/")) {
       return route.fulfill({ json: [] });
     }
     // Duas rotas da Fase 5 precisam **respeitar o filtro**, e são as duas únicas leituras de query
@@ -860,10 +863,10 @@ export async function mockApi(page: Page, role: Role | null): Promise<void> {
     // mandato da conta — devolver a mesma lista três vezes renderizaria cada entrada em triplicata
     // e o total sairia triplicado, aprovando uma soma que o produto não faz.
     const busca = new URL(route.request().url()).searchParams;
-    if (pathname === "/api/v1/measurements/") {
+    if (pathname === "/api/v2/measurements/") {
       return route.fulfill({ json: MEDICOES_POR_KPI[busca.get("kpi") ?? ""] ?? [] });
     }
-    if (pathname === "/api/v1/value-ledger-entries/") {
+    if (pathname === "/api/v2/value-ledger-entries/") {
       const doMandato = (FIXTURES[pathname] as { engagement: number }[])
         .filter(entrada => String(entrada.engagement) === busca.get("engagement"));
       return route.fulfill({ json: doMandato });

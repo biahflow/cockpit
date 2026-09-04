@@ -45,11 +45,11 @@ export function CommercialPage() {
   const [archived, setArchived] = useState<CommercialOpportunity[]>([]);
   const [restoring, setRestoring] = useState<number | null>(null);
   const detailFile = useRef<HTMLInputElement>(null);
-  const load = useCallback(() => Promise.all([api<PipelineStage[]>("/pipeline-stages/"), api<CommercialOpportunity[]>("/opportunities/"), api<Account[]>("/clients/"), api<Service[]>("/services/")]).then(([loadedStages, loadedOpportunities, loadedAccounts, loadedServices]) => { setStages(loadedStages); setOpportunities(loadedOpportunities); setAccounts(loadedAccounts); setServices(loadedServices); if (loadedStages[0]) setDraft(current => current.stage ? current : { ...current, stage: String(loadedStages[0].id) }); }).catch((cause: Error) => setError(cause.message)), []);
+  const load = useCallback(() => Promise.all([api<PipelineStage[]>("/pipeline-stages/"), api<CommercialOpportunity[]>("/commercial-opportunities/"), api<Account[]>("/accounts/"), api<Service[]>("/services/")]).then(([loadedStages, loadedOpportunities, loadedAccounts, loadedServices]) => { setStages(loadedStages); setOpportunities(loadedOpportunities); setAccounts(loadedAccounts); setServices(loadedServices); if (loadedStages[0]) setDraft(current => current.stage ? current : { ...current, stage: String(loadedStages[0].id) }); }).catch((cause: Error) => setError(cause.message)), []);
   useEffect(() => { void load(); }, [load]);
-  async function move(event: DragEvent<HTMLElement>, stage: PipelineStage) { event.preventDefault(); const id = Number(event.dataTransfer.getData("opportunity")); if (!id) return; try { await api(`/opportunities/${id}/`, { method: "PATCH", body: JSON.stringify({ stage: stage.id }) }); await load(); } catch (cause) { setError((cause as Error).message); } }
-  async function createOpportunity(event: FormEvent<HTMLFormElement>) { event.preventDefault(); try { await api("/opportunities/", { method: "POST", body: JSON.stringify({ ...draft, account: Number(draft.account), stage: Number(draft.stage), service: draft.service ? Number(draft.service) : null }) }); setDraft(current => ({ ...blankDraft, stage: current.stage })); setComposerOpen(false); await load(); } catch (cause) { setError((cause as Error).message); } }
-  async function convert(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!converting) return; try { const created = await api<Project>(`/opportunities/${converting.id}/convert-to-project/`, { method: "POST", body: JSON.stringify({ name: converting.title, ...dates, status: "planning" }) }); setConverting(null); setDates({ start_date: "", due_date: "" }); setCreated(created); await load(); } catch (cause) { setError((cause as Error).message); } }
+  async function move(event: DragEvent<HTMLElement>, stage: PipelineStage) { event.preventDefault(); const id = Number(event.dataTransfer.getData("opportunity")); if (!id) return; try { await api(`/commercial-opportunities/${id}/`, { method: "PATCH", body: JSON.stringify({ stage: stage.id }) }); await load(); } catch (cause) { setError((cause as Error).message); } }
+  async function createOpportunity(event: FormEvent<HTMLFormElement>) { event.preventDefault(); try { await api("/commercial-opportunities/", { method: "POST", body: JSON.stringify({ ...draft, account: Number(draft.account), stage: Number(draft.stage), service: draft.service ? Number(draft.service) : null }) }); setDraft(current => ({ ...blankDraft, stage: current.stage })); setComposerOpen(false); await load(); } catch (cause) { setError((cause as Error).message); } }
+  async function convert(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!converting) return; try { const created = await api<Project>(`/commercial-opportunities/${converting.id}/convert-to-project/`, { method: "POST", body: JSON.stringify({ name: converting.title, ...dates, status: "planning" }) }); setConverting(null); setDates({ start_date: "", due_date: "" }); setCreated(created); await load(); } catch (cause) { setError((cause as Error).message); } }
 
   async function openDetail(item: CommercialOpportunity) {
     setDetail(item);
@@ -80,7 +80,7 @@ export function CommercialPage() {
     event.preventDefault(); if (!detail) return;
     setDetailError(""); setDetailNotice(""); setNotice("");
     try {
-      await api<CommercialOpportunity>(`/opportunities/${detail.id}/`, { method: "PATCH", body: JSON.stringify({ title: detailDraft.title, scope: detailDraft.scope, estimated_value: detailDraft.estimated_value, expected_close_date: detailDraft.expected_close_date, contact: detailDraft.contact ? Number(detailDraft.contact) : null, stage: Number(detailDraft.stage), service: detailDraft.service ? Number(detailDraft.service) : null }) });
+      await api<CommercialOpportunity>(`/commercial-opportunities/${detail.id}/`, { method: "PATCH", body: JSON.stringify({ title: detailDraft.title, scope: detailDraft.scope, estimated_value: detailDraft.estimated_value, expected_close_date: detailDraft.expected_close_date, contact: detailDraft.contact ? Number(detailDraft.contact) : null, stage: Number(detailDraft.stage), service: detailDraft.service ? Number(detailDraft.service) : null }) });
       await load();
       setDetail(null);
       setNotice("Oportunidade salva.");
@@ -103,7 +103,7 @@ export function CommercialPage() {
   async function runAi(kind: "summary" | "proposal" | "contract") {
     if (!detail) return; setDetailError(""); setDetailNotice(""); setAiBusy(true); setAiText("");
     try {
-      const result = await api<{ text: string; artifact?: unknown }>(`/opportunities/${detail.id}/${kind}/`, { method: "POST" });
+      const result = await api<{ text: string; artifact?: unknown }>(`/commercial-opportunities/${detail.id}/${kind}/`, { method: "POST" });
       // Proposta e contrato viram artefato registrado (FDD 016); o resumo segue efêmero.
       if (result.artifact) setArtifactsToken(token => token + 1); else setAiText(result.text);
     }
@@ -124,13 +124,13 @@ export function CommercialPage() {
   }
   // O kanban não comporta uma coluna de arquivados — o quadro dá lugar a uma lista simples.
   const loadArchived = useCallback(
-    () => api<CommercialOpportunity[]>("/opportunities/?archived=1").then(setArchived).catch((cause: Error) => setError(cause.message)),
+    () => api<CommercialOpportunity[]>("/commercial-opportunities/?archived=1").then(setArchived).catch((cause: Error) => setError(cause.message)),
     [],
   );
   useEffect(() => { if (showArchived) void loadArchived(); }, [showArchived, loadArchived]);
   async function restore(id: number) {
     setError(""); setRestoring(id);
-    try { await api(`/opportunities/${id}/unarchive/`, { method: "POST" }); await loadArchived(); await load(); }
+    try { await api(`/commercial-opportunities/${id}/unarchive/`, { method: "POST" }); await loadArchived(); await load(); }
     catch (cause) { setError((cause as Error).message); }
     finally { setRestoring(null); }
   }
@@ -138,7 +138,7 @@ export function CommercialPage() {
     if (!archiving) return;
     setArchiveBusy(true);
     try {
-      await api(`/opportunities/${archiving.id}/`, { method: "DELETE" });
+      await api(`/commercial-opportunities/${archiving.id}/`, { method: "DELETE" });
       setArchiving(null); setDetail(null); await load();
       if (showArchived) await loadArchived();
     } catch (cause) { setArchiving(null); setError((cause as Error).message); }

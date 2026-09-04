@@ -14,7 +14,7 @@ vi.mock("../api", () => ({
   listNotifications: mocks.listNotifications,
   markNotificationRead: mocks.markNotificationRead,
   markAllNotificationsRead: mocks.markAllNotificationsRead,
-  avatarUrl: (user: { id: number }) => `/api/v1/users/${user.id}/avatar/`,
+  avatarUrl: (user: { id: number }) => `/api/v2/users/${user.id}/avatar/`,
 }));
 vi.mock("../auth", () => ({ useAuth: mocks.useAuth }));
 
@@ -136,6 +136,6 @@ test("sem foto, o avatar do topo mostra as iniciais", () => {
 test("com foto, o avatar do topo mostra a foto — o mesmo componente nos dois casos", () => {
   renderComo({ role: "admin", is_admin: true, has_avatar: true, avatar_updated_at: "2026-08-27T12:00:00Z" });
 
-  expect(screen.getByRole("img", { name: "Bia" })).toHaveAttribute("src", "/api/v1/users/1/avatar/");
+  expect(screen.getByRole("img", { name: "Bia" })).toHaveAttribute("src", "/api/v2/users/1/avatar/");
   expect(screen.queryByText("BI")).toBeNull();
 });

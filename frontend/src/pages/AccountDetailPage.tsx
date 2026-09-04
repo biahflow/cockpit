@@ -175,18 +175,18 @@ export function AccountDetailPage({ id }: { id: number }) {
   const sellableServices = services.filter(service => service.active && service.category === "commercial");
 
   const load = useCallback(() => Promise.all([
-    api<Account>(`/clients/${id}/`),
+    api<Account>(`/accounts/${id}/`),
     api<Contact[]>(`/contacts/?account=${id}`),
     api<Activity[]>(`/activities/?account=${id}`),
-    api<AccountOverview>(`/clients/${id}/overview/`),
+    api<AccountOverview>(`/accounts/${id}/overview/`),
     api<Vertical[]>("/verticals/"),
     api<Satisfacao[]>(`/satisfacoes/?account=${id}`),
-    api<Process[]>(`/processos/?account=${id}`),
+    api<Process[]>(`/processes/?account=${id}`),
     // Na **mesma** chamada que o resto da página, e não num `useEffect` próprio: a seção não tem
     // estado de carregamento seu (decisão do DAP), e uma segunda chamada criaria um — a tela
     // mostraria a seção vazia antes de mostrá-la cheia.
     api<Engagement[]>(`/engagements/?account=${id}`),
-    canWriteEngagements ? api<CommercialOpportunity[]>(`/opportunities/?account=${id}`) : Promise.resolve([]),
+    canWriteEngagements ? api<CommercialOpportunity[]>(`/commercial-opportunities/?account=${id}`) : Promise.resolve([]),
     canWriteEngagements ? api<DocumentEntry[]>(`/documents/?account=${id}`) : Promise.resolve([]),
     // Só quem escreve o mandato alcança a ação de criar projeto, e é ela a única consumidora do
     // catálogo aqui — a Entrega não vê o botão, então não precisa da chamada.
@@ -206,7 +206,7 @@ export function AccountDetailPage({ id }: { id: number }) {
 
   async function saveClient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaved(false);
-    try { await api(`/clients/${id}/`, { method: "PATCH", body: JSON.stringify({ ...form, vertical: form.vertical ? Number(form.vertical) : null }) }); setSaved(true); await load(); }
+    try { await api(`/accounts/${id}/`, { method: "PATCH", body: JSON.stringify({ ...form, vertical: form.vertical ? Number(form.vertical) : null }) }); setSaved(true); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   /**
@@ -408,7 +408,7 @@ export function AccountDetailPage({ id }: { id: number }) {
   async function archiveClient() {
     setBusy(true);
     try {
-      await api(`/clients/${id}/`, { method: "DELETE" });
+      await api(`/accounts/${id}/`, { method: "DELETE" });
       window.location.assign("/contas");
     } catch (cause) {
       // O 409 das guardas de integridade chega aqui com o motivo ("ainda tem 2 projeto(s)…"),
@@ -626,7 +626,7 @@ export function AccountDetailPage({ id }: { id: number }) {
         sabe.
 
         A contagem de etapas ficou de fora, e o motivo é o payload: `ProcessSerializer` não expõe
-        `steps` nem um contador, e `/processo-etapas/` só filtra por `?process=` — mostrá-la aqui
+        `steps` nem um contador, e `/process-steps/` só filtra por `?process=` — mostrá-la aqui
         custaria uma requisição por processo a cada `load()`, que esta tela dispara a cada contato,
         interação ou satisfação criados. */}
     <section className="panel space-y-4 sm:p-6">

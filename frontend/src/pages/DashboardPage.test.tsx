@@ -9,7 +9,7 @@ const authState = vi.hoisted(() => ({ user: { role: "admin", is_admin: true } as
 vi.mock("../auth", () => ({ useAuth: () => authState }));
 
 const OVERVIEW = [
-  { project_id: 1, project_name: "Projeto X", client_name: "Igreja Batista", current_phase_name: "Prove", canonical_stage: "prove", situation: "blocked", waiting_party: "client", blocker_note: "acesso", next_gate_name: "Scale" },
+  { project_id: 1, project_name: "Projeto X", account_name: "Igreja Batista", current_phase_name: "Prove", canonical_stage: "prove", situation: "blocked", waiting_party: "client", blocker_note: "acesso", next_gate_name: "Scale" },
 ];
 function stub() {
   mocks.api.mockImplementation((path: string) => {

@@ -48,7 +48,7 @@ function stub() {
     if (path.startsWith("/artifacts")) return Promise.resolve([artifact()]);
     if (path.includes("/risk/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 0, level: "baixo", signals: [] });
     if (path.includes("/health/")) return Promise.resolve({ project_id: 1, name: "Projeto X", score: 90, level: "saudável", signals: [] });
-    if (path.startsWith("/projects/")) return Promise.resolve({ id: 1, name: "Projeto X", description: "", client: 1, owner: 1, start_date: "2026-08-01", due_date: "2026-09-01", status: "active", service: null, actual_value: "0", cost: "0", is_overdue: false, ai_maturity: null, ai_potential: null, ai_opportunity: null, ai_dimensions: [], ai_score_summary: "", ai_scored_at: null, ai_score_reviewed: false, client_vertical: 7, client_vertical_name: "Igrejas" });
+    if (path.startsWith("/projects/")) return Promise.resolve({ id: 1, name: "Projeto X", description: "", client: 1, owner: 1, start_date: "2026-08-01", due_date: "2026-09-01", status: "active", service: null, actual_value: "0", cost: "0", is_overdue: false, ai_maturity: null, ai_potential: null, ai_opportunity: null, ai_dimensions: [], ai_score_summary: "", ai_scored_at: null, ai_score_reviewed: false, account_vertical: 7, account_vertical_name: "Igrejas" });
     if (path.startsWith("/milestones")) return Promise.resolve([{ id: 1, project: 1, title: "Marco 1", description: "", owner: 1, due_date: "2026-08-15", completed_at: null, status: "todo", party: "provider", is_overdue: true }]);
     if (path.startsWith("/tasks")) return Promise.resolve([{ id: 1, project: 1, title: "Tarefa 1", description: "", owner: 1, due_date: "2026-08-10", completed_at: null, status: "todo", party: "provider", is_overdue: false, milestone: null }]);
     if (path.startsWith("/meetings")) return Promise.resolve([{ id: 1, project: 1, title: "Kickoff", date: "2026-08-05", recording_url: "https://rec/1", transcript: "Cliente descreveu suas dores.", status: "held" }]);
@@ -650,7 +650,7 @@ test("extrair processos mapeia a operação a partir da transcrição", async ()
   render(<ProjectDetailPage id={1} />);
   await screen.findByText("Projeto X");
 
-  mocks.api.mockImplementationOnce(() => Promise.resolve({ text: "[]", interaction: 9, processos: [{ id: 1 }, { id: 2 }] }));
+  mocks.api.mockImplementationOnce(() => Promise.resolve({ text: "[]", interaction: 9, processes: [{ id: 1 }, { id: 2 }] }));
   fireEvent.click(screen.getByRole("button", { name: "Processos" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(

@@ -126,14 +126,12 @@ export function PriorizacaoPage({ accountId }: { accountId: number }) {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => Promise.all([
-    // A **rota** da conta continua sendo `/clients/` — ela morre na `/api/v2/`
-    // (`docs/ontology/aliases.md`); as três abaixo já nascem com o nome canônico.
-    api<Account>(`/clients/${accountId}/`),
+    api<Account>(`/accounts/${accountId}/`),
     listPainPointsByAccount(accountId),
     listImprovementOpportunities(accountId),
     // Os processos entram só para nomear onde a dor foi observada: `PainPoint` carrega o id do
     // processo e não o nome dele, e "Observado em: 12" não diz nada a quem lê.
-    api<Process[]>(`/processos/?account=${accountId}`),
+    api<Process[]>(`/processes/?account=${accountId}`),
   ]).then(([loadedAccount, loadedDores, loadedOportunidades, loadedProcessos]) => {
     setAccount(loadedAccount); setDores(loadedDores);
     setOportunidades(loadedOportunidades); setProcessos(loadedProcessos);

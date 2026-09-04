@@ -10,7 +10,8 @@ import { isDeliveryOnly } from "../roles";
 import type { Account, CommercialOpportunity, DocumentEntry, Project, SignerRole } from "../types";
 
 // A chave **é** o nome do campo no corpo do `POST /documents/`, então ela é a canônica: a SPA
-// não escreve o alias que a `/api/v1/` mantém para quem integrou antes do renome (#67).
+// fala com a `/api/v2/`, que nem aceita o alias que a `/api/v1/` ainda mantém para quem integrou
+// antes do renome (#67).
 type LinkType = "account" | "commercial_opportunity" | "project";
 const linkLabel: Record<LinkType, string> = { account: "Conta", commercial_opportunity: "Oportunidade", project: "Projeto" };
 // O papel na linha de assinatura (DAP r1, F1): com três signatários, "quem é quem" é a pergunta
@@ -45,8 +46,8 @@ export function DocumentsPage() {
 
   const load = useCallback(() => Promise.all([
     api<DocumentEntry[]>(`/documents/${showArchived ? "?archived=1" : ""}`),
-    api<Account[]>("/clients/"),
-    isDelivery ? Promise.resolve<CommercialOpportunity[]>([]) : api<CommercialOpportunity[]>("/opportunities/"),
+    api<Account[]>("/accounts/"),
+    isDelivery ? Promise.resolve<CommercialOpportunity[]>([]) : api<CommercialOpportunity[]>("/commercial-opportunities/"),
     api<Project[]>("/projects/"),
   ]).then(([loadedDocuments, loadedAccounts, loadedOpportunities, loadedProjects]) => {
     setDocuments(loadedDocuments); setAccounts(loadedAccounts); setOpportunities(loadedOpportunities); setProjects(loadedProjects);

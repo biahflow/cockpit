@@ -6,7 +6,7 @@ import { DocumentsPage } from "./DocumentsPage";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 const authState = vi.hoisted(() => ({ esignEnabled: false, esignHouseSignerEmail: null as string | null, user: { role: "admin", is_admin: true } as { role: string; is_admin?: boolean } }));
-vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v1/documents/${id}/download/` }));
+vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v2/documents/${id}/download/` }));
 vi.mock("../auth", () => ({ useAuth: () => authState }));
 
 const CONTATOS = [
@@ -18,7 +18,7 @@ const CONTATOS = [
 function stub(signatureRequests: object[] = [], documento: object = {}) {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/documents/") return Promise.resolve([{ id: 1, account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", kind: "", original_name: "contrato.pdf", uploaded_by: 1, created_at: "2026-08-01", originated_engagement: null, owning_account: 1, signature_positioning_gap: null, ...documento, signature_requests: signatureRequests }]);
-    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path === "/accounts/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts/")) return Promise.resolve(CONTATOS);
     return Promise.resolve([]);
   });
@@ -43,14 +43,14 @@ test("entrega só pode vincular documento a projeto", async () => {
 
   const linkType = screen.getAllByRole("combobox")[0];
   expect(Array.from(linkType.querySelectorAll("option")).map(option => option.value)).toEqual(["project"]);
-  expect(mocks.api).not.toHaveBeenCalledWith("/opportunities/");
+  expect(mocks.api).not.toHaveBeenCalledWith("/commercial-opportunities/");
 });
 
 test("lista documentos com vínculo e link de download", async () => {
   render(<DocumentsPage />);
   expect(await screen.findByText("contrato.pdf")).toBeInTheDocument();
   expect(screen.getByText("Conta: Cliente A")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Baixar contrato.pdf" })).toHaveAttribute("href", "/api/v1/documents/1/download/");
+  expect(screen.getByRole("link", { name: "Baixar contrato.pdf" })).toHaveAttribute("href", "/api/v2/documents/1/download/");
 });
 
 test("envia um documento vinculado a um cliente", async () => {
@@ -124,7 +124,7 @@ test("a finalidade aparece na listagem, e o documento comum não ganha pastilha"
       { id: 1, kind: "nda", account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "nda.pdf", uploaded_by: 1, created_at: "2026-08-01", originated_engagement: null, owning_account: 1, signature_positioning_gap: null, signature_requests: [] },
       { id: 2, kind: "", account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "ata.pdf", uploaded_by: 1, created_at: "2026-08-01", originated_engagement: null, owning_account: 1, signature_positioning_gap: null, signature_requests: [] },
     ]);
-    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path === "/accounts/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     return Promise.resolve([]);
   });
   render(<DocumentsPage />);
@@ -193,7 +193,7 @@ test("lista e restaura documentos arquivados", async () => {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/documents/?archived=1") return Promise.resolve([{ id: 2, account: 1, client: 1, commercial_opportunity: null, opportunity: null, project: null, file: "x", original_name: "antigo.pdf", uploaded_by: 1, created_at: "2026-08-01", originated_engagement: null, owning_account: 1, signature_positioning_gap: null, signature_requests: [] }]);
     if (path === "/documents/") return Promise.resolve([]);
-    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path === "/accounts/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     return Promise.resolve([]);
   });
   render(<DocumentsPage />);

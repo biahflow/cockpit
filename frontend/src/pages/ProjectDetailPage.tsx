@@ -49,8 +49,8 @@ const ciStateLabel: Record<GithubCiState, string> = { unknown: "—", pending: "
 // **Sem `kpi_baseline`/`kpi_current` desde a decisão C1** do DAP `dap-prove-e-valor-r1`: a medição
 // saiu do ativo de solução e virou `Measurement` de um `KPI` (ADR 0055). Enquanto os dois campos
 // ficassem aqui, existiriam **dois lugares escrevendo o mesmo número** e valeria o último salvo —
-// que é o defeito que a fase inteira desfaz. As duas chaves continuam **saindo** no `GET`
-// (derivadas), e é por isso que o painel abaixo as lê; o que sai é a escrita.
+// que é o defeito que a fase inteira desfaz. A `/api/v2/` não emite mais as duas chaves, e o
+// painel abaixo lê o par pelo KPI referenciado (`listKpis` + `listMeasurements`, `valorDe`).
 const blankEmployeeEdit = { name: "", area: "", status: "building" as DigitalEmployeeStatus, description: "", kpi_label: "", kpi_value: "", kpi_unit: "" as KpiUnit, kpi_direction: "up" as KpiDirection, hours_saved_month: "", roi_month: "" };
 const kpiUnits: { value: KpiUnit; label: string }[] = [
   { value: "", label: "Sem unidade" }, { value: "percent", label: "Percentual (%)" },
@@ -232,7 +232,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   // O catálogo vem **resolvido** pela vertical do cliente: o que a lista mostra é o que a
   // instanciação vai copiar (FDD 026). Sem vertical, vêm os valores genéricos — e vem tudo, porque
   // filtrar por vertical esconderia justamente o bloco que serve a qualquer setor.
-  const vertical = project?.client_vertical;
+  const vertical = project?.account_vertical;
   useEffect(() => {
     if (!canManageJourney) return;
     const query = vertical ? `&vertical=${vertical}` : "";
@@ -378,8 +378,8 @@ export function ProjectDetailPage({ id }: { id: number }) {
   async function estruturarProcessos(meeting: Meeting) {
     setAiLoading(true); setError(""); setProcessosMapeados(0);
     try {
-      const { processos } = await api<{ processos: { id: number }[] }>(`/meetings/${meeting.id}/estruturar/`, { method: "POST" });
-      setProcessosMapeados(processos.length);
+      const { processes } = await api<{ processes: { id: number }[] }>(`/meetings/${meeting.id}/estruturar/`, { method: "POST" });
+      setProcessosMapeados(processes.length);
     }
     catch (cause) { setError(mensagemDeFalha(cause)); } finally { setAiLoading(false); }
   }
@@ -674,15 +674,19 @@ export function ProjectDetailPage({ id }: { id: number }) {
         {employee.area && <p className="mt-0.5 text-xs text-accent">{employee.area}</p>}
         {employee.description && <p className="mt-1 text-xs text-slate-600">{employee.description}</p>}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{employee.kpi_label && <span><strong className="text-ink">{employee.kpi_label}:</strong> {employee.kpi_value}</span>}{Number(employee.hours_saved_month) > 0 && <span>{Number(employee.hours_saved_month)}h/mês</span>}{Number(employee.roi_month) > 0 && <span>ROI {money.format(Number(employee.roi_month))}/mês</span>}</div>
-        {/* **Decisão C1**: o ativo *referencia* o KPI, não o possui. O que aparece aqui é
-            leitura — `kpi_baseline` e `kpi_current` continuam saindo no `GET`, derivados da
-            baseline viva e do Outcome mais recente (ADR 0055) —, e a escrita mora no PROVE. */}
-        {employee.kpi !== null && (() => {
-          const kpiDoAtivo = kpis.find(kpi => kpi.id === employee.kpi);
+        {/* **Decisão C1**: o ativo *referencia* o KPI, não o possui. A `/api/v2/` não emite mais
+            `kpi_baseline`/`kpi_current` (ADR 0055): o par vem das medições do próprio KPI
+            referenciado, o mesmo mecanismo do painel do PROVE logo abaixo (`medicoes` + `valorDe`).
+            Sem KPI referenciado, o painel nem chega a existir para este funcionário digital. */}
+        {(() => {
+          const kpiId = employee.kpi;
+          if (kpiId === null) return null;
+          const kpiDoAtivo = kpis.find(kpi => kpi.id === kpiId);
+          const leituras = medicoes[kpiId] ?? [];
           return <div className="mt-3 border-t border-dashed border-line pt-3">
             <p className="text-xs font-semibold text-ink">KPI referenciado</p>
             <p className="mt-0.5 text-xs text-slate-600">{kpiDoAtivo?.name || employee.kpi_label || "Indicador"}{kpiDoAtivo?.prove_experiment != null ? " · medido no PROVE" : " · sem experimento"}</p>
-            <ParDeMedicao antes={employee.kpi_baseline} depois={employee.kpi_current} direcao={kpiDoAtivo?.direction ?? employee.kpi_direction} />
+            <ParDeMedicao antes={valorDe(leituras, "baseline")} depois={valorDe(leituras, "outcome")} direcao={kpiDoAtivo?.direction ?? employee.kpi_direction} />
             {temFaseProve && kpiDoAtivo?.prove_experiment != null && <a className="back-link mt-1 text-xs" href="#prove">Ver no PROVE<ChevronRight className="size-3.5" /></a>}
           </div>;
         })()}
@@ -700,7 +704,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
         {catalog.length > 0 && <form className="mt-4 flex flex-wrap items-end gap-2 rounded-xl border border-dashed bg-accent-50/30 p-3" onSubmit={event => void createEmployeeFromBlueprint(event)}>
           <label className="form-label flex-1">Adicionar da biblioteca<select className="field" value={blueprintDraft} onChange={event => setBlueprintDraft(event.target.value)} required>
             <option value="">Escolha um bloco do catálogo…</option>
-            {catalog.map(blueprint => <option key={blueprint.id} value={blueprint.id}>{blueprint.name} — {blueprint.area_display}{blueprint.has_variant ? ` (ajustado a ${project.client_vertical_name})` : ""}</option>)}
+            {catalog.map(blueprint => <option key={blueprint.id} value={blueprint.id}>{blueprint.name} — {blueprint.area_display}{blueprint.has_variant ? ` (ajustado a ${project.account_vertical_name})` : ""}</option>)}
           </select></label>
           <button className="btn shrink-0" type="submit"><Plus className="size-4" />Instanciar</button>
         </form>}

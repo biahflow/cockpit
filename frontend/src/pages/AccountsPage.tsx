@@ -40,26 +40,23 @@ export function AccountsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [archived, setArchived] = useState<Account[]>([]);
   const [restoring, setRestoring] = useState<number | null>(null);
-  // A aba Arquivados fala com `/clients/?archived=1`, não com `/clients/overview/`: o overview é
+  // A aba Arquivados fala com `/accounts/?archived=1`, não com `/accounts/overview/`: o overview é
   // agregador montado à mão e não passa pelo `get_queryset` do `ArchiveModelViewSet`, então nunca
   // enxergaria o arquivado. Saúde e jornada também não fazem sentido para quem saiu da base.
-  //
-  // A rota continua sendo `/clients/` (ADR 0052): o renome é da classe e do campo, e `/accounts/`
-  // nasce na `/api/v2/`.
   const load = useCallback(() => {
     if (filter === "archived") {
-      return api<Account[]>("/clients/?archived=1").then(setArchived).catch((cause: Error) => setError(cause.message));
+      return api<Account[]>("/accounts/?archived=1").then(setArchived).catch((cause: Error) => setError(cause.message));
     }
-    return api<{ clients: AccountOverview[] }>(`/clients/overview/${filter === "all" ? "" : `?lifecycle_status=${filter}`}`).then(result => setAccounts(result.clients)).catch((cause: Error) => setError(cause.message));
+    return api<{ accounts: AccountOverview[] }>(`/accounts/overview/${filter === "all" ? "" : `?lifecycle_status=${filter}`}`).then(result => setAccounts(result.accounts)).catch((cause: Error) => setError(cause.message));
   }, [filter]);
   useEffect(() => { void load(); }, [load]);
   async function restore(id: number) {
     setError(""); setRestoring(id);
-    try { await api(`/clients/${id}/unarchive/`, { method: "POST" }); await load(); }
+    try { await api(`/accounts/${id}/unarchive/`, { method: "POST" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
     finally { setRestoring(null); }
   }
-  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setCreating(true); try { await api<Account>("/clients/", { method: "POST", body: JSON.stringify({ name, legal_name: legalName, tax_id: taxId, lifecycle_status: lifecycleStatus }) }); setName(""); setLegalName(""); setTaxId(""); setLifecycleStatus("prospect"); await load(); } catch (cause) { setError((cause as Error).message); } finally { setCreating(false); } }
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setCreating(true); try { await api<Account>("/accounts/", { method: "POST", body: JSON.stringify({ name, legal_name: legalName, tax_id: taxId, lifecycle_status: lifecycleStatus }) }); setName(""); setLegalName(""); setTaxId(""); setLifecycleStatus("prospect"); await load(); } catch (cause) { setError((cause as Error).message); } finally { setCreating(false); } }
 
   return <section className="space-y-7"><header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="eyebrow">Relacionamento</p><h1>Contas</h1><p>Mantenha a base que sustenta seus projetos.</p></div><span className="rounded-xl bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700">{filter === "archived" ? `${archived.length} arquivados` : `${accounts.length} cadastrados`}</span></header>{error && <p role="alert" className="alert--error">{error}</p>}
     <div className="grid gap-5 lg:grid-cols-[.72fr_1.28fr]"><form className="panel sm:p-6" onSubmit={event => void submit(event)}><div className="flex items-center gap-3"><span className="metric-icon size-10"><Plus className="size-5" /></span><div><h2 className="font-semibold text-ink">Nova conta</h2><p className="text-sm text-slate-600">Comece pelo nome principal.</p></div></div><label className="mt-6 form-label">Nome da conta<input className="field" value={name} onChange={event => setName(event.target.value)} placeholder="Ex.: Empresa Exemplo" required /></label><label className="mt-4 form-label">Razão social<input className="field" value={legalName} onChange={event => setLegalName(event.target.value)} placeholder="Opcional" /></label><label className="mt-4 form-label">CNPJ / CPF<input className="field" value={taxId} onChange={event => setTaxId(event.target.value)} placeholder="Opcional" /></label><label className="mt-4 form-label">Situação<select className="field" value={lifecycleStatus} onChange={event => setLifecycleStatus(event.target.value as AccountLifecycleStatus)}><LifecycleOptions /></select></label><button className="btn mt-4 w-full" disabled={isCreating} type="submit"><Plus className="size-4" />{isCreating ? "Cadastrando…" : "Cadastrar conta"}</button></form>

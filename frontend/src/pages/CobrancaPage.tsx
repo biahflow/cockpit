@@ -266,7 +266,7 @@ export function CobrancaPage() {
           // Um **ou** o outro, nunca os dois — a regra é do `clean()` do modelo, e mandar os dois
           // seria pedir 400 para dizer o que a tela já sabia.
           ...(suspensao.alcance === "cliente"
-            ? { account: suspendendo.client }
+            ? { account: suspendendo.account }
             : { invoice: suspendendo.invoice }),
           owner: Number(suspensao.owner),
           until: suspensao.until,
@@ -295,7 +295,7 @@ export function CobrancaPage() {
       await api("/satisfacoes/", {
         method: "POST",
         body: JSON.stringify({
-          account: registrando.client,
+          account: registrando.account,
           source_activity: registrando.sinal_activity,
           nivel: registro.nivel,
           fonte: "declarada",
@@ -345,7 +345,7 @@ export function CobrancaPage() {
             porque seu texto é constante revisada uma vez; o que muda aqui é a **redação**, e a
             redação é precisamente o que uma pessoa revisaria. */}
         <p className="text-sm text-muted">
-          <strong className="text-ink">{envio.linha.client_name}</strong> · fatura {envio.linha.number || "sem número"} · degrau <strong className="text-ink">{envio.linha.proximo_degrau_display}</strong>.
+          <strong className="text-ink">{envio.linha.account_name}</strong> · fatura {envio.linha.number || "sem número"} · degrau <strong className="text-ink">{envio.linha.proximo_degrau_display}</strong>.
           O texto sai como está escrito abaixo, com o seu nome no registro.
         </p>
         {error && <p role="alert" className="alert--error">{error}</p>}
@@ -388,7 +388,7 @@ export function CobrancaPage() {
           <label className="flex items-center gap-2 text-sm text-ink">
             <input type="radio" name="alcance" className="size-4" checked={suspensao.alcance === "cliente"}
               onChange={() => setSuspensao({ ...suspensao, alcance: "cliente" })} />
-            Este cliente inteiro — {suspendendo.client_name}
+            Este cliente inteiro — {suspendendo.account_name}
           </label>
         </fieldset>
         <label className="form-label">Dono da suspensão
@@ -417,7 +417,7 @@ export function CobrancaPage() {
             classificou uma resposta; afirmar que o cliente está insatisfeito é outra coisa, e é
             ela que tira 20 pontos do Health Score e troca a escada da cobrança. */}
         <p className="text-sm text-muted">
-          A resposta de <strong className="text-ink">{registrando.client_name}</strong> foi lida como <strong className="text-ink">{registrando.sinal_display}</strong> em {registrando.sinal_em ? formatDate(registrando.sinal_em) : ""}. O que a IA leu não é registro — o registro é este, e sai com o seu nome.
+          A resposta de <strong className="text-ink">{registrando.account_name}</strong> foi lida como <strong className="text-ink">{registrando.sinal_display}</strong> em {registrando.sinal_em ? formatDate(registrando.sinal_em) : ""}. O que a IA leu não é registro — o registro é este, e sai com o seu nome.
         </p>
         {error && <p role="alert" className="alert--error">{error}</p>}
         {/* A fonte não é escolha: foi o cliente quem respondeu, então é declarada. É a fonte que
@@ -448,7 +448,7 @@ export function CobrancaPage() {
 
     {levantando && <ConfirmDialog
       title="Levantar suspensão"
-      message={<>A régua volta a falar sobre a fatura <strong className="text-ink">{levantando.number || "sem número"}</strong> de {levantando.client_name} a partir da próxima passada. O levantamento fica registrado com autor e carimbo — não existe voltar a cobrar em silêncio.</>}
+      message={<>A régua volta a falar sobre a fatura <strong className="text-ink">{levantando.number || "sem número"}</strong> de {levantando.account_name} a partir da próxima passada. O levantamento fica registrado com autor e carimbo — não existe voltar a cobrar em silêncio.</>}
       confirmLabel="Levantar" busy={busy}
       onCancel={() => setLevantando(null)} onConfirm={() => void levantar()}
     />}
@@ -477,14 +477,14 @@ export function CobrancaPage() {
       const naoEnvia = porQueNaoEnvia(linha);
       const naoRascunha = porQueNaoRascunha(linha);
       const silencio = motivoDoSilencio(linha);
-      const identifica = `${linha.client_name} · fatura ${linha.number || "sem número"}`;
+      const identifica = `${linha.account_name} · fatura ${linha.number || "sem número"}`;
       const contatos = historico[linha.invoice];
       return <article key={linha.invoice} className="panel panel--flush">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-slate-50/60 px-5 py-4 sm:px-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="metric-icon"><Receipt className="size-4" /></span>
-              <h2 className="font-semibold text-ink">{linha.client_name}</h2>
+              <h2 className="font-semibold text-ink">{linha.account_name}</h2>
               <span className={`state ${linha.status === "overdue" ? "state--3" : "state--2"}`}>{linha.status_display}</span>
               <span className={`state ${atrasoTone(linha.dias_de_atraso)}`}>{atrasoLabel(linha.dias_de_atraso)}</span>
             </div>
@@ -541,7 +541,7 @@ export function CobrancaPage() {
               <dd className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="state state--off"><MessageSquareText className="size-3" />{linha.sinal_display}</span>
                 <span className="text-xs text-muted">{linha.sinal_em ? formatDate(linha.sinal_em) : ""} · não move o Health Score nem a régua</span>
-                <button type="button" className="btn btn--secondary" aria-label={`Registrar satisfação — ${linha.client_name} · fatura ${linha.number || "sem número"}`}
+                <button type="button" className="btn btn--secondary" aria-label={`Registrar satisfação — ${linha.account_name} · fatura ${linha.number || "sem número"}`}
                   onClick={() => { setError(""); setNotice(""); setRegistrando(linha); setRegistro({ ...registroVazio, nivel: NIVEL_SUGERIDO[linha.sinal_kind!] }); }}>
                   Registrar satisfação
                 </button>

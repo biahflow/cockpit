@@ -61,7 +61,7 @@ export function FinanceiroPage() {
   }, [statusFilter]);
 
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { void api<Account[]>("/clients/").then(setAccounts).catch(() => setAccounts([])); }, []);
+  useEffect(() => { void api<Account[]>("/accounts/").then(setAccounts).catch(() => setAccounts([])); }, []);
 
   async function acao(invoice: Invoice, rota: string, body?: unknown) {
     setError(""); setNotice(""); setBusy(true);
@@ -188,7 +188,7 @@ export function FinanceiroPage() {
               <span className={`state ${statusTone(invoice)}`}>{invoice.status_display}</span>
               {invoice.is_overdue && invoice.status !== "overdue" && <span className="state state--3"><AlertTriangle className="size-3" />Venceu</span>}
             </div>
-            <p className="mt-1 text-sm text-slate-600">{invoice.client_name}{invoice.description && ` — ${invoice.description}`}</p>
+            <p className="mt-1 text-sm text-slate-600">{invoice.account_name}{invoice.description && ` — ${invoice.description}`}</p>
           </div>
           <div className="text-right">
             <p className="text-lg font-semibold text-ink">{money.format(Number(invoice.amount))}</p>

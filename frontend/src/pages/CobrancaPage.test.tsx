@@ -15,7 +15,7 @@ vi.mock("../auth", () => ({ useAuth: () => ({ user: mocks.user }) }));
 /** Uma linha do painel. **Todos os campos vêm do backend** — o teste nunca calcula um deles. */
 function linha(overrides: Record<string, unknown> = {}) {
   return {
-    invoice: 5, number: "2026-0007", client: 1, client_name: "Imobiliária Aurora",
+    invoice: 5, number: "2026-0007", account: 1, account_name: "Imobiliária Aurora",
     amount: "48750.90", due_date: "2026-08-05", status: "overdue", status_display: "Vencida",
     dias_de_atraso: 12, payment_url: "",
     proximo_degrau: "firme", proximo_degrau_display: "Cobrança firme",

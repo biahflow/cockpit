@@ -9,7 +9,7 @@ vi.mock("../api", () => ({ api: mocks.api }));
 
 beforeEach(() => {
   mocks.api.mockImplementation((path: string) => {
-    if (path.startsWith("/clients/overview/")) return Promise.resolve({ clients: [
+    if (path.startsWith("/accounts/overview/")) return Promise.resolve({ accounts: [
       { client_id: 1, name: "Acme", lifecycle_status: "active", status: "active", roi: { revenue: 0, cost: 0, roi: null }, health: { score: 40, level: "crítico", project_id: 9 }, risk_level: "alto", phase: { name: "Prove", status: "active" }, next_meeting: null },
       { client_id: 2, name: "Beta", lifecycle_status: "prospect", status: "prospect", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null },
       { client_id: 3, name: "Gama", lifecycle_status: "inactive", status: "inactive", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null },
@@ -30,7 +30,7 @@ test("mostra o semáforo de saúde e filtra contas por prospect", async () => {
   expect(screen.getByText("Jornada · Prove")).toBeInTheDocument();
   expect(screen.getByLabelText("Saúde crítico")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Prospects" }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/overview/?lifecycle_status=prospect"));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/overview/?lifecycle_status=prospect"));
 });
 
 test("sem filtro, a lista traz os três estados vivos — inativo não é arquivado", async () => {
@@ -38,7 +38,7 @@ test("sem filtro, a lista traz os três estados vivos — inativo não é arquiv
   await screen.findByText("Acme");
   expect(screen.getByText("Beta")).toBeInTheDocument();
   expect(screen.getByText("Gama")).toBeInTheDocument();
-  expect(mocks.api).toHaveBeenCalledWith("/clients/overview/");
+  expect(mocks.api).toHaveBeenCalledWith("/accounts/overview/");
 });
 
 test("cadastro declara a situação da conta, e o default é prospect", async () => {
@@ -52,7 +52,7 @@ test("cadastro declara a situação da conta, e o default é prospect", async ()
   await user.selectOptions(screen.getByLabelText("Situação"), "active");
   await user.click(screen.getByRole("button", { name: "Cadastrar conta" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/", expect.objectContaining({
     method: "POST", body: expect.stringContaining("\"lifecycle_status\":\"active\""),
   })));
 });
@@ -61,9 +61,9 @@ test("filtro sem resultado explica o filtro, não manda cadastrar a primeira con
   // A base tem conta; só o filtro está vazio. Dizer "sua base começa aqui" aqui é falso — e
   // manda fazer algo (cadastrar) que nasceria prospect e não encheria a aba de inativos.
   mocks.api.mockImplementation((path: string) => Promise.resolve(
-    path === "/clients/overview/?lifecycle_status=inactive"
-      ? { clients: [] }
-      : { clients: [{ client_id: 1, name: "Acme", lifecycle_status: "active", status: "active", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null }] },
+    path === "/accounts/overview/?lifecycle_status=inactive"
+      ? { accounts: [] }
+      : { accounts: [{ client_id: 1, name: "Acme", lifecycle_status: "active", roi: { revenue: 0, cost: 0, roi: null }, health: null, risk_level: null, phase: null, next_meeting: null }] },
   ));
   const user = userEvent.setup();
   render(<AccountsPage />);

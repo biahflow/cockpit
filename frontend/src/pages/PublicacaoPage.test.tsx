@@ -67,7 +67,7 @@ const PRESO_PELO_ACHADO = "Este é o último achado publicado e vivo de 1 dor(es
 
 function processo(overrides: Record<string, unknown> = {}) {
   return {
-    id: 1, account: 4, client: 4, client_name: "Transportadora Rota Norte",
+    id: 1, account: 4, account_name: "Transportadora Rota Norte",
     name: "Conferência de carga na expedição", position: 1,
     source_project: null, source_meeting: null, registered_by: 1,
     volume_mes: null, tempo_horas: null, pessoas: null, custo_hora: null,
@@ -133,8 +133,8 @@ let oportunidades: unknown[] = [];
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/4/") return conta instanceof Error ? Promise.reject(conta) : Promise.resolve(conta);
-    if (path.startsWith("/processos")) return Promise.resolve(processos);
+    if (path === "/accounts/4/") return conta instanceof Error ? Promise.reject(conta) : Promise.resolve(conta);
+    if (path.startsWith("/processes")) return Promise.resolve(processos);
     if (path.startsWith("/evidence")) return Promise.resolve(evidencias);
     if (path.startsWith("/findings")) return Promise.resolve(achados);
     return Promise.resolve([]);
