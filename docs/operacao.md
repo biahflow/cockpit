@@ -114,6 +114,15 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   organizações a proíbem por política, e foi o que bloqueou a homologação do Google.
 - `docker compose up -d --build api`.
 - **Testar:** subir um documento → conferir a estrutura `{Conta}/{Contratos|Propostas|NDAs|Acordos de Design Partner|Outros}/` no Shared Drive (a subpasta segue a finalidade do documento, `Document.kind` — issue #113); a pasta do projeto criada pelo kickoff fica em `{Conta}/Projetos/{Projeto}`.
+- **O acervo anterior a 03/09/2026 não foi movido, e isso é decisão, não pendência** (issue #118,
+  decidida em 04/09/2026): dentro de uma pasta de conta antiga, `1-Projetos`/`2-Áreas`/`3-Recursos`
+  (a estrutura PARA que valia até a issue #113) convivem com as pastas por finalidade. Nada quebra —
+  o `drive_link` de cada documento continua apontando para onde o arquivo sempre esteve, e o acervo
+  antigo é finito. Mover seria operação sobre dado real de cliente: a maior parte daquele acervo não
+  tem `Document.kind` marcado e iria inteira para `Outros`, o que é honesto mas não ajuda ninguém a
+  achar nada. Se um dia doer, o caminho registrado na issue é classificar primeiro (na tela, por quem
+  sabe) e mover depois, com comando idempotente, `--dry-run` obrigatório e rastro — e apagar as
+  pastas antigas vazias é ato destrutivo que exige aprovação humana explícita na hora.
 
 ### 4. Calendário e Assinatura
 - Calendário: `CALENDAR_ENABLED=true` + `GOOGLE_CALENDAR_ID` (mesma identidade do Drive, mas o
