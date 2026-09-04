@@ -77,7 +77,7 @@ from .views import (
     RecommendationsView,
     RiscoViewSet,
     RiskView,
-    SatisfacaoViewSet,
+    SatisfactionRecordViewSet,
     ServiceViewSet,
     SolutionHypothesisViewSet,
     TaskSyncIntakeView,
@@ -124,7 +124,10 @@ router.register("decisoes", DecisaoViewSet)
 router.register("riscos", RiscoViewSet)
 router.register("engineering-handoffs", EngineeringHandoffViewSet)
 router.register("github-projections", GithubDeliveryProjectionViewSet)
-router.register("satisfacoes", SatisfacaoViewSet)
+# A rota e o `basename` **não** mudam com o renome da classe (ADR 0052): a rota canônica
+# `/satisfaction-records/` nasce na `/api/v2/`. O `basename` passa a ser explícito porque o
+# derivado do queryset viraria `satisfactionrecord` e quebraria todo `reverse("satisfacao-…")`.
+router.register("satisfacoes", SatisfactionRecordViewSet, basename="satisfacao")
 # O Discovery estruturado (FDD 039): o processo é ancorado no **cliente**, e por isso as rotas
 # ficam fora de `/projects/`. A etapa pende do processo, não do projeto; o achado agora vive no
 # split `evidence`/`findings` logo abaixo (a `Evidencia` legada saiu na Fase 6, ADR 0052).
@@ -202,12 +205,15 @@ router.register("users", UserViewSet)
 # exige (ver o comentário lá em cima) e mantém a `/api/v1/` byte a byte igual à de antes, porque
 # nenhuma linha dela é reescrita.
 #
-# Só **quatro** prefixos mudam — os quatro que `docs/ontology/aliases.md` marcou para morrer aqui.
+# Só **cinco** prefixos mudam — os que `docs/ontology/aliases.md` marcou para morrer aqui. Os
+# quatro primeiros vieram da issue #67; `satisfacoes` entrou na fatia 5.3 da #122, quando a classe
+# ganhou nome canônico (`SatisfactionRecord`) e a rota passou a ter para onde ir.
 PREFIXOS_CANONICOS_DA_V2: dict[str, str] = {
     "clients": "accounts",
     "opportunities": "commercial-opportunities",
     "processos": "processes",
     "processo-etapas": "process-steps",
+    "satisfacoes": "satisfaction-records",
 }
 
 router_da_v2 = DefaultRouter()

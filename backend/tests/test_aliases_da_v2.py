@@ -52,7 +52,7 @@ from apps.core.models import (
     PipelineStage,
     Project,
     ProjectPhase,
-    Satisfacao,
+    SatisfactionRecord,
     SignatureRequest,
     User,
     Vertical,
@@ -234,10 +234,10 @@ CONSTRUTORES: dict[str, Callable[[], Any]] = {
     "ProcessStep": lambda: ProcessStepFactory(),
     "Project": lambda: ProjectFactory(),
     "ProjectPhase": lambda: _fase_ativa(ProjectFactory()),
-    "Satisfacao": lambda: Satisfacao.objects.create(
+    "SatisfactionRecord": lambda: SatisfactionRecord.objects.create(
         account=AccountFactory(),
-        nivel=Satisfacao.Nivel.PROMOTOR,
-        fonte=Satisfacao.Fonte.DECLARADA,
+        nivel=SatisfactionRecord.Nivel.PROMOTER,
+        fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=timezone.localdate(),
     ),
 }
@@ -304,6 +304,9 @@ PARES_DE_ROTA: tuple[tuple[str, str], ...] = (
     ("opportunities", "commercial-opportunities"),
     ("processos", "processes"),
     ("processo-etapas", "process-steps"),
+    # O quinto par entrou na fatia 5.3, quando a classe ganhou nome canônico: enquanto ela se
+    # chamava `Satisfacao`, a rota não tinha para onde ir (`docs/ontology/aliases.md`).
+    ("satisfacoes", "satisfaction-records"),
 )
 
 
@@ -312,7 +315,7 @@ PARES_DE_ROTA: tuple[tuple[str, str], ...] = (
 def test_a_rota_legada_e_da_v1_e_a_canonica_e_da_v2(
     admin_client: APIClient, legada: str, canonica: str
 ) -> None:
-    """Os quatro pares que a `docs/ontology/aliases.md` marcou para morrer na v2."""
+    """Os cinco pares que a `docs/ontology/aliases.md` marcou para morrer na v2."""
     assert admin_client.get(f"/api/v1/{legada}/").status_code == 200
     assert admin_client.get(f"/api/v2/{canonica}/").status_code == 200
     assert admin_client.get(f"/api/v2/{legada}/").status_code == 404
@@ -321,7 +324,7 @@ def test_a_rota_legada_e_da_v1_e_a_canonica_e_da_v2(
 
 @pytest.mark.django_db
 def test_a_rota_que_nao_muda_responde_nas_duas_versoes(admin_client: APIClient) -> None:
-    """Só quatro prefixos mudam; os outros 53 são a mesma rota sob os dois prefixos de versão."""
+    """Só cinco prefixos mudam; os outros 52 são a mesma rota sob os dois prefixos de versão."""
     assert admin_client.get("/api/v1/contacts/").status_code == 200
     assert admin_client.get("/api/v2/contacts/").status_code == 200
     # Fora do router, e pela mesma fábrica: as rotas explícitas já nascem canônicas.
@@ -1072,3 +1075,210 @@ def test_a_chave_legada_do_sinal_no_corpo_da_v2_e_400_dizendo_a_canonica(
     assert ignorado.status_code == 200
     activity.refresh_from_db()
     assert activity.dunning_signal == ""
+
+
+# ---------------------------------------------------------------------------------------------
+# 10. Classe, tabela e DOIS enums de valor — SatisfactionRecord (issue #122, fatia 5.3)
+#
+# Terceira família de D10, e a que combina os dois mecanismos anteriores num serializer só: o de
+# VALOR da seção 8 (`VALORES_DE_ENTRADA`/`filter_valores_legados`, porque `nivel` e `fonte` são
+# graváveis, ao contrário do sinal read-only da seção 9) e o de ROTA da seção 2, que ganha o
+# quinto par. A novidade é a **tabela**: `RenameModel` puro, sem `Meta.db_table` a preservar,
+# porque a pk desta família não é uma das seis identidades externas da `aliases.md` §2b — o
+# registro sequer atravessa para o portal do cliente (ADR 0032).
+# ---------------------------------------------------------------------------------------------
+
+
+def _migracao_0086() -> Any:
+    """O módulo da migração, importado por caminho — `0086...` não é identificador Python."""
+    return importlib.import_module("apps.core.migrations.0086_a_satisfacao_fala_ingles")
+
+
+def _satisfacao(**kwargs: Any) -> SatisfactionRecord:
+    campos: dict[str, Any] = {
+        "account": AccountFactory(),
+        "nivel": SatisfactionRecord.Nivel.NEUTRAL,
+        "fonte": SatisfactionRecord.Fonte.DECLARED,
+        "happened_on": timezone.localdate(),
+    }
+    campos.update(kwargs)
+    return SatisfactionRecord.objects.create(**campos)
+
+
+@pytest.mark.django_db
+def test_a_migracao_0086_traduz_os_seis_pares_e_a_reversa_e_simetrica() -> None:
+    """A terceira migração de VALOR, e a primeira com **dois** enums na mesma tabela.
+
+    O mapa da `0086` é campo → pares, um nível a mais que o da `0084`/`0085`, e é isso que este
+    teste percorre: sem a chave do campo, a reversa teria de saber de cabeça qual lista pertence a
+    qual coluna. `.update()` no queryset contorna `full_clean()` — é assim que se põe um valor
+    pt-BR na coluna sem passar pela validação que esta própria migração torna obsoleta.
+    """
+    from django.apps import apps as registro_de_apps
+
+    modulo = _migracao_0086()
+    mapa = modulo._PARES_PT_PARA_EN
+    assert set(mapa) == {"nivel", "fonte"}
+    assert sum(len(pares) for pares in mapa.values()) == 6
+
+    registros: dict[tuple[str, str], SatisfactionRecord] = {}
+    for campo, pares in mapa.items():
+        for antigo, _novo in pares:
+            registro = _satisfacao(note="Registro do par.")
+            SatisfactionRecord.objects.filter(pk=registro.pk).update(**{campo: antigo})
+            registros[(campo, antigo)] = registro
+
+    modulo.traduzir_para_ingles(registro_de_apps, None)
+    for campo, pares in mapa.items():
+        for antigo, novo in pares:
+            registros[(campo, antigo)].refresh_from_db()
+            assert getattr(registros[(campo, antigo)], campo) == novo
+
+    modulo.traduzir_para_portugues(registro_de_apps, None)
+    for campo, pares in mapa.items():
+        for antigo, _novo in pares:
+            registros[(campo, antigo)].refresh_from_db()
+            assert getattr(registros[(campo, antigo)], campo) == antigo
+
+
+@pytest.mark.django_db
+def test_nenhum_registro_tem_valor_pt_e_os_choices_sao_os_novos() -> None:
+    """A prova de estado, complementar à de função: os dois enums só conhecem os choices novos."""
+    _satisfacao()
+
+    valores_portugueses = {
+        "promotor", "satisfeito", "neutro", "insatisfeito", "declarada", "percebida",
+    }
+    persistidos = set(SatisfactionRecord.objects.values_list("nivel", flat=True)) | set(
+        SatisfactionRecord.objects.values_list("fonte", flat=True)
+    )
+
+    assert not (persistidos & valores_portugueses)
+    assert tuple(SatisfactionRecord.Nivel.values) == (
+        "promoter", "satisfied", "neutral", "dissatisfied",
+    )
+    assert tuple(SatisfactionRecord.Fonte.values) == ("declared", "perceived")
+
+
+@pytest.mark.django_db
+def test_a_tabela_renomeou_e_a_linha_sobreviveu_com_a_mesma_pk() -> None:
+    """O que a `aliases.md` §2b exige de todo renome: só o rótulo muda.
+
+    A tabela é `core_satisfactionrecord` — o `RenameModel` renomeou em lugar, como a `0069` fez
+    com as quatro da Fase 6 — e a pk continua sendo a da linha, não uma nova. Sem esta asserção o
+    renome passaria igual se alguém tivesse feito modelo novo mais migração de dados, que é
+    exatamente o caminho que a §2b proíbe.
+    """
+    registro = _satisfacao()
+
+    assert SatisfactionRecord._meta.db_table == "core_satisfactionrecord"
+    assert SatisfactionRecord.objects.get(pk=registro.pk).pk == registro.pk
+
+
+@pytest.mark.django_db
+def test_o_valor_legado_no_corpo_da_v1_normaliza_nos_dois_campos(admin_client: APIClient) -> None:
+    """Quem escrevia `"neutro"`/`"declarada"` ontem continua funcionando — e persiste o canônico."""
+    conta = AccountFactory()
+
+    resposta = admin_client.post(
+        "/api/v1/satisfacoes/",
+        {
+            "account": conta.pk,
+            "nivel": "neutro",
+            "fonte": "declarada",
+            "happened_on": str(timezone.localdate()),
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["nivel"] == "neutral"
+    assert resposta.data["fonte"] == "declared"
+    # O rótulo é superfície e não atravessou: continua pt-BR nas duas versões.
+    assert resposta.data["nivel_display"] == "Neutro"
+    assert resposta.data["fonte_display"] == "Declarada pelo cliente"
+    registro = SatisfactionRecord.objects.get()
+    assert (registro.nivel, registro.fonte) == ("neutral", "declared")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("campo", "legado"), [("nivel", "neutro"), ("fonte", "declarada")])
+def test_o_valor_legado_no_corpo_da_v2_e_400_de_choices_na_satisfacao(
+    admin_client: APIClient, campo: str, legado: str
+) -> None:
+    """A v2 não traduz nem recusa com frase própria: quem fala é o `choices` do campo, de graça."""
+    corpo: dict[str, Any] = {
+        "account": AccountFactory().pk,
+        "nivel": "neutral",
+        "fonte": "declared",
+        "happened_on": str(timezone.localdate()),
+    }
+    corpo[campo] = legado
+
+    resposta = admin_client.post("/api/v2/satisfaction-records/", corpo, format="json")
+
+    assert resposta.status_code == 400
+    assert legado in str(resposta.data[campo])
+    assert not SatisfactionRecord.objects.exists()
+
+
+@pytest.mark.django_db
+def test_o_valor_canonico_no_corpo_da_v2_cria_a_satisfacao(admin_client: APIClient) -> None:
+    resposta = admin_client.post(
+        "/api/v2/satisfaction-records/",
+        {
+            "account": AccountFactory().pk,
+            "nivel": "promoter",
+            "fonte": "perceived",
+            "happened_on": str(timezone.localdate()),
+        },
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    registro = SatisfactionRecord.objects.get()
+    assert (registro.nivel, registro.fonte) == ("promoter", "perceived")
+
+
+@pytest.mark.django_db
+def test_o_filtro_aceita_o_valor_legado_e_o_canonico_na_v1_nos_dois_campos(admin_client: APIClient) -> None:
+    conta = AccountFactory()
+    neutro = _satisfacao(account=conta)
+    _satisfacao(
+        account=conta,
+        nivel=SatisfactionRecord.Nivel.PROMOTER,
+        fonte=SatisfactionRecord.Fonte.PERCEIVED,
+    )
+
+    pelo_legado = admin_client.get("/api/v1/satisfacoes/?nivel=neutro&fonte=declarada")
+    pelo_canonico = admin_client.get("/api/v1/satisfacoes/?nivel=neutral&fonte=declared")
+
+    assert [r["id"] for r in pelo_legado.json()] == [neutro.pk]
+    assert [r["id"] for r in pelo_canonico.json()] == [neutro.pk]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("parametro", "canonico"), [("nivel=neutro", "neutral"), ("fonte=declarada", "declared")]
+)
+def test_o_filtro_com_valor_legado_na_v2_e_400_por_campo_da_satisfacao(
+    admin_client: APIClient, parametro: str, canonico: str
+) -> None:
+    """Lista vazia seria o silêncio que a #122 recusa — a v2 recusa o valor, e diz qual usar."""
+    _satisfacao()
+
+    resposta = admin_client.get(f"/api/v2/satisfaction-records/?{parametro}")
+
+    assert resposta.status_code == 400
+    assert f"use '{canonico}'" in str(resposta.data)
+
+
+@pytest.mark.django_db
+def test_o_filtro_com_valor_canonico_continua_funcionando_na_v2_na_satisfacao(admin_client: APIClient) -> None:
+    conta = AccountFactory()
+    neutro = _satisfacao(account=conta)
+    _satisfacao(account=conta, nivel=SatisfactionRecord.Nivel.PROMOTER)
+
+    resposta = admin_client.get("/api/v2/satisfaction-records/?nivel=neutral")
+
+    assert [r["id"] for r in resposta.json()] == [neutro.pk]

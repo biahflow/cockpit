@@ -18,7 +18,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.core import satisfacao as satisfacao_module
-from apps.core.models import Satisfacao, User
+from apps.core.models import SatisfactionRecord, User
 
 from .factories import AccountFactory, ProjectFactory, ProjectMemberFactory, UserFactory
 
@@ -33,8 +33,8 @@ def client() -> APIClient:
 def _payload(account_id: int, **overrides: object) -> dict:
     base: dict = {
         "account": account_id,
-        "nivel": Satisfacao.Nivel.SATISFEITO,
-        "fonte": Satisfacao.Fonte.DECLARADA,
+        "nivel": SatisfactionRecord.Nivel.SATISFIED,
+        "fonte": SatisfactionRecord.Fonte.DECLARED,
         "happened_on": "2026-09-01",
         "note": "Elogiou o ritmo das entregas na call de sexta.",
     }
@@ -42,16 +42,16 @@ def _payload(account_id: int, **overrides: object) -> dict:
     return base
 
 
-def _registro(**kwargs: object) -> Satisfacao:
+def _registro(**kwargs: object) -> SatisfactionRecord:
     """Um registro **não salvo**, para exercitar a janela sem banco."""
     campos: dict = {
-        "nivel": Satisfacao.Nivel.INSATISFEITO,
-        "fonte": Satisfacao.Fonte.DECLARADA,
+        "nivel": SatisfactionRecord.Nivel.DISSATISFIED,
+        "fonte": SatisfactionRecord.Fonte.DECLARED,
         "happened_on": HOJE,
         "note": "n",
     }
     campos.update(kwargs)
-    return Satisfacao(**campos)
+    return SatisfactionRecord(**campos)
 
 
 # --- A janela de validade, sem banco ------------------------------------------
@@ -85,22 +85,22 @@ def test_a_vigente_e_a_mais_recente_da_fonte_pedida() -> None:
     """
     declarada = _registro(happened_on=HOJE - timedelta(days=2))
     percebida = _registro(
-        happened_on=HOJE - timedelta(days=1), fonte=Satisfacao.Fonte.PERCEBIDA
+        happened_on=HOJE - timedelta(days=1), fonte=SatisfactionRecord.Fonte.PERCEIVED
     )
     registros = [declarada, percebida]
 
     assert satisfacao_module.vigente(registros, HOJE) is percebida
     assert (
-        satisfacao_module.vigente(registros, HOJE, fonte=Satisfacao.Fonte.DECLARADA) is declarada
+        satisfacao_module.vigente(registros, HOJE, fonte=SatisfactionRecord.Fonte.DECLARED) is declarada
     )
 
 
 @pytest.mark.django_db
 def test_arquivado_nao_e_vigente_nem_em_lote_nem_na_lista() -> None:
     cliente = AccountFactory()
-    registro = Satisfacao.objects.create(
-        account=cliente, nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE, note="Reclamou do prazo.",
+    registro = SatisfactionRecord.objects.create(
+        account=cliente, nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.DECLARED, happened_on=HOJE, note="Reclamou do prazo.",
     )
     registro.archive()
 
@@ -111,16 +111,16 @@ def test_arquivado_nao_e_vigente_nem_em_lote_nem_na_lista() -> None:
 @pytest.mark.django_db
 def test_o_lote_devolve_uma_vigente_por_cliente_em_uma_query() -> None:
     um, outro = AccountFactory(), AccountFactory()
-    antiga = Satisfacao.objects.create(
-        account=um, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.DECLARADA,
+    antiga = SatisfactionRecord.objects.create(
+        account=um, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=HOJE - timedelta(days=30),
     )
-    nova = Satisfacao.objects.create(
-        account=um, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+    nova = SatisfactionRecord.objects.create(
+        account=um, nivel=SatisfactionRecord.Nivel.PROMOTER, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=HOJE - timedelta(days=1),
     )
-    Satisfacao.objects.create(
-        account=outro, nivel=Satisfacao.Nivel.SATISFEITO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    SatisfactionRecord.objects.create(
+        account=outro, nivel=SatisfactionRecord.Nivel.SATISFIED, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=HOJE - timedelta(days=200),  # fora da janela
     )
 
@@ -140,9 +140,9 @@ def test_o_clean_recusa_projeto_de_outro_cliente() -> None:
     alheio = ProjectFactory()
 
     with pytest.raises(ValidationError) as erro:
-        Satisfacao(
-            account=cliente, project=alheio, nivel=Satisfacao.Nivel.NEUTRO,
-            fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE,
+        SatisfactionRecord(
+            account=cliente, project=alheio, nivel=SatisfactionRecord.Nivel.NEUTRAL,
+            fonte=SatisfactionRecord.Fonte.DECLARED, happened_on=HOJE,
         ).clean()
 
     assert "project" in erro.value.message_dict
@@ -155,15 +155,15 @@ def test_o_clean_exige_nota_no_insatisfeito_e_so_nele() -> None:
     cliente = AccountFactory()
 
     with pytest.raises(ValidationError) as erro:
-        Satisfacao(
-            account=cliente, nivel=Satisfacao.Nivel.INSATISFEITO,
-            fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE, note="   ",
+        SatisfactionRecord(
+            account=cliente, nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+            fonte=SatisfactionRecord.Fonte.DECLARED, happened_on=HOJE, note="   ",
         ).clean()
     assert "note" in erro.value.message_dict
 
-    Satisfacao(
-        account=cliente, nivel=Satisfacao.Nivel.NEUTRO,
-        fonte=Satisfacao.Fonte.DECLARADA, happened_on=HOJE,
+    SatisfactionRecord(
+        account=cliente, nivel=SatisfactionRecord.Nivel.NEUTRAL,
+        fonte=SatisfactionRecord.Fonte.DECLARED, happened_on=HOJE,
     ).clean()
 
 
@@ -186,15 +186,15 @@ def test_vendas_cria_le_edita_e_arquiva(client: APIClient) -> None:
 
     updated = client.patch(
         reverse("satisfacao-detail", args=[registro_id]),
-        {"nivel": Satisfacao.Nivel.PROMOTOR},
+        {"nivel": SatisfactionRecord.Nivel.PROMOTER},
         format="json",
     )
     assert updated.status_code == 200
-    assert updated.data["nivel"] == Satisfacao.Nivel.PROMOTOR
+    assert updated.data["nivel"] == SatisfactionRecord.Nivel.PROMOTER
 
     archived = client.delete(reverse("satisfacao-detail", args=[registro_id]))
     assert archived.status_code == 204
-    assert Satisfacao.objects.get(pk=registro_id).archived_at is not None
+    assert SatisfactionRecord.objects.get(pk=registro_id).archived_at is not None
     assert registro_id not in [row["id"] for row in client.get(reverse("satisfacao-list")).data]
 
     restored = client.post(reverse("satisfacao-unarchive", args=[registro_id]))
@@ -212,8 +212,8 @@ def test_entrega_registra_no_cliente_de_projeto_seu(client: APIClient) -> None:
     created = client.post(
         reverse("satisfacao-list"),
         _payload(
-            projeto.engagement.account_id, project=projeto.id, fonte=Satisfacao.Fonte.PERCEBIDA,
-            nivel=Satisfacao.Nivel.NEUTRO,
+            projeto.engagement.account_id, project=projeto.id, fonte=SatisfactionRecord.Fonte.PERCEIVED,
+            nivel=SatisfactionRecord.Nivel.NEUTRAL,
         ),
         format="json",
     )
@@ -231,8 +231,8 @@ def test_entrega_nao_alcanca_cliente_sem_projeto_seu_nem_para_ler(client: APICli
     meu = ProjectFactory()
     ProjectMemberFactory(project=meu, user=delivery)
     alheio = AccountFactory(name="Cliente alheio")
-    registro_alheio = Satisfacao.objects.create(
-        account=alheio, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+    registro_alheio = SatisfactionRecord.objects.create(
+        account=alheio, nivel=SatisfactionRecord.Nivel.DISSATISFIED, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=HOJE, note="Segredo do cliente alheio.",
     )
     client.force_authenticate(delivery)
@@ -244,7 +244,7 @@ def test_entrega_nao_alcanca_cliente_sem_projeto_seu_nem_para_ler(client: APICli
     assert [row["id"] for row in listed.data] == []
     assert detalhe.status_code == 404  # fora da queryset: nem existe, do ponto de vista dela
     assert criacao.status_code in {403, 404}
-    assert Satisfacao.objects.filter(account=alheio).count() == 1
+    assert SatisfactionRecord.objects.filter(account=alheio).count() == 1
 
 
 @pytest.mark.django_db
@@ -254,8 +254,8 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
     meu = ProjectFactory()
     ProjectMemberFactory(project=meu, user=delivery)
     alheio = AccountFactory()
-    registro = Satisfacao.objects.create(
-        account=meu.engagement.account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    registro = SatisfactionRecord.objects.create(
+        account=meu.engagement.account, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=HOJE,
     )
     client.force_authenticate(delivery)
@@ -273,8 +273,8 @@ def test_entrega_nao_move_registro_proprio_para_cliente_alheio(client: APIClient
 def test_quem_nao_foi_liberado_nao_alcanca_o_recurso(client: APIClient) -> None:
     """Recurso novo nasce fechado: o papel sem nenhuma linha para ele cai no `return False`."""
     cliente = AccountFactory()
-    registro = Satisfacao.objects.create(
-        account=cliente, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    registro = SatisfactionRecord.objects.create(
+        account=cliente, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=HOJE,
     )
     sem_papel = UserFactory(role="")
@@ -328,29 +328,29 @@ def test_insatisfeito_sem_nota_e_recusado_com_400(client: APIClient) -> None:
 
     response = client.post(
         reverse("satisfacao-list"),
-        _payload(cliente.id, nivel=Satisfacao.Nivel.INSATISFEITO, note="  "),
+        _payload(cliente.id, nivel=SatisfactionRecord.Nivel.DISSATISFIED, note="  "),
         format="json",
     )
 
     assert response.status_code == 400
     assert "note" in response.data
-    assert not Satisfacao.objects.exists()
+    assert not SatisfactionRecord.objects.exists()
 
 
 @pytest.mark.django_db
 def test_os_filtros_separam_cliente_nivel_e_fonte(client: APIClient) -> None:
     admin = UserFactory(role=User.Role.ADMIN)
     um, outro = AccountFactory(), AccountFactory()
-    declarada = Satisfacao.objects.create(
-        account=um, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+    declarada = SatisfactionRecord.objects.create(
+        account=um, nivel=SatisfactionRecord.Nivel.DISSATISFIED, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=HOJE, note="Reclamou do prazo do marco 2.",
     )
-    percebida = Satisfacao.objects.create(
-        account=um, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    percebida = SatisfactionRecord.objects.create(
+        account=um, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=HOJE,
     )
-    Satisfacao.objects.create(
-        account=outro, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+    SatisfactionRecord.objects.create(
+        account=outro, nivel=SatisfactionRecord.Nivel.PROMOTER, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=HOJE,
     )
     client.force_authenticate(admin)
@@ -359,5 +359,5 @@ def test_os_filtros_separam_cliente_nivel_e_fonte(client: APIClient) -> None:
         return [row["id"] for row in client.get(reverse("satisfacao-list"), params).data]
 
     assert set(_ids(account=um.id)) == {declarada.id, percebida.id}
-    assert _ids(fonte=Satisfacao.Fonte.PERCEBIDA) == [percebida.id]
-    assert _ids(nivel=Satisfacao.Nivel.INSATISFEITO) == [declarada.id]
+    assert _ids(fonte=SatisfactionRecord.Fonte.PERCEIVED) == [percebida.id]
+    assert _ids(nivel=SatisfactionRecord.Nivel.DISSATISFIED) == [declarada.id]

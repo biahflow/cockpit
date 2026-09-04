@@ -27,15 +27,31 @@ import pytest
 from django.utils import timezone
 
 from apps.core import portal
-from apps.core.models import Satisfacao
+from apps.core.models import SatisfactionRecord
 from apps.core.tests.factories import ProjectFactory
 
 pytestmark = pytest.mark.django_db
 
-#: O que **nunca** pode aparecer no que vai ao cliente. Os dois primeiros são os nomes concretos
+#: O que **nunca** pode aparecer no que vai ao cliente. Os três primeiros são os nomes concretos
 #: dos campos; os outros são as palavras que alguém escreveria ao levá-los "para o cliente
 #: acompanhar a percepção dele".
-PROIBIDOS = ("satisfacao", "satisfação", "insatisfeito", "percebida", "promotor")
+#:
+#: **Os valores em inglês entraram na fatia 5.3 da issue #122, e não por completude.** O renome
+#: para `SatisfactionRecord` traduziu o valor persistido (D10), então uma lista só com os termos
+#: portugueses continuaria verde por eles **terem deixado de existir** — a pior forma de um teste
+#: passar. Os rótulos pt-BR ficam na lista porque continuam sendo o que o `*_display` emite, e é
+#: por ele que um vazamento chegaria legível ao cliente.
+PROIBIDOS = (
+    "satisfacao",
+    "satisfação",
+    "satisfaction",
+    "insatisfeito",
+    "percebida",
+    "promotor",
+    "dissatisfied",
+    "perceived",
+    "promoter",
+)
 
 
 @pytest.fixture
@@ -43,11 +59,11 @@ def projeto_com_satisfacao():  # type: ignore[no-untyped-def]
     """Um cenário em que o registro existe, é recente e é o mais chamativo possível — senão a
     asserção passaria por ausência de dado, não por ausência de vazamento."""
     project = ProjectFactory()
-    Satisfacao.objects.create(
+    SatisfactionRecord.objects.create(
         account=project.engagement.account,
         project=project,
-        nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.PERCEBIDA,
+        nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=timezone.localdate() - timedelta(days=2),
         note="Achei o cliente frio na última call; parece insatisfeito com o ritmo.",
     )
@@ -59,6 +75,10 @@ def test_o_snapshot_nao_carrega_a_satisfacao_em_chave_nenhuma(projeto_com_satisf
 
     assert "satisfacao" not in snapshot
     assert "satisfacoes" not in snapshot
+    # A chave que o nome canônico produziria (issue #122, fatia 5.3): sem estas duas linhas, um
+    # bloco `satisfaction_records[]` acrescentado amanhã passaria pelas duas de cima.
+    assert "satisfaction_record" not in snapshot
+    assert "satisfaction_records" not in snapshot
     serializado = json.dumps(snapshot, default=str).lower()
     for palavra in PROIBIDOS:
         assert palavra not in serializado, f"'{palavra}' vazou para o snapshot do cliente"
@@ -72,10 +92,10 @@ def test_a_nota_nao_vaza_nem_pelo_health_do_snapshot(projeto_com_satisfacao) -> 
     não pode atravessar. O bloco de saúde do portal já leva só o nível, e este teste é o que
     impede que "detalhar um pouco mais para o cliente" desfaça isso.
     """
-    Satisfacao.objects.create(
+    SatisfactionRecord.objects.create(
         account=projeto_com_satisfacao.engagement.account,
-        nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.DECLARADA,
+        nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=timezone.localdate(),
         note="Disse que o marco 2 atrasou duas vezes.",
     )
@@ -103,3 +123,8 @@ def test_a_fonte_do_snapshot_nao_menciona_o_registro_de_satisfacao() -> None:
 
     assert "satisfacao" not in corpo
     assert "satisfacoes" not in corpo
+    # O nome canônico, pelo mesmo motivo da camada comportamental: a classe passou a se chamar
+    # `SatisfactionRecord` na fatia 5.3, e uma guarda que só procura o nome antigo deixaria de
+    # pegar a importação nova — vermelha por termo morto em vez de por ausência de vazamento.
+    assert "satisfactionrecord" not in corpo
+    assert "satisfaction_record" not in corpo

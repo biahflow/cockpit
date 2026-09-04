@@ -438,3 +438,75 @@ modelo pode devolver.
 - `docs/ontology/aliases.md` §"Termos ainda sem nome canônico" deixa de citar `Activity.CobrancaSinal`
   — tem nome canônico e código que o usa —, mantendo `CobrancaContato`, `CobrancaSuspensao` e o
   restante da família `Cobranca*` sem nome ainda.
+
+## Emenda (issue #122, fatia 5.3 — 04/09/2026) — a tabela atravessa junto, e a rota canônica ganha o quinto par
+
+A fatia 5.2 foi a primeira em que classe, campo e valor chegaram juntos. `Satisfacao` é a terceira
+família de D10 a atravessar e traz o que faltava ao conjunto: o renome de **tabela** no mesmo
+arquivo, um par de rota novo no dicionário da v2, e a primeira família com **dois** enums de valor
+no mesmo modelo.
+
+### 14. `RenameModel` que de fato renomeia a tabela — e o que autoriza isso
+
+`docs/ontology/aliases.md` §2b é normativa: todo renome de modelo se faz com `RenameModel`, nunca
+com modelo novo mais migração de dados. Na issue #67 cada fatia fixava `Meta.db_table` no nome
+legado **antes** da operação, para que ela não emitisse SQL nenhum — a proteção existia porque o
+One deriva chave de identidade de seis pks deste repositório e as **persiste**.
+
+A pk de satisfação não é uma das seis, e a razão é mais forte que a lista: o registro **não
+atravessa** para o portal do cliente (ADR 0032), então não existe do outro lado nada de que se
+despregar. Por isso `0086_a_satisfacao_fala_ingles.py` abre com um `RenameModel` puro
+(`core_satisfacao` → `core_satisfactionrecord`), que emite o `ALTER TABLE … RENAME TO` e preserva
+linha e pk pelo mesmo mecanismo da `0069`. A reversa o desfaz. A verificação de que a §2b não
+proíbe está escrita no cabeçalho da própria migração, e não só aqui: quem lê a migração daqui a um
+ano precisa achar o argumento ali.
+
+### 15. O mapa de pares ganha um nível, porque a família tem dois enums
+
+A `0084` e a `0085` traduziram um campo cada, e `_PARES_PT_PARA_EN` era uma tupla de pares. Aqui
+são dois (`nivel` e `fonte`), e o mapa passa a ser campo → pares. Duas tuplas soltas fariam a
+reversa — a metade que ninguém exercita até precisar dela — depender de o leitor lembrar qual lista
+pertence a qual coluna. O teste percorre o mapa em vez de repetir os seis pares, pelo motivo de
+sempre: uma cópia envelhece sozinha.
+
+### 16. Os campos não renomeiam, e a ausência é declarada em vez de suposta
+
+O language-map §4 cunha `satisfaction_record.level` e `satisfaction_record.source` na tabela de
+**enums** — é a linha que enumera os valores. Não há, em seção nenhuma, coinagem do nome do
+*campo*, e a chave de payload é justamente o que a §2c congela até a `/api/v2/`. Renomear a coluna
+sem ter para onde levar a chave pagaria metade de uma dívida e criaria outra, então `nivel` e
+`fonte` ficam — e a ausência de canônico vai por escrito para a seção "Termos ainda sem nome
+canônico" da `aliases.md`, ao lado de `recebido_do_cliente` e das chaves `sinal_*`/`satisfacao_*`
+do painel de cobrança. **A frase que vale para as três é uma só: o valor atravessou, a chave espera
+coinagem.**
+
+Como os dois campos **são graváveis** — ao contrário do `dunning_signal` da 5.2, lavrado só pela
+action `classificar` —, esta é a primeira família a usar os dois moldes da fatia 5.1 com mais de um
+campo: `VALORES_DE_ENTRADA` no serializer (a v1 traduz o valor legado antes da validação; a v2 cai
+no 400 de `choices` do DRF) e `filter_valores_legados` no viewset, que aqui é o mapa **inteiro** do
+serializer por referência, e não uma entrada extraída dele.
+
+### 17. O quinto par de rota, e por que ele não existia antes
+
+`PREFIXOS_CANONICOS_DA_V2` tinha quatro entradas — as quatro que a issue #67 renomeou de classe. A
+rota `/satisfacoes/` não estava entre elas porque não havia nome canônico para onde apontar:
+enquanto a classe se chamava `Satisfacao`, `/satisfaction-records/` seria uma invenção da v2, e não
+o cumprimento de um prazo declarado. Com a classe renomeada, a rota passa a ter destino, e o
+`basename` da v1 vira explícito (`basename="satisfacao"`) pelo motivo de `clients`/`opportunities`:
+o derivado do queryset viraria `satisfactionrecord` e quebraria todo `reverse("satisfacao-…")` do
+repositório.
+
+### Consequências
+
+- `backend/apps/core/migrations/0086_a_satisfacao_fala_ingles.py` é a terceira migração de valor do
+  repositório, a primeira a renomear tabela numa fatia de idioma e a primeira a traduzir dois enums.
+- `openapi.yaml` troca o componente (`Satisfacao` → `SatisfactionRecord`, e o `Patched…` junto) e os
+  dois enums passam a listar os valores ingleses; **a rota da v1 não muda** (`/api/v1/satisfacoes/`).
+- `openapi-v2.yaml` troca a rota para `/api/v2/satisfaction-records/`, com os `operationId` e as
+  tags acompanhando.
+- `docs/ontology/legacy-allowlist.txt` perde **três** linhas (`Satisfacao`, `SatisfacaoSerializer`,
+  `SatisfacaoViewSet`) e `TETO_DA_ALLOWLIST` desce de 22 para 19.
+- `test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2` passa a congelar
+  `SatisfactionRecord.Nivel`/`.Fonte` em inglês; resta a família 1 (degraus de cobrança).
+- `RolePermission` passa a ler `resource = "satisfaction_record"`, no molde das fatias da #67, que
+  renomeavam o `resource` junto da classe.

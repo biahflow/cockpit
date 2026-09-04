@@ -1563,7 +1563,7 @@ class Activity(TimestampedModel):
             raise ValidationError({"invoice": "A fatura deve pertencer ao mesmo cliente."})
 
 
-class Satisfacao(TimestampedModel):
+class SatisfactionRecord(TimestampedModel):
     """Satisfação do cliente: o único sinal do domínio cuja fonte está **fora** da casa (FDD 037).
 
     Camada 5 da RFC 0004, e a lacuna que a docstring do `health.py` declarava desde a Fase 2. Todo
@@ -1579,26 +1579,43 @@ class Satisfacao(TimestampedModel):
 
     Nada aqui sai da casa: não há canal, credencial nem flag. É registro interno digitado por quem
     conversou com o cliente, e **não** atravessa para o portal do cliente (ADR 0032).
+
+    **A classe fala inglês desde a issue #122, fatia 5.3** (D10 do language-map,
+    `docs/ontology/aliases.md`): `satisfaction_record` é o nome cunhado na §4 do mapa, e classe,
+    tabela (`RenameModel`, sem `Meta.db_table` a preservar — a pk desta família **não** está entre
+    as seis identidades externas da §2b) e os dois enums de valor atravessaram na mesma fatia. Os
+    **campos** `nivel` e `fonte` ficam: o mapa cunha `satisfaction_record.level`/`.source` como
+    nome de *enum*, e a chave de payload é o que a §2c congela até a `/api/v2/` — renomear a
+    coluna sem ter para onde levar a chave seria pagar metade da dívida e criar outra.
     """
 
     class Nivel(models.TextChoices):
-        PROMOTOR = "promotor", "Promotor"
-        SATISFEITO = "satisfeito", "Satisfeito"
-        NEUTRO = "neutro", "Neutro"
-        INSATISFEITO = "insatisfeito", "Insatisfeito"
+        """Os quatro níveis, no vocabulário NPS que o language-map §4 enumera.
+
+        Valor em inglês desde a fatia 5.3 (D10); os rótulos pt-BR não mudam — rótulo é superfície,
+        valor é contrato. O nome do **enum** continua `Nivel` porque ele é o tipo do campo `nivel`,
+        e o campo é a chave de payload que a §2c mantém até a `/api/v2/`: batizá-lo `Level` deixaria
+        `SatisfactionRecord.Level` tipando `SatisfactionRecord.nivel`, que é a contradição de meia
+        travessia que D10 existe para não criar.
+        """
+
+        PROMOTER = "promoter", "Promotor"
+        SATISFIED = "satisfied", "Satisfeito"
+        NEUTRAL = "neutral", "Neutro"
+        DISSATISFIED = "dissatisfied", "Insatisfeito"
 
     class Fonte(models.TextChoices):
         """De onde veio o sinal — e é a decisão inteira desta fatia (ADR 0032).
 
-        `declarada` é o cliente tendo dito; `percebida` é a leitura de quem entrega. Os dois são
+        `declared` é o cliente tendo dito; `perceived` é a leitura de quem entrega. Os dois são
         úteis e não são a mesma coisa: um é evidência, o outro é hipótese. **Só a declarada move
         número** — Health Score e escada de cobrança. Sem a separação, o sinal do cliente vira a
         opinião do time sobre si mesmo com aparência de medição, que é pior que não ter sinal
         nenhum, porque um número errado é consultado com a mesma confiança de um número certo.
         """
 
-        DECLARADA = "declarada", "Declarada pelo cliente"
-        PERCEBIDA = "percebida", "Percebida por quem entrega"
+        DECLARED = "declared", "Declarada pelo cliente"
+        PERCEIVED = "perceived", "Percebida por quem entrega"
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="satisfacoes")
     project = models.ForeignKey(
@@ -1658,7 +1675,7 @@ class Satisfacao(TimestampedModel):
         # exatamente o que apodrece: seis meses depois ninguém sabe o que o cliente disse, e a
         # cobrança segue abrandada por um registro que ninguém consegue avaliar. Mesma exigência
         # que `CobrancaSuspensao.reason` já faz, e pela mesma razão.
-        if self.nivel == self.Nivel.INSATISFEITO and not (self.note or "").strip():
+        if self.nivel == self.Nivel.DISSATISFIED and not (self.note or "").strip():
             raise ValidationError(
                 {"note": "Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."}
             )
@@ -1681,8 +1698,8 @@ class Process(TimestampedModel):
     Os dois convivem e não se substituem — a narrativa é o que se lê, o dado é o que se calcula —,
     e é a mesma distinção que o `Risco` faz em relação ao `risk.py` calculado.
 
-    **Liga ao cliente e não ao projeto**, pelo argumento da `Satisfacao` acima: o processo mapeado
-    é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de
+    **Liga ao cliente e não ao projeto**, pelo argumento do `SatisfactionRecord` acima: o processo
+    mapeado é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de
     CommercialOpportunity, `docs/metodologia-fde.md:64-67`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
     novo Discovery da mesma empresa — que é exatamente o defeito que o `DigitalEmployee` tinha
     antes da FDD 026, quando o que valia morava só na instância e não no catálogo.
@@ -1692,8 +1709,8 @@ class Process(TimestampedModel):
     name = models.CharField(max_length=255)
     position = models.PositiveIntegerField(default=0)
     # Procedência, e não vínculo: apagar o projeto ou a reunião não desfaz o mapa levantado neles.
-    # É o `SET_NULL` da `Satisfacao.source_meeting`, pela mesma razão — o que se perde é de onde
-    # veio, e perder isso é melhor que perder o registro.
+    # É o `SET_NULL` do `SatisfactionRecord.source_meeting`, pela mesma razão — o que se perde é
+    # de onde veio, e perder isso é melhor que perder o registro.
     source_project = models.ForeignKey(
         Project, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="processos_mapeados",

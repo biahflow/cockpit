@@ -133,7 +133,7 @@ from .models import (
     ProveExperiment,
     Qualification,
     Risco,
-    Satisfacao,
+    SatisfactionRecord,
     Service,
     SignatureRequest,
     SolutionHypothesis,
@@ -208,7 +208,7 @@ from .serializers import (
     ProveExperimentSerializer,
     QualificationSerializer,
     RiscoSerializer,
-    SatisfacaoSerializer,
+    SatisfactionRecordSerializer,
     ServiceSerializer,
     SignatureRequestSerializer,
     SolutionHypothesisSerializer,
@@ -3261,7 +3261,7 @@ class GithubDeliveryProjectionViewSet(
         return Response(self.get_serializer(projection).data)
 
 
-class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class SatisfactionRecordViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
     **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
@@ -3271,17 +3271,22 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     por algum projeto.
     """
 
-    resource = "satisfacao"
-    queryset = Satisfacao.objects.select_related(
+    resource = "satisfaction_record"
+    queryset = SatisfactionRecord.objects.select_related(
         "account", "project", "source_meeting", "source_activity", "registered_by"
     ).all()
-    serializer_class = SatisfacaoSerializer
+    serializer_class = SatisfactionRecordSerializer
     filter_fields = ("account", "project")
     filter_field_aliases = {"account": "client"}
     # `nivel` e `fonte` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
-    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?fonte=declarada`
+    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?fonte=declared`
     # cairia no chão sem erro nenhum — a lista voltaria inteira, com a percebida junto.
     filter_exact_fields = ("nivel", "fonte")
+    # Os mesmos mapas que o serializer usa para o corpo (`VALORES_DE_ENTRADA`), por referência e
+    # não por cópia — pelo motivo da fatia 5.1: duas tabelas do valor legado seriam o mesmo fato
+    # divergindo em silêncio no dia em que uma fosse editada sem a outra. É o primeiro viewset com
+    # **dois** campos no mapa, e é por isso que ele sempre foi campo → valores.
+    filter_valores_legados = SatisfactionRecordSerializer.VALORES_DE_ENTRADA
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Mesma fronteira da `Activity`: a Entrega só enxerga clientes com projeto seu.
@@ -3306,11 +3311,11 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         if account is None or not Project.objects.visible_to(user).filter(engagement__account=account).exists():
             raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
-    def perform_create(self, serializer: SatisfacaoSerializer) -> None:
+    def perform_create(self, serializer: SatisfactionRecordSerializer) -> None:
         self._assert_cliente_no_escopo(serializer.validated_data.get("account"))
         serializer.save(registered_by=self.request.user)
 
-    def perform_update(self, serializer: SatisfacaoSerializer) -> None:
+    def perform_update(self, serializer: SatisfactionRecordSerializer) -> None:
         # Só quando o corpo tenta *mudar* o cliente — o caminho inverso, que o
         # `ProjectScopedMixin` também fecha: mover um registro próprio para um cliente alheio.
         if "account" in serializer.validated_data:
@@ -3324,9 +3329,9 @@ def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
     Função e não método porque os três recursos abaixo fazem a mesma pergunta a partir de âncoras
     diferentes (o processo tem o cliente; a etapa e a evidência chegam a ele pelo processo pai), e
     três cópias divergiriam na primeira correção. O argumento é o do `_assert_cliente_no_escopo`
-    da `SatisfacaoViewSet`: só a leitura é contornável de graça — sem a guarda de escrita, uma
-    requisição bastaria para mapear processo, etapa e evidência dentro do cliente que a listagem
-    esconde.
+    da `SatisfactionRecordViewSet`: só a leitura é contornável de graça — sem a guarda de escrita,
+    uma requisição bastaria para mapear processo, etapa e evidência dentro do cliente que a
+    listagem esconde.
 
     A pergunta sai de `visible_to` (ADR 0010), a única expressão da regra.
     """
@@ -3339,9 +3344,9 @@ def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
 class ProcessViewSet(PublicationMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-    **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-    aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-    é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+    **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+    projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+    recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
     O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
     de linguagem, era qualificador sem lastro nenhum no schema.
@@ -3982,7 +3987,8 @@ class ValueLedgerEntryViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
     Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
     objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-    `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+    `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+    esta não.
 
     **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
     `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a

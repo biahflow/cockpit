@@ -308,7 +308,7 @@ test("Vendas suspende mas não envia nem rascunha — a assimetria da FDD 036 ch
  */
 test("a satisfação vigente aparece no card, com nível, fonte e idade", async () => {
   mocks.api.mockImplementation(stub([linha({
-    satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 12,
+    satisfacao_nivel: "dissatisfied", satisfacao_fonte: "declared", satisfacao_dias: 12,
   })]));
   render(<CobrancaPage />);
   const cartao = (await screen.findByRole("heading", { name: "Imobiliária Aurora" })).closest("article");
@@ -331,7 +331,7 @@ test("sem registro de satisfação, o card não inventa texto de ausência", asy
 test("relacao_tensa tem rótulo próprio, que não julga o cliente", async () => {
   mocks.api.mockImplementation(stub([linha({
     regua: "relacao_tensa", tensao_causa: "satisfacao",
-    satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 5,
+    satisfacao_nivel: "dissatisfied", satisfacao_fonte: "declared", satisfacao_dias: 5,
   })]));
   render(<CobrancaPage />);
   expect(await screen.findByText(/relação tensa/)).toBeInTheDocument();
@@ -373,7 +373,7 @@ test("a saúde mostrada é a da entrega do cliente, e sem projeto ativo não se 
  */
 test("o sinal da IA aparece rotulado como leitura por registrar, distinto da satisfação vigente", async () => {
   mocks.api.mockImplementation(stub([linha({
-    satisfacao_nivel: "neutro", satisfacao_fonte: "percebida", satisfacao_dias: 30,
+    satisfacao_nivel: "neutral", satisfacao_fonte: "perceived", satisfacao_dias: 30,
     sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
   })]));
   render(<CobrancaPage />);
@@ -403,17 +403,17 @@ test("o atalho registra a satisfação declarada, com a data do que aconteceu e 
 
   // Pré-preenchido, não decidido: o nível vem do sinal e a fonte é declarada porque quem falou foi
   // o cliente. Quem salva é uma pessoa — a IA leu, ela não registrou (ADR 0032).
-  expect(await screen.findByLabelText("Nível")).toHaveValue("insatisfeito");
+  expect(await screen.findByLabelText("Nível")).toHaveValue("dissatisfied");
   expect(screen.getByText(/declarada pelo cliente/)).toBeInTheDocument();
   await userEvent.type(screen.getByLabelText("O que o cliente disse"), "Disse que o marco 2 atrasou duas vezes.");
   await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
-    "/satisfacoes/",
+    "/satisfaction-records/",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
-        account: 1, source_activity: 31, nivel: "insatisfeito", fonte: "declarada",
+        account: 1, source_activity: 31, nivel: "dissatisfied", fonte: "declared",
         happened_on: "2026-08-14", note: "Disse que o marco 2 atrasou duas vezes.",
       }),
     }),
@@ -427,14 +427,14 @@ test("o sinal que fala de dinheiro nasce neutro, e não insatisfeito", async () 
   render(<CobrancaPage />);
   await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
 
-  expect(await screen.findByLabelText("Nível")).toHaveValue("neutro");
+  expect(await screen.findByLabelText("Nível")).toHaveValue("neutral");
 });
 
 test("registrado o sinal, a linha é recarregada e o atalho some", async () => {
   const comSinal = linha({ sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31 });
   let registrado = false;
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/satisfacoes/" && options?.method === "POST") { registrado = true; return Promise.resolve({}); }
+    if (path === "/satisfaction-records/" && options?.method === "POST") { registrado = true; return Promise.resolve({}); }
     return stub([registrado ? linha({ regua: "relacao_tensa", tensao_causa: "satisfacao" }) : comSinal])(path, options);
   });
   render(<CobrancaPage />);

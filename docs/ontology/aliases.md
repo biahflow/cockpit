@@ -36,7 +36,8 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chave de entrada `signer_email` (um signatário) | `signers[]`, lista de `{email, role}` | `views.py` (`_signers_do_pedido`) | `/api/v2/` |
 | chaves `cobranca_sinal` / `cobranca_sinal_display` (só leitura; classe/campo/valor pagos na fatia 5.2 da #122, 04/09/2026 — só resta a leitura) | `dunning_signal` / `dunning_signal_display` | `ActivitySerializer` | `/api/v2/` |
 | degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
-| valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
+| valor de entrada `declarada` / `percebida` e os quatro níveis `promotor` / `satisfeito` / `neutro` / `insatisfeito` (**valor persistido já pago**, fatia 5.3, 04/09/2026 — só resta a entrada) | `declared` / `perceived` e `promoter` / `satisfied` / `neutral` / `dissatisfied` | `SatisfactionRecordSerializer.VALORES_DE_ENTRADA` e `SatisfactionRecordViewSet.filter_valores_legados` | `/api/v2/` |
+| rota `/api/v1/satisfacoes/` | `/satisfaction-records/` | `urls.py` | `/api/v2/` (a canônica nasceu na fatia 5.3) |
 | valor de entrada `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` (área do blueprint; **valor persistido já pago**, fatia 5.1, 04/09/2026 — só resta a entrada) | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA` e `DigitalEmployeeBlueprintViewSet.filter_valores_legados` | `/api/v2/` |
 | chaves `digital_employees[].kpi_label` / `kpi_value` / `hours_saved_month` / `roi_month` no snapshot do portal | `digital_employees[].kpi_ids` + `kpis[]` | `portal.py` | quando o One parar de lê-las |
 
@@ -79,6 +80,34 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > de que o modelo decide o idioma (mesmo argumento da FDD 039) —, e `views.sinal_do_texto` tolera
 > os três tokens legados por barato custo de release, traduzindo-os antes de validar contra o
 > vocabulário novo.
+
+> **A família 3 (`Satisfacao`) foi a terceira a mudar** (fatia 5.3 da issue #122, 04/09/2026), e é
+> a primeira em que o renome de **tabela** anda junto: `RenameModel(Satisfacao → SatisfactionRecord)`
+> sem `Meta.db_table` a fixar antes, porque a pk desta família **não é uma das seis** que a §2b
+> protege — o registro sequer atravessa para o portal do cliente (ADR 0032), então não há
+> consumidor externo de que se despregar. Na #67 a mesma operação era escrita em duas partes
+> justamente para não emitir SQL; aqui ela emite o `ALTER TABLE … RENAME TO`, que é o mesmo
+> mecanismo da `0069` e preserva linha e pk. A migração (`0086_a_satisfacao_fala_ingles`) traduz
+> **dois** enums no mesmo modelo, e por isso o mapa de pares da `0084`/`0085` ganhou um nível
+> (campo → pares): com duas listas soltas, a reversa teria de saber de cabeça qual pertence a qual
+> coluna.
+>
+> **Os campos `nivel` e `fonte` não renomearam, e a ausência de canônico deles está declarada na
+> seção "Termos ainda sem nome canônico", ao lado de `recebido_do_cliente`.** O
+> language-map §4 cunha `satisfaction_record.source` e `satisfaction_record.level` como nomes de
+> **enum** — é a linha que enumera os valores —, e não como nomes de coluna; e a chave de payload é
+> o que a §2c congela até a `/api/v2/`. Renomear a coluna sem ter para onde levar a chave pagaria
+> metade de uma dívida e criaria outra. É a mesma situação de `sinal_*` e `satisfacao_*` no dict
+> cru do painel de cobrança: o valor atravessou, a chave espera coinagem. Diferente da 5.2, aqui os
+> dois campos **são graváveis**, então há `VALORES_DE_ENTRADA` no serializer (a v1 traduz o valor
+> legado antes da validação) e `filter_valores_legados` no viewset (a v1 traduz o filtro, a v2
+> recusa com `frase_do_valor_removido`) — os dois moldes da fatia 5.1, agora com dois campos no
+> mesmo mapa.
+>
+> Os quatro níveis estão **enumerados** na linha da tabela acima porque era ali que a enumeração
+> faltava: a linha anterior dizia "níveis em português", e alias sem os nomes escritos é alias que
+> ninguém consegue conferir. O vocabulário em si já estava cunhado no language-map §4 — não houve
+> coinagem nova nesta fatia, só o registro dela aqui.
 
 > **O recorte físico da Fase 6 foi concluído; a issue #70 foi encerrada por decisão do mantenedor.** Tabelas renomeadas
 > (migração `0069`), dual-write e `Evidencia` removidos (migração `0068`), `Project.client`
@@ -465,10 +494,25 @@ posição, porque não existe uso legítimo do nome antigo.
 
 ## Termos ainda sem nome canônico
 
-`Pendencia`, `Decisao`, `Risco`, `Satisfacao` e o resto da família `Cobranca*` (`CobrancaContato`,
+`Pendencia`, `Decisao`, `Risco` e o resto da família `Cobranca*` (`CobrancaContato`,
 `CobrancaSuspensao`, o `resource`/viewset de cobrança) estão em português no modelo e **a Ontology
 v1 não os cobre** — não há para onde renomeá-los ainda. Eles estão na allowlist mesmo assim, e isso
 é deliberado: sem a linha, a ausência de decisão viraria ausência de dívida.
+
+`Satisfacao` **saiu desta lista na fatia 5.3 da issue #122** (04/09/2026): virou
+`SatisfactionRecord`, com a tabela e os dois enums de valor juntos. Ela estava aqui por um motivo
+diferente do dos vizinhos, e é o que explica ter saído antes deles: o language-map §4 já enumerava
+`satisfaction_record.source` e `satisfaction_record.level`, então o **nome** existia — o que
+faltava era o código dizê-lo. `Pendencia`, `Decisao` e `Risco` continuam sem nenhum.
+
+**Os campos `nivel` e `fonte` do registro de satisfação entram no lugar dela**, com as duas chaves
+derivadas (`nivel_display`, `fonte_display`), e pelo motivo de `recebido_do_cliente` abaixo: o
+language-map cunha `satisfaction_record.level` e `.source` na tabela de **enums** — a linha que
+enumera os valores —, e nenhuma seção cunha o nome do *campo*. Sem canônico, eles não são alias de
+nada: não cabem em `ALIASES_DEPRECIADOS`, não morrem na `/api/v2/` e continuam saindo e sendo
+aceitos nas duas versões. É a mesma forma de `sinal_kind`/`sinal_display` e `satisfacao_nivel`/
+`satisfacao_fonte`/`satisfacao_dias` no dict cru do painel de cobrança, e a frase que vale para as
+três famílias é uma só: **o valor atravessou, a chave espera coinagem.**
 
 `Activity.CobrancaSinal` **saiu desta lista na fatia 5.2 da issue #122** (04/09/2026): tem nome
 canônico (`DunningSignal`) e código que o usa desde essa fatia, então continuar aqui seria negar

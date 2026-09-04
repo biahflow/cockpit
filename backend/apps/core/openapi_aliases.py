@@ -108,7 +108,10 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
         "opportunity", "client", "ai_opportunity", "client_vertical", "client_vertical_name",
     ),
     "ProjectPhase": _CHAVE_LEGADA_DO_GATE,
-    "Satisfacao": ("client",),
+    # `SatisfactionRecord` desde a issue #122, fatia 5.3 (a classe era `Satisfacao`). A chave
+    # continua sendo só `client`: `nivel`/`fonte` **não** são alias — o nome do campo não mudou,
+    # só o valor que ele persiste (D10), e valor não se remove da resposta.
+    "SatisfactionRecord": ("client",),
 }
 
 # Os componentes que **não têm serializer** e por isso não podem estar no mapa acima: são

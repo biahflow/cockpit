@@ -8847,9 +8847,9 @@ paths:
       description: |-
         O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+        **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+        projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+        recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
         O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
         de linguagem, era qualificador sem lastro nenhum no schema.
@@ -8871,9 +8871,9 @@ paths:
       description: |-
         O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+        **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+        projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+        recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
         O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
         de linguagem, era qualificador sem lastro nenhum no schema.
@@ -8906,9 +8906,9 @@ paths:
       description: |-
         O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+        **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+        projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+        recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
         O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
         de linguagem, era qualificador sem lastro nenhum no schema.
@@ -8935,9 +8935,9 @@ paths:
       description: |-
         O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+        **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+        projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+        recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
         O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
         de linguagem, era qualificador sem lastro nenhum no schema.
@@ -8976,9 +8976,9 @@ paths:
       description: |-
         O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+        **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+        projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+        recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
         O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
         de linguagem, era qualificador sem lastro nenhum no schema.
@@ -9016,9 +9016,9 @@ paths:
       description: |-
         O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-        **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-        aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-        é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+        **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+        projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+        recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
         O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
         de linguagem, era qualificador sem lastro nenhum no schema.
@@ -11010,9 +11010,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/RiskResponse'
           description: ''
-  /api/v2/satisfacoes/:
+  /api/v2/satisfaction-records/:
     get:
-      operationId: satisfacoes_list
+      operationId: satisfaction_records_list
       description: |-
         Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
@@ -11022,7 +11022,7 @@ paths:
         cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
         por algum projeto.
       tags:
-      - satisfacoes
+      - satisfaction-records
       security:
       - cookieAuth: []
       responses:
@@ -11032,10 +11032,10 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Satisfacao'
+                  $ref: '#/components/schemas/SatisfactionRecord'
           description: ''
     post:
-      operationId: satisfacoes_create
+      operationId: satisfaction_records_create
       description: |-
         Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
@@ -11045,18 +11045,18 @@ paths:
         cobrança dói. O recorte é o do `ActivityViewSet`: a Entrega enxerga o cliente de que participa
         por algum projeto.
       tags:
-      - satisfacoes
+      - satisfaction-records
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Satisfacao'
+              $ref: '#/components/schemas/SatisfactionRecord'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Satisfacao'
+              $ref: '#/components/schemas/SatisfactionRecord'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Satisfacao'
+              $ref: '#/components/schemas/SatisfactionRecord'
         required: true
       security:
       - cookieAuth: []
@@ -11065,11 +11065,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Satisfacao'
+                $ref: '#/components/schemas/SatisfactionRecord'
           description: ''
-  /api/v2/satisfacoes/{id}/:
+  /api/v2/satisfaction-records/{id}/:
     get:
-      operationId: satisfacoes_retrieve
+      operationId: satisfaction_records_retrieve
       description: |-
         Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
@@ -11083,10 +11083,10 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este satisfacao.
+        description: Um valor inteiro único que identifica este satisfaction record.
         required: true
       tags:
-      - satisfacoes
+      - satisfaction-records
       security:
       - cookieAuth: []
       responses:
@@ -11094,10 +11094,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Satisfacao'
+                $ref: '#/components/schemas/SatisfactionRecord'
           description: ''
     put:
-      operationId: satisfacoes_update
+      operationId: satisfaction_records_update
       description: |-
         Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
@@ -11111,21 +11111,21 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este satisfacao.
+        description: Um valor inteiro único que identifica este satisfaction record.
         required: true
       tags:
-      - satisfacoes
+      - satisfaction-records
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Satisfacao'
+              $ref: '#/components/schemas/SatisfactionRecord'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Satisfacao'
+              $ref: '#/components/schemas/SatisfactionRecord'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Satisfacao'
+              $ref: '#/components/schemas/SatisfactionRecord'
         required: true
       security:
       - cookieAuth: []
@@ -11134,10 +11134,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Satisfacao'
+                $ref: '#/components/schemas/SatisfactionRecord'
           description: ''
     patch:
-      operationId: satisfacoes_partial_update
+      operationId: satisfaction_records_partial_update
       description: |-
         Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
@@ -11151,21 +11151,21 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este satisfacao.
+        description: Um valor inteiro único que identifica este satisfaction record.
         required: true
       tags:
-      - satisfacoes
+      - satisfaction-records
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedSatisfacao'
+              $ref: '#/components/schemas/PatchedSatisfactionRecord'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedSatisfacao'
+              $ref: '#/components/schemas/PatchedSatisfactionRecord'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedSatisfacao'
+              $ref: '#/components/schemas/PatchedSatisfactionRecord'
       security:
       - cookieAuth: []
       responses:
@@ -11173,10 +11173,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Satisfacao'
+                $ref: '#/components/schemas/SatisfactionRecord'
           description: ''
     delete:
-      operationId: satisfacoes_destroy
+      operationId: satisfaction_records_destroy
       description: |-
         Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
@@ -11190,28 +11190,28 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este satisfacao.
+        description: Um valor inteiro único que identifica este satisfaction record.
         required: true
       tags:
-      - satisfacoes
+      - satisfaction-records
       security:
       - cookieAuth: []
       responses:
         '204':
           description: No response body
-  /api/v2/satisfacoes/{id}/unarchive/:
+  /api/v2/satisfaction-records/{id}/unarchive/:
     post:
-      operationId: satisfacoes_unarchive_create
+      operationId: satisfaction_records_unarchive_create
       description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este satisfacao.
+        description: Um valor inteiro único que identifica este satisfaction record.
         required: true
       tags:
-      - satisfacoes
+      - satisfaction-records
       security:
       - cookieAuth: []
       responses:
@@ -11947,7 +11947,8 @@ paths:
         `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
         Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
         objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+        `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+        esta não.
 
         **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
         `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
@@ -11975,7 +11976,8 @@ paths:
         `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
         Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
         objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+        `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+        esta não.
 
         **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
         `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
@@ -12014,7 +12016,8 @@ paths:
         `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
         Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
         objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+        `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+        esta não.
 
         **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
         `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
@@ -12047,7 +12050,8 @@ paths:
         `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
         Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
         objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+        `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+        esta não.
 
         **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
         `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
@@ -12092,7 +12096,8 @@ paths:
         `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
         Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
         objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+        `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+        esta não.
 
         **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
         `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
@@ -12136,7 +12141,8 @@ paths:
         `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
         Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
         objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-        `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+        `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+        esta não.
 
         **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
         `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
@@ -14464,12 +14470,12 @@ components:
       - updated_at
     FonteEnum:
       enum:
-      - declarada
-      - percebida
+      - declared
+      - perceived
       type: string
       description: |-
-        * `declarada` - Declarada pelo cliente
-        * `percebida` - Percebida por quem entrega
+        * `declared` - Declarada pelo cliente
+        * `perceived` - Percebida por quem entrega
     GateDecisionEnum:
       enum:
       - go
@@ -15701,16 +15707,16 @@ components:
       - updated_at
     NivelEnum:
       enum:
-      - promotor
-      - satisfeito
-      - neutro
-      - insatisfeito
+      - promoter
+      - satisfied
+      - neutral
+      - dissatisfied
       type: string
       description: |-
-        * `promotor` - Promotor
-        * `satisfeito` - Satisfeito
-        * `neutro` - Neutro
-        * `insatisfeito` - Insatisfeito
+        * `promoter` - Promotor
+        * `satisfied` - Satisfeito
+        * `neutral` - Neutro
+        * `dissatisfied` - Insatisfeito
     Notification:
       type: object
       properties:
@@ -17877,8 +17883,8 @@ components:
         aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
         mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
 
-        `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
-        sai da sessão, não do corpo.
+        `registered_by` é só de leitura pelo motivo do `Risco` e do `SatisfactionRecord` acima: quem
+        levantou sai da sessão, não do corpo.
 
         `published_at`/`published_by` são só de leitura pelo motivo dos outros quatro publicáveis
         (FDD 051): quem escreve a marca é a action `publish/`, que confere se o mapa pode sair — e
@@ -18522,7 +18528,7 @@ components:
           type: string
           format: date-time
           readOnly: true
-    PatchedSatisfacao:
+    PatchedSatisfactionRecord:
       type: object
       description: |-
         O registro de satisfação (FDD 037).
@@ -19128,8 +19134,8 @@ components:
         aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
         mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
 
-        `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
-        sai da sessão, não do corpo.
+        `registered_by` é só de leitura pelo motivo do `Risco` e do `SatisfactionRecord` acima: quem
+        levantou sai da sessão, não do corpo.
 
         `published_at`/`published_by` são só de leitura pelo motivo dos outros quatro publicáveis
         (FDD 051): quem escreve a marca é a action `publish/`, que confere se o mapa pode sair — e
@@ -20144,7 +20150,7 @@ components:
         * `admin` - Administrador
         * `sales` - Vendas
         * `delivery` - Entrega
-    Satisfacao:
+    SatisfactionRecord:
       type: object
       description: |-
         O registro de satisfação (FDD 037).

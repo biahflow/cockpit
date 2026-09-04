@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import health
-from apps.core.models import Meeting, Pendencia, Satisfacao, Task, WorkItem
+from apps.core.models import Meeting, Pendencia, SatisfactionRecord, Task, WorkItem
 
 from .factories import AccountFactory, ProjectFactory, UserFactory
 
@@ -62,13 +62,13 @@ def test_health_penalizes_negative_roi():
 def _satisfacao(project, **kwargs):  # type: ignore[no-untyped-def]
     campos = {
         "account": project.engagement.account,
-        "nivel": Satisfacao.Nivel.INSATISFEITO,
-        "fonte": Satisfacao.Fonte.DECLARADA,
+        "nivel": SatisfactionRecord.Nivel.DISSATISFIED,
+        "fonte": SatisfactionRecord.Fonte.DECLARED,
         "happened_on": timezone.localdate(),
         "note": "Reclamou do atraso do marco 2 na call de sexta.",
     }
     campos.update(kwargs)
-    return Satisfacao.objects.create(**campos)
+    return SatisfactionRecord.objects.create(**campos)
 
 
 @pytest.mark.django_db
@@ -86,7 +86,7 @@ def test_health_penalizes_declared_dissatisfaction():
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "nivel",
-    [Satisfacao.Nivel.PROMOTOR, Satisfacao.Nivel.SATISFEITO, Satisfacao.Nivel.NEUTRO],
+    [SatisfactionRecord.Nivel.PROMOTER, SatisfactionRecord.Nivel.SATISFIED, SatisfactionRecord.Nivel.NEUTRAL],
 )
 def test_only_dissatisfaction_moves_the_score(nivel):
     """Promotor **não soma**: o escore parte de 100 e só subtrai, e um sinal que somasse faria

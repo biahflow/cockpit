@@ -354,9 +354,14 @@ Key cross-cutting patterns to preserve:
   **tabelas** dos quatro renomes saíram na Fase 6 (migração `0069`, renome em lugar).
   `Project.client` (migração `0070`), `ai_opportunity`→`ai_potential` (migração `0071`) e
   `client_consent`→`account_consent` (migração `0072`) também saíram na Fase 6; sobram as rotas
-  e chaves de payload (`/api/v2/`, que agora pode nascer). O que a guarda ainda tolera está em
-  `docs/ontology/legacy-allowlist.txt` (teto **22**), e o prazo de cada alias, em
-  `docs/ontology/aliases.md` (§2b as seis pks, §2c campo vs. chave).
+  e chaves de payload (`/api/v2/`, que agora pode nascer). **A issue #122 renomeou mais duas
+  classes**, e as duas por serem famílias de enum que a decisão D10 mandou traduzir: `CobrancaSinal`
+  →`DunningSignal` (fatia 5.2, migração `0085`, com o campo `dunning_signal`) e `Satisfacao`
+  →`SatisfactionRecord` (fatia 5.3, migração `0086`, com a **tabela** junto — `RenameModel` puro,
+  autorizado porque a pk desta família não é uma das seis da §2b — e os dois enums de valor). Os
+  campos `nivel`/`fonte` **não** acompanharam: o mapa cunha os nomes de enum, não os de coluna. O
+  que a guarda ainda tolera está em `docs/ontology/legacy-allowlist.txt` (teto **19**), e o prazo de
+  cada alias, em `docs/ontology/aliases.md` (§2b as seis pks, §2c campo vs. chave).
 - **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
   `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP
   `docs/design/dap-engagement-r1/`, r1, decisões **A1** (título em inglês, copy em volta em pt-BR)

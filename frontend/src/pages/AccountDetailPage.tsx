@@ -10,7 +10,7 @@ import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
 import { canWriteBeyondDelivery } from "../roles";
 import { rotuloDoDegrau } from "../tiers";
-import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CommercialOpportunity, Contact, DocumentEntry, DunningSignal, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Service, Vertical } from "../types";
+import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CommercialOpportunity, Contact, DocumentEntry, DunningSignal, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, SatisfactionLevel, SatisfactionRecord, SatisfactionSource, Service, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -22,9 +22,11 @@ const blankActivity = { kind: "call" as ActivityKind, happened_on: new Date().to
 const activityKindLabels: Record<ActivityKind, string> = { call: "Ligação", meeting: "Reunião", email: "E-mail", note: "Nota" };
 // `happened_on` nasce hoje, no molde de `blankActivity` — quem registra corrige a data quando o
 // acontecido foi antes.
-const blankSatisfacao = { nivel: "satisfeito" as SatisfacaoNivel, fonte: "declarada" as SatisfacaoFonte, happened_on: new Date().toISOString().slice(0, 10), note: "" };
-const satisfacaoNivelLabels: Record<SatisfacaoNivel, string> = { promotor: "Promotor", satisfeito: "Satisfeito", neutro: "Neutro", insatisfeito: "Insatisfeito" };
-const satisfacaoFonteLabels: Record<SatisfacaoFonte, string> = { declarada: "Declarada pelo cliente", percebida: "Percebida por quem entrega" };
+// Os valores falam inglês desde a issue #122, fatia 5.3 (D10); os rótulos, que são superfície,
+// continuam em português — é o mesmo corte que a `CobrancaPage` faz nos dois mapas dela.
+const blankSatisfacao = { nivel: "satisfied" as SatisfactionLevel, fonte: "declared" as SatisfactionSource, happened_on: new Date().toISOString().slice(0, 10), note: "" };
+const satisfacaoNivelLabels: Record<SatisfactionLevel, string> = { promoter: "Promotor", satisfied: "Satisfeito", neutral: "Neutro", dissatisfied: "Insatisfeito" };
+const satisfacaoFonteLabels: Record<SatisfactionSource, string> = { declared: "Declarada pelo cliente", perceived: "Percebida por quem entrega" };
 
 /* -------------------------------------------------------------------------------------------
    O mandato de transformação da conta (ADR 0050, FDD 046), desenhado no DAP
@@ -139,7 +141,7 @@ export function AccountDetailPage({ id }: { id: number }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [iaLigada, setIaLigada] = useState(false);
   const [classificando, setClassificando] = useState<number | null>(null);
-  const [satisfacoes, setSatisfacoes] = useState<Satisfacao[]>([]);
+  const [satisfacoes, setSatisfacoes] = useState<SatisfactionRecord[]>([]);
   const [processos, setProcessos] = useState<Process[]>([]);
   const [satisfacaoDraft, setSatisfacaoDraft] = useState(blankSatisfacao);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
@@ -180,7 +182,7 @@ export function AccountDetailPage({ id }: { id: number }) {
     api<Activity[]>(`/activities/?account=${id}`),
     api<AccountOverview>(`/accounts/${id}/overview/`),
     api<Vertical[]>("/verticals/"),
-    api<Satisfacao[]>(`/satisfacoes/?account=${id}`),
+    api<SatisfactionRecord[]>(`/satisfaction-records/?account=${id}`),
     api<Process[]>(`/processes/?account=${id}`),
     // Na **mesma** chamada que o resto da página, e não num `useEffect` próprio: a seção não tem
     // estado de carregamento seu (decisão do DAP), e uma segunda chamada criaria um — a tela
@@ -376,14 +378,14 @@ export function AccountDetailPage({ id }: { id: number }) {
     catch (cause) { setError((cause as Error).message); }
   }
   /**
-   * Registra a satisfação (FDD 037). `insatisfeito` sem `note` volta 400 com a mensagem no campo
+   * Registra a satisfação (FDD 037). `dissatisfied` sem `note` volta 400 com a mensagem no campo
    * (`clean()`/`validate()` do backend) — `mensagemDeFalha` (ADR 0032, FDD 036) é quem traduz o
    * corpo do erro sem uma segunda tabela de orientação nesta tela.
    */
   async function createSatisfacao(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    try { await api("/satisfacoes/", { method: "POST", body: JSON.stringify({ account: id, ...satisfacaoDraft }) }); setSatisfacaoDraft(blankSatisfacao); await load(); }
+    try { await api("/satisfaction-records/", { method: "POST", body: JSON.stringify({ account: id, ...satisfacaoDraft }) }); setSatisfacaoDraft(blankSatisfacao); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   /**
@@ -593,10 +595,10 @@ export function AccountDetailPage({ id }: { id: number }) {
     <section className="panel space-y-4 sm:p-6">
       <div className="flex items-center gap-3"><span className="metric-icon"><HeartHandshake className="size-4" /></span><div><h2 className="font-semibold text-ink">Satisfação</h2><p className="text-sm text-slate-600">{satisfacoes.length} {satisfacoes.length === 1 ? "registro" : "registros"}</p></div></div>
       <form className="form-grid" onSubmit={event => void createSatisfacao(event)}>
-        <label className="form-label">Nível<select className="field" value={satisfacaoDraft.nivel} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, nivel: event.target.value as SatisfacaoNivel })}>{Object.entries(satisfacaoNivelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label className="form-label">Fonte<select className="field" value={satisfacaoDraft.fonte} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, fonte: event.target.value as SatisfacaoFonte })}>{Object.entries(satisfacaoFonteLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="form-label">Nível<select className="field" value={satisfacaoDraft.nivel} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, nivel: event.target.value as SatisfactionLevel })}>{Object.entries(satisfacaoNivelLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="form-label">Fonte<select className="field" value={satisfacaoDraft.fonte} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, fonte: event.target.value as SatisfactionSource })}>{Object.entries(satisfacaoFonteLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="form-label">Data<input className="field" type="date" value={satisfacaoDraft.happened_on} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, happened_on: event.target.value })} required /></label>
-        <label className="form-label sm:col-span-2">Nota{satisfacaoDraft.nivel === "insatisfeito" && <span className="text-danger"> — obrigatória para insatisfeito</span>}<textarea className="field min-h-20" value={satisfacaoDraft.note} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, note: event.target.value })} placeholder="O que o cliente disse, ou o que foi percebido" /></label>
+        <label className="form-label sm:col-span-2">Nota{satisfacaoDraft.nivel === "dissatisfied" && <span className="text-danger"> — obrigatória para insatisfeito</span>}<textarea className="field min-h-20" value={satisfacaoDraft.note} onChange={event => setSatisfacaoDraft({ ...satisfacaoDraft, note: event.target.value })} placeholder="O que o cliente disse, ou o que foi percebido" /></label>
         <button className="btn sm:col-span-2" type="submit"><Plus className="size-4" />Registrar satisfação</button>
       </form>
       {satisfacoes.length ? <div className="panel-rows">{satisfacoes.map(registro => <div className="row" key={registro.id}>

@@ -157,21 +157,21 @@ def test_delivery_agent_context_does_not_leak_satisfaction_from_other_clients(de
     from datetime import date
 
     from apps.core import agents
-    from apps.core.models import Satisfacao
+    from apps.core.models import SatisfactionRecord
 
     hoje = timezone.localdate()
-    Satisfacao.objects.create(
-        account=mine.engagement.account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    SatisfactionRecord.objects.create(
+        account=mine.engagement.account, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=hoje, note="Ficou quieto na última call.",
     )
-    Satisfacao.objects.create(
-        account=theirs.engagement.account, nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.DECLARADA, happened_on=hoje,
+    SatisfactionRecord.objects.create(
+        account=theirs.engagement.account, nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.DECLARED, happened_on=hoje,
         note="Segredo do cliente alheio.",
     )
     # Fora da janela de 90 dias: registro que já não é o estado de hoje não entra no contexto.
-    Satisfacao.objects.create(
-        account=mine.engagement.account, nivel=Satisfacao.Nivel.PROMOTOR, fonte=Satisfacao.Fonte.DECLARADA,
+    SatisfactionRecord.objects.create(
+        account=mine.engagement.account, nivel=SatisfactionRecord.Nivel.PROMOTER, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=date(2000, 1, 1), note="Elogio de outra era.",
     )
 

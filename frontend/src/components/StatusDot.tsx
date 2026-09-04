@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 
-import type { CustoEstadoAtual, EpistemicStatus, HealthLevel, PublicationState, SatisfacaoNivel } from "../types";
+import type { CustoEstadoAtual, EpistemicStatus, HealthLevel, PublicationState, SatisfactionLevel } from "../types";
 
 // Semáforo de saúde 🟢🟡🔴 reutilizável (eleva o mapa antes duplicado em IndicadoresPage).
 // Variantes de `.state`, não as cores delas (ADR 0026): um `bg-emerald-50` escrito aqui é uma
@@ -22,17 +22,21 @@ export function healthBadgeClass(level: HealthLevel): string {
 
 // A satisfação do cliente (FDD 037, ADR 0032). Duas telas leem o mesmo nível — a de detalhe do
 // cliente e a de Cobrança —, e o mapa mora aqui, ao lado do de saúde, pela mesma razão: uma cópia
-// por tela é a segunda definição que diverge sem nada ficar vermelho. `neutro` é `state--off` de
-// propósito — é o nível que não é alerta, no molde de "Desligada"/"Arquivado". `insatisfeito` é o
+// por tela é a segunda definição que diverge sem nada ficar vermelho. `neutral` é `state--off` de
+// propósito — é o nível que não é alerta, no molde de "Desligada"/"Arquivado". `dissatisfied` é o
 // único que muda comportamento (Health Score e escada da régua) e é o único em `state--3`.
-const SATISFACAO_BADGE: Record<SatisfacaoNivel, string> = {
-  promotor: "state--0",
-  satisfeito: "state--1",
-  neutro: "state--off",
-  insatisfeito: "state--3",
+//
+// As chaves falam inglês desde a issue #122, fatia 5.3 (D10): é o valor que o servidor persiste
+// e emite. Os rótulos continuam pt-BR e continuam vindo de outro lugar — do `nivel_display` ou
+// dos mapas de rótulo das duas telas —, porque aqui só mora a variante, nunca a cor (ADR 0026).
+const SATISFACAO_BADGE: Record<SatisfactionLevel, string> = {
+  promoter: "state--0",
+  satisfied: "state--1",
+  neutral: "state--off",
+  dissatisfied: "state--3",
 };
 
-export function satisfacaoBadgeClass(nivel: SatisfacaoNivel): string {
+export function satisfacaoBadgeClass(nivel: SatisfactionLevel): string {
   return SATISFACAO_BADGE[nivel];
 }
 

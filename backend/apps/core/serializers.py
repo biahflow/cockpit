@@ -74,7 +74,7 @@ from .models import (
     ProveExperiment,
     Qualification,
     Risco,
-    Satisfacao,
+    SatisfactionRecord,
     Service,
     SignatureRequest,
     SolutionHypothesis,
@@ -1099,7 +1099,9 @@ class RiscoSerializer(serializers.ModelSerializer[Risco]):
         read_only_fields = ["id", "owner", "resolved_at", "created_at", "updated_at"]
 
 
-class SatisfacaoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Satisfacao]):
+class SatisfactionRecordSerializer(
+    AliasesDaV1Mixin, serializers.ModelSerializer[SatisfactionRecord]
+):
     """O registro de satisfação (FDD 037).
 
     `registered_by` é só de leitura pelo motivo do `owner` do `Risco` acima: quem registrou sai da
@@ -1109,6 +1111,26 @@ class SatisfacaoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Satisfa
 
     ALIASES_DE_ENTRADA = {"client": "account"}
 
+    # Os dois enums falam inglês desde a migração `0086` (issue #122, fatia 5.3; D10 do
+    # language-map). Quem integrou com a `/api/v1/` mandando `"neutro"`/`"declarada"` continua
+    # funcionando: o mixin traduz para o canônico antes da validação. A `/api/v2/` não herda a
+    # tradução — o valor legado cai na validação de `choices` do campo e leva o 400 padrão do DRF,
+    # que já lista o vocabulário inteiro (o argumento da fatia 5.1: uma frase nossa seria a segunda
+    # definição do mesmo erro). **As chaves `nivel`/`fonte` não mudam**: elas são chave de payload,
+    # e a §2c as congela até a `/api/v2/` — o que atravessou aqui foi só o valor.
+    VALORES_DE_ENTRADA = {
+        "nivel": {
+            "promotor": SatisfactionRecord.Nivel.PROMOTER,
+            "satisfeito": SatisfactionRecord.Nivel.SATISFIED,
+            "neutro": SatisfactionRecord.Nivel.NEUTRAL,
+            "insatisfeito": SatisfactionRecord.Nivel.DISSATISFIED,
+        },
+        "fonte": {
+            "declarada": SatisfactionRecord.Fonte.DECLARED,
+            "percebida": SatisfactionRecord.Fonte.PERCEIVED,
+        },
+    }
+
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
     # o mesmo valor da canônica e morre na `/api/v2/`. A escrita vem do `AliasesDaV1Mixin`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
@@ -1116,7 +1138,7 @@ class SatisfacaoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Satisfa
     fonte_display = serializers.CharField(source="get_fonte_display", read_only=True)
 
     class Meta:
-        model = Satisfacao
+        model = SatisfactionRecord
         fields = ["id", "account", "client", "project", "source_meeting", "source_activity",
                   "nivel",
                   "nivel_display", "fonte", "fonte_display", "happened_on", "note",
@@ -1151,7 +1173,7 @@ class SatisfacaoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Satisfa
             )
         nivel = attrs.get("nivel", getattr(self.instance, "nivel", None))
         note = cast(str, attrs.get("note", getattr(self.instance, "note", "")) or "")
-        if nivel == Satisfacao.Nivel.INSATISFEITO and not note.strip():
+        if nivel == SatisfactionRecord.Nivel.DISSATISFIED and not note.strip():
             raise serializers.ValidationError(
                 {"note": "Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."}
             )
@@ -1186,8 +1208,8 @@ class ProcessSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Process]):
     aos nove insumos que já estão no corpo. Persistir o total seria uma segunda verdade sobre o
     mesmo dado — mudaria o volume e o número gravado continuaria dizendo o antigo.
 
-    `registered_by` é só de leitura pelo motivo do `Risco` e da `Satisfacao` acima: quem levantou
-    sai da sessão, não do corpo.
+    `registered_by` é só de leitura pelo motivo do `Risco` e do `SatisfactionRecord` acima: quem
+    levantou sai da sessão, não do corpo.
 
     `published_at`/`published_by` são só de leitura pelo motivo dos outros quatro publicáveis
     (FDD 051): quem escreve a marca é a action `publish/`, que confere se o mapa pode sair — e

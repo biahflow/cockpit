@@ -51,7 +51,7 @@ if TYPE_CHECKING:
         CobrancaSuspensao,
         Contact,
         Invoice,
-        Satisfacao,
+        SatisfactionRecord,
         User,
     )
 
@@ -288,8 +288,9 @@ class PainelContexto:
     health_por_cliente: dict[int, str] = field(default_factory=dict)
     # A última resposta de cobrança que a IA classificou e que **ninguém registrou ainda** (FDD 038,
     # ADR 0032). É leitura, não registro: o painel a mostra para oferecer o atalho, e ela some da
-    # linha assim que existir uma `Satisfacao` apontando para aquela atividade. Sem a pré-carga
-    # seria mais um N+1 por fatura, e por cliente e não por fatura porque a satisfação é da relação.
+    # linha assim que existir um `SatisfactionRecord` apontando para aquela atividade. Sem a
+    # pré-carga seria mais um N+1 por fatura, e por cliente e não por fatura porque a satisfação
+    # é da relação.
     sinal_por_cliente: dict[int, Activity] = field(default_factory=dict)
     # Os registros **vigentes**, e não a satisfação já escolhida, porque as duas leituras desta
     # dimensão são diferentes: a linha do painel mostra a vigente de qualquer fonte (a percebida é
@@ -297,7 +298,7 @@ class PainelContexto:
     # escolha só faria a segunda leitura se contentar com a sobra — uma percebida anotada depois de
     # uma declarada esconderia a declarada, e a tela passaria a discordar do relógio exatamente no
     # caso que esta fatia existe para tratar.
-    satisfacoes_por_cliente: dict[int, list[Satisfacao]] = field(default_factory=dict)
+    satisfacoes_por_cliente: dict[int, list[SatisfactionRecord]] = field(default_factory=dict)
 
 
 def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContexto:
@@ -315,7 +316,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     from .models import Activity, CobrancaContato, CobrancaSuspensao
     from .models import Invoice as InvoiceModel
     from .models import Project as ProjectModel
-    from .models import Satisfacao as SatisfacaoModel
+    from .models import SatisfactionRecord as SatisfactionRecordModel
 
     if not invoices:
         return PainelContexto(hoje=hoje)
@@ -399,7 +400,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     # satisfação **não arquivada**, porque um registro que alguém arquivou deixou de valer e o
     # sinal volta a estar por registrar.
     sinais: dict[int, Activity] = {}
-    registradas = SatisfacaoModel.objects.filter(
+    registradas = SatisfactionRecordModel.objects.filter(
         source_activity__isnull=False, archived_at__isnull=True
     ).values("source_activity_id")
     for activity in (
@@ -506,7 +507,7 @@ def reincidente(
 
 def satisfacao_vigente(
     account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
-) -> Satisfacao | None:
+) -> SatisfactionRecord | None:
     """O registro de satisfação que ainda vale hoje para este cliente, de **qualquer** fonte.
 
     É o que a linha do painel mostra: quem decide o próximo degrau precisa ver também a leitura de
@@ -525,10 +526,10 @@ def satisfacao_vigente(
 
 def insatisfacao_declarada(
     account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
-) -> Satisfacao | None:
+) -> SatisfactionRecord | None:
     """A insatisfação que troca a escada: **declarada** pelo cliente e ainda vigente.
 
-    `fonte=declarada` e não as duas somadas, e essa linha é a decisão central da FDD 037
+    `fonte=declared` e não as duas somadas, e essa linha é a decisão central da FDD 037
     (ADR 0032): abrandar uma cobrança é ato com consequência em dinheiro, e precisa da palavra do
     cliente — não da nossa leitura sobre ele. Somar as duas fontes num filtro só deixaria todos os
     testes de comportamento passando e faria a régua recuar por palpite.
@@ -537,7 +538,7 @@ def insatisfacao_declarada(
     percebida registrada depois de uma declarada esconderia a declarada se a escolha fosse feita
     antes do filtro.
     """
-    from .models import Satisfacao
+    from .models import SatisfactionRecord
 
     dia = _hoje(hoje)
     if contexto is not None:
@@ -546,8 +547,10 @@ def insatisfacao_declarada(
         registros = satisfacao_module.registros_vigentes_por_cliente([account.pk], dia).get(
             account.pk, []
         )
-    registro = satisfacao_module.vigente(registros, dia, fonte=Satisfacao.Fonte.DECLARADA)
-    if registro is None or registro.nivel != Satisfacao.Nivel.INSATISFEITO:
+    registro = satisfacao_module.vigente(
+        registros, dia, fonte=SatisfactionRecord.Fonte.DECLARED
+    )
+    if registro is None or registro.nivel != SatisfactionRecord.Nivel.DISSATISFIED:
         return None
     return registro
 
@@ -561,9 +564,10 @@ def entrega_critica(
     concluído fica de fora porque um crítico congelado no passado deixaria a trava ligada para
     sempre — e uma trava que nunca desliga é uma trava que ninguém respeita.
 
-    **Pergunta por cliente, e não pelo projeto da fatura** (FDD 038), pela mesma razão que a
-    `Satisfacao` liga ao cliente: a régua pergunta por cliente e fatura sem projeto existe. Ligar
-    ao projeto da fatura deixaria a trava sem alcance justamente em quem já saiu daquela entrega.
+    **Pergunta por cliente, e não pelo projeto da fatura** (FDD 038), pela mesma razão que o
+    `SatisfactionRecord` liga ao cliente: a régua pergunta por cliente e fatura sem projeto existe.
+    Ligar ao projeto da fatura deixaria a trava sem alcance justamente em quem já saiu daquela
+    entrega.
 
     **Só o `level` atravessa**, nunca o score nem os sinais — a mesma cerca comercial do
     `PainelContexto`. E o limiar é o de `health._level`: reescrevê-lo aqui criaria uma segunda

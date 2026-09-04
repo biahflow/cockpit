@@ -361,7 +361,11 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # A issue #122, fatia 5.2, pagou `Activity.CobrancaSinal`: a classe virou `DunningSignal`, o campo
 # e o valor persistido acompanharam (D10), e a linha `modelo-em-portugues::CobrancaSinal` saiu do
 # modelo — o teto desceu de 23 para 22.
-TETO_DA_ALLOWLIST = 22
+#
+# A fatia 5.3 pagou `Satisfacao`: a classe virou `SatisfactionRecord`, e com ela a tabela
+# (`RenameModel`) e os dois enums de valor. Saíram **três** linhas de uma vez — o modelo, o
+# serializer e o viewset —, porque o nome errado estava nos três, e o teto desceu de 22 para 19.
+TETO_DA_ALLOWLIST = 19
 
 
 def test_nenhum_termo_banido_novo() -> None:
@@ -447,17 +451,26 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
     A família 2 (`Activity.CobrancaSinal`) atravessou na fatia 5.2 — a migração `0085` renomeou
     classe, campo (`dunning_signal`) e valor juntos (D10), e aqui também o português continua vivo
     só como alias de **leitura** da `/api/v1/` (`cobranca_sinal`/`cobranca_sinal_display`), nunca
-    mais como o que persiste. As famílias 1 e 3 (degraus de cobrança e satisfação) seguem
-    congeladas em português até a fatia que as atravessar.
+    mais como o que persiste.
+
+    A família 3 (`Satisfacao`) atravessou na fatia 5.3 — a migração `0086` renomeou classe, tabela
+    e os **dois** enums de valor juntos, e aqui o português continua vivo só como alias de
+    **entrada** da `/api/v1/` (`SatisfactionRecordSerializer.VALORES_DE_ENTRADA`), como na família
+    4. Sobra a família 1 (degraus de cobrança), congelada em português até a fatia que a atravessar.
     """
     from apps.core import cobranca
-    from apps.core.models import Activity, CobrancaContato, DigitalEmployeeBlueprint, Satisfacao
+    from apps.core.models import (
+        Activity,
+        CobrancaContato,
+        DigitalEmployeeBlueprint,
+        SatisfactionRecord,
+    )
 
     legados = {
         "Activity.DunningSignal": tuple(Activity.DunningSignal.values),
         "CobrancaContato.Degrau": tuple(CobrancaContato.Degrau.values),
-        "Satisfacao.Fonte": tuple(Satisfacao.Fonte.values),
-        "Satisfacao.Nivel": tuple(Satisfacao.Nivel.values),
+        "SatisfactionRecord.Fonte": tuple(SatisfactionRecord.Fonte.values),
+        "SatisfactionRecord.Nivel": tuple(SatisfactionRecord.Nivel.values),
         "DigitalEmployeeBlueprint.Area": tuple(DigitalEmployeeBlueprint.Area.values),
     }
     assert legados == {
@@ -469,8 +482,8 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
             "escalada",
             "renegociacao",
         ),
-        "Satisfacao.Fonte": ("declarada", "percebida"),
-        "Satisfacao.Nivel": ("promotor", "satisfeito", "neutro", "insatisfeito"),
+        "SatisfactionRecord.Fonte": ("declared", "perceived"),
+        "SatisfactionRecord.Nivel": ("promoter", "satisfied", "neutral", "dissatisfied"),
         "DigitalEmployeeBlueprint.Area": (
             "commercial",
             "finance",

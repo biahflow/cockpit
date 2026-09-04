@@ -465,8 +465,8 @@ const FIXTURES: Record<string, unknown> = {
     // A satisfação vigente (FDD 037). Uma linha declarada insatisfeita (a que carrega a régua
     // tensa), uma percebida promotora e as demais sem registro — o axe precisa medir o selo
     // `.state` e o rótulo de fonte nos dois casos, e o card sem satisfação nenhuma.
-    satisfacao_nivel: indice === 2 ? "insatisfeito" : indice === 4 ? "promotor" : null,
-    satisfacao_fonte: indice === 2 ? "declarada" : indice === 4 ? "percebida" : null,
+    satisfacao_nivel: indice === 2 ? "dissatisfied" : indice === 4 ? "promoter" : null,
+    satisfacao_fonte: indice === 2 ? "declared" : indice === 4 ? "perceived" : null,
     satisfacao_dias: indice === 2 ? 5 : indice === 4 ? 40 : null,
     // A causa da tensão (FDD 038). A terceira linha é tensa por satisfação declarada; a segunda
     // entra tensa **por entrega**, que é a combinação que rende o texto mais longo da faixa e a
@@ -508,9 +508,9 @@ const FIXTURES: Record<string, unknown> = {
   // A satisfação do cliente (FDD 037, ADR 0032): uma declarada e uma percebida, para o axe medir
   // o selo de nível e o rótulo de fonte nos dois casos — sem as duas, o painel de Satisfação do
   // detalhe do cliente renderiza sempre a mesma metade da tela.
-  "/api/v2/satisfacoes/": [
-    { nivel: "insatisfeito", nivel_display: "Insatisfeito", fonte: "declarada", fonte_display: "Declarada pelo cliente", happened_on: HOJE, note: "Reclamou do prazo da última entrega na call de comitê." },
-    { nivel: "promotor", nivel_display: "Promotor", fonte: "percebida", fonte_display: "Percebida por quem entrega", happened_on: VENCIDO, note: "" },
+  "/api/v2/satisfaction-records/": [
+    { nivel: "dissatisfied", nivel_display: "Insatisfeito", fonte: "declared", fonte_display: "Declarada pelo cliente", happened_on: HOJE, note: "Reclamou do prazo da última entrega na call de comitê." },
+    { nivel: "promoter", nivel_display: "Promotor", fonte: "perceived", fonte_display: "Percebida por quem entrega", happened_on: VENCIDO, note: "" },
   ].map((registro, indice) => ({
     id: indice + 1, account: 1, project: null, source_meeting: null,
     registered_by: 1, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,

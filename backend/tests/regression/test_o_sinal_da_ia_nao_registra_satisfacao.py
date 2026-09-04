@@ -8,9 +8,10 @@ inteira da ADR 0032.
 
 O que se perde ao cruzar a linha não aparece em teste de comportamento nenhum: a escada continua
 trocando, o Health Score continua descontando, tudo verde. O que muda é o significado. Um
-`Satisfacao(fonte=declarada)` gravado pela IA afirma que **o cliente disse** — e o que houve foi um
-modelo tendo lido uma frase digitada por quem atendeu. Passa a valer 20 pontos de Health Score e
-uma troca de escada por inferência, com a mesma aparência de evidência que o registro humano tem.
+`SatisfactionRecord(fonte=declared)` gravado pela IA afirma que **o cliente disse** — e o que houve
+foi um modelo tendo lido uma frase digitada por quem atendeu. Passa a valer 20 pontos de Health
+Score e uma troca de escada por inferência, com a mesma aparência de evidência que o registro
+humano tem.
 
 O oráculo é o estado depois de classificar: nenhum registro, nenhum ponto, nenhuma escada trocada.
 """
@@ -23,7 +24,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai, cobranca, health
-from apps.core.models import Activity, Invoice, Satisfacao, User
+from apps.core.models import Activity, Invoice, SatisfactionRecord, User
 from apps.core.tests.factories import (
     AccountFactory,
     ActivityFactory,
@@ -80,7 +81,7 @@ def test_classificar_nao_cria_satisfacao(admin_api: APIClient, insatisfeito: Non
     activity.refresh_from_db()
     assert activity.dunning_signal == Activity.DunningSignal.DISSATISFIED
     # O sinal foi gravado; o **registro** não. São coisas diferentes, e a diferença é quem afirma.
-    assert not Satisfacao.objects.exists()
+    assert not SatisfactionRecord.objects.exists()
 
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
@@ -126,8 +127,8 @@ def test_so_o_registro_humano_move_a_escada(admin_api: APIClient, insatisfeito: 
         {
             "account": activity.account_id,
             "source_activity": activity.pk,
-            "nivel": Satisfacao.Nivel.INSATISFEITO,
-            "fonte": Satisfacao.Fonte.DECLARADA,
+            "nivel": SatisfactionRecord.Nivel.DISSATISFIED,
+            "fonte": SatisfactionRecord.Fonte.DECLARED,
             "happened_on": str(activity.happened_on),
             "note": "Disse na ligação que não paga enquanto o marco 2 não entrar.",
         },
@@ -135,7 +136,7 @@ def test_so_o_registro_humano_move_a_escada(admin_api: APIClient, insatisfeito: 
     )
 
     assert resposta.status_code == 201, resposta.data
-    registro = Satisfacao.objects.get()
+    registro = SatisfactionRecord.objects.get()
     # Quem afirma tem nome, e o nome é o da sessão — não o do modelo.
     assert registro.registered_by is not None
     assert registro.source_activity_id == activity.pk
@@ -153,8 +154,8 @@ def test_o_atalho_nao_atravessa_o_cliente(admin_api: APIClient) -> None:
         {
             "account": account.pk,
             "source_activity": alheia.pk,
-            "nivel": Satisfacao.Nivel.INSATISFEITO,
-            "fonte": Satisfacao.Fonte.DECLARADA,
+            "nivel": SatisfactionRecord.Nivel.DISSATISFIED,
+            "fonte": SatisfactionRecord.Fonte.DECLARED,
             "happened_on": str(timezone.localdate()),
             "note": "Não deveria colar.",
         },
@@ -163,4 +164,4 @@ def test_o_atalho_nao_atravessa_o_cliente(admin_api: APIClient) -> None:
 
     assert resposta.status_code == 400
     assert "source_activity" in resposta.data
-    assert not Satisfacao.objects.exists()
+    assert not SatisfactionRecord.objects.exists()

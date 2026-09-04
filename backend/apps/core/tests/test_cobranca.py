@@ -31,7 +31,7 @@ from apps.core.models import (
     Notification,
     Pendencia,
     Project,
-    Satisfacao,
+    SatisfactionRecord,
     User,
     WorkItem,
 )
@@ -178,12 +178,12 @@ def test_a_reincidencia_ignora_a_propria_fatura() -> None:
     assert cobranca.regua_para(antigo, HOJE, ignorando=atrasada) is cobranca.RELACAO_LONGA
 
 
-def _insatisfacao(account: Account, quando: date | None = None) -> Satisfacao:
+def _insatisfacao(account: Account, quando: date | None = None) -> SatisfactionRecord:
     """Insatisfação **declarada** e vigente — a que troca a escada (FDD 037, ADR 0032)."""
-    return Satisfacao.objects.create(
+    return SatisfactionRecord.objects.create(
         account=account,
-        nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.DECLARADA,
+        nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=quando or HOJE,
         note="Disse na call que a entrega do marco 2 atrasou duas vezes.",
     )
@@ -1199,16 +1199,16 @@ def test_o_painel_traz_a_satisfacao_vigente_com_a_fonte(admin_api: APIClient) ->
     """
     account = AccountFactory()
     invoice = _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
-    Satisfacao.objects.create(
-        account=account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    SatisfactionRecord.objects.create(
+        account=account, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=timezone.localdate() - timedelta(days=4),
     )
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
 
     assert linha["invoice"] == invoice.pk
-    assert linha["satisfacao_nivel"] == Satisfacao.Nivel.NEUTRO
-    assert linha["satisfacao_fonte"] == Satisfacao.Fonte.PERCEBIDA
+    assert linha["satisfacao_nivel"] == SatisfactionRecord.Nivel.NEUTRAL
+    assert linha["satisfacao_fonte"] == SatisfactionRecord.Fonte.PERCEIVED
     assert linha["satisfacao_dias"] == 4
     # A percebida aparece e **não** troca a escada.
     assert linha["regua"] == "padrao"
@@ -1218,15 +1218,15 @@ def test_o_painel_traz_a_satisfacao_vigente_com_a_fonte(admin_api: APIClient) ->
 def test_o_painel_nomeia_a_regua_tensa(admin_api: APIClient) -> None:
     account = AccountFactory()
     _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
-    Satisfacao.objects.create(
-        account=account, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+    SatisfactionRecord.objects.create(
+        account=account, nivel=SatisfactionRecord.Nivel.DISSATISFIED, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=timezone.localdate(), note="Reclamou do atraso do marco 2.",
     )
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
 
     assert linha["regua"] == "relacao_tensa"
-    assert linha["satisfacao_fonte"] == Satisfacao.Fonte.DECLARADA
+    assert linha["satisfacao_fonte"] == SatisfactionRecord.Fonte.DECLARED
     # O degrau firme deu lugar à escalada interna, e a linha não ficou muda.
     assert linha["proximo_degrau"] == "escalada"
     assert linha["motivo"] == ""
@@ -1322,9 +1322,9 @@ def test_o_sinal_some_da_linha_depois_de_registrado(admin_api: APIClient) -> Non
     (antes,) = admin_api.get("/api/v1/cobranca/painel/").json()
     assert antes["sinal_activity"] == activity.pk
 
-    Satisfacao.objects.create(
-        account=account, source_activity=activity, nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.DECLARADA, happened_on=activity.happened_on,
+    SatisfactionRecord.objects.create(
+        account=account, source_activity=activity, nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.DECLARED, happened_on=activity.happened_on,
         note="Disse que a entrega do marco 2 atrasou duas vezes.",
     )
 
@@ -1512,8 +1512,8 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
     # percebida de hoje esconderia a declarada de ontem.
     tenso = _cliente_de_casa()
     _insatisfacao(tenso, hoje - timedelta(days=1))
-    Satisfacao.objects.create(
-        account=tenso, nivel=Satisfacao.Nivel.SATISFEITO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    SatisfactionRecord.objects.create(
+        account=tenso, nivel=SatisfactionRecord.Nivel.SATISFIED, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=hoje,
     )
     tensa = _fatura(due_date=hoje - timedelta(days=12), account=tenso)

@@ -12,10 +12,11 @@
 #     mais** numa chave que já está;
 #   * `test_a_allowlist_nao_guarda_linha_desnecessaria` reprova a entrada maior que a dívida que
 #     ela isenta, forçando a baixa do número — ou a remoção da linha, quando a dívida zera;
-#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 22, depois que a Fase 6
-#     removeu `ai_opportunity`, `Project.client` e `client_consent`, e a issue #122 (fatia 5.2)
-#     pagou `Activity.CobrancaSinal`), que conta **dívidas distintas** — linhas deste arquivo, não
-#     ocorrências no código.
+#   * `test_a_allowlist_so_encolhe` guarda o teto (`TETO_DA_ALLOWLIST` = 19, depois que a Fase 6
+#     removeu `ai_opportunity`, `Project.client` e `client_consent`, e a issue #122 pagou
+#     `Activity.CobrancaSinal` na fatia 5.2 e `Satisfacao` na 5.3 — esta última tirando três linhas
+#     de uma vez, porque o mesmo nome errado estava no modelo, no serializer e no viewset), que
+#     conta **dívidas distintas** — linhas deste arquivo, não ocorrências no código.
 #
 # A entrada **não carrega número de linha**, de propósito: dívida declarada não pode ser reaberta
 # por alguém ter inserido um import acima dela. Ela carrega a **contagem**, que é a outra metade
@@ -130,10 +131,16 @@ backend/apps/core/openapi_aliases.py::outcome-como-decisao-de-gate::gate_outcome
 #     D10) renomeados juntos. É o primeiro nome da família `Cobranca*` a ganhar canônico — os
 #     outros três (`CobrancaContato`, `CobrancaSuspensao`, o `resource`/viewset de cobrança) ainda
 #     não têm, e continuam abaixo.
-#   * `Pendencia`, `Decisao`, `Risco`, `Satisfacao` e o resto da família `Cobranca*` **ainda não
-#     têm nome canônico** — a Ontology v1 não os cobre. Registrá-los aqui é o que impede que a
-#     ausência de decisão vire ausência de dívida. O nome entra primeiro no language-map (§8),
-#     depois no Pulse; até lá a linha fica.
+#   * `Satisfacao` **saiu na issue #122, fatia 5.3**: virou `SatisfactionRecord`, com a tabela
+#     (`RenameModel` puro — a pk desta família não é uma das seis da §2b) e os dois enums de
+#     valor (`declared`/`perceived` e os quatro níveis, D10) renomeados juntos. Foram **três**
+#     linhas de uma vez — modelo, serializer e viewset —, e é o normal quando o renome de
+#     classe é completo: as outras duas nunca foram dívidas próprias, eram o mesmo nome errado
+#     repetido no arquivo vizinho.
+#   * `Pendencia`, `Decisao`, `Risco` e o resto da família `Cobranca*` **ainda não têm nome
+#     canônico** — a Ontology v1 não os cobre. Registrá-los aqui é o que impede que a ausência
+#     de decisão vire ausência de dívida. O nome entra primeiro no language-map (§8), depois
+#     no Pulse; até lá a linha fica.
 #
 # As **chaves de payload** (`processo` e `etapa` no corpo e na resposta de etapa e evidência) não
 # aparecem aqui porque a regra casa declaração de campo de modelo (`… = models.…`), e o alias é um
@@ -145,19 +152,16 @@ backend/apps/core/models.py::modelo-em-portugues::CobrancaSuspensao::1
 backend/apps/core/models.py::modelo-em-portugues::Decisao::1
 backend/apps/core/models.py::modelo-em-portugues::Pendencia::1
 backend/apps/core/models.py::modelo-em-portugues::Risco::1
-backend/apps/core/models.py::modelo-em-portugues::Satisfacao::1
 backend/apps/core/serializers.py::modelo-em-portugues::CobrancaContatoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::CobrancaSuspensaoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::DecisaoSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::PendenciaSerializer::1
 backend/apps/core/serializers.py::modelo-em-portugues::RiscoSerializer::1
-backend/apps/core/serializers.py::modelo-em-portugues::SatisfacaoSerializer::1
 backend/apps/core/views.py::modelo-em-portugues::CobrancaSuspensaoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::CobrancaViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::DecisaoViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::PendenciaViewSet::1
 backend/apps/core/views.py::modelo-em-portugues::RiscoViewSet::1
-backend/apps/core/views.py::modelo-em-portugues::SatisfacaoViewSet::1
 
 # ---------------------------------------------------------------------------------------------
 # Legado congelado: a classe que a §5 nomeia como banida e que ainda existe hoje.

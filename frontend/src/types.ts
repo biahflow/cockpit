@@ -391,19 +391,24 @@ export type CobrancaMotivo = "" | "suspensa" | "degrau_gasto" | "teto_de_frequen
 export type CobrancaRegua = "padrao" | "relacao_longa" | "relacao_tensa";
 export type CobrancaSuspensaoResumo = { id: number; until: string; owner: number; owner_name: string };
 
-// A satisfação do cliente (FDD 037, ADR 0032). `declarada` é o cliente tendo dito; `percebida` é a
+// A satisfação do cliente (FDD 037, ADR 0032). `declared` é o cliente tendo dito; `perceived` é a
 // leitura de quem entrega. **Só a declarada move número** — Health Score e escada de cobrança — e é
 // essa distinção, não o nível, a decisão central da fatia: uma tela que tratasse as duas fontes
 // iguais desfaria o que a ADR 0032 decidiu.
-export type SatisfacaoNivel = "promotor" | "satisfeito" | "neutro" | "insatisfeito";
-export type SatisfacaoFonte = "declarada" | "percebida";
-export type Satisfacao = {
+//
+// Os valores falam inglês desde a issue #122, fatia 5.3 (D10 do language-map): a classe virou
+// `SatisfactionRecord` e os dois enums atravessaram junto. As **chaves** `nivel`/`fonte` ficam —
+// elas são chave de payload, e o prazo delas é a `/api/v2/` (`docs/ontology/aliases.md` §2c) —, e
+// os rótulos em português vêm do `*_display` do servidor ou dos mapas de tela, não daqui.
+export type SatisfactionLevel = "promoter" | "satisfied" | "neutral" | "dissatisfied";
+export type SatisfactionSource = "declared" | "perceived";
+export type SatisfactionRecord = {
   id: number; account: number; project: number | null; source_meeting: number | null;
   // A resposta de cobrança que a IA classificou e que originou este registro (FDD 038). É o que
   // faz o painel parar de oferecer o atalho depois do registro — sem ela, o mesmo sinal insistiria
   // para sempre. Continua sendo **uma pessoa** que salva: a IA lê, ela não registra (ADR 0032).
   source_activity: number | null;
-  nivel: SatisfacaoNivel; nivel_display: string; fonte: SatisfacaoFonte; fonte_display: string;
+  nivel: SatisfactionLevel; nivel_display: string; fonte: SatisfactionSource; fonte_display: string;
   happened_on: string; note: string; registered_by: number | null;
   created_at: string; updated_at: string;
 };
@@ -422,7 +427,7 @@ export type CobrancaPainelLinha = {
   // A satisfação vigente (FDD 037): nível e fonte, ou os três `null` quando não há registro dentro
   // da janela de 90 dias. A fonte vai junto do nível porque a linha precisa dizer se é o cliente
   // falando ou a nossa leitura sobre ele — é o que separa o que move a régua do que não move.
-  satisfacao_nivel: SatisfacaoNivel | null; satisfacao_fonte: SatisfacaoFonte | null;
+  satisfacao_nivel: SatisfactionLevel | null; satisfacao_fonte: SatisfactionSource | null;
   satisfacao_dias: number | null;
   // Por que a relação está tensa (FDD 038). É rótulo e não decisão: as duas origens levam à mesma
   // escada, e quem diz qual escada vale continua sendo `regua`. Nulo quando não há tensão.

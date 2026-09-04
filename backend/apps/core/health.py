@@ -10,7 +10,7 @@ insatisfação **declarada** do cliente (FDD 037). Bugs e "acessos liberados" fi
 existir onde registrá-los.
 
 Os cinco primeiros medem o **nosso** trabalho; o sexto é o único que depende de o cliente ter
-dito alguma coisa — e por isso ele lê só `fonte=declarada`. Ver `assess_project_health`.
+dito alguma coisa — e por isso ele lê só `fonte=declared`. Ver `assess_project_health`.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 from . import satisfacao as satisfacao_module
 
 if TYPE_CHECKING:
-    from .models import Milestone, Pendencia, Project, Satisfacao, Task
+    from .models import Milestone, Pendencia, Project, SatisfactionRecord, Task
 
 #: Os três níveis, **do pior para o melhor**. Constantes e não literais porque o nível atravessa
 #: para fora daqui: a régua de cobrança troca de escada quando encontra `CRITICAL` (FDD 038) e o
@@ -60,20 +60,20 @@ def assess_project_health(
     tasks: Sequence[Task] | None = None,
     missed_meetings: int | None = None,
     open_pendencias: Sequence[Pendencia] | None = None,
-    satisfacoes: Sequence[Satisfacao] | None = None,
+    satisfacoes: Sequence[SatisfactionRecord] | None = None,
 ) -> dict[str, Any]:
     """Avalia a saúde de um projeto. Os argumentos nomeados aceitam dado já carregado.
 
     Omitidos, a função consulta o banco — cinco queries, irrelevantes no detalhe de um
     projeto. Quem avalia uma lista usa `assess_projects_health` (FDD 022).
 
-    `satisfacoes` é **sequência, e não `Satisfacao | None`**, ao contrário do que a forma do
-    argumento sugeriria para um sinal que é no máximo um registro. Aqui `None` já significa
+    `satisfacoes` é **sequência, e não `SatisfactionRecord | None`**, ao contrário do que a forma
+    do argumento sugeriria para um sinal que é no máximo um registro. Aqui `None` já significa
     "consulte o banco", como nos outros quatro; se o tipo fosse o registro, "não há satisfação
     registrada" e "consulte o banco" seriam o mesmo valor, e o lote não teria como dizer o
     primeiro. `[]` diz "nenhuma" sem ambiguidade.
     """
-    from .models import Meeting, Milestone, Pendencia, Satisfacao, Task, WorkItem
+    from .models import Meeting, Milestone, Pendencia, SatisfactionRecord, Task, WorkItem
 
     today = date.today()
     signals: list[dict[str, Any]] = []
@@ -146,9 +146,9 @@ def assess_project_health(
             [account_id], today
         ).get(account_id, [])
     insatisfacao = satisfacao_module.vigente(
-        satisfacoes, today, fonte=Satisfacao.Fonte.DECLARADA
+        satisfacoes, today, fonte=SatisfactionRecord.Fonte.DECLARED
     )
-    if insatisfacao is not None and insatisfacao.nivel == Satisfacao.Nivel.INSATISFEITO:
+    if insatisfacao is not None and insatisfacao.nivel == SatisfactionRecord.Nivel.DISSATISFIED:
         weight = 20
         score -= weight
         signals.append({

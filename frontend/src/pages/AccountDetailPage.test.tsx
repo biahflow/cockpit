@@ -34,8 +34,8 @@ let atividades: unknown[] = [atividade()];
 function satisfacaoRegistro(overrides: Record<string, unknown> = {}) {
   return {
     id: 3, client: 1, project: null, source_meeting: null,
-    nivel: "insatisfeito", nivel_display: "Insatisfeito",
-    fonte: "declarada", fonte_display: "Declarada pelo cliente",
+    nivel: "dissatisfied", nivel_display: "Insatisfeito",
+    fonte: "declared", fonte_display: "Declarada pelo cliente",
     happened_on: "2026-08-10", note: "Reclamou do prazo da última entrega.",
     registered_by: 1, created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
     ...overrides,
@@ -164,7 +164,7 @@ function stub() {
     if (path.startsWith("/contacts")) return Promise.resolve(contacts);
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
-    if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
+    if (path.startsWith("/satisfaction-records")) return Promise.resolve(satisfacoes);
     if (path.startsWith("/processes")) return Promise.resolve(processos);
     if (path === "/services/") return Promise.resolve(services);
     if (path.startsWith("/engagements")) return Promise.resolve(engagements);
@@ -490,7 +490,7 @@ test("entrega não classifica nem pergunta pela flag: o recurso é fechado para 
 test("a lista de satisfação distingue as duas fontes, não só o nível", async () => {
   satisfacoes = [
     satisfacaoRegistro(),
-    satisfacaoRegistro({ id: 4, nivel: "promotor", nivel_display: "Promotor", fonte: "percebida", fonte_display: "Percebida por quem entrega", happened_on: "2026-08-01", note: "" }),
+    satisfacaoRegistro({ id: 4, nivel: "promoter", nivel_display: "Promotor", fonte: "perceived", fonte_display: "Percebida por quem entrega", happened_on: "2026-08-01", note: "" }),
   ];
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
@@ -516,19 +516,19 @@ test("registra uma satisfação nova", async () => {
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
-  await user.selectOptions(screen.getByLabelText("Nível"), "promotor");
-  await user.selectOptions(screen.getByLabelText("Fonte"), "percebida");
+  await user.selectOptions(screen.getByLabelText("Nível"), "promoter");
+  await user.selectOptions(screen.getByLabelText("Fonte"), "perceived");
   await user.type(screen.getByPlaceholderText("O que o cliente disse, ou o que foi percebido"), "Elogiou a entrega na call de comitê.");
   await user.click(screen.getByRole("button", { name: "Registrar satisfação" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/satisfaction-records/", expect.objectContaining({
     method: "POST", body: expect.stringContaining('"account":1'),
   })));
-  expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
-    body: expect.stringContaining('"nivel":"promotor"'),
+  expect(mocks.api).toHaveBeenCalledWith("/satisfaction-records/", expect.objectContaining({
+    body: expect.stringContaining('"nivel":"promoter"'),
   }));
-  expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
-    body: expect.stringContaining('"fonte":"percebida"'),
+  expect(mocks.api).toHaveBeenCalledWith("/satisfaction-records/", expect.objectContaining({
+    body: expect.stringContaining('"fonte":"perceived"'),
   }));
 });
 
@@ -540,7 +540,7 @@ test("insatisfeito sem nota volta 400 e a tela mostra a mensagem do campo, não 
   mocks.api.mockImplementationOnce(() => Promise.reject(
     Object.assign(new Error("Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."), { status: 400 }),
   ));
-  await user.selectOptions(screen.getByLabelText("Nível"), "insatisfeito");
+  await user.selectOptions(screen.getByLabelText("Nível"), "dissatisfied");
   await user.click(screen.getByRole("button", { name: "Registrar satisfação" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(/insatisfeito sem nota não se avalia depois/);
