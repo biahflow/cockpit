@@ -29,7 +29,12 @@ vi.mock("../api", () => ({
       },
       win_rate: 0.5, avg_ticket: 1000, avg_cycle_days: 12,
       pipeline: [{ id: 1, name: "Prospecção", kind: "open", position: 0, opportunity_count: 2, estimated_total: 5000 }],
-      roi: { revenue: 1000, cost: 400, roi: 1.5, by_client: [{ label: "ACME", revenue: 1000, cost: 400, roi: 1.5 }], by_service: [{ label: "Consultoria", revenue: 1000, cost: 400, roi: 1.5 }] },
+      // `by_account`, e não `by_client`: a SPA fala a `/api/v2/` (`api.ts`), onde a chave do
+      // recorte por conta trocou de nome (`docs/ontology/aliases.md`). O mock com o nome legado
+      // deixaria `rows` `undefined`, e `RoiTable` faz `rows.map` sem guarda — este teste falha
+      // com `TypeError`, não com asserção. É o que o torna oráculo da chave: quem trocar o nome
+      // de um lado só descobre aqui.
+      roi: { revenue: 1000, cost: 400, roi: 1.5, by_account: [{ label: "ACME", revenue: 1000, cost: 400, roi: 1.5 }], by_service: [{ label: "Consultoria", revenue: 1000, cost: 400, roi: 1.5 }] },
     });
   }),
 }));

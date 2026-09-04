@@ -715,7 +715,9 @@ const FIXTURES: Record<string, unknown> = {
     win_rate: 0.67, avg_ticket: 150000, avg_cycle_days: 38, pipeline: etapas,
     roi: {
       revenue: 1440000, cost: 720000, roi: 1,
-      by_client: clientes.map(c => ({ label: c.name, revenue: 180000, cost: 90000, roi: 1 })),
+      // `by_account`: a chave do recorte por conta trocou de nome na `/api/v2/`, que é a versão
+      // que este mock serve (`docs/ontology/aliases.md`).
+      by_account: clientes.map(c => ({ label: c.name, revenue: 180000, cost: 90000, roi: 1 })),
       by_service: [{ label: "Discovery + Assessment", revenue: 640000, cost: 300000, roi: 1.13 }],
     },
   },

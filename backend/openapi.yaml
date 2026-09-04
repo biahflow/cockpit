@@ -12797,11 +12797,16 @@ components:
           type: number
           format: double
           nullable: true
+        by_client:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoiBreakdownRow'
         by_service:
           type: array
           items:
             $ref: '#/components/schemas/RoiBreakdownRow'
       required:
+      - by_client
       - by_service
       - cost
       - revenue

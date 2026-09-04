@@ -94,7 +94,7 @@ export function IndicadoresPage() {
       </div>)}</div> : <p className="px-6 py-6 text-center text-sm text-slate-600">Nenhum negócio registrado ainda.</p>}
     </section>
 
-    <RoiTable title="ROI por cliente" rows={data.roi.by_client} />
+    <RoiTable title="ROI por cliente" rows={data.roi.by_account} />
     <RoiTable title="ROI por serviço" rows={data.roi.by_service} />
 
     <AgentPanel agentKey="financeiro" title="Agente Financeiro" roles={[]} placeholder="Ex.: qual cliente tem o pior ROI?" />

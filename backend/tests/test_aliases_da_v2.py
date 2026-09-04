@@ -745,6 +745,33 @@ def test_a_visao_agregada_de_contas_troca_a_chave_por_versao(admin_client: APICl
 
 
 @pytest.mark.django_db
+def test_o_recorte_do_roi_por_conta_troca_a_chave_por_versao(admin_client: APIClient) -> None:
+    """`roi.by_client` na v1, `roi.by_account` na v2 — a segunda chave da fatia 4a que **troca**.
+
+    Mesmo precedente da visão agregada logo acima e de `processos`/`processes` na action de IA: a
+    chave envolve a lista inteira do recorte, e duplicá-la pagaria o recorte duas vezes.
+
+    A conta nasce com projeto, receita e custo de propósito. Um recorte vazio sai `[]` nas duas
+    versões e passaria este teste sem provar nada sobre a chave que o envolve — que é justamente o
+    que se afirma aqui.
+    """
+    conta = AccountFactory(name="Conta do Recorte")
+    ProjectFactory(
+        engagement=EngagementFactory(account=conta),
+        actual_value=Decimal("1000"),
+        cost=Decimal("400"),
+    )
+
+    da_v1 = admin_client.get("/api/v1/analytics/").json()["roi"]
+    da_v2 = admin_client.get("/api/v2/analytics/").json()["roi"]
+
+    assert [linha["label"] for linha in da_v1["by_client"]] == ["Conta do Recorte"]
+    assert "by_account" not in da_v1
+    assert [linha["label"] for linha in da_v2["by_account"]] == ["Conta do Recorte"]
+    assert "by_client" not in da_v2
+
+
+@pytest.mark.django_db
 def test_a_visao_compacta_da_entrega_tem_os_dois_nomes_na_v1_e_so_o_canonico_na_v2(
     admin_client: APIClient,
 ) -> None:
