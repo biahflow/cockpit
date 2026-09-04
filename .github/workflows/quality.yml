@@ -71,6 +71,10 @@ jobs:
       - run: uv run pytest
       - run: uv run python manage.py spectacular --file openapi.yaml --validate
       - run: git diff --exit-code -- openapi.yaml
+      # O contrato da /api/v2/ (issue #122, fatia 3b): artefato próprio, gerado a partir do
+      # urlconf dedicado à geração (`config.urls_v2_schema`) com `OPENAPI_ALVO=v2` — ver ADR 0066.
+      - run: OPENAPI_ALVO=v2 uv run python manage.py spectacular --urlconf config.urls_v2_schema --file openapi-v2.yaml --validate
+      - run: git diff --exit-code -- openapi-v2.yaml
       # O corpus de conhecimento é derivado de docs/ e PRD.md e vive commitado, exatamente como o
       # OpenAPI acima: editou metodologia, regera e commita. A fricção é de propósito — "mudei o
       # método" vira ato visível e revisado, em vez de o índice divergir do repositório em silêncio.

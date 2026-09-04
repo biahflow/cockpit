@@ -92,7 +92,7 @@ export function CasesPage() {
   return <section className="space-y-7">
     {consenting && <ConfirmDialog
       title="Registrar consentimento do cliente"
-      message={<>Confirme que <strong className="text-ink">{consenting.client_name || "o cliente"}</strong> autorizou o uso deste resultado como case. O registro guarda quem confirmou e quando — é o que sustenta a publicação depois. Para usar o número sem citar a marca, marque também <strong className="text-ink">Anonimizar</strong>: são duas autorizações diferentes.</>}
+      message={<>Confirme que <strong className="text-ink">{consenting.account_name || "o cliente"}</strong> autorizou o uso deste resultado como case. O registro guarda quem confirmou e quando — é o que sustenta a publicação depois. Para usar o número sem citar a marca, marque também <strong className="text-ink">Anonimizar</strong>: são duas autorizações diferentes.</>}
       confirmLabel="Registrar consentimento" busy={busy}
       onCancel={() => setConsenting(null)} onConfirm={() => void recordConsent()}
     />}

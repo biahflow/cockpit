@@ -11,7 +11,7 @@ resquício do nome antigo vai removê-las achando que está pagando dívida. Est
 `/api/v1/` em silêncio: nada aqui dentro ficaria vermelho, e o erro apareceria no consumidor de
 fora.
 
-A **escrita** é o que nenhum outro teste cobre. `AliasDeEntradaMixin` normaliza a chave legada
+A **escrita** é o que nenhum outro teste cobre. `AliasesDaV1Mixin` normaliza a chave legada
 antes da validação, e o empate resolve pela canônica — mesma regra de `apply-gate` desde a fatia 1
 da issue.
 """

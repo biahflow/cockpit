@@ -88,7 +88,6 @@ from .models import (
     Artifact,
     BlueprintVariant,
     Case,
-    CobrancaContato,
     CobrancaSuspensao,
     CommercialOpportunity,
     Contact,
@@ -98,6 +97,7 @@ from .models import (
     Discovery,
     DiscoverySession,
     Document,
+    DunningContact,
     Engagement,
     EngineeringHandoff,
     Evidence,
@@ -133,7 +133,7 @@ from .models import (
     ProveExperiment,
     Qualification,
     Risco,
-    Satisfacao,
+    SatisfactionRecord,
     Service,
     SignatureRequest,
     SolutionHypothesis,
@@ -143,6 +143,7 @@ from .models import (
     Vertical,
     project_scope_q,
 )
+from .openapi_aliases import chave_da_geracao
 from .permissions import RolePermission
 from .serializers import (
     AVATAR_CONTENT_TYPES,
@@ -154,7 +155,6 @@ from .serializers import (
     BookingCreateSerializer,
     CaseSerializer,
     ChangePasswordSerializer,
-    CobrancaContatoSerializer,
     CobrancaSuspensaoSerializer,
     CommercialOpportunitySerializer,
     ContactSerializer,
@@ -164,6 +164,7 @@ from .serializers import (
     DiscoverySerializer,
     DiscoverySessionSerializer,
     DocumentSerializer,
+    DunningContactSerializer,
     EngagementSerializer,
     EngineeringHandoffSerializer,
     EvidenceSerializer,
@@ -207,7 +208,7 @@ from .serializers import (
     ProveExperimentSerializer,
     QualificationSerializer,
     RiscoSerializer,
-    SatisfacaoSerializer,
+    SatisfactionRecordSerializer,
     ServiceSerializer,
     SignatureRequestSerializer,
     SolutionHypothesisSerializer,
@@ -216,6 +217,13 @@ from .serializers import (
     UserSerializer,
     ValueLedgerEntrySerializer,
     VerticalSerializer,
+)
+from .versioning import (
+    V2,
+    frase_da_chave_removida,
+    frase_do_parametro_removido,
+    frase_do_valor_removido,
+    versao_de,
 )
 
 logger = logging.getLogger(__name__)
@@ -402,20 +410,59 @@ class QueryParamFilterMixin:
     # Sem isto o param antigo não
     # ficaria "sem efeito" — ele estouraria `FieldError`, porque o nome do param **é** o
     # caminho do ORM aqui. A canônica vence quando as duas vêm, como no corpo.
+    #
+    # Na `/api/v2/` (issue #122) o param legado é **recusado com 400** dizendo o canônico, pela
+    # razão exata da chave de corpo: aceito e ignorado, `?client=3` devolveria 200 com a lista
+    # inteira, e quem chamou leria isso como "este cliente tem tudo isso" em vez de "o filtro não
+    # existe". 400 e não 409 porque é o **pedido** que está errado, não o estado.
+    #
+    # **O mapa vale para os dois laços desde a fatia 5.4 da issue #122**, e a segunda metade nasceu
+    # de um renome de campo de texto: `CobrancaContato.degrau` virou `DunningContact.dunning_step`,
+    # e sem o alias `?degrau=lembrete` deixaria de filtrar **em silêncio** na v1 — o nome do param
+    # também **é** o caminho do ORM em `filter_exact_fields`. Era o pior caso possível aqui: nem
+    # `FieldError`, nem 400, só a lista inteira voltando como se ninguém tivesse filtrado.
     filter_field_aliases: dict[str, str] = {}
+    # Campo → {valor legado → valor canônico}, para `filter_exact_fields` cujo VALOR (não o nome
+    # do parâmetro) tem alias — a área do blueprint (issue #122, fatia 5.1) é a primeira. Na
+    # `/api/v1/` o valor legado continua filtrando, traduzido pelo mesmo mapa que o mixin de
+    # serializer usa para o corpo; na `/api/v2/` ele é **recusado**, e não silenciosamente ignorado:
+    # `?area=comercial` sem tradução casaria zero linhas, e uma lista vazia é o mesmo silêncio
+    # mentiroso que a decisão 3 da ADR 0066 recusa para chave e parâmetro. Diferente daquela decisão
+    # (chave de payload/parâmetro, sempre 400 na v2), aqui o valor canônico já filtra igual nas duas
+    # versões — só o valor legado precisa de tratamento, e só quando o campo está neste mapa.
+    filter_valores_legados: dict[str, dict[str, str]] = {}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()  # type: ignore[misc]
+        na_v2 = versao_de(self.request) == V2  # type: ignore[attr-defined]
         for field in self.filter_fields:
             value = self.request.query_params.get(field)  # type: ignore[attr-defined]
             legado = self.filter_field_aliases.get(field)
-            if not value and legado:
-                value = self.request.query_params.get(legado)  # type: ignore[attr-defined]
+            if legado and legado in self.request.query_params:  # type: ignore[attr-defined]
+                if na_v2:
+                    raise InvalidInput(frase_do_parametro_removido(legado, field))
+                if not value:
+                    value = self.request.query_params.get(legado)  # type: ignore[attr-defined]
             if value and value.isdigit():
                 queryset = queryset.filter(**{field: value})
         for field in self.filter_exact_fields:
             value = self.request.query_params.get(field)  # type: ignore[attr-defined]
+            legado = self.filter_field_aliases.get(field)
+            if legado and legado in self.request.query_params:  # type: ignore[attr-defined]
+                # O mesmo tratamento do laço acima, e de propósito na mesma forma: a v1 aceita o
+                # nome antigo do parâmetro, a canônica vence quando as duas vêm, e a v2 recusa
+                # dizendo qual usar.
+                if na_v2:
+                    raise InvalidInput(frase_do_parametro_removido(legado, field))
+                if not value:
+                    value = self.request.query_params.get(legado)  # type: ignore[attr-defined]
             if value:
+                valores_legados = self.filter_valores_legados.get(field)
+                canonico = valores_legados.get(value) if valores_legados else None
+                if canonico is not None:
+                    if na_v2:
+                        raise InvalidInput(frase_do_valor_removido(field, value, canonico))
+                    value = canonico
                 queryset = queryset.filter(**{field: value})
         return queryset
 
@@ -616,6 +663,18 @@ def processos_do_texto(text: str) -> list[dict]:
     return extraidos
 
 
+# Tolerância de release (issue #122, fatia 5.2): o prompt de `classificar` passou a pedir os três
+# tokens canônicos ingleses diretamente — pedir em português e traduzir depois deixaria no prompt
+# a aparência de que o modelo decide o idioma, o mesmo argumento da FDD 039. Mas a IA pode ter
+# cache ou variação e devolver o token antigo; um mapa de três entradas evita descartar uma
+# resposta que ainda soa certa. Vale só aqui — a v2 não traduz nem recusa valor (§2c/D10).
+_SINAIS_LEGADOS: dict[str, str] = {
+    "esqueceu": Activity.DunningSignal.FORGOT,
+    "nao_pode": Activity.DunningSignal.UNABLE_TO_PAY,
+    "insatisfeito": Activity.DunningSignal.DISSATISFIED,
+}
+
+
 def sinal_do_texto(text: str) -> str:
     """Extrai o sinal de cobrança do que o modelo devolveu. Função pura, mesmo molde de
     `decisoes_do_texto` e pela mesma razão: **o modelo não obedece à instrução de formato o tempo
@@ -627,8 +686,6 @@ def sinal_do_texto(text: str) -> str:
     ninguém sabe ler. Descartado, a chamada devolve ``""`` e quem a invoca responde 502, que é
     diferente de gravar "não sei" em silêncio.
     """
-    from .models import Activity
-
     inicio, fim = text.find("{"), text.rfind("}")
     if inicio == -1 or fim <= inicio:
         return ""
@@ -639,7 +696,8 @@ def sinal_do_texto(text: str) -> str:
     if not isinstance(bruto, dict):
         return ""
     sinal = str(bruto.get("sinal") or "").strip().lower()
-    return sinal if sinal in Activity.CobrancaSinal.values else ""
+    sinal = _SINAIS_LEGADOS.get(sinal, sinal)
+    return sinal if sinal in Activity.DunningSignal.values else ""
 
 
 def _ai_run(  # type: ignore[no-untyped-def]
@@ -757,6 +815,33 @@ def build_overview_context(projects: Iterable[Project]) -> OverviewContext:
     )
 
 
+def _sem_chaves_legadas(
+    linhas: list[dict[str, Any]], *chaves: str
+) -> list[dict[str, Any]]:
+    """Tira as chaves-alias de cada linha de um agregador de **dict cru**, na `/api/v2/`.
+
+    Nasceu no painel de cobrança (issue #122, fatia 3a) e ganhou o segundo chamador na fatia 4a (a
+    visão compacta da entrega), então deixou de nomear um deles: a lista de chaves é do chamador,
+    porque é ele que sabe qual é o par legado do seu dicionário. A fatia 4c acrescentou o terceiro
+    e o quarto chamador — `AccountViewSet.overview`/`overview_detail`, para `client_id`/`status`.
+
+    Um dict cru não passa por `ModelSerializer` nenhum, e é por isso que a remoção mora aqui em vez
+    de em `AliasesDaV1Mixin`: aquele mixin lê `ALIASES_DEPRECIADOS` por **componente do schema**,
+    e um dicionário montado à mão não tem serializer que resolva para um. O contrato, esse sim,
+    perde as chaves pelo mesmo mapa dos outros — `ALIASES_DEPRECIADOS_DE_DICT_CRU`, a metade da
+    união que os hooks do drf-spectacular leem (`apps/core/openapi_aliases.py`). Exceção: o par
+    `client_id`/`status` do overview de conta não tem entrada lá, porque `AccountOverviewList`
+    declara `items` sem tipo (`ListField()` sem `child=`) e `AccountOverviewDetail` não declara
+    propriedade nenhuma — o esquema não vê essas chaves, então a remoção aqui é dívida de
+    **resposta**, não de contrato (a lacuna que a ADR 0066, emenda da fatia 4a, declarou por
+    escrito).
+    """
+    for linha in linhas:
+        for chave in chaves:
+            linha.pop(chave, None)
+    return linhas
+
+
 def build_account_overview(
     account: Account,
     projects: Iterable[Project] | None = None,
@@ -785,9 +870,12 @@ def build_account_overview(
     cost = sum((project.cost for project in projects), Decimal("0"))
     overview: dict[str, object] = {
         # `client_id` e `status` são **chaves de payload** e não mudam com o renome do campo
-        # (`docs/ontology/aliases.md` §2c); `lifecycle_status` é a canônica, com o mesmo valor.
-        # As duas morrem na `/api/v2/`.
+        # (`docs/ontology/aliases.md` §2c); `account_id`/`lifecycle_status` são as canônicas, com
+        # o mesmo valor. As duas legadas morrem na `/api/v2/` — a lacuna que a ADR 0066 (emenda da
+        # fatia 4a) declarou fora daquela fatia por não haver schema tipado para o mapa de aliases
+        # alcançar, e que a fatia 4c paga aqui, à mão, via `_sem_chaves_legadas`.
         "client_id": account.pk,
+        "account_id": account.pk,
         "name": account.name,
         "status": account.lifecycle_status,
         "lifecycle_status": account.lifecycle_status,
@@ -912,10 +1000,30 @@ class AccountViewSet(ArchiveModelViewSet):
             engagement__account=account, archived_at__isnull=True
         ).select_related("engagement")
 
-    @extend_schema(responses=inline_serializer("AccountOverviewList", {"clients": serializers.ListField()}))
+    @extend_schema(
+        responses=inline_serializer(
+            "AccountOverviewList",
+            # `items` fica sem tipo (`serializers.ListField()` sem `child=`): o esquema não
+            # descreve as chaves de cada linha, então `ALIASES_DEPRECIADOS`/
+            # `ALIASES_DEPRECIADOS_DE_DICT_CRU` não têm o que indexar aqui — a remoção de
+            # `client_id`/`status` abaixo é dívida de **resposta**, não de contrato (issue #122,
+            # fatia 4c, pagando a lacuna declarada na emenda da fatia 4a da ADR 0066).
+            {chave_da_geracao("clients", "accounts"): serializers.ListField()},
+        )
+    )
     @action(detail=False, methods=["get"])
     def overview(self, request: Request) -> Response:
-        """Lista agregada p/ o grid de contas (honra `?lifecycle_status=` e o alias `?status=`)."""
+        """Lista agregada p/ o grid de contas (honra `?lifecycle_status=` e o alias `?status=`).
+
+        A chave que envolve a lista **troca** por versão — `clients` na `/api/v1/`, `accounts` na
+        `/api/v2/` —, e não convive como o resto do payload legado: duplicar aqui pagaria o corpo
+        inteiro do grid duas vezes. É o precedente da fatia 3a (`processos`/`processes` na action
+        de IA), aplicado ao segundo caso da mesma forma (issue #122, fatia 4a).
+        """
+        # Cada linha também carrega `client_id`/`status` (legados) ao lado de `account_id`/
+        # `lifecycle_status` (canônicos) — os dois somem na `/api/v2/` via `_sem_chaves_legadas`
+        # (issue #122, fatia 4c). Comentário, não docstring: drf-spectacular usa a docstring como
+        # `description` do endpoint, e o esquema desta fatia tem de ter diff vazio nos dois yamls.
         accounts = list(self.get_queryset())
         # Um `_visible_projects` por cliente somava ~14 queries por linha do grid. Aqui os
         # projetos visíveis de todos os clientes vêm juntos e o contexto é montado uma vez —
@@ -928,16 +1036,25 @@ class AccountViewSet(ArchiveModelViewSet):
         context = build_overview_context(
             [project for projects in by_client.values() for project in projects]
         )
-        return Response({"clients": [
+        linhas = [
             build_account_overview(account, projects=by_client[account.pk], context=context)
             for account in accounts
-        ]})
+        ]
+        if versao_de(request) == V2:
+            linhas = _sem_chaves_legadas(linhas, "client_id", "status")
+        chave = "accounts" if versao_de(request) == V2 else "clients"
+        return Response({chave: linhas})
 
     @extend_schema(responses=inline_serializer("AccountOverviewDetail", {}))
     @action(detail=True, methods=["get"], url_path="overview")
     def overview_detail(self, request: Request, pk: str | None = None) -> Response:
         account = self.get_object()
-        return Response(build_account_overview(account, projects=self._visible_projects(account)))
+        overview = build_account_overview(account, projects=self._visible_projects(account))
+        if versao_de(request) == V2:
+            # O detalhe é uma linha só; `_sem_chaves_legadas` opera em lista, então envolve e
+            # desembrulha em vez de duplicar a lógica de remoção (issue #122, fatia 4c).
+            (overview,) = _sem_chaves_legadas([overview], "client_id", "status")
+        return Response(overview)
 
 
 class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
@@ -980,21 +1097,25 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         """Lê a resposta do cliente e grava o sinal — **e não age** (FDD 036, camada 4).
 
         Os três valores não são etiquetas de humor: cada um manda para uma conduta diferente e a
-        mesma régua estraga os três se tratá-los igual. `esqueceu` já se resolveu com o lembrete;
-        `nao_pode` pede renegociação, e cedo; `insatisfeito` não é problema de cobrança — é
+        mesma régua estraga os três se tratá-los igual. `forgot` já se resolveu com o lembrete;
+        `unable_to_pay` pede renegociação, e cedo; `dissatisfied` não é problema de cobrança — é
         problema de relação disfarçado, e é onde insistir piora tudo.
 
         Gravar o sinal é o fim do que a IA faz aqui. Renegociar, dar desconto, suspender e escalar
         seguem humanos (ADR 0006, ADR 0031).
         """
         activity = self.get_object()
+        # O prompt pede os TRÊS CANÔNICOS ingleses diretamente — não pt-BR traduzido depois. Pedir
+        # em português e traduzir a resposta deixaria no prompt a aparência de que o modelo decide
+        # o idioma do dado (mesmo argumento da FDD 039); `sinal_do_texto` ainda tolera o token
+        # legado por barato custo de release (`_SINAIS_LEGADOS`, cache/variação do modelo).
         system = (
             "Você classifica a resposta de um cliente a uma cobrança. Devolva APENAS um objeto "
             'JSON, sem texto antes ou depois, com a chave "sinal" e um destes três valores: '
-            '"esqueceu" (apenas não lembrou e vai pagar), "nao_pode" (tem dificuldade financeira '
-            'ou de fluxo de caixa) ou "insatisfeito" (está retendo o pagamento por insatisfação '
-            "com a entrega ou com a relação). Use APENAS o material fornecido: se ele não permitir "
-            "decidir, devolva um objeto vazio em vez de inferir."
+            '"forgot" (apenas não lembrou e vai pagar), "unable_to_pay" (tem dificuldade '
+            'financeira ou de fluxo de caixa) ou "dissatisfied" (está retendo o pagamento por '
+            "insatisfação com a entrega ou com a relação). Use APENAS o material fornecido: se "
+            "ele não permitir decidir, devolva um objeto vazio em vez de inferir."
         )
 
         def grava(text: str, interaction) -> dict:  # type: ignore[no-untyped-def]
@@ -1004,7 +1125,7 @@ class ActivityViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
                 # valor qualquer. A coluna roteia conduta; um valor chutado manda alguém insistir
                 # com quem está insatisfeito.
                 raise _ExtracaoSemResultado()
-            Activity.objects.filter(pk=activity.pk).update(cobranca_sinal=sinal)
+            Activity.objects.filter(pk=activity.pk).update(dunning_signal=sinal)
             activity.refresh_from_db()
             return {"activity": ActivitySerializer(activity).data}
 
@@ -1569,7 +1690,7 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
                     required=False,
                     help_text=(
                         "Alias depreciado de `decision` (D7, ADR 0052). Continua aceito na "
-                        "`/api/v1/` e sai na `/api/v2/`."
+                        "`/api/v1/`; saiu na `/api/v2/`, que recusa (400) e diz `decision`."
                     ),
                 ),
                 "notes": serializers.CharField(required=False, allow_blank=True),
@@ -1590,8 +1711,12 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         """
         project = self.get_object()
         # `decision` é a chave canônica (D7, ADR 0052); `outcome` continua aceita como alias da
-        # `/api/v1/` e sai na `/api/v2/`. A precedência é da canônica: um corpo com as duas é
-        # confusão do chamador, e resolver pela nova é o que não trava quem já migrou.
+        # `/api/v1/`, com a mesma precedência dos aliases de serializer (a canônica vence quando
+        # as duas vêm no mesmo corpo — não trava quem já migrou). Na `/api/v2/` o alias morreu
+        # (issue #122, fatia 3a): a recusa vem antes do `or`, porque senão o `outcome` de um corpo
+        # só-com-`outcome` seria lido normalmente e a chave nunca chegaria a ser recusada.
+        if versao_de(request) == V2 and "outcome" in request.data:
+            raise InvalidInput(frase_da_chave_removida("outcome", "decision"))
         bruto = request.data.get("decision") or request.data.get("outcome", "")
         decision = str(bruto).strip()
         notes = str(request.data.get("notes", "") or "")
@@ -1672,6 +1797,10 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
             {
                 "project_id": serializers.IntegerField(),
                 "project_name": serializers.CharField(),
+                "account_name": serializers.CharField(),
+                # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): mesmo valor de
+                # `account_name`. Some da `/api/v2/` — a remoção é da view, porque isto é dict cru
+                # (issue #122, fatia 4a); o contrato a perde por `ALIASES_DEPRECIADOS_DE_DICT_CRU`.
                 "client_name": serializers.CharField(),
                 "current_phase_name": serializers.CharField(allow_null=True),
                 "canonical_stage": serializers.CharField(allow_blank=True),
@@ -1690,8 +1819,15 @@ class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
         Agregador que **estreita à mão** por `visible_to` (o mesmo contrato dos outros do
         dashboard) e tem teste próprio: a Entrega não pode ver a jornada de projeto de que não
         participa. Só projetos não-concluídos entram — o dashboard é sobre o que está em curso.
+
+        `_build_timeline_overview` emite `account_name` e `client_name` com o mesmo valor — o
+        comportamento de todo alias de leitura da v1 —, e a remoção do legado é daqui, e não do
+        agregador: ele não conhece a versão da requisição, pelo motivo do painel de cobrança.
         """
-        return Response(_build_timeline_overview(request.user))
+        linhas = _build_timeline_overview(request.user)
+        if versao_de(request) == V2:
+            linhas = _sem_chaves_legadas(linhas, "client_name")
+        return Response(linhas)
 
     @action(detail=True, methods=["post"], url_path="next-steps")
     def next_steps(self, request: Request, pk: str | None = None) -> Response:
@@ -1789,6 +1925,9 @@ def _build_timeline_overview(user: User) -> list[dict[str, Any]]:
         rows.append({
             "project_id": project.pk,
             "project_name": project.name,
+            # O par canônico e o legado saem juntos, com o mesmo valor, como no painel de cobrança
+            # (issue #122, fatia 4a). Quem tira o legado na v2 é `timeline_overview`.
+            "account_name": project.engagement.account.name,
             "client_name": project.engagement.account.name,
             "current_phase_name": current.phase.name if current else None,
             "canonical_stage": current.phase.canonical_stage if current else "",
@@ -2048,6 +2187,45 @@ class CaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet
         return Response(CaseSerializer(cases.record_consent(case, request.user)).data)
 
 
+#: Valor legado do degrau → canônico (issue #122, fatia 5.4; D10 do `language-map` §4). **Um mapa
+#: só, e não um por consumidor**: ele é lido pelas duas actions de cobrança da `InvoiceViewSet` — o
+#: degrau chega no **corpo** delas, e corpo de action não passa por serializer, então
+#: `AliasesDaV1Mixin.VALORES_DE_ENTRADA` não o alcança — e por `filter_valores_legados` da
+#: `DunningContactViewSet`, para `?degrau=`. Duas tabelas do mesmo fato divergiriam em silêncio na
+#: primeira edição, que é o argumento da fatia 5.1 quando o viewset passou a referenciar o mapa do
+#: serializer em vez de copiá-lo.
+VALORES_LEGADOS_DO_DEGRAU: dict[str, str] = {
+    "pre_aviso": DunningContact.DunningStep.PRE_NOTICE,
+    "lembrete": DunningContact.DunningStep.REMINDER,
+    "firme": DunningContact.DunningStep.FIRM,
+    "escalada": DunningContact.DunningStep.ESCALATION,
+    "renegociacao": DunningContact.DunningStep.RENEGOTIATION,
+}
+
+
+def _degrau_do_corpo(request: Request, bruto: str) -> str:
+    """Normaliza o degrau que veio no corpo da action — traduz na v1, recusa na v2.
+
+    **Por que aqui e não no mixin de serializer.** O degrau de `rascunhar`/`enviar` é chave de
+    corpo de `@action`, e action não monta serializer: `VALORES_DE_ENTRADA` nunca é consultado
+    neste caminho. E, diferente do corpo de um `ModelSerializer`, aqui **não existe validação de
+    `choices` do DRF** para recusar o valor legado de graça na v2 — quem valida é a própria action,
+    contra as réguas de `cobranca.py`. Sem esta função, `pre_aviso` na v2 cairia no
+    "Degrau desconhecido", que é um erro mentiroso: o degrau existe, o nome dele é que mudou.
+
+    A frase é a de `versioning.frase_do_valor_removido`, a mesma que o filtro `?degrau=` usa — o
+    formato dela nomeia o parâmetro (`'?degrau='`) porque a chave de corpo e a de query string são
+    a mesma palavra aqui, e duas redações do mesmo "não existe mais, use este nome" divergiriam na
+    primeira edição (a razão de as frases morarem todas em `versioning.py`).
+    """
+    canonico = VALORES_LEGADOS_DO_DEGRAU.get(bruto)
+    if canonico is None:
+        return bruto
+    if versao_de(request) == V2:
+        raise InvalidInput(frase_do_valor_removido("degrau", bruto, canonico))
+    return canonico
+
+
 class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     """Contas a receber (FDD 028, camada 0 da RFC 0004).
 
@@ -2175,15 +2353,17 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         cobrança, e o anti-vazamento é estrutural — só o `AgentView` preenche aquele parâmetro.
         """
         invoice = self.get_object()
-        degrau = str(request.data.get("degrau", "")).strip() or (
+        # Traduzido **antes** da checagem contra o vocabulário: na v1 `pre_aviso` continua valendo,
+        # na v2 leva 400 dizendo `pre_notice` (issue #122, fatia 5.4).
+        degrau = _degrau_do_corpo(request, str(request.data.get("degrau", "")).strip()) or (
             getattr(cobranca.degrau_devido(invoice), "key", "")
         )
-        if degrau not in CobrancaContato.Degrau.values:
+        if degrau not in DunningContact.DunningStep.values:
             return Response(
                 {"degrau": "Diga qual degrau rascunhar — hoje a régua não indica nenhum."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        rotulo = CobrancaContato.Degrau(degrau).label
+        rotulo = DunningContact.DunningStep(degrau).label
         system = (
             "Você redige um e-mail de cobrança em português do Brasil, em nome de uma consultoria, "
             f"no tom do degrau '{rotulo}'. O objetivo não é receber esta fatura a qualquer custo: é "
@@ -2211,7 +2391,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
                 "ai_interaction": serializers.IntegerField(required=False),
             },
         ),
-        responses=CobrancaContatoSerializer,
+        responses=DunningContactSerializer,
     )
     @action(detail=True, methods=["post"], url_path="cobranca/enviar")
     def cobranca_enviar(self, request: Request, pk: str | None = None) -> Response:
@@ -2233,7 +2413,9 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         invoice = self.get_object()
-        degrau_key = str(request.data.get("degrau", "")).strip()
+        # A mesma normalização de `rascunhar`, e pelo mesmo motivo: sem ela o valor legado viraria
+        # "Degrau desconhecido" na v2 — um erro que aponta para o lugar errado (issue #122, 5.4).
+        degrau_key = _degrau_do_corpo(request, str(request.data.get("degrau", "")).strip())
         degrau = next(
             (d for d in cobranca.PADRAO + cobranca.RELACAO_LONGA if d.key == degrau_key), None
         )
@@ -2261,7 +2443,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         # A idempotência conferida **antes** do envio, e não só pela `UniqueConstraint` no fim: a
         # constraint impediria a linha duplicada, mas o e-mail já teria saído. Quem leva o segundo
         # "sua fatura está vencida" não se consola com a integridade do banco.
-        if CobrancaContato.objects.filter(invoice=invoice, degrau=degrau.key).exists():
+        if DunningContact.objects.filter(invoice=invoice, dunning_step=degrau.key).exists():
             raise StateConflict(f"O degrau '{degrau.key}' desta fatura já foi enviado.")
         interaction = None
         if request.data.get("ai_interaction"):
@@ -2295,7 +2477,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
             # aconteceu e ainda queimaria o degrau pela constraint, impedindo a retentativa.
             logger.exception("envio de cobrança falhou para a fatura %s", invoice.pk)
             raise EmailUndeliverable() from exc
-        return Response(CobrancaContatoSerializer(contato).data, status=status.HTTP_201_CREATED)
+        return Response(DunningContactSerializer(contato).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         responses=inline_serializer(
@@ -2329,7 +2511,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return Response(dados)
 
 
-class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
+class DunningContactViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
     """O que a casa já disse sobre suas faturas (FDD 036, camada 3 da RFC 0004).
 
     **Só leitura, e a ausência de escrita é a entrega.** Um `POST /cobranca/` criaria a prova de um
@@ -2343,13 +2525,19 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
     financeiro não é escopado por projeto — a Entrega não alcança nada disto, nem para ler.
     """
 
-    resource = "cobranca"
-    queryset = CobrancaContato.objects.select_related("invoice", "account", "sent_by").all()
-    serializer_class = CobrancaContatoSerializer
+    resource = "dunning_contact"
+    queryset = DunningContact.objects.select_related("invoice", "account", "sent_by").all()
+    serializer_class = DunningContactSerializer
     permission_classes = [RolePermission]
     filter_fields = ("account", "invoice")
-    filter_field_aliases = {"account": "client"}
-    filter_exact_fields = ("degrau", "canal")
+    # `?degrau=` continua filtrando na v1 e leva 400 na v2, pelo mesmo mecanismo de `?client=`: o
+    # campo é `dunning_step` desde a fatia 5.4, e o nome do parâmetro **é** o caminho do ORM aqui.
+    filter_field_aliases = {"account": "client", "dunning_step": "degrau"}
+    filter_exact_fields = ("dunning_step", "canal")
+    # O **valor** do degrau, a outra metade do par (issue #122, fatia 5.4): a v1 traduz
+    # `?dunning_step=lembrete` para `reminder`, a v2 recusa dizendo qual usar. O mapa é o mesmo que
+    # as duas actions de cobrança leem — ver `VALORES_LEGADOS_DO_DEGRAU`.
+    filter_valores_legados = {"dunning_step": VALORES_LEGADOS_DO_DEGRAU}
 
     @extend_schema(
         responses=inline_serializer(
@@ -2357,6 +2545,12 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
             fields={
                 "invoice": serializers.IntegerField(),
                 "number": serializers.CharField(),
+                "account": serializers.IntegerField(),
+                "account_name": serializers.CharField(),
+                # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): mesmo valor de
+                # `account`/`account_name`. Some da resposta da `/api/v2/` desde a fatia 3a, e do
+                # **contrato** dela desde a 4a — por `ALIASES_DEPRECIADOS_DE_DICT_CRU`, que é como
+                # um componente de `inline_serializer` entra no mesmo mapa dos outros.
                 "client": serializers.IntegerField(),
                 "client_name": serializers.CharField(),
                 "amount": serializers.DecimalField(max_digits=12, decimal_places=2),
@@ -2405,14 +2599,22 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
         """A tela onde se decide o próximo passo (FDD 036, critério de aceite 7).
 
         Agregador, e por isso **não passa pelo queryset desta viewset**: ele lista faturas, não
-        contatos. O recorte de papel continua sendo o `resource = "cobranca"` da classe — só-leitura
+        contatos. O recorte de papel continua sendo o `resource` da classe — só-leitura
         para Vendas, fechado para a Entrega —, que é o mesmo mecanismo da FDD 028 e a razão de esta
         rota não precisar de guarda própria.
 
         Toda a decisão sai de `cobranca.painel()`, e nenhuma linha dela é recalculada aqui: a régua
         tem uma definição só, e a tela lê a mesma que o relógio executa.
+
+        `cobranca.painel()` emite os dois pares (`account`/`account_name` e `client`/
+        `client_name`, mesmo valor) — o comportamento de todo alias de leitura da `/api/v1/`. Na
+        `/api/v2/` os dois legados somem daqui, e não do agregador: ele não conhece a versão da
+        requisição, e não devia precisar conhecer para listar faturas.
         """
-        return Response(cobranca.painel())
+        linhas = cobranca.painel()
+        if versao_de(request) == V2:
+            linhas = _sem_chaves_legadas(linhas, "client", "client_name")
+        return Response(linhas)
 
 
 class CobrancaSuspensaoViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
@@ -2562,21 +2764,28 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         super().perform_create(serializer)
 
 
-def _signers_do_pedido(data: Any) -> list[esign.Signer]:
+def _signers_do_pedido(data: Any, versao: str) -> list[esign.Signer]:
     """A rodada de assinatura pedida no corpo — na forma nova, ou pelo alias `signer_email`.
 
     `signers` é a forma canônica: uma lista de `{"email", "role"}`, na ordem em que os signatários
     ocupam o bloco de assinatura do documento (duas testemunhas pegam as duas linhas, nessa ordem).
-    `signer_email` continua aceito e vira **um** signatário `counterparty` — a SPA ainda manda a
-    forma antiga, e a tela de escolher contatos e papéis depende de um DAP que ainda não existe;
-    quebrar agora deixaria o produto sem caminho nenhum. É o mecanismo de alias de entrada de
-    sempre (`docs/ontology/aliases.md` §2c), e a **forma nova vence** quando as duas vêm no mesmo
-    corpo. Morre na `/api/v2/`.
+    Na `/api/v1/`, `signer_email` continua aceito e vira **um** signatário `counterparty` — a SPA
+    ainda manda a forma antiga, e a tela de escolher contatos e papéis depende de um DAP que ainda
+    não existe; quebrar agora deixaria o produto sem caminho nenhum. É o mecanismo de alias de
+    entrada de sempre (`docs/ontology/aliases.md` §2c), e a **forma nova vence** quando as duas vêm
+    no mesmo corpo.
 
-    As três recusas são 400 (`InvalidInput`) porque é o **corpo** que está errado, não o estado:
-    lista vazia, papel fora do vocabulário, e e-mail repetido — este último porque o fornecedor casa
-    signatário por e-mail, e dois iguais tornam ambíguo qual solicitação o webhook vem fechar.
+    Morreu na `/api/v2/` (issue #122, fatia 3a): esta action não passa por serializer com
+    `ALIASES_DE_ENTRADA`, então `AliasesDaV1Mixin` não a alcança — a recusa mora aqui, e por isso
+    recebe a versão do chamador em vez de a redescobrir.
+
+    As três recusas de forma são 400 (`InvalidInput`) porque é o **corpo** que está errado, não o
+    estado: lista vazia, papel fora do vocabulário, e e-mail repetido — este último porque o
+    fornecedor casa signatário por e-mail, e dois iguais tornam ambíguo qual solicitação o webhook
+    vem fechar.
     """
+    if versao == V2 and "signer_email" in data:
+        raise InvalidInput(frase_da_chave_removida("signer_email", "signers"))
     if "signers" in data:
         pedidos = data.get("signers")
         if not isinstance(pedidos, list) or not pedidos:
@@ -2665,9 +2874,10 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
                     ),
                     required=False,
                 ),
-                # Alias de entrada, morre na `/api/v2/` (`docs/ontology/aliases.md`): um único
-                # signatário `counterparty`. A forma canônica é `signers`, e ela vence quando as
-                # duas vêm no mesmo corpo.
+                # Alias de entrada, morreu na `/api/v2/` (`docs/ontology/aliases.md`, issue #122
+                # fatia 3a): um único signatário `counterparty`. Na `/api/v1/` a forma canônica é
+                # `signers`, e ela vence quando as duas vêm no mesmo corpo; na `/api/v2/` esta
+                # chave é recusada com 400.
                 "signer_email": serializers.EmailField(required=False),
             },
         ),
@@ -2693,7 +2903,7 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         document = self.get_object()
         if not esign.is_enabled():
             return Response({"detail": "Assinatura eletrônica desativada."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        signers = _signers_do_pedido(request.data)
+        signers = _signers_do_pedido(request.data, versao_de(request))
         try:
             refs = esign.send_for_signature(document, signers)
         except esign.EsignProviderError as exc:
@@ -2939,10 +3149,13 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                         )
                         achado_novo.evidences.add(evidence)
                 criados.append(processo)
-            # A chave `processos` do corpo **fica**: ela é chave de payload da `/api/v1/` e
-            # morre na `/api/v2/`, junto das rotas `/processos/` e `/processo-etapas/`
-            # (`docs/ontology/aliases.md` §2c).
-            return {"processos": ProcessSerializer(criados, many=True).data}
+            # A chave do corpo **troca** por versão, em vez de conviver: duplicar a lista inteira
+            # em duas chaves pagaria o corpo duas vezes, e aqui — ao contrário do resto do payload
+            # legado — não há um par que saia junto. Na `/api/v1/` continua `processos`; na
+            # `/api/v2/` é `processes`, o nome canônico (`docs/ontology/aliases.md` §2c, issue #122
+            # fatia 3a).
+            chave = "processes" if versao_de(request) == V2 else "processos"
+            return {chave: ProcessSerializer(criados, many=True).data}
 
         try:
             # `atomic` pela razão do `extrair_decisoes`: se a gravação falhar no quinto processo,
@@ -3112,7 +3325,7 @@ class GithubDeliveryProjectionViewSet(
         return Response(self.get_serializer(projection).data)
 
 
-class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+class SatisfactionRecordViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     """Satisfação do cliente (FDD 037): o sinal que vem da outra parte da relação.
 
     **Sem `ProjectScopedMixin`**, ao contrário do `RiscoViewSet` logo acima, porque o vínculo
@@ -3122,17 +3335,22 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     por algum projeto.
     """
 
-    resource = "satisfacao"
-    queryset = Satisfacao.objects.select_related(
+    resource = "satisfaction_record"
+    queryset = SatisfactionRecord.objects.select_related(
         "account", "project", "source_meeting", "source_activity", "registered_by"
     ).all()
-    serializer_class = SatisfacaoSerializer
+    serializer_class = SatisfactionRecordSerializer
     filter_fields = ("account", "project")
     filter_field_aliases = {"account": "client"}
     # `nivel` e `fonte` em `filter_exact_fields` e não em `filter_fields` pelo motivo do `status`
-    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?fonte=declarada`
+    # do `RiscoViewSet`: aquele só aplica o filtro quando o valor é dígito, e `?fonte=declared`
     # cairia no chão sem erro nenhum — a lista voltaria inteira, com a percebida junto.
     filter_exact_fields = ("nivel", "fonte")
+    # Os mesmos mapas que o serializer usa para o corpo (`VALORES_DE_ENTRADA`), por referência e
+    # não por cópia — pelo motivo da fatia 5.1: duas tabelas do valor legado seriam o mesmo fato
+    # divergindo em silêncio no dia em que uma fosse editada sem a outra. É o primeiro viewset com
+    # **dois** campos no mapa, e é por isso que ele sempre foi campo → valores.
+    filter_valores_legados = SatisfactionRecordSerializer.VALORES_DE_ENTRADA
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         # Mesma fronteira da `Activity`: a Entrega só enxerga clientes com projeto seu.
@@ -3157,11 +3375,11 @@ class SatisfacaoViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         if account is None or not Project.objects.visible_to(user).filter(engagement__account=account).exists():
             raise PermissionDenied("Você não participa de nenhum projeto deste cliente.")
 
-    def perform_create(self, serializer: SatisfacaoSerializer) -> None:
+    def perform_create(self, serializer: SatisfactionRecordSerializer) -> None:
         self._assert_cliente_no_escopo(serializer.validated_data.get("account"))
         serializer.save(registered_by=self.request.user)
 
-    def perform_update(self, serializer: SatisfacaoSerializer) -> None:
+    def perform_update(self, serializer: SatisfactionRecordSerializer) -> None:
         # Só quando o corpo tenta *mudar* o cliente — o caminho inverso, que o
         # `ProjectScopedMixin` também fecha: mover um registro próprio para um cliente alheio.
         if "account" in serializer.validated_data:
@@ -3175,9 +3393,9 @@ def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
     Função e não método porque os três recursos abaixo fazem a mesma pergunta a partir de âncoras
     diferentes (o processo tem o cliente; a etapa e a evidência chegam a ele pelo processo pai), e
     três cópias divergiriam na primeira correção. O argumento é o do `_assert_cliente_no_escopo`
-    da `SatisfacaoViewSet`: só a leitura é contornável de graça — sem a guarda de escrita, uma
-    requisição bastaria para mapear processo, etapa e evidência dentro do cliente que a listagem
-    esconde.
+    da `SatisfactionRecordViewSet`: só a leitura é contornável de graça — sem a guarda de escrita,
+    uma requisição bastaria para mapear processo, etapa e evidência dentro do cliente que a
+    listagem esconde.
 
     A pergunta sai de `visible_to` (ADR 0010), a única expressão da regra.
     """
@@ -3190,9 +3408,9 @@ def _exige_cliente_no_escopo(user: User, account: Account | None) -> None:
 class ProcessViewSet(PublicationMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """O processo da operação do cliente, mapeado no Discovery (FDD 039).
 
-    **Sem `ProjectScopedMixin`**, pelo motivo da `SatisfacaoViewSet` acima: não há FK de projeto
-    aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O recorte
-    é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
+    **Sem `ProjectScopedMixin`**, pelo motivo do `SatisfactionRecordViewSet` acima: não há FK de
+    projeto aqui, e não há por design — o mapa é da empresa e sobrevive à venda que o descobriu. O
+    recorte é o mesmo: a Entrega enxerga o cliente de que participa por algum projeto.
 
     O AS-IS também passou a ter marca de publicável (FDD 051, ADR 0060): "validado", na §3 do mapa
     de linguagem, era qualificador sem lastro nenhum no schema.
@@ -3833,7 +4051,8 @@ class ValueLedgerEntryViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
     `Engagement` e o `project` é opcional — um mixin com `project_path="project"` esconderia da
     Entrega toda entrada de mandato que ninguém conseguiu atribuir a um projeto, e a permissão de
     objeto devolveria 403 no detalhe de uma linha que a listagem mostra. É exatamente o defeito que
-    `SatisfacaoViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e esta não.
+    `SatisfactionRecordViewSet` já previu, e por isso os quatro irmãos entram em `PROJECT_OF` e
+    esta não.
 
     **O engajamento não é fronteira de acesso** (ADR 0050): a visibilidade *deriva* de
     `Project.objects.visible_to`, nunca o contrário. Quem tem projeto vê a entrada do projeto; e a
@@ -4634,6 +4853,10 @@ class DigitalEmployeeBlueprintViewSet(QueryParamFilterMixin, viewsets.ModelViewS
     permission_classes = [RolePermission]
     filter_fields = ("service",)
     filter_exact_fields = ("area",)
+    # Mesmo mapa que o serializer usa para o corpo (`VALORES_DE_ENTRADA`), por referência — e não
+    # uma segunda cópia: as duas tabelas do valor legado de `area` seriam o mesmo fato divergindo
+    # em silêncio no dia em que uma fosse editada sem a outra.
+    filter_valores_legados = {"area": DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA["area"]}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()

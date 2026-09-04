@@ -138,12 +138,8 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
   const [salvandoInsumos, setSalvandoInsumos] = useState(false);
 
   const load = useCallback(() => Promise.all([
-    // A **rota** de processo e etapa continua sendo `/processos/` e `/processo-etapas/` — ela morre
-    // na `/api/v2/` (`docs/ontology/aliases.md`). O achado é o split `Evidence`/`Finding` (FDD 045),
-    // que nasceu já com a rota canônica: `/findings/` e `/evidence/`. As chaves de corpo aqui já são
-    // as canônicas.
-    api<Process>(`/processos/${id}/`),
-    api<ProcessStep[]>(`/processo-etapas/?process=${id}`),
+    api<Process>(`/processes/${id}/`),
+    api<ProcessStep[]>(`/process-steps/?process=${id}`),
     api<Finding[]>(`/findings/?process=${id}`),
     api<Evidence[]>(`/evidence/?process=${id}`),
     listPainPointsByProcess(id),
@@ -163,7 +159,7 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
 
   async function createEtapa(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
-    try { await api("/processo-etapas/", { method: "POST", body: JSON.stringify({ process: id, ...etapaDraft }) }); setEtapaDraft(blankEtapa); await load(); }
+    try { await api("/process-steps/", { method: "POST", body: JSON.stringify({ process: id, ...etapaDraft }) }); setEtapaDraft(blankEtapa); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
   }
   /**
@@ -258,14 +254,14 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
     const corpo = Object.fromEntries(
       INSUMOS.map(([campo]) => [campo, insumoDraft[campo]?.trim() || null])
     );
-    try { await api(`/processos/${id}/`, { method: "PATCH", body: JSON.stringify(corpo) }); await load(); }
+    try { await api(`/processes/${id}/`, { method: "PATCH", body: JSON.stringify(corpo) }); await load(); }
     catch (cause) { setError(mensagemDeFalha(cause)); }
     finally { setSalvandoInsumos(false); }
   }
   async function archiveProcesso() {
     setBusy(true);
     try {
-      await api(`/processos/${id}/`, { method: "DELETE" });
+      await api(`/processes/${id}/`, { method: "DELETE" });
       window.location.assign(`/contas/${clientId}`);
     } catch (cause) {
       setArchiving(false); setError(mensagemDeFalha(cause)); setBusy(false);
@@ -290,7 +286,7 @@ export function ProcessDetailPage({ clientId, id }: { clientId: number; id: numb
       onCancel={() => setArchiving(false)} onConfirm={() => void archiveProcesso()}
     />}
     <header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="eyebrow">Discovery estruturado</p><h1>{processo.name}</h1><p>O mapa da operação de {processo.client_name} — o dado que se soma, não a narrativa que se entrega.</p></div>
+      <div><p className="eyebrow">Discovery estruturado</p><h1>{processo.name}</h1><p>O mapa da operação de {processo.account_name} — o dado que se soma, não a narrativa que se entrega.</p></div>
       {/* O selo diz se **este mapa** atravessa para a aba Discovery do portal do cliente. Leitura,
           sem ação: publicar e ocultar moram em `/contas/:id/publicacao` (DAP
           `dap-publicacao-discovery-r1`, decisão A1), porque o ato é sobre o conjunto. */}

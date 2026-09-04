@@ -357,7 +357,20 @@ def quitadas_sem_baixa(reais: Mapping[str, int], declarados: Mapping[str, int]) 
 # sai do mapa e as duas linhas saem daqui juntas. Um mecanismo de depreciação não sobrevive ao que
 # ele deprecia; ler esta linha como permanente transformaria em dívida eterna a única dívida deste
 # arquivo que já tem data marcada.
-TETO_DA_ALLOWLIST = 23
+#
+# A issue #122, fatia 5.2, pagou `Activity.CobrancaSinal`: a classe virou `DunningSignal`, o campo
+# e o valor persistido acompanharam (D10), e a linha `modelo-em-portugues::CobrancaSinal` saiu do
+# modelo — o teto desceu de 23 para 22.
+#
+# A fatia 5.3 pagou `Satisfacao`: a classe virou `SatisfactionRecord`, e com ela a tabela
+# (`RenameModel`) e os dois enums de valor. Saíram **três** linhas de uma vez — o modelo, o
+# serializer e o viewset —, porque o nome errado estava nos três, e o teto desceu de 22 para 19.
+#
+# A fatia 5.4 pagou `CobrancaContato`: a classe virou `DunningContact`, com a tabela, o campo
+# (`dunning_step`) e os cinco valores. Outras **três** linhas de uma vez — modelo, serializer e
+# viewset (`CobrancaViewSet` → `DunningContactViewSet`) —, e o teto desceu de 19 para 16. O que
+# resta da família `Cobranca*` (`CobrancaSuspensao` e o viewset dela) segue sem nome canônico.
+TETO_DA_ALLOWLIST = 16
 
 
 def test_nenhum_termo_banido_novo() -> None:
@@ -428,39 +441,66 @@ def test_a_allowlist_so_encolhe() -> None:
     )
 
 
-def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
-    """D10: dívida existente pode migrar em sua fatia; ocorrência nova não entra por carona.
+def test_os_quatro_enums_da_d10_falam_ingles_e_ficam_congelados_assim() -> None:
+    """D10: as quatro famílias atravessaram, e o que este teste guarda agora é o **estado novo**.
+
+    Ele nasceu ao contrário — congelava o português para que dívida existente pudesse migrar em sua
+    fatia sem ocorrência nova entrar por carona — e a fatia 5.4 da issue #122 virou a última carta:
+    não sobrou enum persistido em português no repositório. O que ele impede daqui em diante é a
+    volta, que é o mesmo defeito visto do outro lado.
 
     O teste usa as próprias `choices`, não busca textual: comentário, copy e rótulo traduzido são
-    português legítimo. O que fica congelado é só o valor que persiste e atravessa a API.
+    português legítimo. O que está congelado é só o valor que persiste e atravessa a API.
+
+    Uma linha por fatia, e o português de cada uma continua vivo, mas só como alias:
+
+    * família 4 (`DigitalEmployeeBlueprint.Area`), fatia 5.1, migração `0084` — alias de
+      **entrada** da `/api/v1/` (`DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA`);
+    * família 2 (`Activity.DunningSignal`), fatia 5.2, migração `0085` — classe, campo e valor
+      juntos, e alias de **leitura** (`cobranca_sinal`/`cobranca_sinal_display`);
+    * família 3 (`SatisfactionRecord`), fatia 5.3, migração `0086` — classe, tabela e os **dois**
+      enums, com alias de **entrada** (`SatisfactionRecordSerializer.VALORES_DE_ENTRADA`);
+    * família 1 (`DunningContact`), fatia 5.4, migração `0087` — classe, tabela, campo
+      (`dunning_step`) e valor, com alias de **entrada de action** e de filtro
+      (`views.VALORES_LEGADOS_DO_DEGRAU`) mais o par de **leitura** `degrau`/`degrau_display`.
+
+    A segunda metade do teste é a que a família 1 exige e as outras três não têm: as `key` da
+    régua (`cobranca.PADRAO` e as duas escadas) **são** os valores persistidos, e o dia em que uma
+    delas divergir da coluna a idempotência para de casar em silêncio — o mesmo degrau sai duas
+    vezes, sem nada ficar vermelho. Por isso as duas listas são afirmadas no mesmo teste.
     """
     from apps.core import cobranca
-    from apps.core.models import Activity, CobrancaContato, DigitalEmployeeBlueprint, Satisfacao
+    from apps.core.models import (
+        Activity,
+        DigitalEmployeeBlueprint,
+        DunningContact,
+        SatisfactionRecord,
+    )
 
-    legados = {
-        "Activity.CobrancaSinal": tuple(Activity.CobrancaSinal.values),
-        "CobrancaContato.Degrau": tuple(CobrancaContato.Degrau.values),
-        "Satisfacao.Fonte": tuple(Satisfacao.Fonte.values),
-        "Satisfacao.Nivel": tuple(Satisfacao.Nivel.values),
+    persistidos = {
+        "Activity.DunningSignal": tuple(Activity.DunningSignal.values),
+        "DunningContact.DunningStep": tuple(DunningContact.DunningStep.values),
+        "SatisfactionRecord.Fonte": tuple(SatisfactionRecord.Fonte.values),
+        "SatisfactionRecord.Nivel": tuple(SatisfactionRecord.Nivel.values),
         "DigitalEmployeeBlueprint.Area": tuple(DigitalEmployeeBlueprint.Area.values),
     }
-    assert legados == {
-        "Activity.CobrancaSinal": ("esqueceu", "nao_pode", "insatisfeito"),
-        "CobrancaContato.Degrau": (
-            "pre_aviso",
-            "lembrete",
-            "firme",
-            "escalada",
-            "renegociacao",
+    assert persistidos == {
+        "Activity.DunningSignal": ("forgot", "unable_to_pay", "dissatisfied"),
+        "DunningContact.DunningStep": (
+            "pre_notice",
+            "reminder",
+            "firm",
+            "escalation",
+            "renegotiation",
         ),
-        "Satisfacao.Fonte": ("declarada", "percebida"),
-        "Satisfacao.Nivel": ("promotor", "satisfeito", "neutro", "insatisfeito"),
+        "SatisfactionRecord.Fonte": ("declared", "perceived"),
+        "SatisfactionRecord.Nivel": ("promoter", "satisfied", "neutral", "dissatisfied"),
         "DigitalEmployeeBlueprint.Area": (
-            "comercial",
-            "financeiro",
-            "rh",
-            "juridico",
-            "atendimento",
+            "commercial",
+            "finance",
+            "hr",
+            "legal",
+            "support",
         ),
     }
 
@@ -470,10 +510,14 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
         "RELACAO_TENSA": tuple(degrau.key for degrau in cobranca.RELACAO_TENSA),
     }
     assert chaves_operacionais == {
-        "PADRAO": ("pre_aviso", "lembrete", "firme", "escalada", "renegociacao"),
-        "RELACAO_LONGA": ("pre_aviso", "lembrete", "escalada", "renegociacao"),
-        "RELACAO_TENSA": ("pre_aviso", "lembrete", "escalada", "renegociacao"),
+        "PADRAO": ("pre_notice", "reminder", "firm", "escalation", "renegotiation"),
+        "RELACAO_LONGA": ("pre_notice", "reminder", "escalation", "renegotiation"),
+        "RELACAO_TENSA": ("pre_notice", "reminder", "escalation", "renegotiation"),
     }
+    # E a metade que fecha o laço: toda `key` da régua **é** um valor do enum persistido. Sem esta
+    # asserção, as duas listas acima poderiam ser editadas juntas para um vocabulário terceiro e o
+    # teste continuaria verde.
+    assert {degrau.key for degrau in cobranca.PADRAO} <= set(DunningContact.DunningStep.values)
 
 
 # --------------------------------------------------------------------------------------------

@@ -157,10 +157,8 @@ export function PublicacaoPage({ accountId }: { accountId: number }) {
   const [semAcesso, setSemAcesso] = useState(false);
 
   const load = useCallback(() => Promise.all([
-    // A **rota** da conta continua sendo `/clients/` e a do processo `/processos/` — as duas morrem
-    // na `/api/v2/` (`docs/ontology/aliases.md`). As três de baixo já nascem canônicas.
-    api<Account>(`/clients/${accountId}/`),
-    api<Process[]>(`/processos/?account=${accountId}`),
+    api<Account>(`/accounts/${accountId}/`),
+    api<Process[]>(`/processes/?account=${accountId}`),
     api<Evidence[]>(`/evidence/?account=${accountId}`),
     api<Finding[]>(`/findings/?account=${accountId}`),
     listPainPointsByAccount(accountId),

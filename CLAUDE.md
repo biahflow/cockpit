@@ -338,7 +338,8 @@ Key cross-cutting patterns to preserve:
   cada uma em lugar (`core_client`→`core_account`, etc.), preservando linha e pk. A **rota** e a
   **chave de payload** ficam para a
   `/api/v2/`: a chave legada continua saindo no `GET` (campo com `source=`, `read_only`) e sendo
-  aceita no `POST`/`PATCH` (`AliasDeEntradaMixin`, um mecanismo para todas), e **a canônica vence
+  aceita no `POST`/`PATCH` (`AliasesDaV1Mixin`, um mecanismo para todas — sensível à versão desde
+  a #122: na `/api/v2/` a chave legada é 400 dizendo o nome canônico, ADR 0066), e **a canônica vence
   quando as duas vêm no mesmo corpo**. Todo alias de escrita precisa de regressão, porque a SPA
   escreve o nome canônico: sem ela a linha do serializer não tem chamador aqui dentro, e a próxima
   varredura atrás do nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem
@@ -353,8 +354,19 @@ Key cross-cutting patterns to preserve:
   **tabelas** dos quatro renomes saíram na Fase 6 (migração `0069`, renome em lugar).
   `Project.client` (migração `0070`), `ai_opportunity`→`ai_potential` (migração `0071`) e
   `client_consent`→`account_consent` (migração `0072`) também saíram na Fase 6; sobram as rotas
-  e chaves de payload (`/api/v2/`, que agora pode nascer). O que a guarda ainda tolera está em
-  `docs/ontology/legacy-allowlist.txt` (teto **23**), e o prazo de cada alias, em
+  e chaves de payload (`/api/v2/`, que agora pode nascer). **A issue #122 renomeou mais três
+  classes**, e as três por serem famílias de enum que a decisão D10 mandou traduzir: `CobrancaSinal`
+  →`DunningSignal` (fatia 5.2, migração `0085`, com o campo `dunning_signal`), `Satisfacao`
+  →`SatisfactionRecord` (fatia 5.3, migração `0086`, com a **tabela** junto — `RenameModel` puro,
+  autorizado porque a pk desta família não é uma das seis da §2b — e os dois enums de valor) e
+  `CobrancaContato`→`DunningContact` (fatia 5.4, migração `0087`, com tabela, campo `dunning_step`
+  e os cinco valores). Os campos `nivel`/`fonte` **não** acompanharam: o mapa cunha os nomes de
+  enum, não os de coluna. `DunningContact` é **coinagem do espelho** — a página do Notion recebe
+  depois —, e o que autoriza inverter o fluxo da §8 é estrito: o campo já estava cunhado e ditava o
+  nome, como em `DunningSignal`; não vale para `Pendencia`, `Decisao`, `Risco` nem para o resto da
+  família `Cobranca*`. **Com a 5.4 não sobra enum persistido em português**, e o teste de
+  congelamento passou a guardar o estado novo em vez do antigo. O que a guarda ainda tolera está em
+  `docs/ontology/legacy-allowlist.txt` (teto **16**), e o prazo de cada alias, em
   `docs/ontology/aliases.md` (§2b as seis pks, §2c campo vs. chave).
 - **O `Engagement` tem superfície, e ela mora no detalhe da conta.** A seção "Engagements" de
   `AccountDetailPage` (entre "Saúde da relação" e "Satisfação") é governada pelo DAP

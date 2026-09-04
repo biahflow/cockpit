@@ -15,10 +15,10 @@ vi.mock("../auth", () => ({ useAuth: () => ({ user: mocks.user }) }));
 /** Uma linha do painel. **Todos os campos vêm do backend** — o teste nunca calcula um deles. */
 function linha(overrides: Record<string, unknown> = {}) {
   return {
-    invoice: 5, number: "2026-0007", client: 1, client_name: "Imobiliária Aurora",
+    invoice: 5, number: "2026-0007", account: 1, account_name: "Imobiliária Aurora",
     amount: "48750.90", due_date: "2026-08-05", status: "overdue", status_display: "Vencida",
     dias_de_atraso: 12, payment_url: "",
-    proximo_degrau: "firme", proximo_degrau_display: "Cobrança firme",
+    proximo_degrau: "firm", proximo_degrau_display: "Cobrança firme",
     proximo_degrau_em: "2026-08-15", motivo: "",
     health_level: "atenção", tempo_de_casa_dias: 1200, reincidente: false,
     regua: "relacao_longa", recebido_do_cliente: "180000.00",
@@ -76,7 +76,7 @@ test("health, tempo de casa, total recebido e reincidência ficam na mesma linha
 });
 
 test("o rótulo do degrau é o que o backend mandou, não um mapa local", async () => {
-  mocks.api.mockImplementation(stub([linha({ proximo_degrau: "firme", proximo_degrau_display: "Um rótulo que só o backend conhece" })]));
+  mocks.api.mockImplementation(stub([linha({ proximo_degrau: "firm", proximo_degrau_display: "Um rótulo que só o backend conhece" })]));
   render(<CobrancaPage />);
   expect(await screen.findByText(/Um rótulo que só o backend conhece/)).toBeInTheDocument();
 });
@@ -136,7 +136,7 @@ test("com a IA desligada o botão de rascunho some da tela — e a régua contin
 
 test("rascunhar pede o degrau que a régua indicou e abre o texto para revisão", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Olá, tudo bem?", interaction: 42, degrau: "firme" });
+    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Olá, tudo bem?", interaction: 42, degrau: "firm" });
     return stub([linha()])(path, options);
   });
   render(<CobrancaPage />);
@@ -144,7 +144,7 @@ test("rascunhar pede o degrau que a régua indicou e abre o texto para revisão"
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
     "/invoices/5/cobranca/rascunhar/",
-    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firme" }) }),
+    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firm" }) }),
   ));
   expect(await screen.findByRole("textbox", { name: "Texto revisado" })).toHaveValue("Olá, tudo bem?");
 });
@@ -161,7 +161,7 @@ test("nunca envia sem alguém ver o corpo: o botão abre o texto, não a rota", 
 
 test("enviar manda degrau, corpo revisado e a interação de IA que produziu o texto", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Rascunho", interaction: 42, degrau: "firme" });
+    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Rascunho", interaction: 42, degrau: "firm" });
     return stub([linha()])(path, options);
   });
   render(<CobrancaPage />);
@@ -170,7 +170,7 @@ test("enviar manda degrau, corpo revisado e a interação de IA que produziu o t
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
     "/invoices/5/cobranca/enviar/",
-    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firme", subject: "", body: "Rascunho", ai_interaction: 42 }) }),
+    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firm", subject: "", body: "Rascunho", ai_interaction: 42 }) }),
   ));
 });
 
@@ -191,7 +191,7 @@ test("o 503 do envio tem texto próprio: diz que a régua está desligada e onde
 
 test("o 409 do degrau gasto tem texto próprio e mantém o corpo revisado na tela", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/invoices/5/cobranca/enviar/") return Promise.reject(falha(409, "O degrau 'firme' desta fatura já foi enviado."));
+    if (path === "/invoices/5/cobranca/enviar/") return Promise.reject(falha(409, "O degrau 'firm' desta fatura já foi enviado."));
     return stub([linha()])(path, options);
   });
   render(<CobrancaPage />);
@@ -273,7 +273,7 @@ test("o histórico do que já saiu é buscado por fatura, sob demanda", async ()
   mocks.api.mockImplementation(stub([linha()], {
     historico: [{
       id: 1, invoice: 5, invoice_number: "2026-0007", account: 1, client: 1, client_name: "Imobiliária Aurora",
-      degrau: "lembrete", degrau_display: "Lembrete", canal: "email", canal_display: "E-mail ao cliente",
+      dunning_step: "reminder", dunning_step_display: "Lembrete", canal: "email", canal_display: "E-mail ao cliente",
       sent_on: "2026-08-08", subject: "Fatura em aberto", to_email: "financeiro@aurora.test",
       body: "…", sent_by: null, ai_interaction: null, created_at: "2026-08-08T09:00:00Z",
     }],
@@ -308,7 +308,7 @@ test("Vendas suspende mas não envia nem rascunha — a assimetria da FDD 036 ch
  */
 test("a satisfação vigente aparece no card, com nível, fonte e idade", async () => {
   mocks.api.mockImplementation(stub([linha({
-    satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 12,
+    satisfacao_nivel: "dissatisfied", satisfacao_fonte: "declared", satisfacao_dias: 12,
   })]));
   render(<CobrancaPage />);
   const cartao = (await screen.findByRole("heading", { name: "Imobiliária Aurora" })).closest("article");
@@ -331,7 +331,7 @@ test("sem registro de satisfação, o card não inventa texto de ausência", asy
 test("relacao_tensa tem rótulo próprio, que não julga o cliente", async () => {
   mocks.api.mockImplementation(stub([linha({
     regua: "relacao_tensa", tensao_causa: "satisfacao",
-    satisfacao_nivel: "insatisfeito", satisfacao_fonte: "declarada", satisfacao_dias: 5,
+    satisfacao_nivel: "dissatisfied", satisfacao_fonte: "declared", satisfacao_dias: 5,
   })]));
   render(<CobrancaPage />);
   expect(await screen.findByText(/relação tensa/)).toBeInTheDocument();
@@ -373,8 +373,8 @@ test("a saúde mostrada é a da entrega do cliente, e sem projeto ativo não se 
  */
 test("o sinal da IA aparece rotulado como leitura por registrar, distinto da satisfação vigente", async () => {
   mocks.api.mockImplementation(stub([linha({
-    satisfacao_nivel: "neutro", satisfacao_fonte: "percebida", satisfacao_dias: 30,
-    sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
+    satisfacao_nivel: "neutral", satisfacao_fonte: "perceived", satisfacao_dias: 30,
+    sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
   })]));
   render(<CobrancaPage />);
   const cartao = (await screen.findByRole("heading", { name: "Imobiliária Aurora" })).closest("article");
@@ -396,24 +396,24 @@ test("sem sinal pendente a linha não oferece o atalho", async () => {
 
 test("o atalho registra a satisfação declarada, com a data do que aconteceu e o nível derivado", async () => {
   mocks.api.mockImplementation(stub([linha({
-    sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
+    sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31,
   })]));
   render(<CobrancaPage />);
   await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
 
   // Pré-preenchido, não decidido: o nível vem do sinal e a fonte é declarada porque quem falou foi
   // o cliente. Quem salva é uma pessoa — a IA leu, ela não registrou (ADR 0032).
-  expect(await screen.findByLabelText("Nível")).toHaveValue("insatisfeito");
+  expect(await screen.findByLabelText("Nível")).toHaveValue("dissatisfied");
   expect(screen.getByText(/declarada pelo cliente/)).toBeInTheDocument();
   await userEvent.type(screen.getByLabelText("O que o cliente disse"), "Disse que o marco 2 atrasou duas vezes.");
   await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
-    "/satisfacoes/",
+    "/satisfaction-records/",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
-        account: 1, source_activity: 31, nivel: "insatisfeito", fonte: "declarada",
+        account: 1, source_activity: 31, nivel: "dissatisfied", fonte: "declared",
         happened_on: "2026-08-14", note: "Disse que o marco 2 atrasou duas vezes.",
       }),
     }),
@@ -422,19 +422,19 @@ test("o atalho registra a satisfação declarada, com a data do que aconteceu e 
 
 test("o sinal que fala de dinheiro nasce neutro, e não insatisfeito", async () => {
   mocks.api.mockImplementation(stub([linha({
-    sinal_kind: "nao_pode", sinal_display: "Não pôde pagar", sinal_em: "2026-08-14", sinal_activity: 32,
+    sinal_kind: "unable_to_pay", sinal_display: "Não pôde pagar", sinal_em: "2026-08-14", sinal_activity: 32,
   })]));
   render(<CobrancaPage />);
   await userEvent.click(await screen.findByRole("button", { name: /Registrar satisfação/ }));
 
-  expect(await screen.findByLabelText("Nível")).toHaveValue("neutro");
+  expect(await screen.findByLabelText("Nível")).toHaveValue("neutral");
 });
 
 test("registrado o sinal, a linha é recarregada e o atalho some", async () => {
-  const comSinal = linha({ sinal_kind: "insatisfeito", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31 });
+  const comSinal = linha({ sinal_kind: "dissatisfied", sinal_display: "Insatisfeito", sinal_em: "2026-08-14", sinal_activity: 31 });
   let registrado = false;
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/satisfacoes/" && options?.method === "POST") { registrado = true; return Promise.resolve({}); }
+    if (path === "/satisfaction-records/" && options?.method === "POST") { registrado = true; return Promise.resolve({}); }
     return stub([registrado ? linha({ regua: "relacao_tensa", tensao_causa: "satisfacao" }) : comSinal])(path, options);
   });
   render(<CobrancaPage />);

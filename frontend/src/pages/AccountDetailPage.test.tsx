@@ -20,7 +20,7 @@ vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 function atividade(overrides: Record<string, unknown> = {}) {
   return {
-    id: 9, client: 1, commercial_opportunity: null, opportunity: null, invoice: null, cobranca_sinal: "", cobranca_sinal_display: "",
+    id: 9, client: 1, commercial_opportunity: null, opportunity: null, invoice: null, dunning_signal: "", dunning_signal_display: "",
     kind: "call", kind_display: "Ligação", happened_on: "2026-08-10", summary: "Alinhamento de escopo",
     notes: "Cliente confirmou prazo.", owner: 1,
     created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
@@ -34,8 +34,8 @@ let atividades: unknown[] = [atividade()];
 function satisfacaoRegistro(overrides: Record<string, unknown> = {}) {
   return {
     id: 3, client: 1, project: null, source_meeting: null,
-    nivel: "insatisfeito", nivel_display: "Insatisfeito",
-    fonte: "declarada", fonte_display: "Declarada pelo cliente",
+    nivel: "dissatisfied", nivel_display: "Insatisfeito",
+    fonte: "declared", fonte_display: "Declarada pelo cliente",
     happened_on: "2026-08-10", note: "Reclamou do prazo da última entrega.",
     registered_by: 1, created_at: "2026-08-10T10:00:00Z", updated_at: "2026-08-10T10:00:00Z",
     ...overrides,
@@ -43,7 +43,7 @@ function satisfacaoRegistro(overrides: Record<string, unknown> = {}) {
 }
 
 // Vazia por padrão: os testes que não são sobre satisfação não devem ver um "Insatisfeito" ou um
-// "Promotor" a mais na tela — colidiria com o texto de outros selos (o `cobranca_sinal_display`
+// "Promotor" a mais na tela — colidiria com o texto de outros selos (o `dunning_signal_display`
 // de Interações, por exemplo, também usa "Insatisfeito"). Cada teste de satisfação povoa a sua.
 let satisfacoes: unknown[] = [];
 
@@ -158,17 +158,17 @@ let publicados = 0;
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "", published_count: publicados });
+    if (path === "/accounts/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", vertical: null, vertical_name: "", published_count: publicados });
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
-    if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
+    if (path === "/accounts/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve(contacts);
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
-    if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
-    if (path.startsWith("/processos")) return Promise.resolve(processos);
+    if (path.startsWith("/satisfaction-records")) return Promise.resolve(satisfacoes);
+    if (path.startsWith("/processes")) return Promise.resolve(processos);
     if (path === "/services/") return Promise.resolve(services);
     if (path.startsWith("/engagements")) return Promise.resolve(engagements);
-    if (path.startsWith("/opportunities/?account=")) return Promise.resolve(opportunities);
+    if (path.startsWith("/commercial-opportunities/?account=")) return Promise.resolve(opportunities);
     if (path.startsWith("/documents/?account=")) return Promise.resolve(documents);
     return Promise.resolve([]);
   });
@@ -216,7 +216,7 @@ test("salva o cliente, cria e remove contato", async () => {
   await user.clear(cliente.getByLabelText("Nome"));
   await user.type(cliente.getByLabelText("Nome"), "Cliente B");
   await user.click(cliente.getByRole("button", { name: "Salvar alterações" }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "PATCH" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({ method: "PATCH" })));
 
   await user.type(painel.getByLabelText("Nome"), "Maria");
   await user.type(painel.getByLabelText("E-mail"), "maria@x.com");
@@ -316,7 +316,7 @@ test("corrige a situação da conta e leva o `lifecycle_status` no PATCH", async
   await user.selectOptions(screen.getByLabelText("Situação"), "prospect");
   await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({
     method: "PATCH", body: expect.stringContaining("\"lifecycle_status\":\"prospect\""),
   })));
 });
@@ -331,7 +331,7 @@ test("atribui uma vertical ao cliente", async () => {
   await user.selectOptions(screen.getByLabelText("Vertical"), "7");
   await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({
     method: "PATCH", body: expect.stringContaining("\"vertical\":7"),
   })));
 });
@@ -410,7 +410,7 @@ test("classificar chama a rota e o sinal gravado volta com a conduta, não só c
   await screen.findByRole("heading", { name: "Cliente A" });
 
   // A segunda carga já traz o sinal lavrado pelo backend — a tela não o adivinha.
-  atividades = [atividade({ invoice: 4, cobranca_sinal: "insatisfeito", cobranca_sinal_display: "Insatisfeito" })];
+  atividades = [atividade({ invoice: 4, dunning_signal: "dissatisfied", dunning_signal_display: "Insatisfeito" })];
   await user.click(screen.getByLabelText("Classificar resposta: Alinhamento de escopo"));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
@@ -425,7 +425,7 @@ test("classificar chama a rota e o sinal gravado volta com a conduta, não só c
 });
 
 test("a interação já classificada não oferece classificar de novo", async () => {
-  atividades = [atividade({ cobranca_sinal: "esqueceu", cobranca_sinal_display: "Esqueceu" })];
+  atividades = [atividade({ dunning_signal: "forgot", dunning_signal_display: "Esqueceu" })];
   render(<AccountDetailPage id={1} />);
   await screen.findByText("Alinhamento de escopo");
 
@@ -490,7 +490,7 @@ test("entrega não classifica nem pergunta pela flag: o recurso é fechado para 
 test("a lista de satisfação distingue as duas fontes, não só o nível", async () => {
   satisfacoes = [
     satisfacaoRegistro(),
-    satisfacaoRegistro({ id: 4, nivel: "promotor", nivel_display: "Promotor", fonte: "percebida", fonte_display: "Percebida por quem entrega", happened_on: "2026-08-01", note: "" }),
+    satisfacaoRegistro({ id: 4, nivel: "promoter", nivel_display: "Promotor", fonte: "perceived", fonte_display: "Percebida por quem entrega", happened_on: "2026-08-01", note: "" }),
   ];
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
@@ -516,19 +516,19 @@ test("registra uma satisfação nova", async () => {
   render(<AccountDetailPage id={1} />);
   await screen.findByRole("heading", { name: "Cliente A" });
 
-  await user.selectOptions(screen.getByLabelText("Nível"), "promotor");
-  await user.selectOptions(screen.getByLabelText("Fonte"), "percebida");
+  await user.selectOptions(screen.getByLabelText("Nível"), "promoter");
+  await user.selectOptions(screen.getByLabelText("Fonte"), "perceived");
   await user.type(screen.getByPlaceholderText("O que o cliente disse, ou o que foi percebido"), "Elogiou a entrega na call de comitê.");
   await user.click(screen.getByRole("button", { name: "Registrar satisfação" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/satisfaction-records/", expect.objectContaining({
     method: "POST", body: expect.stringContaining('"account":1'),
   })));
-  expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
-    body: expect.stringContaining('"nivel":"promotor"'),
+  expect(mocks.api).toHaveBeenCalledWith("/satisfaction-records/", expect.objectContaining({
+    body: expect.stringContaining('"nivel":"promoter"'),
   }));
-  expect(mocks.api).toHaveBeenCalledWith("/satisfacoes/", expect.objectContaining({
-    body: expect.stringContaining('"fonte":"percebida"'),
+  expect(mocks.api).toHaveBeenCalledWith("/satisfaction-records/", expect.objectContaining({
+    body: expect.stringContaining('"fonte":"perceived"'),
   }));
 });
 
@@ -540,7 +540,7 @@ test("insatisfeito sem nota volta 400 e a tela mostra a mensagem do campo, não 
   mocks.api.mockImplementationOnce(() => Promise.reject(
     Object.assign(new Error("Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."), { status: 400 }),
   ));
-  await user.selectOptions(screen.getByLabelText("Nível"), "insatisfeito");
+  await user.selectOptions(screen.getByLabelText("Nível"), "dissatisfied");
   await user.click(screen.getByRole("button", { name: "Registrar satisfação" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(/insatisfeito sem nota não se avalia depois/);
@@ -1027,5 +1027,5 @@ test("o aviso informa e não bloqueia: arquivar continua saindo como DELETE", as
   await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
   await user.click(screen.getByRole("button", { name: "Arquivar" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "DELETE" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({ method: "DELETE" })));
 });

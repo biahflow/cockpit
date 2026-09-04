@@ -794,7 +794,7 @@ def test_a_entrada_sem_projeto_e_visivel_por_quem_alcanca_o_mandato() -> None:
 
     É a razão de `ValueLedgerEntry` ficar fora de `PROJECT_OF`: um mapa que resolvesse
     `obj.project` devolveria `None` aqui, e a Entrega tomaria 403 no detalhe de uma linha que a
-    listagem dela mostra — o defeito que a `Satisfacao` já previu.
+    listagem dela mostra — o defeito que a `SatisfactionRecord` já previu.
     """
     api, _, projeto = _entrega_com_projeto()
     entrada = ValueLedgerEntryFactory(engagement=projeto.engagement, project=None)

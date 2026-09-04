@@ -78,7 +78,7 @@ function hipotese(overrides: Record<string, unknown> = {}) {
 }
 
 const processo = {
-  id: 1, account: 4, client: 4, client_name: "Clínica Vale Verde", name: "Faturamento TISS",
+  id: 1, account: 4, account_name: "Clínica Vale Verde", name: "Faturamento TISS",
   position: 1, source_project: null, source_meeting: null, registered_by: 1,
   volume_mes: null, tempo_horas: null, pessoas: null, custo_hora: null,
   retrabalho_mes: null, erros_mes: null, perdas_mes: null, espera_mes: null, risco_mes: null,
@@ -94,8 +94,8 @@ let conta: unknown = { id: 4, name: "Clínica Vale Verde", legal_name: "", tax_i
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/4/") return conta instanceof Error ? Promise.reject(conta) : Promise.resolve(conta);
-    if (path.startsWith("/processos")) return Promise.resolve([processo]);
+    if (path === "/accounts/4/") return conta instanceof Error ? Promise.reject(conta) : Promise.resolve(conta);
+    if (path.startsWith("/processes")) return Promise.resolve([processo]);
     return Promise.resolve([]);
   });
   mocks.listPainPointsByAccount.mockImplementation(() => Promise.resolve(dores));

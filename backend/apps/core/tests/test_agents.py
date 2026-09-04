@@ -47,19 +47,19 @@ def test_o_contexto_de_entrega_leva_as_duas_fontes_de_satisfacao() -> None:
     aqui apagaria o único uso legítimo dela.
     """
     from apps.core import agents
-    from apps.core.models import Satisfacao
+    from apps.core.models import SatisfactionRecord
 
     delivery = UserFactory(role=User.Role.DELIVERY)
     um, outro = ProjectFactory(), ProjectFactory()
     for projeto in (um, outro):
         ProjectMemberFactory(project=projeto, user=delivery)
     hoje = timezone.localdate()
-    Satisfacao.objects.create(
-        account=um.engagement.account, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+    SatisfactionRecord.objects.create(
+        account=um.engagement.account, nivel=SatisfactionRecord.Nivel.DISSATISFIED, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=hoje, note="Disse que o marco 2 atrasou duas vezes.",
     )
-    Satisfacao.objects.create(
-        account=outro.engagement.account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    SatisfactionRecord.objects.create(
+        account=outro.engagement.account, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=hoje,
     )
 

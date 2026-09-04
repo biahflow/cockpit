@@ -22,16 +22,16 @@ from apps.core import ai, cobranca, health
 from apps.core.models import (
     Account,
     Activity,
-    CobrancaContato,
     CobrancaSuspensao,
     Contact,
+    DunningContact,
     Invoice,
     Meeting,
     Milestone,
     Notification,
     Pendencia,
     Project,
-    Satisfacao,
+    SatisfactionRecord,
     User,
     WorkItem,
 )
@@ -79,19 +79,19 @@ def _com_contato_de_cobranca(account: Account, email: str = "financeiro@cliente.
     ("dias", "esperado"),
     [
         (-5, None),          # cedo demais: o pré-aviso ainda não abriu
-        (-3, "pre_aviso"),
-        (-1, "pre_aviso"),
+        (-3, "pre_notice"),
+        (-1, "pre_notice"),
         (0, None),           # vence hoje: a janela do pré-aviso fechou e a carência começou
         (1, None),           # carência
         (2, None),           # carência
-        (3, "lembrete"),
-        (9, "lembrete"),
-        (10, "firme"),
-        (19, "firme"),
-        (20, "escalada"),
-        (29, "escalada"),
-        (30, "renegociacao"),
-        (400, "renegociacao"),
+        (3, "reminder"),
+        (9, "reminder"),
+        (10, "firm"),
+        (19, "firm"),
+        (20, "escalation"),
+        (29, "escalation"),
+        (30, "renegotiation"),
+        (400, "renegotiation"),
     ],
 )
 def test_a_escada_padrao_responde_por_dia(dias: int, esperado: str | None) -> None:
@@ -117,7 +117,7 @@ def test_o_pre_aviso_atrasado_nao_vira_mentira() -> None:
     uma mentira escrita pela casa, e a única do repertório que o cliente consegue conferir sozinho.
     """
     invoice = _vencendo_em(1)
-    assert CobrancaContato.objects.filter(invoice=invoice).count() == 0
+    assert DunningContact.objects.filter(invoice=invoice).count() == 0
     assert cobranca.degrau_devido(invoice, HOJE) is None
 
 
@@ -133,7 +133,7 @@ def _cliente_de_casa() -> Account:
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("dias", "esperado"),
-    [(3, None), (5, "lembrete"), (12, "lembrete"), (20, "escalada"), (30, "renegociacao")],
+    [(3, None), (5, "reminder"), (12, "reminder"), (20, "escalation"), (30, "renegotiation")],
 )
 def test_relacao_longa_atrasa_o_lembrete_e_nao_tem_degrau_firme(
     dias: int, esperado: str | None
@@ -146,7 +146,7 @@ def test_relacao_longa_atrasa_o_lembrete_e_nao_tem_degrau_firme(
     """
     antigo = _cliente_de_casa()
     assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_LONGA
-    assert "firme" not in {d.key for d in cobranca.RELACAO_LONGA}
+    assert "firm" not in {d.key for d in cobranca.RELACAO_LONGA}
 
     degrau = cobranca.degrau_devido(_vencendo_em(dias, account=antigo), HOJE)
     assert (degrau.key if degrau else None) == esperado
@@ -178,12 +178,12 @@ def test_a_reincidencia_ignora_a_propria_fatura() -> None:
     assert cobranca.regua_para(antigo, HOJE, ignorando=atrasada) is cobranca.RELACAO_LONGA
 
 
-def _insatisfacao(account: Account, quando: date | None = None) -> Satisfacao:
+def _insatisfacao(account: Account, quando: date | None = None) -> SatisfactionRecord:
     """Insatisfação **declarada** e vigente — a que troca a escada (FDD 037, ADR 0032)."""
-    return Satisfacao.objects.create(
+    return SatisfactionRecord.objects.create(
         account=account,
-        nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.DECLARADA,
+        nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=quando or HOJE,
         note="Disse na call que a entrega do marco 2 atrasou duas vezes.",
     )
@@ -192,7 +192,7 @@ def _insatisfacao(account: Account, quando: date | None = None) -> Satisfacao:
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("dias", "esperado"),
-    [(-2, "pre_aviso"), (1, None), (5, "lembrete"), (10, "escalada"), (30, "renegociacao")],
+    [(-2, "pre_notice"), (1, None), (5, "reminder"), (10, "escalation"), (30, "renegotiation")],
 )
 def test_a_relacao_tensa_troca_o_degrau_firme_pela_escalada(dias: int, esperado: str | None) -> None:
     """A régua **não cala**: ela para de endurecer e passa a acordar gente (ADR 0032).
@@ -203,7 +203,7 @@ def test_a_relacao_tensa_troca_o_degrau_firme_pela_escalada(dias: int, esperado:
     account = AccountFactory()
     _insatisfacao(account)
     assert cobranca.regua_para(account, HOJE) is cobranca.RELACAO_TENSA
-    assert "firme" not in {d.key for d in cobranca.RELACAO_TENSA}
+    assert "firm" not in {d.key for d in cobranca.RELACAO_TENSA}
 
     degrau = cobranca.degrau_devido(_vencendo_em(dias, account=account), HOJE)
     assert (degrau.key if degrau else None) == esperado
@@ -292,7 +292,7 @@ def test_a_entrega_critica_troca_a_escada() -> None:
     assert cobranca.regua_para(account, HOJE) is cobranca.RELACAO_TENSA
     # E não cala: em D+12 sai a escalada interna, no lugar do degrau firme.
     degrau = cobranca.degrau_devido(_vencendo_em(12, account=account), HOJE)
-    assert degrau is not None and degrau.key == "escalada"
+    assert degrau is not None and degrau.key == "escalation"
 
 
 @pytest.mark.django_db
@@ -369,7 +369,7 @@ def test_a_causa_da_tensao_nomeia_as_duas_origens() -> None:
     _insatisfacao(ambas)
     _entrega_em_frangalhos(ambas)
 
-    assert cobranca.causa_da_tensao(so_satisfacao, HOJE) == cobranca.TENSAO_SATISFACAO
+    assert cobranca.causa_da_tensao(so_satisfacao, HOJE) == cobranca.TENSAO_SATISFACTION
     assert cobranca.causa_da_tensao(so_entrega, HOJE) == cobranca.TENSAO_ENTREGA
     assert cobranca.causa_da_tensao(ambas, HOJE) == cobranca.TENSAO_AMBAS
     # A mesma escada nos três casos: a causa é rótulo, não decisão.
@@ -425,7 +425,7 @@ def test_suspensao_ativa_cala_e_suspensao_vencida_devolve() -> None:
     assert cobranca.avaliar(invoice, HOJE).motivo == cobranca.SUSPENSA
 
     # `until` é inclusivo: no dia seguinte a régua volta sozinha, sem intervenção.
-    assert cobranca.degrau_devido(invoice, HOJE + timedelta(days=1)).key == "firme"
+    assert cobranca.degrau_devido(invoice, HOJE + timedelta(days=1)).key == "firm"
 
     suspensao.until = HOJE + timedelta(days=10)
     suspensao.save()
@@ -451,7 +451,7 @@ def test_suspensao_levantada_nao_cala_mais() -> None:
         invoice=invoice, owner=invoice.account.owner, until=HOJE + timedelta(days=30),
         reason="Engano.", lifted_at=timezone.now(),
     )
-    assert cobranca.degrau_devido(invoice, HOJE).key == "firme"
+    assert cobranca.degrau_devido(invoice, HOJE).key == "firm"
 
 
 @pytest.mark.django_db
@@ -460,8 +460,8 @@ def test_o_teto_de_frequencia_e_por_cliente_somando_todas_as_faturas() -> None:
     account = AccountFactory()
     uma = _vencendo_em(12, account=account)
     outra = _vencendo_em(4, account=account)
-    CobrancaContato.objects.create(
-        invoice=uma, account=account, degrau="firme", canal=CobrancaContato.Canal.EMAIL,
+    DunningContact.objects.create(
+        invoice=uma, account=account, dunning_step="firm", canal=DunningContact.Canal.EMAIL,
         sent_on=HOJE, subject="x", body="y",
     )
     assert cobranca.avaliar(outra, HOJE).motivo == cobranca.TETO_DE_FREQUENCIA
@@ -477,11 +477,11 @@ def test_o_teto_nao_cala_a_escalada_interna() -> None:
     account = AccountFactory()
     uma = _vencendo_em(4, account=account)
     outra = _vencendo_em(22, account=account)
-    CobrancaContato.objects.create(
-        invoice=uma, account=account, degrau="lembrete", canal=CobrancaContato.Canal.EMAIL,
+    DunningContact.objects.create(
+        invoice=uma, account=account, dunning_step="reminder", canal=DunningContact.Canal.EMAIL,
         sent_on=HOJE, subject="x", body="y",
     )
-    assert cobranca.degrau_devido(outra, HOJE).key == "escalada"
+    assert cobranca.degrau_devido(outra, HOJE).key == "escalation"
 
 
 @pytest.mark.django_db
@@ -489,19 +489,19 @@ def test_aviso_interno_nao_gasta_a_franquia_do_cliente() -> None:
     account = AccountFactory()
     uma = _vencendo_em(22, account=account)
     outra = _vencendo_em(4, account=account)
-    CobrancaContato.objects.create(
-        invoice=uma, account=account, degrau="escalada", canal=CobrancaContato.Canal.INTERNO,
+    DunningContact.objects.create(
+        invoice=uma, account=account, dunning_step="escalation", canal=DunningContact.Canal.INTERNO,
         sent_on=HOJE, subject="x", body="y",
     )
-    assert cobranca.degrau_devido(outra, HOJE).key == "lembrete"
+    assert cobranca.degrau_devido(outra, HOJE).key == "reminder"
 
 
 @pytest.mark.django_db
 def test_degrau_gasto_nao_se_repete() -> None:
     invoice = _vencendo_em(12)
-    CobrancaContato.objects.create(
-        invoice=invoice, account=invoice.account, degrau="firme",
-        canal=CobrancaContato.Canal.EMAIL, sent_on=HOJE, subject="x", body="y",
+    DunningContact.objects.create(
+        invoice=invoice, account=invoice.account, dunning_step="firm",
+        canal=DunningContact.Canal.EMAIL, sent_on=HOJE, subject="x", body="y",
     )
     assert cobranca.avaliar(invoice, HOJE).motivo == cobranca.DEGRAU_GASTO
 
@@ -515,7 +515,7 @@ def test_a_flag_desligada_e_um_no_op_silencioso() -> None:
     _vencendo_em(12)
     resumo = cobranca.executar(HOJE)
     assert resumo["motivo"] == cobranca.FLAG_DESLIGADA
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
     assert mail.outbox == []
 
 
@@ -527,7 +527,7 @@ def test_a_regua_nao_roda_em_fim_de_semana() -> None:
     assert sabado.weekday() == 5
     resumo = cobranca.executar(sabado)
     assert resumo["motivo"] == cobranca.FIM_DE_SEMANA
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -544,9 +544,9 @@ def test_o_pre_aviso_sai_por_email_ao_contato_de_cobranca() -> None:
     # Só quem recebe cobrança. O contato técnico existe e não entra.
     assert enviado.to == ["financeiro@cliente.test"]
     assert "vence" in enviado.subject
-    contato = CobrancaContato.objects.get()
-    assert contato.degrau == "pre_aviso"
-    assert contato.canal == CobrancaContato.Canal.EMAIL
+    contato = DunningContact.objects.get()
+    assert contato.dunning_step == "pre_notice"
+    assert contato.canal == DunningContact.Canal.EMAIL
     assert contato.sent_by_id is None  # nulo = automático
     assert contato.body == enviado.body  # a prova é o texto que saiu
 
@@ -559,9 +559,9 @@ def test_sem_contato_de_cobranca_o_degrau_vira_escalada_interna() -> None:
 
     cobranca.executar(HOJE)
 
-    contato = CobrancaContato.objects.get()
-    assert contato.degrau == "lembrete"
-    assert contato.canal == CobrancaContato.Canal.INTERNO
+    contato = DunningContact.objects.get()
+    assert contato.dunning_step == "reminder"
+    assert contato.canal == DunningContact.Canal.INTERNO
     assert contato.to_email == ""
     assert "recebe cobrança" in contato.body
     assert Notification.objects.filter(user=invoice.account.owner, kind="cobranca").exists()
@@ -645,7 +645,7 @@ def test_a_passada_reage_a_entrega_critica_sem_suspender_nada() -> None:
 
     assert resumo["escaladas"] == 1
     assert resumo["contatos"] == 0
-    assert CobrancaContato.objects.get().degrau == "escalada"
+    assert DunningContact.objects.get().dunning_step == "escalation"
     # A escalada acorda gente e **não** fala com o cliente: o contato de cobrança não recebe nada
     # (o e-mail que sai é a cópia da notificação interna).
     destinos = {endereco for enviado in mail.outbox for endereco in enviado.to}
@@ -670,7 +670,7 @@ def test_o_email_que_nao_sai_nao_grava_contato(monkeypatch: pytest.MonkeyPatch) 
     resumo = cobranca.executar(HOJE)
 
     assert resumo["falhas"] == 1
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -681,7 +681,7 @@ def test_o_comando_aceita_um_dia_fixo() -> None:
 
     call_command("run_dunning", f"--hoje={HOJE.isoformat()}")
 
-    assert CobrancaContato.objects.get().degrau == "lembrete"
+    assert DunningContact.objects.get().dunning_step == "reminder"
 
 
 @pytest.mark.django_db
@@ -711,9 +711,9 @@ def admin_api() -> APIClient:
 def test_a_lista_de_cobranca_e_so_leitura(admin_api: APIClient) -> None:
     """Um POST aqui criaria a prova de um contato que não aconteceu."""
     invoice = _vencendo_em(12)
-    CobrancaContato.objects.create(
-        invoice=invoice, account=invoice.account, degrau="firme",
-        canal=CobrancaContato.Canal.EMAIL, sent_on=HOJE, subject="x", body="y",
+    DunningContact.objects.create(
+        invoice=invoice, account=invoice.account, dunning_step="firm",
+        canal=DunningContact.Canal.EMAIL, sent_on=HOJE, subject="x", body="y",
     )
     assert len(admin_api.get("/api/v1/cobranca/").json()) == 1
     assert admin_api.post("/api/v1/cobranca/", {}, format="json").status_code == 405
@@ -781,12 +781,12 @@ def test_enviar_manualmente_grava_o_autor_e_o_texto_revisado(admin_api: APIClien
 
     resp = admin_api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
-        {"degrau": "firme", "subject": "Sobre a fatura", "body": "Texto revisado por gente."},
+        {"degrau": "firm", "subject": "Sobre a fatura", "body": "Texto revisado por gente."},
         format="json",
     )
 
     assert resp.status_code == 201
-    contato = CobrancaContato.objects.get()
+    contato = DunningContact.objects.get()
     assert contato.sent_by_id is not None  # preenchido = uma pessoa apertou enviar
     assert contato.body == "Texto revisado por gente."
     assert mail.outbox[0].body == "Texto revisado por gente."
@@ -797,7 +797,7 @@ def test_enviar_manualmente_grava_o_autor_e_o_texto_revisado(admin_api: APIClien
 def test_enviar_recusa_o_degrau_ja_gasto_com_409(admin_api: APIClient) -> None:
     invoice = _vencendo_em(12)
     _com_contato_de_cobranca(invoice.account)
-    corpo = {"degrau": "firme", "body": "Texto."}
+    corpo = {"degrau": "firm", "body": "Texto."}
     assert admin_api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/", corpo, format="json"
     ).status_code == 201
@@ -818,10 +818,10 @@ def test_enviar_recusa_durante_a_suspensao(admin_api: APIClient) -> None:
     )
     resp = admin_api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
-        {"degrau": "firme", "body": "Texto."}, format="json",
+        {"degrau": "firm", "body": "Texto."}, format="json",
     )
     assert resp.status_code == 409
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
 
 
 @override_settings(DUNNING_ENABLED=True)  # o envio manual também passa pela flag
@@ -831,7 +831,7 @@ def test_enviar_recusa_fatura_paga(admin_api: APIClient) -> None:
     _com_contato_de_cobranca(invoice.account)
     resp = admin_api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
-        {"degrau": "firme", "body": "Texto."}, format="json",
+        {"degrau": "firm", "body": "Texto."}, format="json",
     )
     assert resp.status_code == 409
 
@@ -846,7 +846,7 @@ def test_enviar_exige_texto_e_degrau_conhecido(admin_api: APIClient) -> None:
     ).status_code == 400
     assert admin_api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
-        {"degrau": "firme", "body": "   "}, format="json",
+        {"degrau": "firm", "body": "   "}, format="json",
     ).status_code == 400
 
 
@@ -865,10 +865,10 @@ def test_o_e_mail_que_nao_sai_pela_api_nao_grava_contato(
 
     resp = admin_api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
-        {"degrau": "firme", "body": "Texto."}, format="json",
+        {"degrau": "firm", "body": "Texto."}, format="json",
     )
     assert resp.status_code == 502
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
 
 
 # --- Camada 4: rascunho e classificação ---------------------------------------------------------
@@ -887,14 +887,14 @@ def test_rascunhar_devolve_texto_e_nao_envia(
     )
 
     resp = admin_api.post(
-        f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {"degrau": "firme"}, format="json"
+        f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {"degrau": "firm"}, format="json"
     )
 
     assert resp.status_code == 200
     assert resp.json()["text"] == "Olá, sobre a fatura..."
-    assert resp.json()["degrau"] == "firme"
+    assert resp.json()["degrau"] == "firm"
     assert mail.outbox == []
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -918,11 +918,22 @@ def test_rascunhar_sem_degrau_aplicavel_recusa(
 def test_o_sinal_e_lido_do_json_e_o_desconhecido_e_descartado() -> None:
     from apps.core.views import sinal_do_texto
 
-    assert sinal_do_texto('{"sinal": "nao_pode"}') == "nao_pode"
-    assert sinal_do_texto('Claro!\n```json\n{"sinal": "esqueceu"}\n```') == "esqueceu"
+    assert sinal_do_texto('{"sinal": "unable_to_pay"}') == "unable_to_pay"
+    assert sinal_do_texto('Claro!\n```json\n{"sinal": "forgot"}\n```') == "forgot"
     assert sinal_do_texto('{"sinal": "com_raiva"}') == ""
     assert sinal_do_texto("não consegui classificar") == ""
-    assert sinal_do_texto('["esqueceu"]') == ""
+    assert sinal_do_texto('["forgot"]') == ""
+
+
+@pytest.mark.django_db
+def test_o_sinal_legado_e_tolerado_e_traduzido_para_o_canonico() -> None:
+    """Tolerância de release (issue #122, fatia 5.2): a IA pode responder com cache ou variação
+    do prompt anterior, e os três tokens antigos ainda traduzem — nunca persistem como vieram."""
+    from apps.core.views import sinal_do_texto
+
+    assert sinal_do_texto('{"sinal": "esqueceu"}') == "forgot"
+    assert sinal_do_texto('{"sinal": "nao_pode"}') == "unable_to_pay"
+    assert sinal_do_texto('{"sinal": "insatisfeito"}') == "dissatisfied"
 
 
 @pytest.mark.django_db
@@ -935,19 +946,38 @@ def test_classificar_grava_o_sinal_e_nao_age(
         account=invoice.account, invoice=invoice, summary="Cliente disse que o caixa apertou."
     )
     monkeypatch.setattr(
-        ai, "complete", lambda s, u, **_: ('{"sinal": "nao_pode"}', {"prompt_tokens": 1})
+        ai, "complete", lambda s, u, **_: ('{"sinal": "unable_to_pay"}', {"prompt_tokens": 1})
     )
 
     resp = admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
 
     assert resp.status_code == 200
     activity.refresh_from_db()
-    assert activity.cobranca_sinal == Activity.CobrancaSinal.NAO_PODE
+    assert activity.dunning_signal == Activity.DunningSignal.UNABLE_TO_PAY
     # Classificar é leitura: nada foi suspenso, renegociado nem cobrado.
     assert CobrancaSuspensao.objects.count() == 0
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
     invoice.refresh_from_db()
     assert invoice.status == Invoice.Status.ISSUED
+
+
+@pytest.mark.django_db
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_classificar_com_sinal_legado_grava_o_canonico_pela_tolerancia(
+    admin_api: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O prompt pede os canônicos, mas a IA pode responder com cache do prompt anterior — a
+    tolerância de release (issue #122, fatia 5.2) grava o canônico, nunca o token legado."""
+    activity = ActivityFactory()
+    monkeypatch.setattr(
+        ai, "complete", lambda s, u, **_: ('{"sinal": "esqueceu"}', {"prompt_tokens": 1})
+    )
+
+    resp = admin_api.post(f"/api/v1/activities/{activity.pk}/classificar/")
+
+    assert resp.status_code == 200
+    activity.refresh_from_db()
+    assert activity.dunning_signal == Activity.DunningSignal.FORGOT
 
 
 @pytest.mark.django_db
@@ -963,7 +993,7 @@ def test_classificar_sem_sinal_utilizavel_e_502(
 
     assert resp.status_code == 502
     activity.refresh_from_db()
-    assert activity.cobranca_sinal == ""
+    assert activity.dunning_signal == ""
 
 
 @pytest.mark.django_db
@@ -975,7 +1005,7 @@ def test_o_sinal_nao_se_grava_por_patch(admin_api: APIClient) -> None:
     )
     assert resp.status_code == 200
     activity.refresh_from_db()
-    assert activity.cobranca_sinal == ""
+    assert activity.dunning_signal == ""
 
 
 @pytest.mark.django_db
@@ -1007,7 +1037,7 @@ def test_vendas_le_cobranca_suspende_e_nao_envia() -> None:
     ).status_code == 201
     assert api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/enviar/",
-        {"degrau": "firme", "body": "Texto."}, format="json",
+        {"degrau": "firm", "body": "Texto."}, format="json",
     ).status_code == 403
     assert api.post(
         f"/api/v1/invoices/{invoice.pk}/cobranca/rascunhar/", {}, format="json"
@@ -1025,9 +1055,9 @@ def test_a_corrida_entre_duas_execucoes_para_no_banco(monkeypatch: pytest.Monkey
     """
     invoice = _vencendo_em(12)
     _com_contato_de_cobranca(invoice.account)
-    CobrancaContato.objects.create(
-        invoice=invoice, account=invoice.account, degrau="firme",
-        canal=CobrancaContato.Canal.EMAIL, sent_on=HOJE - timedelta(days=30), subject="x", body="y",
+    DunningContact.objects.create(
+        invoice=invoice, account=invoice.account, dunning_step="firm",
+        canal=DunningContact.Canal.EMAIL, sent_on=HOJE - timedelta(days=30), subject="x", body="y",
     )
     # Simula a outra execução tendo lido "cabe firme" antes de esta gravar. A assinatura espelha a
     # de `avaliar` inclusive no `contexto=`, que `executar` passa desde a FDD 038: um duplo que
@@ -1041,7 +1071,7 @@ def test_a_corrida_entre_duas_execucoes_para_no_banco(monkeypatch: pytest.Monkey
 
     assert resumo["falhas"] == 0
     assert resumo["calados"] == {cobranca.DEGRAU_GASTO: 1}
-    assert CobrancaContato.objects.filter(invoice=invoice, degrau="firme").count() == 1
+    assert DunningContact.objects.filter(invoice=invoice, dunning_step="firm").count() == 1
 
 
 # --- Achados da revisão do diff (FDD 036) ------------------------------------------------------
@@ -1081,9 +1111,9 @@ def test_escalada_sem_ninguem_a_acordar_nao_gasta_o_degrau() -> None:
     with pytest.raises(cobranca.SemDestinatarioInterno):
         cobranca.aplicar(fatura, cobranca.degrau_devido(fatura, HOJE), HOJE)
 
-    assert not CobrancaContato.objects.filter(invoice=fatura).exists()
+    assert not DunningContact.objects.filter(invoice=fatura).exists()
     # E continua devido: a condição é consertável por gente, e a régua espera.
-    assert cobranca.degrau_devido(fatura, HOJE).key == "escalada"
+    assert cobranca.degrau_devido(fatura, HOJE).key == "escalation"
 
 
 @pytest.mark.django_db
@@ -1102,12 +1132,12 @@ def test_o_envio_manual_tambem_respeita_a_flag() -> None:
 
     resposta = api.post(
         f"/api/v1/invoices/{fatura.pk}/cobranca/enviar/",
-        {"degrau": "lembrete", "body": "texto revisado"},
+        {"degrau": "reminder", "body": "texto revisado"},
         format="json",
     )
 
     assert resposta.status_code == 503
-    assert not CobrancaContato.objects.exists()
+    assert not DunningContact.objects.exists()
     assert mail.outbox == []
 
 
@@ -1169,16 +1199,16 @@ def test_o_painel_traz_a_satisfacao_vigente_com_a_fonte(admin_api: APIClient) ->
     """
     account = AccountFactory()
     invoice = _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
-    Satisfacao.objects.create(
-        account=account, nivel=Satisfacao.Nivel.NEUTRO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    SatisfactionRecord.objects.create(
+        account=account, nivel=SatisfactionRecord.Nivel.NEUTRAL, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=timezone.localdate() - timedelta(days=4),
     )
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
 
     assert linha["invoice"] == invoice.pk
-    assert linha["satisfacao_nivel"] == Satisfacao.Nivel.NEUTRO
-    assert linha["satisfacao_fonte"] == Satisfacao.Fonte.PERCEBIDA
+    assert linha["satisfacao_nivel"] == SatisfactionRecord.Nivel.NEUTRAL
+    assert linha["satisfacao_fonte"] == SatisfactionRecord.Fonte.PERCEIVED
     assert linha["satisfacao_dias"] == 4
     # A percebida aparece e **não** troca a escada.
     assert linha["regua"] == "padrao"
@@ -1188,17 +1218,17 @@ def test_o_painel_traz_a_satisfacao_vigente_com_a_fonte(admin_api: APIClient) ->
 def test_o_painel_nomeia_a_regua_tensa(admin_api: APIClient) -> None:
     account = AccountFactory()
     _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
-    Satisfacao.objects.create(
-        account=account, nivel=Satisfacao.Nivel.INSATISFEITO, fonte=Satisfacao.Fonte.DECLARADA,
+    SatisfactionRecord.objects.create(
+        account=account, nivel=SatisfactionRecord.Nivel.DISSATISFIED, fonte=SatisfactionRecord.Fonte.DECLARED,
         happened_on=timezone.localdate(), note="Reclamou do atraso do marco 2.",
     )
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
 
     assert linha["regua"] == "relacao_tensa"
-    assert linha["satisfacao_fonte"] == Satisfacao.Fonte.DECLARADA
+    assert linha["satisfacao_fonte"] == SatisfactionRecord.Fonte.DECLARED
     # O degrau firme deu lugar à escalada interna, e a linha não ficou muda.
-    assert linha["proximo_degrau"] == "escalada"
+    assert linha["proximo_degrau"] == "escalation"
     assert linha["motivo"] == ""
 
 
@@ -1217,7 +1247,7 @@ def test_o_painel_nomeia_a_causa_da_tensao(admin_api: APIClient) -> None:
     assert linha["tensao_causa"] == cobranca.TENSAO_ENTREGA
     assert linha["satisfacao_nivel"] is None
     # A régua não ficou muda por causa da entrega: o degrau firme deu lugar à escalada interna.
-    assert linha["proximo_degrau"] == "escalada"
+    assert linha["proximo_degrau"] == "escalation"
     assert linha["motivo"] == ""
 
 
@@ -1250,7 +1280,7 @@ def test_o_painel_sem_projeto_ativo_nao_inventa_health(admin_api: APIClient) -> 
 
 @pytest.mark.django_db
 def test_o_painel_traz_o_sinal_da_ia_como_leitura_por_registrar(admin_api: APIClient) -> None:
-    """O `cobranca_sinal` ganha leitor (FDD 038): a resposta classificada aparece na linha como
+    """O `dunning_signal` ganha leitor (FDD 038): a resposta classificada aparece na linha como
     **leitura ainda não registrada**, com data, e é o atalho para uma pessoa registrar.
 
     Não é satisfação: nada aqui move o Health Score nem a escada — só o registro humano move
@@ -1259,18 +1289,18 @@ def test_o_painel_traz_o_sinal_da_ia_como_leitura_por_registrar(admin_api: APICl
     account = AccountFactory()
     _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
     velha = ActivityFactory(
-        account=account, cobranca_sinal=Activity.CobrancaSinal.ESQUECEU,
+        account=account, dunning_signal=Activity.DunningSignal.FORGOT,
         happened_on=timezone.localdate() - timedelta(days=9),
     )
     ultima = ActivityFactory(
-        account=account, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+        account=account, dunning_signal=Activity.DunningSignal.DISSATISFIED,
         happened_on=timezone.localdate() - timedelta(days=2),
     )
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
 
     assert linha["sinal_activity"] == ultima.pk != velha.pk
-    assert linha["sinal_kind"] == Activity.CobrancaSinal.INSATISFEITO
+    assert linha["sinal_kind"] == Activity.DunningSignal.DISSATISFIED
     assert linha["sinal_display"] == "Insatisfeito"
     assert linha["sinal_em"] == str(ultima.happened_on)
     # A leitura da IA **não** é registro: a escada segue a padrão e a satisfação vigente é nenhuma.
@@ -1285,16 +1315,16 @@ def test_o_sinal_some_da_linha_depois_de_registrado(admin_api: APIClient) -> Non
     account = AccountFactory()
     _fatura(due_date=timezone.localdate() - timedelta(days=12), account=account)
     activity = ActivityFactory(
-        account=account, cobranca_sinal=Activity.CobrancaSinal.INSATISFEITO,
+        account=account, dunning_signal=Activity.DunningSignal.DISSATISFIED,
         happened_on=timezone.localdate() - timedelta(days=2),
     )
 
     (antes,) = admin_api.get("/api/v1/cobranca/painel/").json()
     assert antes["sinal_activity"] == activity.pk
 
-    Satisfacao.objects.create(
-        account=account, source_activity=activity, nivel=Satisfacao.Nivel.INSATISFEITO,
-        fonte=Satisfacao.Fonte.DECLARADA, happened_on=activity.happened_on,
+    SatisfactionRecord.objects.create(
+        account=account, source_activity=activity, nivel=SatisfactionRecord.Nivel.DISSATISFIED,
+        fonte=SatisfactionRecord.Fonte.DECLARED, happened_on=activity.happened_on,
         note="Disse que a entrega do marco 2 atrasou duas vezes.",
     )
 
@@ -1306,7 +1336,7 @@ def test_o_sinal_some_da_linha_depois_de_registrado(admin_api: APIClient) -> Non
     assert depois["sinal_em"] is None
     # E agora sim a escada mudou — porque houve **registro**, não porque a IA leu.
     assert depois["regua"] == "relacao_tensa"
-    assert depois["tensao_causa"] == cobranca.TENSAO_SATISFACAO
+    assert depois["tensao_causa"] == cobranca.TENSAO_SATISFACTION
 
 
 @pytest.mark.django_db
@@ -1328,7 +1358,7 @@ def test_o_painel_nomeia_o_degrau_e_quando_a_janela_abriu(admin_api: APIClient) 
 
     (linha,) = admin_api.get("/api/v1/cobranca/painel/").json()
 
-    assert linha["proximo_degrau"] == "firme"
+    assert linha["proximo_degrau"] == "firm"
     assert linha["proximo_degrau_display"] == "Cobrança firme"
     # A janela do `firme` abre em D+10 — no passado, porque ele já cabe hoje.
     assert linha["proximo_degrau_em"] == str(invoice.due_date + timedelta(days=10))
@@ -1351,16 +1381,16 @@ def test_o_painel_nomeia_o_silencio(admin_api: APIClient, cenario: str, motivo: 
             reason="Entrega atrasada.",
         )
     elif cenario == "gasto":
-        CobrancaContato.objects.create(
-            invoice=invoice, account=invoice.account, degrau="firme",
-            canal=CobrancaContato.Canal.INTERNO, sent_on=hoje - timedelta(days=30),
+        DunningContact.objects.create(
+            invoice=invoice, account=invoice.account, dunning_step="firm",
+            canal=DunningContact.Canal.INTERNO, sent_on=hoje - timedelta(days=30),
             subject="x", body="y",
         )
     elif cenario == "teto":
         outra = _fatura(due_date=hoje - timedelta(days=40), account=invoice.account)
-        CobrancaContato.objects.create(
-            invoice=outra, account=invoice.account, degrau="lembrete",
-            canal=CobrancaContato.Canal.EMAIL, sent_on=hoje, subject="x", body="y",
+        DunningContact.objects.create(
+            invoice=outra, account=invoice.account, dunning_step="reminder",
+            canal=DunningContact.Canal.EMAIL, sent_on=hoje, subject="x", body="y",
         )
     else:
         invoice.due_date = hoje - timedelta(days=1)
@@ -1424,7 +1454,7 @@ def test_o_painel_responde_com_a_flag_desligada_e_diz_isso(admin_api: APIClient)
 
     (desligada,) = admin_api.get("/api/v1/cobranca/painel/").json()
     assert desligada["regua_ligada"] is False
-    assert desligada["proximo_degrau"] == "firme"
+    assert desligada["proximo_degrau"] == "firm"
 
     with override_settings(DUNNING_ENABLED=True):
         (ligada,) = admin_api.get("/api/v1/cobranca/painel/").json()
@@ -1464,14 +1494,14 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
         invoice=calada, owner=calada.account.owner, until=hoje + timedelta(days=3), reason="x."
     )
     gasta = _fatura(due_date=hoje - timedelta(days=12))
-    CobrancaContato.objects.create(
-        invoice=gasta, account=gasta.account, degrau="firme", canal=CobrancaContato.Canal.INTERNO,
+    DunningContact.objects.create(
+        invoice=gasta, account=gasta.account, dunning_step="firm", canal=DunningContact.Canal.INTERNO,
         sent_on=hoje - timedelta(days=30), subject="x", body="y",
     )
     no_teto = _fatura(due_date=hoje - timedelta(days=4))
-    CobrancaContato.objects.create(
+    DunningContact.objects.create(
         invoice=_fatura(due_date=hoje - timedelta(days=40), account=no_teto.account),
-        account=no_teto.account, degrau="lembrete", canal=CobrancaContato.Canal.EMAIL,
+        account=no_teto.account, dunning_step="reminder", canal=DunningContact.Canal.EMAIL,
         sent_on=hoje, subject="x", body="y",
     )
     antigo = _cliente_de_casa()
@@ -1482,8 +1512,8 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
     # percebida de hoje esconderia a declarada de ontem.
     tenso = _cliente_de_casa()
     _insatisfacao(tenso, hoje - timedelta(days=1))
-    Satisfacao.objects.create(
-        account=tenso, nivel=Satisfacao.Nivel.SATISFEITO, fonte=Satisfacao.Fonte.PERCEBIDA,
+    SatisfactionRecord.objects.create(
+        account=tenso, nivel=SatisfactionRecord.Nivel.SATISFIED, fonte=SatisfactionRecord.Fonte.PERCEIVED,
         happened_on=hoje,
     )
     tensa = _fatura(due_date=hoje - timedelta(days=12), account=tenso)
@@ -1508,8 +1538,8 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
         # A satisfação da linha do painel: de qualquer fonte, e a mesma pelos dois caminhos.
         # É aqui que guardar a **escolha** em vez dos registros divergiria — o cliente `tenso`
         # tem uma percebida de hoje por cima de uma declarada de ontem.
-        em_lote_satisfacao = cobranca.satisfacao_vigente(invoice.account, hoje, contexto=contexto)
-        individual_satisfacao = cobranca.satisfacao_vigente(invoice.account, hoje)
+        em_lote_satisfacao = cobranca.satisfaction_vigente(invoice.account, hoje, contexto=contexto)
+        individual_satisfacao = cobranca.satisfaction_vigente(invoice.account, hoje)
         assert (em_lote_satisfacao and em_lote_satisfacao.pk) == (
             individual_satisfacao and individual_satisfacao.pk
         )

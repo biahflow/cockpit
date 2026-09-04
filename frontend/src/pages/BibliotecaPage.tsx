@@ -6,11 +6,11 @@ import { ConfirmDialog } from "../components/Modal";
 import type { BlueprintArea, DigitalEmployeeBlueprint, KpiDirection, KpiUnit, Service, Vertical } from "../types";
 
 const areas: { value: BlueprintArea; label: string }[] = [
-  { value: "comercial", label: "Comercial" },
-  { value: "financeiro", label: "Financeiro" },
-  { value: "rh", label: "RH" },
-  { value: "juridico", label: "Jurídico" },
-  { value: "atendimento", label: "Atendimento" },
+  { value: "commercial", label: "Comercial" },
+  { value: "finance", label: "Financeiro" },
+  { value: "hr", label: "RH" },
+  { value: "legal", label: "Jurídico" },
+  { value: "support", label: "Atendimento" },
 ];
 // Unidade e direção não têm coluna na variante de propósito: a variante muda o **texto** do KPI
 // para o setor, e trocar a unidade faria dois blocos iguais deixarem de se comparar (FDD 027).
@@ -28,7 +28,7 @@ export function BibliotecaPage() {
   const [blueprints, setBlueprints] = useState<DigitalEmployeeBlueprint[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [verticalDraft, setVerticalDraft] = useState({ name: "", slug: "", position: "" });
-  const [blueprintDraft, setBlueprintDraft] = useState({ name: "", area: "comercial" as BlueprintArea });
+  const [blueprintDraft, setBlueprintDraft] = useState({ name: "", area: "commercial" as BlueprintArea });
   const [variantDraft, setVariantDraft] = useState<Record<number, VariantDraft>>({});
   const [error, setError] = useState("");
   const [isLoading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ export function BibliotecaPage() {
   }
   async function createBlueprint(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
-    try { await api("/digital-employee-blueprints/", { method: "POST", body: JSON.stringify(blueprintDraft) }); setBlueprintDraft({ name: "", area: "comercial" }); await load(); }
+    try { await api("/digital-employee-blueprints/", { method: "POST", body: JSON.stringify(blueprintDraft) }); setBlueprintDraft({ name: "", area: "commercial" }); await load(); }
     catch (cause) { setError((cause as Error).message); }
   }
   async function addVariant(blueprintId: number) {

@@ -21,7 +21,7 @@ from django.core import mail
 from django.test import override_settings
 
 from apps.core import cobranca, invoices
-from apps.core.models import CobrancaContato, Contact, Invoice
+from apps.core.models import Contact, DunningContact, Invoice
 from apps.core.tests.factories import InvoiceFactory, UserFactory
 
 HOJE = date(2026, 9, 2)  # quarta-feira
@@ -58,7 +58,7 @@ def test_a_baixa_entre_duas_execucoes_cala_a_regua(vencida: Invoice) -> None:
     # Zero **avaliadas**: a fatura paga nem entra na consulta do job.
     assert segunda["avaliadas"] == 0
     assert len(mail.outbox) == 1
-    assert list(CobrancaContato.objects.values_list("degrau", flat=True)) == ["lembrete"]
+    assert list(DunningContact.objects.values_list("dunning_step", flat=True)) == ["reminder"]
 
 
 @pytest.mark.django_db
@@ -94,7 +94,7 @@ def test_nem_a_fatura_cancelada_nem_a_renegociada_recebem_degrau() -> None:
     resumo = cobranca.executar(HOJE)
 
     assert resumo["avaliadas"] == 0  # nem entram na consulta
-    assert CobrancaContato.objects.count() == 0
+    assert DunningContact.objects.count() == 0
     assert mail.outbox == []
 
 
@@ -104,8 +104,8 @@ def test_a_regua_nao_tem_fila_para_o_pagamento_cancelar() -> None:
 
     Se um dia existir uma tabela de mensagens agendadas, o pagamento passará a precisar cancelá-la
     — e a corrida entre a baixa e o worker aparece uma vez por trimestre, com um cliente irritado do
-    outro lado. `CobrancaContato` registra o **passado** (`sent_on`), nunca um futuro.
+    outro lado. `DunningContact` registra o **passado** (`sent_on`), nunca um futuro.
     """
-    campos = {campo.name for campo in CobrancaContato._meta.get_fields()}
+    campos = {campo.name for campo in DunningContact._meta.get_fields()}
     assert "sent_on" in campos
     assert not campos & {"scheduled_for", "send_at", "agendado_para", "status"}

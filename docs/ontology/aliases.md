@@ -29,15 +29,24 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chaves `kpi_baseline` / `kpi_current` (só leitura) | `Measurement(kind=baseline)` / `Measurement(kind=outcome)` | `serializers.py` | `/api/v2/` |
 | chave `ai_opportunity` (só leitura) | `ai_potential` | `serializers.py` | `/api/v2/` |
 | chave `client_consent` (só leitura) | `account_consent` | `serializers.py` | `/api/v2/` |
+| chave `client_name` (só leitura) — case, fatura, processo, contato e suspensão de cobrança | `account_name` | `serializers.py` | `/api/v2/` (pago na fatia 4a) |
+| chaves `client` / `client_name` do painel de cobrança e `client_name` da visão compacta da entrega | `account` / `account_name` | `cobranca.py`, `views.py` | `/api/v2/` (pago nas fatias 3a e 4a) |
+| chaves `client_vertical` / `client_vertical_name` (só leitura) | `account_vertical` / `account_vertical_name` | `serializers.py` | `/api/v2/` (pago na fatia 4a) |
+| chave `clients` que envolve a lista de `GET /clients/overview/` | `accounts` | `views.py` | `/api/v2/` (pago na fatia 4a — **troca**, não convive) |
 | chave de entrada `signer_email` (um signatário) | `signers[]`, lista de `{email, role}` | `views.py` (`_signers_do_pedido`) | `/api/v2/` |
-| valores `esqueceu` / `nao_pode` / `insatisfeito` | `forgot` / `unable_to_pay` / `dissatisfied` | `Activity.cobranca_sinal` e serializers | junto do renome para `DunningSignal`; alias morre na `/api/v2/` |
-| degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
-| valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
-| áreas `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprint.Area` e serializers | após o conceito entrar no mapa; alias morre na `/api/v2/` |
+| chaves `cobranca_sinal` / `cobranca_sinal_display` (só leitura; classe/campo/valor pagos na fatia 5.2 da #122, 04/09/2026 — só resta a leitura) | `dunning_signal` / `dunning_signal_display` | `ActivitySerializer` | `/api/v2/` |
+| chaves `degrau` / `degrau_display` (só leitura) e valor de entrada `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` (**classe, tabela, campo e valor persistido já pagos**, fatia 5.4, 04/09/2026 — só restam a leitura e a entrada) | `dunning_step` / `dunning_step_display` e `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `DunningContactSerializer`, `views.VALORES_LEGADOS_DO_DEGRAU` (corpo das actions e filtro) | `/api/v2/` |
+| parâmetro de filtro `?degrau=` | `?dunning_step=` | `DunningContactViewSet.filter_field_aliases` | `/api/v2/` |
+| valor de entrada `declarada` / `percebida` e os quatro níveis `promotor` / `satisfeito` / `neutro` / `insatisfeito` (**valor persistido já pago**, fatia 5.3, 04/09/2026 — só resta a entrada) | `declared` / `perceived` e `promoter` / `satisfied` / `neutral` / `dissatisfied` | `SatisfactionRecordSerializer.VALORES_DE_ENTRADA` e `SatisfactionRecordViewSet.filter_valores_legados` | `/api/v2/` |
+| rota `/api/v1/satisfacoes/` | `/satisfaction-records/` | `urls.py` | `/api/v2/` (a canônica nasceu na fatia 5.3) |
+| valor de entrada `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` (área do blueprint; **valor persistido já pago**, fatia 5.1, 04/09/2026 — só resta a entrada) | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA` e `DigitalEmployeeBlueprintViewSet.filter_valores_legados` | `/api/v2/` |
 | chaves `digital_employees[].kpi_label` / `kpi_value` / `hours_saved_month` / `roi_month` no snapshot do portal | `digital_employees[].kpi_ids` + `kpis[]` | `portal.py` | quando o One parar de lê-las |
 
-> **A quarta linha de baixo para cima é do snapshot, não da `/api/v1/`, e por isso o prazo dela tem
-> outra forma.** Até a FDD 050 os quatro campos legados do funcionário digital eram a *única* coisa
+> **A linha das chaves `digital_employees[]` do snapshot é do snapshot, não da `/api/v1/`, e por
+> isso o prazo dela tem outra forma.** (Nomeada assim, e não por posição na tabela, desde a fatia
+> 5.4 da issue #122: contar linhas de baixo para cima é ponteiro que apodrece sozinho quando a
+> tabela cresce — era "a quarta de baixo para cima" e a contagem já tinha quebrado quando esta nota
+> foi lida de novo.) Até a FDD 050 os quatro campos legados do funcionário digital eram a *única* coisa
 > que o portal do cliente tinha sobre medição: texto livre, sem unidade tipada, sem janela e sem
 > como comparar duas leituras. Agora eles têm sucessor — `kpi_ids` aponta para `kpis[]`, onde moram
 > a unidade, o método, a baseline, o outcome e o monitoramento. Continuam saindo, inalterados, pela
@@ -48,9 +57,110 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > A decisão D10 da Language Map v1.4 torna o **valor** do enum parte do mesmo contrato de idioma
 > do nome da classe e do campo. Esta tabela não autoriza migração isolada: os dados do grupo de
 > cobrança e satisfação mudam junto do renome de cada família, com reversa e normalização de
-> entrada na v1. A área do blueprint muda depois de o conceito canônico estar no mapa — condição
-> cumprida pela própria D10. Até essas fatias chegarem, os valores portugueses seguem sendo os
-> persistidos e expostos pela `/api/v1/`; nenhum valor novo nasce em português.
+> entrada na v1. **A área do blueprint foi a primeira a mudar** (fatia 5.1 da issue #122,
+> 04/09/2026) — a única das quatro famílias com o pré-requisito completo: a classe
+> (`DigitalEmployeeBlueprint`) já nascera inglesa, e o conceito já estava no mapa (`language-map.md`
+> §4). É dali que vêm os dois moldes que as famílias restantes reusam: a **migração de valor
+> persistido, com reversa simétrica** (`0084_a_area_do_blueprint_fala_ingles` — a primeira migração
+> do repositório que traduz dado, não classe/tabela/campo), e a **normalização de entrada de valor
+> na v1**, a segunda tabela do mixin de serializer (`AliasesDaV1Mixin.VALORES_DE_ENTRADA`, ao lado
+> de `ALIASES_DE_ENTRADA` que já existia para chave). Até as fatias das outras três famílias
+> chegarem, os valores portugueses delas seguem sendo os persistidos e expostos pela `/api/v1/`;
+> nenhum valor novo nasce em português.
+
+> **A família 2 (`Activity.CobrancaSinal`) foi a segunda a mudar** (fatia 5.2 da issue #122,
+> 04/09/2026) — e a primeira em que os **três** renomes (classe, campo e valor) chegam juntos: ao
+> contrário do blueprint, cuja classe já nascera inglesa, `CobrancaSinal` ainda dizia errado nos
+> três níveis, e D10 exige que os três atravessem na mesma fatia quando isso acontece — adiar
+> qualquer um deixaria `DunningSignal` (classe inglesa) persistindo `esqueceu`/`nao_pode`/
+> `insatisfeito` num campo chamado `cobranca_sinal`, a contradição que a decisão existe para
+> fechar. A migração (`0085_o_sinal_de_cobranca_fala_ingles`) encadeia `RenameField` (a coluna
+> renomeia, linha e pk sobrevivem — §2b) e só depois o molde de tradução de valor da `0084`, no
+> mesmo arquivo. O campo é **só de leitura** (a escrita é a action `classificar`), então não há
+> `ALIASES_DE_ENTRADA` nem `VALORES_DE_ENTRADA` a declarar — o que sobrevive na `/api/v1/` é o
+> alias de leitura das duas chaves (`cobranca_sinal`/`cobranca_sinal_display`), pelo mecanismo de
+> sempre (§2c). O prompt de `classificar` passou a pedir os três tokens canônicos ingleses
+> diretamente à IA — pedir em português e traduzir a resposta depois deixaria no prompt a aparência
+> de que o modelo decide o idioma (mesmo argumento da FDD 039) —, e `views.sinal_do_texto` tolera
+> os três tokens legados por barato custo de release, traduzindo-os antes de validar contra o
+> vocabulário novo.
+
+> **A família 3 (`Satisfacao`) foi a terceira a mudar** (fatia 5.3 da issue #122, 04/09/2026), e é
+> a primeira em que o renome de **tabela** anda junto: `RenameModel(Satisfacao → SatisfactionRecord)`
+> sem `Meta.db_table` a fixar antes, porque a pk desta família **não é uma das seis** que a §2b
+> protege — o registro sequer atravessa para o portal do cliente (ADR 0032), então não há
+> consumidor externo de que se despregar. Na #67 a mesma operação era escrita em duas partes
+> justamente para não emitir SQL; aqui ela emite o `ALTER TABLE … RENAME TO`, que é o mesmo
+> mecanismo da `0069` e preserva linha e pk. A migração (`0086_a_satisfacao_fala_ingles`) traduz
+> **dois** enums no mesmo modelo, e por isso o mapa de pares da `0084`/`0085` ganhou um nível
+> (campo → pares): com duas listas soltas, a reversa teria de saber de cabeça qual pertence a qual
+> coluna.
+>
+> **Os campos `nivel` e `fonte` não renomearam, e a ausência de canônico deles está declarada na
+> seção "Termos ainda sem nome canônico", ao lado de `recebido_do_cliente`.** O
+> language-map §4 cunha `satisfaction_record.source` e `satisfaction_record.level` como nomes de
+> **enum** — é a linha que enumera os valores —, e não como nomes de coluna; e a chave de payload é
+> o que a §2c congela até a `/api/v2/`. Renomear a coluna sem ter para onde levar a chave pagaria
+> metade de uma dívida e criaria outra. É a mesma situação de `sinal_*` e `satisfacao_*` no dict
+> cru do painel de cobrança: o valor atravessou, a chave espera coinagem. Diferente da 5.2, aqui os
+> dois campos **são graváveis**, então há `VALORES_DE_ENTRADA` no serializer (a v1 traduz o valor
+> legado antes da validação) e `filter_valores_legados` no viewset (a v1 traduz o filtro, a v2
+> recusa com `frase_do_valor_removido`) — os dois moldes da fatia 5.1, agora com dois campos no
+> mesmo mapa.
+>
+> Os quatro níveis estão **enumerados** na linha da tabela acima porque era ali que a enumeração
+> faltava: a linha anterior dizia "níveis em português", e alias sem os nomes escritos é alias que
+> ninguém consegue conferir. O vocabulário em si já estava cunhado no language-map §4 — não houve
+> coinagem nova nesta fatia, só o registro dela aqui.
+
+> **A família 1 (`CobrancaContato`) foi a quarta e última** (fatia 5.4 da issue #122, 04/09/2026),
+> e nela os **quatro** renomes chegam juntos: classe, tabela, campo (`dunning_step`) e valor. Com
+> ela não sobra enum persistido em português no repositório, e o teste de congelamento
+> (`test_os_quatro_enums_da_d10_falam_ingles_e_ficam_congelados_assim`) deixou de guardar português
+> para passar a guardar o estado novo — a volta é o mesmo defeito visto do outro lado.
+>
+> **`DunningContact` é coinagem deste espelho, e a página do Notion recebe depois.** É o inverso do
+> fluxo da §8 do language-map ("Notion → espelho → Pulse"), pelo precedente explícito de
+> `DunningSignal` — cunhado aqui na fatia 5.2 — e pelo mesmo motivo: o campo (`dunning_step`) e os
+> cinco valores **já estavam** cunhados no language-map §4, então a decisão de significado já
+> existia e o que faltava era o substantivo da classe que os carrega. Esperar a página para escrever
+> um nome que o campo já ditava adiaria a fatia por um ato de secretaria.
+>
+> A migração (`0087_o_contato_de_cobranca_fala_ingles`) é a mais longa da série porque é a única em
+> que renome de tabela e de campo chegam no mesmo arquivo, e isso arrasta três operações que as
+> anteriores não tiveram: `RenameIndex` (o índice de `Meta.indexes` não tem nome declarado e o
+> Django o deriva do nome da **tabela**) e o par `RemoveConstraint`/`AddConstraint`, que **abraça**
+> o `RenameField` — a `UniqueConstraint` cita o campo pelo nome e `RenameField` não reescreve
+> `Meta.constraints`; escritas depois do renome, a reversa morria tentando recriar a constraint
+> sobre uma coluna `degrau` que já não existe. O `RenameModel` renomeia a tabela em lugar, como na
+> 5.3: a pk do contato de cobrança não é uma das seis da §2b e não atravessa para o portal.
+>
+> **A metade que não está na migração é a que mais importava.** As `key` da dataclass
+> `cobranca.DunningStep` (a régua: `PADRAO`, `RELACAO_LONGA`, `RELACAO_TENSA`) **são** os valores
+> persistidos na coluna. Traduzir uma sem a outra faria `_degrau_gasto` deixar de casar com o banco
+> **em silêncio** — a idempotência nunca mais encontraria o degrau gasto, e o mesmo e-mail sairia
+> de novo para o cliente. Por isso as duas atravessaram na mesma fatia, e por isso o teste de
+> congelamento afirma as duas listas juntas.
+>
+> Duas superfícies aqui não existiam nas fatias anteriores, e cada uma exigiu mecanismo:
+>
+> * **o valor chega no corpo de uma `@action`** (`rascunhar`/`enviar`), onde o mixin de serializer
+>   não passa e — diferente de um `ModelSerializer` — **não há validação de `choices` do DRF** para
+>   recusar de graça na v2: quem valida é a própria action, contra as réguas. Sem tradução,
+>   `pre_aviso` na v2 viraria "Degrau desconhecido", um erro mentiroso (o degrau existe; o nome
+>   mudou). A recusa usa a frase de sempre, `versioning.frase_do_valor_removido`;
+> * **o nome do parâmetro de filtro mudou junto com o campo** (`?degrau=` → `?dunning_step=`),
+>   porque em `filter_exact_fields` o nome do parâmetro **é** o caminho do ORM. Sem alias, o filtro
+>   legado deixaria de filtrar em silêncio na v1, devolvendo a lista inteira — pior que o
+>   `FieldError` que o mesmo caso produz em `filter_fields`. Por isso `filter_field_aliases` passou
+>   a valer nos **dois** laços do `QueryParamFilterMixin`, na mesma forma.
+>
+> **A rota `/cobranca/` não ganha par canônico**, e é a diferença para a 5.3: lá o prefixo
+> (`/satisfacoes/`) **era** o nome da classe em português, então havia para onde ir. Aqui ele nomeia
+> a **família** de cobrança, que segue sem coinagem (`CobrancaSuspensao`, `cobranca.py`, a flag e o
+> `kind` de notificação `cobranca`) — inventar `/dunning-contacts/` batizaria em inglês o que
+> ninguém decidiu. O que acompanhou a classe foi o `resource` do viewset
+> (`cobranca` → `dunning_contact`), que é nome interno de autorização, não contrato.
 
 > **O recorte físico da Fase 6 foi concluído; a issue #70 foi encerrada por decisão do mantenedor.** Tabelas renomeadas
 > (migração `0069`), dual-write e `Evidencia` removidos (migração `0068`), `Project.client`
@@ -76,6 +186,56 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > (`views._signers_do_pedido`) fica sem chamador daqui de dentro, e a próxima varredura atrás do
 > nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem nada ficar vermelho.
 
+### A série 5.x fechou — fatia 6 da #122, 04/09/2026
+
+As quatro famílias que a decisão D10 marcou atravessaram, uma por fatia: `DigitalEmployeeBlueprint.Area`
+(5.1, 04/09/2026), `Activity.DunningSignal` (5.2), `SatisfactionRecord` (5.3) e `DunningContact`
+(5.4). Não sobra enum persistido em português no repositório — `test_os_quatro_enums_da_d10_falam_ingles_e_ficam_congelados_assim`
+(`backend/tests/test_vocabulario.py`) guarda o estado novo das quatro, e o guarda contra a volta.
+
+**O molde nasceu na 5.1, e as três famílias seguintes o reusaram sem reabri-lo.** Duas peças, uma
+por dimensão do problema:
+
+- a **migração de valor persistido, com reversa simétrica** — `AlterField` trocando `choices`
+  para inglês mais um `RunPython` que traduz as linhas existentes (pt→en) e desfaz (en→pt) —,
+  primeiro em `0084_a_area_do_blueprint_fala_ingles`, depois combinada com `RenameField`/
+  `RenameModel` em `0085`-`0087` conforme a família precisasse de renome de campo e/ou de tabela
+  junto (a tabela só quando a pk não era uma das seis da §2b);
+- a **normalização de entrada de valor na v1**, segunda tabela do mixin de serializer
+  (`AliasesDaV1Mixin.VALORES_DE_ENTRADA`, ao lado de `ALIASES_DE_ENTRADA` que já existia para
+  chave) mais `filter_valores_legados` no viewset, para o campo gravável cujo valor legado ainda
+  chega em query string ou corpo.
+
+Cada fatia é exceção declarada de alguma peça do molde quando a família não precisava dela: a 5.2
+não ganhou `VALORES_DE_ENTRADA` porque o campo é só de leitura (a escrita é a action
+`classificar`); a 5.4 precisou de uma recusa de valor legado em corpo de `@action`
+(`views._degrau_do_corpo`) porque `rascunhar`/`enviar` não montam serializer, a única exceção à
+regra de que a v2 não ganha frase própria para valor legado no corpo (decisão 9 da ADR 0066).
+
+**O que resta vivo neste documento, e não é dívida da série 5.x:**
+
+- as **chaves de payload sem coinagem** que a §2c continua protegendo até a `/api/v2/` — `nivel`,
+  `fonte`, `degrau`/`degrau_display` (alias de leitura de `dunning_step`/`dunning_step_display`),
+  `cobranca_sinal`/`cobranca_sinal_display` (alias de leitura de `dunning_signal`/
+  `dunning_signal_display`), o parâmetro `?degrau=` e os valores de entrada `pre_aviso`/
+  `lembrete`/`firme`/`escalada`/`renegociacao` e `declarada`/`percebida` — porque D10 moveu o
+  **valor** do contrato de idioma, e a §2c continua sendo quem move a **chave**, no seu próprio
+  prazo;
+- as chaves **sem canônico nenhum** — `sinal_*`/`satisfacao_*`/`proximo_degrau*` do dict cru do
+  painel de cobrança e `recebido_do_cliente` —, listadas em "Termos ainda sem nome canônico"
+  abaixo, que D10 não alcança porque não é renome de valor de enum, é ausência de nome;
+- a família `Cobranca*` restante — `CobrancaSuspensao`, o módulo `cobranca.py`, a rota
+  `/cobranca/` com o seu `basename`, a flag de feature e o `kind` de notificação `cobranca` —, e
+  `Pendencia`/`Decisao`/`Risco`, todos sem nome canônico na Ontology v1 (ver "Termos ainda sem
+  nome canônico");
+- o **snapshot do portal** (`digital_employees[].kpi_label`/`kpi_value`/`hours_saved_month`/
+  `roi_month`), cujo prazo não é a `/api/v2/` — é a confirmação do One de que parou de ler, ver a
+  nota logo abaixo da tabela de aliases vivos.
+
+A limpeza de identificador **local** que a fatia 6 fez em cima disso — nome de módulo, de
+constante, de função interna — não muda nenhuma das linhas acima: é dívida de legibilidade, não de
+contrato, e por isso não tem entrada nesta tabela nem em `legacy-allowlist.txt`.
+
 ### Já pagos pela #67 — 28/08/2026
 
 Quatro renomes de classe saíram da tabela porque deixaram de ser alias: o nome antigo não existe
@@ -89,6 +249,12 @@ continuam listadas acima.
 alias. As **rotas** (`/clients/`, `/opportunities/`, `/processos/`, `/processo-etapas/`) e as
 **chaves de payload** (`client`, `status`, `opportunity`, `gate_outcome`, `processo`, `etapa`)
 morrem na `/api/v2/` — que agora **pode nascer**, porque as tabelas já foram concluídas.
+
+> **`etapa` morreu antes do prazo, e não pela v2.** Ela era chave de payload da `Evidencia`, e a
+> Fase 6 (issue #70, migração `0068`) removeu a classe inteira com o dual-write. A lista acima a
+> mantém por ser história: o prazo dela **era** a `/api/v2/`, e o que a alcançou primeiro foi a
+> remoção do modelo que a emitia. Apagá-la daqui esconderia que uma dívida foi paga por um caminho
+> diferente do declarado — que é informação, não ruído.
 
 | Foi | É | Fatia |
 | --- | --- | --- |
@@ -141,6 +307,110 @@ desgrudaria os registros externos em silêncio; por isso a §2b proíbe esse cam
 saíram do `Meta` sem nenhuma outra operação junto. A reversa reaplica o `db_table` legado. Com as
 tabelas concluídas, a `/api/v2/` — onde morrem as **rotas** e as **chaves de payload** — pode
 finalmente nascer.
+
+### A `/api/v2/` nasceu — fatia 1 da #122, 04/09/2026
+
+O mecanismo cabe em três frases. A versão sai do **prefixo do caminho**
+(`apps/core/versioning.py`), sobre os mesmos viewsets e os mesmos serializers — nenhuma rota da v1
+foi reescrita, porque o router da v2 é derivado do `registry` do da v1 com um dicionário de quatro
+renomes de prefixo. O **mesmo** `ALIASES_DEPRECIADOS` que marca `deprecated: true` no `openapi.yaml`
+passou a governar também a remoção dessas chaves na resposta da v2, lido por
+`serializers.AliasesDaV1Mixin`. E chave legada mandada para a v2 — no corpo ou na query string —
+recebe **400 dizendo o nome canônico**, nunca o silêncio com que o DRF ignora chave desconhecida.
+Ver [ADR 0066](../adr/0066-a-api-v2-nasce-por-versao-no-caminho-e-um-mapa-so-governa-o-alias.md).
+
+**Nascer a v2 não tira nenhuma linha da tabela de aliases vivos.** A regra 2 continua inteira: os
+aliases vivem enquanto a `/api/v1/` viver, e o sunset dela é uma decisão que ninguém tomou. O que
+mudou é que agora existe o lugar onde eles **não** estão.
+
+O que **ainda vivia na v2** depois desta fatia — e que a fatia 3a, abaixo, mata — eram os aliases
+que não passavam por serializer com `ALIASES_DE_ENTRADA`, então o mecanismo acima não os alcançava:
+
+- `signer_email` no corpo da action `request-signature` e `outcome` no da `apply-gate` — aliases de
+  **entrada de action**, normalizados na view (`views._signers_do_pedido`, `journey.apply_gate`);
+- o dicionário cru de `GET /cobranca/painel/`, que emite `client`/`client_name` sem serializer;
+- a chave `processos` da action de IA.
+
+> Alcançá-los pela metade seria pior que declarar a lacuna — e por isso ficaram declarados até a
+> fatia 3a resolvê-los de vez, e não meio resolvidos por um `if` avulso nesta fatia.
+
+### A fatia 3a mata os quatro pontos que restavam, mais uma lacuna — issue #122, 04/09/2026
+
+Os quatro pontos acima morreram: `signer_email` e `outcome` respondem 400 dizendo `signers` e
+`decision` na `/api/v2/` (a recusa mora na view, porque a action não passa por serializer); o
+painel de cobrança ganhou o par canônico (`account`/`account_name`) em toda linha, e a view tira os
+dois legados quando a requisição é da v2; e a chave da action de IA **troca** por versão —
+`processos` na v1, `processes` na v2 — em vez de conviver, porque duplicar a lista inteira pagaria
+o corpo duas vezes.
+
+**A lacuna que a fatia 1 registrou e não nomeou aqui**: um alias só-de-leitura mandado no *corpo*
+da v2 (`POST /api/v2/projects/` com `client: 5`) era ignorado em silêncio — o campo é `read_only`,
+o DRF descarta chave desconhecida, e a resposta 201 escondia que o vínculo não foi gravado. É o
+mesmo modo de falha mudo que a decisão 3 da ADR 0066 recusou para `ALIASES_DE_ENTRADA`, só que pela
+porta que aquele mecanismo não cobria — `AliasesDaV1Mixin.to_internal_value` passou a recusar
+também as chaves de `ALIASES_DEPRECIADOS[componente]` presentes no corpo, com o nome canônico de
+cada uma vindo de um mapa novo, `openapi_aliases.CANONICO_DA_CHAVE` (`None` para o par do §2d, cuja
+frase aponta para `/kpis/` e `/measurements/` em vez de um nome de campo). A recusa é sempre por
+**componente**, nunca por nome global de chave — `status` continua um campo real em `Invoice` e
+`Engagement`, e só é recusado nos componentes que `ALIASES_DEPRECIADOS` lista.
+
+Regra dos testes em `backend/tests/test_aliases_da_v2.py`. O que resta para as fatias seguintes da
+#122: o contrato próprio `openapi-v2.yaml` (fatia 3b), a travessia da SPA para a `/api/v2/` (fatia
+4) e as famílias de enum ainda em português (fatia 5) — nenhuma delas nasce antes da anterior.
+
+### O contrato da v2 nasceu, e nasceu verdadeiro — fatia 3b da #122, 04/09/2026
+
+`backend/openapi-v2.yaml` é o artefato: só caminhos `/api/v2/…` e componentes sem as chaves-alias
+que `ALIASES_DEPRECIADOS` lista — a v2 não anuncia depreciação, ela simplesmente não emite a
+chave. Gerado por um comando próprio, com o urlconf dedicado à geração
+(`config.urls_v2_schema`) e `OPENAPI_ALVO=v2`, que é o que os hooks (`marcar_aliases_depreciados`/
+`remover_aliases_do_contrato`, os dois em `openapi_aliases.py`) leem para saber qual dos dois
+contratos estão montando. `info.version` marca a travessia: `2.0.0` na v2, `1.0.0` na v1, que não
+mudou nesta fatia. Ver [ADR 0066](../adr/0066-a-api-v2-nasce-por-versao-no-caminho-e-um-mapa-so-governa-o-alias.md),
+emenda da fatia 3b, e o teste em `backend/tests/test_openapi_aliases.py`.
+
+### As chaves «client» que nunca tinham entrado no mapa — fatia 4a da #122, 04/09/2026
+
+O contrato da fatia 3b nasceu verdadeiro sobre o mapa que existia, e foi lê-lo que mostrou o que o
+mapa não tinha: `openapi-v2.yaml` ainda dizia `client_name` em onze componentes, `clients` na
+resposta do grid de contas, `client`/`client_vertical`/`client_vertical_name` — chaves que
+atravessaram a issue #67 inteira **sem serem alias de nada**, porque nenhuma delas era renome de
+campo. Eram projeções: `client_name` sempre foi `source="account.name"`, `client_vertical` sempre
+atravessou `engagement.account.vertical`. Não havendo coluna com o nome errado, o renome de classe
+passou ao lado delas, e o que sobrou foi o pior caso do §2c — o nome errado na **chave de
+payload**, que é onde ele mais dura. A decisão foi trazê-las todas para o mecanismo de sempre.
+
+Três tratamentos, e a diferença entre eles é quem consegue executar a remoção:
+
+- **Serializer** (`Case`, `Invoice`, `Process`, `DunningContact` — então `CobrancaContato` —,
+  `CobrancaSuspensao`, e as duas
+  chaves de vertical em `Project`): a canônica entra ao lado, a legada vira alias de leitura e a
+  entrada do componente cresce em `ALIASES_DEPRECIADOS` — `AliasesDaV1Mixin` cuida do resto.
+- **Dict cru** (o painel de cobrança, que a fatia 3a já resolvia, e a visão compacta da entrega, que
+  entrou agora): o agregador emite os dois nomes e a **view** tira o legado na v2. O contrato,
+  esse, perde a chave pelo mesmo mapa dos outros — `ALIASES_DEPRECIADOS_DE_DICT_CRU`, a segunda
+  metade que os hooks do esquema leem. São dois dicionários porque a guarda "todo componente do
+  mapa tem um serializer que o executa" só vale para o primeiro, e afrouxá-la para caber o
+  `inline_serializer` desligaria justamente o defeito que ela pega.
+- **Chave que troca** (`clients` → `accounts` em `GET /accounts/overview/`): não convive, pelo
+  precedente de `processos`/`processes` da fatia 3a — ela envolve a lista inteira, e duplicá-la
+  pagaria o corpo do grid duas vezes. O esquema troca junto, por `openapi_aliases.chave_da_geracao`.
+
+O critério de aceite é o artefato, não o mapa: nenhuma propriedade de componente do
+`openapi-v2.yaml` diz `client`, e a única exceção — `recebido_do_cliente` — está declarada abaixo.
+A guarda é `test_nenhuma_chave_client_sobra_na_v2`, e ela varre o contrato inteiro em vez de iterar
+o mapa, porque as quatro chaves desta fatia sobreviveram meses justamente por **não estarem** nele.
+A regressão da §2c está em
+`backend/tests/regression/test_o_alias_de_nome_de_conta_sobrevive_na_v1.py`.
+
+> **Não houve migração, e a ausência é o achado.** O plano desta fatia previa um `RenameField` de
+> `Project.client_vertical`; esse campo **nunca existiu** — o campo do modelo é `Account.vertical`
+> (migração `0030`), e as duas chaves são projeção sobre ele. Registrado aqui porque "renomear a
+> coluna" e "renomear a chave" são coisas diferentes desde a ADR 0052, e este é o caso em que só a
+> segunda existia.
+
+O que resta para as fatias seguintes da #122: a travessia da SPA para a `/api/v2/` (fatia 4b) e as
+famílias de enum ainda em português (fatia 5) — nenhuma delas nasce antes da anterior.
 
 ## As três regras
 
@@ -328,9 +598,58 @@ posição, porque não existe uso legítimo do nome antigo.
 
 ## Termos ainda sem nome canônico
 
-`Pendencia`, `Decisao`, `Risco`, `Satisfacao` e a família `Cobranca*` estão em português no modelo
-e **a Ontology v1 não os cobre** — não há para onde renomeá-los ainda. Eles estão na allowlist
-mesmo assim, e isso é deliberado: sem a linha, a ausência de decisão viraria ausência de dívida.
+`Pendencia`, `Decisao`, `Risco` e o resto da família `Cobranca*` (`CobrancaSuspensao` e o
+`resource`/viewset dela, o módulo `cobranca.py`, a rota `/cobranca/` com o seu `basename`, a flag e
+o `kind` de notificação `cobranca`) estão em português no modelo e **a Ontology v1 não os cobre** —
+não há para onde renomeá-los ainda. Eles estão na allowlist mesmo assim, e isso é deliberado: sem a
+linha, a ausência de decisão viraria ausência de dívida.
+
+`CobrancaContato` **saiu desta lista na fatia 5.4 da issue #122** (04/09/2026): virou
+`DunningContact`, com a tabela, o campo (`dunning_step`) e os cinco valores juntos, e com o
+`resource` do viewset (`cobranca` → `dunning_contact`). Ele saiu por um caminho que os vizinhos não
+têm: o nome **não** existia no language-map, e foi **cunhado neste espelho** pelo precedente de
+`DunningSignal` — ver a nota da fatia 5.4 acima. `Pendencia`, `Decisao`, `Risco` e o resto da
+família continuam sem nenhum, e nenhum deles tem campo já cunhado a puxar a coinagem, que é
+exatamente o que faltava aqui e não falta lá.
+
+**As chaves `proximo_degrau` / `proximo_degrau_display` / `proximo_degrau_em` do dict cru do painel
+entram no lugar dele**, ao lado de `sinal_*` e `satisfacao_*` logo abaixo e pelo mesmo motivo: o
+language-map cunha `dunning_step` como nome de **campo do contato**, não como nome de chave do
+painel, e o painel é um agregador de faturas, não a serialização do contato. Sem canônico elas não
+são alias de nada: não cabem em `ALIASES_DEPRECIADOS`, não morrem na `/api/v2/` e continuam saindo
+nas duas versões. **O valor delas atravessou** — é o do enum —, e é a mesma frase de sempre: o
+valor atravessou, a chave espera coinagem.
+
+`Satisfacao` **saiu desta lista na fatia 5.3 da issue #122** (04/09/2026): virou
+`SatisfactionRecord`, com a tabela e os dois enums de valor juntos. Ela estava aqui por um motivo
+diferente do dos vizinhos, e é o que explica ter saído antes deles: o language-map §4 já enumerava
+`satisfaction_record.source` e `satisfaction_record.level`, então o **nome** existia — o que
+faltava era o código dizê-lo. `Pendencia`, `Decisao` e `Risco` continuam sem nenhum.
+
+**Os campos `nivel` e `fonte` do registro de satisfação entram no lugar dela**, com as duas chaves
+derivadas (`nivel_display`, `fonte_display`), e pelo motivo de `recebido_do_cliente` abaixo: o
+language-map cunha `satisfaction_record.level` e `.source` na tabela de **enums** — a linha que
+enumera os valores —, e nenhuma seção cunha o nome do *campo*. Sem canônico, eles não são alias de
+nada: não cabem em `ALIASES_DEPRECIADOS`, não morrem na `/api/v2/` e continuam saindo e sendo
+aceitos nas duas versões. É a mesma forma de `sinal_kind`/`sinal_display` e `satisfacao_nivel`/
+`satisfacao_fonte`/`satisfacao_dias` no dict cru do painel de cobrança, e a frase que vale para as
+três famílias é uma só: **o valor atravessou, a chave espera coinagem.**
+
+`Activity.CobrancaSinal` **saiu desta lista na fatia 5.2 da issue #122** (04/09/2026): tem nome
+canônico (`DunningSignal`) e código que o usa desde essa fatia, então continuar aqui seria negar
+uma decisão já tomada. Era o único membro da família `Cobranca*` com nome próprio já cunhado no
+language-map (`activity.dunning_signal`, §4) — o que faltava era a classe, o campo e o valor
+persistido atravessarem, e a fatia 5.2 pagou os três juntos (D10).
+
+`recebido_do_cliente` — a chave do painel de cobrança que diz quanto a conta já pagou — entra na
+mesma lista, e por escrito, desde a fatia 4a da #122. Ela **não é alias de `client`**: é um nome
+que nunca teve canônico, então não cabe em `ALIASES_DEPRECIADOS` nem morre na `/api/v2/` por conta
+disso. É a única chave com «client» que a guarda do contrato da v2 tolera
+(`test_nenhuma_chave_client_sobra_na_v2`), e a isenção tem teste próprio para não sobreviver ao dia
+em que a fatia 5 traduzir a família de cobrança inteira. **A fatia 5.4 fechou a série sem alcançá-la**,
+e isso é informação, não pendência esquecida: o que a fatia 5 traduziu foram os quatro **enums** que
+a D10 marcou, e `recebido_do_cliente` é chave de dict cru sem canônico — a mesma categoria de
+`proximo_degrau*` acima. Ela continua esperando coinagem.
 
 O caminho é o da §8 do language-map: o termo entra primeiro na página do Notion, depois aqui,
 depois no Pulse.

@@ -24,7 +24,7 @@ vi.mock("../api", () => ({
   uploadAvatar: mocks.uploadAvatar,
   removeAvatar: mocks.removeAvatar,
   changePassword: mocks.changePassword,
-  avatarUrl: (user: { id: number }) => `/api/v1/users/${user.id}/avatar/`,
+  avatarUrl: (user: { id: number }) => `/api/v2/users/${user.id}/avatar/`,
 }));
 vi.mock("../auth", () => ({ useAuth: () => ({ user: mocks.user, refreshUser: mocks.refreshUser }) }));
 
@@ -69,7 +69,7 @@ test("com foto, mostra a miniatura e libera Trocar foto e Remover", () => {
   mocks.user = { ...mocks.user, has_avatar: true, avatar_updated_at: "2026-08-27T12:00:00Z" };
   render(<ProfilePage />);
 
-  expect(screen.getByRole("img", { name: "Foto de perfil" })).toHaveAttribute("src", "/api/v1/users/7/avatar/");
+  expect(screen.getByRole("img", { name: "Foto de perfil" })).toHaveAttribute("src", "/api/v2/users/7/avatar/");
   expect(screen.getByRole("button", { name: "Trocar foto" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Remover" })).toBeEnabled();
 });

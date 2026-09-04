@@ -11,4 +11,8 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/v1/", include("apps.core.urls")),
+    # A `/api/v2/` (issue #122): as mesmas views, sob os nomes canônicos e sem as chaves legadas.
+    # Quem diz qual das duas está falando é `apps.core.versioning.VersaoPeloCaminho`, lendo este
+    # prefixo. A v1 continua respondendo como sempre — a v2 nasce ao lado, não no lugar.
+    path("api/v2/", include("apps.core.urls_v2")),
 ]

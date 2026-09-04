@@ -14,8 +14,8 @@ mão, e quem pagou de manhã é cobrado à tarde. Isto não tem esse modo de fal
 construção. Quem "otimizar" este módulo para uma tabela de mensagens agendadas reintroduz o
 defeito inteiro.
 
-`CobrancaContato` é só o registro do que **já saiu**, e é dele que vem a idempotência do degrau —
-via `UniqueConstraint(invoice, degrau)`, no banco, e não via guarda em Python.
+`DunningContact` é só o registro do que **já saiu**, e é dele que vem a idempotência do degrau —
+via `UniqueConstraint(invoice, dunning_step)`, no banco, e não via guarda em Python.
 
 O que este módulo deliberadamente **não** faz: decidir. Dar desconto, baixar, renegociar, escalar
 e suspender seguem sendo atos humanos (RFC 0004 "Segurança", ADR 0006). O que sai daqui sozinho é
@@ -40,18 +40,18 @@ from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from . import flags
-from . import satisfacao as satisfacao_module
+from . import satisfaction as satisfaction_module
 
 if TYPE_CHECKING:
     from .models import (
         Account,
         Activity,
         AiInteraction,
-        CobrancaContato,
         CobrancaSuspensao,
         Contact,
+        DunningContact,
         Invoice,
-        Satisfacao,
+        SatisfactionRecord,
         User,
     )
 
@@ -62,8 +62,13 @@ INTERNO = "interno"
 
 
 @dataclass(frozen=True)
-class Degrau:
+class DunningStep:
     """Um degrau da escada: quando cabe, para quem vai e o que diz.
+
+    **A `key` é o valor persistido em `DunningContact.dunning_step`**, e as duas metades
+    atravessaram juntas na fatia 5.4 da issue #122 (D10): traduzir a coluna sem traduzir estas
+    chaves — ou o contrário — faria a régua parar de casar com o banco em silêncio, e o sintoma
+    seria um degrau saindo duas vezes por a idempotência nunca mais encontrar o que já foi gasto.
 
     `de`/`ate` são a **janela em dias** relativa ao vencimento, fechada na esquerda e aberta na
     direita. A janela existe em vez de um simples "offset já passou" por causa de um caso concreto:
@@ -90,8 +95,8 @@ class Degrau:
 # O texto do degrau é **constante de código, revisada uma vez** — e é justamente isso que autoriza
 # ele a sair sozinho (ADR 0031). O que o relógio decide é *se* a mensagem cabe hoje, não como ela
 # está escrita.
-_PRE_AVISO = Degrau(
-    key="pre_aviso",
+_PRE_NOTICE = DunningStep(
+    key="pre_notice",
     destino=CLIENTE,
     de=-3,
     ate=0,
@@ -105,8 +110,8 @@ _PRE_AVISO = Degrau(
         "Equipe Biahflow"
     ),
 )
-_LEMBRETE = Degrau(
-    key="lembrete",
+_REMINDER = DunningStep(
+    key="reminder",
     destino=CLIENTE,
     de=3,
     ate=10,
@@ -121,8 +126,8 @@ _LEMBRETE = Degrau(
         "Equipe Biahflow"
     ),
 )
-_FIRME = Degrau(
-    key="firme",
+_FIRM = DunningStep(
+    key="firm",
     destino=CLIENTE,
     de=10,
     ate=20,
@@ -140,8 +145,8 @@ _FIRME = Degrau(
 # Os dois últimos **não falam com o cliente**. A RFC os descreve como "escalada para humano" e
 # "renegociação", e as duas coisas são atos de gente: o que o sistema faz é acordar a pessoa certa
 # com o contexto na mão.
-_ESCALADA = Degrau(
-    key="escalada",
+_ESCALATION = DunningStep(
+    key="escalation",
     destino=INTERNO,
     de=20,
     ate=30,
@@ -152,8 +157,8 @@ _ESCALADA = Degrau(
         "Daqui em diante é decisão de relação, não de régua: fale com o cliente."
     ),
 )
-_RENEGOCIACAO = Degrau(
-    key="renegociacao",
+_RENEGOTIATION = DunningStep(
+    key="renegotiation",
     destino=INTERNO,
     de=30,
     ate=None,
@@ -167,7 +172,7 @@ _RENEGOCIACAO = Degrau(
 )
 
 #: A escada padrão. O buraco entre D+0 e D+3 é a carência.
-PADRAO: tuple[Degrau, ...] = (_PRE_AVISO, _LEMBRETE, _FIRME, _ESCALADA, _RENEGOCIACAO)
+PADRAO: tuple[DunningStep, ...] = (_PRE_NOTICE, _REMINDER, _FIRM, _ESCALATION, _RENEGOTIATION)
 
 #: Cliente de casa e sem histórico de atraso. **Não é refinamento, é requisito** da seção
 #: Segurança da RFC 0004: *"cinco dias de atraso de um cliente antigo não é o mesmo evento que
@@ -175,15 +180,15 @@ PADRAO: tuple[Degrau, ...] = (_PRE_AVISO, _LEMBRETE, _FIRME, _ESCALADA, _RENEGOC
 #: escalada interna — quem conversa com um cliente de anos é gente, não um template. Uma régua que
 #: trata os dois casos igual está programada para perder o melhor cliente da carteira por uma
 #: fatura.
-RELACAO_LONGA: tuple[Degrau, ...] = (
-    _PRE_AVISO,
+RELACAO_LONGA: tuple[DunningStep, ...] = (
+    _PRE_NOTICE,
     # A **mesma chave** do lembrete padrão, e não uma nova: a idempotência é
-    # `UniqueConstraint(invoice, degrau)`, e se um cliente mudar de régua entre duas execuções
+    # `UniqueConstraint(invoice, dunning_step)`, e se um cliente mudar de régua entre duas execuções
     # (deixou de ser reincidente, completou um ano) uma chave própria deixaria o mesmo lembrete
     # sair duas vezes. O que muda entre as duas escadas é a janela, não o degrau.
-    replace(_LEMBRETE, de=5, ate=20),
-    _ESCALADA,
-    _RENEGOCIACAO,
+    replace(_REMINDER, de=5, ate=20),
+    _ESCALATION,
+    _RENEGOTIATION,
 )
 
 #: Cliente com insatisfação **declarada** vigente (FDD 037, ADR 0032). A camada 5 da RFC 0004 pede
@@ -197,14 +202,14 @@ RELACAO_LONGA: tuple[Degrau, ...] = (
 #: já construiu. O robô nunca fica mudo; a trava existe e tem nome.
 #:
 #: Como na `RELACAO_LONGA`, os degraus **reusam as chaves existentes**: a idempotência é
-#: `UniqueConstraint(invoice, degrau)`, e uma chave nova faria o mesmo lembrete sair duas vezes
+#: `UniqueConstraint(invoice, dunning_step)`, e uma chave nova faria o mesmo lembrete sair duas vezes
 #: para quem trocasse de escada entre duas execuções — e trocar de escada aqui é fácil, basta
 #: alguém registrar a insatisfação de ontem.
-RELACAO_TENSA: tuple[Degrau, ...] = (
-    _PRE_AVISO,
-    _LEMBRETE,
-    replace(_ESCALADA, de=10, ate=30),
-    _RENEGOCIACAO,
+RELACAO_TENSA: tuple[DunningStep, ...] = (
+    _PRE_NOTICE,
+    _REMINDER,
+    replace(_ESCALATION, de=10, ate=30),
+    _RENEGOTIATION,
 )
 
 #: Um ano de casa. Não há nada de mágico no número; o que há é o requisito de existir um corte
@@ -233,7 +238,11 @@ FLAG_DESLIGADA = "flag_desligada"
 # rotula e o que os testes nomeiam. Se elas colapsassem num rótulo só, o painel diria "régua tensa"
 # e não diria por quê, e as duas condutas que ele deveria sugerir são diferentes — uma pede
 # conversa sobre a relação, a outra pede conserto da entrega.
-TENSAO_SATISFACAO = "satisfacao"
+#
+# O identificador chamava-se `TENSAO_SATISFACAO` até a fatia 6 da issue #122 — é nome local, sem
+# coinagem. **O valor não muda**: `"satisfacao"` é a chave de payload de `tensao_causa`
+# (`docs/ontology/aliases.md`, "Termos ainda sem nome canônico"), e só quem tem canônico atravessa.
+TENSAO_SATISFACTION = "satisfacao"
 TENSAO_ENTREGA = "entrega"
 TENSAO_AMBAS = "ambas"
 
@@ -288,8 +297,9 @@ class PainelContexto:
     health_por_cliente: dict[int, str] = field(default_factory=dict)
     # A última resposta de cobrança que a IA classificou e que **ninguém registrou ainda** (FDD 038,
     # ADR 0032). É leitura, não registro: o painel a mostra para oferecer o atalho, e ela some da
-    # linha assim que existir uma `Satisfacao` apontando para aquela atividade. Sem a pré-carga
-    # seria mais um N+1 por fatura, e por cliente e não por fatura porque a satisfação é da relação.
+    # linha assim que existir um `SatisfactionRecord` apontando para aquela atividade. Sem a
+    # pré-carga seria mais um N+1 por fatura, e por cliente e não por fatura porque a satisfação
+    # é da relação.
     sinal_por_cliente: dict[int, Activity] = field(default_factory=dict)
     # Os registros **vigentes**, e não a satisfação já escolhida, porque as duas leituras desta
     # dimensão são diferentes: a linha do painel mostra a vigente de qualquer fonte (a percebida é
@@ -297,7 +307,7 @@ class PainelContexto:
     # escolha só faria a segunda leitura se contentar com a sobra — uma percebida anotada depois de
     # uma declarada esconderia a declarada, e a tela passaria a discordar do relógio exatamente no
     # caso que esta fatia existe para tratar.
-    satisfacoes_por_cliente: dict[int, list[Satisfacao]] = field(default_factory=dict)
+    satisfaction_records_por_cliente: dict[int, list[SatisfactionRecord]] = field(default_factory=dict)
 
 
 def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContexto:
@@ -312,10 +322,10 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     outra faria a linha do painel depender de o cliente estar em entrega.
     """
     from . import health as health_module
-    from .models import Activity, CobrancaContato, CobrancaSuspensao
+    from .models import Activity, CobrancaSuspensao, DunningContact
     from .models import Invoice as InvoiceModel
     from .models import Project as ProjectModel
-    from .models import Satisfacao as SatisfacaoModel
+    from .models import SatisfactionRecord as SatisfactionRecordModel
 
     if not invoices:
         return PainelContexto(hoje=hoje)
@@ -338,15 +348,15 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
             por_cliente.setdefault(suspensao.account_id, suspensao)
 
     gastos: dict[int, set[str]] = defaultdict(set)
-    for invoice_id, degrau in CobrancaContato.objects.filter(invoice_id__in=ids).values_list(
-        "invoice_id", "degrau"
+    for invoice_id, degrau in DunningContact.objects.filter(invoice_id__in=ids).values_list(
+        "invoice_id", "dunning_step"
     ):
         gastos[invoice_id].add(degrau)
 
     corte = hoje - timedelta(days=settings.DUNNING_MIN_DAYS_BETWEEN_CONTACTS)
     no_teto = set(
-        CobrancaContato.objects.filter(
-            account_id__in=clientes, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
+        DunningContact.objects.filter(
+            account_id__in=clientes, canal=DunningContact.Canal.EMAIL, sent_on__gt=corte
         ).values_list("account_id", flat=True)
     )
 
@@ -399,12 +409,12 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     # satisfação **não arquivada**, porque um registro que alguém arquivou deixou de valer e o
     # sinal volta a estar por registrar.
     sinais: dict[int, Activity] = {}
-    registradas = SatisfacaoModel.objects.filter(
+    registradas = SatisfactionRecordModel.objects.filter(
         source_activity__isnull=False, archived_at__isnull=True
     ).values("source_activity_id")
     for activity in (
         Activity.objects.filter(account_id__in=clientes, archived_at__isnull=True)
-        .exclude(cobranca_sinal="")
+        .exclude(dunning_signal="")
         # Subconsulta explícita, e **não** `.exclude(satisfacoes__archived_at__isnull=True)`: o
         # `exclude` sobre relação reversa monta um LEFT JOIN, e para a atividade sem nenhuma
         # satisfação a coluna vem nula — ou seja, ele excluiria justamente os sinais por registrar,
@@ -426,7 +436,9 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         recebido_por_cliente=recebido,
         health_por_cliente=saude,
         sinal_por_cliente=sinais,
-        satisfacoes_por_cliente=satisfacao_module.registros_vigentes_por_cliente(clientes, hoje),
+        satisfaction_records_por_cliente=satisfaction_module.registros_vigentes_por_cliente(
+            clientes, hoje
+        ),
     )
 
 
@@ -434,7 +446,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
 class Avaliacao:
     """O que cabe hoje nesta fatura, e — quando nada cabe — por quê."""
 
-    degrau: Degrau | None
+    degrau: DunningStep | None
     motivo: str
 
 
@@ -504,9 +516,9 @@ def reincidente(
     return consulta.filter(_q_em_atraso(dia)).exists()
 
 
-def satisfacao_vigente(
+def satisfaction_vigente(
     account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
-) -> Satisfacao | None:
+) -> SatisfactionRecord | None:
     """O registro de satisfação que ainda vale hoje para este cliente, de **qualquer** fonte.
 
     É o que a linha do painel mostra: quem decide o próximo degrau precisa ver também a leitura de
@@ -515,39 +527,41 @@ def satisfacao_vigente(
     """
     dia = _hoje(hoje)
     if contexto is not None:
-        registros = contexto.satisfacoes_por_cliente.get(account.pk, [])
+        registros = contexto.satisfaction_records_por_cliente.get(account.pk, [])
     else:
-        registros = satisfacao_module.registros_vigentes_por_cliente([account.pk], dia).get(
+        registros = satisfaction_module.registros_vigentes_por_cliente([account.pk], dia).get(
             account.pk, []
         )
-    return satisfacao_module.vigente(registros, dia)
+    return satisfaction_module.vigente(registros, dia)
 
 
-def insatisfacao_declarada(
+def dissatisfaction_declarada(
     account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
-) -> Satisfacao | None:
+) -> SatisfactionRecord | None:
     """A insatisfação que troca a escada: **declarada** pelo cliente e ainda vigente.
 
-    `fonte=declarada` e não as duas somadas, e essa linha é a decisão central da FDD 037
+    `fonte=declared` e não as duas somadas, e essa linha é a decisão central da FDD 037
     (ADR 0032): abrandar uma cobrança é ato com consequência em dinheiro, e precisa da palavra do
     cliente — não da nossa leitura sobre ele. Somar as duas fontes num filtro só deixaria todos os
     testes de comportamento passando e faria a régua recuar por palpite.
 
-    A escolha sai de `satisfacao.vigente(..., fonte=...)` e não de um filtro local, porque uma
+    A escolha sai de `satisfaction.vigente(..., fonte=...)` e não de um filtro local, porque uma
     percebida registrada depois de uma declarada esconderia a declarada se a escolha fosse feita
     antes do filtro.
     """
-    from .models import Satisfacao
+    from .models import SatisfactionRecord
 
     dia = _hoje(hoje)
     if contexto is not None:
-        registros = contexto.satisfacoes_por_cliente.get(account.pk, [])
+        registros = contexto.satisfaction_records_por_cliente.get(account.pk, [])
     else:
-        registros = satisfacao_module.registros_vigentes_por_cliente([account.pk], dia).get(
+        registros = satisfaction_module.registros_vigentes_por_cliente([account.pk], dia).get(
             account.pk, []
         )
-    registro = satisfacao_module.vigente(registros, dia, fonte=Satisfacao.Fonte.DECLARADA)
-    if registro is None or registro.nivel != Satisfacao.Nivel.INSATISFEITO:
+    registro = satisfaction_module.vigente(
+        registros, dia, fonte=SatisfactionRecord.Fonte.DECLARED
+    )
+    if registro is None or registro.nivel != SatisfactionRecord.Nivel.DISSATISFIED:
         return None
     return registro
 
@@ -561,9 +575,10 @@ def entrega_critica(
     concluído fica de fora porque um crítico congelado no passado deixaria a trava ligada para
     sempre — e uma trava que nunca desliga é uma trava que ninguém respeita.
 
-    **Pergunta por cliente, e não pelo projeto da fatura** (FDD 038), pela mesma razão que a
-    `Satisfacao` liga ao cliente: a régua pergunta por cliente e fatura sem projeto existe. Ligar
-    ao projeto da fatura deixaria a trava sem alcance justamente em quem já saiu daquela entrega.
+    **Pergunta por cliente, e não pelo projeto da fatura** (FDD 038), pela mesma razão que o
+    `SatisfactionRecord` liga ao cliente: a régua pergunta por cliente e fatura sem projeto existe.
+    Ligar ao projeto da fatura deixaria a trava sem alcance justamente em quem já saiu daquela
+    entrega.
 
     **Só o `level` atravessa**, nunca o score nem os sinais — a mesma cerca comercial do
     `PainelContexto`. E o limiar é o de `health._level`: reescrevê-lo aqui criaria uma segunda
@@ -601,12 +616,12 @@ def causa_da_tensao(
     causas sugerem são diferentes, e uma é consertável por quem entrega.
     """
     dia = _hoje(hoje)
-    por_satisfacao = insatisfacao_declarada(account, dia, contexto=contexto) is not None
+    por_satisfaction = dissatisfaction_declarada(account, dia, contexto=contexto) is not None
     por_entrega = entrega_critica(account, dia, contexto=contexto)
-    if por_satisfacao and por_entrega:
+    if por_satisfaction and por_entrega:
         return TENSAO_AMBAS
-    if por_satisfacao:
-        return TENSAO_SATISFACAO
+    if por_satisfaction:
+        return TENSAO_SATISFACTION
     if por_entrega:
         return TENSAO_ENTREGA
     return None
@@ -617,7 +632,7 @@ def regua_para(
     hoje: date | None = None,
     ignorando: Invoice | None = None,
     contexto: PainelContexto | None = None,
-) -> tuple[Degrau, ...]:
+) -> tuple[DunningStep, ...]:
     """Qual das três escadas vale para este cliente. Função pura sobre o cliente, no molde de
     `health._level`: explicável em uma frase e testável sem montar cenário.
 
@@ -635,7 +650,7 @@ def regua_para(
     tela, e quem responde é `causa_da_tensao`.
     """
     dia = _hoje(hoje)
-    if insatisfacao_declarada(account, dia, contexto=contexto) is not None or entrega_critica(
+    if dissatisfaction_declarada(account, dia, contexto=contexto) is not None or entrega_critica(
         account, dia, contexto=contexto
     ):
         return RELACAO_TENSA
@@ -686,14 +701,14 @@ def pode_contatar(
     cliente — ele nem chega lá —, e fazer a escalada competir com o lembrete pelo mesmo teto
     atrasaria justamente o degrau que existe para acordar gente.
     """
-    from .models import CobrancaContato
+    from .models import DunningContact
 
     dia = _hoje(hoje)
     if contexto is not None:
         return account.pk not in contexto.clientes_no_teto
     corte = dia - timedelta(days=settings.DUNNING_MIN_DAYS_BETWEEN_CONTACTS)
-    return not CobrancaContato.objects.filter(
-        account=account, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
+    return not DunningContact.objects.filter(
+        account=account, canal=DunningContact.Canal.EMAIL, sent_on__gt=corte
     ).exists()
 
 
@@ -759,15 +774,15 @@ def avaliar(
     return Avaliacao(degrau, "")
 
 
-def _degrau_gasto(invoice: Invoice, degrau: Degrau, contexto: PainelContexto | None) -> bool:
-    from .models import CobrancaContato
+def _degrau_gasto(invoice: Invoice, degrau: DunningStep, contexto: PainelContexto | None) -> bool:
+    from .models import DunningContact
 
     if contexto is not None:
         return degrau.key in contexto.degraus_gastos.get(invoice.pk, frozenset())
-    return CobrancaContato.objects.filter(invoice=invoice, degrau=degrau.key).exists()
+    return DunningContact.objects.filter(invoice=invoice, dunning_step=degrau.key).exists()
 
 
-def degrau_devido(invoice: Invoice, hoje: date | None = None) -> Degrau | None:
+def degrau_devido(invoice: Invoice, hoje: date | None = None) -> DunningStep | None:
     """O degrau que cabe hoje, ou nada. Fachada de `avaliar` para quem não precisa do motivo."""
     return avaliar(invoice, hoje).degrau
 
@@ -784,7 +799,7 @@ def moeda(valor: Decimal) -> str:
     return f"R$ {milhar},{centavos}"
 
 
-def texto_do_degrau(invoice: Invoice, degrau: Degrau, hoje: date | None = None) -> tuple[str, str]:
+def texto_do_degrau(invoice: Invoice, degrau: DunningStep, hoje: date | None = None) -> tuple[str, str]:
     """Assunto e corpo do degrau, já preenchidos. Texto puro — não existe template HTML de e-mail
     neste produto, e introduzir um aqui seria dívida de renderização por uma mensagem de seis
     linhas."""
@@ -827,7 +842,7 @@ def _internos(account: Account) -> list[User]:
 
 def registrar(
     invoice: Invoice,
-    degrau: Degrau,
+    degrau: DunningStep,
     *,
     hoje: date | None = None,
     canal: str,
@@ -836,7 +851,7 @@ def registrar(
     to_email: str = "",
     sent_by: User | None = None,
     ai_interaction: AiInteraction | None = None,
-) -> CobrancaContato:
+) -> DunningContact:
     """Grava o que saiu. **Só é chamada depois do envio**, nunca antes.
 
     A ordem não é estilo: as rodadas de homologação da FDD 024 acharam três vezes a mesma classe de
@@ -844,12 +859,12 @@ def registrar(
     ao mesmo tempo: o degrau constaria gasto (e a `UniqueConstraint` impediria a retentativa) e a
     tela diria que o cliente foi avisado quando nada saiu.
     """
-    from .models import CobrancaContato
+    from .models import DunningContact
 
-    return CobrancaContato.objects.create(
+    return DunningContact.objects.create(
         invoice=invoice,
         account=invoice.account,
-        degrau=degrau.key,
+        dunning_step=degrau.key,
         canal=canal,
         sent_on=_hoje(hoje),
         subject=subject[:255],
@@ -862,14 +877,14 @@ def registrar(
 
 def enviar_ao_cliente(
     invoice: Invoice,
-    degrau: Degrau,
+    degrau: DunningStep,
     *,
     hoje: date | None = None,
     subject: str = "",
     body: str = "",
     sent_by: User | None = None,
     ai_interaction: AiInteraction | None = None,
-) -> CobrancaContato:
+) -> DunningContact:
     """Manda o degrau ao cliente e registra. Sem contato de cobrança, vira escalada interna.
 
     Falha fechada, no padrão que a casa já usa no enriquecimento de lead (FDD 030): cala quando não
@@ -877,7 +892,7 @@ def enviar_ao_cliente(
     degrau é gasto como interno, com o motivo no corpo, para que a falta de contato apareça para
     quem pode cadastrá-lo em vez de sumir num log.
     """
-    from .models import CobrancaContato
+    from .models import DunningContact
 
     assunto, corpo = texto_do_degrau(invoice, degrau, hoje)
     assunto, corpo = subject or assunto, body or corpo
@@ -893,13 +908,13 @@ def enviar_ao_cliente(
     enderecos = [contato.email for contato in contatos]
     # `fail_silently=False` de propósito, ao contrário do espelho de e-mail das notificações: lá o
     # registro in-app já existe e o e-mail é cópia; aqui o e-mail **é** o degrau, e engolir a falha
-    # gravaria um `CobrancaContato` afirmando um contato que não aconteceu.
+    # gravaria um `DunningContact` afirmando um contato que não aconteceu.
     send_mail(assunto, corpo, None, enderecos, fail_silently=False)
     return registrar(
         invoice,
         degrau,
         hoje=hoje,
-        canal=CobrancaContato.Canal.EMAIL,
+        canal=DunningContact.Canal.EMAIL,
         subject=assunto,
         body=corpo,
         to_email=", ".join(enderecos),
@@ -910,16 +925,16 @@ def enviar_ao_cliente(
 
 def _escalar(
     invoice: Invoice,
-    degrau: Degrau,
+    degrau: DunningStep,
     *,
     hoje: date | None = None,
     subject: str = "",
     body: str = "",
     sent_by: User | None = None,
-) -> CobrancaContato:
+) -> DunningContact:
     """Acorda quem responde pela relação. Nada disto sai para o cliente."""
     from . import notifications
-    from .models import CobrancaContato
+    from .models import DunningContact
 
     assunto, corpo = texto_do_degrau(invoice, degrau, hoje)
     assunto, corpo = subject or assunto, body or corpo
@@ -939,21 +954,21 @@ def _escalar(
         invoice,
         degrau,
         hoje=hoje,
-        canal=CobrancaContato.Canal.INTERNO,
+        canal=DunningContact.Canal.INTERNO,
         subject=assunto,
         body=corpo,
         sent_by=sent_by,
     )
 
 
-def aplicar(invoice: Invoice, degrau: Degrau, hoje: date | None = None) -> CobrancaContato:
+def aplicar(invoice: Invoice, degrau: DunningStep, hoje: date | None = None) -> DunningContact:
     """Executa o degrau pelo destino dele. É o caminho automático (`sent_by` fica nulo)."""
     if degrau.destino == CLIENTE:
         return enviar_ao_cliente(invoice, degrau, hoje=hoje)
     return _escalar(invoice, degrau, hoje=hoje)
 
 
-def _nome_da_regua(regua: tuple[Degrau, ...]) -> str:
+def _nome_da_regua(regua: tuple[DunningStep, ...]) -> str:
     if regua is RELACAO_TENSA:
         return "relacao_tensa"
     return "relacao_longa" if regua is RELACAO_LONGA else "padrao"
@@ -976,7 +991,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
     diz "nada hoje" ensina quem a usa a não confiar nela — e a régua tem quatro motivos legítimos
     de calar.
     """
-    from .models import CobrancaContato, Invoice
+    from .models import DunningContact, Invoice
 
     dia = _hoje(hoje)
     invoices = list(
@@ -1007,13 +1022,19 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
         degrau = avaliacao.degrau
         regua = regua_para(invoice.account, dia, ignorando=invoice, contexto=contexto)
         suspensao = suspensao_ativa(invoice, dia, contexto=contexto)
-        satisfacao = satisfacao_vigente(invoice.account, dia, contexto=contexto)
+        satisfaction = satisfaction_vigente(invoice.account, dia, contexto=contexto)
         sinal = contexto.sinal_por_cliente.get(invoice.account_id)
         linhas.append({
             "invoice": invoice.pk,
             "number": invoice.number,
-            # Chaves de payload da `/api/v1/`: o campo virou `account` e a chave não
-            # (`docs/ontology/aliases.md` §2c). Elas morrem na `/api/v2/`.
+            # O par canônico e o legado saem **juntos**, com o mesmo valor — o comportamento de
+            # todo alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c). Este painel é
+            # dict cru, sem serializer que faça isso sozinho (`AliasesDaV1Mixin` não alcança quem
+            # não é `ModelSerializer`), então os dois pares são escritos à mão aqui. A view remove
+            # `client`/`client_name` da resposta quando a requisição é da `/api/v2/` (issue #122,
+            # fatia 3a) — quem decide isso é ela, não este agregador, que não conhece a versão.
+            "account": invoice.account_id,
+            "account_name": invoice.account.name,
             "client": invoice.account_id,
             "client_name": invoice.account.name,
             "amount": _dinheiro(invoice.amount),
@@ -1024,7 +1045,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             "payment_url": invoice.payment_url,
             "proximo_degrau": degrau.key if degrau else None,
             "proximo_degrau_display": (
-                CobrancaContato.Degrau(degrau.key).label if degrau else None
+                DunningContact.DunningStep(degrau.key).label if degrau else None
             ),
             # A data em que a janela do degrau **abriu**, não uma previsão: com o degrau cabendo
             # hoje ela está no passado, e é o que deixa "o quê e quando" caber numa linha só.
@@ -1044,19 +1065,19 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             # vinha da outra parte da relação. Vai a **fonte** junto, e não só o nível, porque a
             # linha precisa dizer se aquilo é o cliente falando ou a nossa leitura sobre ele: é o
             # que separa o que muda a escada do que não muda.
-            "satisfacao_nivel": satisfacao.nivel if satisfacao else None,
-            "satisfacao_fonte": satisfacao.fonte if satisfacao else None,
+            "satisfacao_nivel": satisfaction.nivel if satisfaction else None,
+            "satisfacao_fonte": satisfaction.fonte if satisfaction else None,
             # Idade e não a data: o sinal envelhece, e "há 12 dias" é a leitura que faz alguém
             # perguntar de novo — a data crua exigiria a subtração de cabeça.
-            "satisfacao_dias": (dia - satisfacao.happened_on).days if satisfacao else None,
+            "satisfacao_dias": (dia - satisfaction.happened_on).days if satisfaction else None,
             # Por que a relação está tensa, quando está (FDD 038). Rótulo, não decisão: a escada
             # é a mesma nas três causas, e é `regua` que diz qual escada vale.
             "tensao_causa": causa_da_tensao(invoice.account, dia, contexto=contexto),
             # A leitura da IA que **ninguém registrou ainda** (ADR 0032). Vai rotulada como leitura
             # justamente para não se confundir com a satisfação vigente logo acima: aquela é
             # registro, esta é uma resposta lida. Some da linha quando alguém registrar.
-            "sinal_kind": sinal.cobranca_sinal if sinal else None,
-            "sinal_display": sinal.get_cobranca_sinal_display() if sinal else None,
+            "sinal_kind": sinal.dunning_signal if sinal else None,
+            "sinal_display": sinal.get_dunning_signal_display() if sinal else None,
             "sinal_em": sinal.happened_on if sinal else None,
             "sinal_activity": sinal.pk if sinal else None,
             "reincidente": reincidente(invoice.account, dia, ignorando=invoice, contexto=contexto),

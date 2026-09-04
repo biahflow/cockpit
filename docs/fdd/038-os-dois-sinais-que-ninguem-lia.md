@@ -3,6 +3,12 @@
 > **Fecha a camada 5 da RFC 0004**, sobre a metade que a FDD 037 entregou. As duas coisas que esta
 > fatia liga já existiam no banco há semanas: a saúde do projeto e o rótulo que a IA grava na
 > resposta do cliente. Nenhuma das duas mudava o comportamento de nada.
+>
+> **Nomes desta página que travessaram na issue #122 (04/09/2026, D10 do `language-map`):**
+> `Activity.cobranca_sinal` → `Activity.dunning_signal` (fatia 5.2), `Satisfacao` →
+> `SatisfactionRecord` (fatia 5.3), o campo `degrau` → `dunning_step` e o valor `firme` → `firm`
+> (fatia 5.4). A chave de payload e o rótulo que a tela mostra não mudaram — ver
+> `docs/ontology/aliases.md`.
 
 ## Jornada
 
@@ -14,7 +20,7 @@ cobrança, ao lado do tempo de casa e do valor já recebido, porque a RFC 0004 e
 o próximo degrau veja a relação inteira *"na mesma tela, não a dois cliques"*. Ele está lá. E não
 muda nada: a régua escolhe a escada olhando apenas para tempo de casa, reincidência e satisfação
 declarada. Um cliente cuja entrega está em frangalhos recebe exatamente a mesma cobrança que um
-cliente cujo projeto vai bem — inclusive o degrau `firme`, que é o de tom duro.
+cliente cujo projeto vai bem — inclusive o degrau `firm`, que é o de tom duro.
 
 O segundo é mais curto de contar, porque é código morto. A FDD 036 construiu a classificação da
 resposta do cliente: a IA lê o que ele respondeu e grava `Activity.cobranca_sinal` como *esqueceu*,
@@ -34,8 +40,8 @@ ligar qualquer um dos dois é a que a RFC 0004 proíbe na sua seção Segurança
 A quarta condição da escada de cobrança — entrega em estado crítico leva à `RELACAO_TENSA`, a
 mesma escada que a insatisfação declarada já produzia —, a causa da tensão nomeada no painel, o
 health da linha corrigido para o cliente inteiro, e o rótulo da IA transformado em atalho de
-registro. Mais uma FK de proveniência, `Satisfacao.source_activity`, que é o que faz o atalho
-parar de insistir depois de atendido.
+registro. Mais uma FK de proveniência, `SatisfactionRecord.source_activity`, que é o que faz o
+atalho parar de insistir depois de atendido.
 
 Nada sai da casa e nada é ligado: a flag `dunning` continua desligada, pelas duas razões que a
 FDD 036 registrou e que seguem verdadeiras.
@@ -47,7 +53,7 @@ precisa ser declarado […] nunca um 'pular' silencioso"*. A saída é a que a F
 outra metade, e agora vira princípio na **ADR 0033**: sinal ruim **troca a escada, não cria
 silêncio**.
 
-Com um projeto ativo em `crítico`, o cliente entra na `RELACAO_TENSA`: o degrau `firme` não existe
+Com um projeto ativo em `crítico`, o cliente entra na `RELACAO_TENSA`: o degrau `firm` não existe
 e a escalada interna ocupa a janela D+10 que era dele. O destino desse degrau é a casa, não o
 cliente. A régua fica mais barulhenta, não menos — e o que ela produz é uma pessoa sendo avisada de
 que há uma fatura vencida num cliente cuja entrega está ruim, que é precisamente a conversa que
@@ -55,8 +61,8 @@ ninguém quer que um template tenha.
 
 A escada é a **mesma tupla**, não uma quarta. O comportamento pedido é idêntico, e chaves de
 degrau próprias fariam o mesmo lembrete sair duas vezes para quem trocasse de escada entre duas
-execuções — a idempotência é `UniqueConstraint(invoice, degrau)`, e é o terceiro registro seguido
-desse mesmo argumento.
+execuções — a idempotência é `UniqueConstraint(invoice, dunning_step)`, e é o terceiro registro
+seguido desse mesmo argumento.
 
 ### Por que a guarda pergunta por cliente, e o que isso quebrou na tela
 
@@ -103,14 +109,14 @@ saiba qual olhar.
    junto da segunda metade da mesma invariante: nenhuma `CobrancaSuspensao` nasce fora de
    requisição.
 2. **Entrega crítica troca a escada e reusa as chaves.** O cliente cai na `RELACAO_TENSA`, sem
-   degrau `firme` e com a escalada interna em D+10, com as mesmas chaves de degrau.
+   degrau `firm` e com a escalada interna em D+10, com as mesmas chaves de degrau.
 3. **A tensão por entrega vence a relação longa**, como a tensão por satisfação já vencia.
 4. **Projeto concluído não trava nada**, e cliente sem projeto continua na `PADRAO`.
 5. **A tela não discorda do relógio.** O `health_level` da linha é o pior entre os projetos ativos
    do cliente, e a causa da tensão é nomeada (`satisfacao` / `entrega` / `ambas`).
-6. **A IA não registra satisfação.** Classificar uma resposta como `insatisfeito` não cria
-   `Satisfacao`, não muda Health Score e não troca escada.
-7. **O atalho para de insistir** quando existe `Satisfacao` apontando para aquela atividade.
+6. **A IA não registra satisfação.** Classificar uma resposta como `dissatisfied` não cria
+   `SatisfactionRecord`, não muda Health Score e não troca escada.
+7. **O atalho para de insistir** quando existe `SatisfactionRecord` apontando para aquela atividade.
 8. **Os agregadores não crescem com a base.** `/cobranca/painel/` mantém contagem constante de
    queries com quatro vezes a base, com as dimensões novas ocupadas (ADR 0014).
 
@@ -187,7 +193,8 @@ segunda definição do vocabulário do health. A que erra o acento não fica ver
 casa. O limiar não mudou.
 
 **Três filtros de arquivado que ninguém tinha pedido.** Atividade arquivada não vira sinal por
-registrar; `Satisfacao` arquivada não conta como registro, e o sinal volta a estar por registrar;
+registrar; `SatisfactionRecord` arquivada não conta como registro, e o sinal volta a estar por
+registrar;
 projeto arquivado não entra na guarda de entrega. Os três seguem do soft delete da casa, e cada um
 seria um defeito mudo — o mais feio é o do meio, porque um registro desfeito que continuasse
 contando deixaria o atalho invisível para sempre.

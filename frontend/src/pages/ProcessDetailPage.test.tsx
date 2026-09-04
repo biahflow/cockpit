@@ -63,7 +63,7 @@ const visivel = (presos = 0, impedimento = "") => ({
 
 function processoMapeado(overrides: Record<string, unknown> = {}) {
   return {
-    id: 1, account: 4, client: 4, client_name: "Cliente A", name: "Faturamento manual de notas",
+    id: 1, account: 4, account_name: "Cliente A", name: "Faturamento manual de notas",
     position: 1, source_project: 2, source_meeting: 3, registered_by: 1,
     volume_mes: 400, tempo_horas: "0.50", pessoas: 2, custo_hora: "80.00",
     retrabalho_mes: "3200.00", erros_mes: null, perdas_mes: null, espera_mes: null, risco_mes: null,
@@ -117,8 +117,8 @@ let oportunidades: unknown[] = [];
 
 function stub() {
   mocks.api.mockImplementation((path: string, init?: RequestInit) => {
-    if (path === "/processos/1/") return Promise.resolve(processo);
-    if (path.startsWith("/processo-etapas")) return Promise.resolve(etapas);
+    if (path === "/processes/1/") return Promise.resolve(processo);
+    if (path.startsWith("/process-steps")) return Promise.resolve(etapas);
     if (path.startsWith("/findings")) return Promise.resolve(findings);
     if (path.startsWith("/evidence")) {
       // O POST de `Evidence` devolve a linha criada: o `Finding` precisa da chave dela para nascer
@@ -236,10 +236,10 @@ test("cria a etapa com as seis perguntas na ordem em que se pergunta", async () 
   await user.type(screen.getByLabelText("Erro — o que pode dar errado"), "Fiscal ausente trava a fila");
   await user.click(screen.getByRole("button", { name: "Adicionar etapa" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/processo-etapas/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/process-steps/", expect.objectContaining({
     method: "POST", body: expect.stringContaining('"process":1'),
   })));
-  expect(mocks.api).toHaveBeenCalledWith("/processo-etapas/", expect.objectContaining({
+  expect(mocks.api).toHaveBeenCalledWith("/process-steps/", expect.objectContaining({
     body: expect.stringContaining('"erro":"Fiscal ausente trava a fila"'),
   }));
 });
@@ -341,7 +341,7 @@ test("arquivar avisa que as etapas vão junto e os achados ficam com a conta", a
 
   // Nada foi arquivado ainda: a confirmação é o que existe entre o clique e o `DELETE`.
   await user.click(screen.getByRole("button", { name: "Arquivar processo" }));
-  expect(mocks.api).not.toHaveBeenCalledWith("/processos/1/", expect.objectContaining({ method: "DELETE" }));
+  expect(mocks.api).not.toHaveBeenCalledWith("/processes/1/", expect.objectContaining({ method: "DELETE" }));
 
   const dialogo = within(screen.getByRole("dialog"));
   expect(dialogo.getByText(/1 etapa\(s\) dele/)).toBeInTheDocument();
@@ -379,11 +379,11 @@ test("campo em branco vira null no envio, e nunca zero", async () => {
   await user.type(screen.getByLabelText("Perdas — R$/mês"), "1500");
   await user.click(screen.getByRole("button", { name: /Salvar os insumos do custo/ }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/processos/1/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/processes/1/", expect.objectContaining({
     method: "PATCH",
   })));
   const corpo = JSON.parse(
-    (mocks.api.mock.calls.find(([path, init]) => path === "/processos/1/" && init?.method === "PATCH")![1] as RequestInit).body as string
+    (mocks.api.mock.calls.find(([path, init]) => path === "/processes/1/" && init?.method === "PATCH")![1] as RequestInit).body as string
   );
   expect(corpo.perdas_mes).toBe("1500");
   // A asserção inteira desta fatia, do lado da tela: em branco é "não apurado", não é zero.
@@ -402,9 +402,9 @@ test("limpar um insumo já medido devolve o campo a não apurado", async () => {
   await user.clear(screen.getByLabelText("Retrabalho — R$/mês"));
   await user.click(screen.getByRole("button", { name: /Salvar os insumos do custo/ }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/processos/1/", expect.anything()));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/processes/1/", expect.anything()));
   const corpo = JSON.parse(
-    (mocks.api.mock.calls.find(([path, init]) => path === "/processos/1/" && init?.method === "PATCH")![1] as RequestInit).body as string
+    (mocks.api.mock.calls.find(([path, init]) => path === "/processes/1/" && init?.method === "PATCH")![1] as RequestInit).body as string
   );
   expect(corpo.retrabalho_mes).toBeNull();
 });

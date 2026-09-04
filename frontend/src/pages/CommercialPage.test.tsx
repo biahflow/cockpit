@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   api: vi.fn(),
   auth: { user: { id: 1, username: "admin", first_name: "", last_name: "", email: "", role: "admin", is_admin: true }, aiEnabled: true } as { user: { id: number; username: string; first_name: string; last_name: string; email: string; role: string; is_admin: boolean }; aiEnabled: boolean },
 }));
-vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v1/documents/${id}/download/` }));
+vi.mock("../api", () => ({ api: mocks.api, documentDownloadUrl: (id: number) => `/api/v2/documents/${id}/download/` }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 const stages = [
@@ -33,9 +33,9 @@ function stub() {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     const method = options?.method?.toUpperCase() ?? "GET";
     if (path === "/pipeline-stages/") return Promise.resolve(stages);
-    if (path === "/opportunities/" && method === "GET") return Promise.resolve([opp]);
+    if (path === "/commercial-opportunities/" && method === "GET") return Promise.resolve([opp]);
     if (path === "/services/") return Promise.resolve(services);
-    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path === "/accounts/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
     if (path.startsWith("/documents/?commercial_opportunity")) return Promise.resolve([{ id: 9, client: null, commercial_opportunity: 1, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
     if (path.startsWith("/activities/?commercial_opportunity")) return Promise.resolve([{ id: 4, client: 1, commercial_opportunity: 1, opportunity: 1, kind: "meeting", kind_display: "Reunião", happened_on: "2026-08-12", summary: "Apresentação da proposta", notes: "", owner: 1, created_at: "2026-08-12T10:00:00Z", updated_at: "2026-08-12T10:00:00Z" }]);
@@ -70,7 +70,7 @@ test("edita e salva a oportunidade pelo detalhe", async () => {
   await user.clear(title);
   await user.type(title, "Oport Y");
   await user.click(screen.getByRole("button", { name: "Salvar" }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({ method: "PATCH" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/commercial-opportunities/1/", expect.objectContaining({ method: "PATCH" })));
 });
 
 test("envia documento vinculado à oportunidade", async () => {
@@ -94,7 +94,7 @@ test("converte a oportunidade ganha em projeto pelo detalhe", async () => {
   fireEvent.change(dates[0], { target: { value: "2026-08-01" } });
   fireEvent.change(dates[1], { target: { value: "2026-09-01" } });
   await user.click(within(dialog).getByRole("button", { name: "Criar projeto" }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/convert-to-project/", expect.objectContaining({ method: "POST" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/commercial-opportunities/1/convert-to-project/", expect.objectContaining({ method: "POST" })));
   // Converter sem retorno nenhum deixava a dúvida "criou?". O aviso responde e leva ao projeto.
   const aviso = await screen.findByRole("status");
   expect(within(aviso).getByRole("link", { name: /Abrir projeto/ })).toHaveAttribute("href", "/projetos/7");
@@ -104,9 +104,9 @@ test("oportunidade já convertida oferece ver o projeto, não criá-lo de novo",
   // Sem isto o card segue oferecendo "Criar projeto" numa oportunidade que só pode responder 409.
   mocks.api.mockImplementation((path: string) => {
     if (path === "/pipeline-stages/") return Promise.resolve(stages);
-    if (path === "/opportunities/") return Promise.resolve([{ ...opp, project: 7 }]);
+    if (path === "/commercial-opportunities/") return Promise.resolve([{ ...opp, project: 7 }]);
     if (path === "/services/") return Promise.resolve(services);
-    if (path === "/clients/") return Promise.resolve([]);
+    if (path === "/accounts/") return Promise.resolve([]);
     return Promise.resolve([]);
   });
   render(<CommercialPage />);
@@ -152,7 +152,7 @@ test("cria uma nova oportunidade pelo compositor", async () => {
   await user.type(within(dialog).getByLabelText("Valor estimado"), "5000");
   fireEvent.change(within(dialog).getByLabelText("Previsão de fechamento"), { target: { value: "2026-10-01" } });
   await user.click(within(dialog).getByRole("button", { name: "Adicionar ao pipeline" }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/", expect.objectContaining({ method: "POST" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/commercial-opportunities/", expect.objectContaining({ method: "POST" })));
 });
 
 test("mostra o nível de produto no card do pipeline", async () => {
@@ -174,7 +174,7 @@ test("cria a oportunidade com o nível de produto escolhido", async () => {
   fireEvent.change(within(dialog).getByLabelText("Previsão de fechamento"), { target: { value: "2026-10-01" } });
   await user.click(within(dialog).getByRole("button", { name: "Adicionar ao pipeline" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/commercial-opportunities/", expect.objectContaining({
     method: "POST", body: expect.stringContaining('"service":11'),
   })));
 });
@@ -187,7 +187,7 @@ test("altera o nível de produto pelo detalhe da oportunidade", async () => {
   await user.selectOptions(screen.getByLabelText("Nível de produto"), "11");
   await user.click(screen.getByRole("button", { name: "Salvar" }));
 
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/commercial-opportunities/1/", expect.objectContaining({
     method: "PATCH", body: expect.stringContaining('"service":11'),
   })));
 });
@@ -208,19 +208,19 @@ test("arquiva a oportunidade a partir do detalhe, com confirmação", async () =
   // A confirmação abre por cima; o detalhe continua montado atrás.
   expect(screen.getByRole("dialog", { name: "Arquivar oportunidade" })).toBeInTheDocument();
   expect(screen.getByRole("dialog", { name: "Detalhe da oportunidade" })).toBeInTheDocument();
-  expect(mocks.api).not.toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({ method: "DELETE" }));
+  expect(mocks.api).not.toHaveBeenCalledWith("/commercial-opportunities/1/", expect.objectContaining({ method: "DELETE" }));
 
   await user.click(within(screen.getByRole("dialog", { name: "Arquivar oportunidade" })).getByRole("button", { name: "Arquivar" }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/1/", expect.objectContaining({ method: "DELETE" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/commercial-opportunities/1/", expect.objectContaining({ method: "DELETE" })));
 });
 
 test("projeto arquivado não vira link nem oferece nova conversão", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     const method = options?.method?.toUpperCase() ?? "GET";
     if (path === "/pipeline-stages/") return Promise.resolve(stages);
-    if (path === "/opportunities/" && method === "GET") return Promise.resolve([{ ...opp, project: 7, project_archived: true }]);
+    if (path === "/commercial-opportunities/" && method === "GET") return Promise.resolve([{ ...opp, project: 7, project_archived: true }]);
     if (path === "/services/") return Promise.resolve(services);
-    if (path === "/clients/") return Promise.resolve([]);
+    if (path === "/accounts/") return Promise.resolve([]);
     return Promise.resolve({});
   });
   render(<CommercialPage />);
@@ -235,10 +235,10 @@ test("lista e restaura oportunidades arquivadas", async () => {
   const user = userEvent.setup();
   mocks.api.mockImplementation((path: string) => {
     if (path === "/pipeline-stages/") return Promise.resolve(stages);
-    if (path === "/opportunities/?archived=1") return Promise.resolve([{ ...opp, id: 2, title: "Arquivada X" }]);
-    if (path === "/opportunities/") return Promise.resolve([]);
+    if (path === "/commercial-opportunities/?archived=1") return Promise.resolve([{ ...opp, id: 2, title: "Arquivada X" }]);
+    if (path === "/commercial-opportunities/") return Promise.resolve([]);
     if (path === "/services/") return Promise.resolve(services);
-    if (path === "/clients/") return Promise.resolve([]);
+    if (path === "/accounts/") return Promise.resolve([]);
     return Promise.resolve({});
   });
   render(<CommercialPage />);
@@ -247,7 +247,7 @@ test("lista e restaura oportunidades arquivadas", async () => {
   expect(await screen.findByText("Arquivada X")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: /Restaurar/ }));
-  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/opportunities/2/unarchive/", expect.objectContaining({ method: "POST" })));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/commercial-opportunities/2/unarchive/", expect.objectContaining({ method: "POST" })));
 });
 
 // --- interações (FDD 035) -----------------------------------------------------------------------
@@ -302,9 +302,9 @@ test("o erro do upload aparece dentro do modal", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     const method = options?.method?.toUpperCase() ?? "GET";
     if (path === "/pipeline-stages/") return Promise.resolve(stages);
-    if (path === "/opportunities/" && method === "GET") return Promise.resolve([opp]);
+    if (path === "/commercial-opportunities/" && method === "GET") return Promise.resolve([opp]);
     if (path === "/services/") return Promise.resolve(services);
-    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path === "/accounts/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
     if (path.startsWith("/documents/?commercial_opportunity")) return Promise.resolve([{ id: 9, client: null, commercial_opportunity: 1, opportunity: 1, project: null, file: "x", original_name: "proposta.pdf", uploaded_by: 1, created_at: "2026-08-01" }]);
     if (path.startsWith("/activities/?commercial_opportunity")) return Promise.resolve([]);
@@ -356,13 +356,13 @@ test("erro ao salvar mantém o modal aberto", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
     const method = options?.method?.toUpperCase() ?? "GET";
     if (path === "/pipeline-stages/") return Promise.resolve(stages);
-    if (path === "/opportunities/" && method === "GET") return Promise.resolve([opp]);
+    if (path === "/commercial-opportunities/" && method === "GET") return Promise.resolve([opp]);
     if (path === "/services/") return Promise.resolve(services);
-    if (path === "/clients/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
+    if (path === "/accounts/") return Promise.resolve([{ id: 1, name: "Cliente A", legal_name: "", tax_id: "", owner: 1 }]);
     if (path.startsWith("/contacts")) return Promise.resolve([{ id: 5, client: 1, name: "João", email: "", phone: "", job_title: "" }]);
     if (path.startsWith("/documents/?commercial_opportunity")) return Promise.resolve([]);
     if (path.startsWith("/activities/?commercial_opportunity")) return Promise.resolve([]);
-    if (path === "/opportunities/1/" && method === "PATCH") return Promise.reject(new Error("Não foi possível salvar."));
+    if (path === "/commercial-opportunities/1/" && method === "PATCH") return Promise.reject(new Error("Não foi possível salvar."));
     return Promise.resolve({});
   });
   render(<CommercialPage />);

@@ -1,7 +1,7 @@
 """Regressão: só a **declarada** move número (FDD 037, ADR 0032).
 
 É a decisão central da fatia e a única que um refactor desatento apaga em silêncio. Somar as duas
-fontes num filtro só — `Satisfacao.objects.filter(account=...)` sem `fonte=` — deixa **todos** os
+fontes num filtro só — `SatisfactionRecord.objects.filter(account=...)` sem `fonte=` — deixa **todos** os
 testes de comportamento passando: o Health Score continua descontando, a escada continua trocando,
 e nada fica vermelho. O que muda é o significado: o sinal do cliente vira a opinião do time sobre
 si mesmo com aparência de medição, e um número errado é consultado com a mesma confiança de um
@@ -21,8 +21,8 @@ from decimal import Decimal
 import pytest
 from django.utils import timezone
 
-from apps.core import cobranca, health, satisfacao
-from apps.core.models import Account, Invoice, Satisfacao
+from apps.core import cobranca, health, satisfaction
+from apps.core.models import Account, Invoice, SatisfactionRecord
 from apps.core.tests.factories import AccountFactory, InvoiceFactory, ProjectFactory
 
 HOJE = date(2026, 9, 2)  # uma quarta-feira, como no resto da suíte de cobrança
@@ -33,7 +33,7 @@ pytestmark = pytest.mark.django_db
 def _registrar(account, fonte: str, **kwargs):  # type: ignore[no-untyped-def]
     campos = {
         "account": account,
-        "nivel": Satisfacao.Nivel.INSATISFEITO,
+        "nivel": SatisfactionRecord.Nivel.DISSATISFIED,
         "fonte": fonte,
         # O dia real, e não `HOJE`: o Health Score não recebe "hoje" por parâmetro (é função pura
         # sobre o agora), e um registro com data futura não é o estado de hoje — deixaria os
@@ -41,7 +41,7 @@ def _registrar(account, fonte: str, **kwargs):  # type: ignore[no-untyped-def]
         #
         # **O default vale só para o motor 1.** O motor 2 recebe `hoje` por parâmetro e o congela
         # em `HOJE`, então lá o default é a armadilha simétrica: `vigente` recorta
-        # `inicio <= happened_on <= hoje` (`satisfacao.py:73`), e um registro carimbado com o dia
+        # `inicio <= happened_on <= hoje` (`satisfaction.py:80`), e um registro carimbado com o dia
         # real fica **no futuro** em relação a `HOJE` e sai do recorte. Foi o que aconteceu em
         # 2026-09-03, quando o relógio passou de `HOJE`: `test_a_declarada_troca_a_escada` ficou
         # vermelho, e os três testes de percebida ficaram verdes **pelo motivo errado** — por
@@ -52,7 +52,7 @@ def _registrar(account, fonte: str, **kwargs):  # type: ignore[no-untyped-def]
         "note": "O cliente/eu achei que a entrega do marco 2 decepcionou.",
     }
     campos.update(kwargs)
-    return Satisfacao.objects.create(**campos)
+    return SatisfactionRecord.objects.create(**campos)
 
 
 # --- Motor 1: o Health Score --------------------------------------------------
@@ -62,7 +62,7 @@ def test_a_percebida_nao_muda_o_health_score() -> None:
     """Mesmo nível, mesma data, mesma nota: a única diferença é a fonte."""
     sem_registro = ProjectFactory()
     com_percebida = ProjectFactory()
-    _registrar(com_percebida.engagement.account, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(com_percebida.engagement.account, SatisfactionRecord.Fonte.PERCEIVED)
 
     controle = health.assess_project_health(sem_registro)
     medido = health.assess_project_health(com_percebida)
@@ -75,7 +75,7 @@ def test_a_declarada_muda_o_health_score() -> None:
     """O complemento do teste acima: cercar tudo não é cercar — se a declarada também não movesse,
     o teste de cima passaria por o sinal não existir."""
     project = ProjectFactory()
-    _registrar(project.engagement.account, Satisfacao.Fonte.DECLARADA)
+    _registrar(project.engagement.account, SatisfactionRecord.Fonte.DECLARED)
 
     resultado = health.assess_project_health(project)
 
@@ -88,7 +88,7 @@ def test_a_percebida_nao_muda_o_health_score_em_lote() -> None:
     um filtro por fonte esquecido **ali** não apareceria no caminho individual."""
     sem_registro = ProjectFactory()
     com_percebida = ProjectFactory()
-    _registrar(com_percebida.engagement.account, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(com_percebida.engagement.account, SatisfactionRecord.Fonte.PERCEIVED)
 
     por_projeto = {
         linha["project_id"]: linha
@@ -102,8 +102,8 @@ def test_a_percebida_nao_muda_o_health_score_em_lote() -> None:
 def test_o_lote_e_o_individual_concordam_sobre_a_fonte() -> None:
     """A pré-carga troca a fonte do dado, nunca a regra (FDD 022)."""
     projetos = [ProjectFactory() for _ in range(3)]
-    _registrar(projetos[0].engagement.account, Satisfacao.Fonte.DECLARADA)
-    _registrar(projetos[1].engagement.account, Satisfacao.Fonte.PERCEBIDA)
+    _registrar(projetos[0].engagement.account, SatisfactionRecord.Fonte.DECLARED)
+    _registrar(projetos[1].engagement.account, SatisfactionRecord.Fonte.PERCEIVED)
 
     assert health.assess_projects_health(projetos) == [
         health.assess_project_health(project) for project in projetos
@@ -123,7 +123,7 @@ def test_o_registro_do_motor_2_esta_vigente_em_hoje() -> None:
 
     Foi o que aconteceu em 2026-09-03. `HOJE` é uma quarta-feira congelada e `_registrar` carimbava
     `timezone.localdate()`; enquanto o relógio real não passou de `HOJE` os dois coincidiam, e no
-    dia seguinte o registro virou futuro (`inicio <= happened_on <= hoje`, `satisfacao.py:73`).
+    dia seguinte o registro virou futuro (`inicio <= happened_on <= hoje`, `satisfaction.py:80`).
     `test_a_declarada_troca_a_escada` ficou vermelho e os outros três ficaram verdes pelo motivo
     errado — que é o caso pior, porque não avisa.
 
@@ -131,14 +131,14 @@ def test_o_registro_do_motor_2_esta_vigente_em_hoje() -> None:
     é **este** teste que fica vermelho, e ele diz o porquê no nome.
     """
     account = AccountFactory()
-    registro = _registrar(account, Satisfacao.Fonte.DECLARADA, happened_on=HOJE)
+    registro = _registrar(account, SatisfactionRecord.Fonte.DECLARED, happened_on=HOJE)
 
-    assert satisfacao.vigente([registro], HOJE, fonte=Satisfacao.Fonte.DECLARADA) is registro
+    assert satisfaction.vigente([registro], HOJE, fonte=SatisfactionRecord.Fonte.DECLARED) is registro
 
 
 def test_a_percebida_nao_troca_a_escada() -> None:
     account = AccountFactory()
-    _registrar(account, Satisfacao.Fonte.PERCEBIDA, happened_on=HOJE)
+    _registrar(account, SatisfactionRecord.Fonte.PERCEIVED, happened_on=HOJE)
 
     assert cobranca.regua_para(account, HOJE) is cobranca.PADRAO
 
@@ -149,14 +149,14 @@ def test_a_percebida_nao_alcanca_nem_o_cliente_de_relacao_longa() -> None:
     antigo = AccountFactory()
     Account.objects.filter(pk=antigo.pk).update(created_at=timezone.now() - timedelta(days=800))
     antigo.refresh_from_db()
-    _registrar(antigo, Satisfacao.Fonte.PERCEBIDA, happened_on=HOJE)
+    _registrar(antigo, SatisfactionRecord.Fonte.PERCEIVED, happened_on=HOJE)
 
     assert cobranca.regua_para(antigo, HOJE) is cobranca.RELACAO_LONGA
 
 
 def test_a_declarada_troca_a_escada() -> None:
     account = AccountFactory()
-    _registrar(account, Satisfacao.Fonte.DECLARADA, happened_on=HOJE)
+    _registrar(account, SatisfactionRecord.Fonte.DECLARED, happened_on=HOJE)
 
     assert cobranca.regua_para(account, HOJE) is cobranca.RELACAO_TENSA
 
@@ -165,19 +165,19 @@ def test_a_percebida_nao_muda_o_degrau_que_sai_hoje() -> None:
     """O teste de comportamento por trás dos três acima: em D+12 a régua padrão manda o `firme`, e
     é justamente esse degrau que a tensão tira."""
     com_percebida = AccountFactory()
-    _registrar(com_percebida, Satisfacao.Fonte.PERCEBIDA, happened_on=HOJE)
+    _registrar(com_percebida, SatisfactionRecord.Fonte.PERCEIVED, happened_on=HOJE)
     invoice = InvoiceFactory(
         account=com_percebida, status=Invoice.Status.OVERDUE, number="2026-0001",
         amount=Decimal("1000.00"), due_date=HOJE - timedelta(days=12),
     )
 
-    assert cobranca.degrau_devido(invoice, HOJE).key == "firme"
+    assert cobranca.degrau_devido(invoice, HOJE).key == "firm"
 
 
 def test_a_percebida_nao_cala_a_regua_nem_a_declarada() -> None:
     """Critério de aceite 3: nenhuma das duas fontes produz avaliação sem degrau. A trava troca a
     escada; ela nunca vira silêncio (RFC 0004, "Segurança")."""
-    for fonte in (Satisfacao.Fonte.PERCEBIDA, Satisfacao.Fonte.DECLARADA):
+    for fonte in (SatisfactionRecord.Fonte.PERCEIVED, SatisfactionRecord.Fonte.DECLARED):
         account = AccountFactory()
         _registrar(account, fonte, happened_on=HOJE)
         invoice = InvoiceFactory(

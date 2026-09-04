@@ -225,7 +225,7 @@ Os outros quatro entram: laudo, experimento e KPI pendem de projeto, e a mediç�
 um hop, como a etapa chega pelo processo. A entrada de valor **não**, e não por esquecimento: ela
 pende de `Engagement` e o `project` dela é opcional. Um mapa que resolvesse `obj.project`
 devolveria `None` para a entrada de mandato sem projeto, e a Entrega tomaria 403 no detalhe de uma
-linha que a listagem dela mostra — o defeito que a `Satisfacao` já previu.
+linha que a listagem dela mostra — o defeito que a `SatisfactionRecord` já previu.
 
 O recorte é o inverso, e é o mesmo de `EngagementViewSet`: a pessoa vê a entrada do projeto que ela
 alcança; e a entrada **sem** projeto, quando alcança algum projeto daquele mandato. **O engajamento

@@ -12,8 +12,12 @@ estraga invisível (RFC 0004, "Segurança"): um cliente que reclamou uma vez, em
 cobrado com firmeza.
 
 O que este módulo deliberadamente **não** faz é decidir o que a satisfação significa. Que só a
-fonte `declarada` move número é regra dos consumidores (ADR 0032), e cada um a escreve onde ela
+fonte `declared` move número é regra dos consumidores (ADR 0032), e cada um a escreve onde ela
 importa — aqui ela é só um filtro opcional.
+
+Chamava-se `satisfacao.py` até a fatia 6 da issue #122 (04/09/2026, limpeza de rastro da série
+D10): nome de arquivo é identificador local, sem coinagem — a chave de payload e a rota
+continuam como sempre (`docs/ontology/aliases.md`).
 """
 
 from __future__ import annotations
@@ -26,14 +30,17 @@ from typing import TYPE_CHECKING
 from django.db.models import Q
 
 if TYPE_CHECKING:
-    from .models import Satisfacao
+    from .models import SatisfactionRecord
 
 #: Por quanto tempo um registro continua sendo "o estado de hoje". Noventa dias, e o número é o
 #: mesmo tipo de corte explícito que `cobranca.RELACAO_LONGA_DIAS`: não há nada de mágico nele, há
 #: o requisito de existir um limite testável em vez de "registro recente" virar julgamento de quem
 #: estiver de plantão. A forma — janela, e não offset — é a que a FDD 036 já adotou na régua, e
 #: pela mesma razão: passada a janela, o registro simplesmente não vale mais.
-SATISFACAO_VALIDA_DIAS = 90
+#:
+#: Chamava-se `SATISFACAO_VALIDA_DIAS` até a fatia 6 da issue #122 — identificador local, sem
+#: coinagem.
+SATISFACTION_VALID_DAYS = 90
 
 
 def _q_na_janela(hoje: date) -> Q:
@@ -46,12 +53,12 @@ def _q_na_janela(hoje: date) -> Q:
     O limite superior não é enfeite: um registro com data futura (dedo errado no formulário) não
     é o estado de hoje, e sem ele passaria a valer por noventa dias a partir do erro.
     """
-    return Q(happened_on__gte=hoje - timedelta(days=SATISFACAO_VALIDA_DIAS), happened_on__lte=hoje)
+    return Q(happened_on__gte=hoje - timedelta(days=SATISFACTION_VALID_DAYS), happened_on__lte=hoje)
 
 
 def vigente(
-    registros: Iterable[Satisfacao], hoje: date, *, fonte: str | None = None
-) -> Satisfacao | None:
+    registros: Iterable[SatisfactionRecord], hoje: date, *, fonte: str | None = None
+) -> SatisfactionRecord | None:
     """O registro mais recente que ainda vale hoje, ou nada.
 
     Função **pura** sobre uma lista já recortada por cliente (ou por projeto), no molde de
@@ -65,7 +72,7 @@ def vigente(
     Arquivado não conta. A pré-carga já filtra em SQL; a repetição aqui é para quem passar uma
     lista crua, porque um registro que alguém arquivou não pode continuar movendo número.
     """
-    inicio = hoje - timedelta(days=SATISFACAO_VALIDA_DIAS)
+    inicio = hoje - timedelta(days=SATISFACTION_VALID_DAYS)
     candidatos = [
         registro
         for registro in registros
@@ -83,7 +90,7 @@ def vigente(
 
 def registros_vigentes_por_cliente(
     client_ids: Iterable[int], hoje: date
-) -> dict[int, list[Satisfacao]]:
+) -> dict[int, list[SatisfactionRecord]]:
     """Os registros ainda válidos de cada cliente, em **uma** query.
 
     Devolve a lista e não o escolhido de propósito: o painel de cobrança mostra a vigente de
@@ -95,14 +102,14 @@ def registros_vigentes_por_cliente(
     É a ADR 0014 outra vez: sem lote, `/health/`, `/clients/overview/` e `/cobranca/painel/`
     ganhariam um N+1 por cliente.
     """
-    from .models import Satisfacao
+    from .models import SatisfactionRecord
 
     ids = list(client_ids)
     if not ids:
         return {}
-    por_cliente: dict[int, list[Satisfacao]] = defaultdict(list)
+    por_cliente: dict[int, list[SatisfactionRecord]] = defaultdict(list)
     for registro in (
-        Satisfacao.objects.filter(account_id__in=ids, archived_at__isnull=True)
+        SatisfactionRecord.objects.filter(account_id__in=ids, archived_at__isnull=True)
         .filter(_q_na_janela(hoje))
         .select_related("account")
     ):
@@ -112,13 +119,13 @@ def registros_vigentes_por_cliente(
 
 def vigentes_por_cliente(
     client_ids: Iterable[int], hoje: date, *, fonte: str | None = None
-) -> dict[int, Satisfacao]:
+) -> dict[int, SatisfactionRecord]:
     """A vigente de cada cliente, em uma query. Cliente sem registro válido não entra no dicionário.
 
     Fachada de `registros_vigentes_por_cliente` + `vigente` — a escolha continua sendo a mesma
     função, para o lote não ser uma segunda definição de "vigente".
     """
-    escolhidas: dict[int, Satisfacao] = {}
+    escolhidas: dict[int, SatisfactionRecord] = {}
     for client_id, registros in registros_vigentes_por_cliente(client_ids, hoje).items():
         escolhida = vigente(registros, hoje, fonte=fonte)
         if escolhida is not None:

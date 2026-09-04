@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
-from . import satisfacao as satisfacao_module
+from . import satisfaction as satisfaction_module
 
 if TYPE_CHECKING:
     from .models import User
@@ -166,7 +166,7 @@ def build_delivery_context(user: User) -> str:
     #
     # Por cliente e não por projeto: a satisfação é da relação. O recorte continua saindo de
     # `visible_to` (ADR 0010), pela lista `active` que o bloco de riscos já usa.
-    vigentes = satisfacao_module.vigentes_por_cliente(
+    vigentes = satisfaction_module.vigentes_por_cliente(
         {project.engagement.account_id for project in active}, hoje
     )
     if vigentes:

@@ -35,7 +35,7 @@ from .models import (
     ProjectPhase,
     ProveExperiment,
     Risco,
-    Satisfacao,
+    SatisfactionRecord,
     SolutionHypothesis,
     Task,
     User,
@@ -84,7 +84,7 @@ PROJECT_OF = {
     # `ValueLedgerEntry` **não entra aqui**, e não por esquecimento: ela pende de `Engagement` e o
     # `project` dela é opcional — um mapa que resolvesse `obj.project` devolveria `None` para a
     # entrada de mandato sem projeto, e a Entrega tomaria 403 no detalhe de uma linha que a
-    # listagem dela mostra. É o defeito que a `Satisfacao` já previu, e a pergunta certa está no
+    # listagem dela mostra. É o defeito que o `SatisfactionRecord` já previu, e a pergunta está no
     # ramo próprio dela, abaixo.
     FeasibilityAssessment: lambda obj: obj.project,
     ProveExperiment: lambda obj: obj.project,
@@ -116,8 +116,9 @@ class RolePermission(BasePermission):
             # `invoice` só-leitura para Vendas (FDD 028): quem acompanha o recebível do próprio
             # cliente é o comercial, mas emitir, baixar e cancelar são atos de admin — é dinheiro,
             # e a responsabilidade por afirmar que ele entrou não se delega.
-            # `cobranca` só-leitura ao lado de `invoice`, e pela mesma razão (FDD 036): o comercial
-            # acompanha o que a casa disse ao cliente dele, mas mandar cobrança é ato de admin.
+            # `dunning_contact` (era `cobranca` até a fatia 5.4 da issue #122) só-leitura ao
+            # lado de `invoice`, e pela mesma razão (FDD 036): o comercial acompanha o que a
+            # casa disse ao cliente dele, mas mandar cobrança é ato de admin.
             # As rotas de rascunhar e enviar ficam na `InvoiceViewSet`, e por isso já caem no
             # `invoice` acima — o 403 de Vendas no envio vem de graça, sem regra nova.
             # Os cinco da Fase 5 (FDD 049) entram aqui, **só de leitura**, ao lado de
@@ -127,7 +128,7 @@ class RolePermission(BasePermission):
             # escreve a medição que sustenta a afirmação.
             if resource in {"project", "project_phase", "project_deliverable",
                             "project_checklist_item", "digital_employee", "project_member",
-                            "risk", "health", "case", "invoice", "cobranca",
+                            "risk", "health", "case", "invoice", "dunning_contact",
                             "feasibility_assessment", "prove_experiment", "kpi", "measurement",
                             "value_ledger_entry"}:
                 return request.method in SAFE_METHODS
@@ -136,16 +137,17 @@ class RolePermission(BasePermission):
             # `cobranca_suspensao` é o único recurso financeiro em que Vendas **escreve**, e a
             # assimetria é deliberada: suspender é decisão de relação, e quem a carrega é quem
             # responde pelo cliente. Emitir, baixar e cobrar seguem de admin, porque são dinheiro.
-            # `satisfacao` é escrita pelos **dois** papéis (FDD 037), e é a diferença dela para
-            # os dois vizinhos: `risco` é só de Entrega e `activity` é escrita por Vendas e só
-            # lida por Entrega. Quem conversa com o cliente é de ambas as áreas, e um registro
-            # que só metade da casa pode fazer é um registro que não acontece.
+            # `satisfaction_record` é escrito pelos **dois** papéis (FDD 037), e é a diferença
+            # dele para os dois vizinhos: `risco` é só de Entrega e `activity` é escrita por
+            # Vendas e só lida por Entrega. Quem conversa com o cliente é de ambas as áreas, e um
+            # registro que só metade da casa pode fazer é um registro que não acontece.
             # `process` e `process_step` (FDD 039) são escritos pelos **dois** papéis, pelo
-            # argumento que a FDD 037 usou para `satisfacao` logo acima: quem conduz Discovery é de
-            # ambas as áreas — o comercial levanta a operação na venda, a entrega continua
-            # levantando dentro do projeto —, e um registro que só metade da casa pode fazer é um
-            # registro que não acontece. O achado, que era `evidencia`, virou o par `evidence`/
-            # `finding` do split e entra logo abaixo (a `Evidencia` legada saiu na Fase 6, ADR 0052).
+            # argumento que a FDD 037 usou para `satisfaction_record` logo acima: quem conduz
+            # Discovery é de ambas as áreas — o comercial levanta a operação na venda, a entrega
+            # continua levantando dentro do projeto —, e um registro que só metade da casa pode
+            # fazer é um registro que não acontece. O achado, que era `evidencia`, virou o par
+            # `evidence`/`finding` do split e entra logo abaixo (a `Evidencia` legada saiu na
+            # Fase 6, ADR 0052).
             # `qualification` (ADR 0049) entra ao lado de `lead`, e **não** aparece em
             # nenhum conjunto da Entrega logo abaixo: a avaliação é ato comercial e não
             # atravessa para o portal do cliente (mapa de linguagem §3). O 403 dela vem do
@@ -158,7 +160,8 @@ class RolePermission(BasePermission):
             # continua na entrega, e um achado que só metade da casa registra não é registrado.
             return resource in {"account", "contact", "commercial_opportunity", "engagement",
                                 "document", "lead", "analytics", "artifact", "activity",
-                                "cobranca_suspensao", "satisfacao", "process", "process_step",
+                                "cobranca_suspensao", "satisfaction_record", "process",
+                                "process_step",
                                 "qualification",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding",
@@ -188,9 +191,9 @@ class RolePermission(BasePermission):
             # participa. Quem produz o 403 é o `return False` abaixo — o mesmo mecanismo que fecha
             # `lead` e `analytics`, e a melhor propriedade deste modelo de permissão: recurso novo
             # nasce fechado sem uma linha de código.
-            # `cobranca` e `cobranca_suspensao` (FDD 036) seguem a fatura e também **não aparecem
-            # em nenhum dos dois conjuntos**: quem não alcança o recebível não alcança o que a casa
-            # disse sobre ele. É o mesmo `return False` abaixo, e é a melhor propriedade deste
+            # `dunning_contact` e `cobranca_suspensao` (FDD 036) seguem a fatura e também **não
+            # aparecem em nenhum dos dois conjuntos**: quem não alcança o recebível não alcança o
+            # que a casa disse sobre ele. É o mesmo `return False` abaixo, e é a melhor propriedade deste
             # modelo de permissão — recurso novo nasce fechado sem uma linha de código.
             # `risco` (o registro declarado da FDD 034) entra aqui, ao lado de `pendencia`, e
             # **não** se confunde com `risk` lá em cima: aquele é a avaliação calculada, só de
@@ -205,7 +208,7 @@ class RolePermission(BasePermission):
             return resource in {"milestone", "task", "document", "dashboard", "meeting",
                                 "pendencia", "decisao", "risco", "project_phase",
                                 "project_deliverable", "project_checklist_item",
-                                "digital_employee", "artifact", "satisfacao",
+                                "digital_employee", "artifact", "satisfaction_record",
                                 "process", "process_step",
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding",
@@ -238,7 +241,7 @@ class RolePermission(BasePermission):
             # pode ser da Entrega, e é dele que se espera o ato de verificar.
             if getattr(view, "resource", "") == "knowledge":
                 return request.method in SAFE_METHODS or getattr(view, "action", None) == "verify"
-            if isinstance(obj, Satisfacao):
+            if isinstance(obj, SatisfactionRecord):
                 # **Não entra em `PROJECT_OF`**, e não por esquecimento: o `project` aqui é
                 # opcional, e um mapa que resolvesse `obj.project` devolveria `None` para o
                 # registro de cliente sem projeto — a Entrega tomaria 403 no detalhe de um
@@ -250,16 +253,16 @@ class RolePermission(BasePermission):
                 Process | ProcessStep | Evidence | Finding | PainPoint
                 | ImprovementOpportunity | PriorityAssessment | SolutionHypothesis,
             ):
-                # Mesma pergunta da `Satisfacao` acima, e **também fora de `PROJECT_OF`** — aqui
-                # não por o projeto ser opcional, mas por não existir: o processo mapeado é do
-                # cliente e sobrevive à venda que o descobriu (FDD 039). A etapa chega ao cliente
+                # Mesma pergunta do `SatisfactionRecord` acima, e **também fora de `PROJECT_OF`**
+                # — aqui não por o projeto ser opcional, mas por não existir: o processo mapeado é
+                # do cliente e sobrevive à venda que o descobriu (FDD 039). A etapa chega ao cliente
                 # pelo processo pai, que é o mesmo caminho da queryset dela.
                 #
                 # `Evidence` e `Finding` (FDD 045) entram no mesmo ramo com um caminho a menos: a
                 # conta é campo deles (`account`), e não algo a resolver pelo pai. O `process` é
                 # opcional nos dois, então resolvê-la por ele devolveria `None` justamente no
                 # achado solto — 403 no detalhe de um registro que a listagem mostra, que é o
-                # defeito que a `Satisfacao` já previu.
+                # defeito que o `SatisfactionRecord` já previu.
                 #
                 # Os quatro da Fase 4 (FDD 048) entram no mesmo ramo: `PainPoint` e
                 # `ImprovementOpportunity` têm a conta como campo próprio, e `PriorityAssessment`

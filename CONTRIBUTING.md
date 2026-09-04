@@ -9,7 +9,7 @@ Nome novo — de modelo, campo, rota, componente ou prop — segue [`docs/ontolo
 ## Corpus de conhecimento (FDD 029)
 
 `backend/apps/core/knowledge_corpus.jsonl` é **derivado** de `docs/` e `PRD.md` e vive commitado,
-como o `openapi.yaml`. Mexeu em ADR, FDD, RFC, runbook, `PRD.md`, `docs/architecture.md`,
+como o `openapi.yaml` e o `openapi-v2.yaml`. Mexeu em ADR, FDD, RFC, runbook, `PRD.md`, `docs/architecture.md`,
 `docs/operacao.md` ou `docs/captacao-de-leads.md`? Rode:
 
 ```bash

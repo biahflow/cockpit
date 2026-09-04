@@ -9,7 +9,7 @@ vi.mock("../api", () => ({ api: mocks.api }));
 
 const vertical = { id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true };
 const blueprint = {
-  id: 3, name: "SDR", area: "comercial", area_display: "Comercial",
+  id: 3, name: "SDR", area: "commercial", area_display: "Comercial",
   description: "Qualifica lead fora do horário.", kpi_label: "Leads qualificados/mês",
   default_hours_saved_month: "40.0", default_roi_month: "8000.00", service: null,
   service_name: "", active: true, resolved: null, has_variant: true,
@@ -51,6 +51,22 @@ test("cria uma vertical e um bloco do catálogo", async () => {
   await user.type(screen.getByLabelText("Novo bloco"), "Agente Financeiro");
   await user.click(screen.getByRole("button", { name: "Adicionar bloco" }));
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/digital-employee-blueprints/", expect.objectContaining({ method: "POST", body: expect.stringContaining("Agente Financeiro") })));
+
+  // O valor fala inglês desde a migração `0084` (issue #122, fatia 5.1) — a tela manda "commercial",
+  // nunca "comercial", mesmo com o default (sem trocar a área no formulário).
+  const chamada = mocks.api.mock.calls.find(
+    ([caminho, opcoes]) => caminho === "/digital-employee-blueprints/" && (opcoes as { method?: string } | undefined)?.method === "POST",
+  );
+  expect(JSON.parse((chamada?.[1] as { body: string }).body)).toMatchObject({ area: "commercial" });
+});
+
+test("mostra o rótulo em português mesmo com o valor em inglês", async () => {
+  render(<BibliotecaPage />);
+  await screen.findByDisplayValue("SDR");
+
+  const selecao = screen.getByLabelText("Área de SDR") as HTMLSelectElement;
+  expect(selecao.value).toBe("commercial");
+  expect(selecao.selectedOptions[0].textContent).toBe("Comercial");
 });
 
 test("adiciona uma variante mandando null onde o campo ficou em branco", async () => {

@@ -47,7 +47,7 @@ def fatura_de_projeto_lucrativo() -> Invoice:
 
 @pytest.mark.django_db
 def test_o_contexto_nao_cita_custo_margem_nem_roi(fatura_de_projeto_lucrativo: Invoice) -> None:
-    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firme", HOJE).lower()
+    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firm", HOJE).lower()
 
     assert "250000" not in contexto and "250.000" not in contexto
     for palavra in PROIBIDOS:
@@ -60,7 +60,7 @@ def test_o_contexto_leva_o_nivel_de_health_e_nao_o_score(
 ) -> None:
     """"atenção" ajusta o tom; "62/100, 2 entregas atrasadas" é a nossa medição da nossa própria
     falha, e ela não é assunto de um e-mail de cobrança."""
-    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firme", HOJE)
+    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firm", HOJE)
 
     assert "Saúde da entrega: saudável" in contexto
     assert "/100" not in contexto
@@ -70,7 +70,7 @@ def test_o_contexto_leva_o_nivel_de_health_e_nao_o_score(
 def test_o_contexto_leva_o_que_o_cliente_ja_sabe(fatura_de_projeto_lucrativo: Invoice) -> None:
     """O complemento do teste acima: cercar tudo não é cercar — o rascunho precisa do que faz o
     tom mudar (valor, prazo, tempo de casa, histórico, entrega atrasada)."""
-    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firme", HOJE)
+    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firm", HOJE)
 
     assert "18000" in contexto
     assert "Dias de atraso: 12" in contexto
@@ -86,7 +86,7 @@ def test_o_contexto_nao_alcanca_fatura_de_outro_cliente(
         status=Invoice.Status.OVERDUE, number="2026-0002", amount=Decimal("77777.00"),
         due_date=HOJE - timedelta(days=40),
     )
-    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firme", HOJE)
+    contexto = ai.build_cobranca_context(fatura_de_projeto_lucrativo, "firm", HOJE)
 
     assert "77777" not in contexto
     assert de_outro.account.name not in contexto

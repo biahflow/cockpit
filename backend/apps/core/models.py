@@ -1501,18 +1501,23 @@ class Activity(TimestampedModel):
         EMAIL = "email", "E-mail"
         NOTE = "note", "Nota"
 
-    class CobrancaSinal(models.TextChoices):
+    class DunningSignal(models.TextChoices):
         """Os três problemas que a mesma régua estraga (RFC 0004, camada 4).
 
         Não é sentimento nem etiqueta de CRM: cada valor manda para um lugar diferente.
-        `esqueceu` já se resolveu com o lembrete; `nao_pode` pede renegociação, e cedo;
-        `insatisfeito` não é problema de cobrança — é problema de relação disfarçado, e insistir
+        `forgot` já se resolveu com o lembrete; `unable_to_pay` pede renegociação, e cedo;
+        `dissatisfied` não é problema de cobrança — é problema de relação disfarçado, e insistir
         piora tudo. A IA **grava o sinal e não age** (ADR 0031).
+
+        O valor fala inglês desde a issue #122, fatia 5.2 (D10 do language-map, `docs/ontology/
+        aliases.md`): classe, campo (`dunning_signal`) e valor mudaram juntos, no molde que a
+        fatia 5.1 (`DigitalEmployeeBlueprint.Area`) estabeleceu. Os rótulos pt-BR não mudam —
+        rótulo é superfície, valor é contrato.
         """
 
-        ESQUECEU = "esqueceu", "Esqueceu"
-        NAO_PODE = "nao_pode", "Não pôde pagar"
-        INSATISFEITO = "insatisfeito", "Insatisfeito"
+        FORGOT = "forgot", "Esqueceu"
+        UNABLE_TO_PAY = "unable_to_pay", "Não pôde pagar"
+        DISSATISFIED = "dissatisfied", "Insatisfeito"
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="activities")
     commercial_opportunity = models.ForeignKey(
@@ -1525,8 +1530,8 @@ class Activity(TimestampedModel):
     invoice = models.ForeignKey(
         "Invoice", on_delete=models.SET_NULL, null=True, blank=True, related_name="activities"
     )
-    cobranca_sinal = models.CharField(
-        max_length=16, choices=CobrancaSinal.choices, blank=True, default=""
+    dunning_signal = models.CharField(
+        max_length=16, choices=DunningSignal.choices, blank=True, default=""
     )
     kind = models.CharField(max_length=16, choices=Kind.choices)
     happened_on = models.DateField()
@@ -1558,7 +1563,7 @@ class Activity(TimestampedModel):
             raise ValidationError({"invoice": "A fatura deve pertencer ao mesmo cliente."})
 
 
-class Satisfacao(TimestampedModel):
+class SatisfactionRecord(TimestampedModel):
     """Satisfação do cliente: o único sinal do domínio cuja fonte está **fora** da casa (FDD 037).
 
     Camada 5 da RFC 0004, e a lacuna que a docstring do `health.py` declarava desde a Fase 2. Todo
@@ -1574,26 +1579,43 @@ class Satisfacao(TimestampedModel):
 
     Nada aqui sai da casa: não há canal, credencial nem flag. É registro interno digitado por quem
     conversou com o cliente, e **não** atravessa para o portal do cliente (ADR 0032).
+
+    **A classe fala inglês desde a issue #122, fatia 5.3** (D10 do language-map,
+    `docs/ontology/aliases.md`): `satisfaction_record` é o nome cunhado na §4 do mapa, e classe,
+    tabela (`RenameModel`, sem `Meta.db_table` a preservar — a pk desta família **não** está entre
+    as seis identidades externas da §2b) e os dois enums de valor atravessaram na mesma fatia. Os
+    **campos** `nivel` e `fonte` ficam: o mapa cunha `satisfaction_record.level`/`.source` como
+    nome de *enum*, e a chave de payload é o que a §2c congela até a `/api/v2/` — renomear a
+    coluna sem ter para onde levar a chave seria pagar metade da dívida e criar outra.
     """
 
     class Nivel(models.TextChoices):
-        PROMOTOR = "promotor", "Promotor"
-        SATISFEITO = "satisfeito", "Satisfeito"
-        NEUTRO = "neutro", "Neutro"
-        INSATISFEITO = "insatisfeito", "Insatisfeito"
+        """Os quatro níveis, no vocabulário NPS que o language-map §4 enumera.
+
+        Valor em inglês desde a fatia 5.3 (D10); os rótulos pt-BR não mudam — rótulo é superfície,
+        valor é contrato. O nome do **enum** continua `Nivel` porque ele é o tipo do campo `nivel`,
+        e o campo é a chave de payload que a §2c mantém até a `/api/v2/`: batizá-lo `Level` deixaria
+        `SatisfactionRecord.Level` tipando `SatisfactionRecord.nivel`, que é a contradição de meia
+        travessia que D10 existe para não criar.
+        """
+
+        PROMOTER = "promoter", "Promotor"
+        SATISFIED = "satisfied", "Satisfeito"
+        NEUTRAL = "neutral", "Neutro"
+        DISSATISFIED = "dissatisfied", "Insatisfeito"
 
     class Fonte(models.TextChoices):
         """De onde veio o sinal — e é a decisão inteira desta fatia (ADR 0032).
 
-        `declarada` é o cliente tendo dito; `percebida` é a leitura de quem entrega. Os dois são
+        `declared` é o cliente tendo dito; `perceived` é a leitura de quem entrega. Os dois são
         úteis e não são a mesma coisa: um é evidência, o outro é hipótese. **Só a declarada move
         número** — Health Score e escada de cobrança. Sem a separação, o sinal do cliente vira a
         opinião do time sobre si mesmo com aparência de medição, que é pior que não ter sinal
         nenhum, porque um número errado é consultado com a mesma confiança de um número certo.
         """
 
-        DECLARADA = "declarada", "Declarada pelo cliente"
-        PERCEBIDA = "percebida", "Percebida por quem entrega"
+        DECLARED = "declared", "Declarada pelo cliente"
+        PERCEIVED = "perceived", "Percebida por quem entrega"
 
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name="satisfacoes")
     project = models.ForeignKey(
@@ -1606,7 +1628,7 @@ class Satisfacao(TimestampedModel):
         Meeting, on_delete=models.SET_NULL, null=True, blank=True, related_name="satisfacoes"
     )
     # A outra proveniência: a resposta de cobrança que a IA classificou (FDD 038). É ela que dá
-    # **leitor** ao `Activity.cobranca_sinal`, que até aqui era gravado e nunca lido por motor
+    # **leitor** ao `Activity.dunning_signal`, que até aqui era gravado e nunca lido por motor
     # nenhum. O painel usa esta ligação para parar de oferecer o atalho depois do registro — sem
     # ela, o mesmo sinal insistiria para sempre, mesmo já registrado.
     #
@@ -1621,7 +1643,7 @@ class Satisfacao(TimestampedModel):
     # justamente para ninguém escolher por omissão.
     fonte = models.CharField(max_length=16, choices=Fonte.choices)
     # O dia do acontecido, não o do cadastro: o sinal envelhece por uma janela de 90 dias
-    # (`satisfacao.SATISFACAO_VALIDA_DIAS`), e é `happened_on` que a janela lê.
+    # (`satisfaction.SATISFACTION_VALID_DAYS`), e é `happened_on` que a janela lê.
     happened_on = models.DateField()
     note = models.TextField(blank=True)
     registered_by = models.ForeignKey(
@@ -1653,7 +1675,7 @@ class Satisfacao(TimestampedModel):
         # exatamente o que apodrece: seis meses depois ninguém sabe o que o cliente disse, e a
         # cobrança segue abrandada por um registro que ninguém consegue avaliar. Mesma exigência
         # que `CobrancaSuspensao.reason` já faz, e pela mesma razão.
-        if self.nivel == self.Nivel.INSATISFEITO and not (self.note or "").strip():
+        if self.nivel == self.Nivel.DISSATISFIED and not (self.note or "").strip():
             raise ValidationError(
                 {"note": "Diga o que o cliente disse: insatisfeito sem nota não se avalia depois."}
             )
@@ -1676,8 +1698,8 @@ class Process(TimestampedModel):
     Os dois convivem e não se substituem — a narrativa é o que se lê, o dado é o que se calcula —,
     e é a mesma distinção que o `Risco` faz em relação ao `risk.py` calculado.
 
-    **Liga ao cliente e não ao projeto**, pelo argumento da `Satisfacao` acima: o processo mapeado
-    é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de
+    **Liga ao cliente e não ao projeto**, pelo argumento do `SatisfactionRecord` acima: o processo
+    mapeado é da empresa e sobrevive à venda que o descobriu (a metodologia separa Account de
     CommercialOpportunity, `docs/metodologia-fde.md:64-67`). Ancorar no projeto obrigaria a recriar o AS-IS do zero a cada
     novo Discovery da mesma empresa — que é exatamente o defeito que o `DigitalEmployee` tinha
     antes da FDD 026, quando o que valia morava só na instância e não no catálogo.
@@ -1687,8 +1709,8 @@ class Process(TimestampedModel):
     name = models.CharField(max_length=255)
     position = models.PositiveIntegerField(default=0)
     # Procedência, e não vínculo: apagar o projeto ou a reunião não desfaz o mapa levantado neles.
-    # É o `SET_NULL` da `Satisfacao.source_meeting`, pela mesma razão — o que se perde é de onde
-    # veio, e perder isso é melhor que perder o registro.
+    # É o `SET_NULL` do `SatisfactionRecord.source_meeting`, pela mesma razão — o que se perde é
+    # de onde veio, e perder isso é melhor que perder o registro.
     source_project = models.ForeignKey(
         Project, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="processos_mapeados",
@@ -3526,11 +3548,21 @@ class DigitalEmployeeBlueprint(models.Model):
     """
 
     class Area(models.TextChoices):
-        COMMERCIAL = "comercial", "Comercial"
-        FINANCE = "financeiro", "Financeiro"
-        HR = "rh", "RH"
-        LEGAL = "juridico", "Jurídico"
-        SUPPORT = "atendimento", "Atendimento"
+        """Os MEMBROS e os LABELS ficam; o VALOR virou inglês na fatia 5.1 da issue #122.
+
+        Rótulo é superfície, valor é contrato (D10, `docs/ontology/language-map.md` §4) — os cinco
+        pares (`comercial→commercial`, ...) são a primeira migração de **valor** do repositório
+        (`0084_a_area_do_blueprint_fala_ingles`), não mais um `RenameModel`/`RenameField`. Os
+        valores portugueses continuam aceitos como alias de **entrada** só na `/api/v1/`
+        (`DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA`); a `/api/v2/` recusa com o 400 de
+        `choices` do DRF. Ver `docs/ontology/aliases.md`.
+        """
+
+        COMMERCIAL = "commercial", "Comercial"
+        FINANCE = "finance", "Financeiro"
+        HR = "hr", "RH"
+        LEGAL = "legal", "Jurídico"
+        SUPPORT = "support", "Atendimento"
 
     name = models.CharField(max_length=120)
     area = models.CharField(max_length=24, choices=Area.choices, default=Area.COMMERCIAL)
@@ -3962,8 +3994,14 @@ class Invoice(TimestampedModel):
         return self.status == self.Status.ISSUED and self.due_date < timezone.localdate()
 
 
-class CobrancaContato(TimestampedModel):
+class DunningContact(TimestampedModel):
     """O que a casa **já disse** sobre uma fatura vencida (FDD 036, camada 3 da RFC 0004).
+
+    Chamava-se `CobrancaContato` até a fatia 5.4 da issue #122 (D10 do `language-map` §4): o campo
+    (`dunning_step`) e os cinco valores já estavam cunhados no mapa, e o que faltava era o
+    substantivo da classe que os carrega — cunhado no espelho (`docs/ontology/aliases.md` §8) pelo
+    precedente de `DunningSignal`. A tabela foi junto (`RenameModel` puro): esta pk **não** é uma
+    das seis identidades externas da §2b, e o registro sequer atravessa para o portal do cliente.
 
     Não é fila e não é agenda: é registro do que saiu. A régua é derivada do estado atual da
     fatura (`cobranca.degrau_devido`), e este modelo só responde "este degrau já foi gasto?".
@@ -3984,12 +4022,14 @@ class CobrancaContato(TimestampedModel):
     apagar.
     """
 
-    class Degrau(models.TextChoices):
-        PRE_AVISO = "pre_aviso", "Pré-aviso"
-        LEMBRETE = "lembrete", "Lembrete"
-        FIRME = "firme", "Cobrança firme"
-        ESCALADA = "escalada", "Escalada interna"
-        RENEGOCIACAO = "renegociacao", "Renegociação"
+    # Os cinco valores falam inglês desde a migração `0087` (issue #122, fatia 5.4). O rótulo
+    # continua pt-BR: ele é superfície, e o que a D10 move é o que persiste.
+    class DunningStep(models.TextChoices):
+        PRE_NOTICE = "pre_notice", "Pré-aviso"
+        REMINDER = "reminder", "Lembrete"
+        FIRM = "firm", "Cobrança firme"
+        ESCALATION = "escalation", "Escalada interna"
+        RENEGOTIATION = "renegotiation", "Renegociação"
 
     class Canal(models.TextChoices):
         EMAIL = "email", "E-mail ao cliente"
@@ -3997,7 +4037,7 @@ class CobrancaContato(TimestampedModel):
 
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="cobrancas")
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="cobrancas")
-    degrau = models.CharField(max_length=16, choices=Degrau.choices)
+    dunning_step = models.CharField(max_length=16, choices=DunningStep.choices)
     canal = models.CharField(max_length=8, choices=Canal.choices)
     # **Data e não carimbo de relógio**, ao contrário de `Invoice.paid_at`. Toda regra da régua é
     # aritmética de dias sobre o vencimento, e o comando aceita `--hoje` para exercício
@@ -4030,8 +4070,12 @@ class CobrancaContato(TimestampedModel):
             # **A idempotência do degrau mora aqui, e não numa guarda em Python.** Duas execuções
             # no mesmo dia, ou o job e uma pessoa ao mesmo tempo, param no banco em vez de
             # dependerem de quem leu antes.
+            # O **nome** das duas constraints não acompanha o renome de propósito: nome de
+            # constraint é identificador de banco, e trocá-lo custaria um `DROP`/`CREATE` de índice
+            # único para nenhum ganho de contrato. O que a §2b exige é que linha e pk sobrevivam,
+            # e é o que `RenameModel`/`RenameField` fazem.
             models.UniqueConstraint(
-                fields=["invoice", "degrau"], name="unique_cobranca_degrau_por_fatura"
+                fields=["invoice", "dunning_step"], name="unique_cobranca_degrau_por_fatura"
             ),
             models.CheckConstraint(
                 condition=Q(archived_at__isnull=True), name="cobranca_contato_is_never_archived"
@@ -4039,7 +4083,7 @@ class CobrancaContato(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.get_degrau_display()} — {self.account.name} ({self.sent_on})"
+        return f"{self.get_dunning_step_display()} — {self.account.name} ({self.sent_on})"
 
 
 class CobrancaSuspensao(TimestampedModel):

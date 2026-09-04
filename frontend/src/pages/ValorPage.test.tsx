@@ -45,7 +45,7 @@ let contaOuFalha: unknown = conta;
 
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/4/") return contaOuFalha instanceof Error ? Promise.reject(contaOuFalha) : Promise.resolve(contaOuFalha);
+    if (path === "/accounts/4/") return contaOuFalha instanceof Error ? Promise.reject(contaOuFalha) : Promise.resolve(contaOuFalha);
     if (path.startsWith("/engagements/")) return Promise.resolve(engagements);
     return Promise.resolve([]);
   });

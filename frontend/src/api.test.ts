@@ -13,8 +13,8 @@ test("envia o token CSRF ao autenticar", async () => {
 
   await login("admin", "admin");
 
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/auth/csrf/", { credentials: "include" });
-  expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/auth/login/", expect.objectContaining({
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v2/auth/csrf/", { credentials: "include" });
+  expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v2/auth/login/", expect.objectContaining({
     method: "POST",
     credentials: "include",
     headers: expect.objectContaining({ "Content-Type": "application/json", "X-CSRFToken": "token-seguro" }),
@@ -29,8 +29,8 @@ test("lista convites e usuários via GET", async () => {
 
   expect(await listInvitations()).toEqual([{ id: 1 }]);
   expect(await listUsers()).toEqual([{ id: 2 }]);
-  expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/invitations/", expect.objectContaining({ credentials: "include" }));
-  expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/users/", expect.objectContaining({ credentials: "include" }));
+  expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v2/invitations/", expect.objectContaining({ credentials: "include" }));
+  expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v2/users/", expect.objectContaining({ credentials: "include" }));
 });
 
 test("cria convite e aceita convite via POST com CSRF", async () => {
@@ -40,12 +40,12 @@ test("cria convite e aceita convite via POST com CSRF", async () => {
   await createInvitation("pessoa@x.com", "delivery");
   await acceptInvitation({ token: "abc", username: "novo", password: "SenhaSegura123!" });
 
-  expect(fetchMock).toHaveBeenCalledWith("/api/v1/invitations/", expect.objectContaining({ method: "POST" }));
-  expect(fetchMock).toHaveBeenCalledWith("/api/v1/invitations/accept/", expect.objectContaining({ method: "POST" }));
+  expect(fetchMock).toHaveBeenCalledWith("/api/v2/invitations/", expect.objectContaining({ method: "POST" }));
+  expect(fetchMock).toHaveBeenCalledWith("/api/v2/invitations/accept/", expect.objectContaining({ method: "POST" }));
 });
 
 test("monta a URL de download do documento", () => {
-  expect(documentDownloadUrl(7)).toBe("/api/v1/documents/7/download/");
+  expect(documentDownloadUrl(7)).toBe("/api/v2/documents/7/download/");
 });
 
 test("busca config e notificações via GET", async () => {
@@ -94,8 +94,8 @@ test("marca notificações como lidas via POST", async () => {
   await markNotificationRead(1);
   await markAllNotificationsRead();
 
-  expect(fetchMock).toHaveBeenCalledWith("/api/v1/notifications/1/read/", expect.objectContaining({ method: "POST" }));
-  expect(fetchMock).toHaveBeenCalledWith("/api/v1/notifications/read-all/", expect.objectContaining({ method: "POST" }));
+  expect(fetchMock).toHaveBeenCalledWith("/api/v2/notifications/1/read/", expect.objectContaining({ method: "POST" }));
+  expect(fetchMock).toHaveBeenCalledWith("/api/v2/notifications/read-all/", expect.objectContaining({ method: "POST" }));
 });
 
 test("erro de campo do DRF chega ao usuário em vez do texto genérico", async () => {

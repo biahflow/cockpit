@@ -16,7 +16,7 @@ test("sem DSN o Sentry não é inicializado", async () => {
 });
 
 test("reportar erro com o Sentry desligado não explode", () => {
-  expect(() => reportError(new Error("qualquer"), { path: "/clients/" })).not.toThrow();
+  expect(() => reportError(new Error("qualquer"), { path: "/accounts/" })).not.toThrow();
 });
 
 test("guarda o request-id da última resposta", () => {

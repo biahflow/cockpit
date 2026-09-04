@@ -4,10 +4,10 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api, getConfig } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog, Modal } from "../components/Modal";
-import { healthBadgeClass, satisfacaoBadgeClass } from "../components/StatusDot";
+import { healthBadgeClass, satisfactionBadgeClass } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
 import { canWriteBeyondDelivery } from "../roles";
-import type { CobrancaContato, CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, CobrancaTensaoCausa, SatisfacaoFonte, SatisfacaoNivel, SessionUser } from "../types";
+import type { CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, CobrancaTensaoCausa, DunningContact, SatisfactionLevel, SatisfactionSource, SessionUser } from "../types";
 
 /**
  * A tela onde se decide o próximo passo da cobrança (FDD 036, critério de aceite 7).
@@ -44,17 +44,21 @@ const REGUA: Record<CobrancaRegua, string> = {
 
 // A satisfação vigente no card da fatura (FDD 037). Só o nível tem rótulo próprio aqui: a fonte já
 // vem pronta em `fonte_display` no cadastro de satisfação, mas o painel manda o **código**
-// (`declarada`/`percebida`), não o rótulo — mandar os dois seria duplicar o texto por dois
-// caminhos que podem discordar.
-const SATISFACAO_NIVEL: Record<SatisfacaoNivel, string> = {
-  promotor: "Promotor",
-  satisfeito: "Satisfeito",
-  neutro: "Neutro",
-  insatisfeito: "Insatisfeito",
+// (`declared`/`perceived`), não o rótulo — mandar os dois seria duplicar o texto por dois
+// caminhos que podem discordar. As chaves falam inglês desde a fatia 5.3 da issue #122; os
+// rótulos, que são superfície, não mudaram (D10).
+//
+// Os dois mapas falavam português (`SATISFACTION_NIVEL`/`SATISFACTION_FONTE`) até a fatia 6 da
+// mesma issue — nome local, sem coinagem.
+const SATISFACTION_NIVEL: Record<SatisfactionLevel, string> = {
+  promoter: "Promotor",
+  satisfied: "Satisfeito",
+  neutral: "Neutro",
+  dissatisfied: "Insatisfeito",
 };
-const SATISFACAO_FONTE: Record<SatisfacaoFonte, string> = {
-  declarada: "declarada pelo cliente",
-  percebida: "percebida por quem entrega",
+const SATISFACTION_FONTE: Record<SatisfactionSource, string> = {
+  declared: "declarada pelo cliente",
+  perceived: "percebida por quem entrega",
 };
 
 // Por que a relação está tensa (FDD 038). O rótulo existe porque a escada é a **mesma** nas duas
@@ -67,17 +71,26 @@ const TENSAO_CAUSA: Record<CobrancaTensaoCausa, string> = {
 };
 
 // O nível que o formulário do atalho nasce marcando, por sinal lido (FDD 038). É **palpite
-// editável**, não classificação: `insatisfeito` é a única leitura que afirma algo sobre a relação,
-// e as outras duas falam de dinheiro, não de satisfação — daí `neutro`, que é o nível que não é
+// editável**, não classificação: `dissatisfied` é a única leitura que afirma algo sobre a relação,
+// e as outras duas falam de dinheiro, não de satisfação — daí `neutral`, que é o nível que não é
 // alerta. Quem salva escolhe, e é a escolha dela que vira registro (ADR 0032).
-const NIVEL_SUGERIDO: Record<Exclude<CobrancaPainelLinha["sinal_kind"], null>, SatisfacaoNivel> = {
-  esqueceu: "neutro",
-  nao_pode: "neutro",
-  insatisfeito: "insatisfeito",
+//
+// **As duas metades do mapa agora falam inglês, e foi em fatias diferentes**: as CHAVES na 5.2
+// (`Activity.DunningSignal`) e os VALORES na 5.3 (`SatisfactionRecord.Nivel`). São famílias
+// distintas, e é por isso que `dissatisfied` aparece dos dois lados da mesma linha sem ser a
+// mesma coisa: à esquerda é o sinal que a IA leu, à direita é o nível que uma pessoa vai
+// registrar — a homonímia é do vocabulário, não um acoplamento entre as duas.
+const NIVEL_SUGERIDO: Record<
+  Exclude<CobrancaPainelLinha["sinal_kind"], null>,
+  SatisfactionLevel
+> = {
+  forgot: "neutral",
+  unable_to_pay: "neutral",
+  dissatisfied: "dissatisfied",
 };
 
 /** "há 12 dias" — a idade que faz alguém perguntar de novo (FDD 037). O corte é do backend. */
-function satisfacaoIdade(dias: number): string {
+function satisfactionIdade(dias: number): string {
   if (dias === 0) return "hoje";
   if (dias === 1) return "há 1 dia";
   return `há ${dias} dias`;
@@ -167,10 +180,10 @@ const suspensaoVazia = { alcance: "fatura" as Alcance, owner: "", until: "", rea
 
 /**
  * O registro que o atalho do sinal abre. `fonte` **não** está aqui e não é escolha: a resposta é do
- * cliente, então a fonte é `declarada` (ADR 0032). O que se edita é o nível e a nota — e é uma
+ * cliente, então a fonte é `declared` (ADR 0032). O que se edita é o nível e a nota — e é uma
  * pessoa quem salva, o que é a decisão inteira desta metade da fatia: a IA leu, ela não registrou.
  */
-const registroVazio = { nivel: "neutro" as SatisfacaoNivel, note: "" };
+const registroVazio = { nivel: "neutral" as SatisfactionLevel, note: "" };
 
 export function CobrancaPage() {
   const { user } = useAuth();
@@ -181,7 +194,7 @@ export function CobrancaPage() {
   const [linhas, setLinhas] = useState<CobrancaPainelLinha[]>([]);
   const [iaLigada, setIaLigada] = useState(false);
   const [donos, setDonos] = useState<SessionUser[]>([]);
-  const [historico, setHistorico] = useState<Record<number, CobrancaContato[]>>({});
+  const [historico, setHistorico] = useState<Record<number, DunningContact[]>>({});
   const [aberto, setAberto] = useState<number | null>(null);
   const [envio, setEnvio] = useState<Envio | null>(null);
   const [suspendendo, setSuspendendo] = useState<CobrancaPainelLinha | null>(null);
@@ -266,7 +279,7 @@ export function CobrancaPage() {
           // Um **ou** o outro, nunca os dois — a regra é do `clean()` do modelo, e mandar os dois
           // seria pedir 400 para dizer o que a tela já sabia.
           ...(suspensao.alcance === "cliente"
-            ? { account: suspendendo.client }
+            ? { account: suspendendo.account }
             : { invoice: suspendendo.invoice }),
           owner: Number(suspensao.owner),
           until: suspensao.until,
@@ -287,18 +300,18 @@ export function CobrancaPage() {
    * daqui e não do backend ao classificar. `source_activity` é o que faz o sinal sumir da linha
    * depois: sem ele o mesmo lembrete insistiria para sempre, inclusive com o registro já feito.
    */
-  async function registrarSatisfacao(event: FormEvent<HTMLFormElement>) {
+  async function registrarSatisfaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!registrando?.sinal_activity) return;
     setError(""); setBusy(true);
     try {
-      await api("/satisfacoes/", {
+      await api("/satisfaction-records/", {
         method: "POST",
         body: JSON.stringify({
-          account: registrando.client,
+          account: registrando.account,
           source_activity: registrando.sinal_activity,
           nivel: registro.nivel,
-          fonte: "declarada",
+          fonte: "declared",
           // O dia do acontecido, e não o de hoje: o sinal envelhece por uma janela de 90 dias, e
           // carimbar o registro com a data do cadastro esticaria a validade do que o cliente disse.
           happened_on: registrando.sinal_em,
@@ -329,7 +342,7 @@ export function CobrancaPage() {
     setAberto(linha.invoice);
     if (historico[linha.invoice]) return;
     try {
-      const itens = await api<CobrancaContato[]>(`/cobranca/?invoice=${linha.invoice}`);
+      const itens = await api<DunningContact[]>(`/cobranca/?invoice=${linha.invoice}`);
       setHistorico(prev => ({ ...prev, [linha.invoice]: itens }));
     } catch (cause) { setError(mensagemDeFalha(cause)); }
   }
@@ -345,7 +358,7 @@ export function CobrancaPage() {
             porque seu texto é constante revisada uma vez; o que muda aqui é a **redação**, e a
             redação é precisamente o que uma pessoa revisaria. */}
         <p className="text-sm text-muted">
-          <strong className="text-ink">{envio.linha.client_name}</strong> · fatura {envio.linha.number || "sem número"} · degrau <strong className="text-ink">{envio.linha.proximo_degrau_display}</strong>.
+          <strong className="text-ink">{envio.linha.account_name}</strong> · fatura {envio.linha.number || "sem número"} · degrau <strong className="text-ink">{envio.linha.proximo_degrau_display}</strong>.
           O texto sai como está escrito abaixo, com o seu nome no registro.
         </p>
         {error && <p role="alert" className="alert--error">{error}</p>}
@@ -388,7 +401,7 @@ export function CobrancaPage() {
           <label className="flex items-center gap-2 text-sm text-ink">
             <input type="radio" name="alcance" className="size-4" checked={suspensao.alcance === "cliente"}
               onChange={() => setSuspensao({ ...suspensao, alcance: "cliente" })} />
-            Este cliente inteiro — {suspendendo.client_name}
+            Este cliente inteiro — {suspendendo.account_name}
           </label>
         </fieldset>
         <label className="form-label">Dono da suspensão
@@ -412,12 +425,12 @@ export function CobrancaPage() {
     </Modal>}
 
     {registrando && <Modal title="Registrar satisfação" onClose={() => { setRegistrando(null); setRegistro(registroVazio); }}>
-      <form className="grid gap-4" onSubmit={event => void registrarSatisfacao(event)}>
+      <form className="grid gap-4" onSubmit={event => void registrarSatisfaction(event)}>
         {/* A leitura da IA vira registro **aqui**, com o nome de quem salvou (ADR 0032). O modelo
             classificou uma resposta; afirmar que o cliente está insatisfeito é outra coisa, e é
             ela que tira 20 pontos do Health Score e troca a escada da cobrança. */}
         <p className="text-sm text-muted">
-          A resposta de <strong className="text-ink">{registrando.client_name}</strong> foi lida como <strong className="text-ink">{registrando.sinal_display}</strong> em {registrando.sinal_em ? formatDate(registrando.sinal_em) : ""}. O que a IA leu não é registro — o registro é este, e sai com o seu nome.
+          A resposta de <strong className="text-ink">{registrando.account_name}</strong> foi lida como <strong className="text-ink">{registrando.sinal_display}</strong> em {registrando.sinal_em ? formatDate(registrando.sinal_em) : ""}. O que a IA leu não é registro — o registro é este, e sai com o seu nome.
         </p>
         {error && <p role="alert" className="alert--error">{error}</p>}
         {/* A fonte não é escolha: foi o cliente quem respondeu, então é declarada. É a fonte que
@@ -428,17 +441,17 @@ export function CobrancaPage() {
         </p>
         <label className="form-label">Nível
           <select required className="field" value={registro.nivel}
-            onChange={event => setRegistro({ ...registro, nivel: event.target.value as SatisfacaoNivel })}>
-            {(Object.keys(SATISFACAO_NIVEL) as SatisfacaoNivel[]).map(nivel =>
-              <option key={nivel} value={nivel}>{SATISFACAO_NIVEL[nivel]}</option>)}
+            onChange={event => setRegistro({ ...registro, nivel: event.target.value as SatisfactionLevel })}>
+            {(Object.keys(SATISFACTION_NIVEL) as SatisfactionLevel[]).map(nivel =>
+              <option key={nivel} value={nivel}>{SATISFACTION_NIVEL[nivel]}</option>)}
           </select>
         </label>
         <label className="form-label">O que o cliente disse
-          <textarea required={registro.nivel === "insatisfeito"} rows={3} className="field"
+          <textarea required={registro.nivel === "dissatisfied"} rows={3} className="field"
             placeholder="A frase dele, não a sua leitura sobre ele"
             value={registro.note} onChange={event => setRegistro({ ...registro, note: event.target.value })} />
         </label>
-        {registro.nivel === "insatisfeito" && <p className="text-xs text-muted">Insatisfeito sem nota não se avalia depois: seis meses adiante ninguém sabe o que o cliente disse, e a cobrança segue abrandada por um registro que ninguém consegue julgar.</p>}
+        {registro.nivel === "dissatisfied" && <p className="text-xs text-muted">Insatisfeito sem nota não se avalia depois: seis meses adiante ninguém sabe o que o cliente disse, e a cobrança segue abrandada por um registro que ninguém consegue julgar.</p>}
         <div className="flex flex-wrap gap-3">
           <button type="submit" disabled={busy} className="btn"><MessageSquareText className="size-4" />{busy ? "Registrando…" : "Registrar"}</button>
           <button type="button" className="btn btn--secondary" onClick={() => { setRegistrando(null); setRegistro(registroVazio); }}>Cancelar</button>
@@ -448,7 +461,7 @@ export function CobrancaPage() {
 
     {levantando && <ConfirmDialog
       title="Levantar suspensão"
-      message={<>A régua volta a falar sobre a fatura <strong className="text-ink">{levantando.number || "sem número"}</strong> de {levantando.client_name} a partir da próxima passada. O levantamento fica registrado com autor e carimbo — não existe voltar a cobrar em silêncio.</>}
+      message={<>A régua volta a falar sobre a fatura <strong className="text-ink">{levantando.number || "sem número"}</strong> de {levantando.account_name} a partir da próxima passada. O levantamento fica registrado com autor e carimbo — não existe voltar a cobrar em silêncio.</>}
       confirmLabel="Levantar" busy={busy}
       onCancel={() => setLevantando(null)} onConfirm={() => void levantar()}
     />}
@@ -477,14 +490,14 @@ export function CobrancaPage() {
       const naoEnvia = porQueNaoEnvia(linha);
       const naoRascunha = porQueNaoRascunha(linha);
       const silencio = motivoDoSilencio(linha);
-      const identifica = `${linha.client_name} · fatura ${linha.number || "sem número"}`;
+      const identifica = `${linha.account_name} · fatura ${linha.number || "sem número"}`;
       const contatos = historico[linha.invoice];
       return <article key={linha.invoice} className="panel panel--flush">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-slate-50/60 px-5 py-4 sm:px-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="metric-icon"><Receipt className="size-4" /></span>
-              <h2 className="font-semibold text-ink">{linha.client_name}</h2>
+              <h2 className="font-semibold text-ink">{linha.account_name}</h2>
               <span className={`state ${linha.status === "overdue" ? "state--3" : "state--2"}`}>{linha.status_display}</span>
               <span className={`state ${atrasoTone(linha.dias_de_atraso)}`}>{atrasoLabel(linha.dias_de_atraso)}</span>
             </div>
@@ -526,8 +539,8 @@ export function CobrancaPage() {
             {linha.satisfacao_nivel && linha.satisfacao_fonte && <div>
               <dt className="text-xs text-muted">Satisfação</dt>
               <dd className="mt-1 flex flex-wrap items-center gap-2">
-                <span className={`state ${satisfacaoBadgeClass(linha.satisfacao_nivel)}`}>{SATISFACAO_NIVEL[linha.satisfacao_nivel]}</span>
-                <span className="text-xs text-muted">{SATISFACAO_FONTE[linha.satisfacao_fonte]}{linha.satisfacao_dias != null ? ` · ${satisfacaoIdade(linha.satisfacao_dias)}` : ""}</span>
+                <span className={`state ${satisfactionBadgeClass(linha.satisfacao_nivel)}`}>{SATISFACTION_NIVEL[linha.satisfacao_nivel]}</span>
+                <span className="text-xs text-muted">{SATISFACTION_FONTE[linha.satisfacao_fonte]}{linha.satisfacao_dias != null ? ` · ${satisfactionIdade(linha.satisfacao_dias)}` : ""}</span>
               </dd>
             </div>}
             {/* O sinal que a IA leu na resposta do cliente (FDD 038), e que **ninguém registrou**.
@@ -541,7 +554,7 @@ export function CobrancaPage() {
               <dd className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="state state--off"><MessageSquareText className="size-3" />{linha.sinal_display}</span>
                 <span className="text-xs text-muted">{linha.sinal_em ? formatDate(linha.sinal_em) : ""} · não move o Health Score nem a régua</span>
-                <button type="button" className="btn btn--secondary" aria-label={`Registrar satisfação — ${linha.client_name} · fatura ${linha.number || "sem número"}`}
+                <button type="button" className="btn btn--secondary" aria-label={`Registrar satisfação — ${linha.account_name} · fatura ${linha.number || "sem número"}`}
                   onClick={() => { setError(""); setNotice(""); setRegistrando(linha); setRegistro({ ...registroVazio, nivel: NIVEL_SUGERIDO[linha.sinal_kind!] }); }}>
                   Registrar satisfação
                 </button>
@@ -604,7 +617,7 @@ export function CobrancaPage() {
         {aberto === linha.invoice && (contatos?.length
           ? <div className="panel-rows border-t border-line">{contatos.map(contato => <div key={contato.id} className="row">
               <div className="row-main">
-                <strong>{contato.degrau_display} · {contato.canal_display}</strong>
+                <strong>{contato.dunning_step_display} · {contato.canal_display}</strong>
                 <span>{formatDate(contato.sent_on)}{contato.to_email && ` · ${contato.to_email}`}{contato.sent_by ? "" : " · enviado pela régua"}</span>
                 {contato.subject && <span>{contato.subject}</span>}
               </div>
