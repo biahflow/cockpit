@@ -638,6 +638,28 @@ decisão. A guarda casa **declaração** — o ato de batizar. O detalhe está n
 A única exceção é `GateOutcome`/`gate_outcome`: ali o identificador inteiro está errado em qualquer
 posição, porque não existe uso legítimo do nome antigo.
 
+**Chave de payload de agregação também não é batismo, e `opportunities`/`opportunity_count` são o
+caso examinado.** As duas ficaram visíveis no contrato quando o PR #125 tipou os dicts crus, e
+parecem violar a §5 do language-map — que bane `Opportunity` sem qualificador. Não violam, por três
+razões que convém deixar escritas para a próxima varredura não as levantar de novo:
+
+1. A invariante §6.1 enumera o que não pode conter o termo sem qualificador: **modelo, campo, rota,
+   componente, prop**. Chave de payload não está na lista, e a omissão não é descuido — é a mesma
+   fronteira da §2c, que separa o nome do campo (renomeia) do nome da chave (só na `/api/v2/`).
+2. O que a regra exigia já foi feito: o componente do esquema chama-se `FunnelCommercialOpportunities`,
+   e não `FunnelOpportunities`. O comentário no `@extend_schema` de `AnalyticsView` registra a
+   escolha e diz por que a chave ficou.
+3. **Elas nunca tiveram nome errado.** `opportunity_count` sai de `Count("opportunities")`, o
+   `related_name` das FKs de `CommercialOpportunity`; `opportunities` é o bloco `open`/`won`/`lost`
+   do funil comercial, onde o qualificador é o próprio funil. Não são alias de nada — não há nome
+   canônico anterior nem posterior —, e renomeá-las na v2 criaria dívida em vez de pagar: um par
+   novo para manter, sem um lado legado para aposentar.
+
+`test_vocabulario.py` confirma isso por construção, e não por tolerância: nenhuma das suas regras
+casa `campo = serializers.…`, dict literal ou `.values(...)`. Uma chave de payload jamais poderia
+ser reprovada por ele, nem se fosse português puro — que é exatamente por que a lista de "termos
+ainda sem nome canônico" acima precisa existir à mão.
+
 ## Termos ainda sem nome canônico
 
 `Pendencia`, `Decisao`, `Risco` e o resto da família `Cobranca*` (`CobrancaSuspensao` e o
@@ -692,6 +714,19 @@ em que a fatia 5 traduzir a família de cobrança inteira. **A fatia 5.4 fechou 
 e isso é informação, não pendência esquecida: o que a fatia 5 traduziu foram os quatro **enums** que
 a D10 marcou, e `recebido_do_cliente` é chave de dict cru sem canônico — a mesma categoria de
 `proximo_degrau*` acima. Ela continua esperando coinagem.
+
+`parcelas`, `valor`, `nao_apurado` e `sustentacao` — as quatro chaves do custo do estado atual de
+um processo (`ProcessCost` e `ProcessCostLine`, servidas em `Process.custo`) — entram na lista por
+esta linha, e o motivo de estarem chegando só agora é o que as torna interessantes: **elas
+existiam desde a FDD 039, mas viviam atrás de um `DictField()` sem `child=`**. Não estavam
+escondidas de propósito; estavam invisíveis ao contrato, e por isso invisíveis a toda varredura que
+lê o `openapi.yaml`. O PR #125 as tipou, e tipar é o que as trouxe para cá.
+
+Nenhuma das quatro é alias: não há nome inglês do outro lado esperando, e por isso elas não morrem
+na `/api/v2/`. `sustentacao` é o caso mais claro — ela carrega os valores `sustentado`/`hipotese`,
+que são vocabulário epistemológico da casa e vizinhos diretos do `epistemic_status`
+(`fact`/`hypothesis`/`unknown`) que **já** está em inglês no `Finding`. É a mesma distinção dita em
+duas línguas em dois lugares, e a coinagem vai ter de resolver isso junto, não chave a chave.
 
 O caminho é o da §8 do language-map: o termo entra primeiro na página do Notion, depois aqui,
 depois no Pulse.
