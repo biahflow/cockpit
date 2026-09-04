@@ -307,3 +307,17 @@ pelo alvo da geração.
   `/accounts/overview/`. São dict cru sem descrição no esquema (`ListField` sem item tipado), então
   não aparecem em contrato nenhum e o critério de aceite desta fatia não os alcança — a dívida é de
   resposta, não de contrato, e paga-se junto da fatia que atravessar a SPA.
+
+## Emenda (issue #122, fatia 4c — 04/09/2026) — a lacuna declarada foi paga
+
+A emenda da fatia 4a registrou `client_id`/`status` de cada linha de `/accounts/overview/` (lista e
+detalhe) como fora daquela fatia — dict cru sem item tipado no esquema, dívida de resposta e não de
+contrato — e adiou o pagamento para a fatia que atravessasse a SPA. A 4b atravessou; esta fatia paga.
+
+`build_account_overview` ganhou `account_id` ao lado de `client_id` (`lifecycle_status` já saía ao
+lado de `status`), e as duas legadas somem na `/api/v2/` pelo mesmo `views._sem_chaves_legadas` que
+já tirava `client_name` da visão compacta da entrega — o detalhe (uma linha só) envolve e
+desembrulha a lista em vez de duplicar a lógica de remoção. A SPA (`AccountsPage.tsx`, `types.ts`)
+passou a ler `account_id`. Nenhum componente do esquema muda: `AccountOverviewList.items` e
+`AccountOverviewDetail` continuam sem tipo, então `ALIASES_DEPRECIADOS`/
+`ALIASES_DEPRECIADOS_DE_DICT_CRU` não ganham entrada nova — os dois `openapi*.yaml` têm diff vazio.

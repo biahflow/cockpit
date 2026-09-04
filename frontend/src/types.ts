@@ -264,7 +264,7 @@ export type RiskAssessment = { project_id: number; name: string; score: number; 
 export type HealthLevel = "saudável" | "atenção" | "crítico";
 export type HealthAssessment = { project_id: number; name: string; score: number; level: HealthLevel; signals: RiskSignal[] };
 export type AccountOverview = {
-  client_id: number;
+  account_id: number;
   name: string;
   lifecycle_status: AccountLifecycleStatus;
   roi: { revenue: number; cost: number; roi: number | null };

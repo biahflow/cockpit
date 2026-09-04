@@ -722,7 +722,8 @@ def test_a_visao_agregada_de_contas_troca_a_chave_por_versao(admin_client: APICl
 
     assert [linha["client_id"] for linha in da_v1["clients"]] == [conta.pk]
     assert "accounts" not in da_v1
-    assert [linha["client_id"] for linha in da_v2["accounts"]] == [conta.pk]
+    # `client_id` some da própria linha na v2 desde a fatia 4c — a linha lê pela canônica.
+    assert [linha["account_id"] for linha in da_v2["accounts"]] == [conta.pk]
     assert "clients" not in da_v2
 
 
@@ -774,3 +775,43 @@ def test_todo_valor_nao_nulo_de_canonico_da_chave_cobre_aliases_depreciados() ->
     }
 
     assert todas_as_chaves_depreciadas <= set(CANONICO_DA_CHAVE)
+
+
+# ---------------------------------------------------------------------------------------------
+# 7. As linhas cruas do overview pagam a lacuna declarada (issue #122, fatia 4c)
+# ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_linha_do_overview_agregado_paga_a_lacuna_declarada(admin_client: APIClient) -> None:
+    """`client_id`/`status` de cada linha do grid — a lacuna que a ADR 0066 (emenda da fatia 4a)
+    declarou fora do contrato por ser dict cru sem item tipado no esquema. A fatia 4c paga na
+    resposta: as duas legadas continuam na v1 ao lado das canônicas, e somem na v2.
+    """
+    conta = AccountFactory()
+
+    (linha_v1,) = admin_client.get("/api/v1/clients/overview/").json()["clients"]
+    (linha_v2,) = admin_client.get("/api/v2/accounts/overview/").json()["accounts"]
+
+    assert linha_v1["account_id"] == linha_v1["client_id"] == conta.pk
+    assert linha_v1["lifecycle_status"] == linha_v1["status"] == conta.lifecycle_status
+    assert linha_v2["account_id"] == conta.pk
+    assert linha_v2["lifecycle_status"] == conta.lifecycle_status
+    assert "client_id" not in linha_v2
+    assert "status" not in linha_v2
+
+
+@pytest.mark.django_db
+def test_o_detalhe_do_overview_paga_a_mesma_lacuna(admin_client: APIClient) -> None:
+    """A mesma dívida na rota de detalhe — uma linha só, sem lista a indexar por cima."""
+    conta = AccountFactory()
+
+    da_v1 = admin_client.get(reverse("client-overview-detail", args=[conta.pk])).json()
+    da_v2 = admin_client.get(reverse("v2-client-overview-detail", args=[conta.pk])).json()
+
+    assert da_v1["account_id"] == da_v1["client_id"] == conta.pk
+    assert da_v1["lifecycle_status"] == da_v1["status"] == conta.lifecycle_status
+    assert da_v2["account_id"] == conta.pk
+    assert da_v2["lifecycle_status"] == conta.lifecycle_status
+    assert "client_id" not in da_v2
+    assert "status" not in da_v2

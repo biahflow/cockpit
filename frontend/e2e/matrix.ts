@@ -297,13 +297,14 @@ const FIXTURES: Record<string, unknown> = {
   "/api/v2/accounts/": clientes,
   "/api/v2/accounts/1/": clientes[0],
   "/api/v2/accounts/overview/": {
-    // `client_id` e `status` (redundante com `lifecycle_status`) dentro de cada linha continuam
-    // fora do contrato da v2 (ADR 0066, emenda da fatia 4a): é dict cru sem item tipado no
-    // esquema, e a v2 ainda os emite. `accounts:` é a chave que **envolve** a lista, essa sim
-    // trocada — era `clients:` na v1.
+    // `client_id` e `status` (redundante com `lifecycle_status`) dentro de cada linha somem da
+    // v2 desde a fatia 4c (ADR 0066, emenda da fatia 4a): é dict cru sem item tipado no esquema
+    // — a dívida era de resposta, não de contrato —, mas a resposta em si já não os emite mais
+    // aqui. `accounts:` é a chave que **envolve** a lista, trocada desde a fatia 4a — era
+    // `clients:` na v1.
     accounts: clientes.map(cliente => ({
-      client_id: cliente.id, name: cliente.name,
-      lifecycle_status: cliente.lifecycle_status, status: cliente.lifecycle_status,
+      account_id: cliente.id, name: cliente.name,
+      lifecycle_status: cliente.lifecycle_status,
       roi: { revenue: 180000, cost: 90000, roi: 1 },
       health: { score: 42, level: "crítico", project_id: cliente.id },
       risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
@@ -313,7 +314,7 @@ const FIXTURES: Record<string, unknown> = {
     })),
   },
   "/api/v2/accounts/1/overview/": {
-    client_id: 1, name: clientes[0].name, lifecycle_status: "active",
+    account_id: 1, name: clientes[0].name, lifecycle_status: "active",
     roi: { revenue: 180000, cost: 90000, roi: 1 },
     health: { score: 42, level: "crítico", project_id: 1 },
     risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },

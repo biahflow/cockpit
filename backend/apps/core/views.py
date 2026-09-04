@@ -775,13 +775,19 @@ def _sem_chaves_legadas(
 
     Nasceu no painel de cobrança (issue #122, fatia 3a) e ganhou o segundo chamador na fatia 4a (a
     visão compacta da entrega), então deixou de nomear um deles: a lista de chaves é do chamador,
-    porque é ele que sabe qual é o par legado do seu dicionário.
+    porque é ele que sabe qual é o par legado do seu dicionário. A fatia 4c acrescentou o terceiro
+    e o quarto chamador — `AccountViewSet.overview`/`overview_detail`, para `client_id`/`status`.
 
     Um dict cru não passa por `ModelSerializer` nenhum, e é por isso que a remoção mora aqui em vez
     de em `AliasesDaV1Mixin`: aquele mixin lê `ALIASES_DEPRECIADOS` por **componente do schema**,
     e um dicionário montado à mão não tem serializer que resolva para um. O contrato, esse sim,
     perde as chaves pelo mesmo mapa dos outros — `ALIASES_DEPRECIADOS_DE_DICT_CRU`, a metade da
-    união que os hooks do drf-spectacular leem (`apps/core/openapi_aliases.py`).
+    união que os hooks do drf-spectacular leem (`apps/core/openapi_aliases.py`). Exceção: o par
+    `client_id`/`status` do overview de conta não tem entrada lá, porque `AccountOverviewList`
+    declara `items` sem tipo (`ListField()` sem `child=`) e `AccountOverviewDetail` não declara
+    propriedade nenhuma — o esquema não vê essas chaves, então a remoção aqui é dívida de
+    **resposta**, não de contrato (a lacuna que a ADR 0066, emenda da fatia 4a, declarou por
+    escrito).
     """
     for linha in linhas:
         for chave in chaves:
@@ -817,9 +823,12 @@ def build_account_overview(
     cost = sum((project.cost for project in projects), Decimal("0"))
     overview: dict[str, object] = {
         # `client_id` e `status` são **chaves de payload** e não mudam com o renome do campo
-        # (`docs/ontology/aliases.md` §2c); `lifecycle_status` é a canônica, com o mesmo valor.
-        # As duas morrem na `/api/v2/`.
+        # (`docs/ontology/aliases.md` §2c); `account_id`/`lifecycle_status` são as canônicas, com
+        # o mesmo valor. As duas legadas morrem na `/api/v2/` — a lacuna que a ADR 0066 (emenda da
+        # fatia 4a) declarou fora daquela fatia por não haver schema tipado para o mapa de aliases
+        # alcançar, e que a fatia 4c paga aqui, à mão, via `_sem_chaves_legadas`.
         "client_id": account.pk,
+        "account_id": account.pk,
         "name": account.name,
         "status": account.lifecycle_status,
         "lifecycle_status": account.lifecycle_status,
@@ -947,6 +956,11 @@ class AccountViewSet(ArchiveModelViewSet):
     @extend_schema(
         responses=inline_serializer(
             "AccountOverviewList",
+            # `items` fica sem tipo (`serializers.ListField()` sem `child=`): o esquema não
+            # descreve as chaves de cada linha, então `ALIASES_DEPRECIADOS`/
+            # `ALIASES_DEPRECIADOS_DE_DICT_CRU` não têm o que indexar aqui — a remoção de
+            # `client_id`/`status` abaixo é dívida de **resposta**, não de contrato (issue #122,
+            # fatia 4c, pagando a lacuna declarada na emenda da fatia 4a da ADR 0066).
             {chave_da_geracao("clients", "accounts"): serializers.ListField()},
         )
     )
@@ -959,6 +973,10 @@ class AccountViewSet(ArchiveModelViewSet):
         inteiro do grid duas vezes. É o precedente da fatia 3a (`processos`/`processes` na action
         de IA), aplicado ao segundo caso da mesma forma (issue #122, fatia 4a).
         """
+        # Cada linha também carrega `client_id`/`status` (legados) ao lado de `account_id`/
+        # `lifecycle_status` (canônicos) — os dois somem na `/api/v2/` via `_sem_chaves_legadas`
+        # (issue #122, fatia 4c). Comentário, não docstring: drf-spectacular usa a docstring como
+        # `description` do endpoint, e o esquema desta fatia tem de ter diff vazio nos dois yamls.
         accounts = list(self.get_queryset())
         # Um `_visible_projects` por cliente somava ~14 queries por linha do grid. Aqui os
         # projetos visíveis de todos os clientes vêm juntos e o contexto é montado uma vez —
@@ -971,17 +989,25 @@ class AccountViewSet(ArchiveModelViewSet):
         context = build_overview_context(
             [project for projects in by_client.values() for project in projects]
         )
-        chave = "accounts" if versao_de(request) == V2 else "clients"
-        return Response({chave: [
+        linhas = [
             build_account_overview(account, projects=by_client[account.pk], context=context)
             for account in accounts
-        ]})
+        ]
+        if versao_de(request) == V2:
+            linhas = _sem_chaves_legadas(linhas, "client_id", "status")
+        chave = "accounts" if versao_de(request) == V2 else "clients"
+        return Response({chave: linhas})
 
     @extend_schema(responses=inline_serializer("AccountOverviewDetail", {}))
     @action(detail=True, methods=["get"], url_path="overview")
     def overview_detail(self, request: Request, pk: str | None = None) -> Response:
         account = self.get_object()
-        return Response(build_account_overview(account, projects=self._visible_projects(account)))
+        overview = build_account_overview(account, projects=self._visible_projects(account))
+        if versao_de(request) == V2:
+            # O detalhe é uma linha só; `_sem_chaves_legadas` opera em lista, então envolve e
+            # desembrulha em vez de duplicar a lógica de remoção (issue #122, fatia 4c).
+            (overview,) = _sem_chaves_legadas([overview], "client_id", "status")
+        return Response(overview)
 
 
 class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
