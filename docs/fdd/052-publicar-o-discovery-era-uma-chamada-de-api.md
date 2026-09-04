@@ -35,7 +35,7 @@ no próprio pacote. Mudar a superfície exige revisão nova dele, não julgament
 ## A correção de fato que mudou o desenho
 
 A issue `#108` descreve `unpublish` como uma ação que derruba dependentes. **Ela não derruba: ela é
-recusada por eles** (`backend/apps/core/views.py:371`):
+recusada por eles** (a action `unpublish` do `PublicationMixin`, em `backend/apps/core/views.py`):
 
 ```python
 presos = publication.dependentes_publicados_de(obj)
@@ -80,14 +80,14 @@ Os quatro estão desenhados no board, e é essa quadratura que o contrato abaixo
 **A decisão é a ADR 0063** — chaves *e* frases, e as frases vindas de `publication.py` —, e ela não
 se repete aqui. O que esta FDD registra é o que foi construído:
 
-- **Um lugar só decide.** `publication.estado_de_publicacao` (`publication.py:259`) é a única função
+- **Um lugar só decide.** `publication.estado_de_publicacao` é a única função
   que responde, e cada ramo calcula um lado só: publicado calcula `blocked_by`/`blocked_phrase` e
   devolve `missing` vazio; não publicado calcula `missing`/`missing_phrase` e devolve `blocked_by`
   zero. A omissão é medida, não economia — um registro que não atravessou não pode ter dependente
   publicado, que é a invariante exata das cinco portas.
-- **Um serializer, cinco consumidores.** `PublicationStateSerializer` (`serializers.py:1005`) entra
-  nos cinco com `source="*"` — `ProcessSerializer:1048`, `EvidenceSerializer:1211`,
-  `FindingSerializer:1337`, `PainPointSerializer:1439`, `ImprovementOpportunitySerializer:1510` —,
+- **Um serializer, cinco consumidores.** `PublicationStateSerializer` entra
+  nos cinco com `source="*"` — `ProcessSerializer`, `EvidenceSerializer`,
+  `FindingSerializer`, `PainPointSerializer`, `ImprovementOpportunitySerializer` —,
   e delega por inteiro à função. Um serializer comum em vez de cinco `SerializerMethodField` sem
   tipo, porque o drf-spectacular gera daí um componente `PublicationState` de verdade em
   `openapi.yaml`, e não um `object` solto repetido cinco vezes.
@@ -107,7 +107,7 @@ deliberada à regra do `nao_apurado` (ADR 0063 §5).
 A fonte da superfície é o DAP; esta seção diz o que existe, não redesenha o board.
 
 - **`/contas/:id/publicacao`** (`frontend/src/pages/PublicacaoPage.tsx`), resolvida em
-  `App.tsx:82-83`, acima da rota da conta por especificidade. **Nada entra no menu lateral**: é a
+  `App.tsx`, acima da rota da conta por especificidade. **Nada entra no menu lateral**: é a
   terceira tela que pende de uma conta, pelo motivo já registrado em `/contas/:id/priorizacao` e
   `/contas/:id/valor` — publicação é sempre *de uma conta*, e um item de menu que abre perguntando
   "qual conta?" é um beco.
@@ -119,7 +119,7 @@ A fonte da superfície é o DAP; esta seção diz o que existe, não redesenha o
   cliente" (`.state--off`, `EyeOff`), sempre o último elemento da `.row-meta`. O que falta e o que
   prende são **frase** na `.row-main`, nunca uma terceira pastilha: "preso" e "bloqueado" não
   respondem *o cliente vê isto?*, respondem *posso mudar isto?*, que é pergunta de ação e mora junto
-  da ação. O componente é `PublicacaoBadge` (`components/StatusDot.tsx:120`), e o ícone é metade da
+  da ação. O componente é `PublicacaoBadge` (`components/StatusDot.tsx`), e o ícone é metade da
   distinção — na linha de um achado ele convive com o selo epistêmico, e na de uma dor com um
   "Sem oportunidade" que é o mesmo cinza.
 - **A cascata de seleção corre nos dois sentidos** (F1). Para baixo, marcar leva a subárvore —
@@ -184,7 +184,7 @@ lista honesta por uma lista bonita e devolve à linha de comando o ato que este 
 ### O mapa epistêmico subiu de arquivo quando ganhou o segundo leitor
 
 `STATUS_BADGE` vivia dentro de `ProcessDetailPage.tsx` e virou `epistemicoBadgeClass` em
-`components/StatusDot.tsx:76`. Uma cópia por tela é a segunda definição de "fato", e ela diverge da
+`components/StatusDot.tsx`. Uma cópia por tela é a segunda definição de "fato", e ela diverge da
 primeira sem nada ficar vermelho (ADR 0026) — a mesma razão que já tinha elevado os três mapas
 vizinhos.
 

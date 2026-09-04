@@ -1201,6 +1201,33 @@ class PublicationStateSerializer(serializers.Serializer):
         return publication.estado_de_publicacao(instance)
 
 
+# `valor` e `total` saem como texto porque `get_custo` converte cada `Decimal` em `str` — a
+# docstring de lá diz por quê (o encoder do DRF transformaria dinheiro em `float`). O esquema
+# descreve o que trafega, e é `CharField` nos dois.
+class ProcessCostLineSerializer(serializers.Serializer):
+    """Uma parcela da conta do custo do estado atual. `valor` é texto, com duas casas."""
+
+    label = serializers.CharField()
+    valor = serializers.CharField()
+
+
+class ProcessCostSerializer(serializers.Serializer):
+    """A conta do custo do estado atual do processo, por mês.
+
+    `total: "0.00"` com `nao_apurado` cheio **não** significa "custa zero": significa "não há
+    insumo para dizer". As duas listas são complementares — juntas somam os seis rótulos —, e é
+    por `nao_apurado`, nunca pelo total, que se distinguem os dois casos.
+    """
+
+    parcelas = ProcessCostLineSerializer(many=True)
+    total = serializers.CharField()
+    nao_apurado = serializers.ListField(child=serializers.CharField())
+    # `"sustentado"` ou `"hipotese"` — se há `Finding(fact)` vivo por trás do número
+    # (`docs/metodologia-fde.md:117`). `CharField` e não `ChoiceField`: as duas saídas são
+    # constantes de `process.py`, não `choices` de modelo.
+    sustentacao = serializers.CharField()
+
+
 class ProcessSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Process]):
     """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
@@ -1241,7 +1268,7 @@ class ProcessSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Process]):
                             "published_at",
                             "published_by", "publication_state", "created_at", "updated_at"]
 
-    @extend_schema_field(serializers.DictField())
+    @extend_schema_field(ProcessCostSerializer())
     def get_custo(self, processo: Process) -> dict[str, Any]:
         """A conta à vista: parcelas, total, o que não foi apurado e se há fato sustentando.
 
@@ -2497,6 +2524,25 @@ class BlueprintVariantSerializer(serializers.ModelSerializer[BlueprintVariant]):
         read_only_fields = ["id"]
 
 
+# `area` recebe `area_display` (o rótulo, de `get_area_display()`), e não o valor do enum: é o que
+# `get_resolved` monta. `kpi_unit`/`kpi_direction` saem sempre do blueprint e nunca da variante
+# (FDD 027) — `CharField` nos dois, sem choice a reusar. `hours_saved_month`/`roi_month` são texto
+# pela mesma conversão de `get_custo`.
+class BlueprintResolvedSerializer(serializers.Serializer):
+    """Os valores do bloco do catálogo com a variante da vertical já aplicada — o que a
+    instanciação vai copiar. `area` é o rótulo da área; as duas últimas são texto decimal.
+    """
+
+    name = serializers.CharField()
+    area = serializers.CharField()
+    description = serializers.CharField()
+    kpi_label = serializers.CharField()
+    kpi_unit = serializers.CharField()
+    kpi_direction = serializers.CharField()
+    hours_saved_month = serializers.CharField()
+    roi_month = serializers.CharField()
+
+
 class DigitalEmployeeBlueprintSerializer(
     AliasesDaV1Mixin, serializers.ModelSerializer[DigitalEmployeeBlueprint]
 ):
@@ -2538,7 +2584,9 @@ class DigitalEmployeeBlueprintSerializer(
     def _vertical(self) -> Vertical | None:
         return self.context.get("vertical")
 
-    @extend_schema_field(serializers.DictField(allow_null=True))
+    # `None` inteiro quando o viewset não recebeu `?vertical=` — a chave sai, o objeto é que não
+    # existe (quem lista o catálogo para editá-lo não pede os valores de um setor em particular).
+    @extend_schema_field(BlueprintResolvedSerializer(allow_null=True))
     def get_resolved(self, blueprint: DigitalEmployeeBlueprint) -> dict[str, object] | None:
         vertical = self._vertical()
         if vertical is None:

@@ -12676,6 +12676,22 @@ components:
       required:
       - interaction
       - text
+    AiFeatureMetric:
+      type: object
+      properties:
+        feature:
+          type: string
+        count:
+          type: integer
+        positive:
+          type: integer
+        negative:
+          type: integer
+      required:
+      - count
+      - feature
+      - negative
+      - positive
     AiFeedback:
       type: object
       properties:
@@ -12697,17 +12713,45 @@ components:
           nullable: true
         by_feature:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/AiFeatureMetric'
       required:
       - by_feature
       - positive_rate
       - total
+    AnalyticsFunnel:
+      type: object
+      properties:
+        leads:
+          $ref: '#/components/schemas/FunnelLeads'
+        opportunities:
+          $ref: '#/components/schemas/FunnelCommercialOpportunities'
+        projects:
+          $ref: '#/components/schemas/FunnelProjects'
+        by_tier:
+          type: array
+          items:
+            $ref: '#/components/schemas/FunnelTierRow'
+        by_stage:
+          type: array
+          items:
+            $ref: '#/components/schemas/FunnelStageRow'
+        by_source:
+          type: array
+          items:
+            $ref: '#/components/schemas/FunnelSourceRow'
+      required:
+      - by_source
+      - by_stage
+      - by_tier
+      - leads
+      - opportunities
+      - projects
     AnalyticsResponse:
       type: object
       properties:
         funnel:
-          type: object
-          additionalProperties: {}
+          $ref: '#/components/schemas/AnalyticsFunnel'
         win_rate:
           type: number
           format: double
@@ -12721,10 +12765,10 @@ components:
           nullable: true
         pipeline:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/PipelineStageRow'
         roi:
-          type: object
-          additionalProperties: {}
+          $ref: '#/components/schemas/AnalyticsRoi'
       required:
       - avg_cycle_days
       - avg_ticket
@@ -12732,6 +12776,36 @@ components:
       - pipeline
       - roi
       - win_rate
+    AnalyticsRoi:
+      type: object
+      properties:
+        revenue:
+          type: number
+          format: double
+          maximum: 1000000000000
+          minimum: -1000000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+        cost:
+          type: number
+          format: double
+          maximum: 1000000000000
+          minimum: -1000000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+        roi:
+          type: number
+          format: double
+          nullable: true
+        by_service:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoiBreakdownRow'
+      required:
+      - by_service
+      - cost
+      - revenue
+      - roi
     ApplyGate:
       type: object
       properties:
@@ -12882,9 +12956,54 @@ components:
         * `sent` - Enviado
         * `accepted` - Aceito
         * `rejected` - Recusado
+    AssessmentSignal:
+      type: object
+      description: Um sinal da avaliação e o peso com que ele entrou no escore.
+      properties:
+        label:
+          type: string
+        detail:
+          type: string
+        weight:
+          type: integer
+      required:
+      - detail
+      - label
+      - weight
     BlankEnum:
       enum:
       - ''
+    BlueprintResolved:
+      type: object
+      description: |-
+        Os valores do bloco do catálogo com a variante da vertical já aplicada — o que a
+        instanciação vai copiar. `area` é o rótulo da área; as duas últimas são texto decimal.
+      properties:
+        name:
+          type: string
+        area:
+          type: string
+        description:
+          type: string
+        kpi_label:
+          type: string
+        kpi_unit:
+          type: string
+        kpi_direction:
+          type: string
+        hours_saved_month:
+          type: string
+        roi_month:
+          type: string
+      required:
+      - area
+      - description
+      - hours_saved_month
+      - kpi_direction
+      - kpi_label
+      - kpi_unit
+      - name
+      - roi_month
     BlueprintVariant:
       type: object
       description: Parametrização de um blueprint por vertical. Campo em branco herda
@@ -13244,8 +13363,8 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         suspensao:
-          type: object
-          additionalProperties: {}
+          allOf:
+          - $ref: '#/components/schemas/CobrancaPainelSuspensao'
           nullable: true
         regua_ligada:
           type: boolean
@@ -13281,6 +13400,23 @@ components:
       - suspensao
       - tempo_de_casa_dias
       - tensao_causa
+    CobrancaPainelSuspensao:
+      type: object
+      properties:
+        id:
+          type: integer
+        until:
+          type: string
+          format: date
+        owner:
+          type: integer
+        owner_name:
+          type: string
+      required:
+      - id
+      - owner
+      - owner_name
+      - until
     CobrancaRascunho:
       type: object
       properties:
@@ -13514,8 +13650,7 @@ components:
         integrations:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/ConfigFlag'
       required:
       - ai_enabled
       - calendar_enabled
@@ -13590,15 +13725,34 @@ components:
           type: integer
         pipeline:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/PipelineStageRow'
         upcoming_tasks:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/DashboardUpcomingTask'
       required:
       - active_projects
       - overdue_count
       - pipeline
       - upcoming_tasks
+    DashboardUpcomingTask:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        due_date:
+          type: string
+          format: date
+        project_id:
+          type: integer
+      required:
+      - due_date
+      - id
+      - project_id
+      - title
     Decisao:
       type: object
       properties:
@@ -13837,8 +13991,8 @@ components:
             $ref: '#/components/schemas/BlueprintVariant'
           readOnly: true
         resolved:
-          type: object
-          additionalProperties: {}
+          allOf:
+          - $ref: '#/components/schemas/BlueprintResolved'
           nullable: true
           readOnly: true
         has_variant:
@@ -14754,6 +14908,132 @@ components:
       description: |-
         * `declared` - Declarada pelo cliente
         * `perceived` - Percebida por quem entrega
+    FunnelCommercialOpportunities:
+      type: object
+      properties:
+        open:
+          type: integer
+        won:
+          type: integer
+        lost:
+          type: integer
+      required:
+      - lost
+      - open
+      - won
+    FunnelLeads:
+      type: object
+      properties:
+        total:
+          type: integer
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+      - by_status
+      - total
+    FunnelProjects:
+      type: object
+      properties:
+        total:
+          type: integer
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+      - by_status
+      - total
+    FunnelSourceRow:
+      type: object
+      properties:
+        source:
+          type: string
+        leads:
+          type: integer
+        won:
+          type: integer
+        projects:
+          type: integer
+        revenue:
+          type: number
+          format: double
+          maximum: 1000000000000
+          minimum: -1000000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+      required:
+      - leads
+      - projects
+      - revenue
+      - source
+      - won
+    FunnelStageRow:
+      type: object
+      properties:
+        kind:
+          type: string
+        label:
+          type: string
+        total:
+          type: integer
+        sent:
+          type: integer
+        accepted:
+          type: integer
+        rejected:
+          type: integer
+        acceptance_rate:
+          type: number
+          format: double
+          nullable: true
+        reached:
+          type: integer
+      required:
+      - acceptance_rate
+      - accepted
+      - kind
+      - label
+      - reached
+      - rejected
+      - sent
+      - total
+    FunnelTierRow:
+      type: object
+      properties:
+        tier:
+          type: string
+        label:
+          type: string
+        total:
+          type: integer
+        open:
+          type: integer
+        won:
+          type: integer
+        lost:
+          type: integer
+        estimated_total:
+          type: number
+          format: double
+          maximum: 1000000000000
+          minimum: -1000000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+        win_rate:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - estimated_total
+      - label
+      - lost
+      - open
+      - tier
+      - total
+      - win_rate
+      - won
     GateDecisionEnum:
       enum:
       - go
@@ -14900,12 +15180,34 @@ components:
       - stale_after_seconds
       - state
       - updated_at
+    HealthProject:
+      type: object
+      properties:
+        project_id:
+          type: integer
+        name:
+          type: string
+        score:
+          type: integer
+        level:
+          type: string
+        signals:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssessmentSignal'
+      required:
+      - level
+      - name
+      - project_id
+      - score
+      - signals
     HealthResponse:
       type: object
       properties:
         projects:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/HealthProject'
       required:
       - projects
     ImpactEnum:
@@ -16846,8 +17148,8 @@ components:
             $ref: '#/components/schemas/BlueprintVariant'
           readOnly: true
         resolved:
-          type: object
-          additionalProperties: {}
+          allOf:
+          - $ref: '#/components/schemas/BlueprintResolved'
           nullable: true
           readOnly: true
         has_variant:
@@ -18300,8 +18602,8 @@ components:
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
         custo:
-          type: object
-          additionalProperties: {}
+          allOf:
+          - $ref: '#/components/schemas/ProcessCost'
           readOnly: true
         published_at:
           type: string
@@ -19383,6 +19685,35 @@ components:
         * `open` - Aberta
         * `won` - Ganho
         * `lost` - Perdido
+    PipelineStageRow:
+      type: object
+      description: Uma etapa do funil com o agregado das oportunidades dela.
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        kind:
+          type: string
+        position:
+          type: integer
+        opportunity_count:
+          type: integer
+        estimated_total:
+          type: number
+          format: double
+          maximum: 1000000000000
+          minimum: -1000000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+          nullable: true
+      required:
+      - estimated_total
+      - id
+      - kind
+      - name
+      - opportunity_count
+      - position
     PrStateEnum:
       enum:
       - unknown
@@ -19597,8 +19928,8 @@ components:
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
         custo:
-          type: object
-          additionalProperties: {}
+          allOf:
+          - $ref: '#/components/schemas/ProcessCost'
           readOnly: true
         published_at:
           type: string
@@ -19635,6 +19966,44 @@ components:
       - published_by
       - registered_by
       - updated_at
+    ProcessCost:
+      type: object
+      description: |-
+        A conta do custo do estado atual do processo, por mês.
+
+        `total: "0.00"` com `nao_apurado` cheio **não** significa "custa zero": significa "não há
+        insumo para dizer". As duas listas são complementares — juntas somam os seis rótulos —, e é
+        por `nao_apurado`, nunca pelo total, que se distinguem os dois casos.
+      properties:
+        parcelas:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProcessCostLine'
+        total:
+          type: string
+        nao_apurado:
+          type: array
+          items:
+            type: string
+        sustentacao:
+          type: string
+      required:
+      - nao_apurado
+      - parcelas
+      - sustentacao
+      - total
+    ProcessCostLine:
+      type: object
+      description: Uma parcela da conta do custo do estado atual. `valor` é texto,
+        com duas casas.
+      properties:
+        label:
+          type: string
+        valor:
+          type: string
+      required:
+      - label
+      - valor
     ProcessObservation:
       type: object
       description: |-
@@ -20428,12 +20797,29 @@ components:
         * `qualified` - Qualificado
         * `nurture` - Nutrir
         * `disqualified` - Desqualificado
+    RecommendationItem:
+      type: object
+      properties:
+        kind:
+          type: string
+        label:
+          type: string
+        detail:
+          type: string
+        url:
+          type: string
+      required:
+      - detail
+      - kind
+      - label
+      - url
     RecommendationsResponse:
       type: object
       properties:
         items:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/RecommendationItem'
       required:
       - items
     RequestSignatureCreated:
@@ -20552,14 +20938,86 @@ components:
         * `mitigated` - Mitigado
         * `accepted` - Aceito
         * `materialized` - Materializado
+    RiskForecast:
+      type: object
+      properties:
+        predicted_finish_date:
+          type: string
+          format: date
+        delay_days:
+          type: integer
+        basis:
+          type: string
+      required:
+      - basis
+      - delay_days
+      - predicted_finish_date
+    RiskProject:
+      type: object
+      properties:
+        project_id:
+          type: integer
+        name:
+          type: string
+        score:
+          type: integer
+        level:
+          type: string
+        signals:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssessmentSignal'
+        forecast:
+          allOf:
+          - $ref: '#/components/schemas/RiskForecast'
+          nullable: true
+      required:
+      - forecast
+      - level
+      - name
+      - project_id
+      - score
+      - signals
     RiskResponse:
       type: object
       properties:
         projects:
           type: array
-          items: {}
+          items:
+            $ref: '#/components/schemas/RiskProject'
       required:
       - projects
+    RoiBreakdownRow:
+      type: object
+      description: |-
+        Uma linha de recorte do ROI. `roi` é nulo quando o custo é zero — divisão que não existe
+        não vira zero.
+      properties:
+        label:
+          type: string
+        revenue:
+          type: number
+          format: double
+          maximum: 1000000000000
+          minimum: -1000000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+        cost:
+          type: number
+          format: double
+          maximum: 1000000000000
+          minimum: -1000000000000
+          exclusiveMaximum: true
+          exclusiveMinimum: true
+        roi:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - cost
+      - label
+      - revenue
+      - roi
     RoleEnum:
       enum:
       - admin
