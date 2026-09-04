@@ -14,8 +14,8 @@ mão, e quem pagou de manhã é cobrado à tarde. Isto não tem esse modo de fal
 construção. Quem "otimizar" este módulo para uma tabela de mensagens agendadas reintroduz o
 defeito inteiro.
 
-`CobrancaContato` é só o registro do que **já saiu**, e é dele que vem a idempotência do degrau —
-via `UniqueConstraint(invoice, degrau)`, no banco, e não via guarda em Python.
+`DunningContact` é só o registro do que **já saiu**, e é dele que vem a idempotência do degrau —
+via `UniqueConstraint(invoice, dunning_step)`, no banco, e não via guarda em Python.
 
 O que este módulo deliberadamente **não** faz: decidir. Dar desconto, baixar, renegociar, escalar
 e suspender seguem sendo atos humanos (RFC 0004 "Segurança", ADR 0006). O que sai daqui sozinho é
@@ -47,9 +47,9 @@ if TYPE_CHECKING:
         Account,
         Activity,
         AiInteraction,
-        CobrancaContato,
         CobrancaSuspensao,
         Contact,
+        DunningContact,
         Invoice,
         SatisfactionRecord,
         User,
@@ -62,8 +62,13 @@ INTERNO = "interno"
 
 
 @dataclass(frozen=True)
-class Degrau:
+class DunningStep:
     """Um degrau da escada: quando cabe, para quem vai e o que diz.
+
+    **A `key` é o valor persistido em `DunningContact.dunning_step`**, e as duas metades
+    atravessaram juntas na fatia 5.4 da issue #122 (D10): traduzir a coluna sem traduzir estas
+    chaves — ou o contrário — faria a régua parar de casar com o banco em silêncio, e o sintoma
+    seria um degrau saindo duas vezes por a idempotência nunca mais encontrar o que já foi gasto.
 
     `de`/`ate` são a **janela em dias** relativa ao vencimento, fechada na esquerda e aberta na
     direita. A janela existe em vez de um simples "offset já passou" por causa de um caso concreto:
@@ -90,8 +95,8 @@ class Degrau:
 # O texto do degrau é **constante de código, revisada uma vez** — e é justamente isso que autoriza
 # ele a sair sozinho (ADR 0031). O que o relógio decide é *se* a mensagem cabe hoje, não como ela
 # está escrita.
-_PRE_AVISO = Degrau(
-    key="pre_aviso",
+_PRE_NOTICE = DunningStep(
+    key="pre_notice",
     destino=CLIENTE,
     de=-3,
     ate=0,
@@ -105,8 +110,8 @@ _PRE_AVISO = Degrau(
         "Equipe Biahflow"
     ),
 )
-_LEMBRETE = Degrau(
-    key="lembrete",
+_REMINDER = DunningStep(
+    key="reminder",
     destino=CLIENTE,
     de=3,
     ate=10,
@@ -121,8 +126,8 @@ _LEMBRETE = Degrau(
         "Equipe Biahflow"
     ),
 )
-_FIRME = Degrau(
-    key="firme",
+_FIRM = DunningStep(
+    key="firm",
     destino=CLIENTE,
     de=10,
     ate=20,
@@ -140,8 +145,8 @@ _FIRME = Degrau(
 # Os dois últimos **não falam com o cliente**. A RFC os descreve como "escalada para humano" e
 # "renegociação", e as duas coisas são atos de gente: o que o sistema faz é acordar a pessoa certa
 # com o contexto na mão.
-_ESCALADA = Degrau(
-    key="escalada",
+_ESCALATION = DunningStep(
+    key="escalation",
     destino=INTERNO,
     de=20,
     ate=30,
@@ -152,8 +157,8 @@ _ESCALADA = Degrau(
         "Daqui em diante é decisão de relação, não de régua: fale com o cliente."
     ),
 )
-_RENEGOCIACAO = Degrau(
-    key="renegociacao",
+_RENEGOTIATION = DunningStep(
+    key="renegotiation",
     destino=INTERNO,
     de=30,
     ate=None,
@@ -167,7 +172,7 @@ _RENEGOCIACAO = Degrau(
 )
 
 #: A escada padrão. O buraco entre D+0 e D+3 é a carência.
-PADRAO: tuple[Degrau, ...] = (_PRE_AVISO, _LEMBRETE, _FIRME, _ESCALADA, _RENEGOCIACAO)
+PADRAO: tuple[DunningStep, ...] = (_PRE_NOTICE, _REMINDER, _FIRM, _ESCALATION, _RENEGOTIATION)
 
 #: Cliente de casa e sem histórico de atraso. **Não é refinamento, é requisito** da seção
 #: Segurança da RFC 0004: *"cinco dias de atraso de um cliente antigo não é o mesmo evento que
@@ -175,15 +180,15 @@ PADRAO: tuple[Degrau, ...] = (_PRE_AVISO, _LEMBRETE, _FIRME, _ESCALADA, _RENEGOC
 #: escalada interna — quem conversa com um cliente de anos é gente, não um template. Uma régua que
 #: trata os dois casos igual está programada para perder o melhor cliente da carteira por uma
 #: fatura.
-RELACAO_LONGA: tuple[Degrau, ...] = (
-    _PRE_AVISO,
+RELACAO_LONGA: tuple[DunningStep, ...] = (
+    _PRE_NOTICE,
     # A **mesma chave** do lembrete padrão, e não uma nova: a idempotência é
-    # `UniqueConstraint(invoice, degrau)`, e se um cliente mudar de régua entre duas execuções
+    # `UniqueConstraint(invoice, dunning_step)`, e se um cliente mudar de régua entre duas execuções
     # (deixou de ser reincidente, completou um ano) uma chave própria deixaria o mesmo lembrete
     # sair duas vezes. O que muda entre as duas escadas é a janela, não o degrau.
-    replace(_LEMBRETE, de=5, ate=20),
-    _ESCALADA,
-    _RENEGOCIACAO,
+    replace(_REMINDER, de=5, ate=20),
+    _ESCALATION,
+    _RENEGOTIATION,
 )
 
 #: Cliente com insatisfação **declarada** vigente (FDD 037, ADR 0032). A camada 5 da RFC 0004 pede
@@ -197,14 +202,14 @@ RELACAO_LONGA: tuple[Degrau, ...] = (
 #: já construiu. O robô nunca fica mudo; a trava existe e tem nome.
 #:
 #: Como na `RELACAO_LONGA`, os degraus **reusam as chaves existentes**: a idempotência é
-#: `UniqueConstraint(invoice, degrau)`, e uma chave nova faria o mesmo lembrete sair duas vezes
+#: `UniqueConstraint(invoice, dunning_step)`, e uma chave nova faria o mesmo lembrete sair duas vezes
 #: para quem trocasse de escada entre duas execuções — e trocar de escada aqui é fácil, basta
 #: alguém registrar a insatisfação de ontem.
-RELACAO_TENSA: tuple[Degrau, ...] = (
-    _PRE_AVISO,
-    _LEMBRETE,
-    replace(_ESCALADA, de=10, ate=30),
-    _RENEGOCIACAO,
+RELACAO_TENSA: tuple[DunningStep, ...] = (
+    _PRE_NOTICE,
+    _REMINDER,
+    replace(_ESCALATION, de=10, ate=30),
+    _RENEGOTIATION,
 )
 
 #: Um ano de casa. Não há nada de mágico no número; o que há é o requisito de existir um corte
@@ -313,7 +318,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
     outra faria a linha do painel depender de o cliente estar em entrega.
     """
     from . import health as health_module
-    from .models import Activity, CobrancaContato, CobrancaSuspensao
+    from .models import Activity, CobrancaSuspensao, DunningContact
     from .models import Invoice as InvoiceModel
     from .models import Project as ProjectModel
     from .models import SatisfactionRecord as SatisfactionRecordModel
@@ -339,15 +344,15 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
             por_cliente.setdefault(suspensao.account_id, suspensao)
 
     gastos: dict[int, set[str]] = defaultdict(set)
-    for invoice_id, degrau in CobrancaContato.objects.filter(invoice_id__in=ids).values_list(
-        "invoice_id", "degrau"
+    for invoice_id, degrau in DunningContact.objects.filter(invoice_id__in=ids).values_list(
+        "invoice_id", "dunning_step"
     ):
         gastos[invoice_id].add(degrau)
 
     corte = hoje - timedelta(days=settings.DUNNING_MIN_DAYS_BETWEEN_CONTACTS)
     no_teto = set(
-        CobrancaContato.objects.filter(
-            account_id__in=clientes, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
+        DunningContact.objects.filter(
+            account_id__in=clientes, canal=DunningContact.Canal.EMAIL, sent_on__gt=corte
         ).values_list("account_id", flat=True)
     )
 
@@ -435,7 +440,7 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
 class Avaliacao:
     """O que cabe hoje nesta fatura, e — quando nada cabe — por quê."""
 
-    degrau: Degrau | None
+    degrau: DunningStep | None
     motivo: str
 
 
@@ -621,7 +626,7 @@ def regua_para(
     hoje: date | None = None,
     ignorando: Invoice | None = None,
     contexto: PainelContexto | None = None,
-) -> tuple[Degrau, ...]:
+) -> tuple[DunningStep, ...]:
     """Qual das três escadas vale para este cliente. Função pura sobre o cliente, no molde de
     `health._level`: explicável em uma frase e testável sem montar cenário.
 
@@ -690,14 +695,14 @@ def pode_contatar(
     cliente — ele nem chega lá —, e fazer a escalada competir com o lembrete pelo mesmo teto
     atrasaria justamente o degrau que existe para acordar gente.
     """
-    from .models import CobrancaContato
+    from .models import DunningContact
 
     dia = _hoje(hoje)
     if contexto is not None:
         return account.pk not in contexto.clientes_no_teto
     corte = dia - timedelta(days=settings.DUNNING_MIN_DAYS_BETWEEN_CONTACTS)
-    return not CobrancaContato.objects.filter(
-        account=account, canal=CobrancaContato.Canal.EMAIL, sent_on__gt=corte
+    return not DunningContact.objects.filter(
+        account=account, canal=DunningContact.Canal.EMAIL, sent_on__gt=corte
     ).exists()
 
 
@@ -763,15 +768,15 @@ def avaliar(
     return Avaliacao(degrau, "")
 
 
-def _degrau_gasto(invoice: Invoice, degrau: Degrau, contexto: PainelContexto | None) -> bool:
-    from .models import CobrancaContato
+def _degrau_gasto(invoice: Invoice, degrau: DunningStep, contexto: PainelContexto | None) -> bool:
+    from .models import DunningContact
 
     if contexto is not None:
         return degrau.key in contexto.degraus_gastos.get(invoice.pk, frozenset())
-    return CobrancaContato.objects.filter(invoice=invoice, degrau=degrau.key).exists()
+    return DunningContact.objects.filter(invoice=invoice, dunning_step=degrau.key).exists()
 
 
-def degrau_devido(invoice: Invoice, hoje: date | None = None) -> Degrau | None:
+def degrau_devido(invoice: Invoice, hoje: date | None = None) -> DunningStep | None:
     """O degrau que cabe hoje, ou nada. Fachada de `avaliar` para quem não precisa do motivo."""
     return avaliar(invoice, hoje).degrau
 
@@ -788,7 +793,7 @@ def moeda(valor: Decimal) -> str:
     return f"R$ {milhar},{centavos}"
 
 
-def texto_do_degrau(invoice: Invoice, degrau: Degrau, hoje: date | None = None) -> tuple[str, str]:
+def texto_do_degrau(invoice: Invoice, degrau: DunningStep, hoje: date | None = None) -> tuple[str, str]:
     """Assunto e corpo do degrau, já preenchidos. Texto puro — não existe template HTML de e-mail
     neste produto, e introduzir um aqui seria dívida de renderização por uma mensagem de seis
     linhas."""
@@ -831,7 +836,7 @@ def _internos(account: Account) -> list[User]:
 
 def registrar(
     invoice: Invoice,
-    degrau: Degrau,
+    degrau: DunningStep,
     *,
     hoje: date | None = None,
     canal: str,
@@ -840,7 +845,7 @@ def registrar(
     to_email: str = "",
     sent_by: User | None = None,
     ai_interaction: AiInteraction | None = None,
-) -> CobrancaContato:
+) -> DunningContact:
     """Grava o que saiu. **Só é chamada depois do envio**, nunca antes.
 
     A ordem não é estilo: as rodadas de homologação da FDD 024 acharam três vezes a mesma classe de
@@ -848,12 +853,12 @@ def registrar(
     ao mesmo tempo: o degrau constaria gasto (e a `UniqueConstraint` impediria a retentativa) e a
     tela diria que o cliente foi avisado quando nada saiu.
     """
-    from .models import CobrancaContato
+    from .models import DunningContact
 
-    return CobrancaContato.objects.create(
+    return DunningContact.objects.create(
         invoice=invoice,
         account=invoice.account,
-        degrau=degrau.key,
+        dunning_step=degrau.key,
         canal=canal,
         sent_on=_hoje(hoje),
         subject=subject[:255],
@@ -866,14 +871,14 @@ def registrar(
 
 def enviar_ao_cliente(
     invoice: Invoice,
-    degrau: Degrau,
+    degrau: DunningStep,
     *,
     hoje: date | None = None,
     subject: str = "",
     body: str = "",
     sent_by: User | None = None,
     ai_interaction: AiInteraction | None = None,
-) -> CobrancaContato:
+) -> DunningContact:
     """Manda o degrau ao cliente e registra. Sem contato de cobrança, vira escalada interna.
 
     Falha fechada, no padrão que a casa já usa no enriquecimento de lead (FDD 030): cala quando não
@@ -881,7 +886,7 @@ def enviar_ao_cliente(
     degrau é gasto como interno, com o motivo no corpo, para que a falta de contato apareça para
     quem pode cadastrá-lo em vez de sumir num log.
     """
-    from .models import CobrancaContato
+    from .models import DunningContact
 
     assunto, corpo = texto_do_degrau(invoice, degrau, hoje)
     assunto, corpo = subject or assunto, body or corpo
@@ -897,13 +902,13 @@ def enviar_ao_cliente(
     enderecos = [contato.email for contato in contatos]
     # `fail_silently=False` de propósito, ao contrário do espelho de e-mail das notificações: lá o
     # registro in-app já existe e o e-mail é cópia; aqui o e-mail **é** o degrau, e engolir a falha
-    # gravaria um `CobrancaContato` afirmando um contato que não aconteceu.
+    # gravaria um `DunningContact` afirmando um contato que não aconteceu.
     send_mail(assunto, corpo, None, enderecos, fail_silently=False)
     return registrar(
         invoice,
         degrau,
         hoje=hoje,
-        canal=CobrancaContato.Canal.EMAIL,
+        canal=DunningContact.Canal.EMAIL,
         subject=assunto,
         body=corpo,
         to_email=", ".join(enderecos),
@@ -914,16 +919,16 @@ def enviar_ao_cliente(
 
 def _escalar(
     invoice: Invoice,
-    degrau: Degrau,
+    degrau: DunningStep,
     *,
     hoje: date | None = None,
     subject: str = "",
     body: str = "",
     sent_by: User | None = None,
-) -> CobrancaContato:
+) -> DunningContact:
     """Acorda quem responde pela relação. Nada disto sai para o cliente."""
     from . import notifications
-    from .models import CobrancaContato
+    from .models import DunningContact
 
     assunto, corpo = texto_do_degrau(invoice, degrau, hoje)
     assunto, corpo = subject or assunto, body or corpo
@@ -943,21 +948,21 @@ def _escalar(
         invoice,
         degrau,
         hoje=hoje,
-        canal=CobrancaContato.Canal.INTERNO,
+        canal=DunningContact.Canal.INTERNO,
         subject=assunto,
         body=corpo,
         sent_by=sent_by,
     )
 
 
-def aplicar(invoice: Invoice, degrau: Degrau, hoje: date | None = None) -> CobrancaContato:
+def aplicar(invoice: Invoice, degrau: DunningStep, hoje: date | None = None) -> DunningContact:
     """Executa o degrau pelo destino dele. É o caminho automático (`sent_by` fica nulo)."""
     if degrau.destino == CLIENTE:
         return enviar_ao_cliente(invoice, degrau, hoje=hoje)
     return _escalar(invoice, degrau, hoje=hoje)
 
 
-def _nome_da_regua(regua: tuple[Degrau, ...]) -> str:
+def _nome_da_regua(regua: tuple[DunningStep, ...]) -> str:
     if regua is RELACAO_TENSA:
         return "relacao_tensa"
     return "relacao_longa" if regua is RELACAO_LONGA else "padrao"
@@ -980,7 +985,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
     diz "nada hoje" ensina quem a usa a não confiar nela — e a régua tem quatro motivos legítimos
     de calar.
     """
-    from .models import CobrancaContato, Invoice
+    from .models import DunningContact, Invoice
 
     dia = _hoje(hoje)
     invoices = list(
@@ -1034,7 +1039,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             "payment_url": invoice.payment_url,
             "proximo_degrau": degrau.key if degrau else None,
             "proximo_degrau_display": (
-                CobrancaContato.Degrau(degrau.key).label if degrau else None
+                DunningContact.DunningStep(degrau.key).label if degrau else None
             ),
             # A data em que a janela do degrau **abriu**, não uma previsão: com o degrau cabendo
             # hoje ela está no passado, e é o que deixa "o quê e quando" caber numa linha só.

@@ -35,7 +35,8 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | chave `clients` que envolve a lista de `GET /clients/overview/` | `accounts` | `views.py` | `/api/v2/` (pago na fatia 4a — **troca**, não convive) |
 | chave de entrada `signer_email` (um signatário) | `signers[]`, lista de `{email, role}` | `views.py` (`_signers_do_pedido`) | `/api/v2/` |
 | chaves `cobranca_sinal` / `cobranca_sinal_display` (só leitura; classe/campo/valor pagos na fatia 5.2 da #122, 04/09/2026 — só resta a leitura) | `dunning_signal` / `dunning_signal_display` | `ActivitySerializer` | `/api/v2/` |
-| degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
+| chaves `degrau` / `degrau_display` (só leitura) e valor de entrada `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` (**classe, tabela, campo e valor persistido já pagos**, fatia 5.4, 04/09/2026 — só restam a leitura e a entrada) | `dunning_step` / `dunning_step_display` e `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `DunningContactSerializer`, `views.VALORES_LEGADOS_DO_DEGRAU` (corpo das actions e filtro) | `/api/v2/` |
+| parâmetro de filtro `?degrau=` | `?dunning_step=` | `DunningContactViewSet.filter_field_aliases` | `/api/v2/` |
 | valor de entrada `declarada` / `percebida` e os quatro níveis `promotor` / `satisfeito` / `neutro` / `insatisfeito` (**valor persistido já pago**, fatia 5.3, 04/09/2026 — só resta a entrada) | `declared` / `perceived` e `promoter` / `satisfied` / `neutral` / `dissatisfied` | `SatisfactionRecordSerializer.VALORES_DE_ENTRADA` e `SatisfactionRecordViewSet.filter_valores_legados` | `/api/v2/` |
 | rota `/api/v1/satisfacoes/` | `/satisfaction-records/` | `urls.py` | `/api/v2/` (a canônica nasceu na fatia 5.3) |
 | valor de entrada `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` (área do blueprint; **valor persistido já pago**, fatia 5.1, 04/09/2026 — só resta a entrada) | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA` e `DigitalEmployeeBlueprintViewSet.filter_valores_legados` | `/api/v2/` |
@@ -108,6 +109,55 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > faltava: a linha anterior dizia "níveis em português", e alias sem os nomes escritos é alias que
 > ninguém consegue conferir. O vocabulário em si já estava cunhado no language-map §4 — não houve
 > coinagem nova nesta fatia, só o registro dela aqui.
+
+> **A família 1 (`CobrancaContato`) foi a quarta e última** (fatia 5.4 da issue #122, 04/09/2026),
+> e nela os **quatro** renomes chegam juntos: classe, tabela, campo (`dunning_step`) e valor. Com
+> ela não sobra enum persistido em português no repositório, e o teste de congelamento
+> (`test_os_quatro_enums_da_d10_falam_ingles_e_ficam_congelados_assim`) deixou de guardar português
+> para passar a guardar o estado novo — a volta é o mesmo defeito visto do outro lado.
+>
+> **`DunningContact` é coinagem deste espelho, e a página do Notion recebe depois.** É o inverso do
+> fluxo da §8 do language-map ("Notion → espelho → Pulse"), pelo precedente explícito de
+> `DunningSignal` — cunhado aqui na fatia 5.2 — e pelo mesmo motivo: o campo (`dunning_step`) e os
+> cinco valores **já estavam** cunhados no language-map §4, então a decisão de significado já
+> existia e o que faltava era o substantivo da classe que os carrega. Esperar a página para escrever
+> um nome que o campo já ditava adiaria a fatia por um ato de secretaria.
+>
+> A migração (`0087_o_contato_de_cobranca_fala_ingles`) é a mais longa da série porque é a única em
+> que renome de tabela e de campo chegam no mesmo arquivo, e isso arrasta três operações que as
+> anteriores não tiveram: `RenameIndex` (o índice de `Meta.indexes` não tem nome declarado e o
+> Django o deriva do nome da **tabela**) e o par `RemoveConstraint`/`AddConstraint`, que **abraça**
+> o `RenameField` — a `UniqueConstraint` cita o campo pelo nome e `RenameField` não reescreve
+> `Meta.constraints`; escritas depois do renome, a reversa morria tentando recriar a constraint
+> sobre uma coluna `degrau` que já não existe. O `RenameModel` renomeia a tabela em lugar, como na
+> 5.3: a pk do contato de cobrança não é uma das seis da §2b e não atravessa para o portal.
+>
+> **A metade que não está na migração é a que mais importava.** As `key` da dataclass
+> `cobranca.DunningStep` (a régua: `PADRAO`, `RELACAO_LONGA`, `RELACAO_TENSA`) **são** os valores
+> persistidos na coluna. Traduzir uma sem a outra faria `_degrau_gasto` deixar de casar com o banco
+> **em silêncio** — a idempotência nunca mais encontraria o degrau gasto, e o mesmo e-mail sairia
+> de novo para o cliente. Por isso as duas atravessaram na mesma fatia, e por isso o teste de
+> congelamento afirma as duas listas juntas.
+>
+> Duas superfícies aqui não existiam nas fatias anteriores, e cada uma exigiu mecanismo:
+>
+> * **o valor chega no corpo de uma `@action`** (`rascunhar`/`enviar`), onde o mixin de serializer
+>   não passa e — diferente de um `ModelSerializer` — **não há validação de `choices` do DRF** para
+>   recusar de graça na v2: quem valida é a própria action, contra as réguas. Sem tradução,
+>   `pre_aviso` na v2 viraria "Degrau desconhecido", um erro mentiroso (o degrau existe; o nome
+>   mudou). A recusa usa a frase de sempre, `versioning.frase_do_valor_removido`;
+> * **o nome do parâmetro de filtro mudou junto com o campo** (`?degrau=` → `?dunning_step=`),
+>   porque em `filter_exact_fields` o nome do parâmetro **é** o caminho do ORM. Sem alias, o filtro
+>   legado deixaria de filtrar em silêncio na v1, devolvendo a lista inteira — pior que o
+>   `FieldError` que o mesmo caso produz em `filter_fields`. Por isso `filter_field_aliases` passou
+>   a valer nos **dois** laços do `QueryParamFilterMixin`, na mesma forma.
+>
+> **A rota `/cobranca/` não ganha par canônico**, e é a diferença para a 5.3: lá o prefixo
+> (`/satisfacoes/`) **era** o nome da classe em português, então havia para onde ir. Aqui ele nomeia
+> a **família** de cobrança, que segue sem coinagem (`CobrancaSuspensao`, `cobranca.py`, a flag e o
+> `kind` de notificação `cobranca`) — inventar `/dunning-contacts/` batizaria em inglês o que
+> ninguém decidiu. O que acompanhou a classe foi o `resource` do viewset
+> (`cobranca` → `dunning_contact`), que é nome interno de autorização, não contrato.
 
 > **O recorte físico da Fase 6 foi concluído; a issue #70 foi encerrada por decisão do mantenedor.** Tabelas renomeadas
 > (migração `0069`), dual-write e `Evidencia` removidos (migração `0068`), `Project.client`
@@ -279,7 +329,8 @@ payload**, que é onde ele mais dura. A decisão foi trazê-las todas para o mec
 
 Três tratamentos, e a diferença entre eles é quem consegue executar a remoção:
 
-- **Serializer** (`Case`, `Invoice`, `Process`, `CobrancaContato`, `CobrancaSuspensao`, e as duas
+- **Serializer** (`Case`, `Invoice`, `Process`, `DunningContact` — então `CobrancaContato` —,
+  `CobrancaSuspensao`, e as duas
   chaves de vertical em `Project`): a canônica entra ao lado, a legada vira alias de leitura e a
   entrada do componente cresce em `ALIASES_DEPRECIADOS` — `AliasesDaV1Mixin` cuida do resto.
 - **Dict cru** (o painel de cobrança, que a fatia 3a já resolvia, e a visão compacta da entrega, que
@@ -494,10 +545,27 @@ posição, porque não existe uso legítimo do nome antigo.
 
 ## Termos ainda sem nome canônico
 
-`Pendencia`, `Decisao`, `Risco` e o resto da família `Cobranca*` (`CobrancaContato`,
-`CobrancaSuspensao`, o `resource`/viewset de cobrança) estão em português no modelo e **a Ontology
-v1 não os cobre** — não há para onde renomeá-los ainda. Eles estão na allowlist mesmo assim, e isso
-é deliberado: sem a linha, a ausência de decisão viraria ausência de dívida.
+`Pendencia`, `Decisao`, `Risco` e o resto da família `Cobranca*` (`CobrancaSuspensao` e o
+`resource`/viewset dela, o módulo `cobranca.py`, a rota `/cobranca/` com o seu `basename`, a flag e
+o `kind` de notificação `cobranca`) estão em português no modelo e **a Ontology v1 não os cobre** —
+não há para onde renomeá-los ainda. Eles estão na allowlist mesmo assim, e isso é deliberado: sem a
+linha, a ausência de decisão viraria ausência de dívida.
+
+`CobrancaContato` **saiu desta lista na fatia 5.4 da issue #122** (04/09/2026): virou
+`DunningContact`, com a tabela, o campo (`dunning_step`) e os cinco valores juntos, e com o
+`resource` do viewset (`cobranca` → `dunning_contact`). Ele saiu por um caminho que os vizinhos não
+têm: o nome **não** existia no language-map, e foi **cunhado neste espelho** pelo precedente de
+`DunningSignal` — ver a nota da fatia 5.4 acima. `Pendencia`, `Decisao`, `Risco` e o resto da
+família continuam sem nenhum, e nenhum deles tem campo já cunhado a puxar a coinagem, que é
+exatamente o que faltava aqui e não falta lá.
+
+**As chaves `proximo_degrau` / `proximo_degrau_display` / `proximo_degrau_em` do dict cru do painel
+entram no lugar dele**, ao lado de `sinal_*` e `satisfacao_*` logo abaixo e pelo mesmo motivo: o
+language-map cunha `dunning_step` como nome de **campo do contato**, não como nome de chave do
+painel, e o painel é um agregador de faturas, não a serialização do contato. Sem canônico elas não
+são alias de nada: não cabem em `ALIASES_DEPRECIADOS`, não morrem na `/api/v2/` e continuam saindo
+nas duas versões. **O valor delas atravessou** — é o do enum —, e é a mesma frase de sempre: o
+valor atravessou, a chave espera coinagem.
 
 `Satisfacao` **saiu desta lista na fatia 5.3 da issue #122** (04/09/2026): virou
 `SatisfactionRecord`, com a tabela e os dois enums de valor juntos. Ela estava aqui por um motivo
@@ -525,7 +593,10 @@ mesma lista, e por escrito, desde a fatia 4a da #122. Ela **não é alias de `cl
 que nunca teve canônico, então não cabe em `ALIASES_DEPRECIADOS` nem morre na `/api/v2/` por conta
 disso. É a única chave com «client» que a guarda do contrato da v2 tolera
 (`test_nenhuma_chave_client_sobra_na_v2`), e a isenção tem teste próprio para não sobreviver ao dia
-em que a fatia 5 traduzir a família de cobrança inteira.
+em que a fatia 5 traduzir a família de cobrança inteira. **A fatia 5.4 fechou a série sem alcançá-la**,
+e isso é informação, não pendência esquecida: o que a fatia 5 traduziu foram os quatro **enums** que
+a D10 marcou, e `recebido_do_cliente` é chave de dict cru sem canônico — a mesma categoria de
+`proximo_degrau*` acima. Ela continua esperando coinagem.
 
 O caminho é o da §8 do language-map: o termo entra primeiro na página do Notion, depois aqui,
 depois no Pulse.

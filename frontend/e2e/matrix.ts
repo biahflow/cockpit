@@ -437,7 +437,7 @@ const FIXTURES: Record<string, unknown> = {
   // Uma linha por motivo de silêncio, mais uma com degrau: o `motivo` é o que a tela traduz, e um
   // mock com um só valor aprovaria quatro textos que nunca renderizaram.
   "/api/v2/cobranca/painel/": [
-    { motivo: "", degrau: "lembrete", rotulo: "Lembrete", dias: 4, suspensa: false },
+    { motivo: "", degrau: "reminder", rotulo: "Lembrete", dias: 4, suspensa: false },
     { motivo: "suspensa", degrau: null, rotulo: null, dias: 12, suspensa: true },
     { motivo: "degrau_gasto", degrau: null, rotulo: null, dias: 3, suspensa: false },
     { motivo: "teto_de_frequencia", degrau: null, rotulo: null, dias: 21, suspensa: false },
@@ -486,8 +486,8 @@ const FIXTURES: Record<string, unknown> = {
   })),
   "/api/v2/cobranca/": serie(2, index => ({
     id: index, invoice: 1, invoice_number: "2026-0010", account: 1, client_name: NOME_LONGO,
-    degrau: index === 1 ? "pre_aviso" : "lembrete",
-    degrau_display: index === 1 ? "Pré-aviso" : "Lembrete",
+    dunning_step: index === 1 ? "pre_notice" : "reminder",
+    dunning_step_display: index === 1 ? "Pré-aviso" : "Lembrete",
     canal: "email", canal_display: "E-mail ao cliente", sent_on: HOJE,
     subject: `Fatura 2026-0010 em aberto — ${NOME_LONGO}`,
     to_email: "financeiro@empresa.test", body: "Olá, passando para lembrar…",

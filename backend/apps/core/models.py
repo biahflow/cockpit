@@ -3994,8 +3994,14 @@ class Invoice(TimestampedModel):
         return self.status == self.Status.ISSUED and self.due_date < timezone.localdate()
 
 
-class CobrancaContato(TimestampedModel):
+class DunningContact(TimestampedModel):
     """O que a casa **já disse** sobre uma fatura vencida (FDD 036, camada 3 da RFC 0004).
+
+    Chamava-se `CobrancaContato` até a fatia 5.4 da issue #122 (D10 do `language-map` §4): o campo
+    (`dunning_step`) e os cinco valores já estavam cunhados no mapa, e o que faltava era o
+    substantivo da classe que os carrega — cunhado no espelho (`docs/ontology/aliases.md` §8) pelo
+    precedente de `DunningSignal`. A tabela foi junto (`RenameModel` puro): esta pk **não** é uma
+    das seis identidades externas da §2b, e o registro sequer atravessa para o portal do cliente.
 
     Não é fila e não é agenda: é registro do que saiu. A régua é derivada do estado atual da
     fatura (`cobranca.degrau_devido`), e este modelo só responde "este degrau já foi gasto?".
@@ -4016,12 +4022,14 @@ class CobrancaContato(TimestampedModel):
     apagar.
     """
 
-    class Degrau(models.TextChoices):
-        PRE_AVISO = "pre_aviso", "Pré-aviso"
-        LEMBRETE = "lembrete", "Lembrete"
-        FIRME = "firme", "Cobrança firme"
-        ESCALADA = "escalada", "Escalada interna"
-        RENEGOCIACAO = "renegociacao", "Renegociação"
+    # Os cinco valores falam inglês desde a migração `0087` (issue #122, fatia 5.4). O rótulo
+    # continua pt-BR: ele é superfície, e o que a D10 move é o que persiste.
+    class DunningStep(models.TextChoices):
+        PRE_NOTICE = "pre_notice", "Pré-aviso"
+        REMINDER = "reminder", "Lembrete"
+        FIRM = "firm", "Cobrança firme"
+        ESCALATION = "escalation", "Escalada interna"
+        RENEGOTIATION = "renegotiation", "Renegociação"
 
     class Canal(models.TextChoices):
         EMAIL = "email", "E-mail ao cliente"
@@ -4029,7 +4037,7 @@ class CobrancaContato(TimestampedModel):
 
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="cobrancas")
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="cobrancas")
-    degrau = models.CharField(max_length=16, choices=Degrau.choices)
+    dunning_step = models.CharField(max_length=16, choices=DunningStep.choices)
     canal = models.CharField(max_length=8, choices=Canal.choices)
     # **Data e não carimbo de relógio**, ao contrário de `Invoice.paid_at`. Toda regra da régua é
     # aritmética de dias sobre o vencimento, e o comando aceita `--hoje` para exercício
@@ -4062,8 +4070,12 @@ class CobrancaContato(TimestampedModel):
             # **A idempotência do degrau mora aqui, e não numa guarda em Python.** Duas execuções
             # no mesmo dia, ou o job e uma pessoa ao mesmo tempo, param no banco em vez de
             # dependerem de quem leu antes.
+            # O **nome** das duas constraints não acompanha o renome de propósito: nome de
+            # constraint é identificador de banco, e trocá-lo custaria um `DROP`/`CREATE` de índice
+            # único para nenhum ganho de contrato. O que a §2b exige é que linha e pk sobrevivam,
+            # e é o que `RenameModel`/`RenameField` fazem.
             models.UniqueConstraint(
-                fields=["invoice", "degrau"], name="unique_cobranca_degrau_por_fatura"
+                fields=["invoice", "dunning_step"], name="unique_cobranca_degrau_por_fatura"
             ),
             models.CheckConstraint(
                 condition=Q(archived_at__isnull=True), name="cobranca_contato_is_never_archived"
@@ -4071,7 +4083,7 @@ class CobrancaContato(TimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.get_degrau_display()} — {self.account.name} ({self.sent_on})"
+        return f"{self.get_dunning_step_display()} — {self.account.name} ({self.sent_on})"
 
 
 class CobrancaSuspensao(TimestampedModel):

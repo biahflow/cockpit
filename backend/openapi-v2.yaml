@@ -1322,7 +1322,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CobrancaContato'
+                  $ref: '#/components/schemas/DunningContact'
           description: ''
   /api/v2/cobranca/{id}/:
     get:
@@ -1344,7 +1344,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: Um valor inteiro único que identifica este cobranca contato.
+        description: Um valor inteiro único que identifica este dunning contact.
         required: true
       tags:
       - cobranca
@@ -1355,7 +1355,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CobrancaContato'
+                $ref: '#/components/schemas/DunningContact'
           description: ''
   /api/v2/cobranca/painel/:
     get:
@@ -1364,7 +1364,7 @@ paths:
         A tela onde se decide o próximo passo (FDD 036, critério de aceite 7).
 
         Agregador, e por isso **não passa pelo queryset desta viewset**: ele lista faturas, não
-        contatos. O recorte de papel continua sendo o `resource = "cobranca"` da classe — só-leitura
+        contatos. O recorte de papel continua sendo o `resource` da classe — só-leitura
         para Vendas, fechado para a Entrega —, que é o mesmo mecanismo da FDD 028 e a razão de esta
         rota não precisar de guarda própria.
 
@@ -5438,7 +5438,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CobrancaContato'
+                $ref: '#/components/schemas/DunningContact'
           description: ''
   /api/v2/invoices/{id}/cobranca/rascunhar/:
     post:
@@ -12952,87 +12952,6 @@ components:
         * `pending` - Em execução
         * `success` - Verde
         * `failure` - Vermelho
-    CobrancaContato:
-      type: object
-      description: |-
-        O que a casa já disse sobre uma fatura (FDD 036). **Só de leitura pelo router.**
-
-        Nenhum campo é gravável aqui, e a ausência é a entrega: um `POST /cobranca/` criaria a prova de
-        um contato que não aconteceu. Contato nasce de `POST /invoices/{id}/cobranca/enviar/` ou do job
-        — os dois mandam o e-mail **antes** de gravar.
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        invoice:
-          type: integer
-          readOnly: true
-        invoice_number:
-          type: string
-          readOnly: true
-          default: ''
-        account:
-          type: integer
-          readOnly: true
-        account_name:
-          type: string
-          readOnly: true
-        degrau:
-          allOf:
-          - $ref: '#/components/schemas/DegrauEnum'
-          readOnly: true
-        degrau_display:
-          type: string
-          readOnly: true
-        canal:
-          allOf:
-          - $ref: '#/components/schemas/CanalEnum'
-          readOnly: true
-        canal_display:
-          type: string
-          readOnly: true
-        sent_on:
-          type: string
-          format: date
-          readOnly: true
-        subject:
-          type: string
-          readOnly: true
-        to_email:
-          type: string
-          readOnly: true
-        body:
-          type: string
-          readOnly: true
-        sent_by:
-          type: integer
-          readOnly: true
-          nullable: true
-        ai_interaction:
-          type: integer
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - account
-      - account_name
-      - ai_interaction
-      - body
-      - canal
-      - canal_display
-      - created_at
-      - degrau
-      - degrau_display
-      - id
-      - invoice
-      - invoice_number
-      - sent_by
-      - sent_on
-      - subject
-      - to_email
     CobrancaEnvioRequest:
       type: object
       properties:
@@ -13512,20 +13431,6 @@ components:
       description: |-
         * `draft` - Rascunho
         * `published` - Publicada
-    DegrauEnum:
-      enum:
-      - pre_aviso
-      - lembrete
-      - firme
-      - escalada
-      - renegociacao
-      type: string
-      description: |-
-        * `pre_aviso` - Pré-aviso
-        * `lembrete` - Lembrete
-        * `firme` - Cobrança firme
-        * `escalada` - Escalada interna
-        * `renegociacao` - Renegociação
     DeliveryTimelineOverview:
       type: object
       properties:
@@ -13926,6 +13831,91 @@ components:
         * `nda` - NDA
         * `commercial_contract` - Contrato comercial
         * `proposal` - Proposta
+    DunningContact:
+      type: object
+      description: |-
+        O que a casa já disse sobre uma fatura (FDD 036). **Só de leitura pelo router.**
+
+        Nenhum campo é gravável aqui, e a ausência é a entrega: um `POST /cobranca/` criaria a prova de
+        um contato que não aconteceu. Contato nasce de `POST /invoices/{id}/cobranca/enviar/` ou do job
+        — os dois mandam o e-mail **antes** de gravar.
+
+        O degrau é `dunning_step` desde a `/api/v1/` da fatia 5.4 da issue #122; `degrau` e
+        `degrau_display` continuam saindo aqui, com o mesmo valor, e morrem na `/api/v2/` como toda
+        chave de payload legada.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        invoice:
+          type: integer
+          readOnly: true
+        invoice_number:
+          type: string
+          readOnly: true
+          default: ''
+        account:
+          type: integer
+          readOnly: true
+        account_name:
+          type: string
+          readOnly: true
+        dunning_step:
+          allOf:
+          - $ref: '#/components/schemas/DunningStepEnum'
+          readOnly: true
+        dunning_step_display:
+          type: string
+          readOnly: true
+        canal:
+          allOf:
+          - $ref: '#/components/schemas/CanalEnum'
+          readOnly: true
+        canal_display:
+          type: string
+          readOnly: true
+        sent_on:
+          type: string
+          format: date
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+        to_email:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        sent_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        ai_interaction:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - account_name
+      - ai_interaction
+      - body
+      - canal
+      - canal_display
+      - created_at
+      - dunning_step
+      - dunning_step_display
+      - id
+      - invoice
+      - invoice_number
+      - sent_by
+      - sent_on
+      - subject
+      - to_email
     DunningSignalEnum:
       enum:
       - forgot
@@ -13936,6 +13926,20 @@ components:
         * `forgot` - Esqueceu
         * `unable_to_pay` - Não pôde pagar
         * `dissatisfied` - Insatisfeito
+    DunningStepEnum:
+      enum:
+      - pre_notice
+      - reminder
+      - firm
+      - escalation
+      - renegotiation
+      type: string
+      description: |-
+        * `pre_notice` - Pré-aviso
+        * `reminder` - Lembrete
+        * `firm` - Cobrança firme
+        * `escalation` - Escalada interna
+        * `renegotiation` - Renegociação
     Engagement:
       type: object
       properties:

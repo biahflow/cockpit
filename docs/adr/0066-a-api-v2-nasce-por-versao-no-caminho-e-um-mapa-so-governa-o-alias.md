@@ -510,3 +510,84 @@ repositório.
   `SatisfactionRecord.Nivel`/`.Fonte` em inglês; resta a família 1 (degraus de cobrança).
 - `RolePermission` passa a ler `resource = "satisfaction_record"`, no molde das fatias da #67, que
   renomeavam o `resource` junto da classe.
+
+## Emenda (issue #122, fatia 5.4 — 04/09/2026) — a última família atravessa, e a série fecha
+
+`CobrancaContato` é a quarta e última família que a decisão D10 marcou, e nela os **quatro**
+renomes chegam no mesmo arquivo: classe, tabela, campo (`dunning_step`) e valor. Depois dela não
+resta enum persistido em português no repositório, e o teste de congelamento inverte de sentido —
+deixa de guardar o português para guardar o estado novo, porque a volta é o mesmo defeito visto do
+outro lado. As decisões novas são cinco, e nenhuma delas altera as anteriores.
+
+### 18. A coinagem veio pelo espelho, e o precedente é `DunningSignal`
+
+O caminho normal da §8 do language-map é Notion → espelho → Pulse. Aqui ele se inverteu, pela
+segunda vez na mesma issue: o campo (`dunning_step`) e os cinco valores **já estavam** cunhados no
+language-map §4, então a decisão de significado já existia — faltava só o substantivo da classe que
+os carrega. `DunningContact` foi cunhado em `docs/ontology/aliases.md`, com a mesma justificativa
+que a fatia 5.2 usou para `DunningSignal`, e a página do Notion recebe depois.
+
+O que autoriza a inversão é estritamente isso: **existir campo já cunhado que dita o nome**. Não
+vale para `Pendencia`, `Decisao`, `Risco` nem para o resto da família `Cobranca*`, e a `aliases.md`
+diz isso por escrito para a exceção não virar regra na próxima fatia.
+
+### 19. As `key` da régua **são** o valor persistido, e por isso não havia como partir a fatia
+
+`cobranca.DunningStep` (a dataclass da régua) carrega uma `key` por degrau, e essa `key` é o que
+`DunningContact.dunning_step` guarda. Traduzir a coluna sem traduzir as chaves — ou o contrário —
+faria `_degrau_gasto` deixar de casar com o banco **em silêncio**: a idempotência nunca mais
+encontraria o degrau já gasto, e o mesmo e-mail sairia de novo para o cliente, sem nada ficar
+vermelho. É a única das quatro famílias em que o valor do enum tem uma segunda expressão em código,
+e é por isso que o teste de congelamento afirma as duas listas no mesmo lugar, mais a inclusão de
+uma na outra.
+
+### 20. Valor legado em corpo de `@action` precisa de recusa própria — a exceção da decisão 9
+
+A decisão 9 registrou que a v2 **não** ganha frase própria para valor legado no corpo: o
+`ModelSerializer` cai sozinho na validação de `choices` do DRF, que já é um 400 listando o
+vocabulário inteiro, e escrever uma frase nossa seria a segunda definição do mesmo erro. O degrau é
+a exceção, e a diferença é mecânica: ele chega no corpo de `rascunhar`/`enviar`, que **não montam
+serializer** — quem valida é a própria action, contra as réguas de `cobranca.py`. Sem tradução,
+`pre_aviso` na v2 cairia no "Degrau desconhecido", que é um erro mentiroso: o degrau existe, o nome
+dele é que mudou. A recusa vive em `views._degrau_do_corpo` e usa a frase que já existia
+(`versioning.frase_do_valor_removido`), a mesma do filtro — duas redações do mesmo "não existe
+mais, use este nome" divergiriam na primeira edição.
+
+### 21. `filter_field_aliases` passa a valer nos dois laços do mixin
+
+Em `filter_exact_fields`, o nome do parâmetro **é** o caminho do ORM, como já era em
+`filter_fields`. Com o campo renomeado, `?degrau=lembrete` deixaria de filtrar **em silêncio** na
+v1 — devolvendo a lista inteira como se ninguém tivesse filtrado, que é pior que o `FieldError`
+que o mesmo caso produz no outro laço, e é exatamente o modo de falha mudo que a decisão 3 recusa.
+O laço de `filter_exact_fields` passou a consultar `filter_field_aliases` na mesma forma do
+primeiro: a v1 aceita o nome antigo, a canônica vence quando as duas vêm, e a v2 responde 400
+dizendo qual usar. A mudança é inerte para todo viewset em que os dois mapas não se tocam.
+
+### 22. A rota `/cobranca/` **não** ganha par canônico — ao contrário da 5.3
+
+Na 5.3, `/satisfacoes/` era o nome da classe em português, e a classe renomeada deu destino à rota.
+Aqui o prefixo nomeia a **família** de cobrança — `CobrancaSuspensao`, `cobranca.py`, a flag e o
+`kind` de notificação —, que segue sem coinagem. Inventar `/dunning-contacts/` batizaria em inglês
+o que ninguém decidiu, que é o oposto do que esta issue faz. `PREFIXOS_CANONICOS_DA_V2` continua com
+cinco entradas. O que acompanhou a classe foi o `resource` do viewset
+(`cobranca` → `dunning_contact`), no molde das fatias da #67: `resource` é nome interno de
+autorização, não contrato público.
+
+### Consequências
+
+- `backend/apps/core/migrations/0087_o_contato_de_cobranca_fala_ingles.py` é a quarta e última
+  migração de valor da série, e a única em que renome de tabela e de campo andam juntos — o que
+  arrasta `RenameIndex` (índice de `Meta.indexes` sem nome declarado, derivado da tabela) e o par
+  `RemoveConstraint`/`AddConstraint` **abraçando** o `RenameField`, sem o qual a reversa morre
+  tentando recriar a `UniqueConstraint` sobre uma coluna que já não existe.
+- `openapi.yaml` ganha `dunning_step`/`dunning_step_display` e marca `degrau`/`degrau_display` como
+  `deprecated`; o componente vira `DunningContact` e o enum, `DunningStepEnum`. `openapi-v2.yaml`
+  não emite o par legado. **A rota da v1 e a da v2 continuam `/cobranca/`.**
+- `docs/ontology/legacy-allowlist.txt` perde **três** linhas (`CobrancaContato`,
+  `CobrancaContatoSerializer`, `CobrancaViewSet`) e `TETO_DA_ALLOWLIST` desce de 19 para 16.
+- `test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2` foi renomeado para
+  `test_os_quatro_enums_da_d10_falam_ingles_e_ficam_congelados_assim`: não há mais família
+  congelada em português, e o que ele guarda agora é o estado novo das quatro.
+- `RolePermission` passa a ler `resource = "dunning_contact"`.
+- A SPA troca `CobrancaDegrau`/`CobrancaContato` por `DunningStep`/`DunningContact` e passa a ler
+  `dunning_step_display` no histórico — ela consome a v2, onde `degrau_display` não sai.

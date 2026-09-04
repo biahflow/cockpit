@@ -88,7 +88,6 @@ from .models import (
     Artifact,
     BlueprintVariant,
     Case,
-    CobrancaContato,
     CobrancaSuspensao,
     CommercialOpportunity,
     Contact,
@@ -98,6 +97,7 @@ from .models import (
     Discovery,
     DiscoverySession,
     Document,
+    DunningContact,
     Engagement,
     EngineeringHandoff,
     Evidence,
@@ -155,7 +155,6 @@ from .serializers import (
     BookingCreateSerializer,
     CaseSerializer,
     ChangePasswordSerializer,
-    CobrancaContatoSerializer,
     CobrancaSuspensaoSerializer,
     CommercialOpportunitySerializer,
     ContactSerializer,
@@ -165,6 +164,7 @@ from .serializers import (
     DiscoverySerializer,
     DiscoverySessionSerializer,
     DocumentSerializer,
+    DunningContactSerializer,
     EngagementSerializer,
     EngineeringHandoffSerializer,
     EvidenceSerializer,
@@ -415,6 +415,12 @@ class QueryParamFilterMixin:
     # razão exata da chave de corpo: aceito e ignorado, `?client=3` devolveria 200 com a lista
     # inteira, e quem chamou leria isso como "este cliente tem tudo isso" em vez de "o filtro não
     # existe". 400 e não 409 porque é o **pedido** que está errado, não o estado.
+    #
+    # **O mapa vale para os dois laços desde a fatia 5.4 da issue #122**, e a segunda metade nasceu
+    # de um renome de campo de texto: `CobrancaContato.degrau` virou `DunningContact.dunning_step`,
+    # e sem o alias `?degrau=lembrete` deixaria de filtrar **em silêncio** na v1 — o nome do param
+    # também **é** o caminho do ORM em `filter_exact_fields`. Era o pior caso possível aqui: nem
+    # `FieldError`, nem 400, só a lista inteira voltando como se ninguém tivesse filtrado.
     filter_field_aliases: dict[str, str] = {}
     # Campo → {valor legado → valor canônico}, para `filter_exact_fields` cujo VALOR (não o nome
     # do parâmetro) tem alias — a área do blueprint (issue #122, fatia 5.1) é a primeira. Na
@@ -441,6 +447,15 @@ class QueryParamFilterMixin:
                 queryset = queryset.filter(**{field: value})
         for field in self.filter_exact_fields:
             value = self.request.query_params.get(field)  # type: ignore[attr-defined]
+            legado = self.filter_field_aliases.get(field)
+            if legado and legado in self.request.query_params:  # type: ignore[attr-defined]
+                # O mesmo tratamento do laço acima, e de propósito na mesma forma: a v1 aceita o
+                # nome antigo do parâmetro, a canônica vence quando as duas vêm, e a v2 recusa
+                # dizendo qual usar.
+                if na_v2:
+                    raise InvalidInput(frase_do_parametro_removido(legado, field))
+                if not value:
+                    value = self.request.query_params.get(legado)  # type: ignore[attr-defined]
             if value:
                 valores_legados = self.filter_valores_legados.get(field)
                 canonico = valores_legados.get(value) if valores_legados else None
@@ -2172,6 +2187,45 @@ class CaseViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet
         return Response(CaseSerializer(cases.record_consent(case, request.user)).data)
 
 
+#: Valor legado do degrau → canônico (issue #122, fatia 5.4; D10 do `language-map` §4). **Um mapa
+#: só, e não um por consumidor**: ele é lido pelas duas actions de cobrança da `InvoiceViewSet` — o
+#: degrau chega no **corpo** delas, e corpo de action não passa por serializer, então
+#: `AliasesDaV1Mixin.VALORES_DE_ENTRADA` não o alcança — e por `filter_valores_legados` da
+#: `DunningContactViewSet`, para `?degrau=`. Duas tabelas do mesmo fato divergiriam em silêncio na
+#: primeira edição, que é o argumento da fatia 5.1 quando o viewset passou a referenciar o mapa do
+#: serializer em vez de copiá-lo.
+VALORES_LEGADOS_DO_DEGRAU: dict[str, str] = {
+    "pre_aviso": DunningContact.DunningStep.PRE_NOTICE,
+    "lembrete": DunningContact.DunningStep.REMINDER,
+    "firme": DunningContact.DunningStep.FIRM,
+    "escalada": DunningContact.DunningStep.ESCALATION,
+    "renegociacao": DunningContact.DunningStep.RENEGOTIATION,
+}
+
+
+def _degrau_do_corpo(request: Request, bruto: str) -> str:
+    """Normaliza o degrau que veio no corpo da action — traduz na v1, recusa na v2.
+
+    **Por que aqui e não no mixin de serializer.** O degrau de `rascunhar`/`enviar` é chave de
+    corpo de `@action`, e action não monta serializer: `VALORES_DE_ENTRADA` nunca é consultado
+    neste caminho. E, diferente do corpo de um `ModelSerializer`, aqui **não existe validação de
+    `choices` do DRF** para recusar o valor legado de graça na v2 — quem valida é a própria action,
+    contra as réguas de `cobranca.py`. Sem esta função, `pre_aviso` na v2 cairia no
+    "Degrau desconhecido", que é um erro mentiroso: o degrau existe, o nome dele é que mudou.
+
+    A frase é a de `versioning.frase_do_valor_removido`, a mesma que o filtro `?degrau=` usa — o
+    formato dela nomeia o parâmetro (`'?degrau='`) porque a chave de corpo e a de query string são
+    a mesma palavra aqui, e duas redações do mesmo "não existe mais, use este nome" divergiriam na
+    primeira edição (a razão de as frases morarem todas em `versioning.py`).
+    """
+    canonico = VALORES_LEGADOS_DO_DEGRAU.get(bruto)
+    if canonico is None:
+        return bruto
+    if versao_de(request) == V2:
+        raise InvalidInput(frase_do_valor_removido("degrau", bruto, canonico))
+    return canonico
+
+
 class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
     """Contas a receber (FDD 028, camada 0 da RFC 0004).
 
@@ -2299,15 +2353,17 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         cobrança, e o anti-vazamento é estrutural — só o `AgentView` preenche aquele parâmetro.
         """
         invoice = self.get_object()
-        degrau = str(request.data.get("degrau", "")).strip() or (
+        # Traduzido **antes** da checagem contra o vocabulário: na v1 `pre_aviso` continua valendo,
+        # na v2 leva 400 dizendo `pre_notice` (issue #122, fatia 5.4).
+        degrau = _degrau_do_corpo(request, str(request.data.get("degrau", "")).strip()) or (
             getattr(cobranca.degrau_devido(invoice), "key", "")
         )
-        if degrau not in CobrancaContato.Degrau.values:
+        if degrau not in DunningContact.DunningStep.values:
             return Response(
                 {"degrau": "Diga qual degrau rascunhar — hoje a régua não indica nenhum."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        rotulo = CobrancaContato.Degrau(degrau).label
+        rotulo = DunningContact.DunningStep(degrau).label
         system = (
             "Você redige um e-mail de cobrança em português do Brasil, em nome de uma consultoria, "
             f"no tom do degrau '{rotulo}'. O objetivo não é receber esta fatura a qualquer custo: é "
@@ -2335,7 +2391,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
                 "ai_interaction": serializers.IntegerField(required=False),
             },
         ),
-        responses=CobrancaContatoSerializer,
+        responses=DunningContactSerializer,
     )
     @action(detail=True, methods=["post"], url_path="cobranca/enviar")
     def cobranca_enviar(self, request: Request, pk: str | None = None) -> Response:
@@ -2357,7 +2413,9 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         invoice = self.get_object()
-        degrau_key = str(request.data.get("degrau", "")).strip()
+        # A mesma normalização de `rascunhar`, e pelo mesmo motivo: sem ela o valor legado viraria
+        # "Degrau desconhecido" na v2 — um erro que aponta para o lugar errado (issue #122, 5.4).
+        degrau_key = _degrau_do_corpo(request, str(request.data.get("degrau", "")).strip())
         degrau = next(
             (d for d in cobranca.PADRAO + cobranca.RELACAO_LONGA if d.key == degrau_key), None
         )
@@ -2385,7 +2443,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         # A idempotência conferida **antes** do envio, e não só pela `UniqueConstraint` no fim: a
         # constraint impediria a linha duplicada, mas o e-mail já teria saído. Quem leva o segundo
         # "sua fatura está vencida" não se consola com a integridade do banco.
-        if CobrancaContato.objects.filter(invoice=invoice, degrau=degrau.key).exists():
+        if DunningContact.objects.filter(invoice=invoice, dunning_step=degrau.key).exists():
             raise StateConflict(f"O degrau '{degrau.key}' desta fatura já foi enviado.")
         interaction = None
         if request.data.get("ai_interaction"):
@@ -2419,7 +2477,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
             # aconteceu e ainda queimaria o degrau pela constraint, impedindo a retentativa.
             logger.exception("envio de cobrança falhou para a fatura %s", invoice.pk)
             raise EmailUndeliverable() from exc
-        return Response(CobrancaContatoSerializer(contato).data, status=status.HTTP_201_CREATED)
+        return Response(DunningContactSerializer(contato).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         responses=inline_serializer(
@@ -2453,7 +2511,7 @@ class InvoiceViewSet(QueryParamFilterMixin, viewsets.ModelViewSet):
         return Response(dados)
 
 
-class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
+class DunningContactViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
     """O que a casa já disse sobre suas faturas (FDD 036, camada 3 da RFC 0004).
 
     **Só leitura, e a ausência de escrita é a entrega.** Um `POST /cobranca/` criaria a prova de um
@@ -2467,13 +2525,19 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
     financeiro não é escopado por projeto — a Entrega não alcança nada disto, nem para ler.
     """
 
-    resource = "cobranca"
-    queryset = CobrancaContato.objects.select_related("invoice", "account", "sent_by").all()
-    serializer_class = CobrancaContatoSerializer
+    resource = "dunning_contact"
+    queryset = DunningContact.objects.select_related("invoice", "account", "sent_by").all()
+    serializer_class = DunningContactSerializer
     permission_classes = [RolePermission]
     filter_fields = ("account", "invoice")
-    filter_field_aliases = {"account": "client"}
-    filter_exact_fields = ("degrau", "canal")
+    # `?degrau=` continua filtrando na v1 e leva 400 na v2, pelo mesmo mecanismo de `?client=`: o
+    # campo é `dunning_step` desde a fatia 5.4, e o nome do parâmetro **é** o caminho do ORM aqui.
+    filter_field_aliases = {"account": "client", "dunning_step": "degrau"}
+    filter_exact_fields = ("dunning_step", "canal")
+    # O **valor** do degrau, a outra metade do par (issue #122, fatia 5.4): a v1 traduz
+    # `?dunning_step=lembrete` para `reminder`, a v2 recusa dizendo qual usar. O mapa é o mesmo que
+    # as duas actions de cobrança leem — ver `VALORES_LEGADOS_DO_DEGRAU`.
+    filter_valores_legados = {"dunning_step": VALORES_LEGADOS_DO_DEGRAU}
 
     @extend_schema(
         responses=inline_serializer(
@@ -2535,7 +2599,7 @@ class CobrancaViewSet(QueryParamFilterMixin, viewsets.ReadOnlyModelViewSet):
         """A tela onde se decide o próximo passo (FDD 036, critério de aceite 7).
 
         Agregador, e por isso **não passa pelo queryset desta viewset**: ele lista faturas, não
-        contatos. O recorte de papel continua sendo o `resource = "cobranca"` da classe — só-leitura
+        contatos. O recorte de papel continua sendo o `resource` da classe — só-leitura
         para Vendas, fechado para a Entrega —, que é o mesmo mecanismo da FDD 028 e a razão de esta
         rota não precisar de guarda própria.
 

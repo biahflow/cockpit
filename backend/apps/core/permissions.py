@@ -116,8 +116,9 @@ class RolePermission(BasePermission):
             # `invoice` só-leitura para Vendas (FDD 028): quem acompanha o recebível do próprio
             # cliente é o comercial, mas emitir, baixar e cancelar são atos de admin — é dinheiro,
             # e a responsabilidade por afirmar que ele entrou não se delega.
-            # `cobranca` só-leitura ao lado de `invoice`, e pela mesma razão (FDD 036): o comercial
-            # acompanha o que a casa disse ao cliente dele, mas mandar cobrança é ato de admin.
+            # `dunning_contact` (era `cobranca` até a fatia 5.4 da issue #122) só-leitura ao
+            # lado de `invoice`, e pela mesma razão (FDD 036): o comercial acompanha o que a
+            # casa disse ao cliente dele, mas mandar cobrança é ato de admin.
             # As rotas de rascunhar e enviar ficam na `InvoiceViewSet`, e por isso já caem no
             # `invoice` acima — o 403 de Vendas no envio vem de graça, sem regra nova.
             # Os cinco da Fase 5 (FDD 049) entram aqui, **só de leitura**, ao lado de
@@ -127,7 +128,7 @@ class RolePermission(BasePermission):
             # escreve a medição que sustenta a afirmação.
             if resource in {"project", "project_phase", "project_deliverable",
                             "project_checklist_item", "digital_employee", "project_member",
-                            "risk", "health", "case", "invoice", "cobranca",
+                            "risk", "health", "case", "invoice", "dunning_contact",
                             "feasibility_assessment", "prove_experiment", "kpi", "measurement",
                             "value_ledger_entry"}:
                 return request.method in SAFE_METHODS
@@ -190,9 +191,9 @@ class RolePermission(BasePermission):
             # participa. Quem produz o 403 é o `return False` abaixo — o mesmo mecanismo que fecha
             # `lead` e `analytics`, e a melhor propriedade deste modelo de permissão: recurso novo
             # nasce fechado sem uma linha de código.
-            # `cobranca` e `cobranca_suspensao` (FDD 036) seguem a fatura e também **não aparecem
-            # em nenhum dos dois conjuntos**: quem não alcança o recebível não alcança o que a casa
-            # disse sobre ele. É o mesmo `return False` abaixo, e é a melhor propriedade deste
+            # `dunning_contact` e `cobranca_suspensao` (FDD 036) seguem a fatura e também **não
+            # aparecem em nenhum dos dois conjuntos**: quem não alcança o recebível não alcança o
+            # que a casa disse sobre ele. É o mesmo `return False` abaixo, e é a melhor propriedade deste
             # modelo de permissão — recurso novo nasce fechado sem uma linha de código.
             # `risco` (o registro declarado da FDD 034) entra aqui, ao lado de `pendencia`, e
             # **não** se confunde com `risk` lá em cima: aquele é a avaliação calculada, só de

@@ -34,7 +34,7 @@ O mapa cobre dois mecanismos, e os dois produzem a mesma forma no esquema (uma p
   própria — a chave legada do gate em `ProjectPhase`/`PhaseEvent` (`apply-gate`/`set-waiting`,
   `docs/ontology/aliases.md` §2c), `Lead.client`/`Lead.opportunity` (`convert`/
   `open-opportunity`), `Project.opportunity` (`convert-to-project`), `Case.client_consent`
-  (`record-consent`), `CobrancaContato.client` (o contato nasce do envio) e o par
+  (`record-consent`), `DunningContact.client`/`degrau` (o contato nasce do envio) e o par
   `kpi_baseline`/`kpi_current` do `DigitalEmployee`, que é derivado do KPI referenciado (§2d).
 
 **Toda entrada do mapa tem um serializer que a executa, e isso é guardado.** Componente sem
@@ -82,7 +82,6 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     # `read_only` — ver o comentário do `ActivitySerializer`.
     "Activity": ("client", "opportunity", "cobranca_sinal", "cobranca_sinal_display"),
     "Artifact": ("opportunity",),
-    "CobrancaContato": ("client", "client_name"),
     "CobrancaSuspensao": ("client", "client_name"),
     "Case": ("client_consent", "client_name"),
     "CommercialOpportunity": ("client",),
@@ -93,6 +92,10 @@ ALIASES_DEPRECIADOS: dict[str, tuple[str, ...]] = {
     # mapa não a cumpria — entrada que faltava, não alias novo (issue #122).
     "DigitalEmployee": ("kpi_baseline", "kpi_current"),
     "Document": ("client", "opportunity"),
+    # `degrau`/`degrau_display` entraram na issue #122, fatia 5.4, junto do renome de
+    # `CobrancaContato` para `DunningContact` e do campo para `dunning_step` (D10). Sem
+    # `ALIASES_DE_ENTRADA`: o serializer é inteiro `read_only` — ver a docstring dele.
+    "DunningContact": ("client", "client_name", "degrau", "degrau_display"),
     "Invoice": ("client", "client_name"),
     "Lead": ("client", "opportunity"),
     "PhaseEvent": _CHAVE_LEGADA_DO_GATE,
@@ -170,6 +173,8 @@ CANONICO_DA_CHAVE: dict[str, str | None] = {
     "kpi_current": None,
     "cobranca_sinal": "dunning_signal",
     "cobranca_sinal_display": "dunning_signal_display",
+    "degrau": "dunning_step",
+    "degrau_display": "dunning_step_display",
 }
 
 _PREFIXO_PATCHED = re.compile(r"^Patched(.+)$")

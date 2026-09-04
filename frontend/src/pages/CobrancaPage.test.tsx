@@ -18,7 +18,7 @@ function linha(overrides: Record<string, unknown> = {}) {
     invoice: 5, number: "2026-0007", account: 1, account_name: "Imobiliária Aurora",
     amount: "48750.90", due_date: "2026-08-05", status: "overdue", status_display: "Vencida",
     dias_de_atraso: 12, payment_url: "",
-    proximo_degrau: "firme", proximo_degrau_display: "Cobrança firme",
+    proximo_degrau: "firm", proximo_degrau_display: "Cobrança firme",
     proximo_degrau_em: "2026-08-15", motivo: "",
     health_level: "atenção", tempo_de_casa_dias: 1200, reincidente: false,
     regua: "relacao_longa", recebido_do_cliente: "180000.00",
@@ -76,7 +76,7 @@ test("health, tempo de casa, total recebido e reincidência ficam na mesma linha
 });
 
 test("o rótulo do degrau é o que o backend mandou, não um mapa local", async () => {
-  mocks.api.mockImplementation(stub([linha({ proximo_degrau: "firme", proximo_degrau_display: "Um rótulo que só o backend conhece" })]));
+  mocks.api.mockImplementation(stub([linha({ proximo_degrau: "firm", proximo_degrau_display: "Um rótulo que só o backend conhece" })]));
   render(<CobrancaPage />);
   expect(await screen.findByText(/Um rótulo que só o backend conhece/)).toBeInTheDocument();
 });
@@ -136,7 +136,7 @@ test("com a IA desligada o botão de rascunho some da tela — e a régua contin
 
 test("rascunhar pede o degrau que a régua indicou e abre o texto para revisão", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Olá, tudo bem?", interaction: 42, degrau: "firme" });
+    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Olá, tudo bem?", interaction: 42, degrau: "firm" });
     return stub([linha()])(path, options);
   });
   render(<CobrancaPage />);
@@ -144,7 +144,7 @@ test("rascunhar pede o degrau que a régua indicou e abre o texto para revisão"
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
     "/invoices/5/cobranca/rascunhar/",
-    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firme" }) }),
+    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firm" }) }),
   ));
   expect(await screen.findByRole("textbox", { name: "Texto revisado" })).toHaveValue("Olá, tudo bem?");
 });
@@ -161,7 +161,7 @@ test("nunca envia sem alguém ver o corpo: o botão abre o texto, não a rota", 
 
 test("enviar manda degrau, corpo revisado e a interação de IA que produziu o texto", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Rascunho", interaction: 42, degrau: "firme" });
+    if (path === "/invoices/5/cobranca/rascunhar/") return Promise.resolve({ text: "Rascunho", interaction: 42, degrau: "firm" });
     return stub([linha()])(path, options);
   });
   render(<CobrancaPage />);
@@ -170,7 +170,7 @@ test("enviar manda degrau, corpo revisado e a interação de IA que produziu o t
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith(
     "/invoices/5/cobranca/enviar/",
-    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firme", subject: "", body: "Rascunho", ai_interaction: 42 }) }),
+    expect.objectContaining({ method: "POST", body: JSON.stringify({ degrau: "firm", subject: "", body: "Rascunho", ai_interaction: 42 }) }),
   ));
 });
 
@@ -191,7 +191,7 @@ test("o 503 do envio tem texto próprio: diz que a régua está desligada e onde
 
 test("o 409 do degrau gasto tem texto próprio e mantém o corpo revisado na tela", async () => {
   mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
-    if (path === "/invoices/5/cobranca/enviar/") return Promise.reject(falha(409, "O degrau 'firme' desta fatura já foi enviado."));
+    if (path === "/invoices/5/cobranca/enviar/") return Promise.reject(falha(409, "O degrau 'firm' desta fatura já foi enviado."));
     return stub([linha()])(path, options);
   });
   render(<CobrancaPage />);
@@ -273,7 +273,7 @@ test("o histórico do que já saiu é buscado por fatura, sob demanda", async ()
   mocks.api.mockImplementation(stub([linha()], {
     historico: [{
       id: 1, invoice: 5, invoice_number: "2026-0007", account: 1, client: 1, client_name: "Imobiliária Aurora",
-      degrau: "lembrete", degrau_display: "Lembrete", canal: "email", canal_display: "E-mail ao cliente",
+      dunning_step: "reminder", dunning_step_display: "Lembrete", canal: "email", canal_display: "E-mail ao cliente",
       sent_on: "2026-08-08", subject: "Fatura em aberto", to_email: "financeiro@aurora.test",
       body: "…", sent_by: null, ai_interaction: null, created_at: "2026-08-08T09:00:00Z",
     }],

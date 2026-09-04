@@ -380,7 +380,11 @@ export type InvoiceSummary = { open: string; overdue: string; paid: string; open
 // aplicada, reincidência e motivo do silêncio chegam prontos de `/cobranca/painel/` — reimplementar
 // qualquer um deles em TypeScript seria a segunda definição da régua, e as duas cópias não ficam
 // vermelhas ao divergir: elas só passam a discordar do relógio, em silêncio.
-export type CobrancaDegrau = "pre_aviso" | "lembrete" | "firme" | "escalada" | "renegociacao";
+// Os cinco degraus falam inglês desde a issue #122, fatia 5.4 (D10 do language-map): a classe
+// virou `DunningContact`, o campo `dunning_step` e o valor persistido atravessou junto. Os
+// **rótulos** continuam em pt-BR e continuam vindo do servidor (`*_display`) — nenhum mapa de
+// rótulo nasce aqui, pelo motivo de sempre: seria a segunda definição da régua.
+export type DunningStep = "pre_notice" | "reminder" | "firm" | "escalation" | "renegotiation";
 export type CobrancaCanal = "email" | "interno";
 // Por que a régua se calou, com as mesmas constantes do backend. Vazio quando há degrau.
 export type CobrancaMotivo = "" | "suspensa" | "degrau_gasto" | "teto_de_frequencia" | "sem_degrau" | "estado_nao_cobravel";
@@ -417,7 +421,10 @@ export type CobrancaPainelLinha = {
   invoice: number; number: string; account: number; account_name: string;
   amount: string; due_date: string; status: InvoiceStatus; status_display: string;
   dias_de_atraso: number; payment_url: string;
-  proximo_degrau: CobrancaDegrau | null; proximo_degrau_display: string | null;
+  // As **chaves** `proximo_degrau*` ficam: elas são do dict cru do painel, e a família `Cobranca*`
+  // segue sem coinagem (`docs/ontology/aliases.md`, "Termos ainda sem nome canônico"). O que
+  // atravessou na fatia 5.4 foi o valor.
+  proximo_degrau: DunningStep | null; proximo_degrau_display: string | null;
   proximo_degrau_em: string | null; motivo: CobrancaMotivo;
   // Só o **nível** da saúde, nunca o score nem os sinais: é a cerca comercial do backend, e a linha
   // vai para a tela. Nulo quando a fatura não está presa a projeto nenhum.
@@ -439,9 +446,15 @@ export type CobrancaPainelLinha = {
   sinal_em: string | null; sinal_activity: number | null;
 };
 export type CobrancaTensaoCausa = "satisfacao" | "entrega" | "ambas";
-export type CobrancaContato = { id: number; invoice: number; invoice_number: string; account: number; client_name: string; degrau: CobrancaDegrau; degrau_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
+// `dunning_step`/`dunning_step_display` e não `degrau`/`degrau_display`: a SPA lê a `/api/v2/`, e
+// lá o par legado não sai (`ALIASES_DEPRECIADOS`). Na `/api/v1/` os dois continuam saindo, para
+// quem integrou antes da fatia 5.4.
+export type DunningContact = { id: number; invoice: number; invoice_number: string; account: number; client_name: string; dunning_step: DunningStep; dunning_step_display: string; canal: CobrancaCanal; canal_display: string; sent_on: string; subject: string; to_email: string; body: string; sent_by: number | null; ai_interaction: number | null; created_at: string };
 export type CobrancaSuspensao = { id: number; invoice: number | null; invoice_number: string; account: number | null; client_name: string; owner: number; until: string; reason: string; created_by: number | null; lifted_at: string | null; lifted_by: number | null; is_active: boolean; created_at: string; updated_at: string };
-export type CobrancaRascunho = { text: string; interaction: number; degrau: CobrancaDegrau };
+// A chave `degrau` fica: ela é do corpo e da resposta das actions `rascunhar`/`enviar`, e chave de
+// action não muda de nome por versão (o precedente de `signers` era substituição, não renome). O
+// **valor** dentro dela é o canônico — a v1 traduz o legado, a v2 o recusa.
+export type CobrancaRascunho = { text: string; interaction: number; degrau: DunningStep };
 
 // Base de conhecimento interna (FDD 029). `status` é derivado no backend — depende do dono da área
 // e do relógio —, então a tela **não** o recalcula: reproduzi-lo aqui seria a segunda expressão da

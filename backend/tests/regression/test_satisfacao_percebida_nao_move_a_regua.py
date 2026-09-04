@@ -171,7 +171,7 @@ def test_a_percebida_nao_muda_o_degrau_que_sai_hoje() -> None:
         amount=Decimal("1000.00"), due_date=HOJE - timedelta(days=12),
     )
 
-    assert cobranca.degrau_devido(invoice, HOJE).key == "firme"
+    assert cobranca.degrau_devido(invoice, HOJE).key == "firm"
 
 
 def test_a_percebida_nao_cala_a_regua_nem_a_declarada() -> None:

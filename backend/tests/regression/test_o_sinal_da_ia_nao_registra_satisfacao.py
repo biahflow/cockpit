@@ -110,7 +110,7 @@ def test_classificar_nao_troca_a_escada(admin_api: APIClient, insatisfeito: None
 
     assert cobranca.regua_para(activity.account, HOJE, ignorando=invoice) is cobranca.PADRAO
     degrau = cobranca.degrau_devido(invoice, HOJE)
-    assert degrau is not None and degrau.key == "firme"
+    assert degrau is not None and degrau.key == "firm"
 
 
 @override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")

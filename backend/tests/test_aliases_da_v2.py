@@ -24,10 +24,12 @@ from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 import yaml
 from django.conf import settings
+from django.core import mail
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -39,12 +41,12 @@ from apps.core import serializers as modulo_de_serializers
 from apps.core.models import (
     Activity,
     Case,
-    CobrancaContato,
     CobrancaSuspensao,
     Contact,
     DigitalEmployee,
     DigitalEmployeeBlueprint,
     Document,
+    DunningContact,
     Invoice,
     JourneyPhase,
     Meeting,
@@ -89,6 +91,8 @@ from apps.core.versioning import (
     VersaoPeloCaminho,
     frase_da_chave_removida,
     frase_da_chave_sem_sucessora,
+    frase_do_parametro_removido,
+    frase_do_valor_removido,
     versao_de,
 )
 
@@ -197,13 +201,6 @@ CONSTRUTORES: dict[str, Callable[[], Any]] = {
     "Activity": lambda: ActivityFactory(),
     "Artifact": lambda: ArtifactFactory(),
     "Case": lambda: Case.objects.create(project=ProjectFactory(), title="Case de teste"),
-    "CobrancaContato": lambda: CobrancaContato.objects.create(
-        invoice=(fatura := InvoiceFactory()),
-        account=fatura.account,
-        degrau=CobrancaContato.Degrau.LEMBRETE,
-        canal=CobrancaContato.Canal.INTERNO,
-        sent_on=timezone.localdate(),
-    ),
     "CobrancaSuspensao": lambda: CobrancaSuspensao.objects.create(
         account=AccountFactory(),
         owner=UserFactory(),
@@ -221,6 +218,13 @@ CONSTRUTORES: dict[str, Callable[[], Any]] = {
     ),
     "Document": lambda: Document.objects.create(
         account=AccountFactory(), original_name="contrato.pdf", uploaded_by=UserFactory()
+    ),
+    "DunningContact": lambda: DunningContact.objects.create(
+        invoice=(fatura := InvoiceFactory()),
+        account=fatura.account,
+        dunning_step=DunningContact.DunningStep.REMINDER,
+        canal=DunningContact.Canal.INTERNO,
+        sent_on=timezone.localdate(),
     ),
     "Invoice": lambda: InvoiceFactory(),
     "Lead": lambda: LeadFactory(),
@@ -1282,3 +1286,289 @@ def test_o_filtro_com_valor_canonico_continua_funcionando_na_v2_na_satisfacao(ad
     resposta = admin_client.get("/api/v2/satisfaction-records/?nivel=neutral")
 
     assert [r["id"] for r in resposta.json()] == [neutro.pk]
+
+
+# ---------------------------------------------------------------------------------------------
+# 11. A última família — DunningContact (issue #122, fatia 5.4)
+#
+# Ela junta tudo o que as três anteriores fizeram em separado: classe e **tabela** (como a 5.3),
+# **campo** (como a 5.2) e **valor** (como as três). E traz duas superfícies que nenhuma delas
+# tinha, porque o degrau não é campo de serializer gravável:
+#
+# * o valor chega no **corpo de uma `@action`** (`rascunhar`/`enviar`), onde o mixin de serializer
+#   não passa e **não existe** validação de `choices` do DRF para recusar de graça na v2 — quem
+#   valida é a própria action, contra as réguas de `cobranca.py`. Sem tradução, `pre_aviso` na v2
+#   viraria "Degrau desconhecido", um erro que aponta para o lugar errado;
+# * o **nome do parâmetro** de filtro mudou junto com o campo (`?degrau=` → `?dunning_step=`), o
+#   que exigiu `filter_field_aliases` também no laço de `filter_exact_fields` — sem ele o filtro
+#   legado deixaria de filtrar em silêncio na v1, devolvendo a lista inteira.
+#
+# A **rota** `/cobranca/` não ganha par canônico: ela nomeia a família de cobrança, que continua
+# sem coinagem (`CobrancaSuspensao`, `cobranca.py`), e não a classe que acabou de ganhar a dela.
+# ---------------------------------------------------------------------------------------------
+
+
+def _migracao_0087() -> Any:
+    """O módulo da migração, importado por caminho — `0087...` não é identificador Python."""
+    return importlib.import_module("apps.core.migrations.0087_o_contato_de_cobranca_fala_ingles")
+
+
+def _fatura_cobravel() -> Invoice:
+    """Emitida e vencida há 12 dias: o degrau `firm` é o que cabe, e há a quem cobrar."""
+    fatura = InvoiceFactory(
+        status=Invoice.Status.ISSUED,
+        number=f"2026-{Invoice.objects.count() + 1:04d}",
+        due_date=timezone.localdate() - timedelta(days=12),
+    )
+    Contact.objects.create(
+        account=fatura.account, first_name="Financeiro",
+        email="financeiro@cliente.test", receives_billing=True,
+    )
+    return fatura
+
+
+def _contato(**kwargs: Any) -> DunningContact:
+    fatura = kwargs.pop("invoice", None) or InvoiceFactory()
+    campos: dict[str, Any] = {
+        "invoice": fatura,
+        "account": fatura.account,
+        "dunning_step": DunningContact.DunningStep.REMINDER,
+        "canal": DunningContact.Canal.EMAIL,
+        "sent_on": timezone.localdate(),
+    }
+    campos.update(kwargs)
+    return DunningContact.objects.create(**campos)
+
+
+@pytest.mark.django_db
+def test_a_migracao_0087_traduz_os_cinco_pares_do_degrau_e_a_reversa_e_simetrica() -> None:
+    """A quarta e última migração de VALOR, no molde da `0084`/`0085`/`0086`.
+
+    `.update()` no queryset, como o forward faz, contorna `full_clean()` — é assim que se põe um
+    valor pt-BR na coluna sem passar pela validação que esta própria migração torna obsoleta.
+    """
+    from django.apps import apps as registro_de_apps
+
+    modulo = _migracao_0087()
+    pares = modulo._PARES_PT_PARA_EN
+    assert len(pares) == 5
+
+    contatos = {antigo: _contato() for antigo, _novo in pares}
+    for antigo, contato in contatos.items():
+        DunningContact.objects.filter(pk=contato.pk).update(dunning_step=antigo)
+
+    modulo.traduzir_para_ingles(registro_de_apps, None)
+    for antigo, novo in pares:
+        contatos[antigo].refresh_from_db()
+        assert contatos[antigo].dunning_step == novo
+
+    modulo.traduzir_para_portugues(registro_de_apps, None)
+    for antigo, _novo in pares:
+        contatos[antigo].refresh_from_db()
+        assert contatos[antigo].dunning_step == antigo
+
+
+@pytest.mark.django_db
+def test_nenhum_contato_tem_degrau_pt_e_os_choices_sao_os_novos() -> None:
+    """A prova de estado, complementar à de função: o enum atual só conhece os choices novos."""
+    _contato()
+
+    valores_portugueses = {"pre_aviso", "lembrete", "firme", "escalada", "renegociacao"}
+    persistidos = set(DunningContact.objects.values_list("dunning_step", flat=True))
+
+    assert not (persistidos & valores_portugueses)
+    assert tuple(DunningContact.DunningStep.values) == (
+        "pre_notice", "reminder", "firm", "escalation", "renegotiation",
+    )
+
+
+@pytest.mark.django_db
+def test_a_tabela_do_contato_renomeou_e_a_linha_sobreviveu_com_a_mesma_pk() -> None:
+    """O que a `aliases.md` §2b exige de todo renome: só o rótulo muda.
+
+    Sem esta asserção o renome passaria igual se alguém tivesse feito modelo novo mais migração de
+    dados, que é exatamente o caminho que a §2b proíbe.
+    """
+    contato = _contato()
+
+    assert DunningContact._meta.db_table == "core_dunningcontact"
+    assert DunningContact.objects.get(pk=contato.pk).pk == contato.pk
+
+
+@pytest.mark.django_db
+def test_a_leitura_do_contato_na_v1_emite_os_dois_pares_e_a_v2_so_o_canonico(
+    admin_client: APIClient,
+) -> None:
+    """`GET /cobranca/` — `dunning_step` e `degrau` na v1, só o canônico na v2."""
+    _contato(dunning_step=DunningContact.DunningStep.FIRM)
+
+    (da_v1,) = admin_client.get("/api/v1/cobranca/").json()
+    (da_v2,) = admin_client.get("/api/v2/cobranca/").json()
+
+    assert da_v1["dunning_step"] == da_v1["degrau"] == "firm"
+    assert da_v1["dunning_step_display"] == da_v1["degrau_display"] == "Cobrança firme"
+
+    assert da_v2["dunning_step"] == "firm"
+    assert da_v2["dunning_step_display"] == "Cobrança firme"
+    assert "degrau" not in da_v2
+    assert "degrau_display" not in da_v2
+
+
+@pytest.mark.django_db
+def test_a_rota_de_cobranca_responde_igual_nas_duas_versoes(admin_client: APIClient) -> None:
+    """A classe ganhou nome canônico e a **rota** não muda — ela nomeia a família, não a classe.
+
+    É a diferença para a fatia 5.3, em que `/satisfacoes/` ganhou o par `/satisfaction-records/`:
+    lá o prefixo **era** o nome da classe em português. Aqui `/cobranca/` continua sendo o nome de
+    uma família que segue sem coinagem (`CobrancaSuspensao`, `cobranca.py`), e inventar
+    `/dunning-contacts/` na v2 batizaria em inglês o que ainda não foi decidido.
+    """
+    assert admin_client.get("/api/v1/cobranca/").status_code == 200
+    assert admin_client.get("/api/v2/cobranca/").status_code == 200
+    assert admin_client.get("/api/v2/dunning-contacts/").status_code == 404
+
+
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+@pytest.mark.django_db
+def test_o_degrau_legado_no_corpo_de_rascunhar_normaliza_na_v1(
+    admin_client: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Quem mandava `"firme"` ontem continua funcionando — e o que volta é o canônico."""
+    fatura = _fatura_cobravel()
+    monkeypatch.setattr(ai, "complete", lambda s, u, **_: ("Olá...", {"prompt_tokens": 1}))
+
+    resposta = admin_client.post(
+        f"/api/v1/invoices/{fatura.pk}/cobranca/rascunhar/", {"degrau": "firme"}, format="json"
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json()["degrau"] == "firm"
+
+
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+@pytest.mark.django_db
+def test_o_degrau_legado_no_corpo_de_rascunhar_na_v2_e_400_dizendo_o_canonico(
+    admin_client: APIClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E **não** "Degrau desconhecido": o degrau existe, o nome dele é que mudou."""
+    fatura = _fatura_cobravel()
+    complete = Mock()
+    monkeypatch.setattr(ai, "complete", complete)
+
+    resposta = admin_client.post(
+        f"/api/v2/invoices/{fatura.pk}/cobranca/rascunhar/", {"degrau": "firme"}, format="json"
+    )
+
+    assert resposta.status_code == 400
+    assert frase_do_valor_removido("degrau", "firme", "firm") in str(resposta.data)
+    complete.assert_not_called()
+
+
+@override_settings(DUNNING_ENABLED=True)
+@pytest.mark.django_db
+def test_o_degrau_legado_no_corpo_de_enviar_normaliza_na_v1_e_grava_o_canonico(
+    admin_client: APIClient,
+) -> None:
+    fatura = _fatura_cobravel()
+
+    resposta = admin_client.post(
+        f"/api/v1/invoices/{fatura.pk}/cobranca/enviar/",
+        {"degrau": "firme", "body": "Texto revisado por gente."},
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["dunning_step"] == "firm"
+    assert DunningContact.objects.get().dunning_step == "firm"
+
+
+@override_settings(DUNNING_ENABLED=True)
+@pytest.mark.django_db
+def test_o_degrau_legado_no_corpo_de_enviar_na_v2_e_400_e_nada_sai(
+    admin_client: APIClient,
+) -> None:
+    """A recusa vem **antes** do envio: nenhum e-mail sai e nenhum contato é gravado."""
+    fatura = _fatura_cobravel()
+
+    resposta = admin_client.post(
+        f"/api/v2/invoices/{fatura.pk}/cobranca/enviar/",
+        {"degrau": "firme", "body": "Texto revisado por gente."},
+        format="json",
+    )
+
+    assert resposta.status_code == 400
+    assert frase_do_valor_removido("degrau", "firme", "firm") in str(resposta.data)
+    assert not DunningContact.objects.exists()
+    assert mail.outbox == []
+
+
+@override_settings(DUNNING_ENABLED=True)
+@pytest.mark.django_db
+def test_o_degrau_canonico_no_corpo_de_enviar_funciona_na_v2(admin_client: APIClient) -> None:
+    fatura = _fatura_cobravel()
+
+    resposta = admin_client.post(
+        f"/api/v2/invoices/{fatura.pk}/cobranca/enviar/",
+        {"degrau": "firm", "body": "Texto revisado por gente."},
+        format="json",
+    )
+
+    assert resposta.status_code == 201
+    assert DunningContact.objects.get().dunning_step == "firm"
+
+
+@pytest.mark.django_db
+def test_o_filtro_do_degrau_aceita_os_dois_nomes_e_os_dois_valores_na_v1(
+    admin_client: APIClient,
+) -> None:
+    """Duas metades num teste só, porque foi um renome só: o **nome** do parâmetro e o **valor**.
+
+    `?degrau=lembrete` é a chamada de quem integrou com a v1 antes desta fatia, e as duas pontas
+    dela mudaram de nome no mesmo dia.
+    """
+    reminder = _contato()
+    _contato(dunning_step=DunningContact.DunningStep.FIRM)
+
+    pelo_legado = admin_client.get("/api/v1/cobranca/?degrau=lembrete")
+    pelo_canonico = admin_client.get("/api/v1/cobranca/?dunning_step=reminder")
+    misto = admin_client.get("/api/v1/cobranca/?dunning_step=lembrete")
+
+    assert [c["id"] for c in pelo_legado.json()] == [reminder.pk]
+    assert [c["id"] for c in pelo_canonico.json()] == [reminder.pk]
+    assert [c["id"] for c in misto.json()] == [reminder.pk]
+
+
+@pytest.mark.django_db
+def test_o_parametro_legado_do_degrau_na_v2_e_400_dizendo_o_canonico(
+    admin_client: APIClient,
+) -> None:
+    """Sem esta recusa, `?degrau=` seria **ignorado em silêncio** — o filtro sumiria sem aviso."""
+    _contato()
+
+    resposta = admin_client.get("/api/v2/cobranca/?degrau=reminder")
+
+    assert resposta.status_code == 400
+    assert frase_do_parametro_removido("degrau", "dunning_step") in str(resposta.data)
+
+
+@pytest.mark.django_db
+def test_o_valor_legado_do_degrau_no_filtro_da_v2_e_400_dizendo_o_canonico(
+    admin_client: APIClient,
+) -> None:
+    """Lista vazia seria o silêncio que a #122 recusa — a v2 recusa o valor, e diz qual usar."""
+    _contato()
+
+    resposta = admin_client.get("/api/v2/cobranca/?dunning_step=lembrete")
+
+    assert resposta.status_code == 400
+    assert frase_do_valor_removido("dunning_step", "lembrete", "reminder") in str(resposta.data)
+
+
+@pytest.mark.django_db
+def test_o_filtro_com_valor_canonico_do_degrau_funciona_na_v2(admin_client: APIClient) -> None:
+    reminder = _contato()
+    _contato(dunning_step=DunningContact.DunningStep.FIRM)
+
+    resposta = admin_client.get("/api/v2/cobranca/?dunning_step=reminder")
+
+    assert [c["id"] for c in resposta.json()] == [reminder.pk]

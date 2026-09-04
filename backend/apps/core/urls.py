@@ -16,7 +16,6 @@ from .views import (
     CalendarSyncView,
     CaseViewSet,
     CobrancaSuspensaoViewSet,
-    CobrancaViewSet,
     CommercialOpportunityViewSet,
     ConfigView,
     ContactViewSet,
@@ -29,6 +28,7 @@ from .views import (
     DiscoverySessionViewSet,
     DiscoveryViewSet,
     DocumentViewSet,
+    DunningContactViewSet,
     EngagementViewSet,
     EngineeringHandoffViewSet,
     EsignWebhookView,
@@ -179,7 +179,7 @@ router.register("invoices", InvoiceViewSet)
 # "suspensoes" como pk — registrada primeiro, ela sequestraria a lista de suspensões e o sintoma
 # seria um 404 de detalhe onde deveria haver uma coleção.
 router.register("cobranca/suspensoes", CobrancaSuspensaoViewSet, basename="cobranca-suspensao")
-router.register("cobranca", CobrancaViewSet, basename="cobranca")
+router.register("cobranca", DunningContactViewSet, basename="cobranca")
 router.register("knowledge-areas", KnowledgeAreaViewSet)
 router.register("knowledge-pieces", KnowledgePieceViewSet)
 router.register("leads", LeadViewSet)

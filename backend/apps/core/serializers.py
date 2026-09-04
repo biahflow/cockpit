@@ -29,7 +29,6 @@ from .models import (
     Artifact,
     BlueprintVariant,
     Case,
-    CobrancaContato,
     CobrancaSuspensao,
     CommercialOpportunity,
     Contact,
@@ -39,6 +38,7 @@ from .models import (
     Discovery,
     DiscoverySession,
     Document,
+    DunningContact,
     Engagement,
     EngineeringHandoff,
     Evidence,
@@ -2852,18 +2852,28 @@ class InvoiceSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Invoice]):
         return attrs
 
 
-class CobrancaContatoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[CobrancaContato]):
+class DunningContactSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[DunningContact]):
     """O que a casa já disse sobre uma fatura (FDD 036). **Só de leitura pelo router.**
 
     Nenhum campo é gravável aqui, e a ausência é a entrega: um `POST /cobranca/` criaria a prova de
     um contato que não aconteceu. Contato nasce de `POST /invoices/{id}/cobranca/enviar/` ou do job
     — os dois mandam o e-mail **antes** de gravar.
+
+    O degrau é `dunning_step` desde a `/api/v1/` da fatia 5.4 da issue #122; `degrau` e
+    `degrau_display` continuam saindo aqui, com o mesmo valor, e morrem na `/api/v2/` como toda
+    chave de payload legada.
     """
 
     # Alias de leitura da `/api/v1/` (`docs/ontology/aliases.md` §2c): a chave antiga sai com
     # o mesmo valor da canônica e morre na `/api/v2/`.
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
-    degrau_display = serializers.CharField(source="get_degrau_display", read_only=True)
+    dunning_step_display = serializers.CharField(source="get_dunning_step_display", read_only=True)
+    # O par legado do degrau (issue #122, fatia 5.4). **Sem `ALIASES_DE_ENTRADA`**: nada aqui é
+    # gravável — o contato nasce da action de envio ou do job —, então não há escrita a normalizar.
+    # O que a v1 promete é a leitura pelas duas chaves, e quem some com as legadas na v2 é o
+    # `AliasesDaV1Mixin`, lendo `ALIASES_DEPRECIADOS["DunningContact"]`.
+    degrau = serializers.CharField(source="dunning_step", read_only=True)
+    degrau_display = serializers.CharField(source="get_dunning_step_display", read_only=True)
     canal_display = serializers.CharField(source="get_canal_display", read_only=True)
     # `account_name` é a canônica e `client_name` o alias que morre na `/api/v2/` — o mesmo par de
     # `account`/`client` acima (issue #122, fatia 4a).
@@ -2872,9 +2882,9 @@ class CobrancaContatoSerializer(AliasesDaV1Mixin, serializers.ModelSerializer[Co
     invoice_number = serializers.CharField(source="invoice.number", read_only=True, default="")
 
     class Meta:
-        model = CobrancaContato
+        model = DunningContact
         fields = ["id", "invoice", "invoice_number", "account", "client", "account_name",
-                  "client_name", "degrau",
+                  "client_name", "dunning_step", "dunning_step_display", "degrau",
                   "degrau_display", "canal", "canal_display", "sent_on", "subject", "to_email",
                   "body", "sent_by", "ai_interaction", "created_at"]
         read_only_fields = fields

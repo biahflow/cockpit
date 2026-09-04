@@ -187,9 +187,9 @@ def seed_cobranca(clients: int) -> None:
     """
     from apps.core.models import (
         Activity,
-        CobrancaContato,
         CobrancaSuspensao,
         Contact,
+        DunningContact,
         Invoice,
         Meeting,
         Pendencia,
@@ -243,9 +243,9 @@ def seed_cobranca(clients: int) -> None:
             due_date=hoje - timedelta(days=200),
             paid_at=timezone.now() - timedelta(days=190),
         )
-        CobrancaContato.objects.create(
-            invoice=atrasada, account=account, degrau="lembrete",
-            canal=CobrancaContato.Canal.EMAIL, sent_on=hoje - timedelta(days=30),
+        DunningContact.objects.create(
+            invoice=atrasada, account=account, dunning_step="reminder",
+            canal=DunningContact.Canal.EMAIL, sent_on=hoje - timedelta(days=30),
             subject="Fatura em aberto", body="...",
         )
         CobrancaSuspensao.objects.create(

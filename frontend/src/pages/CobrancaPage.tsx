@@ -7,7 +7,7 @@ import { ConfirmDialog, Modal } from "../components/Modal";
 import { healthBadgeClass, satisfacaoBadgeClass } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
 import { canWriteBeyondDelivery } from "../roles";
-import type { CobrancaContato, CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, CobrancaTensaoCausa, SatisfactionLevel, SatisfactionSource, SessionUser } from "../types";
+import type { CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, CobrancaTensaoCausa, DunningContact, SatisfactionLevel, SatisfactionSource, SessionUser } from "../types";
 
 /**
  * A tela onde se decide o próximo passo da cobrança (FDD 036, critério de aceite 7).
@@ -191,7 +191,7 @@ export function CobrancaPage() {
   const [linhas, setLinhas] = useState<CobrancaPainelLinha[]>([]);
   const [iaLigada, setIaLigada] = useState(false);
   const [donos, setDonos] = useState<SessionUser[]>([]);
-  const [historico, setHistorico] = useState<Record<number, CobrancaContato[]>>({});
+  const [historico, setHistorico] = useState<Record<number, DunningContact[]>>({});
   const [aberto, setAberto] = useState<number | null>(null);
   const [envio, setEnvio] = useState<Envio | null>(null);
   const [suspendendo, setSuspendendo] = useState<CobrancaPainelLinha | null>(null);
@@ -339,7 +339,7 @@ export function CobrancaPage() {
     setAberto(linha.invoice);
     if (historico[linha.invoice]) return;
     try {
-      const itens = await api<CobrancaContato[]>(`/cobranca/?invoice=${linha.invoice}`);
+      const itens = await api<DunningContact[]>(`/cobranca/?invoice=${linha.invoice}`);
       setHistorico(prev => ({ ...prev, [linha.invoice]: itens }));
     } catch (cause) { setError(mensagemDeFalha(cause)); }
   }
@@ -614,7 +614,7 @@ export function CobrancaPage() {
         {aberto === linha.invoice && (contatos?.length
           ? <div className="panel-rows border-t border-line">{contatos.map(contato => <div key={contato.id} className="row">
               <div className="row-main">
-                <strong>{contato.degrau_display} · {contato.canal_display}</strong>
+                <strong>{contato.dunning_step_display} · {contato.canal_display}</strong>
                 <span>{formatDate(contato.sent_on)}{contato.to_email && ` · ${contato.to_email}`}{contato.sent_by ? "" : " · enviado pela régua"}</span>
                 {contato.subject && <span>{contato.subject}</span>}
               </div>
