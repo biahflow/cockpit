@@ -53,12 +53,18 @@ dois usos de IA que a RFC autoriza — rascunhar o tom e classificar a resposta.
 
 | Offset | Degrau | Destino | O que ele é |
 | --- | --- | --- | --- |
-| D−3 | `pre_aviso` | cliente | favor, não cobrança: a fatura ainda nem venceu |
+| D−3 | `pre_notice` | cliente | favor, não cobrança: a fatura ainda nem venceu |
 | D+1..D+2 | *carência* | ninguém | o silêncio é o degrau |
-| D+3 | `lembrete` | cliente | neutro |
-| D+10 | `firme` | cliente | firme |
-| D+20 | `escalada` | interno | não sai para o cliente: acorda quem responde pela relação |
-| D+30 | `renegociacao` | interno | pede decisão humana |
+| D+3 | `reminder` | cliente | neutro |
+| D+10 | `firm` | cliente | firme |
+| D+20 | `escalation` | interno | não sai para o cliente: acorda quem responde pela relação |
+| D+30 | `renegotiation` | interno | pede decisão humana |
+
+> **Os cinco valores da coluna Degrau falam inglês desde a fatia 5.4 da issue #122** (D10 do
+> `language-map`, 04/09/2026): a classe virou `DunningContact`, o campo `dunning_step`, e os
+> valores acima acompanharam. O rótulo que a tela mostra (`Pré-aviso`, `Lembrete`, `Cobrança
+> firme`, `Escalada interna`, `Renegociação`) não mudou — é superfície, e só o que persiste no
+> banco mudou de idioma. Ver `docs/ontology/aliases.md`.
 
 A carência **não tem linha**. Ela é o intervalo entre o vencimento e o lembrete, e
 representá-la como um degrau que não faz nada convidaria alguém a preenchê-lo.
@@ -144,7 +150,9 @@ na FDD 028: o recurso não entra em conjunto nenhum e o `has_permission` termina
 `return False`. Recurso novo nasce fechado.
 
 Campos novos, todos opcionais: `Contact.receives_billing`, `Activity.invoice` e
-`Activity.cobranca_sinal`.
+`Activity.dunning_signal` (chamava-se `Activity.cobranca_sinal` até a fatia 5.2 da issue #122;
+as chaves de payload `cobranca_sinal`/`cobranca_sinal_display` continuam saindo até a
+`/api/v2/`, ver `docs/ontology/aliases.md`).
 
 ## Critérios de aceite
 
@@ -152,7 +160,8 @@ Campos novos, todos opcionais: `Contact.receives_billing`, `Activity.invoice` e
    nenhum — e não por uma rotina de cancelamento, mas porque a régua é derivada do estado e
    `paid` é terminal. É o pecado capital da RFC, e tem regressão dedicada.
 2. **O degrau não se repete**, nem no mesmo dia nem no seguinte. A idempotência é
-   `UniqueConstraint(invoice, degrau)`, não uma guarda em Python.
+   `UniqueConstraint(invoice, dunning_step)` (campo `degrau` até a fatia 5.4 da issue #122), não
+   uma guarda em Python.
 3. **Custo e margem não saem** — teste estrutural além do comportamental, no molde do
    anti-vazamento do corpus (FDD 029).
 4. **Suspensão ativa cala a régua; suspensão vencida a devolve**, sem intervenção.
@@ -190,7 +199,7 @@ degrau simplesmente não cabe mais e o próximo assume. A carência continua sen
 duas janelas, e continua sem entrada na tabela.
 
 **A régua da relação longa reusa a chave do lembrete padrão, e não cria uma nova.** A idempotência
-é `UniqueConstraint(invoice, degrau)`. Se um cliente mudar de régua entre duas execuções — completou
+é `UniqueConstraint(invoice, dunning_step)`. Se um cliente mudar de régua entre duas execuções — completou
 um ano, deixou de ser reincidente —, uma chave própria faria o mesmo lembrete sair duas vezes. O que
 muda entre as duas escadas é a janela, não a identidade do degrau.
 

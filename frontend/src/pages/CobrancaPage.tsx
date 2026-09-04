@@ -4,7 +4,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api, getConfig } from "../api";
 import { useAuth } from "../auth";
 import { ConfirmDialog, Modal } from "../components/Modal";
-import { healthBadgeClass, satisfacaoBadgeClass } from "../components/StatusDot";
+import { healthBadgeClass, satisfactionBadgeClass } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
 import { canWriteBeyondDelivery } from "../roles";
 import type { CobrancaPainelLinha, CobrancaRascunho, CobrancaRegua, CobrancaTensaoCausa, DunningContact, SatisfactionLevel, SatisfactionSource, SessionUser } from "../types";
@@ -47,13 +47,16 @@ const REGUA: Record<CobrancaRegua, string> = {
 // (`declared`/`perceived`), não o rótulo — mandar os dois seria duplicar o texto por dois
 // caminhos que podem discordar. As chaves falam inglês desde a fatia 5.3 da issue #122; os
 // rótulos, que são superfície, não mudaram (D10).
-const SATISFACAO_NIVEL: Record<SatisfactionLevel, string> = {
+//
+// Os dois mapas falavam português (`SATISFACTION_NIVEL`/`SATISFACTION_FONTE`) até a fatia 6 da
+// mesma issue — nome local, sem coinagem.
+const SATISFACTION_NIVEL: Record<SatisfactionLevel, string> = {
   promoter: "Promotor",
   satisfied: "Satisfeito",
   neutral: "Neutro",
   dissatisfied: "Insatisfeito",
 };
-const SATISFACAO_FONTE: Record<SatisfactionSource, string> = {
+const SATISFACTION_FONTE: Record<SatisfactionSource, string> = {
   declared: "declarada pelo cliente",
   perceived: "percebida por quem entrega",
 };
@@ -87,7 +90,7 @@ const NIVEL_SUGERIDO: Record<
 };
 
 /** "há 12 dias" — a idade que faz alguém perguntar de novo (FDD 037). O corte é do backend. */
-function satisfacaoIdade(dias: number): string {
+function satisfactionIdade(dias: number): string {
   if (dias === 0) return "hoje";
   if (dias === 1) return "há 1 dia";
   return `há ${dias} dias`;
@@ -297,7 +300,7 @@ export function CobrancaPage() {
    * daqui e não do backend ao classificar. `source_activity` é o que faz o sinal sumir da linha
    * depois: sem ele o mesmo lembrete insistiria para sempre, inclusive com o registro já feito.
    */
-  async function registrarSatisfacao(event: FormEvent<HTMLFormElement>) {
+  async function registrarSatisfaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!registrando?.sinal_activity) return;
     setError(""); setBusy(true);
@@ -422,7 +425,7 @@ export function CobrancaPage() {
     </Modal>}
 
     {registrando && <Modal title="Registrar satisfação" onClose={() => { setRegistrando(null); setRegistro(registroVazio); }}>
-      <form className="grid gap-4" onSubmit={event => void registrarSatisfacao(event)}>
+      <form className="grid gap-4" onSubmit={event => void registrarSatisfaction(event)}>
         {/* A leitura da IA vira registro **aqui**, com o nome de quem salvou (ADR 0032). O modelo
             classificou uma resposta; afirmar que o cliente está insatisfeito é outra coisa, e é
             ela que tira 20 pontos do Health Score e troca a escada da cobrança. */}
@@ -439,8 +442,8 @@ export function CobrancaPage() {
         <label className="form-label">Nível
           <select required className="field" value={registro.nivel}
             onChange={event => setRegistro({ ...registro, nivel: event.target.value as SatisfactionLevel })}>
-            {(Object.keys(SATISFACAO_NIVEL) as SatisfactionLevel[]).map(nivel =>
-              <option key={nivel} value={nivel}>{SATISFACAO_NIVEL[nivel]}</option>)}
+            {(Object.keys(SATISFACTION_NIVEL) as SatisfactionLevel[]).map(nivel =>
+              <option key={nivel} value={nivel}>{SATISFACTION_NIVEL[nivel]}</option>)}
           </select>
         </label>
         <label className="form-label">O que o cliente disse
@@ -536,8 +539,8 @@ export function CobrancaPage() {
             {linha.satisfacao_nivel && linha.satisfacao_fonte && <div>
               <dt className="text-xs text-muted">Satisfação</dt>
               <dd className="mt-1 flex flex-wrap items-center gap-2">
-                <span className={`state ${satisfacaoBadgeClass(linha.satisfacao_nivel)}`}>{SATISFACAO_NIVEL[linha.satisfacao_nivel]}</span>
-                <span className="text-xs text-muted">{SATISFACAO_FONTE[linha.satisfacao_fonte]}{linha.satisfacao_dias != null ? ` · ${satisfacaoIdade(linha.satisfacao_dias)}` : ""}</span>
+                <span className={`state ${satisfactionBadgeClass(linha.satisfacao_nivel)}`}>{SATISFACTION_NIVEL[linha.satisfacao_nivel]}</span>
+                <span className="text-xs text-muted">{SATISFACTION_FONTE[linha.satisfacao_fonte]}{linha.satisfacao_dias != null ? ` · ${satisfactionIdade(linha.satisfacao_dias)}` : ""}</span>
               </dd>
             </div>}
             {/* O sinal que a IA leu na resposta do cliente (FDD 038), e que **ninguém registrou**.

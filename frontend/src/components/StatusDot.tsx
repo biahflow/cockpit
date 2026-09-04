@@ -29,15 +29,18 @@ export function healthBadgeClass(level: HealthLevel): string {
 // As chaves falam inglês desde a issue #122, fatia 5.3 (D10): é o valor que o servidor persiste
 // e emite. Os rótulos continuam pt-BR e continuam vindo de outro lugar — do `nivel_display` ou
 // dos mapas de rótulo das duas telas —, porque aqui só mora a variante, nunca a cor (ADR 0026).
-const SATISFACAO_BADGE: Record<SatisfactionLevel, string> = {
+//
+// O identificador falava português (`SATISFACAO_BADGE`/`satisfacaoBadgeClass`) até a fatia 6 da
+// issue #122 — nome local, sem coinagem, no molde de `HEALTH_BADGE`/`healthBadgeClass` acima.
+const SATISFACTION_BADGE: Record<SatisfactionLevel, string> = {
   promoter: "state--0",
   satisfied: "state--1",
   neutral: "state--off",
   dissatisfied: "state--3",
 };
 
-export function satisfacaoBadgeClass(nivel: SatisfactionLevel): string {
-  return SATISFACAO_BADGE[nivel];
+export function satisfactionBadgeClass(nivel: SatisfactionLevel): string {
+  return SATISFACTION_BADGE[nivel];
 }
 
 // A sustentação do custo do estado atual (FDD 039, ADR 0034). Mora aqui, ao lado dos dois mapas

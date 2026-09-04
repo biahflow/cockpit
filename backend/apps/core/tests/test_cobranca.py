@@ -369,7 +369,7 @@ def test_a_causa_da_tensao_nomeia_as_duas_origens() -> None:
     _insatisfacao(ambas)
     _entrega_em_frangalhos(ambas)
 
-    assert cobranca.causa_da_tensao(so_satisfacao, HOJE) == cobranca.TENSAO_SATISFACAO
+    assert cobranca.causa_da_tensao(so_satisfacao, HOJE) == cobranca.TENSAO_SATISFACTION
     assert cobranca.causa_da_tensao(so_entrega, HOJE) == cobranca.TENSAO_ENTREGA
     assert cobranca.causa_da_tensao(ambas, HOJE) == cobranca.TENSAO_AMBAS
     # A mesma escada nos três casos: a causa é rótulo, não decisão.
@@ -1336,7 +1336,7 @@ def test_o_sinal_some_da_linha_depois_de_registrado(admin_api: APIClient) -> Non
     assert depois["sinal_em"] is None
     # E agora sim a escada mudou — porque houve **registro**, não porque a IA leu.
     assert depois["regua"] == "relacao_tensa"
-    assert depois["tensao_causa"] == cobranca.TENSAO_SATISFACAO
+    assert depois["tensao_causa"] == cobranca.TENSAO_SATISFACTION
 
 
 @pytest.mark.django_db
@@ -1538,8 +1538,8 @@ def test_o_contexto_pre_carregado_da_a_mesma_resposta_da_consulta_individual() -
         # A satisfação da linha do painel: de qualquer fonte, e a mesma pelos dois caminhos.
         # É aqui que guardar a **escolha** em vez dos registros divergiria — o cliente `tenso`
         # tem uma percebida de hoje por cima de uma declarada de ontem.
-        em_lote_satisfacao = cobranca.satisfacao_vigente(invoice.account, hoje, contexto=contexto)
-        individual_satisfacao = cobranca.satisfacao_vigente(invoice.account, hoje)
+        em_lote_satisfacao = cobranca.satisfaction_vigente(invoice.account, hoje, contexto=contexto)
+        individual_satisfacao = cobranca.satisfaction_vigente(invoice.account, hoje)
         assert (em_lote_satisfacao and em_lote_satisfacao.pk) == (
             individual_satisfacao and individual_satisfacao.pk
         )

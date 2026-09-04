@@ -591,3 +591,46 @@ autorização, não contrato público.
 - `RolePermission` passa a ler `resource = "dunning_contact"`.
 - A SPA troca `CobrancaDegrau`/`CobrancaContato` por `DunningStep`/`DunningContact` e passa a ler
   `dunning_step_display` no histórico — ela consome a v2, onde `degrau_display` não sai.
+
+## Emenda (issue #122, fatia 6 — 04/09/2026) — a série fecha, e o que a issue entregou por inteiro
+
+A fatia 6 é limpeza, não travessia de contrato: nenhum `openapi.yaml`/`openapi-v2.yaml` muda —
+critério de aceite verificado por `git diff` vazio dos dois, na mesma disciplina da fatia 3b. O que
+ela paga é o rastro que as fatias 5.1–5.4 deixaram para trás ao mover classe, tabela, campo e valor
+em código, e que a documentação e os identificadores puramente locais não tinham acompanhado:
+
+- as FDDs vivas (036, 037, 038, e mais duas ocorrências achadas na varredura completa — FDD 039 e
+  FDD 049) passaram a afirmar os nomes/valores canônicos onde descreviam o estado atual do código,
+  com uma nota datada por página; a narrativa histórica de cada uma (a "Jornada" que motivou a
+  fatia, escrita antes de D10 existir) não foi reescrita — reescrever contexto de decisão já
+  tomada é reescrever história, e as ADRs desta série valem o mesmo tratamento e por isso não
+  foram tocadas;
+- o módulo `satisfacao.py` virou `satisfaction.py` (molde de `processos.py`→`process.py` da #67),
+  com a constante `SATISFACAO_VALIDA_DIAS`→`SATISFACTION_VALID_DAYS` e o alias de import
+  `satisfacao_module`→`satisfaction_module` nos três chamadores (`agents.py`, `health.py`,
+  `cobranca.py`); em `cobranca.py`, `TENSAO_SATISFACAO` e os vizinhos puramente internos que
+  nomeavam a satisfação em português (`satisfacoes_por_cliente`, `satisfacao_vigente`,
+  `insatisfacao_declarada`) atravessaram para inglês — **o valor** de `TENSAO_SATISFACAO`
+  (`"satisfacao"`, a chave de payload de `tensao_causa`) não mudou, porque não tem canônico ainda
+  (ver "Termos ainda sem nome canônico" em `docs/ontology/aliases.md`);
+- o ponteiro rançoso da nota do snapshot em `docs/ontology/aliases.md` ("a quarta linha de baixo
+  para cima") passou a nomear a linha em vez de contar posição — a tabela cresceu quatro vezes
+  desde que a nota foi escrita, e contagem de posição numa tabela que cresce é o tipo de ponteiro
+  que apodrece sozinho;
+- `docs/ontology/aliases.md` ganhou a seção "A série 5.x fechou", que registra as quatro famílias,
+  o molde nascido na 5.1 e o que continua vivo no documento por não ser dívida desta série.
+
+**Nenhum identificador de contrato mudou.** Chave de payload, rota e valor de enum já expostos
+continuam exatamente como as fatias 5.1–5.4 os deixaram; o que a fatia 6 renomeou foi só o que o
+`docs/ontology/language-map.md` §6 chama de "batismo" em território puramente interno — arquivo,
+constante, variável e função sem chamador fora do processo Python. `docs/ontology/legacy-allowlist.txt`
+e `TETO_DA_ALLOWLIST` não mudam nesta fatia: nenhum dos identificadores renomeados estava
+declarado ali — a heurística de `modelo-em-portugues` casa `class X(`, não nome de arquivo, de
+constante ou de função.
+
+Com isto a issue #122 entrega, de ponta a ponta: a `/api/v2/` nascida por versão no caminho (fatia
+1), os quatro pontos de alias que só a view alcançava (fatia 3a), o contrato próprio da v2 (fatia
+3b), as chaves «client» que nunca tinham entrado no mapa (fatia 4a) e a lacuna que sobrou dela
+(4c), a travessia da SPA para a v2 (4b), as quatro famílias de enum em português (5.1–5.4) e,
+nesta fatia, o rastro documental e de nomenclatura interna que elas deixaram. Fica fora, como
+sempre esteve: o sunset da `/api/v1/`, decisão que ninguém tomou.

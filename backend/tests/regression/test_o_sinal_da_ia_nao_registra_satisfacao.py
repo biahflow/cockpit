@@ -65,7 +65,7 @@ def _resposta_de_cobranca() -> Activity:
         # `HOJE`, e não o dia real: a satisfação criada a partir desta atividade herda a data dela
         # (`str(activity.happened_on)` abaixo), e a régua é avaliada em `HOJE`. Com o dia real, o
         # registro fica **no futuro** em relação a `HOJE` e sai do recorte de `vigente`
-        # (`inicio <= happened_on <= hoje`, `satisfacao.py:73`) — foi o que quebrou este arquivo em
+        # (`inicio <= happened_on <= hoje`, `satisfaction.py:80`) — foi o que quebrou este arquivo em
         # 2026-09-03, quando o relógio passou da quarta-feira congelada.
         happened_on=HOJE,
     )

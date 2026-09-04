@@ -14,6 +14,10 @@ cobrado com firmeza.
 O que este módulo deliberadamente **não** faz é decidir o que a satisfação significa. Que só a
 fonte `declared` move número é regra dos consumidores (ADR 0032), e cada um a escreve onde ela
 importa — aqui ela é só um filtro opcional.
+
+Chamava-se `satisfacao.py` até a fatia 6 da issue #122 (04/09/2026, limpeza de rastro da série
+D10): nome de arquivo é identificador local, sem coinagem — a chave de payload e a rota
+continuam como sempre (`docs/ontology/aliases.md`).
 """
 
 from __future__ import annotations
@@ -33,7 +37,10 @@ if TYPE_CHECKING:
 #: o requisito de existir um limite testável em vez de "registro recente" virar julgamento de quem
 #: estiver de plantão. A forma — janela, e não offset — é a que a FDD 036 já adotou na régua, e
 #: pela mesma razão: passada a janela, o registro simplesmente não vale mais.
-SATISFACAO_VALIDA_DIAS = 90
+#:
+#: Chamava-se `SATISFACAO_VALIDA_DIAS` até a fatia 6 da issue #122 — identificador local, sem
+#: coinagem.
+SATISFACTION_VALID_DAYS = 90
 
 
 def _q_na_janela(hoje: date) -> Q:
@@ -46,7 +53,7 @@ def _q_na_janela(hoje: date) -> Q:
     O limite superior não é enfeite: um registro com data futura (dedo errado no formulário) não
     é o estado de hoje, e sem ele passaria a valer por noventa dias a partir do erro.
     """
-    return Q(happened_on__gte=hoje - timedelta(days=SATISFACAO_VALIDA_DIAS), happened_on__lte=hoje)
+    return Q(happened_on__gte=hoje - timedelta(days=SATISFACTION_VALID_DAYS), happened_on__lte=hoje)
 
 
 def vigente(
@@ -65,7 +72,7 @@ def vigente(
     Arquivado não conta. A pré-carga já filtra em SQL; a repetição aqui é para quem passar uma
     lista crua, porque um registro que alguém arquivou não pode continuar movendo número.
     """
-    inicio = hoje - timedelta(days=SATISFACAO_VALIDA_DIAS)
+    inicio = hoje - timedelta(days=SATISFACTION_VALID_DAYS)
     candidatos = [
         registro
         for registro in registros

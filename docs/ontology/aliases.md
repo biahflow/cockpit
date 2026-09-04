@@ -42,8 +42,11 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | valor de entrada `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` (área do blueprint; **valor persistido já pago**, fatia 5.1, 04/09/2026 — só resta a entrada) | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA` e `DigitalEmployeeBlueprintViewSet.filter_valores_legados` | `/api/v2/` |
 | chaves `digital_employees[].kpi_label` / `kpi_value` / `hours_saved_month` / `roi_month` no snapshot do portal | `digital_employees[].kpi_ids` + `kpis[]` | `portal.py` | quando o One parar de lê-las |
 
-> **A quarta linha de baixo para cima é do snapshot, não da `/api/v1/`, e por isso o prazo dela tem
-> outra forma.** Até a FDD 050 os quatro campos legados do funcionário digital eram a *única* coisa
+> **A linha das chaves `digital_employees[]` do snapshot é do snapshot, não da `/api/v1/`, e por
+> isso o prazo dela tem outra forma.** (Nomeada assim, e não por posição na tabela, desde a fatia
+> 5.4 da issue #122: contar linhas de baixo para cima é ponteiro que apodrece sozinho quando a
+> tabela cresce — era "a quarta de baixo para cima" e a contagem já tinha quebrado quando esta nota
+> foi lida de novo.) Até a FDD 050 os quatro campos legados do funcionário digital eram a *única* coisa
 > que o portal do cliente tinha sobre medição: texto livre, sem unidade tipada, sem janela e sem
 > como comparar duas leituras. Agora eles têm sucessor — `kpi_ids` aponta para `kpis[]`, onde moram
 > a unidade, o método, a baseline, o outcome e o monitoramento. Continuam saindo, inalterados, pela
@@ -182,6 +185,56 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > chave antiga, e ela tem prazo na `/api/v2/`, não antes. Sem o teste, a linha que a normaliza
 > (`views._signers_do_pedido`) fica sem chamador daqui de dentro, e a próxima varredura atrás do
 > nome antigo a remove achando que paga dívida — quebrando a `/api/v1/` sem nada ficar vermelho.
+
+### A série 5.x fechou — fatia 6 da #122, 04/09/2026
+
+As quatro famílias que a decisão D10 marcou atravessaram, uma por fatia: `DigitalEmployeeBlueprint.Area`
+(5.1, 04/09/2026), `Activity.DunningSignal` (5.2), `SatisfactionRecord` (5.3) e `DunningContact`
+(5.4). Não sobra enum persistido em português no repositório — `test_os_quatro_enums_da_d10_falam_ingles_e_ficam_congelados_assim`
+(`backend/tests/test_vocabulario.py`) guarda o estado novo das quatro, e o guarda contra a volta.
+
+**O molde nasceu na 5.1, e as três famílias seguintes o reusaram sem reabri-lo.** Duas peças, uma
+por dimensão do problema:
+
+- a **migração de valor persistido, com reversa simétrica** — `AlterField` trocando `choices`
+  para inglês mais um `RunPython` que traduz as linhas existentes (pt→en) e desfaz (en→pt) —,
+  primeiro em `0084_a_area_do_blueprint_fala_ingles`, depois combinada com `RenameField`/
+  `RenameModel` em `0085`-`0087` conforme a família precisasse de renome de campo e/ou de tabela
+  junto (a tabela só quando a pk não era uma das seis da §2b);
+- a **normalização de entrada de valor na v1**, segunda tabela do mixin de serializer
+  (`AliasesDaV1Mixin.VALORES_DE_ENTRADA`, ao lado de `ALIASES_DE_ENTRADA` que já existia para
+  chave) mais `filter_valores_legados` no viewset, para o campo gravável cujo valor legado ainda
+  chega em query string ou corpo.
+
+Cada fatia é exceção declarada de alguma peça do molde quando a família não precisava dela: a 5.2
+não ganhou `VALORES_DE_ENTRADA` porque o campo é só de leitura (a escrita é a action
+`classificar`); a 5.4 precisou de uma recusa de valor legado em corpo de `@action`
+(`views._degrau_do_corpo`) porque `rascunhar`/`enviar` não montam serializer, a única exceção à
+regra de que a v2 não ganha frase própria para valor legado no corpo (decisão 9 da ADR 0066).
+
+**O que resta vivo neste documento, e não é dívida da série 5.x:**
+
+- as **chaves de payload sem coinagem** que a §2c continua protegendo até a `/api/v2/` — `nivel`,
+  `fonte`, `degrau`/`degrau_display` (alias de leitura de `dunning_step`/`dunning_step_display`),
+  `cobranca_sinal`/`cobranca_sinal_display` (alias de leitura de `dunning_signal`/
+  `dunning_signal_display`), o parâmetro `?degrau=` e os valores de entrada `pre_aviso`/
+  `lembrete`/`firme`/`escalada`/`renegociacao` e `declarada`/`percebida` — porque D10 moveu o
+  **valor** do contrato de idioma, e a §2c continua sendo quem move a **chave**, no seu próprio
+  prazo;
+- as chaves **sem canônico nenhum** — `sinal_*`/`satisfacao_*`/`proximo_degrau*` do dict cru do
+  painel de cobrança e `recebido_do_cliente` —, listadas em "Termos ainda sem nome canônico"
+  abaixo, que D10 não alcança porque não é renome de valor de enum, é ausência de nome;
+- a família `Cobranca*` restante — `CobrancaSuspensao`, o módulo `cobranca.py`, a rota
+  `/cobranca/` com o seu `basename`, a flag de feature e o `kind` de notificação `cobranca` —, e
+  `Pendencia`/`Decisao`/`Risco`, todos sem nome canônico na Ontology v1 (ver "Termos ainda sem
+  nome canônico");
+- o **snapshot do portal** (`digital_employees[].kpi_label`/`kpi_value`/`hours_saved_month`/
+  `roi_month`), cujo prazo não é a `/api/v2/` — é a confirmação do One de que parou de ler, ver a
+  nota logo abaixo da tabela de aliases vivos.
+
+A limpeza de identificador **local** que a fatia 6 fez em cima disso — nome de módulo, de
+constante, de função interna — não muda nenhuma das linhas acima: é dívida de legibilidade, não de
+contrato, e por isso não tem entrada nesta tabela nem em `legacy-allowlist.txt`.
 
 ### Já pagos pela #67 — 28/08/2026
 

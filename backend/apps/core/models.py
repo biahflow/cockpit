@@ -1643,7 +1643,7 @@ class SatisfactionRecord(TimestampedModel):
     # justamente para ninguém escolher por omissão.
     fonte = models.CharField(max_length=16, choices=Fonte.choices)
     # O dia do acontecido, não o do cadastro: o sinal envelhece por uma janela de 90 dias
-    # (`satisfacao.SATISFACAO_VALIDA_DIAS`), e é `happened_on` que a janela lê.
+    # (`satisfaction.SATISFACTION_VALID_DAYS`), e é `happened_on` que a janela lê.
     happened_on = models.DateField()
     note = models.TextField(blank=True)
     registered_by = models.ForeignKey(

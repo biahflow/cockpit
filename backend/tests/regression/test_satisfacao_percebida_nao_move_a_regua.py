@@ -21,7 +21,7 @@ from decimal import Decimal
 import pytest
 from django.utils import timezone
 
-from apps.core import cobranca, health, satisfacao
+from apps.core import cobranca, health, satisfaction
 from apps.core.models import Account, Invoice, SatisfactionRecord
 from apps.core.tests.factories import AccountFactory, InvoiceFactory, ProjectFactory
 
@@ -41,7 +41,7 @@ def _registrar(account, fonte: str, **kwargs):  # type: ignore[no-untyped-def]
         #
         # **O default vale só para o motor 1.** O motor 2 recebe `hoje` por parâmetro e o congela
         # em `HOJE`, então lá o default é a armadilha simétrica: `vigente` recorta
-        # `inicio <= happened_on <= hoje` (`satisfacao.py:73`), e um registro carimbado com o dia
+        # `inicio <= happened_on <= hoje` (`satisfaction.py:80`), e um registro carimbado com o dia
         # real fica **no futuro** em relação a `HOJE` e sai do recorte. Foi o que aconteceu em
         # 2026-09-03, quando o relógio passou de `HOJE`: `test_a_declarada_troca_a_escada` ficou
         # vermelho, e os três testes de percebida ficaram verdes **pelo motivo errado** — por
@@ -123,7 +123,7 @@ def test_o_registro_do_motor_2_esta_vigente_em_hoje() -> None:
 
     Foi o que aconteceu em 2026-09-03. `HOJE` é uma quarta-feira congelada e `_registrar` carimbava
     `timezone.localdate()`; enquanto o relógio real não passou de `HOJE` os dois coincidiam, e no
-    dia seguinte o registro virou futuro (`inicio <= happened_on <= hoje`, `satisfacao.py:73`).
+    dia seguinte o registro virou futuro (`inicio <= happened_on <= hoje`, `satisfaction.py:80`).
     `test_a_declarada_troca_a_escada` ficou vermelho e os outros três ficaram verdes pelo motivo
     errado — que é o caso pior, porque não avisa.
 
@@ -133,7 +133,7 @@ def test_o_registro_do_motor_2_esta_vigente_em_hoje() -> None:
     account = AccountFactory()
     registro = _registrar(account, SatisfactionRecord.Fonte.DECLARED, happened_on=HOJE)
 
-    assert satisfacao.vigente([registro], HOJE, fonte=SatisfactionRecord.Fonte.DECLARED) is registro
+    assert satisfaction.vigente([registro], HOJE, fonte=SatisfactionRecord.Fonte.DECLARED) is registro
 
 
 def test_a_percebida_nao_troca_a_escada() -> None:

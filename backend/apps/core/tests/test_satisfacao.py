@@ -5,9 +5,9 @@ Liga ao **cliente** e não ao projeto, ao contrário dos três registros vizinho
 fronteira da Entrega não passa por `PROJECT_OF`, passa pela pergunta "existe projeto meu neste
 cliente?".
 
-A janela de validade e a separação por fonte moram em `apps/core/satisfacao.py` e são testadas
-aqui sem banco, no molde da escada de `test_cobranca.py`: o oráculo do resto é "que registro vale
-hoje?" respondido por função pura.
+A janela de validade e a separação por fonte moram em `apps/core/satisfaction.py` (`satisfacao.py`
+até a fatia 6 da issue #122) e são testadas aqui sem banco, no molde da escada de
+`test_cobranca.py`: o oráculo do resto é "que registro vale hoje?" respondido por função pura.
 """
 
 from datetime import date, timedelta
@@ -17,7 +17,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.core import satisfacao as satisfacao_module
+from apps.core import satisfaction as satisfaction_module
 from apps.core.models import SatisfactionRecord, User
 
 from .factories import AccountFactory, ProjectFactory, ProjectMemberFactory, UserFactory
@@ -64,17 +64,17 @@ def _registro(**kwargs: object) -> SatisfactionRecord:
 def test_o_sinal_envelhece_e_a_janela_e_fechada_nos_dois_lados(dias: int, vale: bool) -> None:
     """Critério de aceite 4: 91 dias não move nada, 89 move.
 
-    O corte é `SATISFACAO_VALIDA_DIAS` e não um "registro recente" a julgar por quem estiver de
+    O corte é `SATISFACTION_VALID_DAYS` e não um "registro recente" a julgar por quem estiver de
     plantão — um insatisfeito de oito meses não é o estado de hoje.
     """
     registro = _registro(happened_on=HOJE - timedelta(days=dias))
 
-    assert (satisfacao_module.vigente([registro], HOJE) is registro) is vale
+    assert (satisfaction_module.vigente([registro], HOJE) is registro) is vale
 
 
 def test_registro_com_data_futura_nao_e_o_estado_de_hoje() -> None:
     """Dedo errado no formulário não pode valer por noventa dias a partir do erro."""
-    assert satisfacao_module.vigente([_registro(happened_on=HOJE + timedelta(days=1))], HOJE) is None
+    assert satisfaction_module.vigente([_registro(happened_on=HOJE + timedelta(days=1))], HOJE) is None
 
 
 def test_a_vigente_e_a_mais_recente_da_fonte_pedida() -> None:
@@ -89,9 +89,9 @@ def test_a_vigente_e_a_mais_recente_da_fonte_pedida() -> None:
     )
     registros = [declarada, percebida]
 
-    assert satisfacao_module.vigente(registros, HOJE) is percebida
+    assert satisfaction_module.vigente(registros, HOJE) is percebida
     assert (
-        satisfacao_module.vigente(registros, HOJE, fonte=SatisfactionRecord.Fonte.DECLARED) is declarada
+        satisfaction_module.vigente(registros, HOJE, fonte=SatisfactionRecord.Fonte.DECLARED) is declarada
     )
 
 
@@ -104,8 +104,8 @@ def test_arquivado_nao_e_vigente_nem_em_lote_nem_na_lista() -> None:
     )
     registro.archive()
 
-    assert satisfacao_module.vigente([registro], HOJE) is None
-    assert satisfacao_module.vigentes_por_cliente([cliente.pk], HOJE) == {}
+    assert satisfaction_module.vigente([registro], HOJE) is None
+    assert satisfaction_module.vigentes_por_cliente([cliente.pk], HOJE) == {}
 
 
 @pytest.mark.django_db
@@ -124,11 +124,11 @@ def test_o_lote_devolve_uma_vigente_por_cliente_em_uma_query() -> None:
         happened_on=HOJE - timedelta(days=200),  # fora da janela
     )
 
-    vigentes = satisfacao_module.vigentes_por_cliente([um.pk, outro.pk], HOJE)
+    vigentes = satisfaction_module.vigentes_por_cliente([um.pk, outro.pk], HOJE)
 
     assert vigentes == {um.pk: nova}
     assert antiga.pk not in {registro.pk for registro in vigentes.values()}
-    assert satisfacao_module.vigentes_por_cliente([], HOJE) == {}
+    assert satisfaction_module.vigentes_por_cliente([], HOJE) == {}
 
 
 # --- O modelo -----------------------------------------------------------------

@@ -20,7 +20,7 @@ from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
-from . import satisfacao as satisfacao_module
+from . import satisfaction as satisfaction_module
 
 if TYPE_CHECKING:
     from .models import Milestone, Pendencia, Project, SatisfactionRecord, Task
@@ -142,10 +142,10 @@ def assess_project_health(
     # sinais acima teriam de ser reescritos para conviver com isso.
     if satisfacoes is None:
         account_id = project.engagement.account_id
-        satisfacoes = satisfacao_module.registros_vigentes_por_cliente(
+        satisfacoes = satisfaction_module.registros_vigentes_por_cliente(
             [account_id], today
         ).get(account_id, [])
-    insatisfacao = satisfacao_module.vigente(
+    insatisfacao = satisfaction_module.vigente(
         satisfacoes, today, fonte=SatisfactionRecord.Fonte.DECLARED
     )
     if insatisfacao is not None and insatisfacao.nivel == SatisfactionRecord.Nivel.DISSATISFIED:
@@ -202,7 +202,7 @@ def assess_projects_health(projects: Iterable[Project]) -> list[dict[str, Any]]:
         project_id__in=ids, archived_at__isnull=True, status=Pendencia.Status.OPEN
     ):
         pendencias[pendencia.project_id].append(pendencia)
-    satisfacoes = satisfacao_module.registros_vigentes_por_cliente(
+    satisfacoes = satisfaction_module.registros_vigentes_por_cliente(
         {project.engagement.account_id for project in items}, today
     )
 

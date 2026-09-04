@@ -40,7 +40,7 @@ from django.db.models import F, Q, Sum
 from django.utils import timezone
 
 from . import flags
-from . import satisfacao as satisfacao_module
+from . import satisfaction as satisfaction_module
 
 if TYPE_CHECKING:
     from .models import (
@@ -238,7 +238,11 @@ FLAG_DESLIGADA = "flag_desligada"
 # rotula e o que os testes nomeiam. Se elas colapsassem num rótulo só, o painel diria "régua tensa"
 # e não diria por quê, e as duas condutas que ele deveria sugerir são diferentes — uma pede
 # conversa sobre a relação, a outra pede conserto da entrega.
-TENSAO_SATISFACAO = "satisfacao"
+#
+# O identificador chamava-se `TENSAO_SATISFACAO` até a fatia 6 da issue #122 — é nome local, sem
+# coinagem. **O valor não muda**: `"satisfacao"` é a chave de payload de `tensao_causa`
+# (`docs/ontology/aliases.md`, "Termos ainda sem nome canônico"), e só quem tem canônico atravessa.
+TENSAO_SATISFACTION = "satisfacao"
 TENSAO_ENTREGA = "entrega"
 TENSAO_AMBAS = "ambas"
 
@@ -303,7 +307,7 @@ class PainelContexto:
     # escolha só faria a segunda leitura se contentar com a sobra — uma percebida anotada depois de
     # uma declarada esconderia a declarada, e a tela passaria a discordar do relógio exatamente no
     # caso que esta fatia existe para tratar.
-    satisfacoes_por_cliente: dict[int, list[SatisfactionRecord]] = field(default_factory=dict)
+    satisfaction_records_por_cliente: dict[int, list[SatisfactionRecord]] = field(default_factory=dict)
 
 
 def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContexto:
@@ -432,7 +436,9 @@ def contexto_do_painel(invoices: Sequence[Invoice], hoje: date) -> PainelContext
         recebido_por_cliente=recebido,
         health_por_cliente=saude,
         sinal_por_cliente=sinais,
-        satisfacoes_por_cliente=satisfacao_module.registros_vigentes_por_cliente(clientes, hoje),
+        satisfaction_records_por_cliente=satisfaction_module.registros_vigentes_por_cliente(
+            clientes, hoje
+        ),
     )
 
 
@@ -510,7 +516,7 @@ def reincidente(
     return consulta.filter(_q_em_atraso(dia)).exists()
 
 
-def satisfacao_vigente(
+def satisfaction_vigente(
     account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
 ) -> SatisfactionRecord | None:
     """O registro de satisfação que ainda vale hoje para este cliente, de **qualquer** fonte.
@@ -521,15 +527,15 @@ def satisfacao_vigente(
     """
     dia = _hoje(hoje)
     if contexto is not None:
-        registros = contexto.satisfacoes_por_cliente.get(account.pk, [])
+        registros = contexto.satisfaction_records_por_cliente.get(account.pk, [])
     else:
-        registros = satisfacao_module.registros_vigentes_por_cliente([account.pk], dia).get(
+        registros = satisfaction_module.registros_vigentes_por_cliente([account.pk], dia).get(
             account.pk, []
         )
-    return satisfacao_module.vigente(registros, dia)
+    return satisfaction_module.vigente(registros, dia)
 
 
-def insatisfacao_declarada(
+def dissatisfaction_declarada(
     account: Account, hoje: date | None = None, contexto: PainelContexto | None = None
 ) -> SatisfactionRecord | None:
     """A insatisfação que troca a escada: **declarada** pelo cliente e ainda vigente.
@@ -539,7 +545,7 @@ def insatisfacao_declarada(
     cliente — não da nossa leitura sobre ele. Somar as duas fontes num filtro só deixaria todos os
     testes de comportamento passando e faria a régua recuar por palpite.
 
-    A escolha sai de `satisfacao.vigente(..., fonte=...)` e não de um filtro local, porque uma
+    A escolha sai de `satisfaction.vigente(..., fonte=...)` e não de um filtro local, porque uma
     percebida registrada depois de uma declarada esconderia a declarada se a escolha fosse feita
     antes do filtro.
     """
@@ -547,12 +553,12 @@ def insatisfacao_declarada(
 
     dia = _hoje(hoje)
     if contexto is not None:
-        registros = contexto.satisfacoes_por_cliente.get(account.pk, [])
+        registros = contexto.satisfaction_records_por_cliente.get(account.pk, [])
     else:
-        registros = satisfacao_module.registros_vigentes_por_cliente([account.pk], dia).get(
+        registros = satisfaction_module.registros_vigentes_por_cliente([account.pk], dia).get(
             account.pk, []
         )
-    registro = satisfacao_module.vigente(
+    registro = satisfaction_module.vigente(
         registros, dia, fonte=SatisfactionRecord.Fonte.DECLARED
     )
     if registro is None or registro.nivel != SatisfactionRecord.Nivel.DISSATISFIED:
@@ -610,12 +616,12 @@ def causa_da_tensao(
     causas sugerem são diferentes, e uma é consertável por quem entrega.
     """
     dia = _hoje(hoje)
-    por_satisfacao = insatisfacao_declarada(account, dia, contexto=contexto) is not None
+    por_satisfaction = dissatisfaction_declarada(account, dia, contexto=contexto) is not None
     por_entrega = entrega_critica(account, dia, contexto=contexto)
-    if por_satisfacao and por_entrega:
+    if por_satisfaction and por_entrega:
         return TENSAO_AMBAS
-    if por_satisfacao:
-        return TENSAO_SATISFACAO
+    if por_satisfaction:
+        return TENSAO_SATISFACTION
     if por_entrega:
         return TENSAO_ENTREGA
     return None
@@ -644,7 +650,7 @@ def regua_para(
     tela, e quem responde é `causa_da_tensao`.
     """
     dia = _hoje(hoje)
-    if insatisfacao_declarada(account, dia, contexto=contexto) is not None or entrega_critica(
+    if dissatisfaction_declarada(account, dia, contexto=contexto) is not None or entrega_critica(
         account, dia, contexto=contexto
     ):
         return RELACAO_TENSA
@@ -1016,7 +1022,7 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
         degrau = avaliacao.degrau
         regua = regua_para(invoice.account, dia, ignorando=invoice, contexto=contexto)
         suspensao = suspensao_ativa(invoice, dia, contexto=contexto)
-        satisfacao = satisfacao_vigente(invoice.account, dia, contexto=contexto)
+        satisfaction = satisfaction_vigente(invoice.account, dia, contexto=contexto)
         sinal = contexto.sinal_por_cliente.get(invoice.account_id)
         linhas.append({
             "invoice": invoice.pk,
@@ -1059,11 +1065,11 @@ def painel(hoje: date | None = None) -> list[dict[str, object]]:
             # vinha da outra parte da relação. Vai a **fonte** junto, e não só o nível, porque a
             # linha precisa dizer se aquilo é o cliente falando ou a nossa leitura sobre ele: é o
             # que separa o que muda a escada do que não muda.
-            "satisfacao_nivel": satisfacao.nivel if satisfacao else None,
-            "satisfacao_fonte": satisfacao.fonte if satisfacao else None,
+            "satisfacao_nivel": satisfaction.nivel if satisfaction else None,
+            "satisfacao_fonte": satisfaction.fonte if satisfaction else None,
             # Idade e não a data: o sinal envelhece, e "há 12 dias" é a leitura que faz alguém
             # perguntar de novo — a data crua exigiria a subtração de cabeça.
-            "satisfacao_dias": (dia - satisfacao.happened_on).days if satisfacao else None,
+            "satisfacao_dias": (dia - satisfaction.happened_on).days if satisfaction else None,
             # Por que a relação está tensa, quando está (FDD 038). Rótulo, não decisão: a escada
             # é a mesma nas três causas, e é `regua` que diz qual escada vale.
             "tensao_causa": causa_da_tensao(invoice.account, dia, contexto=contexto),

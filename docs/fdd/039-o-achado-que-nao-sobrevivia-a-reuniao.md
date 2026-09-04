@@ -116,7 +116,7 @@ roadmap) e o Opportunity Score (o gate cobra, a fórmula não existe).
 
 ### Por que o rótulo não tem default
 
-Precedente literal do `Satisfacao.fonte` (ADR 0032): *"justamente para ninguém escolher por
+Precedente literal do `SatisfactionRecord.fonte` (ADR 0032): *"justamente para ninguém escolher por
 omissão"*. Um default não é neutro — faz a casa escolher pelo silêncio de quem não escolheu, e o
 erro cai sempre para o mesmo lado. Nem mesmo `hipotese` como default serve: ele apagaria a
 diferença entre "achamos que é hipótese" e "ninguém classificou", e erro que se parece com

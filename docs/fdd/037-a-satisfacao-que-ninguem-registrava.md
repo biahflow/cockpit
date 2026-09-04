@@ -31,11 +31,16 @@ Esta fatia constrói o lugar.
 
 ## O que esta fatia entrega
 
-O modelo `Satisfacao`, ligado ao cliente e opcionalmente ao projeto e à reunião de origem, com
-`nivel` (promotor / satisfeito / neutro / insatisfeito), `fonte`, data do acontecido, nota e
+O modelo `SatisfactionRecord`, ligado ao cliente e opcionalmente ao projeto e à reunião de origem,
+com `nivel` (promotor / satisfeito / neutro / insatisfeito), `fonte`, data do acontecido, nota e
 autor; o CRUD em `/api/v1/satisfacoes/` com o arquivamento reversível da casa; o sexto sinal do
 Health Score; a terceira escada da régua de cobrança; e a satisfação vigente na tela de quem
 decide o próximo degrau.
+
+> Chamava-se `Satisfacao` — a travessia para `SatisfactionRecord` (classe, tabela e os dois enums
+> de valor) foi na fatia 5.3 da issue #122 (04/09/2026, D10 do `language-map`). A chave de payload
+> (`nivel`, `fonte`) e a rota (`/satisfacoes/`) que o usuário/integrador vê não mudaram — ver
+> `docs/ontology/aliases.md`.
 
 Nada sai da casa. Não há canal novo, não há credencial, não há flag: é registro interno,
 digitado por quem conversou com o cliente, no molde da `Decisao` (FDD 032) e da `Activity`
@@ -63,7 +68,7 @@ desculpa para nunca cobrar, e o recebível estraga invisível"*. Uma trava autom
 régua atende a primeira exigência violando a segunda.
 
 A saída é uma terceira escada. Com insatisfação **declarada** vigente, o cliente entra na
-`RELACAO_TENSA`: o degrau `firme` **não existe** e a escalada interna ocupa a janela que era dele.
+`RELACAO_TENSA`: o degrau `firm` **não existe** e a escalada interna ocupa a janela que era dele.
 A régua não fica muda — ela **para de endurecer e passa a acordar gente**, que então declara a
 suspensão com dono, prazo e motivo, pelo mecanismo que a FDD 036 já construiu. O robô nunca
 silencia; quem recua é gente, com nome e data de validade.
@@ -130,7 +135,8 @@ usa para `commercial_opportunity` e `invoice`.
 
 ### Por que a nova escada reusa as chaves de degrau
 
-A idempotência da régua é `UniqueConstraint(invoice, degrau)`. Se um cliente trocasse de escada
+A idempotência da régua é `UniqueConstraint(invoice, dunning_step)` (campo `degrau` até a fatia
+5.4 da issue #122). Se um cliente trocasse de escada
 entre duas execuções — foi registrada uma insatisfação ontem —, uma chave própria faria o mesmo
 lembrete sair duas vezes. O que muda entre as três escadas é a janela, não a identidade do degrau.
 É a mesma decisão que a FDD 036 já tinha registrado para a relação longa, e ela não é
@@ -146,7 +152,7 @@ não é o denominador de um escore de problemas.
 
 ### Por que a satisfação não atravessa para o portal do cliente
 
-No molde do Risk Register (FDD 034), e por uma razão que a fonte `percebida` torna literal:
+No molde do Risk Register (FDD 034), e por uma razão que a fonte `perceived` torna literal:
 devolver ao cliente a nossa leitura sobre ele não é uma feature com recorte ruim, é uma feature
 que não pode existir. A guarda estrutural da ADR 0027 já reprova chave nova não declarada no
 snapshot; sobre ela entra a afirmação explícita de que esta chave não é para existir.
@@ -187,7 +193,7 @@ snapshot; sobre ela entra a afirmação explícita de que esta chave não é par
   score, porque dois sinais parecidos na mesma tela viram dois números discordando sem que
   ninguém saiba qual olhar. *Feito pela FDD 038: o painel mostra o rótulo como leitura ainda não
   registrada e oferece o atalho que abre o formulário de satisfação — quem salva continua sendo
-  gente, e a `Satisfacao.source_activity` é o que faz o aviso parar de insistir depois de
+  gente, e a `SatisfactionRecord.source_activity` é o que faz o aviso parar de insistir depois de
   atendido.*
 - **Bugs e "acessos liberados"** — os outros dois sinais que a docstring do `health.py` declara
   faltando. Seguem sem onde ser registrados, e esta fatia não os inventou para fechar a lista.
@@ -208,7 +214,8 @@ construção. A forma óbvia — pegar a satisfação vigente do cliente e confe
 depois — tem um defeito silencioso: uma **percebida registrada ontem esconderia a declarada de
 anteontem**, e a régua deixaria de reagir a uma insatisfação real porque alguém do time anotou uma
 impressão depois. O filtro tem de entrar **antes** da escolha do mais recente, e por isso
-`satisfacao.vigente` recebe `fonte=` em vez de devolver um registro que o chamador peneira.
+`satisfaction.vigente` (módulo `satisfacao.py` até a fatia 6 da issue #122) recebe `fonte=` em vez
+de devolver um registro que o chamador peneira.
 
 **O contexto do painel guarda a lista, não a escolhida.** As duas leituras da mesma dimensão são
 diferentes: a linha da tela mostra a vigente de **qualquer** fonte (a percebida é exatamente o que
