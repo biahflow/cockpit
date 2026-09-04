@@ -375,7 +375,7 @@ const FIXTURES: Record<string, unknown> = {
     position: index, active: true,
   })),
   "/api/v2/digital-employee-blueprints/": serie(4, index => ({
-    id: index, name: `SDR de ${NOME_LONGO}`, area: "comercial", area_display: "Comercial",
+    id: index, name: `SDR de ${NOME_LONGO}`, area: "commercial", area_display: "Comercial",
     description: "Qualifica lead fora do horário comercial e agenda a reunião de discovery.",
     kpi_label: "Leads qualificados por mês", kpi_unit: "count", kpi_direction: "up",
     default_hours_saved_month: "40.0",

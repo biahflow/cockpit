@@ -218,7 +218,13 @@ from .serializers import (
     ValueLedgerEntrySerializer,
     VerticalSerializer,
 )
-from .versioning import V2, frase_da_chave_removida, frase_do_parametro_removido, versao_de
+from .versioning import (
+    V2,
+    frase_da_chave_removida,
+    frase_do_parametro_removido,
+    frase_do_valor_removido,
+    versao_de,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -410,6 +416,15 @@ class QueryParamFilterMixin:
     # inteira, e quem chamou leria isso como "este cliente tem tudo isso" em vez de "o filtro não
     # existe". 400 e não 409 porque é o **pedido** que está errado, não o estado.
     filter_field_aliases: dict[str, str] = {}
+    # Campo → {valor legado → valor canônico}, para `filter_exact_fields` cujo VALOR (não o nome
+    # do parâmetro) tem alias — a área do blueprint (issue #122, fatia 5.1) é a primeira. Na
+    # `/api/v1/` o valor legado continua filtrando, traduzido pelo mesmo mapa que o mixin de
+    # serializer usa para o corpo; na `/api/v2/` ele é **recusado**, e não silenciosamente ignorado:
+    # `?area=comercial` sem tradução casaria zero linhas, e uma lista vazia é o mesmo silêncio
+    # mentiroso que a decisão 3 da ADR 0066 recusa para chave e parâmetro. Diferente daquela decisão
+    # (chave de payload/parâmetro, sempre 400 na v2), aqui o valor canônico já filtra igual nas duas
+    # versões — só o valor legado precisa de tratamento, e só quando o campo está neste mapa.
+    filter_valores_legados: dict[str, dict[str, str]] = {}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()  # type: ignore[misc]
@@ -427,6 +442,12 @@ class QueryParamFilterMixin:
         for field in self.filter_exact_fields:
             value = self.request.query_params.get(field)  # type: ignore[attr-defined]
             if value:
+                valores_legados = self.filter_valores_legados.get(field)
+                canonico = valores_legados.get(value) if valores_legados else None
+                if canonico is not None:
+                    if na_v2:
+                        raise InvalidInput(frase_do_valor_removido(field, value, canonico))
+                    value = canonico
                 queryset = queryset.filter(**{field: value})
         return queryset
 
@@ -4747,6 +4768,10 @@ class DigitalEmployeeBlueprintViewSet(QueryParamFilterMixin, viewsets.ModelViewS
     permission_classes = [RolePermission]
     filter_fields = ("service",)
     filter_exact_fields = ("area",)
+    # Mesmo mapa que o serializer usa para o corpo (`VALORES_DE_ENTRADA`), por referência — e não
+    # uma segunda cópia: as duas tabelas do valor legado de `area` seriam o mesmo fato divergindo
+    # em silêncio no dia em que uma fosse editada sem a outra.
+    filter_valores_legados = {"area": DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA["area"]}
 
     def get_queryset(self):  # type: ignore[no-untyped-def]
         queryset = super().get_queryset()

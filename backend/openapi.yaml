@@ -12602,18 +12602,18 @@ components:
       - decision
     AreaEnum:
       enum:
-      - comercial
-      - financeiro
-      - rh
-      - juridico
-      - atendimento
+      - commercial
+      - finance
+      - hr
+      - legal
+      - support
       type: string
       description: |-
-        * `comercial` - Comercial
-        * `financeiro` - Financeiro
-        * `rh` - RH
-        * `juridico` - Jurídico
-        * `atendimento` - Atendimento
+        * `commercial` - Comercial
+        * `finance` - Financeiro
+        * `hr` - RH
+        * `legal` - Jurídico
+        * `support` - Atendimento
     Artifact:
       type: object
       properties:

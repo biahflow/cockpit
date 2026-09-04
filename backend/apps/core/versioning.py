@@ -75,6 +75,18 @@ def frase_do_parametro_removido(antigo: str, canonico: str) -> str:
     return f"O parâmetro '?{antigo}=' não existe na /api/v2/; use '?{canonico}='."
 
 
+def frase_do_valor_removido(campo: str, antigo: str, canonico: str) -> str:
+    """A mesma recusa, para o **valor** de um filtro de query string (issue #122, fatia 5.1).
+
+    Par de `frase_do_parametro_removido`, mas para a outra metade do par (campo, valor): aquela
+    recusa o **nome** do parâmetro legado (`?client=`); esta recusa o **valor** legado dentro de um
+    parâmetro cujo nome não mudou (`?area=comercial`). Existe só onde a viewset declara um mapa de
+    valores legados (`QueryParamFilterMixin.filter_valores_legados`) — para valor de filtro sem
+    mapa declarado, o comportamento de sempre (lista vazia) continua valendo.
+    """
+    return f"O valor '{antigo}' de '?{campo}=' não existe na /api/v2/; use '{canonico}'."
+
+
 def frase_da_chave_sem_sucessora(antiga: str) -> str:
     """A recusa de uma chave que não tem canônica de **escrita** — o par do §2d.
 

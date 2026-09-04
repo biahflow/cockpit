@@ -321,3 +321,62 @@ desembrulha a lista em vez de duplicar a lógica de remoção. A SPA (`AccountsP
 passou a ler `account_id`. Nenhum componente do esquema muda: `AccountOverviewList.items` e
 `AccountOverviewDetail` continuam sem tipo, então `ALIASES_DEPRECIADOS`/
 `ALIASES_DEPRECIADOS_DE_DICT_CRU` não ganham entrada nova — os dois `openapi*.yaml` têm diff vazio.
+
+## Emenda (issue #122, fatia 5.1 — 04/09/2026) — o VALOR do enum atravessa por versão, e nasce o molde da migração de dado
+
+Até aqui toda travessia de versão desta ADR foi sobre **chave** de payload ou de query string — o
+campo mudou de nome, o valor dentro dele nunca mudou. `docs/ontology/aliases.md` sempre teve uma
+quarta dimensão em aberto: a decisão D10 da Language Map v1.4 torna o **valor** de um enum parte do
+mesmo contrato de idioma da classe e do campo, e quatro famílias em português esperavam essa
+condição. `DigitalEmployeeBlueprint.Area` foi a primeira com o pré-requisito completo — a classe já
+nascera inglesa — e por isso é a primeira a atravessar, estabelecendo os dois moldes que as três
+famílias restantes (cobrança e satisfação) reusam.
+
+### 8. A migração de valor persistido, com reversa — o primeiro caso do repositório
+
+Toda migração de ontologia até aqui (`0067`–`0072`, `0069`) foi `RenameModel`/`RenameField`/
+`AlterModelTable`: preserva linha e pk, nunca lê nem escreve o dado. A `0084` é diferente —
+`AlterField` troca os `choices` e o `default` para inglês, e um `RunPython` traduz as cinco linhas
+existentes (`comercial→commercial`, ...) com reversa simétrica (en→pt). A reversa não é
+formalidade: valor persistido sem caminho de volta é migração destrutiva disfarçada, o mesmo
+argumento que justificou a prova de equivalência da `0070`. O par que autoriza a migração é a linha
+da tabela de `docs/ontology/aliases.md` mais a nota D10 abaixo dela — não uma decisão desta ADR
+isolada.
+
+### 9. A normalização de entrada de VALOR na v1 — segunda tabela do mixin, e por que a v2 não ganha frase própria
+
+`AliasesDaV1Mixin` ganhou `VALORES_DE_ENTRADA: dict[str, dict[str, str]]` (campo → {valor legado:
+valor canônico}), ao lado de `ALIASES_DE_ENTRADA` (campo → campo canônico) que já existia. São duas
+tabelas porque resolvem defeitos diferentes: uma diz "este campo mudou de nome", a outra diz "este
+campo é o mesmo, e o que persiste dentro dele mudou de idioma". Na v1, um valor legado no corpo é
+traduzido para o canônico **antes** da validação — quem escrevia `"comercial"` continua
+funcionando. Na v2 a chave errada não tem onde cair (o DRF a ignoraria em silêncio, o modo de falha
+mudo da decisão 3), mas o **valor** errado tem: cai sozinho na validação de `choices` do campo, que
+já é um 400 listando o vocabulário inteiro. Escrever uma frase nossa aqui seria a segunda definição
+de um erro que o DRF já produz de graça — por isso a v2 não ganha recusa dedicada de valor no
+corpo, ao contrário do que a decisão 3 faz para chave.
+
+### 10. O filtro de query string é a exceção — porque lá ninguém valida nada
+
+`QueryParamFilterMixin` ganhou `filter_valores_legados: dict[str, dict[str, str]]`, o par de
+`filter_field_aliases` para valor em vez de nome de parâmetro. Na v1 o valor legado em
+`filter_exact_fields` continua filtrando, traduzido pelo mesmo mapa do corpo (por referência —
+`DigitalEmployeeBlueprintViewSet.filter_valores_legados` aponta para
+`DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA`, não uma segunda cópia). Na v2, ao
+contrário do corpo, o valor legado **é** recusado com frase dedicada
+(`versioning.frase_do_valor_removido`, o par de `frase_do_parametro_removido`): um filtro não passa
+pelo `choices` de nenhum serializer, e `?area=comercial` sem tradução casaria zero linhas —
+devolvendo 200 com uma lista vazia, o mesmo silêncio mentiroso que a decisão 3 recusa para chave e
+parâmetro. Custava uma frase a mais evitar esse silêncio, e foi essa a diferença que decidiu o
+tratamento: corpo tem validador que fala por conta própria, filtro não tem nenhum.
+
+### Consequências
+
+- `backend/apps/core/migrations/0084_a_area_do_blueprint_fala_ingles.py` é o molde citado por
+  `docs/ontology/aliases.md`: `AlterField` + `RunPython` com reversa, cinco `.update()` por par.
+- `openapi.yaml` e `openapi-v2.yaml` mudam só no enum de `area` (os dois passam a listar os cinco
+  valores ingleses) — nenhum caminho novo, nenhuma chave-alias nova em `ALIASES_DEPRECIADOS`: o
+  mecanismo desta fatia é outro, e não usa aquele mapa.
+- `backend/tests/test_vocabulario.py::test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2`
+  passa a congelar `DigitalEmployeeBlueprint.Area` em inglês; as outras três famílias continuam
+  congeladas em português.

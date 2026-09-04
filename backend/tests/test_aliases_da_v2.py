@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 from datetime import timedelta
 from decimal import Decimal
@@ -41,6 +42,7 @@ from apps.core.models import (
     CobrancaSuspensao,
     Contact,
     DigitalEmployee,
+    DigitalEmployeeBlueprint,
     Document,
     Invoice,
     JourneyPhase,
@@ -815,3 +817,147 @@ def test_o_detalhe_do_overview_paga_a_mesma_lacuna(admin_client: APIClient) -> N
     assert da_v2["lifecycle_status"] == conta.lifecycle_status
     assert "client_id" not in da_v2
     assert "status" not in da_v2
+
+
+# ---------------------------------------------------------------------------------------------
+# 8. O VALOR do enum também atravessa por versão — a área do blueprint (issue #122, fatia 5.1)
+#
+# Mecanismo novo, e diferente do resto do arquivo: `ALIASES_DEPRECIADOS`/`ALIASES_DE_ENTRADA`
+# tratam **chave** de payload; aqui o campo `area` nunca mudou de nome, só o que ele persiste
+# mudou de idioma (D10). Por isso o par de mapas é outro
+# (`AliasesDaV1Mixin.VALORES_DE_ENTRADA`/`QueryParamFilterMixin.filter_valores_legados`) e a
+# recusa da v2 também é outra: no corpo, quem fala é o `choices` do DRF (400 padrão); só no filtro,
+# onde ninguém valida nada, é que existe frase dedicada (`versioning.frase_do_valor_removido`).
+# ---------------------------------------------------------------------------------------------
+
+
+def _migracao_0084() -> Any:
+    """O módulo da migração, importado por caminho — `0084...` não é identificador Python."""
+    return importlib.import_module("apps.core.migrations.0084_a_area_do_blueprint_fala_ingles")
+
+
+@pytest.mark.django_db
+def test_a_migracao_traduz_os_cinco_pares_e_a_reversa_e_simetrica() -> None:
+    """A primeira migração de VALOR do repositório — testada como função, e não só como estado.
+
+    O banco de teste já rodou a `0084` (o schema tem os choices ingleses); o que falta comprovar é
+    que o `RunPython` traduz as cinco linhas certas nos dois sentidos. `.update()` no queryset,
+    como o forward faz, contorna `full_clean()` — é assim que se põe um valor pt-BR na coluna sem
+    passar pela validação que esta própria migração torna obsoleta.
+    """
+    from django.apps import apps as registro_de_apps
+
+    modulo = _migracao_0084()
+    pares = modulo._PARES_PT_PARA_EN
+
+    blueprints = {
+        antigo: DigitalEmployeeBlueprint.objects.create(name=f"Bloco {antigo}")
+        for antigo, _novo in pares
+    }
+    for antigo, blueprint in blueprints.items():
+        DigitalEmployeeBlueprint.objects.filter(pk=blueprint.pk).update(area=antigo)
+
+    modulo.traduzir_para_ingles(registro_de_apps, None)
+    for antigo, novo in pares:
+        blueprints[antigo].refresh_from_db()
+        assert blueprints[antigo].area == novo
+
+    modulo.traduzir_para_portugues(registro_de_apps, None)
+    for antigo, _novo in pares:
+        blueprints[antigo].refresh_from_db()
+        assert blueprints[antigo].area == antigo
+
+
+@pytest.mark.django_db
+def test_nenhum_blueprint_tem_valor_pt_e_os_choices_sao_os_novos() -> None:
+    """A prova de estado, complementar à de função: o catálogo atual só conhece os choices novos."""
+    DigitalEmployeeBlueprint.objects.create(name="Bloco padrão")
+
+    valores_portugueses = {"comercial", "financeiro", "rh", "juridico", "atendimento"}
+    persistidos = set(DigitalEmployeeBlueprint.objects.values_list("area", flat=True))
+
+    assert not (persistidos & valores_portugueses)
+    assert tuple(DigitalEmployeeBlueprint.Area.values) == (
+        "commercial", "finance", "hr", "legal", "support",
+    )
+
+
+@pytest.mark.django_db
+def test_o_valor_legado_no_corpo_da_v1_normaliza_e_o_display_continua_pt(
+    admin_client: APIClient,
+) -> None:
+    """Quem escrevia `"comercial"` ontem continua funcionando hoje — e o que persiste é o canônico."""
+    resposta = admin_client.post(
+        "/api/v1/digital-employee-blueprints/", {"name": "SDR", "area": "comercial"}, format="json"
+    )
+
+    assert resposta.status_code == 201
+    assert resposta.data["area"] == "commercial"
+    assert resposta.data["area_display"] == "Comercial"
+    assert DigitalEmployeeBlueprint.objects.get().area == "commercial"
+
+
+@pytest.mark.django_db
+def test_o_valor_legado_no_corpo_da_v2_e_400_de_choices_do_drf(admin_client: APIClient) -> None:
+    """A v2 não traduz nem recusa com frase própria: quem fala é o `choices` do campo, de graça."""
+    resposta = admin_client.post(
+        "/api/v2/digital-employee-blueprints/", {"name": "SDR", "area": "comercial"}, format="json"
+    )
+
+    assert resposta.status_code == 400
+    assert "comercial" in str(resposta.data["area"])
+    assert not DigitalEmployeeBlueprint.objects.exists()
+
+
+@pytest.mark.django_db
+def test_o_valor_canonico_no_corpo_da_v2_cria(admin_client: APIClient) -> None:
+    resposta = admin_client.post(
+        "/api/v2/digital-employee-blueprints/", {"name": "SDR", "area": "commercial"}, format="json"
+    )
+
+    assert resposta.status_code == 201
+    assert DigitalEmployeeBlueprint.objects.get().area == "commercial"
+
+
+@pytest.mark.django_db
+def test_o_filtro_aceita_o_valor_legado_e_o_canonico_na_v1(admin_client: APIClient) -> None:
+    DigitalEmployeeBlueprint.objects.create(
+        name="SDR", area=DigitalEmployeeBlueprint.Area.COMMERCIAL
+    )
+    DigitalEmployeeBlueprint.objects.create(
+        name="Cobrador", area=DigitalEmployeeBlueprint.Area.FINANCE
+    )
+
+    pelo_legado = admin_client.get("/api/v1/digital-employee-blueprints/?area=comercial")
+    pelo_canonico = admin_client.get("/api/v1/digital-employee-blueprints/?area=commercial")
+
+    assert [b["name"] for b in pelo_legado.json()] == ["SDR"]
+    assert [b["name"] for b in pelo_canonico.json()] == ["SDR"]
+
+
+@pytest.mark.django_db
+def test_o_filtro_com_valor_legado_na_v2_e_400_dizendo_o_canonico(admin_client: APIClient) -> None:
+    """Lista vazia seria o silêncio que a #122 recusa — a v2 recusa o valor, e diz qual usar."""
+    DigitalEmployeeBlueprint.objects.create(
+        name="SDR", area=DigitalEmployeeBlueprint.Area.COMMERCIAL
+    )
+
+    resposta = admin_client.get("/api/v2/digital-employee-blueprints/?area=comercial")
+
+    assert resposta.status_code == 400
+    assert "?area=" in str(resposta.data)
+    assert "use 'commercial'" in str(resposta.data)
+
+
+@pytest.mark.django_db
+def test_o_filtro_com_valor_canonico_continua_funcionando_na_v2(admin_client: APIClient) -> None:
+    DigitalEmployeeBlueprint.objects.create(
+        name="SDR", area=DigitalEmployeeBlueprint.Area.COMMERCIAL
+    )
+    DigitalEmployeeBlueprint.objects.create(
+        name="Cobrador", area=DigitalEmployeeBlueprint.Area.FINANCE
+    )
+
+    resposta = admin_client.get("/api/v2/digital-employee-blueprints/?area=commercial")
+
+    assert [b["name"] for b in resposta.json()] == ["SDR"]

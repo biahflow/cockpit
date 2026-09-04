@@ -37,7 +37,7 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 | valores `esqueceu` / `nao_pode` / `insatisfeito` | `forgot` / `unable_to_pay` / `dissatisfied` | `Activity.cobranca_sinal` e serializers | junto do renome para `DunningSignal`; alias morre na `/api/v2/` |
 | degraus `pre_aviso` / `lembrete` / `firme` / `escalada` / `renegociacao` | `pre_notice` / `reminder` / `firm` / `escalation` / `renegotiation` | `cobranca.py`, contatos e serializers | junto do renome da família de cobrança; alias morre na `/api/v2/` |
 | valores `declarada` / `percebida` e níveis em português | `declared` / `perceived` e níveis em inglês | `Satisfacao` e serializers | junto do renome para `SatisfactionRecord`; alias morre na `/api/v2/` |
-| áreas `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprint.Area` e serializers | após o conceito entrar no mapa; alias morre na `/api/v2/` |
+| valor de entrada `comercial` / `financeiro` / `rh` / `juridico` / `atendimento` (área do blueprint; **valor persistido já pago**, fatia 5.1, 04/09/2026 — só resta a entrada) | `commercial` / `finance` / `hr` / `legal` / `support` | `DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA` e `DigitalEmployeeBlueprintViewSet.filter_valores_legados` | `/api/v2/` |
 | chaves `digital_employees[].kpi_label` / `kpi_value` / `hours_saved_month` / `roi_month` no snapshot do portal | `digital_employees[].kpi_ids` + `kpis[]` | `portal.py` | quando o One parar de lê-las |
 
 > **A quarta linha de baixo para cima é do snapshot, não da `/api/v1/`, e por isso o prazo dela tem
@@ -52,9 +52,16 @@ compressão delas em "renome físico na Fase 6" que fazia o mesmo termo signific
 > A decisão D10 da Language Map v1.4 torna o **valor** do enum parte do mesmo contrato de idioma
 > do nome da classe e do campo. Esta tabela não autoriza migração isolada: os dados do grupo de
 > cobrança e satisfação mudam junto do renome de cada família, com reversa e normalização de
-> entrada na v1. A área do blueprint muda depois de o conceito canônico estar no mapa — condição
-> cumprida pela própria D10. Até essas fatias chegarem, os valores portugueses seguem sendo os
-> persistidos e expostos pela `/api/v1/`; nenhum valor novo nasce em português.
+> entrada na v1. **A área do blueprint foi a primeira a mudar** (fatia 5.1 da issue #122,
+> 04/09/2026) — a única das quatro famílias com o pré-requisito completo: a classe
+> (`DigitalEmployeeBlueprint`) já nascera inglesa, e o conceito já estava no mapa (`language-map.md`
+> §4). É dali que vêm os dois moldes que as famílias restantes reusam: a **migração de valor
+> persistido, com reversa simétrica** (`0084_a_area_do_blueprint_fala_ingles` — a primeira migração
+> do repositório que traduz dado, não classe/tabela/campo), e a **normalização de entrada de valor
+> na v1**, a segunda tabela do mixin de serializer (`AliasesDaV1Mixin.VALORES_DE_ENTRADA`, ao lado
+> de `ALIASES_DE_ENTRADA` que já existia para chave). Até as fatias das outras três famílias
+> chegarem, os valores portugueses delas seguem sendo os persistidos e expostos pela `/api/v1/`;
+> nenhum valor novo nasce em português.
 
 > **O recorte físico da Fase 6 foi concluído; a issue #70 foi encerrada por decisão do mantenedor.** Tabelas renomeadas
 > (migração `0069`), dual-write e `Evidencia` removidos (migração `0068`), `Project.client`

@@ -299,7 +299,9 @@ export type DigitalEmployee = { id: number; project: number; blueprint: number |
 // Mesmo par que `JourneyPhaseTemplate`/`ProjectPhase`, um nível acima: o que a entrega instancia
 // é uma **cópia**, e por isso `DigitalEmployee` não referencia nada aqui além da procedência.
 export type Vertical = { id: number; name: string; slug: string; position: number; active: boolean };
-export type BlueprintArea = "comercial" | "financeiro" | "rh" | "juridico" | "atendimento";
+// Valor fala inglês desde a migração `0084` (issue #122, fatia 5.1; D10 do language-map §4) — o
+// rótulo em `BibliotecaPage.tsx` continua pt-BR, e é só ele que a UI mostra.
+export type BlueprintArea = "commercial" | "finance" | "hr" | "legal" | "support";
 export type BlueprintVariant = { id: number; blueprint: number; vertical: number; vertical_name: string; description: string; kpi_label: string; default_hours_saved_month: string | null; default_roi_month: string | null };
 // `resolved` só vem preenchido quando a lista é pedida com `?vertical=` — são os valores já com a
 // variante aplicada, que é exatamente o que a instanciação vai copiar.

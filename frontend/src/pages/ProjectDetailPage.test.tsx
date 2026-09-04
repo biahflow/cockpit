@@ -444,7 +444,7 @@ test("Vendas lê o roster e não mexe nele", async () => {
 // alguém completar à mão — que era o estado anterior, e a razão de tudo chegar ao cliente zerado.
 
 const blueprint = (overrides = {}) => ({
-  id: 3, name: "SDR", area: "comercial", area_display: "Comercial",
+  id: 3, name: "SDR", area: "commercial", area_display: "Comercial",
   description: "Qualifica lead fora do horário.", kpi_label: "Leads qualificados/mês",
   default_hours_saved_month: "40.0", default_roi_month: "8000.00", service: null,
   service_name: "", active: true, variants: [], resolved: null, has_variant: true, ...overrides,

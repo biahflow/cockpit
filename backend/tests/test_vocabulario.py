@@ -433,6 +433,13 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
 
     O teste usa as próprias `choices`, não busca textual: comentário, copy e rótulo traduzido são
     português legítimo. O que fica congelado é só o valor que persiste e atravessa a API.
+
+    A família 4 (`DigitalEmployeeBlueprint.Area`) atravessou na fatia 5.1 da issue #122 — a
+    migração `0084` traduziu o valor persistido para inglês, e o que este teste passa a congelar
+    para ela é o **estado novo**: o português continua vivo só como alias de **entrada** da
+    `/api/v1/` (`DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA`), nunca mais como o que
+    persiste ou o que a API emite. As outras três famílias (cobrança e satisfação) seguem
+    congeladas em português até a fatia que as atravessar.
     """
     from apps.core import cobranca
     from apps.core.models import Activity, CobrancaContato, DigitalEmployeeBlueprint, Satisfacao
@@ -456,11 +463,11 @@ def test_os_valores_de_enum_em_portugues_ficam_congelados_ate_a_v2() -> None:
         "Satisfacao.Fonte": ("declarada", "percebida"),
         "Satisfacao.Nivel": ("promotor", "satisfeito", "neutro", "insatisfeito"),
         "DigitalEmployeeBlueprint.Area": (
-            "comercial",
-            "financeiro",
-            "rh",
-            "juridico",
-            "atendimento",
+            "commercial",
+            "finance",
+            "hr",
+            "legal",
+            "support",
         ),
     }
 

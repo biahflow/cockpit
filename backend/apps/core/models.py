@@ -3526,11 +3526,21 @@ class DigitalEmployeeBlueprint(models.Model):
     """
 
     class Area(models.TextChoices):
-        COMMERCIAL = "comercial", "Comercial"
-        FINANCE = "financeiro", "Financeiro"
-        HR = "rh", "RH"
-        LEGAL = "juridico", "Jurídico"
-        SUPPORT = "atendimento", "Atendimento"
+        """Os MEMBROS e os LABELS ficam; o VALOR virou inglês na fatia 5.1 da issue #122.
+
+        Rótulo é superfície, valor é contrato (D10, `docs/ontology/language-map.md` §4) — os cinco
+        pares (`comercial→commercial`, ...) são a primeira migração de **valor** do repositório
+        (`0084_a_area_do_blueprint_fala_ingles`), não mais um `RenameModel`/`RenameField`. Os
+        valores portugueses continuam aceitos como alias de **entrada** só na `/api/v1/`
+        (`DigitalEmployeeBlueprintSerializer.VALORES_DE_ENTRADA`); a `/api/v2/` recusa com o 400 de
+        `choices` do DRF. Ver `docs/ontology/aliases.md`.
+        """
+
+        COMMERCIAL = "commercial", "Comercial"
+        FINANCE = "finance", "Financeiro"
+        HR = "hr", "RH"
+        LEGAL = "legal", "Jurídico"
+        SUPPORT = "support", "Atendimento"
 
     name = models.CharField(max_length=120)
     area = models.CharField(max_length=24, choices=Area.choices, default=Area.COMMERCIAL)

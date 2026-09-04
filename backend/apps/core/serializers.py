@@ -175,6 +175,18 @@ class AliasesDaV1Mixin:
 
     ALIASES_DE_ENTRADA: dict[str, str] = {}
 
+    # A segunda tabela, e ela traduz **valor**, não chave (issue #122, fatia 5.1) — campo →
+    # {valor_legado: valor_canônico}. `ALIASES_DE_ENTRADA` acima resolve "o campo mudou de nome"
+    # (`client` → `account`); esta resolve "o campo é o mesmo, e o que persiste dentro dele mudou de
+    # idioma" (`DigitalEmployeeBlueprint.area`: `comercial` → `commercial`, D10 do language-map). As
+    # duas precisam de mapas separados porque a v2 as trata diferente: chave errada não tem onde
+    # cair — o DRF ignoraria em silêncio — e por isso ganha 400 dedicado
+    # (`versioning.frase_da_chave_removida`); valor errado cai sozinho na validação de `choices` do
+    # campo, que **já é** um 400 listando o vocabulário inteiro. Escrever uma frase nossa para o
+    # valor seria a segunda definição do mesmo erro que o DRF já produz de graça — por isso a v2 não
+    # ganha recusa dedicada aqui, só a v1 traduz.
+    VALORES_DE_ENTRADA: dict[str, dict[str, str]] = {}
+
     def to_internal_value(self, data: Any) -> Any:
         if not hasattr(data, "keys"):
             return super().to_internal_value(data)  # type: ignore[misc]
@@ -203,19 +215,26 @@ class AliasesDaV1Mixin:
                     recusadas[antiga] = [mensagem]
             if recusadas:
                 raise serializers.ValidationError(recusadas)
-        elif self.ALIASES_DE_ENTRADA:
-            traduzir = {
-                canonica: antiga
+            # `VALORES_DE_ENTRADA` não entra aqui: a v2 não traduz nem recusa o valor legado, ela
+            # deixa a validação de `choices` do campo recusar sozinha (ver o comentário da tabela).
+        else:
+            atualizacoes: dict[str, Any] = {
+                canonica: data[antiga]
                 for antiga, canonica in self.ALIASES_DE_ENTRADA.items()
                 if antiga in data and canonica not in data
             }
-            if traduzir:
+            for campo, valores_do_campo in self.VALORES_DE_ENTRADA.items():
+                valor = data.get(campo)
+                if valor in valores_do_campo:
+                    atualizacoes[campo] = valores_do_campo[valor]
+            if atualizacoes:
                 data = _corpo_mutavel(data)
-                for canonica, antiga in traduzir.items():
-                    # Cópia e não `pop`: a chave legada continua declarada como campo
-                    # `read_only`, então o serializer a ignora — e `QueryDict.pop` devolveria
-                    # a **lista** de valores, não o valor.
-                    data[canonica] = data[antiga]
+                for chave, valor in atualizacoes.items():
+                    # Cópia e não `pop`: no par (chave, valor) a chave legada continua declarada
+                    # como campo `read_only`, então o serializer a ignora — e `QueryDict.pop`
+                    # devolveria a **lista** de valores, não o valor. No par (campo, valor) a
+                    # atribuição é uma sobrescrita no próprio campo, pelo mesmo motivo de mutação.
+                    data[chave] = valor
         return super().to_internal_value(data)  # type: ignore[misc]
 
     def to_representation(self, instance: Any) -> Any:
@@ -2443,13 +2462,29 @@ class BlueprintVariantSerializer(serializers.ModelSerializer[BlueprintVariant]):
         read_only_fields = ["id"]
 
 
-class DigitalEmployeeBlueprintSerializer(serializers.ModelSerializer[DigitalEmployeeBlueprint]):
+class DigitalEmployeeBlueprintSerializer(
+    AliasesDaV1Mixin, serializers.ModelSerializer[DigitalEmployeeBlueprint]
+):
     """Bloco do catálogo, com as variantes aninhadas (forma do `JourneyPhaseSerializer`).
 
     `resolved` só aparece quando o viewset recebe `?vertical=`: são os valores já com a variante
     aplicada, que é o que a instanciação vai copiar. Sem o parâmetro o campo é omitido — quem
     lista o catálogo para editá-lo não quer ver os valores de um setor em particular.
     """
+
+    # A área fala inglês desde a migração `0084` (issue #122, fatia 5.1; D10 do language-map).
+    # Quem integrou com a `/api/v1/` mandando `"comercial"` continua funcionando: o mixin traduz
+    # para `"commercial"` antes da validação. A `/api/v2/` não herda esta tradução — o valor
+    # legado cai na validação de `choices` do campo `area` e leva o 400 padrão do DRF.
+    VALORES_DE_ENTRADA = {
+        "area": {
+            "comercial": DigitalEmployeeBlueprint.Area.COMMERCIAL,
+            "financeiro": DigitalEmployeeBlueprint.Area.FINANCE,
+            "rh": DigitalEmployeeBlueprint.Area.HR,
+            "juridico": DigitalEmployeeBlueprint.Area.LEGAL,
+            "atendimento": DigitalEmployeeBlueprint.Area.SUPPORT,
+        }
+    }
 
     variants = BlueprintVariantSerializer(many=True, read_only=True)
     area_display = serializers.CharField(source="get_area_display", read_only=True)
