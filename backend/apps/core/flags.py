@@ -72,6 +72,36 @@ def _payments_missing() -> list[str]:
     ]
 
 
+def _whatsapp_missing() -> list[str]:
+    """O que falta no canal de WhatsApp — e o conjunto depende de **quais** provedores foram nomeados.
+
+    Mesma forma do `_esign_missing`, com uma diferença que o canal impõe: aqui há uma lista
+    ordenada de provedores, não um só. Sem nenhum nomeado a integração roda no `NullProvider` —
+    registra a intenção e não manda nada — e esse modo não precisa de credencial; cobrá-la
+    desligaria um caminho que funciona.
+
+    Nomeado um provedor, as credenciais **dele** viram obrigatórias, e só as dele: exigir as duas
+    famílias recusaria a instalação que tem um fornecedor só, que é a instalação normal.
+
+    Um nome que ninguém reconhece também aparece aqui. Ignorá-lo em silêncio produziria o pior
+    caso possível — `WHATSAPP_PROVIDERS="zap"` cai no `NullProvider`, a tela diz "configurado" e
+    nenhuma mensagem sai sem que nada fique vermelho.
+    """
+    from . import whatsapp
+
+    exigencias = {
+        "zapi": ("WHATSAPP_ZAPI_INSTANCE_ID", "WHATSAPP_ZAPI_TOKEN"),
+        "uazapi": ("WHATSAPP_UAZAPI_TOKEN",),
+    }
+    faltando: list[str] = []
+    for nome in whatsapp.provider_names():
+        if nome not in exigencias:
+            faltando.append(f"WHATSAPP_PROVIDERS (provedor desconhecido: {nome!r})")
+            continue
+        faltando += [key for key in exigencias[nome] if not getattr(settings, key, "")]
+    return faltando
+
+
 def _google_auth_missing() -> list[str]:
     """O que falta na autenticação com o Google (ADR 0016).
 
@@ -190,6 +220,33 @@ FLAGS: dict[str, Flag] = {
     "cobranca": Flag(
         "Régua de cobrança",
         lambda: bool(settings.DUNNING_ENABLED),
+    ),
+    # Agendamento do Discovery pelo cliente (FDD 013, DAP `dap-agendamento-discovery-r1`). Governa
+    # as duas rotas públicas **e** o e-mail que leva o link — as duas metades do mesmo ato, e
+    # separá-las produziria o pior estado possível: o cliente recebe o convite e a página recusa.
+    #
+    # **Sem `requires`**, pelo precedente do `enrichment` e do `cobranca`: o convite sai pelo SMTP
+    # que a casa já usa e o link se monta com `FRONTEND_BASE_URL`, que tem default — não existe
+    # variável cuja ausência denuncie falta de configuração. A agenda em si é a flag `calendar`,
+    # que as rotas conferem por conta própria, como as de booking já faziam.
+    #
+    # **E `env_default` falso**, como a régua de cobrança: esta é a primeira rota sem autenticação
+    # do produto além do login, e o e-mail sai sozinho para fora da casa. Construir não é ligar.
+    "discovery_booking": Flag(
+        "Agendamento do Discovery pelo cliente",
+        lambda: bool(settings.DISCOVERY_BOOKING_ENABLED),
+    ),
+    # Mensagens por WhatsApp (ADR 0031: canal novo, **não gate novo**). O `extra_missing` segue o
+    # molde do `_esign_missing` — sem provedor nomeado não se exige credencial nenhuma, porque o
+    # `NullProvider` é um modo que roda.
+    #
+    # **E `env_default` falso**, como a régua de cobrança e o agendamento do Discovery: este é um
+    # canal que fala com o cliente fora da casa, e nada no produto o chama ainda. Construir o
+    # adaptador não é ligar o canal.
+    "whatsapp": Flag(
+        "Mensagens por WhatsApp",
+        lambda: bool(settings.WHATSAPP_ENABLED),
+        extra_missing=lambda: _whatsapp_missing(),
     ),
 }
 

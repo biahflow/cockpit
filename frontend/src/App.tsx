@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { AcceptInvitePage } from "./pages/AcceptInvitePage";
+import { AgendarDiscoveryPage } from "./pages/AgendarDiscoveryPage";
 import { BibliotecaPage } from "./pages/BibliotecaPage";
 import { CasesPage } from "./pages/CasesPage";
 import { AccountDetailPage } from "./pages/AccountDetailPage";
@@ -25,6 +26,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { ProcessDetailPage } from "./pages/ProcessDetailPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { PublicacaoPage } from "./pages/PublicacaoPage";
 import { ServicesPage } from "./pages/ServicesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TeamPage } from "./pages/TeamPage";
@@ -71,6 +73,14 @@ function resolvePage(path: string): ReactNode {
   // então a tela pende dela em vez de virar item de menu (DAP `dap-prove-e-valor-r1`, decisão D1).
   const valor = path.match(/^\/contas\/(\d+)\/valor$/);
   if (valor) return <ValorPage accountId={Number(valor[1])} />;
+  // A publicação do Discovery é a terceira tela que pende da conta, e pelo mesmo motivo das duas
+  // de cima: **o que o cliente vê** é sempre de uma conta, e um item de menu que abre perguntando
+  // "qual conta?" é um beco (DAP `dap-publicacao-discovery-r1`, decisão A1). Fica acima da rota da
+  // conta por especificidade, como as anteriores — as três são ancoradas, então a ordem não decide
+  // nada hoje; ela é o que impede que afrouxar o `$` do `accountDetail` amanhã torne esta
+  // inalcançável em silêncio.
+  const publicacao = path.match(/^\/contas\/(\d+)\/publicacao$/);
+  if (publicacao) return <PublicacaoPage accountId={Number(publicacao[1])} />;
   const accountDetail = path.match(/^\/contas\/(\d+)$/);
   if (accountDetail) return <AccountDetailPage id={Number(accountDetail[1])} />;
   if (path === "/contas") return <AccountsPage />;
@@ -88,6 +98,10 @@ function rotaLegada(path: string): string | null {
 export function App() {
   const { isLoading, user } = useAuth();
   if (window.location.pathname === "/aceitar-convite") return <AcceptInvitePage />;
+  // Pública e movida a token, como a de cima — mas fala com um cliente que nunca vai ter login
+  // (DAP `dap-agendamento-discovery-r1`), então resolve antes do portão de sessão do mesmo jeito.
+  const agendar = window.location.pathname.match(/^\/agendar\/([^/]+)$/);
+  if (agendar) return <AgendarDiscoveryPage token={decodeURIComponent(agendar[1])} />;
   const destino = rotaLegada(window.location.pathname);
   if (destino) {
     window.location.replace(`${destino}${window.location.search}${window.location.hash}`);

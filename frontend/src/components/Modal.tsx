@@ -3,12 +3,14 @@ import { type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { useEscape, useFocusTrap } from "../a11y";
 
-type Width = "md" | "3xl";
+type Width = "md" | "2xl" | "3xl";
 
 // `max-w-md` serve a um formulário curto e sufoca o resto: o detalhe da oportunidade carrega
 // formulário, documentos, texto de IA e artefatos em 448px, e o rascunho da IA saía numa coluna de
 // ~400px. `width="3xl"` é a saída para esses casos, sem alargar os diálogos que já cabiam.
-const widths: Record<Width, string> = { md: "max-w-md", "3xl": "max-w-3xl" };
+// `2xl` (42rem) é o degrau da rodada de assinatura: o board do DAP a desenha em 38rem, e cada linha
+// carrega nome, e-mail, seletor de papel e botão de remover — em `md` o seletor quebra para baixo.
+const widths: Record<Width, string> = { md: "max-w-md", "2xl": "max-w-2xl", "3xl": "max-w-3xl" };
 
 /**
  * Pilha dos diálogos abertos, em ordem de abertura.

@@ -343,6 +343,13 @@
   .alert--ok {
     @apply rounded-xl border border-success-50 bg-success-50 p-4 text-sm text-success;
   }
+  /* O aviso que não é falha: a operação vai sair, e o resultado é outro do que se esperava. É o
+     par âmbar de `.state--2` na forma de alerta — a rodada de assinatura de um documento sem
+     bloco (DAP `dap-assinatura-com-papeis-r1`, E1) sai 201 e a assinatura cai na página anexa.
+     `.alert--error` mentiria sobre isso, e um selo não interrompe a tela como um alerta. */
+  .alert--warn {
+    @apply rounded-xl border border-warning-50 bg-warning-50 p-4 text-sm text-warning;
+  }
 
   /* A barra de filtros acima de uma lista (Leads, Clientes). Portada do `.filter-chip` de lá:
      pastilha de contorno em repouso, tinta da marca quando ligada. O `bg-ink` de antes pintava o
@@ -353,6 +360,17 @@
       transition-colors hover:border-brand-500 hover:text-brand-600;
   }
   .filter-chip--on { @apply border-brand-500 bg-brand-50 text-brand-700; }
+
+  /* O horário escolhível da página pública de agendamento (DAP `dap-agendamento-discovery-r1`).
+     Vizinho do `.filter-chip` e não uma variante dele: os dois são pastilha de contorno que liga
+     com a tinta da marca, mas um **filtra uma lista** e o outro **é a escolha** — e o raio já os
+     separa, controle (8px) aqui contra `rounded-full` lá, que o DAP GH-26 r1 reservou. Nasce com
+     um consumidor só, que é a regra da casa; o que não pode é nascer com nenhum. */
+  .slot {
+    @apply rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink
+      transition-colors hover:border-brand-500 hover:bg-brand-50;
+  }
+  .slot--on { @apply border-brand-500 bg-brand-50 font-semibold text-brand-700; }
 
   /* O link que sobe um nível. Correspondente do `.admin-back` de lá; existe aqui em cinco telas
      de detalhe e configuração. */

@@ -22,6 +22,7 @@ export const ROUTES: readonly Screen[] = [
   { path: "/contas/1/processos/1", name: "Processo mapeado", role: "admin" },
   { path: "/contas/1/priorizacao", name: "Priorização", role: "admin" },
   { path: "/contas/1/valor", name: "Valor gerado", role: "admin" },
+  { path: "/contas/1/publicacao", name: "Publicação do Discovery", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
@@ -45,6 +46,11 @@ export const ROUTES: readonly Screen[] = [
   { path: "/projetos", name: "Projetos (Entrega, sem equipe)", role: "delivery" },
   { path: "/", name: "Login", role: null },
   { path: "/aceitar-convite", name: "Aceitar convite", role: null },
+  // Pública e movida a token, como a de cima (DAP `dap-agendamento-discovery-r1`). Cobre o
+  // caminho feliz — os cinco estados de exceção são cobertos no vitest de
+  // `AgendarDiscoveryPage.test.tsx`, não aqui: a matriz mede uma tela por rota, e o token na URL
+  // não tem como selecionar qual resposta o mock devolve.
+  { path: "/agendar/tok-e2e", name: "Agendar Discovery", role: null },
 ];
 
 /**
@@ -53,6 +59,31 @@ export const ROUTES: readonly Screen[] = [
  * de uma razão social real.
  */
 const NOME_LONGO = "Indústria Metalúrgica São Bernardo do Campo Participações S.A.";
+
+/**
+ * A marca de publicável (FDD 051, ADR 0060) e o campo derivado que a tela de publicação consome
+ * (DAP `dap-publicacao-discovery-r1`, decisão B1).
+ *
+ * **Os quatro estados por item entram na amostra**, e não é completude: eles são quatro
+ * superfícies diferentes — pastilha escura sólida contra pastilha cinza, frase do impedimento,
+ * frase do que falta, caixa de seleção presente ou ausente, botão habilitado ou desabilitado. Um
+ * mock com tudo no mesmo estado aprovaria a tela sem que metade dela tivesse renderizado uma vez,
+ * que é o modo de falha que o comentário de `/api/v1/processos/` já registra um nível acima.
+ */
+const visivel = (presos = 0, impedimento = "") => ({
+  published_at: `${HOJE}T09:00:00Z`, published_by: 1,
+  publication_state: { state: "published", missing: [], missing_phrase: "", blocked_by: presos, blocked_phrase: impedimento },
+});
+const oculto = (falta?: { chave: string; frase: string }) => ({
+  published_at: null, published_by: null,
+  publication_state: {
+    state: falta ? "blocked" : "ready",
+    missing: falta ? [falta.chave] : [], missing_phrase: falta ? falta.frase : "",
+    blocked_by: 0, blocked_phrase: "",
+  },
+});
+const FALTA_ACHADO = { chave: "published_finding", frase: "ao menos um achado publicado e vivo" };
+const FALTA_DOR = { chave: "published_pain_point", frase: "ao menos uma dor publicada e viva" };
 /** Um token sem espaço nem hífen: reproduz o conteúdo que não oferece ponto natural de quebra. */
 export const TITULO_DE_LINHA_INQUEBRAVEL = "Inconsistenciacadastralidentificadaautomaticamentenoprocessodefaturamentomensal";
 const HOJE = "2026-08-05";
@@ -139,6 +170,12 @@ const processos = serie(3, index => ({
     nao_apurado: ["Perdas", "Espera", "Risco"],
     sustentacao: index === 1 ? "sustentado" : "hipotese",
   },
+  // O primeiro mapa é a **âncora** de um achado e de uma dor publicados: é o visível·preso, com o
+  // botão desabilitado e a frase do 409 na linha. O segundo está oculto·pronto — e é ele que
+  // bloqueia o achado ancorado nele. O terceiro é visível·solto.
+  ...(index === 1
+    ? visivel(2, "Este processo é a âncora de 2 achado(s) ou dor(es) publicado(s). Despublique-os primeiro.")
+    : index === 2 ? oculto() : visivel()),
   created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
 }));
 
@@ -167,19 +204,36 @@ const findings = [
   { epistemic_status: "unknown", epistemic_status_display: "Desconhecido",
     statement: "Ninguém soube dizer quanto tempo a nota espera na fila de aprovação do fiscal." },
 ].map((registro, indice) => ({
-  id: indice + 1, account: 1, process: 1, step: null, confidence: null,
+  id: indice + 1, account: 1,
+  // O terceiro achado é **ancorado no segundo mapa**, que está oculto: é o que produz o
+  // oculto·bloqueado por âncora — "Falta: o processo que ele cita publicado e vivo" —, e é também o
+  // que dá à árvore da tela de publicação um segundo mapa com filho, em vez de um só.
+  process: indice === 2 ? 2 : 1, step: null, confidence: null,
   reviewed_by: registro.epistemic_status === "fact" ? 1 : null,
   reviewed_at: registro.epistemic_status === "fact" ? `${HOJE}T09:00:00Z` : null,
-  evidences: [indice + 1], created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  evidences: [indice + 1],
+  // O fato publicado prende a evidência que o sustenta e é preso pela dor que ele sustenta — os
+  // dois lados da cadeia, na mesma linha. A hipótese está pronta; o desconhecido, bloqueado.
+  ...(indice === 0
+    ? visivel(1, "Este é o último achado publicado e vivo de 1 dor(es) publicada(s). Despublique a dor primeiro, ou publique outro achado.")
+    : indice === 1 ? oculto() : oculto({ chave: "published_process", frase: "o processo que ele cita publicado e vivo" })),
+  created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
 }));
 const evidence = [
   { kind: "data", kind_display: "Dado (volume, tempo, custo, erro)" },
   { kind: "interview", kind_display: "Entrevista (o que dizem)" },
   { kind: "observation", kind_display: "Observação (o que fazem)" },
 ].map((registro, indice) => ({
-  id: indice + 1, account: 1, discovery: null, process: 1, step: null, raw_excerpt: "Trecho da fonte.",
+  id: indice + 1, account: 1, discovery: null, process: indice === 2 ? 2 : 1, step: null,
+  raw_excerpt: "Trecho da fonte.",
   reference: "", source_session: null, source_meeting: 1, captured_at: `${HOJE}T09:00:00Z`,
-  captured_by: 1, content_hash: "abc", created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  captured_by: 1, content_hash: "abc",
+  // A primeira é a **última sustentação publicada** do fato publicado: visível·presa, com o botão
+  // desabilitado. As outras duas estão ocultas·prontas — a folha da escada não pede nada para subir.
+  ...(indice === 0
+    ? visivel(1, "Esta é a última evidência publicada e viva de 1 achado(s) publicado(s) como fato. Despublique o achado primeiro, ou publique outra evidência.")
+    : oculto()),
+  created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
   ...registro,
 }));
 
@@ -203,6 +257,13 @@ const MEDICOES_POR_KPI: Record<string, unknown[]> = {
 
 const FIXTURES: Record<string, unknown> = {
   "/api/v1/auth/csrf/": { csrfToken: "test" },
+  // O caminho feliz de `/agendar/:token` (DAP `dap-agendamento-discovery-r1`, decisão B1):
+  // horários em dois dias, para o axe medir os dois cabeçalhos de dia e a grade de pastilhas.
+  "/api/v1/booking/discovery/slots/": {
+    account: "Rio Home Care",
+    slots: ["2026-09-10T13:00:00Z", "2026-09-10T15:00:00Z", "2026-09-11T13:00:00Z"],
+    scheduled_at: null,
+  },
   // As sete flags que `flags.FLAGS` serve, e **com `missing`** — o campo nasceu na ADR 0018, a
   // `SettingsPage` passou a fazer `flag.missing.join()` e esta fixture ficou para trás, estourando
   // a tela em toda varredura. Passou despercebido porque o `ErrorBoundary` também tem `<h1>` e a
@@ -211,6 +272,9 @@ const FIXTURES: Record<string, unknown> = {
   // texto "Falta no ambiente: X" — o mais longo da tela, que é o que a largura precisa aguentar.
   "/api/v1/config/": {
     ai_enabled: true, calendar_enabled: false, esign_enabled: true,
+    // Fora de `integrations` de propósito (DAP `dap-assinatura-com-papeis-r1`, D1): é o e-mail com
+    // que a casa assina, e é ele que faz a linha fixa "Você (Biahflow)" existir na rodada.
+    esign_house_signer_email: "daniel@biahflow.ai",
     integrations: [
       { key: "ai", label: "Assistente de IA", enabled: true, configured: true, toggleable: true, missing: [] },
       { key: "drive", label: "Documentos no Google Drive", enabled: false, configured: false, toggleable: true, missing: ["GOOGLE_DRIVE_ROOT_FOLDER_ID"] },
@@ -293,8 +357,13 @@ const FIXTURES: Record<string, unknown> = {
     file: "/media/x.pdf",
     drive_link: "", original_name: `Contrato de prestação de serviços — ${NOME_LONGO}.pdf`,
     uploaded_by: 1, created_at: `${HOJE}T09:00:00Z`, originated_engagement: null,
+    // A conta-dona derivada (decisão B1) é o que faz o modal buscar os contatos; e **um** dos seis
+    // sem posicionamento, porque o `.alert--warn` do aviso E1 é cor nova e precisa entrar na
+    // varredura de contraste do axe — o modal só abre a partir da primeira linha.
+    owning_account: index,
+    signature_positioning_gap: index === 1 ? "not_pdf" : null,
     signature_requests: index === 1
-      ? [{ id: 1, signer_email: "juridico@empresa.test", status: "signed", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: `${HOJE}T10:00:00Z`, created_at: `${HOJE}T09:00:00Z` }]
+      ? [{ id: 1, signer_email: "juridico@empresa.test", signer_role: "counterparty", status: "signed", sign_url: "https://exemplo.test/s/1", reminded_at: null, signed_at: `${HOJE}T10:00:00Z`, created_at: `${HOJE}T09:00:00Z` }]
       : [],
   })),
   "/api/v1/verticals/": serie(5, index => ({
@@ -459,27 +528,35 @@ const FIXTURES: Record<string, unknown> = {
     { id: 1, title: "Retrabalho na conciliação de pagamentos de convênio dos três maiores planos",
       impact_type: "financial", impact_type_display: "Financeiro", findings: [1, 2] },
     { id: 2, title: "Agenda dupla por falha de sincronização entre as unidades da rede",
-      impact_type: "operational", impact_type_display: "Operacional", findings: [] },
+      impact_type: "operational", impact_type_display: "Operacional", findings: [1] },
     { id: 3, title: "Tempo de espera na recepção acima de quarenta minutos em dia de pico",
-      impact_type: "experience", impact_type_display: "Experiência", findings: [3] },
-  ].map(registro => ({
+      impact_type: "experience", impact_type_display: "Experiência", findings: [1] },
+  ].map((registro, indice) => ({
     account: 1, process: 1, step: null, description: "", impact_estimate: null,
     status: "observed", status_display: "Observado",
+    // A primeira só cita o achado que ainda não subiu: oculta·bloqueada. A segunda cita o fato
+    // publicado e está oculta·pronta. A terceira é visível·presa pela oportunidade que a agrupa.
+    ...(indice === 0 ? oculto(FALTA_ACHADO) : indice === 1 ? oculto()
+      : visivel(1, "Esta é a última dor publicada e viva de 1 oportunidade(s) de melhoria publicada(s). Despublique a oportunidade primeiro, ou publique outra dor.")),
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
   "/api/v1/improvement-opportunities/": [
     { id: 1, title: "Padronizar o checklist de documentação exigida para faturamento TISS",
-      pain_points: [1], status: "prioritized", status_display: "Priorizada",
+      pain_points: [3], status: "prioritized", status_display: "Priorizada",
       score: "78.00", assessment_version: 2, rank: 1 },
     { id: 2, title: "Automatizar a confirmação de agendamento por WhatsApp em todas as unidades",
-      pain_points: [], status: "assessing", status_display: "Em avaliação",
+      pain_points: [1], status: "assessing", status_display: "Em avaliação",
       score: "64.00", assessment_version: 1, rank: 2 },
     // A que ninguém avaliou: score, versão e rank saem **nulos juntos**, e é o `—` do desenho.
     { id: 3, title: "Consolidar o prontuário eletrônico entre as unidades da rede",
       pain_points: [], status: "open", status_display: "Aberta",
       score: null, assessment_version: null, rank: null },
-  ].map(registro => ({
+  ].map((registro, indice) => ({
     account: 1, engagement: null, desired_change: "", impact_hypothesis: "",
+    // O topo da escada: a primeira é **visível·solta** — nada pende dela, e o botão de ocultar
+    // dela é o único habilitado da tela. As outras duas estão bloqueadas por falta de dor
+    // publicada, e é a segunda que mostra a caixa de seleção **vazia** num item bloqueado.
+    ...(indice === 0 ? visivel() : oculto(FALTA_DOR)),
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
   "/api/v1/priority-assessments/": [
@@ -712,19 +789,27 @@ const FIXTURES: Record<string, unknown> = {
   // Sem esta chave a rota cairia no fallback de lista vazia e a matriz aprovaria o estado vazio no
   // lugar da seção — o modo de falha que o comentário de `/api/v1/processos/` acima já registra.
   "/api/v1/engagements/": [
+    // O primeiro leva o par completo (D1: link de convite) — o terceiro momento do board é o
+    // segundo desta lista, e o silêncio (C1) é o terceiro: um de cada estado que a linha desenha.
     { name: `Transformação do faturamento e do fiscal — ${NOME_LONGO}`,
       status: "active", status_display: "Ativo",
       commercial_model: "paid", commercial_model_display: "Pago",
       sponsor: 1, sponsor_name: "Maria de Lourdes Albuquerque",
-      started_at: "2026-03-02", ended_at: null, projects_count: 3 },
+      started_at: "2026-03-02", ended_at: null, projects_count: 3,
+      whatsapp_group_id: "120363431743499021@g.us",
+      whatsapp_group_invite_url: "https://chat.whatsapp.com/GONwbGG" },
+    // JID sem link de convite (D1): o texto sem affordance também entra na varredura do axe.
     { name: "Discovery Cartas Vivas", status: "paused", status_display: "Pausado",
       commercial_model: "design_partner", commercial_model_display: "Design partner",
       sponsor: null, sponsor_name: null,
-      started_at: "2026-06-01", ended_at: null, projects_count: 1 },
+      started_at: "2026-06-01", ended_at: null, projects_count: 1,
+      whatsapp_group_id: "120363431743499099@g.us", whatsapp_group_invite_url: "" },
+    // Sem grupo nenhum (C1): silêncio, sem traço nem estado.
     { name: "Piloto de atendimento 24h", status: "closed", status_display: "Encerrado",
       commercial_model: "paid", commercial_model_display: "Pago",
       sponsor: 2, sponsor_name: "Pessoa de contato 2",
-      started_at: "2026-02-10", ended_at: "2026-05-20", projects_count: 2 },
+      started_at: "2026-02-10", ended_at: "2026-05-20", projects_count: 2,
+      whatsapp_group_id: "", whatsapp_group_invite_url: "" },
   ].map((registro, indice) => ({
     id: indice + 1, account: 1, account_name: NOME_LONGO,
     mandate: "Reduzir o retrabalho do faturamento e fechar o mês sem conferência manual.",

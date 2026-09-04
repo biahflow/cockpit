@@ -48,12 +48,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import Q
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
+from django.db.models.expressions import Combinable
+from django.db.models.functions import Coalesce
 
 if TYPE_CHECKING:
     from django.db.models import Model
 
     from .models import (
+        Account,
         Evidence,
         Finding,
         ImprovementOpportunity,
@@ -254,3 +257,129 @@ def frase_do_impedimento(obj: Publicavel, dependentes: list[Model]) -> str:
     tomou é pior que o 409 que diz qual estado impede e como sair dele.
     """
     return _IMPEDIMENTO[type(obj).__name__].format(quantos=len(dependentes))
+
+
+def estado_de_publicacao(obj: Publicavel) -> dict[str, Any]:
+    """O campo derivado `publication_state` que a tela de publicação consome (issue `#108`, DAP
+    `dap-publicacao-discovery-r1` decisão E1) — chaves **e** frases, para o front não reexpressar
+    o rótulo que já existe aqui (`ROTULOS`, `_IMPEDIMENTO`).
+
+    **Cada ramo calcula só o lado que pode variar, e a omissão é medida, não economia
+    arbitrária.** Um registro **não publicado** não pode ter dependente publicado — é a invariante
+    exata que as cinco portas de `publish/`/`unpublish/` defendem, então `blocked_by` é sempre
+    `0` e `blocked_phrase` sempre `""` nesse ramo. Um registro **publicado** já passou pelo que
+    faltava para subir, então `missing` é sempre `[]` e `missing_phrase` sempre `""` no outro.
+    Calcular os dois lados sempre dobraria a consulta por linha (`dependentes_publicados_de` e
+    `o_que_falta_para_publicar` andam nas mesmas tabelas que este módulo já evita duplicar) sem o
+    resultado poder mudar de valor — a mesma economia que fez `o_que_falta_para_publicar` nunca
+    chamar `dependentes_publicados_de` nem o inverso.
+    """
+    if obj.published_at is not None:
+        presos = dependentes_publicados_de(obj)
+        return {
+            "state": "published",
+            "missing": [],
+            "missing_phrase": "",
+            "blocked_by": len(presos),
+            "blocked_phrase": frase_do_impedimento(obj, presos) if presos else "",
+        }
+    faltas = o_que_falta_para_publicar(obj)
+    return {
+        "state": "ready" if not faltas else "blocked",
+        "missing": faltas,
+        "missing_phrase": frase_do_que_falta(faltas),
+        "blocked_by": 0,
+        "blocked_phrase": "",
+    }
+
+
+# --- "Quanto desta conta o cliente está vendo agora?" (issue `#114`) ------------------
+#
+# A pergunta é deste módulo e não do serializer pela razão de sempre: escrever o filtro lá o
+# tornaria uma **segunda** definição de "publicado e vivo", e a segunda diverge da primeira no
+# primeiro conserto — o mesmo argumento que fez `falta_a_ancora` ser pública em vez de o
+# `FindingSerializer` repetir os dois FKs.
+#
+# Ela existe porque arquivar a conta **não** despublica o Discovery, e não deve: a ADR 0060 diz
+# que só um ato humano publica e só um ato humano despublica. Cascatear no arquivamento seria o
+# oposto dela. O que faltava era o aviso — quem arquiva precisa saber o que continua no ar.
+
+#: O recorte de "o cliente está vendo isto agora", e é **o mesmo** dos quatro blocos de
+#: `portal.build_snapshot`, não uma variação. Contar o arquivado-mas-publicado mentiria: ele não
+#: atravessa o snapshot, então o cliente não o vê.
+PUBLICADO_E_VIVO = Q(archived_at__isnull=True, published_at__isnull=False)
+
+
+def _publicaveis() -> tuple[tuple[str, type[Model]], ...]:
+    """Os cinco modelos marcados e o `related_name` do FK **direto** que cada um tem para a conta.
+
+    Os cinco penduram em `Account` com `on_delete=CASCADE`, então a contagem não precisa
+    atravessar `Process` para chegar ao achado — e não deve: `Finding.process` é `SET_NULL`, e um
+    achado publicado com o processo apagado continua sendo lido pelo cliente.
+
+    Import tardio, como em toda função deste módulo — a convenção que mantém este arquivo
+    importável de qualquer lugar, inclusive de dentro de `models.py`.
+    """
+    from .models import Evidence, Finding, ImprovementOpportunity, PainPoint, Process
+
+    return (
+        ("processos", Process),
+        ("evidence", Evidence),
+        ("findings", Finding),
+        ("pain_points", PainPoint),
+        ("improvement_opportunities", ImprovementOpportunity),
+    )
+
+
+def contagem_publicada(account: Account) -> int:
+    """Quantos registros desta conta o cliente está vendo agora.
+
+    Cinco `COUNT` sobre **um** objeto — o caminho de quem já tem a conta na mão e não passou pelo
+    queryset anotado (um `Account` de teste, um `AccountSerializer` usado fora do viewset). Quem
+    lista usa `anotacao_de_contagem_publicada`; os dois têm de dar o mesmo número, e há teste
+    afirmando isso.
+    """
+    return sum(
+        getattr(account, related).filter(PUBLICADO_E_VIVO).count()
+        for related, _ in _publicaveis()
+    )
+
+
+def _subconsulta_publicada(modelo: type[Model]) -> Combinable:
+    """`COUNT` correlacionado de um dos cinco, já com `0` no lugar de `NULL`.
+
+    **Subconsulta e não `Count` com `JOIN`.** Cinco joins na mesma consulta multiplicam as linhas
+    entre si e a soma sai errada; `distinct=True` esconderia o número errado sem tirar o produto
+    cartesiano de baixo. Correlacionada, cada uma é um escalar por linha da conta — imune ao
+    `.distinct()` que `AccountViewSet.get_queryset` aplica quando o escopo de Entrega entra.
+
+    O `.order_by()` não é enfeite: os cinco têm `Meta.ordering`, e o campo de ordenação entraria
+    no `GROUP BY` do agrupamento abaixo, quebrando a agregação por conta.
+    """
+    return Coalesce(
+        Subquery(
+            modelo._default_manager.filter(PUBLICADO_E_VIVO, account_id=OuterRef("pk"))
+            .order_by()
+            .values("account_id")
+            .annotate(quantos=Count("pk"))
+            .values("quantos")[:1],
+            output_field=IntegerField(),
+        ),
+        0,
+        output_field=IntegerField(),
+    )
+
+
+def anotacao_de_contagem_publicada() -> dict[str, Any]:
+    """A mesma contagem como anotação de queryset — uma consulta, não cinco por linha.
+
+    Obrigatória porque `AccountSerializer` serve listagem **e** detalhe: cinco `COUNT` por linha
+    no grid de contas seria N+1, e o orçamento de consulta dos agregadores
+    (`tests/regression/test_aggregate_query_budget.py`) existe justamente para que o custo não
+    cresça com a base.
+    """
+    soma: Combinable | None = None
+    for _, modelo in _publicaveis():
+        parcela = _subconsulta_publicada(modelo)
+        soma = parcela if soma is None else soma + parcela
+    return {"published_count": soma}

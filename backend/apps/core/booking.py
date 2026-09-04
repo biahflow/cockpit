@@ -1,8 +1,18 @@
-"""Agendamento automático de reuniões de pré-venda (FDD 013, RFC 0002).
+"""Agendamento automático de reuniões (FDD 013, RFC 0002).
 
 Gera os horários livres a partir de uma grade de horário comercial menos o que já está ocupado
 (free/busy do Google) e as reservas existentes (`Booking`), e materializa a reserva criando o
 evento com horário no Google Calendar. Atrás da flag `calendar`.
+
+Dois fluxos entram pela mesma grade e pela mesma tabela: a **pré-venda** (`book`, o lead
+qualificado que veio do site) e o **Discovery** do Design Partner (`book_discovery`, o cliente que
+acabou de assinar o acordo). O núcleo é um só — `_reservar` — porque a checagem de conflito é
+justamente o que os dois precisam compartilhar: dois núcleos seriam duas agendas que não se veem.
+
+**A oferta, essa é de cada um.** `available_slots` (pré-venda) mostra 14 dias corridos e todo
+horário livre; `available_slots_for_discovery` mostra 5 dias com grade a partir de 3 dias e no
+máximo 3 por dia. As duas leem a mesma ocupação por `_slots_livres` e decidem sozinhas a janela —
+unificá-las é o que o teste de regressão do agendamento existe para impedir.
 
 A geração de slots é pura/testável; o I/O com o Google fica em `calendar_sync` (`# pragma: no cover`).
 """
@@ -10,7 +20,7 @@ A geração de slots é pura/testável; o I/O com o Google fica em `calendar_syn
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -22,7 +32,7 @@ from . import calendar_sync, notifications
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from .models import Booking, Lead
+    from .models import Booking, Engagement, Lead
 
 # Grade de horário comercial: dia da semana (0=segunda … 6=domingo) → faixas (hora_ini, hora_fim).
 BOOKING_HOURS: dict[int, list[tuple[int, int]]] = {
@@ -34,6 +44,27 @@ BOOKING_HOURS: dict[int, list[tuple[int, int]]] = {
 }
 # Quantos dias à frente ofertar.
 BOOKING_HORIZON_DAYS = 14
+
+# --- A janela do Discovery ------------------------------------------------------------------
+#
+# **Só do Discovery.** A pré-venda continua com os 14 dias corridos e todos os horários livres: a
+# janela é a mesma decisão dos dois lados só enquanto ninguém mede, e o primeiro teste em uso mediu
+# — 80 opções numa página, que é lista longa demais para uma escolha (DAP
+# `dap-agendamento-discovery-r1`, emenda de 02/09). O que os dois fluxos precisam compartilhar é a
+# **agenda** (`slots_for_range`, `_slots_livres`), não a oferta.
+#
+# Três constantes e nenhum número solto, porque cada uma responde a uma pergunta diferente e elas
+# vão divergir na próxima revisão do pacote.
+#
+# O prazo é contado a partir de agora — ninguém agenda um walkthrough para amanhã.
+DISCOVERY_LEAD_TIME_DAYS = 3
+# **Dias com grade**, não dias corridos: `BOOKING_HOURS` tem segunda a sexta, e contar corrido
+# entregaria três dias úteis na semana que começa numa quinta.
+DISCOVERY_BUSINESS_DAYS = 5
+# As duas bordas da grade comercial, e é delas que sai a leitura de "manhã" e "tarde". Cravar 12 e
+# 14 dentro da regra de seleção faria a oferta discordar da grade na primeira mudança de horário.
+DISCOVERY_MORNING_END_HOUR = 12
+DISCOVERY_AFTERNOON_START_HOUR = 14
 
 
 class SlotUnavailable(Exception):
@@ -79,16 +110,15 @@ def slots_for_range(
     return slots
 
 
-def available_slots(start: datetime | None = None, end: datetime | None = None) -> list[datetime]:
-    """Horários livres para agendamento. Vazio quando a integração está desligada."""
-    if not calendar_sync.is_enabled():
-        return []
+def _slots_livres(start: datetime, end: datetime, now: datetime) -> list[datetime]:
+    """A agenda de verdade no intervalo: grade menos free/busy do Google menos `Booking` viva.
 
+    É o que os dois fluxos compartilham — quem oferta pela pré-venda e quem oferta pelo Discovery
+    precisa enxergar a **mesma** ocupação, pelo mesmo motivo que `_reservar` é um núcleo só. O que
+    cada um decide sozinho é a janela e quantas opções mostrar.
+    """
     from .models import Booking
 
-    now = timezone.localtime()
-    start = start or now
-    end = end or (now + timedelta(days=BOOKING_HORIZON_DAYS))
     busy = calendar_sync.freebusy(start, end)
     taken = [
         (b.starts_at, b.ends_at)
@@ -98,6 +128,93 @@ def available_slots(start: datetime | None = None, end: datetime | None = None) 
         )
     ]
     return slots_for_range(busy, start, end, now, taken=taken)
+
+
+def available_slots(start: datetime | None = None, end: datetime | None = None) -> list[datetime]:
+    """Horários livres para agendamento. Vazio quando a integração está desligada."""
+    if not calendar_sync.is_enabled():
+        return []
+
+    now = timezone.localtime()
+    start = start or now
+    end = end or (now + timedelta(days=BOOKING_HORIZON_DAYS))
+    return _slots_livres(start, end, now)
+
+
+def discovery_window(
+    now: datetime, hours: dict[int, list[tuple[int, int]]] | None = None
+) -> tuple[datetime, datetime]:
+    """O intervalo que o Discovery oferta: começa em `now + 3 dias`, cobre 5 **dias com grade**.
+
+    A varredura anda dia a dia contando só o que `BOOKING_HOURS` conhece, porque "dia útil" aqui
+    não é uma segunda definição de calendário — é a própria grade dizendo em que dias a casa
+    atende. O teto do laço existe para uma grade vazia devolver janela degenerada em vez de rodar
+    para sempre.
+    """
+    hours = BOOKING_HOURS if hours is None else hours
+    start = now + timedelta(days=DISCOVERY_LEAD_TIME_DAYS)
+    ultimo = day = start.date()
+    uteis = 0
+    for _ in range(DISCOVERY_BUSINESS_DAYS * 7):
+        if uteis >= DISCOVERY_BUSINESS_DAYS:
+            break
+        if hours.get(day.weekday()):
+            uteis += 1
+            ultimo = day
+        day += timedelta(days=1)
+    end = timezone.make_aware(
+        datetime.combine(ultimo, datetime.max.time()), timezone.get_current_timezone()
+    )
+    return start, end
+
+
+def _hora_local(slot: datetime) -> int:
+    return timezone.localtime(slot).hour
+
+
+def tres_do_dia(slots: list[datetime]) -> list[datetime]:
+    """Reduz cada dia a no máximo três opções: primeira da manhã, primeira da tarde, última do dia.
+
+    A regra é de **degradação**, não de contagem: os três papéis são o que sobrevive quando a
+    agenda enche. Dois papéis que caem no mesmo horário viram um — daí a deduplicação, e é por ela
+    que "menos de três livres oferece os que existem" sai de graça, sem uma segunda regra que
+    pudesse discordar da primeira. Dia sem nenhum livre simplesmente não aparece.
+
+    A leitura de manhã/tarde é sempre no fuso local (`localtime`), como o agrupamento por dia: o
+    slot chega ciente do fuso, e comparar a hora crua de um UTC deslocaria as duas faixas juntas.
+    """
+    por_dia: dict[date, list[datetime]] = {}
+    for slot in sorted(slots):
+        por_dia.setdefault(timezone.localtime(slot).date(), []).append(slot)
+
+    escolhidos: list[datetime] = []
+    for do_dia in por_dia.values():
+        papeis = (
+            next((s for s in do_dia if _hora_local(s) < DISCOVERY_MORNING_END_HOUR), None),
+            next((s for s in do_dia if _hora_local(s) >= DISCOVERY_AFTERNOON_START_HOUR), None),
+            do_dia[-1],
+        )
+        do_dia_escolhidos: list[datetime] = []
+        for candidato in papeis:
+            if candidato is not None and candidato not in do_dia_escolhidos:
+                do_dia_escolhidos.append(candidato)
+        escolhidos.extend(sorted(do_dia_escolhidos))
+    return escolhidos
+
+
+def available_slots_for_discovery() -> list[datetime]:
+    """Os horários que a página do Discovery oferece (DAP `dap-agendamento-discovery-r1`).
+
+    Função irmã de `available_slots`, e não um parâmetro dela, porque a pré-venda **não muda**:
+    ela continua ofertando a janela inteira, e é a rota pública do site que depende disso. As duas
+    dividem a agenda (`_slots_livres`) e nada mais.
+    """
+    if not calendar_sync.is_enabled():
+        return []
+
+    now = timezone.localtime()
+    start, end = discovery_window(now)
+    return tres_do_dia(_slots_livres(start, end, now))
 
 
 def _default_owner():
@@ -111,8 +228,22 @@ def _default_owner():
     )
 
 
-def book(lead: Lead, slot_start: datetime) -> Booking:
-    """Reserva o horário para o lead: cria a `Booking`, o evento no Google e notifica o dono.
+def _reservar(
+    slot_start: datetime,
+    *,
+    attendee_email: str,
+    summary: str,
+    description: str,
+    aviso: str,
+    aviso_link: str,
+    lead: Lead | None = None,
+    engagement: Engagement | None = None,
+) -> Booking:
+    """Núcleo dos dois fluxos: trava o horário, grava a `Booking`, cria o evento e avisa o dono.
+
+    Um núcleo só, e não dois parecidos, porque é aqui que mora a checagem de conflito: quem
+    reserva pela pré-venda e quem reserva pelo Discovery precisam disputar a **mesma** linha
+    travada, senão os dois marcam o mesmo horário sem nada ficar vermelho.
 
     Levanta `SlotUnavailable` se o horário deixou de estar livre (corrida/duplo booking).
     """
@@ -131,8 +262,9 @@ def book(lead: Lead, slot_start: datetime) -> Booking:
             raise SlotUnavailable
         owner = _default_owner()
         booking = Booking.objects.create(
-            lead=lead, owner=owner, starts_at=slot_start, ends_at=slot_end,
-            attendee_email=lead.email,
+            lead=lead, engagement=engagement, owner=owner,
+            starts_at=slot_start, ends_at=slot_end,
+            attendee_email=attendee_email,
         )
 
     # A transação já fechou: a `Booking` está gravada e **bloqueia o horário** para todo mundo (é
@@ -149,10 +281,10 @@ def book(lead: Lead, slot_start: datetime) -> Booking:
     evento_falhou = False
     try:
         event_id, link = calendar_sync.create_timed_event(
-            summary=f"Reunião com {lead.name}",
+            summary=summary,
             start=slot_start, end=slot_end,
-            description=lead.message or "Reunião agendada pelo site.",
-            attendee_email=lead.email,
+            description=description,
+            attendee_email=attendee_email,
             origin=f"booking:{booking.id}",
         )
     except calendar_sync.CalendarProviderError:
@@ -168,14 +300,93 @@ def book(lead: Lead, slot_start: datetime) -> Booking:
         # O aviso diz que o evento não entrou, senão a degradação fica invisível para quem responde
         # pela reunião — e a pessoa conta com um convite que não existe.
         ressalva = " **A reunião não entrou na agenda** — inclua manualmente." if evento_falhou else ""
-        notifications.notify(
-            [owner], "booking",
+        notifications.notify([owner], "booking", f"{aviso}{ressalva}", aviso_link)
+    return booking
+
+
+def book(lead: Lead, slot_start: datetime) -> Booking:
+    """Reserva o horário para o lead: cria a `Booking`, o evento no Google e notifica o dono.
+
+    Levanta `SlotUnavailable` se o horário deixou de estar livre (corrida/duplo booking).
+    """
+    booking = _reservar(
+        slot_start,
+        lead=lead,
+        attendee_email=lead.email,
+        summary=f"Reunião com {lead.name}",
+        description=lead.message or "Reunião agendada pelo site.",
+        aviso=(
             f"{lead.name} agendou uma reunião para "
-            f"{timezone.localtime(slot_start):%d/%m %H:%M}.{ressalva}",
-            "/leads",
-        )
+            f"{timezone.localtime(slot_start):%d/%m %H:%M}."
+        ),
+        aviso_link="/leads",
+    )
     _send_confirmation(lead, slot_start)
     return booking
+
+
+def book_discovery(engagement: Engagement, slot_start: datetime, attendee_email: str) -> Booking:
+    """Reserva o Discovery do mandato de Design Partner (FDD 013, DAP agendamento-discovery r1).
+
+    Mesma agenda e mesma tabela da pré-venda; o que muda é a origem da reserva, o que o evento
+    diz e para onde o aviso ao dono aponta. **Sem confirmação por e-mail própria**: a decisão C1
+    do DAP é que a confirmação acontece na página e o convite do Google vai ao cliente — o texto
+    de `_send_confirmation` é de pré-venda e reusá-lo aqui mentiria sobre o que foi marcado.
+    """
+    account = engagement.account
+    return _reservar(
+        slot_start,
+        engagement=engagement,
+        attendee_email=attendee_email,
+        summary=f"Discovery — {account.name}",
+        description="Sessão de Discovery agendada pelo cliente.",
+        aviso=(
+            f"{account.name} agendou o Discovery para "
+            f"{timezone.localtime(slot_start):%d/%m %H:%M}."
+        ),
+        aviso_link=f"/contas/{engagement.account_id}",
+    )
+
+
+def fechar_sessoes_realizadas(agora: datetime | None = None) -> tuple[int, int]:
+    """O que já aconteceu deixa de estar "agendado". Devolve (reservas, reuniões) fechadas.
+
+    **Nada no sistema fazia isso**, e o buraco não era cosmético: `Booking` e `Meeting` nasciam
+    `scheduled` e ficavam `scheduled` para sempre, então a casa nunca ficava sabendo que a conversa
+    aconteceu. É por isso que a travessia da sessão para o projeto precisou de guarda de degrau
+    (`discovery_booking.registrar_sessao_no_projeto`): a reserva continua "viva" meses depois.
+
+    Os dois modelos num lugar só porque a pergunta é uma só — "esta sessão já aconteceu?" —, e são
+    dois modelos para "reunião marcada" por razão histórica (FDD 046, emenda de 02/09/2026, 2): a
+    `Booking` é quem bloqueia o horário na agenda, a `Meeting` é o fato do projeto. Duas funções
+    responderiam a mesma pergunta e divergiriam na primeira mudança de corte.
+
+    O corte de cada uma é o que ela sabe: a reserva tem hora de fim, e fecha quando o fim passou; a
+    `Meeting.date` é `DateField`, e um dia só termina quando vira o dia seguinte (`date__lt`, no
+    molde de `invoices.mark_overdue` — vencer hoje não é atrasar hoje).
+
+    **Idempotente por construção**, não por guarda: o filtro por `status` exclui exatamente o que a
+    rodada anterior mudou, então a segunda execução do dia atualiza zero linhas. Reserva
+    **cancelada** e linha **arquivada** ficam de fora — cancelada não aconteceu, e arquivada saiu
+    da vista de propósito.
+    """
+    from .models import Booking, Meeting
+
+    agora = agora or timezone.now()
+    reservas = Booking.objects.filter(
+        status=Booking.Status.SCHEDULED, ends_at__lt=agora, archived_at__isnull=True
+    ).update(
+        # `.update()` passa por cima de `auto_now`; sem isto uma mudança de estado em massa não
+        # deixaria carimbo nenhum.
+        status=Booking.Status.HELD,
+        updated_at=agora,
+    )
+    reunioes = Meeting.objects.filter(
+        status=Meeting.Status.SCHEDULED,
+        date__lt=timezone.localdate(agora),
+        archived_at__isnull=True,
+    ).update(status=Meeting.Status.HELD, updated_at=agora)
+    return reservas, reunioes
 
 
 def _send_confirmation(lead: Lead, slot_start: datetime) -> None:

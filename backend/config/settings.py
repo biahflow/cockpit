@@ -221,6 +221,10 @@ REST_FRAMEWORK = {
         "lead_intake": os.getenv("LEAD_INTAKE_RATE", "20/hour"),
         "task_sync": os.getenv("TASK_SYNC_RATE", "60/hour"),
         "booking": os.getenv("BOOKING_RATE", "60/hour"),
+        # Escopo próprio, e não o `booking` acima: a porta do Discovery é aberta por um token de
+        # 14 dias que vai por e-mail, enquanto a da pré-venda depende do `X-Intake-Token` do
+        # relay. Compartilhar o balde faria uma sondagem numa esgotar a outra.
+        "discovery_booking": os.getenv("DISCOVERY_BOOKING_RATE", "60/hour"),
         "esign_webhook": os.getenv("ESIGN_WEBHOOK_RATE", "120/hour"),
         # Cinco vezes o teto do e-sign, de propósito: o Stripe trata 429 como falha e faz backoff
         # por até três dias, e cada pagamento chega em **dois** eventos (`invoice.paid` e
@@ -294,6 +298,19 @@ SPECTACULAR_SETTINGS = {
         # componente independentemente de qual serializer o esquema encontrar primeiro.
         "KpiUnitEnum": "apps.core.models.KpiUnit",
         "KpiDirectionEnum": "apps.core.models.KpiDirection",
+        # `User.role` já ocupava o nome `RoleEnum` quando o corpo do `request-signature` (ADR 0065)
+        # trouxe um segundo campo chamado `role` — o papel do signatário. Sem o override o desempate
+        # renomeia o componente **antigo** para `Role8d9Enum`, quebrando quem já lê `RoleEnum` por
+        # causa de um campo novo que nada tem a ver com ele. Mesmo defeito e mesma correção do
+        # `SourceEnum` acima; o papel do signatário fica com o nome derivado do próprio componente.
+        "RoleEnum": "apps.core.models.User.Role",
+        # E a outra metade do mesmo par, que a issue #120 destravou: com `signer_role` saindo
+        # também no `GET` (`SignatureRequestSerializer`), o **mesmo** conjunto passou a aparecer
+        # sob dois nomes de campo — `signer_role` no serializer e `role` no corpo da action. Sem
+        # o override, o desempate rebatiza o componente da action de `RequestSignatureSignerRoleEnum`
+        # para `Role072Enum`, o sufixo instável de sempre. Apontar para o `TextChoices` funde os
+        # dois num componente só, que é o que eles de fato são.
+        "SignerRoleEnum": "apps.core.models.SignatureRequest.SignerRole",
     },
     # A issue #67 fecha com dois critérios de aceite que ainda faltavam, e este é o segundo:
     # anunciar no próprio contrato quais chaves de payload são o alias legado da `/api/v1/`
@@ -417,6 +434,10 @@ SCHEDULER_BACKUP_CHECK_AT = os.getenv("SCHEDULER_BACKUP_CHECK_AT", "09:00")
 # **Antes** do digest das 07:30, e a ordem é o ponto: quem lê o dia — tela, resumo, qualquer aviso
 # futuro — precisa encontrar o vencimento já apurado, não a apurar.
 SCHEDULER_INVOICES_AT = os.getenv("SCHEDULER_INVOICES_AT", "06:00")
+# **Antes do digest das 07:30**, pela mesma razão de ordem: quem lê o dia precisa encontrar a
+# sessão de ontem já fechada, não anunciada como agendada. Nada no sistema transicionava `Booking`
+# ou `Meeting` para "realizada" antes deste job — elas ficavam `scheduled` para sempre.
+SCHEDULER_SESSIONS_AT = os.getenv("SCHEDULER_SESSIONS_AT", "06:30")
 # **Depois** do vencimento das 06:00, e a ordem é a entrega: a régua pergunta "que degrau cabe
 # hoje?" ao estado da fatura, e rodar antes da apuração faria o D+1 ser lido como D+0. Às 09:30
 # porque cobrança é conversa de horário comercial — a RFC 0004 pede "teto duro de frequência e de
@@ -506,6 +527,11 @@ GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "")
 GOOGLE_BOOKING_CALENDAR_ID = os.getenv("GOOGLE_BOOKING_CALENDAR_ID", "")
 BOOKING_MIN_FIT = os.getenv("BOOKING_MIN_FIT", "medium")
 BOOKING_SLOT_MINUTES = int(os.getenv("BOOKING_SLOT_MINUTES", "45"))
+# Agendamento do Discovery pelo próprio cliente, depois do acordo de Design Partner assinado
+# (FDD 013, DAP `docs/design/dap-agendamento-discovery-r1/`). **Nasce desligada**, pelo mesmo
+# motivo do `DUNNING_ENABLED` e por um a mais: ela abre a primeira rota pública do produto além
+# do login, e manda e-mail sozinha para fora da casa. Ligar é ato de operação, não de deploy.
+DISCOVERY_BOOKING_ENABLED = _env_bool("DISCOVERY_BOOKING_ENABLED", False)
 # Assinatura eletrônica (ADR 0007): fornecedor homologado + webhook de status assinado.
 # `ESIGN_WEBHOOK_SECRET` é o segredo do HMAC da entrega; sem ele o webhook responde 401.
 # Ligado por padrão (ADR 0018), mas sem efeito enquanto faltar qualquer uma das três credenciais
@@ -521,6 +547,11 @@ ESIGN_SANDBOX = os.getenv("ESIGN_SANDBOX", "true").lower() == "true"
 # Quem avisa o signatário: "email" (o fornecedor manda o convite, padrão) ou "link" (o
 # fornecedor devolve o link de assinatura e o portal se encarrega de entregar).
 ESIGN_DELIVERY = os.getenv("ESIGN_DELIVERY", "email").lower()
+# O e-mail com que a **casa** assina (ADR 0065). Preenchido, o Pulse acrescenta um signatário
+# `house` a toda rodada de assinatura — quem envia não digita o próprio e-mail toda vez. **Vazio
+# por padrão**, e é o que torna a entrega reversível: sem ele, a rodada tem exatamente os
+# signatários que o corpo do pedido nomeou, como antes desta ADR.
+ESIGN_HOUSE_SIGNER_EMAIL = os.getenv("ESIGN_HOUSE_SIGNER_EMAIL", "")
 
 # Gateway de pagamento (FDD 028): cobrança emitida no fornecedor + webhook de baixa assinado.
 # Ligado por padrão (ADR 0018) e sem provedor nomeado por padrão — o que significa `NullProvider`:
@@ -537,6 +568,46 @@ PAYMENTS_WEBHOOK_SECRET = os.getenv("PAYMENTS_WEBHOOK_SECRET", "")
 # Janela de aceitação do carimbo do webhook. É o que faz uma entrega **capturada** parar de valer:
 # sem ela, um corpo assinado hoje é reproduzível para sempre.
 PAYMENTS_WEBHOOK_TOLERANCE_SECONDS = _env_int("PAYMENTS_WEBHOOK_TOLERANCE_SECONDS", 300)
+
+# Mensagens por WhatsApp (ADR 0031: canal novo, não gate novo). **Dois provedores ao mesmo tempo**,
+# e é por isso que a variável é uma lista ordenada e não um `WHATSAPP_PROVIDER` singular como o
+# e-sign e o gateway: aqui o segundo nome não é a alternativa da instalação, é o fallback da
+# primeira. `WHATSAPP_PROVIDERS="zapi,uazapi"` tenta na ordem escrita.
+#
+# **Nasce desligada**, como `DUNNING_ENABLED` e `DISCOVERY_BOOKING_ENABLED`. Desde a issue #110 há
+# chamador — o kickoff abre o grupo do cliente ao nascer o projeto —, e é justamente por isso que
+# ligar continua sendo ato de operação e não de deploy: ligada, a primeira conversão passa a criar
+# grupo de verdade, com um número não oficial que fala com clientes (ADR 0062).
+#
+# Vazio em `WHATSAPP_PROVIDERS` significa `NullProvider` — registra a intenção e não manda nada —,
+# e nesse modo `configured()` passa sem exigir credencial alguma, no precedente do `ESIGN_PROVIDER`
+# (`flags._whatsapp_missing`). Nomeado um provedor, as credenciais **dele** viram obrigatórias.
+WHATSAPP_ENABLED = _env_bool("WHATSAPP_ENABLED", False)
+WHATSAPP_PROVIDERS = os.getenv("WHATSAPP_PROVIDERS", "")
+# Z-API: instância e token vão na URL; o `Client-Token` é a validação por token da **conta**, que
+# só existe se quem administra a ligou no painel — por isso ele não é obrigatório.
+WHATSAPP_ZAPI_INSTANCE_ID = os.getenv("WHATSAPP_ZAPI_INSTANCE_ID", "")
+WHATSAPP_ZAPI_TOKEN = os.getenv("WHATSAPP_ZAPI_TOKEN", "")
+WHATSAPP_ZAPI_CLIENT_TOKEN = os.getenv("WHATSAPP_ZAPI_CLIENT_TOKEN", "")
+# Vazio = cada adaptador usa a própria URL padrão (`Provider.DEFAULT_BASE`).
+WHATSAPP_ZAPI_API_BASE = os.getenv("WHATSAPP_ZAPI_API_BASE", "")
+# UAZAPI: token no header, e a base muda por instância (`https://{subdomínio}.uazapi.com`).
+WHATSAPP_UAZAPI_TOKEN = os.getenv("WHATSAPP_UAZAPI_TOKEN", "")
+WHATSAPP_UAZAPI_API_BASE = os.getenv("WHATSAPP_UAZAPI_API_BASE", "")
+# Teto de espera por provedor. Ele importa mais aqui do que nas outras integrações: passar do teto
+# produz `UNCERTAIN`, que por decisão **não** cai para o próximo provedor — um timeout curto demais
+# transforma entrega lenta em mensagem não enviada, e um longo demais segura quem chamou.
+WHATSAPP_TIMEOUT_SECONDS = _env_int("WHATSAPP_TIMEOUT_SECONDS", 15)
+# **Criar grupo é outra ordem de grandeza, e por isso tem teto próprio** (ADR 0064, issue #111).
+# Mandar texto é falar com o provedor; criar grupo é o provedor falando com a rede do WhatsApp e
+# esperando o grupo existir do outro lado. Na primeira chamada real contra a UAZAPI, em
+# 03/09/2026, o teto de 15s estourou, o adaptador devolveu `UNCERTAIN` sem id — e **o grupo tinha
+# sido criado** (`120363431743499021@g.us`, 11:47:18Z), com a referência dele perdida.
+#
+# O que se mediu foi que 15s é curto. **Não** se mediu quanto a UAZAPI leva de fato: 90 é folga
+# escolhida, não número apurado. É exatamente por isso que a reconciliação existe e o teto maior
+# não vem sozinho — um teto maior torna o caso raro, e caso raro não tratado é o pior tipo.
+WHATSAPP_GROUP_TIMEOUT_SECONDS = _env_int("WHATSAPP_GROUP_TIMEOUT_SECONDS", 90)
 
 # Enriquecimento de lead (FDD 030): dado cadastral público de CNPJ alimentando a qualificação que
 # já existe. Nome neutro pela razão de `PAYMENTS_*` e `ESIGN_*` — o provedor é trocável.

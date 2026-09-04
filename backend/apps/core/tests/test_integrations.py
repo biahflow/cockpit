@@ -164,3 +164,47 @@ def test_pagamento_entra_no_registro_de_sondas() -> None:
 
 def test_github_provisioning_entra_no_registro_de_sondas() -> None:
     assert "github_provisioning" in integrations.PROBES
+
+
+# --- aviso de entrega do esign (issue #112) -----------------------------------------------------
+
+
+def test_sonda_de_esign_avisa_sem_reprovar_sem_provedor_sondavel() -> None:
+    """Sem `ping` (`NullProvider`), a sonda cai no caminho `NAO_SONDAVEL` — e o aviso se anexa
+    igual, porque a combinação `sandbox=True`+`delivery=email` independe de haver provedor."""
+    with override_settings(ESIGN_PROVIDER="", ESIGN_SANDBOX=True, ESIGN_DELIVERY="email"):
+        ok, detalhe = integrations._probe_esign()
+
+    assert ok is True
+    assert "issue #112" in detalhe
+
+
+def test_sonda_de_esign_avisa_sem_reprovar_com_provedor_sondavel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Aviso não é reprovação: `ok` continua o que o `ping()` do adaptador devolveu."""
+    from apps.core import esign
+
+    monkeypatch.setattr(esign.AutentiqueProvider, "ping", lambda self: (True, "conta x acessível"))
+
+    with override_settings(
+        ESIGN_PROVIDER="autentique", ESIGN_SANDBOX=True, ESIGN_DELIVERY="email"
+    ):
+        ok, detalhe = integrations._probe_esign()
+
+    assert ok is True
+    assert "conta x acessível" in detalhe
+    assert "issue #112" in detalhe
+
+
+def test_sonda_de_esign_sem_aviso_fora_da_combinacao(monkeypatch: pytest.MonkeyPatch) -> None:
+    from apps.core import esign
+
+    monkeypatch.setattr(esign.AutentiqueProvider, "ping", lambda self: (True, "conta x acessível"))
+
+    with override_settings(ESIGN_PROVIDER="autentique", ESIGN_SANDBOX=True, ESIGN_DELIVERY="link"):
+        ok, detalhe = integrations._probe_esign()
+
+    assert ok is True
+    assert detalhe == "conta x acessível"
+    assert "issue #112" not in detalhe

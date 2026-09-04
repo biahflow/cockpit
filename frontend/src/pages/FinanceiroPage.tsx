@@ -145,7 +145,7 @@ export function FinanceiroPage() {
     {isAdmin && <form onSubmit={event => void criar(event)} className="panel grid gap-4 sm:p-6">
       <h2 className="font-semibold text-ink">Nova fatura</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="form-label">Cliente
+        <label className="form-label">Conta
           <select required className="field" value={form.account} onChange={event => setForm({ ...form, account: event.target.value })}>
             <option value="">Selecione</option>
             {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}

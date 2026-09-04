@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -9,7 +9,13 @@ const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
   auth: { user: { id: 1, is_admin: true, role: "admin" } } as { user: { id: number; is_admin: boolean; role: string } },
 }));
-vi.mock("../api", () => ({ api: mocks.api, getConfig: mocks.getConfig }));
+vi.mock("../api", () => ({
+  api: mocks.api,
+  getConfig: mocks.getConfig,
+  // Espelha `createProjectFromEngagement` de `api.ts`: chama o mesmo `mocks.api`, para os testes
+  // afirmarem a chamada e controlarem a resposta do mesmo jeito que fazem com o resto da tela.
+  createProjectFromEngagement: (engagement: number, payload: unknown) => mocks.api(`/engagements/${engagement}/create-project/`, { method: "POST", body: JSON.stringify(payload) }),
+}));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 function atividade(overrides: Record<string, unknown> = {}) {
@@ -80,6 +86,7 @@ let contacts: unknown[] = [contato()];
 function mandato(overrides: Record<string, unknown> = {}) {
   return {
     id: 5, account: 1, account_name: "Cliente A", name: "Transformação Financeira",
+    discovery_scheduled_at: null,
     mandate: "", sponsor: null, sponsor_name: null, owner: 1, owner_name: "Ana Souza",
     status: "active", status_display: "Ativo",
     commercial_model: "paid", commercial_model_display: "Pago",
@@ -88,7 +95,11 @@ function mandato(overrides: Record<string, unknown> = {}) {
     originating_design_partner_agreement: null,
     originating_design_partner_agreement_name: "",
     started_at: "2026-03-02", ended_at: null, success_definition: "",
-    projects_count: 3, needs_review: false, archived_at: null,
+    projects_count: 3, needs_review: false,
+    // Silêncio por padrão (decisão C1 do DAP `dap-grupo-de-whatsapp-r1`): os testes que não são
+    // sobre o grupo não devem ganhar um link ou um texto extra na faixa de meta da linha.
+    whatsapp_group_id: "", whatsapp_group_invite_url: "",
+    archived_at: null,
     created_at: "2026-03-02T10:00:00Z", updated_at: "2026-03-02T10:00:00Z",
     ...overrides,
   };
@@ -123,9 +134,31 @@ function documento(overrides: Record<string, unknown> = {}) {
 let opportunities: unknown[] = [oportunidade()];
 let documents: unknown[] = [documento()];
 
+/** Um degrau do catálogo, no formato que `ServiceSerializer` devolve. */
+function servico(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 10, name: "Discovery Sprint", active: true, tier: "discovery_sprint", tier_display: "Discovery Sprint",
+    category: "commercial", category_display: "Comercial", list_price: "3000.00", summary: "",
+    ...overrides,
+  };
+}
+
+// Um vendável e um de aquisição por padrão — o segundo existe para que o teste de C1 (o select do
+// modal de criar projeto não oferece aquisição) encontre algo a excluir mesmo quando outro teste
+// não sobrescreve a lista.
+let services: unknown[] = [
+  servico(),
+  servico({ id: 1, name: "Qualification Call", tier: "qualification_call", tier_display: "Qualification Call", category: "acquisition", category_display: "Aquisição", list_price: "0.00" }),
+];
+
+// Quantos registros do Discovery da conta o cliente está vendo (issue #114). Zero por padrão: o
+// aviso de arquivamento não deve aparecer nas telas que não são sobre ele, e cada teste do aviso
+// povoa o seu.
+let publicados = 0;
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
-    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "" });
+    if (path === "/clients/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "", published_count: publicados });
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
     if (path === "/clients/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", status: "active", roi: { revenue: 1000, cost: 250, roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve(contacts);
@@ -133,6 +166,7 @@ function stub() {
     if (path.startsWith("/invoices")) return Promise.resolve([{ id: 4, number: "2026-0007", status_display: "Vencida", due_date: "2026-08-05" }]);
     if (path.startsWith("/satisfacoes")) return Promise.resolve(satisfacoes);
     if (path.startsWith("/processos")) return Promise.resolve(processos);
+    if (path === "/services/") return Promise.resolve(services);
     if (path.startsWith("/engagements")) return Promise.resolve(engagements);
     if (path.startsWith("/opportunities/?account=")) return Promise.resolve(opportunities);
     if (path.startsWith("/documents/?account=")) return Promise.resolve(documents);
@@ -151,6 +185,11 @@ beforeEach(() => {
   engagements = [];
   opportunities = [oportunidade()];
   documents = [documento()];
+  publicados = 0;
+  services = [
+    servico(),
+    servico({ id: 1, name: "Qualification Call", tier: "qualification_call", tier_display: "Qualification Call", category: "acquisition", category_display: "Aquisição", list_price: "0.00" }),
+  ];
   mocks.getConfig.mockResolvedValue({ ai_enabled: true, calendar_enabled: false, esign_enabled: false, integrations: [] });
   stub();
 });
@@ -340,6 +379,29 @@ test("entrega não vê o formulário nem o botão de arquivar de interações", 
 
   expect(screen.queryByPlaceholderText("Do que se tratou o contato")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Arquivar interação: Alinhamento de escopo")).not.toBeInTheDocument();
+});
+
+test("superusuário com papel de entrega escreve contatos — a tela não esconde o que a API aceita", async () => {
+  // `createsuperuser` não pergunta o papel, e o default do modelo é `delivery`: este é o estado
+  // de quem acabou de subir o produto. A API o trata como admin (`User.is_admin_role` é
+  // `role == ADMIN or is_superuser`), então filtrar só por `role` escondia o formulário de quem
+  // a API aceitaria — o mesmo defeito que `Layout.tsx` já tinha corrigido para o menu lateral.
+  mocks.auth.user = { id: 4, is_admin: true, role: "delivery" };
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  expect(painel.getByRole("button", { name: "Adicionar contato" })).toBeInTheDocument();
+});
+
+test("entrega sem superusuário segue sem escrever contatos", async () => {
+  // A outra metade, para o conserto acima não virar liberação geral.
+  mocks.auth.user = { id: 5, is_admin: false, role: "delivery" };
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("contacts-panel"));
+
+  expect(painel.queryByRole("button", { name: "Adicionar contato" })).not.toBeInTheDocument();
 });
 
 test("classificar chama a rota e o sinal gravado volta com a conduta, não só com o selo", async () => {
@@ -712,4 +774,258 @@ test("arquivar mandato com projeto vivo mostra a recusa do backend no topo da p�
   const alerta = await screen.findByRole("alert");
   expect(alerta).toHaveTextContent("Este engagement ainda tem 3 projeto(s) em aberto. Arquive esses projetos antes de arquivar o engagement.");
   expect(alerta).toHaveClass("alert--error");
+});
+
+// --- O grupo do cliente no WhatsApp na linha do mandato (DAP dap-grupo-de-whatsapp-r1, r1 A1·B1·C1·D1)
+
+test("com link de convite, a linha mostra o link discreto para o grupo", async () => {
+  engagements = [mandato({
+    whatsapp_group_id: "120363431743499021@g.us",
+    whatsapp_group_invite_url: "https://chat.whatsapp.com/GONwbGG",
+  })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  const link = painel.getByRole("link", { name: "Abrir o grupo de Transformação Financeira no WhatsApp" });
+  expect(link).toHaveAttribute("href", "https://chat.whatsapp.com/GONwbGG");
+  expect(link).toHaveAttribute("target", "_blank");
+  expect(within(link).getByText("Grupo no WhatsApp")).toBeInTheDocument();
+});
+
+test("com JID sem link, a linha mostra o texto sem affordance — e nenhum link", async () => {
+  engagements = [mandato({ whatsapp_group_id: "120363431743499021@g.us" })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.getByText("Grupo criado · sem link de convite")).toBeInTheDocument();
+  expect(painel.queryByRole("link", { name: /WhatsApp/ })).not.toBeInTheDocument();
+});
+
+test("sem grupo nenhum, a linha não mostra link nem texto — silêncio de propósito (C1)", async () => {
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.queryByRole("link", { name: /WhatsApp/ })).not.toBeInTheDocument();
+  expect(painel.queryByText(/Grupo/)).not.toBeInTheDocument();
+});
+
+// --- Criar projeto a partir do mandato (DAP `dap-engagement-r3`, decisões A1 · B2 · C1 · D1) ---
+
+test("o botão Novo projeto abre o modal e o POST sai com os quatro campos, no mandato certo", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const modal = within(dialog);
+  await user.type(modal.getByLabelText("Nome"), "Discovery Sprint — Cliente A");
+  await user.selectOptions(modal.getByLabelText("Degrau"), "10");
+  const [inicio, prazo] = dialog.querySelectorAll('input[type="date"]');
+  fireEvent.change(inicio, { target: { value: "2026-09-03" } });
+  fireEvent.change(prazo, { target: { value: "2026-09-12" } });
+
+  mocks.api.mockImplementationOnce(() => Promise.resolve({ id: 99, name: "Discovery Sprint — Cliente A" }));
+  await user.click(modal.getByRole("button", { name: "Criar projeto" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/engagements/5/create-project/", expect.objectContaining({ method: "POST" })));
+  const chamada = mocks.api.mock.calls.find(([rota]) => rota === "/engagements/5/create-project/")!;
+  const corpo = JSON.parse(chamada[1].body);
+  expect(corpo).toEqual({ name: "Discovery Sprint — Cliente A", service: 10, start_date: "2026-09-03", due_date: "2026-09-12" });
+});
+
+test("mandato encerrado não mostra o botão Novo projeto (D1) — o backend recusaria com 409", async () => {
+  engagements = [mandato({ status: "closed", status_display: "Encerrado", ended_at: "2026-06-30" })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.queryByRole("button", { name: "Novo projeto" })).not.toBeInTheDocument();
+  // A ação encerrada perde só o "Novo projeto" — Editar segue disponível.
+  expect(painel.getByLabelText("Editar Transformação Financeira")).toBeInTheDocument();
+});
+
+test("entrega não vê o botão Novo projeto — o mesmo portão canWriteEngagements", async () => {
+  mocks.auth.user = { id: 3, is_admin: false, role: "delivery" };
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  expect(painel.queryByRole("button", { name: "Novo projeto" })).not.toBeInTheDocument();
+});
+
+test("o select de degrau não oferece serviço de categoria acquisition", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const degrau = within(dialog).getByLabelText("Degrau") as HTMLSelectElement;
+  const valores = Array.from(degrau.options).map(option => option.value);
+
+  // id 10 é `commercial` (Discovery Sprint) — oferecido. id 1 é `acquisition` (Qualification
+  // Call) — o backend recusa com 400, e a tela não deve oferecer o que a API nega.
+  expect(valores).toContain("10");
+  expect(valores).not.toContain("1");
+});
+
+test("erro do servidor aparece no modal e ele não fecha — quem errou a data corrige sem redigitar tudo", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato()];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const modal = within(dialog);
+  await user.type(modal.getByLabelText("Nome"), "Discovery Sprint — Cliente A");
+  await user.selectOptions(modal.getByLabelText("Degrau"), "10");
+  const [inicio, prazo] = dialog.querySelectorAll('input[type="date"]');
+  fireEvent.change(inicio, { target: { value: "2026-09-12" } });
+  fireEvent.change(prazo, { target: { value: "2026-09-03" } });
+
+  mocks.api.mockImplementationOnce(() => Promise.reject(Object.assign(
+    new Error("O prazo final não pode ser anterior ao início."),
+    { status: 400 },
+  )));
+  await user.click(modal.getByRole("button", { name: "Criar projeto" }));
+
+  const alerta = await within(dialog).findByRole("alert");
+  expect(alerta).toHaveTextContent("O prazo final não pode ser anterior ao início.");
+  expect(alerta).toHaveClass("alert--error");
+  // O modal segue aberto e o rascunho não se perde.
+  expect(screen.getByRole("dialog", { name: "Criar projeto" })).toBeInTheDocument();
+  expect(modal.getByLabelText("Nome")).toHaveValue("Discovery Sprint — Cliente A");
+});
+
+test("depois do sucesso o modal fecha e a lista recarrega — o projects_count da linha muda", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato({ projects_count: 3 })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  let painel = within(screen.getByTestId("engagements-panel"));
+  expect(painel.getByText(/3 projetos/)).toBeInTheDocument();
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+  const dialog = await screen.findByRole("dialog", { name: "Criar projeto" });
+  const modal = within(dialog);
+  await user.type(modal.getByLabelText("Nome"), "Discovery Sprint — Cliente A");
+  await user.selectOptions(modal.getByLabelText("Degrau"), "10");
+  const [inicio, prazo] = dialog.querySelectorAll('input[type="date"]');
+  fireEvent.change(inicio, { target: { value: "2026-09-03" } });
+  fireEvent.change(prazo, { target: { value: "2026-09-12" } });
+
+  // O `load()` recarrega a lista após o sucesso — a linha muda porque o mandato que o backend
+  // devolveria já tem o projeto novo contado.
+  mocks.api.mockImplementationOnce(() => {
+    engagements = [mandato({ projects_count: 4 })];
+    return Promise.resolve({ id: 99, name: "Discovery Sprint — Cliente A" });
+  });
+  await user.click(modal.getByRole("button", { name: "Criar projeto" }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Criar projeto" })).not.toBeInTheDocument());
+  painel = within(screen.getByTestId("engagements-panel"));
+  await waitFor(() => expect(painel.getByText(/4 projetos/)).toBeInTheDocument());
+});
+
+
+test("o modal abre com a janela derivada da sessão que o cliente marcou", async () => {
+  // O **dia 0** é o dia da sessão (decisão do usuário, 02/09). Pré-preenchido e editável: o
+  // formulário aprovado (DAP `dap-engagement-r3`, C1) pede as datas, e travá-las seria mudar a
+  // decisão sem revisar o pacote.
+  const user = userEvent.setup();
+  engagements = [mandato({ discovery_scheduled_at: "2026-09-10T14:00:00-03:00" })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+
+  expect(screen.getByLabelText("Início")).toHaveValue("2026-09-10");
+  expect(screen.getByLabelText("Prazo final")).toHaveValue("2026-09-17");
+});
+
+test("sem sessão marcada o modal abre vazio, em vez de chutar datas", async () => {
+  const user = userEvent.setup();
+  engagements = [mandato({ discovery_scheduled_at: null })];
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+  const painel = within(screen.getByTestId("engagements-panel"));
+
+  await user.click(painel.getByRole("button", { name: "Novo projeto" }));
+
+  expect(screen.getByLabelText("Início")).toHaveValue("");
+  expect(screen.getByLabelText("Prazo final")).toHaveValue("");
+});
+
+
+/* -------------------------------------------------------------------------------------------
+   O aviso do que continua publicado ao arquivar (issue #114).
+
+   Arquivar a conta **não** despublica o Discovery, e não deve: só um ato humano publica e só um
+   ato humano despublica (ADR 0060). O aviso é o que faltava — e ele **informa, não bloqueia**.
+   ------------------------------------------------------------------------------------------- */
+
+test("a confirmação de arquivar avisa quantos registros continuam publicados, com link para a tela", async () => {
+  const user = userEvent.setup();
+  publicados = 5;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
+
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar conta" }));
+  expect(dialogo.getByText("5 registros publicados")).toBeInTheDocument();
+  expect(dialogo.getByText(/Arquivar não os retira/)).toBeInTheDocument();
+  expect(dialogo.getByRole("link", { name: /Ver o que está publicado/ })).toHaveAttribute("href", "/contas/1/publicacao");
+});
+
+test("com um único registro publicado a frase vai no singular", async () => {
+  const user = userEvent.setup();
+  publicados = 1;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
+
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar conta" }));
+  expect(dialogo.getByText("1 registro publicado")).toBeInTheDocument();
+});
+
+test("sem nada publicado a frase não aparece — «0 registros publicados» é ruído, não aviso", async () => {
+  const user = userEvent.setup();
+  publicados = 0;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
+
+  const dialogo = within(screen.getByRole("dialog", { name: "Arquivar conta" }));
+  expect(dialogo.getByText(/saem das listagens ativas/)).toBeInTheDocument();
+  expect(dialogo.queryByText(/registros? publicados?/)).not.toBeInTheDocument();
+  expect(dialogo.queryByRole("link", { name: /Ver o que está publicado/ })).not.toBeInTheDocument();
+});
+
+test("o aviso informa e não bloqueia: arquivar continua saindo como DELETE", async () => {
+  const user = userEvent.setup();
+  publicados = 3;
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
+  await user.click(screen.getByRole("button", { name: "Arquivar" }));
+
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/clients/1/", expect.objectContaining({ method: "DELETE" })));
 });

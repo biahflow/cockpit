@@ -14,12 +14,13 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, drive, knowledge, publication
+from . import blueprints, discovery_booking, drive, esign, kickoff, knowledge, publication
 from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
     ARTIFACT_TRANSITIONS,
     CASE_TRANSITIONS,
+    DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT,
     FINDING_TRANSITIONS,
     INVOICE_TRANSITIONS,
     KPI,
@@ -279,12 +280,34 @@ class AccountSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Account
     # `lifecycle_status` e a chave `status` continua saindo com o mesmo valor, até a `/api/v2/`.
     # A escrita pela chave antiga vem do mixin acima.
     status = serializers.CharField(source="lifecycle_status", read_only=True)
+    published_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = ["id", "name", "legal_name", "tax_id", "owner", "lifecycle_status", "status",
-                  "vertical", "vertical_name", "created_at", "updated_at"]
+                  "vertical", "vertical_name", "published_count", "created_at", "updated_at"]
         read_only_fields = ["id", "owner", "created_at", "updated_at"]
+
+    # O decorador é o mesmo de `get_projects_count`, e pelo mesmo motivo: sem ele o drf-spectacular
+    # copia o docstring inteiro para a `description` do campo no `openapi.yaml`, e o raciocínio
+    # interno vira contrato publicado.
+    @extend_schema_field(serializers.IntegerField())
+    def get_published_count(self, obj: Account) -> int:
+        """Quantos registros do Discovery desta conta o cliente está vendo agora (issue `#114`).
+
+        Quem decide o recorte é `publication.py`, e este método não o reexpressa — reescrever
+        "publicado e vivo" aqui seria a segunda definição que aquele módulo existe para não ter.
+
+        **Dois caminhos, e o segundo não é preciosismo.** Na listagem e no detalhe o valor chega
+        anotado por `AccountViewSet.get_queryset` (uma consulta, não cinco por linha). Fora do
+        viewset — a resposta do `POST`, um `Account` montado em teste, o serializer reusado por
+        outro código — a anotação não existe, e ler `obj.published_count` direto levantaria
+        `AttributeError`, ou seja, 500 num caminho que hoje funciona. Daí o `None` como sentinela
+        em vez de `0`: conta sem nada publicado é `0` de verdade, e confundir os dois faria a
+        ausência de anotação passar por resposta.
+        """
+        anotado = getattr(obj, "published_count", None)
+        return publication.contagem_publicada(obj) if anotado is None else int(anotado)
 
     def validate_lifecycle_status(self, value: str) -> str:
         """O estado é afirmado por quem cadastra, mas o que o sistema observou não se desdiz.
@@ -613,6 +636,12 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     originating_design_partner_agreement_name = serializers.CharField(
         source="originating_design_partner_agreement.original_name", read_only=True, default=""
     )
+    discovery_scheduled_at = serializers.SerializerMethodField()
+    # Par derivado com fallback, DAP `dap-grupo-de-whatsapp-r1` B1: o do próprio mandato quando
+    # existe, senão o do projeto vivo mais antigo com grupo legado. O nome do campo é o mesmo do
+    # modelo de propósito — para a `/api/v1/` o fato é um só, "o canal do mandato".
+    whatsapp_group_id = serializers.SerializerMethodField()
+    whatsapp_group_invite_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Engagement
@@ -625,6 +654,7 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
             "originating_design_partner_agreement",
             "originating_design_partner_agreement_name",
             "started_at", "ended_at", "success_definition", "projects_count",
+            "discovery_scheduled_at", "whatsapp_group_id", "whatsapp_group_invite_url",
             "needs_review", "archived_at", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "archived_at", "created_at", "updated_at"]
@@ -667,6 +697,36 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
         nascer não tem projeto nenhum.
         """
         return getattr(obj, "projects_count", 0)
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_discovery_scheduled_at(self, obj: Engagement) -> str | None:
+        """Quando o cliente marcou o Discovery pelo link do convite — `null` quando não marcou.
+
+        Só leitura, e existe para a tela **pré-preencher** o início e o prazo do projeto (DAP
+        `dap-engagement-r3`, C1). O servidor não sobrescreve essas datas: quem preencheu o
+        formulário escolheu, e um 201 que muda a escolha em silêncio é pior que um campo a menos.
+
+        `discovery_agendado` é a única expressão de "a reserva viva do mandato" — a mesma que a
+        rota pública e `registrar_sessao_no_projeto` consultam. Reescrever o filtro aqui seria uma
+        segunda definição de "viva", que diverge da primeira no dia em que `Booking` ganhar estado.
+
+        A conversão passa por `DateTimeField.to_representation` e não pelo `datetime` cru: método
+        devolve o valor como está, e um `datetime` solto sairia formatado pelo encoder do renderer
+        em vez de pelo `DATETIME_FORMAT` do projeto — uma data com formato próprio no meio de um
+        recurso onde todas as outras concordam.
+        """
+        reserva = discovery_booking.discovery_agendado(obj)
+        if reserva is None:
+            return None
+        return cast(str, serializers.DateTimeField().to_representation(reserva.starts_at))
+
+    @extend_schema_field(serializers.CharField())
+    def get_whatsapp_group_id(self, obj: Engagement) -> str:
+        return kickoff.grupo_do_mandato(obj)[0]
+
+    @extend_schema_field(serializers.CharField())
+    def get_whatsapp_group_invite_url(self, obj: Engagement) -> str:
+        return kickoff.grupo_do_mandato(obj)[1]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Repete no contrato HTTP a invariante 13 que `Engagement.clean()` sustenta no modelo.
@@ -977,6 +1037,27 @@ class SatisfacaoSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Sati
         return attrs
 
 
+class PublicationStateSerializer(serializers.Serializer):
+    """O campo derivado `publication_state` (issue `#108`, DAP `dap-publicacao-discovery-r1`
+    decisão E1), reusado pelos cinco serializers publicáveis via `source="*"` — `source="*"`
+    entrega o objeto inteiro a `to_representation`, que delega por inteiro a
+    `publication.estado_de_publicacao`.
+
+    Um serializer comum (não de modelo) em vez de cinco `SerializerMethodField` sem tipo: assim o
+    drf-spectacular gera um componente de verdade, e não um `object` solto repetido cinco vezes.
+    Nenhum campo daqui decide nada — a regra e as frases moram só em `publication.py`.
+    """
+
+    state = serializers.ChoiceField(choices=["published", "ready", "blocked"], read_only=True)
+    missing = serializers.ListField(child=serializers.CharField(), read_only=True)
+    missing_phrase = serializers.CharField(read_only=True)
+    blocked_by = serializers.IntegerField(read_only=True)
+    blocked_phrase = serializers.CharField(read_only=True)
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        return publication.estado_de_publicacao(instance)
+
+
 class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process]):
     """O processo mapeado no Discovery (FDD 039), com a conta do custo do estado atual junto.
 
@@ -999,16 +1080,17 @@ class ProcessSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Process
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     client_name = serializers.CharField(source="account.name", read_only=True)
     custo = serializers.SerializerMethodField()
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = Process
         fields = ["id", "account", "client", "client_name", "name", "position", "source_project",
                   "source_meeting", "registered_by", "volume_mes", "tempo_horas", "pessoas",
                   "custo_hora", "retrabalho_mes", "erros_mes", "perdas_mes", "espera_mes",
-                  "risco_mes", "custo", "published_at", "published_by",
+                  "risco_mes", "custo", "published_at", "published_by", "publication_state",
                   "created_at", "updated_at"]
         read_only_fields = ["id", "client_name", "registered_by", "custo", "published_at",
-                            "published_by", "created_at", "updated_at"]
+                            "published_by", "publication_state", "created_at", "updated_at"]
 
     @extend_schema_field(serializers.DictField())
     def get_custo(self, processo: Process) -> dict[str, Any]:
@@ -1161,15 +1243,17 @@ class EvidenceSerializer(serializers.ModelSerializer[Evidence]):
     """
 
     kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = Evidence
         fields = ["id", "account", "discovery", "process", "step", "kind", "kind_display",
                   "raw_excerpt", "reference", "source_session", "source_meeting", "captured_at",
                   "captured_by", "content_hash", "published_at", "published_by",
-                  "created_at", "updated_at"]
+                  "publication_state", "created_at", "updated_at"]
         read_only_fields = ["id", "kind_display", "captured_by", "content_hash",
-                            "published_at", "published_by", "created_at", "updated_at"]
+                            "published_at", "published_by", "publication_state",
+                            "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """A mesma regra do `clean()` do modelo — o `save()` do DRF não chama `full_clean`."""
@@ -1285,14 +1369,17 @@ class FindingSerializer(serializers.ModelSerializer[Finding]):
     epistemic_status_display = serializers.CharField(
         source="get_epistemic_status_display", read_only=True
     )
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = Finding
         fields = ["id", "account", "process", "step", "statement", "epistemic_status",
                   "epistemic_status_display", "confidence", "reviewed_by", "reviewed_at",
-                  "evidences", "published_at", "published_by", "created_at", "updated_at"]
+                  "evidences", "published_at", "published_by", "publication_state",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "epistemic_status_display", "reviewed_at",
-                            "published_at", "published_by", "created_at", "updated_at"]
+                            "published_at", "published_by", "publication_state",
+                            "created_at", "updated_at"]
 
     def validate_epistemic_status(self, value: str) -> str:
         if self.instance is None:
@@ -1384,14 +1471,16 @@ class PainPointSerializer(serializers.ModelSerializer[PainPoint]):
 
     impact_type_display = serializers.CharField(source="get_impact_type_display", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
 
     class Meta:
         model = PainPoint
         fields = ["id", "account", "process", "step", "title", "description", "impact_type",
                   "impact_type_display", "impact_estimate", "findings", "status",
-                  "status_display", "published_at", "published_by", "created_at", "updated_at"]
+                  "status_display", "published_at", "published_by", "publication_state",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "impact_type_display", "status_display", "published_at",
-                            "published_by", "created_at", "updated_at"]
+                            "published_by", "publication_state", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """As mesmas regras do `clean()` — o `save()` do DRF não chama `full_clean` —, mais o M2M."""
@@ -1453,6 +1542,7 @@ class ImprovementOpportunitySerializer(serializers.ModelSerializer[ImprovementOp
     score = serializers.SerializerMethodField()
     assessment_version = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
+    publication_state = PublicationStateSerializer(source="*", read_only=True)
     # `conta -> {id da oportunidade: posição}`, memorizado por serialização.
     _ranking_cache: dict[int, dict[int, int]] | None = None
 
@@ -1460,9 +1550,11 @@ class ImprovementOpportunitySerializer(serializers.ModelSerializer[ImprovementOp
         model = ImprovementOpportunity
         fields = ["id", "account", "engagement", "title", "desired_change", "impact_hypothesis",
                   "pain_points", "status", "status_display", "score", "assessment_version",
-                  "rank", "published_at", "published_by", "created_at", "updated_at"]
+                  "rank", "published_at", "published_by", "publication_state",
+                  "created_at", "updated_at"]
         read_only_fields = ["id", "status_display", "score", "assessment_version", "rank",
-                            "published_at", "published_by", "created_at", "updated_at"]
+                            "published_at", "published_by", "publication_state",
+                            "created_at", "updated_at"]
 
     @extend_schema_field(serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True))
     def get_score(self, obj: ImprovementOpportunity) -> str | None:
@@ -2062,7 +2154,8 @@ class SignatureRequestSerializer(serializers.ModelSerializer[SignatureRequest]):
     class Meta:
         model = SignatureRequest
         fields = [
-            "id", "signer_email", "status", "sign_url", "reminded_at", "signed_at", "created_at",
+            "id", "signer_email", "signer_role", "status", "sign_url", "reminded_at", "signed_at",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -2100,13 +2193,19 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
     client = serializers.PrimaryKeyRelatedField(source="account", read_only=True)
     signature_requests = SignatureRequestSerializer(many=True, read_only=True)
     originated_engagement = serializers.SerializerMethodField()
+    # A conta-dona **derivada** (DAP `dap-assinatura-com-papeis-r1`, B1) — não é a chave `client`,
+    # que é alias de leitura do vínculo direto. São fatos diferentes e não compartilham nome: um
+    # contrato pendurado em oportunidade ou projeto sai com `client: null` e conta-dona preenchida.
+    owning_account = serializers.SerializerMethodField()
+    signature_positioning_gap = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
         fields = [
-            "id", "account", "client", "commercial_opportunity", "opportunity", "project", "file",
-            "drive_link", "original_name",
+            "id", "account", "client", "commercial_opportunity", "opportunity", "project", "kind",
+            "file", "drive_link", "original_name",
             "uploaded_by", "created_at", "signature_requests", "originated_engagement",
+            "owning_account", "signature_positioning_gap",
         ]
         read_only_fields = ["id", "drive_link", "original_name", "uploaded_by", "created_at"]
 
@@ -2117,12 +2216,32 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
         except Engagement.DoesNotExist:
             return None
 
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_owning_account(self, obj: Document) -> int | None:
+        # `drive.account_of` é o lugar único da cadeia conta → oportunidade → projeto.engagement;
+        # reexpressá-la aqui seria a segunda definição de "de quem é este documento".
+        account = drive.account_of(obj)
+        return account.pk if account is not None else None
+
+    @extend_schema_field(
+        serializers.ChoiceField(choices=["not_pdf", "kind_without_block"], allow_null=True)
+    )
+    def get_signature_positioning_gap(self, obj: Document) -> str | None:
+        return esign.lacuna_de_posicionamento(obj)
+
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         links = [
             attrs.get("account"), attrs.get("commercial_opportunity"), attrs.get("project")
         ]
         if sum(value is not None for value in links) != 1:
             raise serializers.ValidationError("Vincule o documento a exatamente um cliente, oportunidade ou projeto.")
+        escolhido = cast(str, attrs.get("kind") or "")
+        if escolhido in DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT and attrs.get("account") is None:
+            # Mesma razão do `Document.clean()`: o rótulo vem do valor escolhido.
+            raise serializers.ValidationError({
+                "kind": f"O documento marcado como «{Document.Kind(escolhido).label}» deve "
+                        "estar vinculado a uma conta, nunca a uma oportunidade ou projeto."
+            })
         uploaded_file = cast(UploadedFile | None, attrs.get("file"))
         if uploaded_file is None:
             raise serializers.ValidationError({"file": "Envie um arquivo."})
@@ -2138,9 +2257,16 @@ class DocumentSerializer(AliasDeEntradaMixin, serializers.ModelSerializer[Docume
 
     def create(self, validated_data: dict[str, object]) -> Document:
         uploaded_file = cast(UploadedFile, validated_data.pop("file"))
+        # O único momento em que os bytes estão em mãos (`Document.content_is_pdf`). O `seek(0)`
+        # não é higiene: `drive.upload_document` faz `uploaded_file.read()` cru, e sem rebobinar
+        # o Drive receberia o arquivo sem os cinco primeiros bytes — falha muda, porque aquele
+        # caminho é I/O e não roda nos testes.
+        prefixo = uploaded_file.read(5)
+        uploaded_file.seek(0)
         document = Document(
             **validated_data,
             original_name=_safe_original_name(uploaded_file.name),
+            content_is_pdf=prefixo.startswith(b"%PDF"),
             uploaded_by=self.context["request"].user,
         )
         if drive.is_enabled():

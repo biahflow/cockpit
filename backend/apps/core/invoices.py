@@ -139,9 +139,19 @@ def seed_invoices(project: Project) -> int:
     Nada sai de `draft` sozinho: débito automático não existe neste recorte, e emitir é ato
     deliberado de gente. Idempotente por existência, como `cases.freeze_if_completed`.
     """
-    from .models import Invoice
+    from .models import Engagement, Invoice
 
     if project.invoices.exists():
+        return 0
+    # **Design Partner não fatura, e a guarda mora aqui.** É o significado do campo: o mandato
+    # recebe o Discovery de graça em troca de servir como caso e prova (ADR 0050). Sem esta linha,
+    # um projeto nascido pela rota do mandato (`create-project`, DAP r3) cairia no
+    # `Service.list_price` do degrau — o Discovery Sprint vale R$ 3.000 desde a migração `0064` —
+    # e a casa emitiria rascunho de cobrança contra quem ela decidiu não cobrar.
+    #
+    # Aqui e não na action porque é aqui que a cobrança se decide: quem semeia fatura pergunta uma
+    # vez só, e a próxima rota que criar projeto herda a resposta em vez de repetir a pergunta.
+    if project.engagement.commercial_model == Engagement.CommercialModel.DESIGN_PARTNER:
         return 0
     parcelas = schedule_for(project)
     base = contracted_value(project)

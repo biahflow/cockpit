@@ -10,7 +10,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from pgvector.django import VectorField
 
@@ -283,6 +283,18 @@ class Engagement(TimestampedModel):
         blank=True,
         related_name="originated_design_partner_engagement",
     )
+    # O grupo do cliente no WhatsApp, aberto pelo kickoff — desde 04/09/2026 (issue #119) o grupo
+    # **novo** nasce aqui, e não mais em `Project` (o par legado continua em
+    # `Project.whatsapp_group_id`/`.whatsapp_group_invite_url`, ver o comentário lá). O racional é
+    # o que o comentário de 03/09/2026 já antecipava: o `Engagement` é, por definição (ADR 0050),
+    # "o mesmo trabalho" — um mandato com Discovery → Feasibility → PROVE abria três grupos com o
+    # mesmo cliente, um por projeto, e o custo caía sobre quem via a lista de grupos: o cliente.
+    #
+    # **São dois campos porque são dois fatos**, o mesmo par de sempre: o JID identifica o grupo
+    # para mandar mensagem depois (`whatsapp.send_group_text`), e o link de convite é o que se
+    # entrega a uma pessoa. A UAZAPI pode devolver o primeiro sem o segundo.
+    whatsapp_group_id = models.CharField(max_length=128, blank=True, default="")
+    whatsapp_group_invite_url = models.URLField(blank=True, default="")
 
     class Meta:
         ordering = ["-started_at", "-id"]
@@ -546,6 +558,26 @@ class Project(TimestampedModel):
     actual_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     drive_folder_id = models.CharField(max_length=128, blank=True, default="")
+    # O grupo do cliente no WhatsApp, aberto pelo kickoff (issue #110, emenda de 03/09/2026 na
+    # FDD 008). Referência de fornecedor morando num modelo do domínio, no precedente do
+    # `drive_folder_id` acima e do `payment_customer_ref` da conta.
+    #
+    # **São dois campos porque são dois fatos**, e não a mesma coisa em formatos diferentes: o JID
+    # identifica o grupo para mandar mensagem depois (`whatsapp.send_group_text`), e o link de
+    # convite é o que se entrega a uma pessoa. A UAZAPI pode devolver o primeiro sem o segundo, e
+    # espremer os dois num campo só obrigaria a adivinhar qual chegou.
+    #
+    # **Legado, desde 04/09/2026 (issue #119).** A referência do grupo passou ao `Engagement`
+    # (`Engagement.whatsapp_group_id`/`.whatsapp_group_invite_url`) — exatamente a revisão que este
+    # comentário antecipava em 03/09/2026: o mandato é, por definição (ADR 0050), "o mesmo
+    # trabalho", e um canal por projeto abria três grupos com o mesmo cliente num mandato com
+    # Discovery → Feasibility → PROVE. Estes dois campos não recebem mais gravação nova; guardam a
+    # referência dos grupos que já existem de verdade, com gente dentro — removê-los apagaria essa
+    # referência, e renomear/migrar o grupo em si é efeito externo visível ao cliente, o que a
+    # decisão recusou. `kickoff.abrir_grupo_de_whatsapp` continua lendo-os, como guarda de
+    # idempotência para o acervo criado antes da revisão.
+    whatsapp_group_id = models.CharField(max_length=128, blank=True, default="")
+    whatsapp_group_invite_url = models.URLField(blank=True, default="")
     # AI Score de maturidade/oportunidade de IA (Fase 4 — FDD 014). Gerado a partir da
     # transcrição de uma reunião (Discovery/Assessment) e revisado por humano antes de cruzar
     # ao portal do cliente. Vazio até a IA rodar; só publica quando `ai_score_reviewed`.
@@ -949,12 +981,23 @@ class GithubWebhookDelivery(models.Model):
 
 
 class Document(TimestampedModel):
+    class Kind(models.TextChoices):
+        DESIGN_PARTNER_AGREEMENT = "design_partner_agreement", "Design Partner Agreement"
+        NDA = "nda", "NDA"
+        COMMERCIAL_CONTRACT = "commercial_contract", "Contrato comercial"
+        PROPOSAL = "proposal", "Proposta"
+
     account = models.ForeignKey(Account, on_delete=models.CASCADE, null=True, blank=True)
     commercial_opportunity = models.ForeignKey(
         CommercialOpportunity, on_delete=models.CASCADE, null=True, blank=True
     )
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
+    kind = models.CharField(max_length=32, choices=Kind.choices, blank=True, default="")
     file = models.FileField(upload_to="documents/%Y/%m/", blank=True)
+    # Carimbado **no upload**, quando os bytes estão em mãos: com o Drive ligado o arquivo só
+    # existe lá, e farejar na leitura custaria um download por documento na listagem. `null` é a
+    # linha anterior ao carimbo — "não medido", nunca `False` (a regra do não-apurado).
+    content_is_pdf = models.BooleanField(null=True, default=None)
     drive_file_id = models.CharField(max_length=128, blank=True, default="")
     drive_link = models.URLField(blank=True, default="")
     original_name = models.CharField(max_length=255)
@@ -964,23 +1007,68 @@ class Document(TimestampedModel):
         links = [self.account_id, self.commercial_opportunity_id, self.project_id]
         if sum(value is not None for value in links) != 1:
             raise ValidationError("O documento deve estar vinculado a exatamente um recurso.")
+        if self.kind in DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT and self.account_id is None:
+            # O rótulo sai do próprio valor escolhido, e não cravado: a constante tem um membro
+            # hoje e a frase bateria, mas no dia em que entrar o segundo ela nomearia o documento
+            # errado — a segunda definição divergente que esta refatoração existe para impedir.
+            raise ValidationError(
+                f"O documento marcado como «{self.Kind(self.kind).label}» deve estar vinculado a "
+                "uma conta, nunca a uma oportunidade ou projeto."
+            )
 
     @property
     def linked_resource(self) -> Account | CommercialOpportunity | Project | None:
         return self.account or self.commercial_opportunity or self.project
 
     @property
-    def is_signed(self) -> bool:
-        """Há uma assinatura concluída e datada para este documento.
+    def rodada_assinada(self) -> str | None:
+        """A referência da **rodada** deste documento em que todos assinaram — `None` se não há.
 
         `status=signed` sem `signed_at` é estado incompleto: os dois caminhos reais que fecham a
         assinatura (`mark-signed` e webhook) gravam ambos. Exigir os dois impede que um update cru
         de status transforme um arquivo em instrumento contratual sem carimbo temporal.
+
+        A pergunta é por rodada, e não por documento, desde a issue #115. Antes era um `.exists()`
+        — com um signatário só, "alguém assinou" e "está assinado" eram a mesma frase. Com a casa,
+        a parte contratante e uma testemunha na mesma solicitação, deixaram de ser: a assinatura da
+        casa tornaria o instrumento "assinado" antes de o cliente sequer abrir o link, e daí sairiam
+        o artefato aceito e o mandato de Design Partner aberto.
+
+        A rodada é o `document_ref`, e **toda solicitação tem uma** — a do fornecedor quando ele
+        devolve o `id` do `createDocument`, ou a cunhada por `esign.send_for_signature` (prefixo
+        `local:`) quando não há fornecedor. Sem esse cunho, o registro local deixaria todas as
+        solicitações do documento com `document_ref` vazio, ou seja, na *mesma* rodada: um
+        documento recusado, reenviado e assinado à mão ficaria com uma concluída e uma recusada no
+        mesmo grupo, e nunca mais contaria como assinado — o `NullProvider` é modo previsto, não
+        degradado, e o `mark-signed` manual é caminho legítimo nele.
+
+        Devolve a referência, e não um booleano, porque quem precisa saber *qual* rodada fechou
+        também precisa saber quem era a contraparte **dela** (`esign.email_da_contraparte`). Duas
+        consultas parecidas para a mesma pergunta divergiriam no primeiro conserto.
         """
-        return self.signature_requests.filter(
-            status=SignatureRequest.Status.SIGNED,
-            signed_at__isnull=False,
-        ).exists()
+        rodadas = self.signature_requests.values("document_ref").annotate(
+            total=Count("id"),
+            concluidas=Count(
+                "id",
+                filter=Q(status=SignatureRequest.Status.SIGNED, signed_at__isnull=False),
+            ),
+        )
+        fechadas = [r["document_ref"] for r in rodadas if r["total"] == r["concluidas"]]
+        return fechadas[0] if fechadas else None
+
+    @property
+    def is_signed(self) -> bool:
+        """Há uma rodada deste documento em que todos assinaram, com data."""
+        return self.rodada_assinada is not None
+
+
+# `kind` responde "que documento é este?" — uma pergunta só, de classificação. Abrir um
+# `Engagement` ao ser assinado é *consequência*, e a decisão de quais tipos disparam essa
+# consequência mora aqui, num lugar só (ADR 0061): acrescentar um segundo instrumento que abre
+# mandato é uma entrada nesta constante, não uma condição nova espalhada por `design_partner.py`.
+# A âncora obrigatória em `Account` (acima, em `clean()`, e em `DocumentSerializer.validate()`)
+# segue o comportamento, não o valor — por isso ela também testa pertencimento a este conjunto.
+DOCUMENT_KINDS_QUE_ABREM_ENGAGEMENT = frozenset({Document.Kind.DESIGN_PARTNER_AGREEMENT})
 
 
 class Meeting(TimestampedModel):
@@ -1326,10 +1414,19 @@ class Qualification(TimestampedModel):
 
 
 class Booking(TimestampedModel):
-    """Reunião de pré-venda agendada por um lead qualificado (FDD 013).
+    """Horário reservado na agenda da casa — pela pré-venda (`lead`) ou pelo Discovery
+    (`engagement`), FDD 013.
 
-    Diferente de `Meeting` (presa a um projeto), guarda o agendamento no próprio lead, antes
-    de existir oportunidade/projeto. O evento correspondente vive no Google Calendar.
+    Diferente de `Meeting` (presa a um projeto), guarda o agendamento antes de existir
+    oportunidade/projeto. O evento correspondente vive no Google Calendar.
+
+    **A linha existe porque o evento no Google pode falhar.** É esta tabela que
+    `booking.available_slots`/`booking.book` consultam para saber o que já está tomado, e
+    `book()` grava a reserva antes de tentar criar o evento justamente porque a criação é
+    best-effort. Se o Discovery agendasse só no Google, um Discovery cujo evento não entrou
+    deixaria o horário parecendo livre para a pré-venda — e vice-versa. Por isso os dois
+    fluxos gravam aqui, e por isso `lead` deixou de ser obrigatório: o Design Partner não
+    tem lead, ele nasce do acordo assinado.
     """
 
     class Status(models.TextChoices):
@@ -1337,7 +1434,12 @@ class Booking(TimestampedModel):
         HELD = "held", "Realizada"
         CANCELED = "canceled", "Cancelada"
 
-    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="bookings")
+    lead = models.ForeignKey(
+        Lead, on_delete=models.CASCADE, null=True, blank=True, related_name="bookings"
+    )
+    engagement = models.ForeignKey(
+        Engagement, on_delete=models.CASCADE, null=True, blank=True, related_name="bookings"
+    )
     owner = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="bookings"
     )
@@ -1350,9 +1452,38 @@ class Booking(TimestampedModel):
 
     class Meta:
         ordering = ["starts_at"]
+        constraints = [
+            # "Exatamente um", no molde de `engagement_has_one_origin_or_needs_review`: os dois
+            # nulos deixariam uma reserva sem dono nenhum, e os dois preenchidos fariam a mesma
+            # linha responder por duas origens. `clean()` espelha a regra para a mensagem chegar
+            # à tela, mas quem garante é o banco — shell, admin e migração não passam por
+            # serializer.
+            models.CheckConstraint(
+                condition=(
+                    Q(lead__isnull=False, engagement__isnull=True)
+                    | Q(lead__isnull=True, engagement__isnull=False)
+                ),
+                name="booking_has_exactly_one_origin",
+            )
+        ]
 
     def __str__(self) -> str:
-        return f"{self.lead.name} @ {self.starts_at:%Y-%m-%d %H:%M}"
+        lead = self.lead if self.lead_id else None
+        engagement = self.engagement if self.engagement_id else None
+        if lead is not None:
+            quem = lead.name
+        elif engagement is not None:
+            quem = engagement.account.name
+        else:  # pragma: no cover - a restrição de banco impede
+            quem = "sem origem"
+        return f"{quem} @ {self.starts_at:%Y-%m-%d %H:%M}"
+
+    def clean(self) -> None:
+        if bool(self.lead_id) == bool(self.engagement_id):
+            raise ValidationError(
+                {"lead": "A reserva pertence a um lead (pré-venda) ou a um engagement "
+                         "(Discovery) — exatamente um."}
+            )
 
 
 class Activity(TimestampedModel):
@@ -2498,8 +2629,28 @@ class SignatureRequest(models.Model):
         SIGNED = "signed", "Assinado"
         DECLINED = "declined", "Recusado"
 
+    class SignerRole(models.TextChoices):
+        """Quem é este signatário no instrumento — a casa, a outra parte, ou quem testemunha.
+
+        O papel não é enfeite: ele decide **onde** a assinatura aparece na página (o mapa de
+        posições vive num lugar só, em `esign.py`), qual `action` vai para o fornecedor
+        (testemunha assina como testemunha) e, na volta, para quem sai o convite do Discovery —
+        que é o cliente, nunca a casa nem a testemunha.
+        """
+
+        HOUSE = "house", "Biahflow"
+        COUNTERPARTY = "counterparty", "Parte contratante"
+        WITNESS = "witness", "Testemunha"
+
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="signature_requests")
     signer_email = models.EmailField()
+    # `counterparty` como default é a **decisão**, não conveniência: até a issue #115 o único
+    # signatário que existia era a outra parte, então toda linha já gravada está certa sob esse
+    # default e nenhum backfill é necessário. Um default vazio exigiria adivinhar o papel de cada
+    # assinatura histórica — e adivinhar aqui é escrever quem assinou o quê.
+    signer_role = models.CharField(
+        max_length=16, choices=SignerRole.choices, default=SignerRole.COUNTERPARTY
+    )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     # Referências do fornecedor (ADR 0007): `provider_ref` casa 1:1 com o signatário e é a
     # chave de busca do webhook; `document_ref` é o fallback junto com o e-mail.

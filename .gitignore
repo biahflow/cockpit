@@ -17,3 +17,6 @@ staticfiles/
 *.sqlite3
 coverage/
 .DS_Store
+
+# Sobreposição local do compose (credencial do gcloud, portas, etc.) — nunca versionada.
+docker-compose.override.yml

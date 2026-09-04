@@ -151,6 +151,16 @@ def jobs() -> list[Job]:
             schedule=Daily(_parse_at(settings.SCHEDULER_DUNNING_AT, time(9, 30))),
             description="Régua de cobrança: o degrau que cabe hoje (FDD 036)",
         ),
+        # **Antes do digest**, e a ordem é a leitura do dia: o resumo das 07:30 anuncia o que está
+        # agendado, e a sessão de ontem ainda constaria como marcada se a apuração viesse depois.
+        # Às 06:30 e não junto do vencimento das 06:00 porque são apurações independentes — dois
+        # jobs no mesmo minuto disputam o mesmo tique sem precisar.
+        Job(
+            name="sessions_held",
+            command="mark_sessions_held",
+            schedule=Daily(_parse_at(settings.SCHEDULER_SESSIONS_AT, time(6, 30))),
+            description="Reserva e reunião com horário passado viram realizadas (FDD 013)",
+        ),
         Job(
             name="knowledge_freshness",
             command="check_knowledge_freshness",

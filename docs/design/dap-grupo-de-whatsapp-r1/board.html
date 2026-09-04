@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — O grupo do cliente na linha do mandato · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-200:#dd8b62; --brand-500:#bd4a30; --brand-600:#a8412a; --brand-700:#9c3c26;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --info:#1d4ed8; --info-50:#eff6ff;
+  --slate-100:#f1f5f9; --slate-600:#475569; --slate-700:#334155;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+
+/* ---- primitivas espelhadas de src/index.css (mesmo subconjunto dos boards anteriores) ---- */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:24px;box-shadow:var(--shadow-card)}
+.panel--flush{overflow:hidden;padding:0}
+.panel-heading{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel-heading h2{margin:0;font-size:var(--text-title);line-height:var(--lh-title);font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);border:0;padding:0}
+.panel-heading p{margin:2px 0 0;font-size:var(--text-body);color:var(--slate-600)}
+.panel-rows>.row+.row{border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px 24px}
+.row-main{min-width:0;flex:1;overflow-wrap:anywhere}
+.row-main strong{display:block;font-size:var(--text-body);font-weight:600;color:var(--ink)}
+.row-main span{display:block;margin-top:.125rem;font-size:var(--text-label);line-height:1.05rem;color:var(--muted)}
+.row-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1 1 100%;margin-top:2px}
+.metric-icon{display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;
+  border-radius:var(--radius-control);background:var(--brand-50);color:var(--brand-500)}
+.state{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:4px 10px;
+  font-size:11px;line-height:1rem;font-weight:600;white-space:nowrap}
+.state--1{background:var(--success-50);color:var(--success)}
+.state--off{background:var(--slate-100);color:var(--slate-600)}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit;white-space:nowrap}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn--icon{width:44px;height:44px;min-height:0;padding:0;flex:0 0 auto}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+/* O link externo discreto — molde do link "Drive" da linha de documento
+   (`DocumentsPage.tsx`: `text-xs font-semibold text-slate-600 hover:text-accent`). */
+.link-externo{display:inline-flex;align-items:center;gap:5px;font-size:var(--text-label);
+  font-weight:600;color:var(--slate-600);text-decoration:none}
+.link-externo:hover{color:var(--brand-500)}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--14{width:14px;height:14px}
+.actions-row{margin-left:auto;display:flex;gap:6px}
+.mobile{max-width:342px;margin:0 auto}
+.mobile .row{padding:16px 20px}
+@media (max-width:560px){
+  .wrap{padding:28px 16px 64px}
+  .grid{grid-template-columns:minmax(0,1fr)}
+  h1{font-size:1.5rem;line-height:1.875rem}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package · revisão 1</p>
+<h1>O grupo do cliente na linha do mandato</h1>
+<p class="lede">Issue <code>#116</code>. Desde a <code>#119</code> o grupo é do <code>Engagement</code>
+— e não há como vê-lo em tela nenhuma. Todo estilo aqui espelha <code>src/index.css</code>;
+nenhum valor é inventado neste board.</p>
+
+<h2>1 · A linha do mandato, com o grupo</h2>
+<p class="note">Decisões <strong>A1</strong> e <strong>D1</strong>: o link entra na faixa de meta
+da linha do mandato — a seção "Engagements" do detalhe da conta, governada pelo DAP
+<code>dap-engagement-r1/r3</code> —, junto das duas pílulas e antes dos botões de ação. O molde é
+o link "Drive" da linha de documento: discreto em repouso, tinta da marca no hover.</p>
+
+<div class="stage">
+  <div class="panel panel--flush">
+    <div class="panel-rows">
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main">
+          <strong>Transformação do faturamento e do fiscal</strong>
+          <span>Patrocínio de Maria de Lourdes Albuquerque</span>
+          <span>Desde 03/2026 · 3 projetos</span>
+        </div>
+        <div class="row-meta">
+          <span class="state state--1">Ativo</span>
+          <span class="state state--off">Pago</span>
+          <a class="link-externo" href="#" onclick="return false">
+            <svg class="ico ico--14" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>
+            Grupo no WhatsApp
+            <svg class="ico ico--14" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+          </a>
+          <div class="actions-row">
+            <span class="btn btn--secondary" style="min-height:36px;padding:6px 12px">Novo projeto</span>
+            <span class="btn btn--secondary btn--icon" style="width:36px;height:36px" aria-label="Editar"><svg class="ico" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="note"><strong>De onde vem o dado é a decisão B1</strong>: o serializer do mandato emite o
+par do grupo num lugar só — o do próprio <code>Engagement</code> quando existe; senão, o do projeto
+vivo mais antigo com grupo legado. A tela não sabe a diferença, e é o ponto: o único grupo real de
+hoje é legado, e uma tela que estreasse sem mostrá-lo nasceria mentindo por omissão.</p>
+
+<h2>2 · Grupo criado, sem link de convite</h2>
+<p class="note">Decisão <strong>D1</strong>, segunda metade: a UAZAPI pode devolver o JID sem o
+link. São dois fatos — o canal <em>existe</em>, e é isso que quem olha precisa saber para não criar
+outro. Texto sem affordance, nunca um link morto; o JID em si não aparece, porque não serve para
+uma pessoa.</p>
+
+<div class="stage">
+  <div class="panel panel--flush">
+    <div class="panel-rows">
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main">
+          <strong>Atendimento assistido por IA</strong>
+          <span>Desde 08/2026 · 1 projeto</span>
+        </div>
+        <div class="row-meta">
+          <span class="state state--1">Ativo</span>
+          <span class="state state--off">Design Partner</span>
+          <span class="type-meta" style="color:var(--muted)">Grupo criado · sem link de convite</span>
+          <div class="actions-row">
+            <span class="btn btn--secondary" style="min-height:36px;padding:6px 12px">Novo projeto</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>3 · Sem grupo, silêncio</h2>
+<p class="note">Decisão <strong>C1</strong>: a linha simplesmente não tem o link — a regra do
+e-mail de kickoff (FDD 008): <em>"Grupo: — seria pior do que o silêncio: anuncia um canal e não
+entrega nenhum."</em> As quatro ausências que as guardas produzem não se nomeiam aqui; a única
+perigosa (criação incerta) já notifica o dono do projeto desde a <code>#117</code>, com a saída na
+mensagem.</p>
+
+<div class="stage">
+  <div class="panel panel--flush">
+    <div class="panel-rows">
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main">
+          <strong>Qualificação técnica</strong>
+          <span>Desde 09/2026 · 1 projeto</span>
+        </div>
+        <div class="row-meta">
+          <span class="state state--1">Ativo</span>
+          <span class="state state--off">Pago</span>
+          <div class="actions-row">
+            <span class="btn btn--secondary" style="min-height:36px;padding:6px 12px">Novo projeto</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>4 · Mobile (390px)</h2>
+<p class="note">A faixa de meta já quebra em linha própria (<code>.row-meta</code> é
+<code>flex-wrap</code> com <code>flex:1 1 100%</code>); o link acompanha as pílulas e envolve para
+a linha seguinte quando falta largura. Nada de novo — é o comportamento que a linha do mandato já
+tem.</p>
+
+<div class="stage mobile">
+  <div class="panel panel--flush">
+    <div class="panel-rows">
+      <div class="row">
+        <span class="metric-icon"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        <div class="row-main">
+          <strong>Transformação do faturamento e do fiscal</strong>
+          <span>Desde 03/2026 · 3 projetos</span>
+        </div>
+        <div class="row-meta">
+          <span class="state state--1">Ativo</span>
+          <span class="state state--off">Pago</span>
+        </div>
+        <div class="row-meta">
+          <a class="link-externo" href="#" onclick="return false">
+            <svg class="ico ico--14" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>
+            Grupo no WhatsApp
+            <svg class="ico ico--14" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="m10 14 11-11"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Reservado — não faz parte desta revisão</h2>
+<div class="grid">
+  <figure class="spec reserved">
+    <figcaption>Criar o grupo pela tela</figcaption>
+    <p class="note" style="margin:0">Ação com efeito externo e um segundo caminho para o mesmo ato
+    — hoje só o kickoff cria. Volta em r2 com um caso real e decisão própria.</p>
+  </figure>
+  <figure class="spec reserved">
+    <figcaption>Mandar mensagem ao grupo</figcaption>
+    <p class="note" style="margin:0"><code>send_group_text</code> segue sem chamador de
+    propósito.</p>
+  </figure>
+  <figure class="spec reserved">
+    <figcaption>Backfill do acervo</figcaption>
+    <p class="note" style="margin:0">Recuperar referência de grupo criado fora do produto é
+    operação sobre dado real, com decisão própria.</p>
+  </figure>
+</div>
+
+<hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+<p class="type-meta" style="color:var(--muted)">Aprovar este pacote autoriza planejar e construir a
+revisão que ele descreve. Mudança de superfície depois disso exige r2, e não julgamento na hora.</p>
+
+</div>
+</body>
+</html>

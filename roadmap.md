@@ -65,6 +65,7 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 050 | `kpis[]` e `value_ledger[]` no snapshot do portal do cliente (issue #105) | Entregue | 1 | `docs/fdd/050-a-cadeia-de-medicao-parava-na-fronteira-do-cliente.md` |
 | ADR 0060 | Publicabilidade é campo próprio, e publicar é o ato de revisão humana da §3 (issue #106) | Entregue | 1 | `docs/adr/0060-publicavel-e-campo-proprio-e-publicar-e-o-ato-de-revisao.md` |
 | FDD 051 | O Discovery no snapshot do portal, atrás da marca de publicável (issue #106) | Entregue | 1 | `docs/fdd/051-o-discovery-chegava-ao-cliente-como-documento.md` |
+| FDD 052 | Tela de publicação do Discovery e o campo derivado `publication_state` (issue #108) | Entregue | 1 | `docs/fdd/052-publicar-o-discovery-era-uma-chamada-de-api.md` |
 
 ## Base atual — entregue
 

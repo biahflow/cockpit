@@ -580,11 +580,15 @@ def test_remind_signature_and_mark_signed_close_the_loop(api_client: APIClient, 
         assert signed.status_code == 200
         assert signed.data["status"] == "signed"
         assert signed.data["signed_at"] is not None
+        # `mark-signed` passou a passar por `esign.apply_decision`, o mesmo caminho do webhook —
+        # ela notifica quem subiu o documento, e a flag `email` (ligada por padrão) espelha isso
+        # por e-mail. Antes desta tarefa o fallback manual não fazia nenhum dos dois.
+        assert len(mailoutbox) == 2
 
         # Já assinado: um novo lembrete não envia nada.
         again = api_client.post(reverse("document-remind-signature", args=[document["id"]]))
     assert again.data["reminded"] == 0
-    assert len(mailoutbox) == 1
+    assert len(mailoutbox) == 2
 
 
 @pytest.mark.django_db
@@ -808,3 +812,114 @@ def test_meeting_keeps_room_link_and_recording_apart(api_client: APIClient, admi
     assert response.status_code == 201
     assert response.data["meeting_url"] == "https://meet.example/abc"
     assert response.data["recording_url"] == "https://rec.example/abc"
+
+
+# --- o que a tela de assinatura precisa saber antes do clique (issue #120) ----
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media")
+def test_upload_carimba_se_o_conteudo_e_pdf(api_client: APIClient, admin_user: User):
+    """Pelo **conteúdo**, nunca pela extensão: `original_name` é digitado por gente."""
+    account = AccountFactory(owner=admin_user)
+    api_client.force_authenticate(admin_user)
+
+    pdf = api_client.post(
+        reverse("document-list"),
+        {"account": account.id,
+         "file": SimpleUploadedFile("contrato.pdf", b"%PDF-1.7 x", content_type="application/pdf")},
+    ).data
+    docx = api_client.post(
+        reverse("document-list"),
+        {"account": account.id,
+         "file": SimpleUploadedFile("contrato.pdf", b"PK\x03\x04zip", content_type="application/zip")},
+    ).data
+
+    assert Document.objects.get(pk=pdf["id"]).content_is_pdf is True
+    # O `.docx` batizado de `.pdf`: a extensão mentiria e o carimbo não.
+    assert Document.objects.get(pk=docx["id"]).content_is_pdf is False
+    assert docx["signature_positioning_gap"] == "kind_without_block"  # sem finalidade
+
+
+@pytest.mark.django_db
+def test_o_carimbo_nao_come_os_bytes_que_vao_para_o_drive(
+    api_client: APIClient, admin_user: User, monkeypatch
+):
+    """A armadilha do carimbo: `drive.upload_document` faz `read()` cru.
+
+    Sem o `seek(0)` depois de farejar, o Drive recebe o arquivo sem os cinco primeiros bytes — e
+    nada fica vermelho, porque aquele caminho é I/O e não roda na suíte.
+    """
+    from apps.core import drive
+
+    recebido: dict[str, bytes] = {}
+
+    def upload(document, uploaded_file):
+        recebido["conteudo"] = uploaded_file.read()
+        return "drive-1", "https://drive.test/1"
+
+    monkeypatch.setattr(drive, "is_enabled", lambda: True)
+    monkeypatch.setattr(drive, "upload_document", upload)
+
+    account = AccountFactory(owner=admin_user)
+    api_client.force_authenticate(admin_user)
+    criado = api_client.post(
+        reverse("document-list"),
+        {"account": account.id,
+         "file": SimpleUploadedFile("contrato.pdf", b"%PDF-1.7 inteiro", content_type="application/pdf")},
+    ).data
+
+    assert recebido["conteudo"] == b"%PDF-1.7 inteiro"
+    assert Document.objects.get(pk=criado["id"]).content_is_pdf is True
+
+
+@pytest.mark.django_db
+def test_a_conta_dona_sai_derivada_nos_tres_vinculos(api_client: APIClient, admin_user: User):
+    """Decisão B1 do DAP: um contrato pendurado em oportunidade ou projeto tem `client: null` e
+    conta-dona preenchida — são fatos diferentes e não compartilham nome."""
+    account = AccountFactory(owner=admin_user)
+    opportunity = CommercialOpportunityFactory(owner=admin_user)
+    project = ProjectFactory(owner=admin_user)
+    for vinculo in ({"account": account}, {"commercial_opportunity": opportunity}, {"project": project}):
+        Document.objects.create(original_name="contrato.pdf", uploaded_by=admin_user, **vinculo)
+
+    api_client.force_authenticate(admin_user)
+    linhas = {row["id"]: row for row in api_client.get(reverse("document-list")).data}
+    donas = {row["owning_account"] for row in linhas.values()}
+
+    assert donas == {account.pk, opportunity.account_id, project.engagement.account_id}
+    # A chave legada continua sendo o vínculo direto, e não a conta-dona.
+    assert [row["client"] for row in linhas.values() if row["commercial_opportunity"]] == [None]
+
+
+@pytest.mark.django_db
+@override_settings(MEDIA_ROOT="/tmp/biahflow-test-media", ESIGN_ENABLED=True)
+def test_a_listagem_emite_o_papel_de_cada_signatario(api_client: APIClient, admin_user: User):
+    account = AccountFactory(owner=admin_user)
+    api_client.force_authenticate(admin_user)
+    file = SimpleUploadedFile("contrato.pdf", b"%PDF-1.7", content_type="application/pdf")
+    document = api_client.post(reverse("document-list"), {"account": account.id, "file": file}).data
+    api_client.post(
+        reverse("document-request-signature", args=[document["id"]]),
+        {"signers": [{"email": "parte@x.test", "role": "counterparty"},
+                     {"email": "testemunha@x.test", "role": "witness"}]},
+        format="json",
+    )
+
+    linha = api_client.get(reverse("document-list")).data[0]
+    papeis = {r["signer_email"]: r["signer_role"] for r in linha["signature_requests"]}
+
+    assert papeis == {"parte@x.test": "counterparty", "testemunha@x.test": "witness"}
+
+
+@pytest.mark.django_db
+def test_config_publica_o_email_com_que_a_casa_assina(api_client: APIClient, admin_user: User):
+    """Decisão D do DAP: não é segredo — é o endereço que vai no próprio documento. Por isso sai
+    fora do mecanismo de flags, que nunca revela valor."""
+    api_client.force_authenticate(admin_user)
+
+    with override_settings(ESIGN_HOUSE_SIGNER_EMAIL="daniel@biahflow.ai"):
+        assert api_client.get(reverse("config")).data["esign_house_signer_email"] == "daniel@biahflow.ai"
+
+    with override_settings(ESIGN_HOUSE_SIGNER_EMAIL=""):
+        assert api_client.get(reverse("config")).data["esign_house_signer_email"] is None

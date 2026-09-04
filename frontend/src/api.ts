@@ -1,5 +1,5 @@
 import { reportError, setLastRequestId } from "./observability";
-import type { AgentReply, AppConfig, FeasibilityAssessment, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
+import type { AgentReply, AppConfig, Evidence, FeasibilityAssessment, Finding, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Process, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
 
@@ -7,7 +7,7 @@ const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
 // servidor e na tag do evento do Sentry (FDD 020). É o que transforma "deu erro" em uma
 // requisição localizável.
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly requestId: string) {
+  constructor(message: string, readonly status: number, readonly requestId: string, readonly code: string) {
     super(message);
     this.name = "ApiError";
   }
@@ -48,7 +48,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (requestId) setLastRequestId(requestId);
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
-    const erro = new ApiError(detail.detail || fieldErrors(detail) || "Não foi possível concluir a operação.", response.status, requestId);
+    // O `code` distingue estados que o `detail` sozinho não separa — a página de agendamento do
+    // Discovery (DAP `dap-agendamento-discovery-r1`) precisa de um deles (`token_expired` vs.
+    // `token_invalid`, por exemplo) para escolher a mensagem certa sem comparar string em
+    // português.
+    const erro = new ApiError(detail.detail || fieldErrors(detail) || "Não foi possível concluir a operação.", response.status, requestId, detail.code ?? "");
     // Só 5xx: 400/403/404 são o app funcionando (validação, permissão, item removido) e
     // encheriam o Sentry de ruído que já está na tela do usuário.
     if (response.status >= 500) reportError(erro, { requestId, status: response.status, path });
@@ -157,6 +161,23 @@ export function acceptInvitation(payload: { token: string; username: string; pas
   return api<SessionUser>("/invitations/accept/", { method: "POST", body: JSON.stringify(payload) });
 }
 
+// ---------- Agendamento público do Discovery (DAP `dap-agendamento-discovery-r1`) ----------
+// As duas rotas que `AgendarDiscoveryPage` consome, sob `/agendar/<token>`. Públicas no backend
+// (`AllowAny`, token no caminho da SPA) — nenhuma passa por sessão; o `POST` ainda passa por
+// CSRF porque `api()` decide isso pelo método, não pela autenticação.
+
+export type DiscoveryBookingSlots = { account: string; slots: string[]; scheduled_at: string | null };
+
+export function getDiscoveryBookingSlots(token: string): Promise<DiscoveryBookingSlots> {
+  return api<DiscoveryBookingSlots>(`/booking/discovery/slots/?token=${encodeURIComponent(token)}`);
+}
+
+export type DiscoveryBookingConfirmation = { starts_at: string; link: string };
+
+export function bookDiscovery(payload: { token: string; slot_start: string }): Promise<DiscoveryBookingConfirmation> {
+  return api<DiscoveryBookingConfirmation>("/booking/discovery/", { method: "POST", body: JSON.stringify(payload) });
+}
+
 // ---------- A cadeia do PRIORITIZE (FDD 048, ADR 0054) ----------
 // Dor → oportunidade de melhoria → avaliação → hipótese, consumidas pela tela
 // `/contas/:id/priorizacao` e pela seção de pain points do processo (DAP priorização r1).
@@ -213,6 +234,51 @@ export function createImprovementOpportunity(payload: ImprovementOpportunityPayl
 
 export function updateImprovementOpportunity(id: number, payload: Partial<ImprovementOpportunityPayload> & { status?: ImprovementOpportunity["status"] }): Promise<ImprovementOpportunity> {
   return api<ImprovementOpportunity>(`/improvement-opportunities/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+// ---------- A marca de publicável do Discovery (FDD 051, ADR 0060) ----------
+// Dez funções para cinco recursos, consumidas pela tela `/contas/:id/publicacao` (DAP
+// `dap-publicacao-discovery-r1`, decisão A1). São `POST` em action e **não** `PATCH` de
+// `published_at`, pela razão de `startProveExperiment` logo acima: o que vale depende do estado
+// corrente — qual sustentação está publicada e viva agora —, e só o servidor o conhece.
+//
+// **Nenhuma delas decide se pode.** A tela conhece só a *ordem* da cadeia (decisão F1) e dispara
+// os `POST` nela; quem recusa é o servidor, com 400 listando o que falta ou 409 quando o registro
+// já está no estado pedido ou quando algo publicado depende dele. Reexpressar a regra aqui
+// habilitaria o botão de um `POST` que o servidor nega, sem nada ficar vermelho.
+//
+// A rota do processo continua sendo `/processos/` — ela morre na `/api/v2/`
+// (`docs/ontology/aliases.md`); as outras quatro já nascem com o nome canônico.
+
+export function publishProcess(id: number): Promise<Process> {
+  return api<Process>(`/processos/${id}/publish/`, { method: "POST" });
+}
+export function unpublishProcess(id: number): Promise<Process> {
+  return api<Process>(`/processos/${id}/unpublish/`, { method: "POST" });
+}
+export function publishEvidence(id: number): Promise<Evidence> {
+  return api<Evidence>(`/evidence/${id}/publish/`, { method: "POST" });
+}
+export function unpublishEvidence(id: number): Promise<Evidence> {
+  return api<Evidence>(`/evidence/${id}/unpublish/`, { method: "POST" });
+}
+export function publishFinding(id: number): Promise<Finding> {
+  return api<Finding>(`/findings/${id}/publish/`, { method: "POST" });
+}
+export function unpublishFinding(id: number): Promise<Finding> {
+  return api<Finding>(`/findings/${id}/unpublish/`, { method: "POST" });
+}
+export function publishPainPoint(id: number): Promise<PainPoint> {
+  return api<PainPoint>(`/pain-points/${id}/publish/`, { method: "POST" });
+}
+export function unpublishPainPoint(id: number): Promise<PainPoint> {
+  return api<PainPoint>(`/pain-points/${id}/unpublish/`, { method: "POST" });
+}
+export function publishImprovementOpportunity(id: number): Promise<ImprovementOpportunity> {
+  return api<ImprovementOpportunity>(`/improvement-opportunities/${id}/publish/`, { method: "POST" });
+}
+export function unpublishImprovementOpportunity(id: number): Promise<ImprovementOpportunity> {
+  return api<ImprovementOpportunity>(`/improvement-opportunities/${id}/unpublish/`, { method: "POST" });
 }
 
 export type PriorityAssessmentPayload = {
@@ -317,4 +383,13 @@ export function getMeasurement(id: number): Promise<Measurement> {
  */
 export function listValueLedgerEntries(engagement: number): Promise<ValueLedgerEntry[]> {
   return api<ValueLedgerEntry[]>(`/value-ledger-entries/?engagement=${engagement}`);
+}
+
+/**
+ * Cria um projeto a partir do mandato (DAP `dap-engagement-r3`, decisões A1 · B2 · C1 · D1) — rota
+ * própria com guarda de papel, e não `POST /projects/` cru: `RolePermission` hoje só deixa
+ * **admin** criar projeto direto, e a seção do mandato é visível a Vendas.
+ */
+export function createProjectFromEngagement(engagement: number, payload: { name: string; service: number; start_date: string; due_date: string }): Promise<Project> {
+  return api<Project>(`/engagements/${engagement}/create-project/`, { method: "POST", body: JSON.stringify(payload) });
 }

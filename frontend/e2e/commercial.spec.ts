@@ -54,7 +54,7 @@ test("cria uma oportunidade escolhendo o nível de produto", async ({ page }) =>
   await page.getByRole("button", { name: "Nova oportunidade" }).click();
   const dialog = page.getByRole("dialog", { name: "Nova oportunidade" });
   await dialog.getByLabel("Título").fill("Implantação ACME");
-  await dialog.getByLabel("Cliente").selectOption("1");
+  await dialog.getByLabel("Conta").selectOption("1");
   await dialog.getByLabel("Nível de produto").selectOption("11");
   await dialog.getByLabel("Valor estimado").fill("90000");
   await dialog.getByLabel("Previsão de fechamento").fill("2026-10-01");

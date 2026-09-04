@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { AgentPanel } from "../components/AgentPanel";
+import { isDeliveryOnly } from "../roles";
 import type { Project } from "../types";
 
 const statusLabel: Record<string, string> = { planning: "Planejamento", active: "Ativo", on_hold: "Em espera", completed: "Concluído" };
@@ -14,7 +15,7 @@ export function ProjectsPage() {
   const { user } = useAuth();
   // "Entrega" aqui quer dizer **Entrega restrita**: um superusuário com papel `delivery` não é,
   // e mandá-lo "pedir a um administrador" seria mandá-lo pedir a si mesmo.
-  const isDelivery = user?.role === "delivery" && !user.is_admin;
+  const isDelivery = isDeliveryOnly(user);
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState("");
   const [showArchived, setShowArchived] = useState(false);

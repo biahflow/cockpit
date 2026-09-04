@@ -148,7 +148,7 @@ test("cria uma nova oportunidade pelo compositor", async () => {
   await user.click(screen.getByRole("button", { name: "Nova oportunidade" }));
   const dialog = await screen.findByRole("dialog", { name: "Nova oportunidade" });
   await user.type(within(dialog).getByLabelText("Título"), "Nova Op");
-  await user.selectOptions(within(dialog).getByLabelText("Cliente"), "1");
+  await user.selectOptions(within(dialog).getByLabelText("Conta"), "1");
   await user.type(within(dialog).getByLabelText("Valor estimado"), "5000");
   fireEvent.change(within(dialog).getByLabelText("Previsão de fechamento"), { target: { value: "2026-10-01" } });
   await user.click(within(dialog).getByRole("button", { name: "Adicionar ao pipeline" }));
@@ -168,7 +168,7 @@ test("cria a oportunidade com o nível de produto escolhido", async () => {
   await user.click(screen.getByRole("button", { name: "Nova oportunidade" }));
   const dialog = await screen.findByRole("dialog", { name: "Nova oportunidade" });
   await user.type(within(dialog).getByLabelText("Título"), "Nova Op");
-  await user.selectOptions(within(dialog).getByLabelText("Cliente"), "1");
+  await user.selectOptions(within(dialog).getByLabelText("Conta"), "1");
   await user.selectOptions(within(dialog).getByLabelText("Nível de produto"), "11");
   await user.type(within(dialog).getByLabelText("Valor estimado"), "5000");
   fireEvent.change(within(dialog).getByLabelText("Previsão de fechamento"), { target: { value: "2026-10-01" } });

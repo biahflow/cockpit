@@ -91,14 +91,26 @@ def _probe_calendar() -> tuple[bool, str]:
 
 
 def _probe_esign() -> tuple[bool, str]:
-    """Pergunta ao fornecedor quem é o dono do token, sem criar documento."""
+    """Pergunta ao fornecedor quem é o dono do token, sem criar documento.
+
+    O aviso de `esign.aviso_de_entrega()` (issue #112) se anexa ao `detail` nos **dois** caminhos
+    — com provedor sondável e sem —, e nunca vira reprovação: aviso não é reprovação, e
+    transformá-lo em `False` faria `check_integrations` sair com código 1 no default de fábrica
+    (`ESIGN_SANDBOX=true` + `ESIGN_DELIVERY=email`), treinando quem opera a ignorar o comando —
+    o mesmo argumento que o módulo já faz sobre `NAO_SONDAVEL` (linhas 32-34 acima).
+    """
     from . import esign
 
     provider = esign.get_provider()
     ping = getattr(provider, "ping", None)
     if ping is None:
-        return True, f"{settings.ESIGN_PROVIDER or 'nenhum provedor'}: {NAO_SONDAVEL}"
-    return ping()
+        ok, detalhe = True, f"{settings.ESIGN_PROVIDER or 'nenhum provedor'}: {NAO_SONDAVEL}"
+    else:
+        ok, detalhe = ping()
+    aviso = esign.aviso_de_entrega()
+    if aviso:
+        detalhe = "; ".join([detalhe, aviso])
+    return ok, detalhe
 
 
 def _probe_payments() -> tuple[bool, str]:
@@ -153,6 +165,27 @@ def _probe_enrichment() -> tuple[bool, str]:
     return ping()
 
 
+def _probe_whatsapp() -> tuple[bool, str]:
+    """Pergunta a **cada** provedor se a instância está conectada. Não manda mensagem nenhuma.
+
+    Sonda todos, e não só o primeiro, porque a resolução é uma cadeia de fallback: com o segundo
+    provedor quebrado a integração parece saudável até o dia em que o primeiro cair — que é
+    justamente o dia em que o fallback existe para servir, e o único em que ninguém quer descobrir
+    que ele não funciona.
+    """
+    from . import whatsapp
+
+    if not whatsapp.has_provider():
+        return True, f"nenhum provedor: {NAO_SONDAVEL}"
+    linhas: list[str] = []
+    ok = True
+    for provider in whatsapp.get_providers():
+        aceito, detalhe = provider.ping()
+        ok = ok and aceito
+        linhas.append(f"{provider.name}: {detalhe}")
+    return ok, "; ".join(linhas)
+
+
 def _probe_storage() -> tuple[bool, str]:
     """Escreve, lê e apaga um objeto de sonda. Ao contrário do e-mail, aqui o ciclo completo é
     barato e é o único que prova o que importa: `objectAdmin` sem `create` ou sem `delete` deixa
@@ -183,6 +216,7 @@ PROBES = {
     "portal": _probe_portal,
     "enrichment": _probe_enrichment,
     "storage": _probe_storage,
+    "whatsapp": _probe_whatsapp,
 }
 
 
@@ -191,7 +225,18 @@ def _faltando(name: str) -> str:
 
 
 def _executar(name: str) -> tuple[bool, str]:
-    """Roda a sonda e traduz exceção em reprovação. Nunca propaga."""
+    """Roda a sonda e traduz exceção em reprovação. Nunca propaga.
+
+    **Integração sem sonda passa, e não é lacuna.** `FLAGS` e `PROBES` são dois registros do mesmo
+    mundo e nada os obriga a concordar: nem toda integração tem o que sondar sem gastar um efeito
+    de verdade. `esign`, `payments` e `portal` já respondiam `NAO_SONDAVEL` por essa razão, com
+    sonda própria escrita só para dizer isso; quem não tem sonda nenhuma passa a dizer o mesmo
+    aqui, em vez de estourar `KeyError` e reprovar o comando inteiro com o nome da chave como
+    diagnóstico. A guarda mora neste ponto, e não em `probe`, porque `_forcado` também chama daqui
+    — e era por ele que o defeito passava ao conferir credencial antes de ligar a integração.
+    """
+    if name not in PROBES:
+        return True, NAO_SONDAVEL
     try:
         return PROBES[name]()
     except Exception as exc:  # noqa: BLE001 - diagnóstico não pode estourar

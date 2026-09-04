@@ -1,14 +1,16 @@
-import { ArrowLeft, Briefcase, Coins, HeartHandshake, Mail, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, Briefcase, Coins, Eye, ExternalLink, HeartHandshake, Mail, MessageCircle, MessageSquareText, Pencil, Phone, Plus, Save, Sparkles, Target, Trash2, UserRound, Workflow } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
-import { api, getConfig } from "../api";
+import { api, createProjectFromEngagement, getConfig } from "../api";
 import { useAuth } from "../auth";
 import { LifecycleOptions } from "../components/AccountLifecycle";
-import { ConfirmDialog } from "../components/Modal";
+import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge, SUSTENTACAO_LABEL, satisfacaoBadgeClass, sustentacaoBadgeClass } from "../components/StatusDot";
 import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
-import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, CommercialOpportunity, Contact, DocumentEntry, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Vertical } from "../types";
+import { canWriteBeyondDelivery } from "../roles";
+import { rotuloDoDegrau } from "../tiers";
+import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CobrancaSinal, CommercialOpportunity, Contact, DocumentEntry, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, Satisfacao, SatisfacaoFonte, SatisfacaoNivel, Service, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -52,6 +54,21 @@ const engagementStatusBadge: Record<EngagementStatus, string> = { active: "state
 // sobre o registro, não um aviso. Mostrar só a exceção faria "sem selo" significar duas coisas para
 // quem lê: conta paga, ou campo que ninguém preencheu.
 const engagementCommercialModelBadge: Record<EngagementCommercialModel, string> = { paid: "state--off", design_partner: "state--0" };
+
+/**
+ * Criar projeto a partir do mandato (DAP `docs/design/dap-engagement-r3/`, decisões **A1 · B2 ·
+ * C1 · D1**) — a única saída aprovada além de Editar/Arquivar na linha do mandato, e a única desta
+ * seção que abre modal: a decisão 3 da r1 ("sem modal") governa formulário que edita a lista que
+ * está ali; criar projeto produz algo que **sai** desta tela, e o modal marca a saída (o mesmo do
+ * "Criar projeto" do Comercial).
+ *
+ * O nome nasce vazio de propósito: "Discovery Sprint — Rio Home Care" e "Continuidade 2027" são
+ * coisas diferentes dentro do mesmo mandato, e copiar o nome do mandato esconderia essa escolha.
+ */
+const blankNewProject = { name: "", service: "", start_date: "", due_date: "" };
+// O Discovery Sprint dura de 5 a 7 dias (o que o convite promete ao cliente) e o template de
+// kickoff fecha no Executive Readout em D+7. É só o padrão do formulário — quem cria ajusta.
+const DIAS_DO_DISCOVERY = 7;
 
 /**
  * Período com precisão de **mês** ("Desde 03/2026", "02/2026 → 05/2026") — decisão 6 do DAP: o
@@ -135,19 +152,27 @@ export function AccountDetailPage({ id }: { id: number }) {
   // o que mantém a seção legível numa página que já empilha seis painéis.
   const [engagementFormOpen, setEngagementFormOpen] = useState(false);
   const [removingEngagement, setRemovingEngagement] = useState<Engagement | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [creatingProject, setCreatingProject] = useState<Engagement | null>(null);
+  const [newProjectDraft, setNewProjectDraft] = useState(blankNewProject);
+  const [creatingProjectError, setCreatingProjectError] = useState("");
+  const [creatingProjectBusy, setCreatingProjectBusy] = useState(false);
   const { user } = useAuth();
   const canArchive = !!user?.is_admin;
-  const canWriteActivities = !!user && user.role !== "delivery";
+  const canWriteActivities = canWriteBeyondDelivery(user);
   // Mesma regra de `canWriteActivities` — a Entrega só lê `contact` (RolePermission,
   // `permissions.py`) —, com nome próprio porque é o painel de Contatos que ela gate-ia aqui.
-  const canWriteContacts = !!user && user.role !== "delivery";
+  const canWriteContacts = canWriteBeyondDelivery(user);
   // A mesma leitura de papel outra vez, e pelo mesmo motivo dos dois acima: a Entrega só lê
   // `engagement` (`permissions.py`, e a assimetria é a decisão da FDD 046 — quem entrega precisa
   // saber a que mandato o projeto pertence sem poder redefinir o que foi contratado). O desenho
   // não inventa permissão: ele deixa de mostrar o que a API recusaria.
-  const canWriteEngagements = !!user && user.role !== "delivery";
+  const canWriteEngagements = canWriteBeyondDelivery(user);
   const eligibleCommercialOpportunities = commercialOpportunities.filter(opportunity => opportunity.stage_kind === "won" && opportunity.engagement === null);
   const eligibleDesignPartnerAgreements = accountDocuments.filter(document => document.originated_engagement === null && document.signature_requests.some(signature => signature.status === "signed" && signature.signed_at));
+  // Só degraus **vendáveis**: oferta de aquisição não gera projeto e o backend recusa com 400
+  // (invariante 6 do mapa de linguagem) — oferecer aqui mostraria o que a API nega.
+  const sellableServices = services.filter(service => service.active && service.category === "commercial");
 
   const load = useCallback(() => Promise.all([
     api<Account>(`/clients/${id}/`),
@@ -163,8 +188,11 @@ export function AccountDetailPage({ id }: { id: number }) {
     api<Engagement[]>(`/engagements/?account=${id}`),
     canWriteEngagements ? api<CommercialOpportunity[]>(`/opportunities/?account=${id}`) : Promise.resolve([]),
     canWriteEngagements ? api<DocumentEntry[]>(`/documents/?account=${id}`) : Promise.resolve([]),
-  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements, loadedOpportunities, loadedDocuments]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements); setCommercialOpportunities(loadedOpportunities); setAccountDocuments(loadedDocuments);
+    // Só quem escreve o mandato alcança a ação de criar projeto, e é ela a única consumidora do
+    // catálogo aqui — a Entrega não vê o botão, então não precisa da chamada.
+    canWriteEngagements ? api<Service[]>("/services/") : Promise.resolve([]),
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfacoes, loadedProcessos, loadedEngagements, loadedOpportunities, loadedDocuments, loadedServices]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfacoes(loadedSatisfacoes); setProcessos(loadedProcessos); setEngagements(loadedEngagements); setCommercialOpportunities(loadedOpportunities); setAccountDocuments(loadedDocuments); setServices(loadedServices);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, lifecycle_status: loadedClient.lifecycle_status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [canWriteEngagements, id]);
   useEffect(() => { void load(); }, [load]);
@@ -282,6 +310,65 @@ export function AccountDetailPage({ id }: { id: number }) {
     catch (cause) { setRemovingEngagement(null); setError((cause as Error).message); }
     finally { setBusy(false); }
   }
+  /**
+   * A janela inicial derivada da sessão que o cliente já marcou — o **dia 0** é o dia dela.
+   *
+   * Pré-preenchida e não travada: o formulário aprovado (DAP `dap-engagement-r3`, C1) pede início
+   * e prazo, e desabilitar os campos seria mudar a decisão sem revisar o pacote. O servidor
+   * também não sobrescreve — devolver 201 alterando em silêncio o que alguém preencheu é pior que
+   * um padrão errado, que se vê e se corrige.
+   *
+   * Sem sessão marcada, volta a abrir vazio: chutar datas quando não há âncora seria inventar.
+   */
+  function janelaInicial(engagement: Engagement) {
+    if (!engagement.discovery_scheduled_at) return blankNewProject;
+    // Fatia o ISO em vez de passar por `Date`: `new Date("2026-09-03T…")` renderizado com
+    // `toISOString()` volta para UTC e uma sessão do fim do dia recuaria 24h — o mesmo cuidado
+    // que `periodoDoEngagement` toma logo acima.
+    const dia0 = engagement.discovery_scheduled_at.slice(0, 10);
+    const fim = new Date(`${dia0}T12:00:00`);
+    fim.setDate(fim.getDate() + DIAS_DO_DISCOVERY);
+    return { ...blankNewProject, start_date: dia0, due_date: `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, "0")}-${String(fim.getDate()).padStart(2, "0")}` };
+  }
+
+  function openCreateProject(engagement: Engagement) {
+    setCreatingProject(engagement);
+    setNewProjectDraft(janelaInicial(engagement));
+    setCreatingProjectError("");
+  }
+  function closeCreateProject() {
+    setCreatingProject(null);
+    setNewProjectDraft(blankNewProject);
+    setCreatingProjectError("");
+  }
+  /**
+   * `POST /engagements/{id}/create-project/` — rota própria com guarda de papel (ver `api.ts`),
+   * e não `POST /projects/` cru. No erro (400 de data invertida ou degrau de aquisição, 403 de
+   * papel, 409 de mandato encerrado) o modal **não fecha** e o rascunho fica como estava: quem
+   * errou a data corrige sem redigitar o resto. A mensagem é a do servidor, sem reescrita — nada
+   * de `mensagemDeFalha` aqui, ela acrescentaria orientação genérica sobre uma resposta que já
+   * diz exatamente o que corrigir.
+   */
+  async function createProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!creatingProject) return;
+    setCreatingProjectError("");
+    setCreatingProjectBusy(true);
+    try {
+      await createProjectFromEngagement(creatingProject.id, {
+        name: newProjectDraft.name,
+        service: Number(newProjectDraft.service),
+        start_date: newProjectDraft.start_date,
+        due_date: newProjectDraft.due_date,
+      });
+      closeCreateProject();
+      await load();
+    } catch (cause) {
+      setCreatingProjectError((cause as Error).message);
+    } finally {
+      setCreatingProjectBusy(false);
+    }
+  }
   async function createActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const { invoice, ...resto } = activityDraft;
@@ -347,15 +434,43 @@ export function AccountDetailPage({ id }: { id: number }) {
       confirmLabel="Arquivar" busy={busy}
       onCancel={() => setRemovingEngagement(null)} onConfirm={() => void removeEngagement()}
     />}
+    {/* Criar projeto a partir do mandato — DAP `dap-engagement-r3`, decisão **B2**: exceção
+        deliberada à decisão 3 da r1 ("sem modal"), porque criar projeto produz algo que sai desta
+        tela, e não edita a lista que está aqui. Mesmo molde do "Criar projeto" do Comercial
+        (`CommercialPage.tsx`), com dois campos a mais (nome e degrau — decisão **C1**). */}
+    {creatingProject && <Modal title="Criar projeto" onClose={closeCreateProject}>
+      <p className="mb-5 text-sm text-slate-600">Em <strong className="text-ink">{creatingProject.name}</strong>. Defina o degrau e a janela inicial.</p>
+      {creatingProjectError && <p role="alert" className="alert--error mb-4">{creatingProjectError}</p>}
+      <form className="grid gap-4" onSubmit={event => void createProject(event)}>
+        <Field label="Nome"><input className="field" value={newProjectDraft.name} onChange={event => setNewProjectDraft({ ...newProjectDraft, name: event.target.value })} required /></Field>
+        <Field label="Degrau"><select className="field" value={newProjectDraft.service} onChange={event => setNewProjectDraft({ ...newProjectDraft, service: event.target.value })} required><option value="">Selecione</option>{sellableServices.map(service => <option key={service.id} value={service.id}>{rotuloDoDegrau(service)}</option>)}</select></Field>
+        <div className="form-grid">
+          <Field label="Início"><input className="field" type="date" value={newProjectDraft.start_date} onChange={event => setNewProjectDraft({ ...newProjectDraft, start_date: event.target.value })} required /></Field>
+          <Field label="Prazo final"><input className="field" type="date" value={newProjectDraft.due_date} onChange={event => setNewProjectDraft({ ...newProjectDraft, due_date: event.target.value })} required /></Field>
+        </div>
+        <button className="btn" type="submit" disabled={creatingProjectBusy}>{creatingProjectBusy ? "Criando…" : "Criar projeto"}</button>
+      </form>
+    </Modal>}
+    {/* O aviso do que continua no ar (issue #114). Arquivar a conta **não** despublica o
+        Discovery, e não deve: só um ato humano publica e só um ato humano despublica (ADR 0060) —
+        cascatear aqui seria o oposto dessa decisão. O que faltava era quem arquiva saber, então a
+        confirmação diz quantos são e aponta para a tela que os lista; quem opera decide.
+        Com zero publicados a frase **não aparece**: "0 registros publicados" é ruído, não aviso.
+        O número vem pronto do backend (`published_count`, de `publication.py`) — a tela não
+        reexpressa "publicado e vivo", que é a segunda definição que aquele módulo existe para
+        não ter. */}
     {isArchiving && <ConfirmDialog
-      title="Arquivar cliente"
-      message={<>O cliente <strong className="text-ink">{client.name}</strong> e os contatos dele saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</>}
+      title="Arquivar conta"
+      message={<>
+        <p>A conta <strong className="text-ink">{client.name}</strong> e os contatos dela saem das listagens ativas. Nada é apagado — dá para restaurar depois pela aba Arquivados.</p>
+        {client.published_count > 0 && <p className="mt-3">Esta conta tem <strong className="text-ink">{client.published_count} {client.published_count === 1 ? "registro publicado" : "registros publicados"}</strong> para o cliente. Arquivar não os retira. <a className="inline-flex items-center gap-1.5 font-semibold text-ink underline underline-offset-2" href={`/contas/${client.id}/publicacao`}>Ver o que está publicado <Eye className="size-3.5" /></a></p>}
+      </>}
       confirmLabel="Arquivar" busy={busy}
       onCancel={() => setArchiving(false)} onConfirm={() => void archiveClient()}
     />}
     <header className="page-head flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="eyebrow">Relacionamento</p><h1>{client.name}</h1><p>Dados cadastrais e contatos do cliente.</p></div>
-      {canArchive && <button type="button" className="btn btn--secondary btn--secondary-danger shrink-0 self-start sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar cliente</button>}
+      <div><p className="eyebrow">Relacionamento</p><h1>{client.name}</h1><p>Dados cadastrais e contatos da conta.</p></div>
+      {canArchive && <button type="button" className="btn btn--secondary btn--secondary-danger shrink-0 self-start sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar conta</button>}
     </header>
     {error && <p role="alert" className="alert--error">{error}</p>}
 
@@ -446,7 +561,22 @@ export function AccountDetailPage({ id }: { id: number }) {
         <div className="row-meta">
           <span className={`state ${engagementStatusBadge[engagement.status]}`}>{engagement.status_display}</span>
           <span className={`state ${engagementCommercialModelBadge[engagement.commercial_model]}`}>{engagement.commercial_model_display}</span>
+          {/* Superfície governada pelo DAP `dap-grupo-de-whatsapp-r1` (A1·B1·C1·D1): a ausência é
+              silêncio de propósito (regra do e-mail de kickoff, FDD 008), e a criação incerta já
+              notifica o dono do projeto pela #117 — esta linha não precisa de um terceiro estado. */}
+          {engagement.whatsapp_group_invite_url
+            ? <a className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-accent" href={engagement.whatsapp_group_invite_url} target="_blank" rel="noreferrer" aria-label={`Abrir o grupo de ${engagement.name} no WhatsApp`}>
+                <MessageCircle className="size-3.5" />Grupo no WhatsApp<ExternalLink className="size-3.5" />
+              </a>
+            : engagement.whatsapp_group_id
+              ? <span className="text-xs text-muted">Grupo criado · sem link de convite</span>
+              : null}
           {canWriteEngagements && <div className="ml-auto flex gap-1.5">
+            {/* Decisão **D1**: todo mandato ativo oferece a ação, e não só `design_partner` — a
+                Transformation Partnership origina vários projetos pelo mesmo mandato. Mandato
+                `closed` não mostra o botão: o backend recusa com 409, e a tela não oferece o que a
+                API nega. */}
+            {engagement.status !== "closed" && <button type="button" className="btn btn--secondary" onClick={() => openCreateProject(engagement)}>Novo projeto</button>}
             <button type="button" className="btn btn--icon btn--secondary" aria-label={`Editar ${engagement.name}`} onClick={() => startEngagementEdit(engagement)}><Pencil className="size-4" /></button>
             <button type="button" className="btn btn--icon btn--secondary btn--secondary-danger" aria-label={`Arquivar ${engagement.name}`} onClick={() => setRemovingEngagement(engagement)}><Trash2 className="size-4" /></button>
           </div>}
@@ -527,11 +657,18 @@ export function AccountDetailPage({ id }: { id: number }) {
           priorização, pelo mesmo motivo: valor é sempre de uma conta, e nenhum dos dois entra no
           menu lateral. */}
       <a className="btn btn--secondary" href={`/contas/${id}/valor`}><Coins className="size-4" />Abrir o valor gerado</a>
+      {/* A porta da publicação do Discovery (DAP `dap-publicacao-discovery-r1`, decisão **A1**) —
+          a terceira da faixa, pelo mesmo motivo das duas anteriores: o que o cliente vê é sempre
+          de uma conta, e nenhuma das três entra no menu lateral. O ícone é o mesmo `Eye` do selo
+          "Visível ao cliente": a porta e o estado que ela governa dizem a mesma coisa com o mesmo
+          glifo. Sem contador — quantos itens estão pendentes é informação da tela de destino, e um
+          número aqui obrigaria esta página a buscar os cinco recursos a cada carga. */}
+      <a className="btn btn--secondary" href={`/contas/${id}/publicacao`}><Eye className="size-4" />Abrir a publicação</a>
     </div>
 
     <div className="grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
       <form className="panel space-y-4 sm:p-6" onSubmit={event => void saveClient(event)} data-testid="client-form">
-        <h2 className="font-semibold text-ink">Dados do cliente</h2>
+        <h2 className="font-semibold text-ink">Dados da conta</h2>
         <Field label="Nome"><input className="field" value={form.name} onChange={event => { setForm({ ...form, name: event.target.value }); setSaved(false); }} required /></Field>
         <Field label="Razão social"><input className="field" value={form.legal_name} onChange={event => { setForm({ ...form, legal_name: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>
         <Field label="CNPJ / CPF"><input className="field" value={form.tax_id} onChange={event => { setForm({ ...form, tax_id: event.target.value }); setSaved(false); }} placeholder="Opcional" /></Field>

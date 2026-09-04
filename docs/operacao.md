@@ -39,6 +39,7 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
 | Notificações por e-mail e digest diário | `EMAIL_NOTIFICATIONS_ENABLED` (default `true`), `EMAIL_HOST`/`EMAIL_PORT`, `SCHEDULER_DIGEST_AT` | SMTP acessível (Mailpit no dev) | **Ligado** ✅ — ponha `false` para silenciar |
 | Calendário (add ao Google Calendar + eventos → tarefas) | `CALENDAR_ENABLED`, `GOOGLE_CALENDAR_ID` | mesma auth do Drive, **outro escopo** | Pronto (desligado) |
 | Agendamento (qualificação IA + booking pelo site) | `AI_ENABLED`+`CALENDAR_ENABLED`, `GOOGLE_BOOKING_CALENDAR_ID`, `BOOKING_MIN_FIT` | OpenAI + Google (free/busy) | Pronto (desligado) |
+| **Agendamento do Discovery pelo cliente** | `DISCOVERY_BOOKING_ENABLED` (default `false`), `DISCOVERY_BOOKING_RATE` (60/hour) + `CALENDAR_ENABLED` | **nenhuma própria** — usa o SMTP e a agenda que já estão configurados | Pronto (**desligada**). Governa as duas rotas públicas (`/booking/discovery/slots/`, `/booking/discovery/`) **e** o convite por e-mail que leva o link — as duas metades do mesmo ato. Desligada por decisão declarada: é a primeira rota sem autenticação do produto além do login, e o e-mail sai sozinho para fora da casa. Exige `calendar` ligado; sem ele as rotas respondem 503 |
 | Assinatura eletrônica | `ESIGN_ENABLED` (default `true`), `ESIGN_PROVIDER`, `ESIGN_API_TOKEN`, `ESIGN_WEBHOOK_SECRET`, `ESIGN_SANDBOX`, `ESIGN_DELIVERY` | conta Autentique — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `ESIGN_PROVIDER` roda em registro local (`mark-signed` manual); com fornecedor nomeado, exige token e segredo do webhook |
 | Gateway de pagamento (contas a receber) | `PAYMENTS_ENABLED` (default `true`), `PAYMENTS_PROVIDER`, `PAYMENTS_API_TOKEN`, `PAYMENTS_WEBHOOK_SECRET` | conta Stripe — **ou nenhuma**, ver abaixo | **Ligado** ✅ — sem `PAYMENTS_PROVIDER` roda em registro local (`mark-paid` manual); com fornecedor nomeado, exige token e segredo do webhook. **Stripe sem homologação** |
 | **Régua de cobrança** (pré-aviso, lembrete, escalada) | `DUNNING_ENABLED` (default `false`), `SCHEDULER_DUNNING_AT` (09:30), `DUNNING_MIN_DAYS_BETWEEN_CONTACTS` (5) | **nenhuma** — usa o SMTP que já está configurado | Pronto (**desligada**). Não é integração: não fala com fornecedor nenhum, e por isso não tem `requires`. Desligada por decisão declarada, e não por custo — o gateway que *desarma* a régua (a baixa por webhook) segue sem homologação, e cobrar sobre reconciliação não exercitada é cobrar quem já pagou. Ligue depois da homologação do Stripe (runbook de homologação, seção 5). Marque em cada cliente quem **recebe cobrança** (contato), senão o degrau vira aviso interno |
@@ -112,7 +113,16 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   (convidar participante em evento). **Chave de conta de serviço não é caminho**: muitas
   organizações a proíbem por política, e foi o que bloqueou a homologação do Google.
 - `docker compose up -d --build api`.
-- **Testar:** subir um documento → conferir a estrutura `{Cliente}/{1-Projetos|2-Áreas|3-Recursos}/` no Shared Drive.
+- **Testar:** subir um documento → conferir a estrutura `{Conta}/{Contratos|Propostas|NDAs|Acordos de Design Partner|Outros}/` no Shared Drive (a subpasta segue a finalidade do documento, `Document.kind` — issue #113); a pasta do projeto criada pelo kickoff fica em `{Conta}/Projetos/{Projeto}`.
+- **O acervo anterior a 03/09/2026 não foi movido, e isso é decisão, não pendência** (issue #118,
+  decidida em 04/09/2026): dentro de uma pasta de conta antiga, `1-Projetos`/`2-Áreas`/`3-Recursos`
+  (a estrutura PARA que valia até a issue #113) convivem com as pastas por finalidade. Nada quebra —
+  o `drive_link` de cada documento continua apontando para onde o arquivo sempre esteve, e o acervo
+  antigo é finito. Mover seria operação sobre dado real de cliente: a maior parte daquele acervo não
+  tem `Document.kind` marcado e iria inteira para `Outros`, o que é honesto mas não ajuda ninguém a
+  achar nada. Se um dia doer, o caminho registrado na issue é classificar primeiro (na tela, por quem
+  sabe) e mover depois, com comando idempotente, `--dry-run` obrigatório e rastro — e apagar as
+  pastas antigas vazias é ato destrutivo que exige aprovação humana explícita na hora.
 
 ### 4. Calendário e Assinatura
 - Calendário: `CALENDAR_ENABLED=true` + `GOOGLE_CALENDAR_ID` (mesma identidade do Drive, mas o
@@ -142,6 +152,20 @@ Após editar o `.env`, aplique com `docker compose up -d api` (recria o containe
   idempotente, então as reentregas (3 tentativas: 60s, 120s e 300s) não duplicam nada. Só
   `signature.accepted` e `signature.rejected` movem a assinatura; os demais eventos são ignorados
   com 200.
+  **A rodada tem mais de uma pessoa desde a ADR 0065**: `request-signature` aceita
+  `{"signers": [{"email": …, "role": "house"|"counterparty"|"witness"}]}` numa chamada só — os três
+  assinam o mesmo documento, e chamar o fornecedor uma vez por pessoa criaria três documentos
+  separados. O corpo antigo (`signer_email`) continua valendo como um único `counterparty`.
+  `ESIGN_HOUSE_SIGNER_EMAIL` (**vazio por padrão**) é o e-mail com que a casa assina: preenchido, o
+  Pulse acrescenta o signatário `house` a toda rodada, e quem envia não digita o próprio e-mail
+  toda vez; vazio, a rodada tem exatamente os signatários que o pedido nomeou. **O documento só
+  conta como assinado quando a rodada inteira assinou** — por isso o contrato só é aceito e o
+  mandato de Design Partner só abre depois do último, enquanto uma recusa vale na hora. A assinatura
+  vai **posicionada** na última página (`positions`, contada com `pypdf`) nos três tipos que têm
+  bloco de assinatura — acordo de Design Partner, NDA e contrato comercial; documento que não é PDF
+  legível vai sem posição, com o motivo no log, e a assinatura cai na página anexa como antes. **As
+  coordenadas x/y são estimativa não medida**: confira no painel do fornecedor onde os campos caíram
+  no primeiro envio real e ajuste `_POSICAO_POR_PAPEL` em `backend/apps/core/esign.py`.
 - **Pagamentos (Stripe)**: já vem `PAYMENTS_ENABLED=true` (ADR 0018). Sem `PAYMENTS_PROVIDER`, a
   integração roda no **registro local**: a fatura vive só no portal e "Marcar como paga" é o único
   caminho de baixa — modo previsto, não degradado, e a tela Financeiro funciona inteira assim. Para

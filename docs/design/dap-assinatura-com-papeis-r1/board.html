@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — Assinatura com papéis · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-100:#fadfd4; --brand-200:#dd8b62; --brand-500:#bd4a30;
+  --brand-600:#a8412a; --brand-700:#9c3c26; --brand-900:#5c2317;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --info:#1d4ed8; --info-50:#eff6ff;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  --slate-600:#475569; --slate-700:#334155;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --shadow-pop:0 16px 40px -16px rgba(18,17,15,.28);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650;margin:28px 0 10px}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:var(--text-body)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface-subtle);font-weight:650}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.grid--2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.spec--pick{border-style:solid;border-color:var(--brand-200);box-shadow:0 0 0 3px rgba(221,139,98,.12)}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+
+/* ---- primitivas espelhadas de src/index.css (mesmo subconjunto do molde dap-priorizacao-r1) ---- */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:24px;box-shadow:var(--shadow-card)}
+/* `.panel--flush` real não redeclara borda/fundo — combina com `.panel` no markup (index.css:201). */
+.panel--flush{overflow:hidden;padding:0}
+.panel-heading{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel-heading h2{margin:0;font-size:var(--text-title);line-height:var(--lh-title);font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);border:0;padding:0}
+.panel-rows>.row+.row{border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px 24px}
+.row-main{min-width:0;flex:1;overflow-wrap:anywhere}
+.row-main strong{display:block;font-size:var(--text-body);font-weight:600;color:var(--ink)}
+.row-main span{display:block;margin-top:.125rem;font-size:var(--text-label);line-height:1.05rem;color:var(--muted)}
+/* Dentro do modal o e-mail é identificação e não pode quebrar no meio: `anywhere` do `.row-main`
+   partia "fulano@homecare.co m.br". Fora do modal a regra do produto segue valendo. */
+.dialog .row-main{overflow-wrap:normal}
+.dialog .row-main strong,.dialog .row-main span{word-break:keep-all;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+/* O cluster de selos da linha, sempre numa linha própria dentro da mesma `.row`
+   (`flex:1 1 100%` força a quebra num `.row` `flex-wrap`). index.css:230. */
+.row-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1 1 100%;margin-top:2px}
+.metric-icon{display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;
+  border-radius:var(--radius-control);background:var(--brand-50);color:var(--brand-500)}
+.metric-card{display:grid;gap:8px;border-radius:var(--radius-card);border:1px solid var(--line);
+  background:var(--surface);padding:16px;box-shadow:var(--shadow-card)}
+.metric-card span{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500;color:var(--muted)}
+.metric-card strong{font-size:1.75rem;line-height:2rem;font-weight:650;letter-spacing:-.03em;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.state{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:4px 10px;
+  font-size:11px;line-height:1rem;font-weight:600;white-space:nowrap}
+.state--0{background:var(--info-50);color:var(--info)}
+.state--1{background:var(--success-50);color:var(--success)}
+.state--2{background:var(--warning-50);color:var(--warning)}
+.state--3{background:var(--danger-50);color:var(--danger)}
+.state--off{background:var(--slate-100);color:var(--slate-600)}
+/* O sólido escuro — `bg-ink text-white`, index.css:414. É o único selo sólido do produto, e é
+   isso (mais o ícone) que separa o de publicação dos dois pastel vizinhos. */
+.state--active{background:var(--ink);color:#fff}
+.field{width:100%;border-radius:var(--radius-control);border:1px solid var(--line-strong);
+  background:#fff;padding:12px;font-size:var(--text-body);color:var(--slate-700);font-family:inherit}
+.field::placeholder{color:#a8a29e}
+.form-label{display:grid;gap:8px;font-size:var(--text-body);font-weight:500;color:var(--slate-700)}
+.form-grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit;white-space:nowrap}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+/* O único botão vermelho do produto: só o `ConfirmDialog` o usa (index.css:305). */
+.btn--danger{background:var(--danger);color:#fff;border-color:transparent}
+.btn--icon{width:44px;height:44px;min-height:0;padding:0;flex:0 0 auto}
+.btn[disabled],.btn--secondary[disabled]{border-color:var(--line);background:var(--line);color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;border-radius:var(--radius-card);
+  border:1px solid var(--line);background:var(--surface);padding:24px;box-shadow:var(--shadow-card)}
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;
+  border:1px solid var(--line);background:#fff;padding:6px 12px;font-size:var(--text-body);
+  font-weight:600;color:var(--muted)}
+.filter-chip--on{border-color:var(--brand-500);background:var(--brand-50);color:var(--brand-700)}
+.empty-state{border-radius:var(--radius-card);border:1px dashed var(--line);
+  background:rgba(248,250,252,.6);padding:24px 16px;text-align:center;
+  font-size:var(--text-body);color:var(--muted)}
+.alert--error{border-radius:var(--radius-card);border:1px solid var(--danger-50);
+  background:var(--danger-50);padding:16px;font-size:var(--text-body);color:var(--danger);margin:0 0 16px}
+.type-title{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650}
+.type-label{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--18{width:18px;height:18px}
+/* Ícone dentro de `.state`: `size-3` — o mesmo corpo de `PowerOff` em `CobrancaPage.tsx:467`
+   e de `Lock` em `ProjectDetailPage.tsx:941`, os dois já dentro de um selo. */
+.ico--12{width:12px;height:12px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+.skeleton{background:var(--slate-200);border-radius:12px}
+.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
+.stack{display:grid;gap:16px}
+.actions{display:flex;gap:6px;flex:0 0 auto;margin-left:auto}
+.back-link{display:inline-flex;align-items:center;gap:8px;font-size:var(--text-body);font-weight:600;
+  color:var(--brand-600);text-decoration:none}
+.page-head{margin-bottom:24px;display:grid;gap:6px}
+.page-head p{margin:0;max-width:60ch;color:var(--slate-600);font-size:var(--text-body)}
+/* A hierarquia visual **é** a cadeia (decisão C1): recuo e filete à esquerda, e nada mais.
+   Posicionamento puro — nenhuma cor, raio ou corpo de texto próprio; o filete é `line` e o
+   fundo de nível é `canvas`/`surface-subtle`, os dois já da paleta. */
+.nest{border-top:1px solid var(--line);background:var(--canvas)}
+.nest+.row{border-top:1px solid var(--line)}
+.nest>.panel-rows>.row{padding-left:56px}
+.nest .nest{background:var(--surface-subtle)}
+.nest .nest>.panel-rows>.row{padding-left:88px}
+.check{width:16px;height:16px;flex:0 0 auto;accent-color:var(--brand-500)}
+/* O overlay do `ConfirmDialog`, desenhado sem JS: `bg-ink/45` + painel `rounded-2xl bg-white p-5
+   shadow-2xl` — cópia literal de `components/Modal.tsx:78-95`, não valor novo deste pacote. */
+.overlay{position:relative;display:grid;place-items:center;padding:32px 16px;
+  background:rgba(18,17,15,.45);border-radius:var(--radius-card)}
+.dialog{width:100%;max-width:32rem;border-radius:16px;background:#fff;padding:24px;
+  box-shadow:var(--shadow-pop)}
+.dialog h2{margin:0;font-size:1.125rem;line-height:1.75rem;font-weight:600;color:var(--ink);border:0;padding:0}
+.mobile{max-width:342px;margin:0 auto}
+.mobile .panel{padding:20px}
+.mobile .row{padding:16px 20px}
+.mobile .nest>.panel-rows>.row{padding-left:36px}
+.mobile .nest .nest>.panel-rows>.row{padding-left:52px}
+.mobile .form-grid{grid-template-columns:1fr}
+.mobile .row .actions{width:100%}
+@media (max-width:560px){
+  .wrap{padding:28px 16px 64px}
+  .grid,.grid--2{grid-template-columns:minmax(0,1fr)}
+  .grid>*,.spec,.stage{min-width:0}
+  .form-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{padding:10px}
+  .spec{padding:10px}
+  .panel-heading{flex-wrap:wrap}
+  .panel-heading>.btn{width:100%}
+  table{display:block;overflow-x:auto}
+  h1{font-size:1.5rem;line-height:1.875rem}
+}
+code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package · revisão 1</p>
+<h1>Assinatura com papéis</h1>
+<p class="lede">A tela que substitui um <code>window.prompt</code>. Issue <code>#115</code>, ADR 0065.
+Todo estilo aqui espelha <code>src/index.css</code>; nenhum valor é inventado neste board.</p>
+
+<h2>O que existe hoje</h2>
+<p class="note">Não é uma tela ruim — é a ausência de uma. <code>DocumentsPage.tsx:95-100</code>
+abre a caixa nativa do navegador, sem validação, sem contexto e sem como dizer quem é a casa,
+quem é a parte e quem testemunha. O backend aceita os três desde a ADR 0065; a tela sabe pedir um.</p>
+
+<div class="stage">
+  <div class="overlay" style="background:rgba(18,17,15,.28)">
+    <div class="dialog" style="max-width:26rem;border-radius:8px;padding:16px">
+      <p class="type-label" style="color:var(--muted);margin:0 0 10px">app.pulse.biahflow.ai diz</p>
+      <p style="margin:0 0 14px">E-mail do signatário:</p>
+      <div class="field" style="padding:8px;color:#a8a29e">&nbsp;</div>
+      <div class="actions" style="margin-top:16px">
+        <span class="btn btn--secondary" style="min-height:32px;padding:6px 14px">Cancelar</span>
+        <span class="btn" style="min-height:32px;padding:6px 14px">OK</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>1 · O modal, vazio</h2>
+<p class="note">Aberto pelo botão <code>PenLine</code> que já existe na linha do documento
+(decisão <strong>A1</strong>). A linha da casa vem primeiro, fixa e não removível
+(<strong>D1</strong>): quem envia precisa saber quantas assinaturas o documento vai esperar, porque
+<em>aceitar exige todos</em>.</p>
+
+<div class="stage">
+  <div class="overlay">
+    <div class="dialog">
+      <h2>Enviar para assinatura</h2>
+      <p class="type-label" style="color:var(--muted);margin:6px 0 20px;font-weight:500">
+        Contrato_Design_Partner.docx</p>
+
+      <div class="panel panel--flush" style="box-shadow:none">
+        <div class="panel-rows">
+          <div class="row" style="background:var(--surface-subtle)">
+            <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <div class="row-main">
+              <strong>Você (Biahflow)</strong>
+              <span>daniel@biahflow.ai · assina como a casa</span>
+            </div>
+            <span class="state state--off">Fixo</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty-state" style="margin-top:16px">
+        Nenhum signatário do cliente ainda.<br>
+        Escolha um contato da conta ou informe um e-mail.
+      </div>
+
+      <label class="form-label" style="margin-top:16px">Contato da conta
+        <span class="field" style="display:flex;align-items:center;justify-content:space-between;color:#a8a29e">
+          Selecione um contato…
+          <svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+      <div class="actions" style="margin-top:24px">
+        <span class="btn btn--secondary">Cancelar</span>
+        <span class="btn" style="background:var(--line);color:var(--muted);border-color:var(--line)">Enviar</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="note"><strong>O botão nasce desabilitado</strong> e só habilita com ao menos um signatário
+do cliente. A casa sozinha não é uma rodada — e um botão habilitado para um <code>POST</code> que o
+servidor recusa com 400 é o defeito que o <code>CLAUDE.md</code> nomeia para o PROVE:
+<em>“habilitaria o botão de um POST que o servidor nega, sem nada ficar vermelho”</em>.</p>
+
+<h2>2 · O modal, com a rodada montada</h2>
+<p class="note">O caso real da Home Care: a casa, uma pessoa da parte contratante e uma testemunha
+do lado do cliente. O seletor por linha é a decisão <strong>C1</strong> — as duas linhas de
+testemunha do template são <strong>de quem for</strong>, e não uma reservada por lado.</p>
+
+<div class="stage">
+  <div class="overlay">
+    <div class="dialog" style="max-width:38rem">
+      <h2>Enviar para assinatura</h2>
+      <p class="type-label" style="color:var(--muted);margin:6px 0 20px;font-weight:500">
+        Contrato_Design_Partner.docx</p>
+
+      <div class="panel panel--flush" style="box-shadow:none">
+        <div class="panel-rows">
+
+          <div class="row" style="background:var(--surface-subtle)">
+            <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <div class="row-main">
+              <strong>Você (Biahflow)</strong>
+              <span>daniel@biahflow.ai · assina como a casa</span>
+            </div>
+            <span class="state state--off">Fixo</span>
+          </div>
+
+          <div class="row">
+            <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <div class="row-main">
+              <strong>Fulano de Tal</strong>
+              <span>fulano@homecare.com.br</span>
+            </div>
+            <span class="field" style="width:auto;min-width:9.5rem;padding:8px 10px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px">
+              Parte contratante
+              <svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+            <span class="btn btn--secondary btn--icon" style="min-height:36px;width:36px;height:36px" aria-label="Remover">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </span>
+          </div>
+
+          <div class="row">
+            <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <div class="row-main">
+              <strong>Beltrana Souza</strong>
+              <span>beltrana@homecare.com.br</span>
+            </div>
+            <span class="field" style="width:auto;min-width:9.5rem;padding:8px 10px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px">
+              Testemunha
+              <svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+            <span class="btn btn--secondary btn--icon" style="min-height:36px;width:36px;height:36px" aria-label="Remover">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </span>
+            <div class="row-meta">
+              <span class="type-meta" style="color:var(--muted)">Ocupa a <strong>linha 1</strong> de testemunha do documento</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <label class="form-label" style="margin-top:16px">Contato da conta
+        <span class="field" style="display:flex;align-items:center;justify-content:space-between;color:#a8a29e">
+          Selecione um contato…
+          <svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </span>
+      </label>
+
+      <div class="actions" style="margin-top:24px">
+        <span class="btn btn--secondary">Cancelar</span>
+        <span class="btn">Enviar para 3 signatários</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="note"><strong>A ordem das testemunhas é dado, não enfeite.</strong> A primeira da lista
+ocupa a linha 1 do documento e a segunda a linha 2; da terceira em diante não há linha e a
+assinatura vai <em>sem posição</em> (ADR 0065). Por isso a linha diz qual ocupa, e a terceira
+avisa.</p>
+
+<h2>3 · O aviso de documento sem posicionamento</h2>
+<p class="note">Decisão <strong>E1</strong>, e a mais importante deste pacote. Os dois templates
+reais da casa são <code>.docx</code> — ou seja, <strong>o caso mais comum é o que não
+posiciona</strong>, e ele é silencioso: 201, o cliente assina, e a assinatura aparece na página
+anexa. Foi o defeito que abriu a <code>#115</code>.</p>
+
+<div class="stage">
+  <div class="overlay">
+    <div class="dialog">
+      <h2>Enviar para assinatura</h2>
+      <p class="type-label" style="color:var(--muted);margin:6px 0 16px;font-weight:500">
+        Contrato_Design_Partner.docx</p>
+
+      <div class="alert--error" style="border-color:var(--warning-50);background:var(--warning-50);color:var(--warning);display:flex;gap:10px;align-items:flex-start">
+        <svg class="ico ico--18" viewBox="0 0 24 24" style="margin-top:1px"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        <span>Este documento não é PDF. As assinaturas vão para a última página do relatório, e
+        não sobre as linhas de assinatura.</span>
+      </div>
+
+      <p class="type-label" style="color:var(--muted);font-weight:500;margin:0">
+        (o resto do modal segue igual)</p>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid--2" style="margin-top:20px">
+  <figure class="spec spec--pick">
+    <figcaption>E1 ✅ — o servidor responde</figcaption>
+    <p class="note" style="margin:0">Campo derivado no <code>DocumentSerializer</code>, calculado
+    pelo mesmo <code>esign</code> que decide de verdade. Reconhece PDF pelo <strong>conteúdo</strong>
+    (<code>%PDF</code>), como o backend faz.</p>
+  </figure>
+  <figure class="spec">
+    <figcaption>E2 ❌ — o front infere pela extensão</figcaption>
+    <p class="note" style="margin:0">Um <code>contrato.pdf</code> que na verdade é <code>.docx</code>
+    faria a tela <strong>prometer</strong> posicionamento que não haverá. O aviso mentiria — pior do
+    que não avisar.</p>
+  </figure>
+</div>
+
+<h2>4 · A lista, depois do envio</h2>
+<p class="note">Decisão <strong>F1</strong>: a linha ganha o <strong>papel</strong>, e os três selos
+de status não mudam. Com três signatários, “quem é quem” é a pergunta que a lista de hoje não
+responde — <code>daniel@biahflow.ai</code> ao lado de <code>fulano@homecare.com.br</code> não diz
+qual deles é a casa.</p>
+
+<div class="stage">
+  <div class="panel panel--flush">
+    <div class="panel-rows">
+      <div class="row">
+        <span class="metric-icon"><svg class="ico ico--18" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+        <div class="row-main">
+          <strong>Contrato_Design_Partner.docx</strong>
+          <span>Home Care · Acordo de Design Partner</span>
+        </div>
+        <div class="actions">
+          <span class="btn btn--secondary" style="min-height:36px;padding:6px 12px">Lembrar</span>
+        </div>
+      </div>
+      <div class="nest">
+        <div class="panel-rows">
+          <div class="row">
+            <span class="state state--1">
+              <svg class="ico ico--12" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>Assinado</span>
+            <div class="row-main">
+              <strong>daniel@biahflow.ai</strong>
+              <span>Biahflow</span>
+            </div>
+          </div>
+          <div class="row">
+            <span class="state state--2">Pendente</span>
+            <div class="row-main">
+              <strong>fulano@homecare.com.br</strong>
+              <span>Parte contratante</span>
+            </div>
+            <div class="actions">
+              <span class="type-label" style="color:var(--brand-600)">Marcar assinado</span>
+            </div>
+          </div>
+          <div class="row">
+            <span class="state state--2">Pendente</span>
+            <div class="row-main">
+              <strong>beltrana@homecare.com.br</strong>
+              <span>Testemunha</span>
+            </div>
+            <div class="actions">
+              <span class="type-label" style="color:var(--brand-600)">Marcar assinado</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="note"><strong>Não há selo de “documento assinado”.</strong> Ele seria uma segunda
+definição de <code>Document.is_signed</code> — a armadilha que o <code>CLAUDE.md</code> nomeia para
+os mapas de estado. A resposta agregada é derivável de relance: todas as linhas verdes. E aqui ela
+mostra exatamente o que a ADR 0065 corrigiu: a casa já assinou, e o documento <em>não</em> está
+assinado.</p>
+
+<h2>5 · Mobile (390px)</h2>
+<p class="note">O modal vira coluna: o seletor de papel desce para baixo do e-mail, e o botão de
+remover ganha a linha inteira. Os alvos de toque seguem em 44px (WCAG 2.5.8), que é a razão de
+<code>.icon-button</code> manter <code>size-10</code> no produto.</p>
+
+<div class="stage mobile">
+  <div class="dialog" style="box-shadow:var(--shadow-card)">
+    <h2>Enviar para assinatura</h2>
+    <p class="type-label" style="color:var(--muted);margin:6px 0 16px;font-weight:500">
+      Contrato_Design_Partner.docx</p>
+    <div class="panel panel--flush" style="box-shadow:none">
+      <div class="panel-rows">
+        <div class="row" style="background:var(--surface-subtle)">
+          <div class="row-main">
+            <strong>Você (Biahflow)</strong>
+            <span>daniel@biahflow.ai</span>
+          </div>
+          <span class="state state--off">Fixo</span>
+        </div>
+        <div class="row">
+          <div class="row-main">
+            <strong>Fulano de Tal</strong>
+            <span>fulano@homecare.com.br</span>
+          </div>
+          <div class="row-meta">
+            <span class="field" style="width:auto;flex:1;padding:8px 10px;display:inline-flex;align-items:center;justify-content:space-between;gap:8px">
+              Parte contratante
+              <svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+            <span class="btn btn--secondary btn--icon" aria-label="Remover">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:20px;flex-direction:column">
+      <span class="btn" style="width:100%">Enviar para 2 signatários</span>
+      <span class="btn btn--secondary" style="width:100%">Cancelar</span>
+    </div>
+  </div>
+</div>
+
+<h2>Reservado — não faz parte desta revisão</h2>
+<div class="grid">
+  <figure class="spec reserved">
+    <figcaption>Ordem de assinatura</figcaption>
+    <p class="note" style="margin:0">Quem assina primeiro. O <code>SignerInput</code> do fornecedor
+    aceita; nós não usamos, e usar é decisão de produto.</p>
+  </figure>
+  <figure class="spec reserved">
+    <figcaption>Agrupar por rodada</figcaption>
+    <p class="note" style="margin:0">A rodada existe no schema e é o que fecha o documento, mas só
+    fica visível quando há reenvio depois de recusa — raro, e ainda não relatado. Volta em r2 com um
+    caso real.</p>
+  </figure>
+  <figure class="spec reserved">
+    <figcaption>Editar as coordenadas</figcaption>
+    <p class="note" style="margin:0">São fixas por papel e estimativa declarada (ADR 0065). A tela
+    não as expõe nem as edita.</p>
+  </figure>
+</div>
+
+<hr class="sep">
+<p class="type-meta" style="color:var(--muted)">Aprovar este pacote autoriza planejar e construir a
+revisão que ele descreve. Mudança de superfície depois disso exige r2, e não julgamento na hora.</p>
+
+</div>
+</body>
+</html>

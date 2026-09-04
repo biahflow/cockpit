@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAP — a finalidade classifica o documento · r2</title>
+<style>
+  /* Valores copiados de `frontend/src/index.css`. Auto-contido: abre sem build nem rede. */
+  :root {
+    --ink: #12110f; --muted: #57534e; --line: #e7e5e4; --line-strong: #d6d3d1;
+    --canvas: #fafaf9; --surface: #ffffff; --surface-subtle: #f5f5f4;
+    --brand-50: #fdf1ec; --brand-500: #bd4a30; --brand-700: #9c3c26;
+    --success: #047857; --success-50: #ecfdf5;
+    --warning: #b45309; --warning-50: #fffbeb;
+    --shadow-card: 0 1px 2px rgba(18,17,15,.06);
+    --text-title: 1rem; --text-body: .875rem; --text-label: .75rem; --text-meta: .6875rem;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px; background: var(--canvas); color: var(--ink);
+    font-family: "Inter Variable", "Inter", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--text-body); line-height: 1.375rem; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; }
+  .eyebrow { font-size: var(--text-meta); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-500); }
+  h1 { font-size: 2rem; line-height: 2.375rem; margin: 6px 0 8px; letter-spacing: -.02em; }
+  h2 { font-size: 1.25rem; margin: 0 0 6px; letter-spacing: -.01em; }
+  p.lead { color: var(--muted); margin: 0 0 4px; max-width: 78ch; }
+  .rule { height: 1px; background: var(--line); margin: 40px 0 28px; border: 0; }
+  .note { color: var(--muted); font-size: var(--text-label); margin: 8px 0 0; max-width: 78ch; }
+  .opt { font-size: var(--text-meta); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .rec { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--success-50); color: var(--success); letter-spacing: 0; }
+  .grid2 { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0,1fr)); }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .panel { border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 20px; box-shadow: var(--shadow-card); }
+  .form-label { display:block; font-size: var(--text-label); font-weight: 600; margin: 0 0 4px; }
+  .field { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; font-size: var(--text-body); background: var(--surface); color: var(--ink); }
+  .field + .form-label { margin-top: 12px; }
+  .state { display:inline-flex; border-radius:999px; padding:2px 9px; font-size:var(--text-meta); font-weight:600; }
+  .state--off { background: var(--surface-subtle); color: var(--muted); }
+  .state--1 { background: var(--success-50); color: var(--success); }
+  .state--2 { background: var(--warning-50); color: var(--warning); }
+
+  .doc-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--line); }
+  .doc-row:first-of-type { border-top: 0; }
+  .doc-icon { width:34px; height:34px; border-radius:10px; background:var(--surface-subtle); color:var(--muted); display:grid; place-items:center; flex:none; }
+  .doc-main { min-width:0; flex:1; }
+  .doc-main strong { display:block; font-size: var(--text-body); }
+  .doc-meta { display:flex; align-items:center; gap:6px; font-size:var(--text-label); color:var(--muted); margin-top:2px; }
+  table { border-collapse: collapse; width: 100%; font-size: var(--text-body); }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align: top; }
+  th { font-size: var(--text-label); color: var(--muted); font-weight: 700; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.8125rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Design Approval Package · r2</p>
+  <h1>A finalidade classifica o documento</h1>
+  <p class="lead">
+    A r1 aprovou o campo com <strong>um</strong> valor, e por isso ele só aparecia no vínculo com
+    conta. Com NDA, contrato e proposta no enum, essa regra passa a esconder o campo justamente
+    onde eles vivem. Um campo só, que classifica — e a casa decide o que dispara.
+  </p>
+
+  <hr class="rule">
+
+  <h2>Decisão A — quando o campo aparece (revê a A1 da r1)</h2>
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">A1-r2 — sempre visível, opções filtradas <span class="rec">recomendada</span></p>
+      <div class="panel">
+        <label class="form-label">Vincular a</label>
+        <select class="field"><option>Cliente</option></select>
+        <label class="form-label">Cliente</label>
+        <select class="field"><option>Rio Home Care</option></select>
+        <label class="form-label">Finalidade</label>
+        <select class="field">
+          <option>Documento comum</option><option>NDA</option>
+          <option>Contrato comercial</option><option>Proposta</option>
+          <option>Design Partner Agreement</option>
+        </select>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <label class="form-label">Vincular a</label>
+        <select class="field"><option>Oportunidade</option></select>
+        <label class="form-label">Oportunidade</label>
+        <select class="field"><option>Discovery — Rio Home Care</option></select>
+        <label class="form-label">Finalidade</label>
+        <select class="field">
+          <option>Documento comum</option><option>NDA</option>
+          <option>Contrato comercial</option><option>Proposta</option>
+        </select>
+      </div>
+      <p class="note">
+        O que exigia conta nunca foi <strong>o campo</strong> — era <strong>abrir mandato</strong>.
+        Amarrando a condição às opções, o NDA passa a poder ser classificado onde ele está.
+      </p>
+    </div>
+    <div>
+      <p class="opt">A3-r2 — manter a A1</p>
+      <div class="panel">
+        <label class="form-label">Vincular a</label>
+        <select class="field"><option>Oportunidade</option></select>
+        <label class="form-label">Oportunidade</label>
+        <select class="field"><option>Discovery — Rio Home Care</option></select>
+        <p class="note" style="margin-top:14px">— sem campo de finalidade —</p>
+      </div>
+      <p class="note">Mantém o defeito que motivou a revisão: o contrato desta oportunidade continua sendo "Documento comum".</p>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <h2>Decisão B — a finalidade aparece na listagem</h2>
+  <p class="lead">Sem isto, classificar não resolve o que motivou a revisão: achar o NDA depois.</p>
+  <div class="grid2" style="margin-top:16px">
+    <div>
+      <p class="opt">B1 — pastilha neutra na linha <span class="rec">recomendada</span></p>
+      <div class="panel">
+        <div class="doc-row">
+          <span class="doc-icon">▤</span>
+          <div class="doc-main"><strong>nda-rio-home-care.pdf</strong>
+            <div class="doc-meta">Cliente: Rio Home Care <span class="state state--off">NDA</span></div></div>
+          <span class="state state--1">Assinado</span>
+        </div>
+        <div class="doc-row">
+          <span class="doc-icon">▤</span>
+          <div class="doc-main"><strong>acordo-parceria.pdf</strong>
+            <div class="doc-meta">Cliente: Rio Home Care <span class="state state--off">Design Partner Agreement</span></div></div>
+          <span class="state state--1">Assinado</span>
+        </div>
+        <div class="doc-row">
+          <span class="doc-icon">▤</span>
+          <div class="doc-main"><strong>ata-kickoff.pdf</strong>
+            <div class="doc-meta">Projeto: Discovery Sprint</div></div>
+          <span class="state state--2">Pendente</span>
+        </div>
+      </div>
+      <p class="note">
+        "Documento comum" <strong>não</strong> ganha pastilha: o padrão não precisa se anunciar, e
+        uma pastilha em toda linha vira ruído em vez de sinal. A neutra (<code>--off</code>) é o que
+        a ADR 0026 reserva para o que não é aviso.
+      </p>
+    </div>
+    <div>
+      <p class="opt">B2 — texto simples</p>
+      <div class="panel">
+        <div class="doc-row">
+          <span class="doc-icon">▤</span>
+          <div class="doc-main"><strong>nda-rio-home-care.pdf</strong>
+            <div class="doc-meta">Cliente: Rio Home Care · NDA</div></div>
+          <span class="state state--1">Assinado</span>
+        </div>
+        <div class="doc-row">
+          <span class="doc-icon">▤</span>
+          <div class="doc-main"><strong>acordo-parceria.pdf</strong>
+            <div class="doc-meta">Cliente: Rio Home Care · Design Partner Agreement</div></div>
+          <span class="state state--1">Assinado</span>
+        </div>
+      </div>
+      <p class="note">Mais discreto, e some no meio do vínculo quando o nome da conta é longo.</p>
+    </div>
+  </div>
+
+  <hr class="rule">
+  <h2>O que este pacote não decide</h2>
+  <table>
+    <tr><th>Assunto</th><th>Por quê</th></tr>
+    <tr><td>Filtrar por finalidade</td><td>Reservado (C1): a lista já filtra por Ativos/Arquivados, e um segundo eixo pede decidir como os dois se combinam. Exibir já resolve numa lista deste tamanho.</td></tr>
+    <tr><td>Editar a finalidade depois do envio</td><td>Continua fora, como na r1.</td></tr>
+    <tr><td>Valores novos no enum</td><td>Cada um precisa de consumidor e de decisão própria.</td></tr>
+  </table>
+</div>
+</body>
+</html>

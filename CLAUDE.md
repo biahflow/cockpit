@@ -124,7 +124,9 @@ Key cross-cutting patterns to preserve:
   `docs/design/dap-lifecycle-status-r1/`, decisões **A1 · B1 · C1**, e os mapas de rótulo e de
   variante moram em `frontend/src/components/AccountLifecycle.tsx` — um lugar só, no molde de
   `StatusDot` (ADR 0026). A rota da SPA é `/contas`; `/clientes*` redireciona e morre na
-  `/api/v2/`.
+  `/api/v2/`. A r2 (decisão **A1**, aprovada em 03/09/2026) estendeu "Conta" ao detalhe da conta,
+  aos formulários do Comercial e do Financeiro e ao alvo de vínculo de Documentos; "Cliente" segue
+  sendo só o rótulo do estado e o eixo de pendência (`Fornecedor`/`Cliente`).
 - **Opportunity → Project conversion** is the central business action: the
   `convert-to-project` `@action` on `CommercialOpportunityViewSet`. It requires the sale be in the
   "won" stage, enforces sales/admin role, and carries `CommercialOpportunity.service` over to
@@ -273,7 +275,12 @@ Key cross-cutting patterns to preserve:
   exige o mapa citado publicado e vivo, despublicá-lo ou arquivá-lo é 409 enquanto algo publicado
   o citar, e **mover a âncora por baixo de um registro publicado é 400** — senão `process_id`
   aponta para fora de `processes[]`. São **cinco** portas, e a quinta é a única que não passa
-  perto de `published_at`: quem responde às três perguntas é `publication.py`, num lugar só. Nunca
+  perto de `published_at`: quem responde às três perguntas é `publication.py`, num lugar só.
+  **Publicar deixou de ser só chamada de API na FDD 052**: a superfície é `/contas/:id/publicacao`
+  (selo de leitura na `ProcessDetailPage`, porta no detalhe da conta), e a regra que não pode se
+  perder ali é a ADR 0063 — o estado sai nos cinco serializers como `publication_state`, **com a
+  frase junto**, e a frase de recusa é a de `publication.py`; um mapa chave→rótulo em TypeScript
+  seria a segunda definição da copy que o 400 e o 409 já usam. Nunca
   cruzam `raw_excerpt`, `content_hash`, os nove insumos do custo, `rationale`/`weights`/`formula_key`,
   `assumptions`, e **nem `rank`** — ele ordena as oportunidades **não publicadas** junto, e
   recalculá-lo entre as publicadas seria a segunda definição que a ADR 0054 recusou; quem responde é
@@ -355,7 +362,12 @@ Key cross-cutting patterns to preserve:
   e **B1** (as duas pílulas de `commercial_model` sempre visíveis) — mudar a superfície exige
   revisão nova do pacote, não julgamento na hora. `projects_count` é **recortado por
   `project_scope_q`**, não é o total do mandato: dois usuários veem números diferentes para a mesma
-  linha, e é o mesmo comportamento de `/clients/overview/`. Ver a emenda de 28/08 na FDD 046.
+  linha, e é o mesmo comportamento de `/clients/overview/`. Ver a emenda de 28/08 na FDD 046. A
+  linha do mandato também mostra o grupo de WhatsApp do cliente, governada pelo DAP
+  `docs/design/dap-grupo-de-whatsapp-r1/` (A1 · B1 · C1 · D1): o par sai derivado com fallback pelo
+  legado, num lugar só (`kickoff.grupo_do_mandato`) e **sem** recorte por papel — contraste
+  deliberado com `projects_count`, porque "o mandato tem grupo" é fato da relação com o cliente, o
+  mesmo para quem olha.
 - **Pipeline invariants.** DB constraints enforce at most one "won" and one "lost"
   `PipelineStage`, and at most one active `Service` per product `tier`. DRF derives the
   serializer validation from these constraints — don't hand-roll a duplicate check.

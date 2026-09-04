@@ -1,10 +1,17 @@
 """Integração com o Google Drive (conta de serviço + Shared Drive).
 
-Organiza os documentos por cliente usando o método PARA:
-``[raiz]/{Cliente}/{1-Projetos|2-Áreas|3-Recursos|4-Arquivo}/arquivo``.
+Organiza os documentos por conta usando a **finalidade** (``Document.kind``):
+``[raiz]/{Conta}/{Contratos|Propostas|NDAs|Acordos de Design Partner|Outros}/arquivo``, mais
+``{Conta}/Projetos/{Projeto}`` para a pasta que o kickoff garante (issue #113). Até aqui o
+critério era o **vínculo** do documento (conta/oportunidade/projeto, o método PARA) — mas o
+vínculo nunca disse para que o documento serve, só onde ele nasceu; um Contrato Comercial preso a
+uma oportunidade e outro já solto na conta (`account`, pós-conversão) caíam em pastas diferentes
+apesar de serem o mesmo tipo de papel. `Document.kind` passou a existir e responde à pergunta
+certa. Documento já enviado ao Drive **não é movido**: a estrutura antiga continua valendo para
+quem já está lá (é operação sobre dado real de cliente, fora deste escopo — issue #113).
 Quando ``GOOGLE_DRIVE_ENABLED`` está desligado, o app usa o storage local e nada
 aqui é chamado. As funções que falam com a API do Google são finas e ficam fora da
-cobertura de teste; a lógica de negócio (bucket PARA e conta-dona) é testada.
+cobertura de teste; a lógica de negócio (a pasta e a conta-dona) é testada.
 """
 
 from __future__ import annotations
@@ -32,10 +39,32 @@ class DriveProviderError(Exception):
     caiu" — que é exatamente o tipo de mentira que a FDD 024 existe para evitar.
     """
 
-PROJECT_BUCKET = "1-Projetos"
-CLIENT_BUCKET = "2-Áreas"
-OPPORTUNITY_BUCKET = "3-Recursos"
-ARCHIVE_BUCKET = "4-Arquivo"
+# O método PARA saiu (issue #113): as duas constantes de subpasta por vínculo (conta e
+# oportunidade) classificavam pelo lugar de origem, critério que a finalidade substitui. A
+# subpasta "4-Arquivo" saiu por um motivo à parte — nunca teve chamador: a função de bucket
+# anterior jamais a retornava, e a issue #113 a descrevia como "destino de documento arquivado"
+# por engano. Mesma dívida da issue #110 (classe sem consumidor), em escala menor.
+PASTA_DE_PROJETOS = "Projetos"
+
+# Nome de pasta em plural, num mapa próprio — e não o rótulo cru do `Document.Kind`, que é
+# singular e serve a outra superfície (o `<select>` de finalidade). É uma segunda definição do
+# rótulo, e o custo disso é pago pelo teste de exaustividade em `tests/test_drive.py`: ele reprova
+# se um `Kind` novo não tiver entrada aqui, o que impede a divergência silenciosa.
+#
+# Chaveado por **string literal** (e não por `Document.Kind.…`) de propósito: `drive.py` só
+# importa `Document` sob `TYPE_CHECKING` (linhas 20-21) para não criar ciclo — `models.py` não
+# importa `drive`, mas um `dict` de módulo com chave `Document.Kind.…` exigiria o import de
+# `models` em tempo de execução no topo do arquivo, e a alternativa (montar o mapa dentro de uma
+# função com import local, como `_service()` faz) pagaria esse custo a cada chamada por nada: as
+# chaves já são exatamente os `value` de `Document.Kind`, e a correspondência entre os dois é
+# provada pelo teste de exaustividade, não pelo tipo do Python.
+PASTA_POR_FINALIDADE: dict[str, str] = {
+    "commercial_contract": "Contratos",
+    "proposal": "Propostas",
+    "nda": "NDAs",
+    "design_partner_agreement": "Acordos de Design Partner",
+}
+PASTA_SEM_FINALIDADE = "Outros"
 
 
 # O id de uma pasta/Shared Drive só aparece **dentro** da URL, que é de onde a pessoa o copia —
@@ -64,13 +93,9 @@ def root_folder_id() -> str:
     return parse_root_folder_id(settings.GOOGLE_DRIVE_ROOT_FOLDER_ID)
 
 
-def para_bucket_for(document: Document) -> str:
-    """Subpasta PARA de acordo com o vínculo do documento."""
-    if document.project_id:
-        return PROJECT_BUCKET
-    if document.commercial_opportunity_id:
-        return OPPORTUNITY_BUCKET
-    return CLIENT_BUCKET
+def pasta_do_documento(document: Document) -> str:
+    """Subpasta de acordo com a finalidade do documento (`Document.kind`), não o vínculo."""
+    return PASTA_POR_FINALIDADE.get(document.kind, PASTA_SEM_FINALIDADE)
 
 
 def account_of(document: Document) -> Account | None:
@@ -139,7 +164,7 @@ def _ensure_account_folder(service, account: Account) -> str:  # pragma: no cove
 
 
 def ensure_project_folder(project: Project) -> str:  # pragma: no cover - I/O
-    """Garante ``{Cliente}/1-Projetos/{Projeto}`` e persiste o id no projeto.
+    """Garante ``{Conta}/Projetos/{Projeto}`` e persiste o id no projeto.
 
     No-op (retorna "") quando o Drive está desligado, para o kickoff seguir sem I/O.
     """
@@ -149,7 +174,7 @@ def ensure_project_folder(project: Project) -> str:  # pragma: no cover - I/O
         return project.drive_folder_id
     service = _service()
     account_folder = _ensure_account_folder(service, project.engagement.account)
-    bucket_folder = _ensure_subfolder(service, PROJECT_BUCKET, account_folder)
+    bucket_folder = _ensure_subfolder(service, PASTA_DE_PROJETOS, account_folder)
     folder_id = _ensure_subfolder(service, project.name, bucket_folder)
     project.drive_folder_id = folder_id
     project.save(update_fields=["drive_folder_id", "updated_at"])
@@ -157,7 +182,7 @@ def ensure_project_folder(project: Project) -> str:  # pragma: no cover - I/O
 
 
 def upload_document(document: Document, uploaded_file) -> tuple[str, str]:  # pragma: no cover - I/O
-    """Sobe o arquivo para ``{Cliente}/{subpasta PARA}`` e retorna ``(file_id, link)``."""
+    """Sobe o arquivo para ``{Conta}/{pasta da finalidade}`` e retorna ``(file_id, link)``."""
     from googleapiclient.http import MediaIoBaseUpload
 
     account = account_of(document)
@@ -165,7 +190,7 @@ def upload_document(document: Document, uploaded_file) -> tuple[str, str]:  # pr
         raise ValueError("Documento sem conta-dona para o Drive.")
     service = _service()
     account_folder = _ensure_account_folder(service, account)
-    bucket_folder = _ensure_subfolder(service, para_bucket_for(document), account_folder)
+    bucket_folder = _ensure_subfolder(service, pasta_do_documento(document), account_folder)
     media = MediaIoBaseUpload(
         io.BytesIO(uploaded_file.read()),
         mimetype=getattr(uploaded_file, "content_type", None) or "application/octet-stream",

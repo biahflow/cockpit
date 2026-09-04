@@ -48,6 +48,7 @@ from . import (
     calendar_sync,
     cases,
     cobranca,
+    discovery_booking,
     drive,
     engineering_provisioning,
     enrichment,
@@ -848,7 +849,25 @@ class AccountViewSet(ArchiveModelViewSet):
         # tem mais o reverso `projects` (era o related_name de `Project.client`, removido); o
         # caminho canônico até o projeto passa pelo mandato: `engagements__projects`.
         scope = project_scope_q(self.request.user, "engagements__projects")
-        return queryset.filter(scope).distinct() if scope else queryset
+        queryset = queryset.filter(scope).distinct() if scope else queryset
+        # `published_count` (issue `#114`): quanto do Discovery desta conta o cliente está vendo,
+        # para a confirmação de arquivar poder avisar. Vem por subconsulta correlacionada e não
+        # por `Count` com `JOIN` — cinco joins multiplicariam as linhas entre si, e o `.distinct()`
+        # acima esconderia o número errado em vez de corrigi-lo. Anotado **depois** do escopo
+        # porque o recorte é da conta, não do leitor: dois usuários veem o mesmo número.
+        #
+        # **Só onde o serializer lê.** `get_queryset` aqui serve também ao `/clients/overview/`,
+        # que monta dicionário próprio e nunca toca em `AccountSerializer`: anotar sempre faria o
+        # grid de contas — a tela mais carregada do produto — rodar cinco `COUNT` correlacionados
+        # por linha que ninguém lê. A contagem de *queries* não mudaria (por isso o orçamento de
+        # `test_aggregate_query_budget` passa dos dois jeitos), e é exatamente o que torna esse
+        # desperdício invisível: ele cresce com a carteira sem nada ficar vermelho. As demais
+        # ações caem no `getattr(obj, "published_count", None)` do serializer, que conta o objeto
+        # na mão — cinco `COUNT` sobre **uma** linha, que é o caso que aquele ramo existe para
+        # servir.
+        if self.action not in {"list", "retrieve"}:
+            return queryset
+        return queryset.annotate(**publication.anotacao_de_contagem_publicada())
 
     def perform_destroy(self, instance: Account) -> None:
         """Arquiva o cliente e, junto, os contatos dele — recusando se ainda houver trabalho aberto.
@@ -1265,6 +1284,10 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
         "sponsor",
         "originating_commercial_opportunity",
         "originating_design_partner_agreement",
+    ).prefetch_related(
+        # O fallback do grupo de WhatsApp (DAP `dap-grupo-de-whatsapp-r1`, B1) lê os projetos do
+        # mandato em `kickoff.grupo_do_mandato`; sem o prefetch a listagem faz uma query por linha.
+        "projects",
     ).all()
     serializer_class = EngagementSerializer
     # `status` em `filter_exact_fields` e não em `filter_fields`: o primeiro conjunto só aplica
@@ -1338,6 +1361,89 @@ class EngagementViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
                 "Arquive esses projetos antes de arquivar o engagement."
             )
         instance.archive()
+
+    @extend_schema(request=ProjectSerializer, responses={201: ProjectSerializer})
+    @action(detail=True, methods=["post"], url_path="create-project")
+    def create_project(self, request: Request, pk: str | None = None) -> Response:
+        """Faz nascer um projeto do mandato, sem passar por venda (DAP `dap-engagement-r3`, D1).
+
+        `POST /projects/` não serve a este caminho por **três** razões, e nenhuma delas é estilo:
+
+        - ele só passa para admin (`RolePermission`), e a seção de Engagements é visível a Vendas —
+          quem negocia o mandato é quem cria o projeto dele. Afrouxar o `RolePermission` para
+          resolver isto abriria a criação crua de projeto para todo o comercial, que é mais do que
+          se pediu; a guarda própria desta action é o mesmo remédio da `convert-to-project`;
+        - `perform_create` não semeia nada: sem marcos, sem tarefas, sem faturas e sem kickoff. Um
+          projeto nascido por lá aparece vazio, e o Discovery Sprint perde os marcos que **são** a
+          metodologia (walkthrough, custo do estado atual, Executive Readout);
+        - a invariante 6 do mapa de linguagem (oferta de aquisição não gera projeto) vive em
+          `Project.clean()`, e o `ProjectSerializer` não chama `full_clean()` — hoje só a conversão
+          a aplica de fato.
+
+        **A trava não é a mesma da conversão, e a diferença é sutil.** Lá o `select_for_update`
+        sustenta um "converte uma vez só"; aqui não há o que impedir — um mandato origina vários
+        projetos por desenho (D1, ADR 0050), e o segundo é legítimo. A trava existe porque
+        `kickoff.seed_work_items` **não** é idempotente: ela apenas serializa duas requisições
+        simultâneas para que o duplo clique produza dois pedidos em fila, e não dois projetos com
+        dois cronogramas gravados por cima um do outro. Ela mora em
+        `kickoff.criar_projeto_do_mandato`, junto do resto do ato, desde que a rota pública do
+        agendamento passou a fazer nascer o mesmo projeto (ADR 0061).
+        """
+        engagement = self.get_object()
+        if request.user.role not in {User.Role.ADMIN, User.Role.SALES} and not request.user.is_superuser:
+            return Response(
+                {"detail": "Somente Vendas pode criar projetos a partir do engagement."}, status=403
+            )
+        # D1: mandato encerrado não oferece a ação. 409 e não 400 pela regra do `StateConflict` —
+        # o corpo está perfeitamente bem formado, o que impede é o estado, e é ele que muda para o
+        # pedido passar.
+        if engagement.status == Engagement.Status.CLOSED:
+            raise StateConflict(
+                "Este engagement está encerrado e não origina projeto novo. "
+                "Reabra o mandato ou crie o projeto no engagement que está em curso."
+            )
+        # O mandato desta rota é o da URL, e o formulário aprovado (C1) não repete o que o caminho
+        # já diz: `name`, `service`, `start_date` e `due_date`, nada mais. Ele entra no corpo
+        # **antes** da validação, e não como `engagement_optional` mais um `save(engagement=…)`,
+        # porque é o que mantém a validação sendo a mesma do `POST /projects/` — uma definição só:
+        # `due_date >= start_date` e a conferência da chave legada `client` contra a conta do
+        # mandato, que sem o engajamento em mãos o serializer pula em silêncio.
+        dados = request.data.copy()
+        do_corpo = dados.get("engagement")
+        if do_corpo is not None and str(do_corpo) != str(engagement.pk):
+            # Sobrescrever devolveria 201 para um pedido que escolheu **outro** mandato, e quem
+            # chamou acreditaria ter criado o projeto lá. Mesmo motivo pelo qual a conversão recusa
+            # uma conta divergente em vez de ignorá-la.
+            return Response(
+                {"engagement": "O projeto nasce do engagement da rota. Remova a chave do corpo "
+                               "ou repita o mesmo id."},
+                status=400,
+            )
+        dados["engagement"] = engagement.pk
+        serializer = ProjectSerializer(data=dados)
+        serializer.is_valid(raise_exception=True)
+        service = serializer.validated_data.get("service")
+        # Invariante 6 do mapa de linguagem (ADR 0049), a mesma da conversão e com o mesmo texto:
+        # a Qualification Call existe para descobrir se há venda, não para ser entregue.
+        if service and service.category == Service.Category.ACQUISITION:
+            return Response(
+                {"service": "Oferta de aquisição não gera projeto — a Qualification Call abre a "
+                            "venda, ela não é a venda. Escolha um degrau da escada."},
+                status=400,
+            )
+        # A transação inteira — trava, gravação e semeadura — mora em `kickoff`, porque a rota
+        # pública em que o cliente marca a sessão de Discovery faz nascer o **mesmo** projeto
+        # (ADR 0061) e duas cópias do ato divergiriam na primeira manutenção. O que fica aqui é o
+        # que só esta rota tem: as guardas acima e o dono, que lá não existe.
+        #
+        # Sem `originating_commercial_opportunity`: aqui não houve venda, e inventar uma origem
+        # comercial contaminaria o funil e o ciclo médio, que leem esse campo como fato histórico.
+        # Projeto de mandato sem venda é o caso do Design Partner (ADR 0053).
+        project = kickoff.criar_projeto_do_mandato(
+            engagement, lambda: serializer.save(owner=request.user)
+        )
+        kickoff.finalize(project, origem=f"a partir do engagement '{engagement.name}'")
+        return Response(ProjectSerializer(project).data, status=status.HTTP_201_CREATED)
 
 
 class ProjectViewSet(ProjectScopedMixin, ArchiveModelViewSet):
@@ -2456,6 +2562,58 @@ class ArtifactViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         super().perform_create(serializer)
 
 
+def _signers_do_pedido(data: Any) -> list[esign.Signer]:
+    """A rodada de assinatura pedida no corpo — na forma nova, ou pelo alias `signer_email`.
+
+    `signers` é a forma canônica: uma lista de `{"email", "role"}`, na ordem em que os signatários
+    ocupam o bloco de assinatura do documento (duas testemunhas pegam as duas linhas, nessa ordem).
+    `signer_email` continua aceito e vira **um** signatário `counterparty` — a SPA ainda manda a
+    forma antiga, e a tela de escolher contatos e papéis depende de um DAP que ainda não existe;
+    quebrar agora deixaria o produto sem caminho nenhum. É o mecanismo de alias de entrada de
+    sempre (`docs/ontology/aliases.md` §2c), e a **forma nova vence** quando as duas vêm no mesmo
+    corpo. Morre na `/api/v2/`.
+
+    As três recusas são 400 (`InvalidInput`) porque é o **corpo** que está errado, não o estado:
+    lista vazia, papel fora do vocabulário, e e-mail repetido — este último porque o fornecedor casa
+    signatário por e-mail, e dois iguais tornam ambíguo qual solicitação o webhook vem fechar.
+    """
+    if "signers" in data:
+        pedidos = data.get("signers")
+        if not isinstance(pedidos, list) or not pedidos:
+            raise InvalidInput("Informe ao menos um signatário em «signers».")
+    else:
+        email_unico = str(data.get("signer_email", "")).strip()
+        if not email_unico:
+            raise InvalidInput("Informe o e-mail do signatário.")
+        pedidos = [{"email": email_unico, "role": SignatureRequest.SignerRole.COUNTERPARTY}]
+
+    signers: list[esign.Signer] = []
+    vistos: set[str] = set()
+    for pedido in pedidos:
+        if not isinstance(pedido, dict):
+            raise InvalidInput("Cada signatário é um objeto com «email» e «role».")
+        email = str(pedido.get("email", "")).strip()
+        if not email:
+            raise InvalidInput("Informe o e-mail do signatário.")
+        papel = str(pedido.get("role") or SignatureRequest.SignerRole.COUNTERPARTY).strip()
+        if papel not in SignatureRequest.SignerRole.values:
+            raise InvalidInput(f"Papel de signatário desconhecido: «{papel}».")
+        if email.lower() in vistos:
+            raise InvalidInput(
+                "O mesmo e-mail aparece duas vezes na lista de signatários. O fornecedor casa "
+                "signatário por e-mail, e dois iguais deixam ambíguo qual assinatura foi concluída."
+            )
+        vistos.add(email.lower())
+        signers.append(esign.Signer(email=email, role=papel))
+
+    casa = str(settings.ESIGN_HOUSE_SIGNER_EMAIL or "").strip()
+    # A casa entra sozinha quando o e-mail dela está configurado — e **não** entra duas vezes se
+    # quem enviou já a nomeou no corpo: seria o e-mail repetido que a regra acima recusa.
+    if casa and casa.lower() not in vistos:
+        signers.append(esign.Signer(email=casa, role=SignatureRequest.SignerRole.HOUSE))
+    return signers
+
+
 class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
     """Documentos privados, vinculados a exatamente um cliente, oportunidade ou projeto.
 
@@ -2467,6 +2625,10 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
     queryset = Document.objects.select_related(
         "account", "commercial_opportunity", "project", "uploaded_by",
         "originated_design_partner_engagement",
+        # A conta-dona derivada (`owning_account`, DAP r1 B1) segue o vínculo até
+        # `engagement.account`. Sem estes dois a listagem faz uma consulta por documento pendurado
+        # em oportunidade ou projeto — o campo é derivado, mas a cadeia é real.
+        "commercial_opportunity__account", "project__engagement__account",
     ).prefetch_related("signature_requests").all()
     serializer_class = DocumentSerializer
     filter_fields = ("account", "commercial_opportunity", "project")
@@ -2487,25 +2649,81 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
             return FileResponse(content, as_attachment=True, filename=document.original_name)
         return FileResponse(document.file.open("rb"), as_attachment=True, filename=document.original_name)
 
+    @extend_schema(
+        request=inline_serializer(
+            name="RequestSignatureRequest",
+            fields={
+                "signers": serializers.ListField(
+                    child=inline_serializer(
+                        name="RequestSignatureSigner",
+                        fields={
+                            "email": serializers.EmailField(),
+                            "role": serializers.ChoiceField(
+                                choices=SignatureRequest.SignerRole.choices, required=False
+                            ),
+                        },
+                    ),
+                    required=False,
+                ),
+                # Alias de entrada, morre na `/api/v2/` (`docs/ontology/aliases.md`): um único
+                # signatário `counterparty`. A forma canônica é `signers`, e ela vence quando as
+                # duas vêm no mesmo corpo.
+                "signer_email": serializers.EmailField(required=False),
+            },
+        ),
+        responses=inline_serializer(
+            name="RequestSignatureCreated",
+            fields={
+                "signatures": serializers.ListField(
+                    child=inline_serializer(
+                        name="RequestSignatureCreatedItem",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "status": serializers.CharField(),
+                            "signer_email": serializers.EmailField(),
+                            "signer_role": serializers.CharField(),
+                        },
+                    )
+                )
+            },
+        ),
+    )
     @action(detail=True, methods=["post"], url_path="request-signature")
     def request_signature(self, request: Request, pk: str | None = None) -> Response:
         document = self.get_object()
         if not esign.is_enabled():
             return Response({"detail": "Assinatura eletrônica desativada."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        signer_email = str(request.data.get("signer_email", "")).strip()
-        if not signer_email:
-            return Response({"detail": "Informe o e-mail do signatário."}, status=400)
+        signers = _signers_do_pedido(request.data)
         try:
-            ref = esign.send_for_signature(document, signer_email)
+            refs = esign.send_for_signature(document, signers)
         except esign.EsignProviderError as exc:
             logger.exception("solicitação de assinatura recusada para %s", document.original_name)
             raise EsignUnavailable() from exc
-        signature = SignatureRequest.objects.create(
-            document=document, signer_email=signer_email,
-            provider_ref=ref.provider_ref, document_ref=ref.document_ref, sign_url=ref.sign_url,
+        # Uma rodada, N solicitações, o **mesmo** `document_ref` — é ele que responde "esta rodada
+        # está assinada?" em `Document.is_signed`.
+        criadas = [
+            SignatureRequest.objects.create(
+                document=document, signer_email=signer.email, signer_role=signer.role,
+                provider_ref=ref.provider_ref, document_ref=ref.document_ref, sign_url=ref.sign_url,
+            )
+            for signer, ref in zip(signers, refs, strict=True)
+        ]
+        for signature in criadas:
+            esign.invite_signer(document, signature)  # no-op quando o fornecedor é quem convida
+        return Response(
+            {
+                "signatures": [
+                    {
+                        "id": signature.id,
+                        "status": signature.status,
+                        "signer_email": signature.signer_email,
+                        "signer_role": signature.signer_role,
+                    }
+                    for signature in criadas
+                ]
+            },
+            status=status.HTTP_201_CREATED,
         )
-        esign.invite_signer(document, signature)  # no-op quando o fornecedor é quem convida
-        return Response({"id": signature.id, "status": signature.status}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="remind-signature")
     def remind_signature(self, request: Request, pk: str | None = None) -> Response:
@@ -2520,9 +2738,9 @@ class DocumentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVie
         signature = document.signature_requests.filter(pk=request.data.get("signature")).first()
         if signature is None:
             return Response({"detail": "Solicitação de assinatura não encontrada."}, status=404)
-        signature.status = SignatureRequest.Status.SIGNED
-        signature.signed_at = timezone.now()
-        signature.save(update_fields=["status", "signed_at"])
+        # Fallback manual do mesmo caminho do webhook (`esign.apply_decision`): fecha o artefato
+        # de contrato, notifica quem subiu o documento e é idempotente a um segundo clique.
+        signature = esign.apply_decision(signature.pk, SignatureRequest.Status.SIGNED)
         return Response(SignatureRequestSerializer(signature).data)
 
 
@@ -4030,6 +4248,173 @@ class BookingCreateView(APIView):
         )
 
 
+# --- Agendamento do Discovery pelo cliente (FDD 013, DAP `dap-agendamento-discovery-r1`) ------
+#
+# As duas rotas abaixo são públicas e o **token é a credencial** — ele chega por e-mail a quem
+# acabou de assinar o acordo de Design Partner. Sem `X-Intake-Token`, ao contrário das de
+# pré-venda: ali o segredo do relay é a primeira porta porque o formulário é do site da casa;
+# aqui quem abre é o cliente, direto do e-mail, e não há relay entre os dois.
+#
+# **Os quatro estados da decisão D1 precisam ser distinguíveis pela resposta**, cada um com seu
+# `code`: a página desenha mensagem diferente para cada um, e colapsá-los faria a tela dizer
+# "não há horário livre" quando o que houve foi a agenda não responder — mentira que custa uma
+# reunião. Por isso `code` e não só `detail`: texto de mensagem é da superfície, e a página não
+# deve ramificar por ele.
+DISCOVERY_INDISPONIVEL = "Agendamento indisponível."
+DISCOVERY_AGENDA_FORA = "Não foi possível consultar a agenda."
+
+
+def _discovery_erro(detail: str, code: str, http_status: int) -> Response:
+    return Response({"detail": detail, "code": code}, status=http_status)
+
+
+def _discovery_token_response(exc: Exception) -> Response:
+    """Traduz a falha do token no 400 que a página sabe desenhar."""
+    if isinstance(exc, discovery_booking.TokenExpirado):
+        return _discovery_erro(
+            "Este link expirou.", "token_expired", status.HTTP_400_BAD_REQUEST
+        )
+    # Sem dizer por quê: distinguir "assinatura errada" de "mandato inexistente" para quem não
+    # está autenticado é dar retorno a quem sonda (decisão D1).
+    return _discovery_erro(
+        "Link não reconhecido.", "token_invalid", status.HTTP_400_BAD_REQUEST
+    )
+
+
+def _discovery_fora_do_ar() -> Response | None:
+    """503 quando a funcionalidade ou a agenda estão desligadas; `None` quando dá para seguir."""
+    if not discovery_booking.is_enabled() or not calendar_sync.is_enabled():
+        return _discovery_erro(
+            DISCOVERY_INDISPONIVEL, "booking_disabled", status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    return None
+
+
+class DiscoveryBookingSlotsView(APIView):
+    """Horários livres para o cliente marcar o Discovery do seu mandato (rota pública)."""
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "discovery_booking"
+
+    @extend_schema(responses=inline_serializer("DiscoveryBookingSlotsResponse", {
+        "account": serializers.CharField(),
+        "slots": serializers.ListField(child=serializers.DateTimeField()),
+        "scheduled_at": serializers.DateTimeField(allow_null=True),
+    }))
+    def get(self, request: Request) -> Response:
+        fora = _discovery_fora_do_ar()
+        if fora is not None:
+            return fora
+        try:
+            engagement = discovery_booking.engagement_from_token(request.query_params.get("token", ""))
+        except (discovery_booking.TokenExpirado, discovery_booking.TokenInvalido) as exc:
+            return _discovery_token_response(exc)
+
+        # Já marcado: a página mostra o horário e não oferece outro (decisão C1, sem remarcação).
+        # A pergunta vem **antes** da agenda de propósito — consultar o Google aqui só criaria uma
+        # chance a mais de 503 para quem já não tem nada a escolher.
+        agendado = discovery_booking.discovery_agendado(engagement)
+        if agendado is not None:
+            return Response({
+                "account": engagement.account.name,
+                "slots": [],
+                "scheduled_at": agendado.starts_at,
+            })
+        try:
+            # A janela do Discovery, **não** a da pré-venda: 5 dias com grade a partir de 3 dias,
+            # 3 opções por dia (DAP `dap-agendamento-discovery-r1`, emenda de 02/09). A oferta
+            # inteira eram 80 escolhas numa página que pede uma.
+            slots = booking.available_slots_for_discovery()
+        except calendar_sync.CalendarUnavailable:
+            # Sem enxergar a agenda não dá para dizer o que está livre, e lista vazia aqui seria a
+            # página afirmando "não há horário" — o estado que a D1 separa deste.
+            return _discovery_erro(
+                DISCOVERY_AGENDA_FORA, "calendar_unavailable", status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        # Lista vazia é 200: "a janela acabou cheia" é resposta legítima, não falha.
+        return Response({
+            "account": engagement.account.name, "slots": slots, "scheduled_at": None,
+        })
+
+
+class DiscoveryBookingCreateView(APIView):
+    """Marca o Discovery do mandato no horário escolhido (rota pública)."""
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "discovery_booking"
+
+    @extend_schema(
+        request=BookingCreateSerializer,
+        responses=inline_serializer("DiscoveryBookingCreateResponse", {
+            "starts_at": serializers.DateTimeField(),
+            "link": serializers.CharField(),
+        }),
+    )
+    def post(self, request: Request) -> Response:
+        fora = _discovery_fora_do_ar()
+        if fora is not None:
+            return fora
+        serializer = BookingCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            engagement = discovery_booking.engagement_from_token(serializer.validated_data["token"])
+        except (discovery_booking.TokenExpirado, discovery_booking.TokenInvalido) as exc:
+            return _discovery_token_response(exc)
+        if discovery_booking.discovery_agendado(engagement) is not None:
+            return _discovery_erro(
+                "O Discovery deste mandato já está agendado.",
+                "already_scheduled",
+                status.HTTP_409_CONFLICT,
+            )
+        try:
+            created = booking.book_discovery(
+                engagement,
+                serializer.validated_data["slot_start"],
+                _discovery_attendee(engagement),
+            )
+        except booking.SlotUnavailable:
+            return _discovery_erro(
+                "Horário indisponível.", "slot_unavailable", status.HTTP_409_CONFLICT
+            )
+        except calendar_sync.CalendarUnavailable:
+            return _discovery_erro(
+                DISCOVERY_AGENDA_FORA, "calendar_unavailable", status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        # **Depois** da reserva e **fora** da transação dela: o projeto do Discovery nasce aqui, e
+        # não num clique posterior de alguém da casa (ADR 0061). Best-effort por dentro — falhe o
+        # que falhar, a resposta abaixo continua 201, porque o cliente marcou o horário e o projeto
+        # é consequência interna.
+        discovery_booking.abrir_projeto_da_sessao(engagement, created)
+        return Response(
+            {"starts_at": created.starts_at, "link": created.calendar_link},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def _discovery_attendee(engagement: Engagement) -> str:
+    """Quem o Google convida: a **parte contratante** do acordo que abriu o mandato.
+
+    O e-mail **não** vem do corpo da requisição, e é a decisão inteira: quem tem o link poderia,
+    então, redirecionar o convite do Discovery para um endereço qualquer. O mandato já sabe de
+    onde veio (`originating_design_partner_agreement`), e é dali que o endereço sai.
+
+    Era "quem assinou por último" (`order_by("-signed_at")`), e isso acertava por sorte enquanto o
+    acordo tinha um signatário só. Desde a issue #115 a rodada tem a casa e as testemunhas, e o
+    último a assinar pode ser qualquer um deles — o convite de calendário iria para dentro de casa,
+    ou para quem só testemunhou. Quem responde é `esign.email_da_contraparte`, o mesmo lugar que o
+    convite por e-mail consulta: duas buscas parecidas para a mesma pergunta divergiriam no
+    primeiro conserto, e esta já tinha divergido.
+    """
+    documento = engagement.originating_design_partner_agreement
+    if documento is None:  # pragma: no cover - mandato de Design Partner sempre tem o acordo
+        return ""
+    return esign.email_da_contraparte(documento, documento.rodada_assinada)
+
+
 class TaskSyncIntakeView(APIView):
     """Entrada da sincronia de tarefas (Linear/GitHub → Biahflow). Autentica por token."""
 
@@ -4680,6 +5065,7 @@ class ConfigView(APIView):
         "ai_enabled": serializers.BooleanField(),
         "calendar_enabled": serializers.BooleanField(),
         "esign_enabled": serializers.BooleanField(),
+        "esign_house_signer_email": serializers.CharField(allow_null=True),
         "integrations": serializers.ListField(child=serializers.DictField()),
     }))
     def get(self, request: Request) -> Response:
@@ -4687,6 +5073,10 @@ class ConfigView(APIView):
             "ai_enabled": ai.is_enabled(),
             "calendar_enabled": calendar_sync.is_enabled(),
             "esign_enabled": esign.is_enabled(),
+            # Fora do mecanismo de flags de propósito (DAP `dap-assinatura-com-papeis-r1`, D): as
+            # flags respondem "configurado?" sem revelar valor, e aqui o valor **é** a resposta —
+            # é o e-mail com que a casa assina, e ele vai no próprio documento.
+            "esign_house_signer_email": str(settings.ESIGN_HOUSE_SIGNER_EMAIL or "").strip() or None,
             "integrations": flags.all_status(),
         })
 

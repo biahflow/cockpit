@@ -97,7 +97,11 @@ test("título longo sem hífen não invade o estado nem as ações em 390px", as
     return { sobrepoe, metaCount: metaRects.length };
   });
 
-  expect(geometria.metaCount, "a medição precisa alcançar o estado e a ação da linha").toBe(2);
+  // **Três**, e não dois: a linha do achado ganhou o selo de publicação (DAP
+  // `dap-publicacao-discovery-r1`, decisão D1) ao lado do epistêmico que já estava lá, mais o
+  // "Promover a fato". O número é exato de propósito — ele existe para provar que a medição
+  // alcançou os elementos, e um `>=` deixaria a asserção passar com a faixa vazia.
+  expect(geometria.metaCount, "a medição precisa alcançar os dois selos e a ação da linha").toBe(3);
   expect(geometria.sobrepoe, "o título pinta sobre o estado ou a ação").toBe(false);
 
   const excesso = await page.evaluate(

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { CANONICAL_STAGE_LABEL, SITUATION_LABEL, situationVariant, WAITING_PARTY_LABEL } from "../journey";
+import { isDeliveryOnly } from "../roles";
 import type { Dashboard, DeliveryTimelineRow } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -19,7 +20,7 @@ export function DashboardPage() {
   const { user } = useAuth();
   // O backend já manda o pipeline preenchido para quem é admin (`views.py:151`); filtrar só por
   // `role` fazia o SPA **descartar dado que chegou** na tela de um superusuário.
-  const showPipeline = !!user?.is_admin || user?.role !== "delivery";
+  const showPipeline = !isDeliveryOnly(user);
   const [data, setData] = useState<Dashboard>();
   const [timeline, setTimeline] = useState<DeliveryTimelineRow[]>([]);
   const [error, setError] = useState("");

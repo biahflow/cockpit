@@ -61,7 +61,12 @@ def _resposta_de_cobranca() -> Activity:
     return ActivityFactory(
         account=account, invoice=invoice,
         summary="Cliente disse que não paga enquanto o marco 2 não entrar.",
-        happened_on=timezone.localdate(),
+        # `HOJE`, e não o dia real: a satisfação criada a partir desta atividade herda a data dela
+        # (`str(activity.happened_on)` abaixo), e a régua é avaliada em `HOJE`. Com o dia real, o
+        # registro fica **no futuro** em relação a `HOJE` e sai do recorte de `vigente`
+        # (`inicio <= happened_on <= hoje`, `satisfacao.py:73`) — foi o que quebrou este arquivo em
+        # 2026-09-03, quando o relógio passou da quarta-feira congelada.
+        happened_on=HOJE,
     )
 
 
