@@ -321,6 +321,17 @@ const FIXTURES: Record<string, unknown> = {
     next_meeting: { title: "Comitê quinzenal de acompanhamento", date: HOJE },
     ai_score: null,
   },
+  // O próximo passo da conta (FDD 054, decisão B1). Um degrau de verdade, e não o vazio: o painel
+  // com conteúdo é o que a matriz precisa medir — dois selos e um título longo na mesma faixa é
+  // exatamente onde 390px quebra, e o vazio não exercitaria nem o contraste do par de pastilhas.
+  "/api/v2/accounts/1/next-step/": {
+    next_step: {
+      improvement_opportunity: 77,
+      title: "Reconciliação manual de repasses entre a operadora e as unidades",
+      score: "78.00", assessment_version: 2, missing: "choose_hypothesis",
+    },
+    ranked_count: 3,
+  },
   "/api/v2/projects/": projetos,
   "/api/v2/projects/1/": projetos[0],
   "/api/v2/projects/1/risk/": riscos[0],

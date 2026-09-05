@@ -1518,6 +1518,46 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/clients/{id}/next-step/:
+    get:
+      operationId: v1_clients_next_step_retrieve
+      description: |-
+        O próximo passo desta conta: qual melhoria atacar em seguida, e o que falta nela.
+
+        A regra inteira mora em `next_step.proximo_passo_da_conta` — a mesma função que
+        `recommendations.build_recommendations` lê (ADR 0069, decisão B1 do DAP
+        `dap-discovery-session-e-business-case-r2`). A action não reexpressa nem um pedaço dela:
+        uma segunda leitura aqui faria o painel e a lista de `/indicadores` responderem coisas
+        diferentes à mesma pergunta, sem nada ficar vermelho.
+
+        `ranked_count` acompanha porque **os dois vazios não são o mesmo vazio**: conta sem nenhuma
+        oportunidade avaliada mostra o vazio honesto, com a porta para a priorização; conta com
+        oportunidades avaliadas e nenhuma pendência mostra o neutro, sem inventar urgência. Os dois
+        chegam como `next_step: null`, e recontar as oportunidades no cliente reexpressaria o
+        critério de elegibilidade do ranking do lado errado da fronteira.
+
+        **Não entra no `/overview/`**, e a razão é operacional: aquele agregador tem orçamento
+        determinístico de consultas (ADR 0014, `loadtests/`) e serve também o **grid** de contas —
+        onde meia dúzia de consultas por conta se multiplicaria por linha da carteira. Aqui é o
+        detalhe de uma conta, e o custo é o de uma.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este account.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountNextStep'
+          description: ''
   /api/v1/clients/{id}/overview/:
     get:
       operationId: v1_clients_overview_retrieve_2
@@ -12686,6 +12726,37 @@ components:
       - status
       - updated_at
       - vertical_name
+    AccountNextStep:
+      type: object
+      properties:
+        next_step:
+          allOf:
+          - $ref: '#/components/schemas/AccountNextStepDegrau'
+          nullable: true
+        ranked_count:
+          type: integer
+      required:
+      - next_step
+      - ranked_count
+    AccountNextStepDegrau:
+      type: object
+      properties:
+        improvement_opportunity:
+          type: integer
+        title:
+          type: string
+        score:
+          type: string
+        assessment_version:
+          type: integer
+        missing:
+          $ref: '#/components/schemas/MissingEnum'
+      required:
+      - assessment_version
+      - improvement_opportunity
+      - missing
+      - score
+      - title
     AccountOverviewAiScore:
       type: object
       properties:
@@ -16711,6 +16782,18 @@ components:
       - source
       - title
       - updated_at
+    MissingEnum:
+      enum:
+      - choose_hypothesis
+      - build_business_case
+      - decide_investment
+      - open_commercial_opportunity
+      type: string
+      description: |-
+        * `choose_hypothesis` - choose_hypothesis
+        * `build_business_case` - build_business_case
+        * `decide_investment` - decide_investment
+        * `open_commercial_opportunity` - open_commercial_opportunity
     NivelEnum:
       enum:
       - promoter

@@ -198,6 +198,18 @@ export type PriorityAssessment = { id: number; improvement_opportunity: number; 
 // Hipóteses concorrentes são o estado normal; **uma só `chosen` viva por oportunidade**.
 export type SolutionHypothesisStatus = "proposed" | "chosen" | "discarded";
 export type SolutionHypothesis = { id: number; improvement_opportunity: number; statement: string; intervention: string; assumptions: string; expected_effect: string; status: SolutionHypothesisStatus; status_display: string; created_at: string; updated_at: string };
+// O próximo passo da conta (FDD 054, ADR 0069), no molde de `ProveMissingRequirement` logo abaixo:
+// **o servidor devolve a chave e a tela tem o rótulo**. `missing` é o **primeiro** degrau que falta
+// na primeira oportunidade ranqueada com pendência — nunca a de maior score quando ela já está
+// encaminhada —, e a tela não recalcula nenhum dos dois: uma segunda expressão da regra faria o
+// painel discordar da recomendação de `/indicadores`, que lê a mesma função.
+//
+// `ranked_count` existe porque **os dois vazios não são o mesmo vazio**: `next_step: null` com
+// contagem zero é "nada avaliado nesta conta" (o vazio honesto, com a porta para a priorização) e
+// com contagem maior que zero é "nada pendente" (o neutro, que não inventa urgência).
+export type AccountNextStepMissing = "choose_hypothesis" | "build_business_case" | "decide_investment" | "open_commercial_opportunity";
+export type AccountNextStep = { improvement_opportunity: number; title: string; score: string; assessment_version: number; missing: AccountNextStepMissing };
+export type AccountNextStepResponse = { next_step: AccountNextStep | null; ranked_count: number };
 // Feasibility, PROVE, KPI/Measurement e Value Ledger (FDD 049, ADR 0055). **Nenhuma tela consome
 // estes tipos ainda**, exatamente como os da Fase 4 logo acima e pelo mesmo motivo: é o recorte da
 // fatia, não esquecimento — a superfície tem DAP aprovado (`docs/design/dap-prove-e-valor-r1/`,

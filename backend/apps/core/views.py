@@ -145,6 +145,7 @@ from .models import (
     Vertical,
     project_scope_q,
 )
+from .next_step import DEGRAUS, oportunidades_ranqueadas, proximo_passo_da_conta
 from .openapi_aliases import chave_da_geracao
 from .permissions import RolePermission
 from .serializers import (
@@ -1143,6 +1144,61 @@ class AccountViewSet(ArchiveModelViewSet):
             # desembrulha em vez de duplicar a lógica de remoção (issue #122, fatia 4c).
             (overview,) = _sem_chaves_legadas([overview], "client_id", "status")
         return Response(overview)
+
+    @extend_schema(
+        responses=inline_serializer(
+            "AccountNextStep",
+            {
+                "next_step": inline_serializer(
+                    "AccountNextStepDegrau",
+                    {
+                        "improvement_opportunity": serializers.IntegerField(),
+                        "title": serializers.CharField(),
+                        # Texto, como o `score` de `ImprovementOpportunitySerializer` e pelo mesmo
+                        # motivo de todo decimal desta API (ADR 0068).
+                        "score": serializers.CharField(),
+                        "assessment_version": serializers.IntegerField(),
+                        # `ChoiceField` e não `CharField`, ao contrário de `RecommendationItem.kind`
+                        # logo adiante — e a diferença é a que aquele comentário registra: lá não há
+                        # lista de onde derivar e inventar uma criaria a segunda definição; aqui a
+                        # lista existe, é `next_step.DEGRAUS`, e publicá-la é o esquema dizendo o
+                        # vocabulário fechado em vez de prometer "qualquer texto".
+                        "missing": serializers.ChoiceField(choices=DEGRAUS),
+                    },
+                    allow_null=True,
+                ),
+                "ranked_count": serializers.IntegerField(),
+            },
+        )
+    )
+    @action(detail=True, methods=["get"], url_path="next-step")
+    def next_step(self, request: Request, pk: str | None = None) -> Response:
+        """O próximo passo desta conta: qual melhoria atacar em seguida, e o que falta nela.
+
+        A regra inteira mora em `next_step.proximo_passo_da_conta` — a mesma função que
+        `recommendations.build_recommendations` lê (ADR 0069, decisão B1 do DAP
+        `dap-discovery-session-e-business-case-r2`). A action não reexpressa nem um pedaço dela:
+        uma segunda leitura aqui faria o painel e a lista de `/indicadores` responderem coisas
+        diferentes à mesma pergunta, sem nada ficar vermelho.
+
+        `ranked_count` acompanha porque **os dois vazios não são o mesmo vazio**: conta sem nenhuma
+        oportunidade avaliada mostra o vazio honesto, com a porta para a priorização; conta com
+        oportunidades avaliadas e nenhuma pendência mostra o neutro, sem inventar urgência. Os dois
+        chegam como `next_step: null`, e recontar as oportunidades no cliente reexpressaria o
+        critério de elegibilidade do ranking do lado errado da fronteira.
+
+        **Não entra no `/overview/`**, e a razão é operacional: aquele agregador tem orçamento
+        determinístico de consultas (ADR 0014, `loadtests/`) e serve também o **grid** de contas —
+        onde meia dúzia de consultas por conta se multiplicaria por linha da carteira. Aqui é o
+        detalhe de uma conta, e o custo é o de uma.
+        """
+        account = self.get_object()
+        return Response(
+            {
+                "next_step": proximo_passo_da_conta(account),
+                "ranked_count": oportunidades_ranqueadas(account),
+            }
+        )
 
 
 class ContactViewSet(QueryParamFilterMixin, ArchiveModelViewSet):

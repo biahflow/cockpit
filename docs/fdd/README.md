@@ -57,3 +57,4 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 051 — O Discovery chegava ao cliente como documento
 - 052 — Publicar o Discovery era uma chamada de API
 - 053 — A decisão de investir não tinha onde morar
+- 054 — O próximo passo existia e morava onde ninguém procura

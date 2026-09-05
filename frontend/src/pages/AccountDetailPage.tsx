@@ -10,7 +10,7 @@ import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
 import { canWriteBeyondDelivery } from "../roles";
 import { rotuloDoDegrau } from "../tiers";
-import type { Account, AccountLifecycleStatus, AccountOverview, Activity, ActivityKind, CommercialOpportunity, Contact, DocumentEntry, DunningSignal, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, SatisfactionLevel, SatisfactionRecord, SatisfactionSource, Service, Vertical } from "../types";
+import type { Account, AccountLifecycleStatus, AccountNextStep, AccountNextStepMissing, AccountNextStepResponse, AccountOverview, Activity, ActivityKind, CommercialOpportunity, Contact, DocumentEntry, DunningSignal, Engagement, EngagementCommercialModel, EngagementStatus, Invoice, Process, SatisfactionLevel, SatisfactionRecord, SatisfactionSource, Service, Vertical } from "../types";
 
 // `receives_billing` nasce falso, e a falha é fechada de propósito (FDD 036): sem ninguém marcado,
 // o degrau da régua **não vira e-mail ao cliente** — vira escalada interna com o motivo escrito. A
@@ -111,6 +111,54 @@ function resumoDeEngagements(engagements: Engagement[]): string {
   return `${ativos} ${ativos === 1 ? "engagement ativo" : "engagements ativos"} nesta conta`;
 }
 
+/* -------------------------------------------------------------------------------------------
+   O próximo passo da conta (FDD 054, ADR 0069), governado pelo DAP
+   `docs/design/dap-discovery-session-e-business-case-r2/` — decisão **B1**: painel no detalhe da
+   conta, acima de "Saúde da relação", mostrando **um** degrau — o primeiro que falta.
+
+   **Os rótulos são daqui, e a regra não.** O servidor devolve a chave (`missing`), no molde exato
+   de `missing_to_start` do PROVE; a tela nunca recalcula qual é o degrau. Recalcular faria o
+   painel discordar da recomendação de `/indicadores`, que lê a mesma função do backend — e nada
+   ficaria vermelho quando discordassem, que foi o contra-argumento registrado da decisão B1.
+
+   A frase de cada degrau sai **da chave e de nada mais**. O board escreve linhas com dado que o
+   contrato não publica ("Hipótese escolhida em 02/09", "Duas hipóteses propostas") e o próprio
+   pacote as marca como ilustrativas; inventá-las aqui seria a tela afirmando o que não sabe.
+   ------------------------------------------------------------------------------------------- */
+const DEGRAUS_DO_PROXIMO_PASSO: Record<AccountNextStepMissing, { rotulo: string; frase: string; porta: string; rota: (accountId: number) => string }> = {
+  choose_hypothesis: {
+    rotulo: "Escolher a hipótese",
+    frase: "Nenhuma hipótese de solução foi escolhida para esta oportunidade.",
+    porta: "Abrir a priorização", rota: accountId => `/contas/${accountId}/priorizacao`,
+  },
+  build_business_case: {
+    rotulo: "Montar o business case",
+    frase: "A hipótese está escolhida; falta orçar a intervenção.",
+    porta: "Abrir a priorização", rota: accountId => `/contas/${accountId}/priorizacao`,
+  },
+  decide_investment: {
+    rotulo: "Decidir o investimento",
+    frase: "O business case está em rascunho, esperando decisão.",
+    porta: "Abrir a priorização", rota: accountId => `/contas/${accountId}/priorizacao`,
+  },
+  // A única porta que sai da conta, e o board a desenha assim: o degrau seguinte à aprovação é uma
+  // venda, e ela nasce no Comercial. `/comercial` não tem recorte de papel no menu lateral, então
+  // o link não mostra o que a API recusaria.
+  open_commercial_opportunity: {
+    rotulo: "Abrir a venda",
+    frase: "O investimento foi aprovado e esta conta não tem venda em aberto.",
+    porta: "Abrir o comercial", rota: () => "/comercial",
+  },
+};
+
+/**
+ * O score sai do servidor como `"78.00"` — texto, como todo decimal desta API (ADR 0068). Aqui ele
+ * nunca é nulo: só entra na resposta a oportunidade que tem avaliação vigente, e é por isso que
+ * este painel não tem o `—` que `PriorizacaoPage` precisa ter.
+ */
+const scoreDoProximoPasso = (score: string) =>
+  Number(score).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+
 /**
  * O que fazer com cada sinal — e é isto, não o selo, que a tela precisa comunicar.
  *
@@ -149,6 +197,7 @@ export function AccountDetailPage({ id }: { id: number }) {
   const [processos, setProcessos] = useState<Process[]>([]);
   const [satisfactionDraft, setSatisfactionDraft] = useState(blankSatisfaction);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
+  const [nextStep, setNextStep] = useState<AccountNextStepResponse>();
   const [commercialOpportunities, setCommercialOpportunities] = useState<CommercialOpportunity[]>([]);
   const [accountDocuments, setAccountDocuments] = useState<DocumentEntry[]>([]);
   const [engagementDraft, setEngagementDraft] = useState(blankEngagement);
@@ -197,8 +246,12 @@ export function AccountDetailPage({ id }: { id: number }) {
     // Só quem escreve o mandato alcança a ação de criar projeto, e é ela a única consumidora do
     // catálogo aqui — a Entrega não vê o botão, então não precisa da chamada.
     canWriteEngagements ? api<Service[]>("/services/") : Promise.resolve([]),
-  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfactionRecords, loadedProcessos, loadedEngagements, loadedOpportunities, loadedDocuments, loadedServices]) => {
-    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfactionRecords(loadedSatisfactionRecords); setProcessos(loadedProcessos); setEngagements(loadedEngagements); setCommercialOpportunities(loadedOpportunities); setAccountDocuments(loadedDocuments); setServices(loadedServices);
+    // Na mesma chamada que o resto da página, pela razão escrita na seção de Engagements: o painel
+    // não tem estado de carregamento próprio, e uma chamada à parte criaria um — a tela mostraria
+    // "nada priorizado" antes de mostrar o degrau, que é a pior das leituras erradas possíveis.
+    api<AccountNextStepResponse>(`/accounts/${id}/next-step/`),
+  ]).then(([loadedClient, loadedContacts, loadedActivities, loadedOverview, loadedVerticals, loadedSatisfactionRecords, loadedProcessos, loadedEngagements, loadedOpportunities, loadedDocuments, loadedServices, loadedNextStep]) => {
+    setClient(loadedClient); setContacts(loadedContacts); setActivities(loadedActivities); setOverview(loadedOverview); setVerticals(loadedVerticals); setSatisfactionRecords(loadedSatisfactionRecords); setProcessos(loadedProcessos); setEngagements(loadedEngagements); setCommercialOpportunities(loadedOpportunities); setAccountDocuments(loadedDocuments); setServices(loadedServices); setNextStep(loadedNextStep);
     setForm({ name: loadedClient.name, legal_name: loadedClient.legal_name, tax_id: loadedClient.tax_id, lifecycle_status: loadedClient.lifecycle_status, vertical: loadedClient.vertical ? String(loadedClient.vertical) : "" });
   }).catch((cause: Error) => setError(cause.message)), [canWriteEngagements, id]);
   useEffect(() => { void load(); }, [load]);
@@ -479,6 +532,30 @@ export function AccountDetailPage({ id }: { id: number }) {
       {canArchive && <button type="button" className="btn btn--secondary btn--secondary-danger shrink-0 self-start sm:self-auto" onClick={() => setArchiving(true)}><Trash2 className="size-4" />Arquivar conta</button>}
     </header>
     {error && <p role="alert" className="alert--error">{error}</p>}
+
+    {/* O próximo passo da conta — DAP `dap-discovery-session-e-business-case-r2`, decisão **B1**.
+
+        **Acima de "Saúde da relação", e a ordem é a decisão**: a saúde diz *como estamos indo* e o
+        próximo passo diz *o que fazer agora*; quem abre a conta com uma pergunta na cabeça abre com
+        a segunda. É o mesmo argumento da ordem que o DAP do Engagement fixou logo abaixo.
+
+        Os dois vazios não são o mesmo vazio, e `ranked_count` é quem os separa — sem ele, "nada
+        avaliado" e "nada pendente" mostrariam o mesmo texto, e o segundo caso (que é uma conta
+        indo bem) leria como uma tela que não carregou. Nenhum dos dois inventa urgência. */}
+    {nextStep && <section className="panel sm:p-6" data-testid="next-step-panel">
+      <p className="eyebrow">Próximo passo</p>
+      {nextStep.next_step
+        ? <ProximoPasso passo={nextStep.next_step} accountId={id} />
+        : nextStep.ranked_count === 0
+          ? <>
+              <p className="empty-state mt-2.5">Nenhuma oportunidade de melhoria priorizada nesta conta.<br />O próximo passo aparece quando houver avaliação.</p>
+              <a className="back-link mt-3.5" href={`/contas/${id}/priorizacao`}>Abrir a priorização <ExternalLink className="size-4" /></a>
+            </>
+          : <>
+              <div className="panel-heading mt-1.5"><h2 className="font-semibold text-ink">Nada pendente</h2></div>
+              <p className="type-meta text-muted">{nextStep.ranked_count} {nextStep.ranked_count === 1 ? "oportunidade priorizada" : "oportunidades priorizadas"} nesta conta, nenhuma com passo pendente.</p>
+            </>}
+    </section>}
 
     {overview && (overview.health
       ? <section className="panel sm:p-6">
@@ -767,6 +844,25 @@ export function AccountDetailPage({ id }: { id: number }) {
       </div>)}</div> : <p className="empty-state">Nenhuma interação registrada.</p>}
     </section>
   </section>;
+}
+
+/**
+ * O degrau pendente — corpo do painel quando o servidor devolveu um. Componente próprio, e não um
+ * ramo do JSX, para o `passo` chegar aqui **não-nulo**: é o que deixa o índice do mapa ser lido uma
+ * vez, com o tipo garantindo a chave, em vez de repetido em quatro lugares que a próxima edição
+ * mudaria em três.
+ */
+function ProximoPasso({ passo, accountId }: { passo: AccountNextStep; accountId: number }) {
+  const degrau = DEGRAUS_DO_PROXIMO_PASSO[passo.missing];
+  return <>
+    <div className="panel-heading mt-1.5"><h2 className="font-semibold text-ink">{passo.title}</h2></div>
+    <div className="row-meta mb-3">
+      <span className="state state--0">Opportunity Score {scoreDoProximoPasso(passo.score)}</span>
+      <span className="state state--2">{degrau.rotulo}</span>
+    </div>
+    <p className="type-meta mb-3.5 text-muted">{degrau.frase}</p>
+    <a className="back-link" href={degrau.rota(accountId)}>{degrau.porta} <ExternalLink className="size-4" /></a>
+  </>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="form-label">{label}{children}</label>; }
