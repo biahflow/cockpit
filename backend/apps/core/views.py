@@ -88,6 +88,7 @@ from .models import (
     AppSetting,
     Artifact,
     BlueprintVariant,
+    BusinessCase,
     Case,
     CobrancaSuspensao,
     CommercialOpportunity,
@@ -154,6 +155,7 @@ from .serializers import (
     ArtifactSerializer,
     BlueprintVariantSerializer,
     BookingCreateSerializer,
+    BusinessCaseSerializer,
     CaseSerializer,
     ChangePasswordSerializer,
     CobrancaSuspensaoSerializer,
@@ -3988,6 +3990,159 @@ class SolutionHypothesisViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
                 self.request.user, oportunidade.account if oportunidade else None
             )
         super().perform_update(serializer)
+
+
+#: As duas saídas de `POST /business-cases/{id}/decide/`. Constantes e não `choices` de modelo
+#: porque o corpo da action não passa por serializer — é o mesmo motivo de
+#: `VALORES_LEGADOS_DO_DEGRAU` viver aqui em cima.
+DECISOES_DO_BUSINESS_CASE: tuple[str, ...] = ("approved", "rejected")
+
+
+class BusinessCaseViewSet(QueryParamFilterMixin, ArchiveModelViewSet):
+    """A justificativa do investimento (FDD 053, ADR 0069).
+
+    Mesmo recorte da `SolutionHypothesisViewSet`, e pelo mesmo caminho: a conta chega pela
+    oportunidade, um hop. Não pende de projeto e por isso não entra em `PROJECT_OF`.
+
+    **Business case decidido é imutável.** Aprovar ou rejeitar encerra o registro: um investimento
+    aprovado cujo valor alguém edita depois é a mesma classe de defeito do case publicado que muda
+    de número sozinho (FDD 027) — quem citou a conta na reunião passa a estar dizendo outra coisa
+    sem saber. A recusa é **409** e não 400: o corpo está bem formado, o que impede é o estado, e é
+    ele que mudaria para o pedido passar (rascunho novo, não edição do decidido).
+    """
+
+    resource = "business_case"
+    queryset = BusinessCase.objects.select_related(
+        "improvement_opportunity", "improvement_opportunity__account",
+        "solution_hypothesis", "priority_assessment", "decided_by",
+    ).all()
+    serializer_class = BusinessCaseSerializer
+    filter_fields = ("improvement_opportunity",)
+    filter_exact_fields = ("status",)
+
+    def get_queryset(self):  # type: ignore[no-untyped-def]
+        queryset = super().get_queryset()
+        # `?account=` fica fora de `filter_fields` porque lá o nome do parâmetro **é** o caminho do
+        # ORM, e a conta não é campo deste modelo — `filter(account=…)` estouraria `FieldError`.
+        # A tela pergunta pela conta (é dela que a priorização é), então o parâmetro é `account` e
+        # a tradução para o caminho mora aqui, num lugar só.
+        conta = self.request.query_params.get("account")
+        if conta and conta.isdigit():
+            queryset = queryset.filter(improvement_opportunity__account_id=conta)
+        scope = project_scope_q(
+            self.request.user, "improvement_opportunity__account__engagements__projects"
+        )
+        return queryset.filter(scope).distinct() if scope else queryset
+
+    def perform_create(self, serializer: BusinessCaseSerializer) -> None:
+        oportunidade = serializer.validated_data.get("improvement_opportunity")
+        _exige_cliente_no_escopo(
+            self.request.user, oportunidade.account if oportunidade else None
+        )
+        serializer.save()
+
+    def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Recusa editar o que já foi decidido — **antes** de validar o corpo.
+
+        A guarda mora aqui e não em `perform_update` de propósito: lá ela só rodaria depois da
+        validação, e um corpo com erro de digitação sobre um business case aprovado devolveria 400
+        ("corrija o corpo") sobre uma operação que não existe mais. Cobre `PUT` e `PATCH`, porque
+        `partial_update` chama este método.
+        """
+        business_case = self.get_object()
+        if business_case.status != BusinessCase.Status.DRAFT:
+            raise StateConflict(
+                f"Este business case já está {business_case.get_status_display().lower()} e não "
+                "muda mais. Registre um novo rascunho para revisar o investimento."
+            )
+        return super().update(request, *args, **kwargs)
+
+    def perform_update(self, serializer: BusinessCaseSerializer) -> None:
+        if "improvement_opportunity" in serializer.validated_data:
+            oportunidade = serializer.validated_data.get("improvement_opportunity")
+            _exige_cliente_no_escopo(
+                self.request.user, oportunidade.account if oportunidade else None
+            )
+        super().perform_update(serializer)
+
+    @extend_schema(
+        request=inline_serializer(
+            "BusinessCaseDecision",
+            {"outcome": serializers.ChoiceField(choices=list(DECISOES_DO_BUSINESS_CASE))},
+        ),
+        responses=BusinessCaseSerializer,
+    )
+    @action(detail=True, methods=["post"])
+    def decide(self, request: Request, pk: str | None = None) -> Response:
+        """Aprova ou rejeita o investimento, com autor e carimbo (FDD 053).
+
+        **Uma action, e não um `PATCH` de `status`**, pela razão de `journey.apply_gate` (ADR 0053)
+        e de `prove.start`: o que vale depende do **estado corrente** — se já houve decisão, se os
+        dois números existem, se outra aprovação viva já ocupa esta oportunidade —, e só quem
+        conhece esse estado pode fazer a pergunta. Um `PATCH` gravaria `approved` sem ela, e a
+        invariante viraria sugestão. É também o motivo de o trio `status`/`decided_at`/`decided_by`
+        ser read-only no serializer, como o trio do consentimento do `Case`.
+
+        Quatro recusas, cada uma com o status que merece:
+
+        - **400** quando `outcome` não é `approved` nem `rejected`: o pedido está malfeito;
+        - **409** quando já houve decisão: o corpo está bom, o que impede é o estado. Vem **antes**
+          da checagem dos números, senão um registro já rejeitado e sem valores pediria "registre
+          os números" — instrução que não se cumpre, porque editar decidido também é 409;
+        - **400** quando falta `investment` ou `expected_return_year` **e o desfecho é aprovar**:
+          não se aprova investimento sem os dois números, e um zero no lugar do nulo seria um
+          orçamento que ninguém fez. **Rejeitar não os exige** — recusa-se justamente o que não
+          fechou conta, e cobrá-los ali obrigaria a inventar valor para dizer "não";
+        - **409** quando outra aprovação viva já existe para a mesma oportunidade. A garantia é a
+          `UniqueConstraint` parcial, como em `SolutionHypothesis`; esta checagem existe para a
+          recusa ser legível em vez de subir como `IntegrityError` — e é 409, e não o 400 daquela,
+          porque aqui o corpo (`{"outcome": "approved"}`) está perfeitamente correto.
+        """
+        business_case = self.get_object()
+        outcome = request.data.get("outcome")
+        if outcome not in DECISOES_DO_BUSINESS_CASE:
+            raise InvalidInput(
+                "Decisão desconhecida. As disponíveis são: "
+                f"{', '.join(DECISOES_DO_BUSINESS_CASE)}."
+            )
+        # O estado vem **antes** dos números, e a ordem importa: um business case já rejeitado e
+        # sem os dois valores responderia "registre os números antes de decidir" — instrução
+        # impossível de cumprir, porque `PATCH` em decidido é 409. A pergunta sobre o corpo só faz
+        # sentido depois que a operação ainda existe.
+        if business_case.status != BusinessCase.Status.DRAFT:
+            raise StateConflict(
+                f"Este business case já está {business_case.get_status_display().lower()}. "
+                "Só um rascunho pode ser decidido."
+            )
+        # **Os números são exigidos para aprovar, não para rejeitar.** Aprovar sem saber quanto e
+        # para quê é a decisão que a exigência existe para impedir; recusar sem os números é o caso
+        # comum — recusa-se justamente o que não fechou conta, ou o que nem chegou a ser orçado.
+        # Cobrá-los na rejeição obrigaria a inventar dois valores para registrar que não se vai
+        # investir, e dado inventado para satisfazer validação é pior que campo vazio.
+        faltam = [
+            campo
+            for campo in ("investment", "expected_return_year")
+            if getattr(business_case, campo) is None
+        ]
+        if outcome == BusinessCase.Status.APPROVED and faltam:
+            raise InvalidInput(
+                f"Não se aprova investimento sem {' e sem '.join(faltam)}. Registre o(s) "
+                "número(s) antes de aprovar."
+            )
+        if outcome == BusinessCase.Status.APPROVED and BusinessCase.objects.filter(
+            improvement_opportunity_id=business_case.improvement_opportunity_id,
+            status=BusinessCase.Status.APPROVED,
+            archived_at__isnull=True,
+        ).exists():
+            raise StateConflict(
+                "Esta oportunidade já tem um business case aprovado. Arquive o aprovado antes de "
+                "aprovar outro."
+            )
+        business_case.status = outcome
+        business_case.decided_by = request.user
+        business_case.decided_at = timezone.now()
+        business_case.save(update_fields=["status", "decided_by", "decided_at", "updated_at"])
+        return Response(BusinessCaseSerializer(business_case).data)
 
 
 class FeasibilityAssessmentViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):

@@ -9,6 +9,7 @@ from apps.core.models import (
     Account,
     Activity,
     Artifact,
+    BusinessCase,
     CommercialOpportunity,
     DigitalEmployee,
     Discovery,
@@ -368,6 +369,35 @@ class SolutionHypothesisFactory(factory.django.DjangoModelFactory):
     improvement_opportunity = factory.SubFactory(ImprovementOpportunityFactory)
     statement = "Um leitor de nota fiscal reduz a conferência a uma revisão por exceção."
     status = SolutionHypothesis.Status.PROPOSED
+
+
+class BusinessCaseFactory(factory.django.DjangoModelFactory):
+    """Business case em **rascunho**, com hipótese e avaliação da mesma oportunidade (FDD 053).
+
+    As duas `SubFactory` recebem `SelfAttribute("..improvement_opportunity")` de propósito: sem
+    isso cada uma criaria a **sua** oportunidade, e a fábrica produziria em silêncio a linha
+    incoerente que o `clean()` recusa — todo teste desta suíte passaria a afirmar sobre um estado
+    que a API não deixa criar, que é o defeito que a `FindingFactory` evita não entregando fatos.
+
+    `current_state_cost` **não** é passado: ele sai do `save()` do modelo, e informá-lo aqui
+    esconderia justamente o congelamento que esta suíte mede.
+    """
+
+    class Meta:
+        model = BusinessCase
+
+    improvement_opportunity = factory.SubFactory(ImprovementOpportunityFactory)
+    solution_hypothesis = factory.SubFactory(
+        SolutionHypothesisFactory,
+        improvement_opportunity=factory.SelfAttribute("..improvement_opportunity"),
+    )
+    priority_assessment = factory.SubFactory(
+        PriorityAssessmentFactory,
+        improvement_opportunity=factory.SelfAttribute("..improvement_opportunity"),
+    )
+    investment = Decimal("30000.00")
+    expected_return_year = Decimal("120000.00")
+    rationale = "O leitor de nota se paga no primeiro trimestre de operação."
 
 
 class FindingFactory(factory.django.DjangoModelFactory):

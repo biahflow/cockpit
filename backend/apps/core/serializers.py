@@ -28,6 +28,7 @@ from .models import (
     Activity,
     Artifact,
     BlueprintVariant,
+    BusinessCase,
     Case,
     CobrancaSuspensao,
     CommercialOpportunity,
@@ -1860,6 +1861,76 @@ class SolutionHypothesisSerializer(serializers.ModelSerializer[SolutionHypothesi
             raise serializers.ValidationError(
                 {"status": "Esta oportunidade já tem uma hipótese escolhida. Descarte a atual "
                            "antes de escolher outra."}
+            )
+        return attrs
+
+
+class BusinessCaseSerializer(serializers.ModelSerializer[BusinessCase]):
+    """A justificativa do investimento (FDD 053, ADR 0069).
+
+    A lista de `read_only_fields` é a entrega, e não burocracia — é a mesma do `CaseSerializer`
+    pelo mesmo motivo. `current_state_cost` e `current_state_cost_source` são a fotografia do
+    custo no instante da criação: mantê-los fora da escrita é o que faz "o número não muda depois
+    de congelado" ser verdade **por construção**, sem caminho de escrita em vez de com um caminho
+    que ninguém usa. `status`, `decided_at` e `decided_by` ficam de fora pelo motivo oposto: eles
+    *devem* mudar, mas só pela action `decide/`, que grava quem decidiu.
+
+    O `validate()` repete as duas guardas do `clean()` porque o serializer não chama `full_clean()`
+    — é a porta dupla que o `ImprovementOpportunitySerializer` já mantém para a mesma classe de
+    vínculo cruzado. Nenhuma constraint cobre estas duas: sem a repetição aqui, a recusa
+    simplesmente **não aconteceria** pela rota, e o `clean()` seguiria valendo só para shell,
+    admin e migração.
+
+    **O dinheiro sai como texto**: os três campos decimais passam por `ModelSerializer`, então o
+    `COERCE_DECIMAL_TO_STRING` do DRF os emite como string (ADR 0068). O `dict` cru de
+    `current_state_cost_source` não passa por lá — quem cuida dele é `business_case.dinheiro()`, na
+    origem.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    # Derivado, e não campo: a conta chega pela oportunidade, um hop — o mesmo caminho que a
+    # queryset e a permissão de objeto percorrem. Publicá-lo poupa a tela de uma segunda chamada
+    # só para saber de quem é a linha.
+    account = serializers.IntegerField(
+        source="improvement_opportunity.account_id", read_only=True
+    )
+
+    class Meta:
+        model = BusinessCase
+        fields = ["id", "improvement_opportunity", "account", "solution_hypothesis",
+                  "priority_assessment", "investment", "expected_return_year", "payback_months",
+                  "current_state_cost", "current_state_cost_source", "rationale", "assumptions",
+                  "status", "status_display", "decided_at", "decided_by",
+                  "created_at", "updated_at"]
+        read_only_fields = ["id", "account", "current_state_cost", "current_state_cost_source",
+                            "status", "status_display", "decided_at", "decided_by",
+                            "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        oportunidade = cast(
+            ImprovementOpportunity | None,
+            attrs.get(
+                "improvement_opportunity",
+                getattr(self.instance, "improvement_opportunity", None),
+            ),
+        )
+        hipotese = cast(
+            SolutionHypothesis | None,
+            attrs.get("solution_hypothesis", getattr(self.instance, "solution_hypothesis", None)),
+        )
+        avaliacao = cast(
+            PriorityAssessment | None,
+            attrs.get("priority_assessment", getattr(self.instance, "priority_assessment", None)),
+        )
+        if oportunidade is None:
+            return attrs
+        if hipotese is not None and hipotese.improvement_opportunity_id != oportunidade.pk:
+            raise serializers.ValidationError(
+                {"solution_hypothesis": "A hipótese deve ser da mesma oportunidade de melhoria."}
+            )
+        if avaliacao is not None and avaliacao.improvement_opportunity_id != oportunidade.pk:
+            raise serializers.ValidationError(
+                {"priority_assessment": "A avaliação deve ser da mesma oportunidade de melhoria."}
             )
         return attrs
 

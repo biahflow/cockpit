@@ -851,6 +851,288 @@ paths:
               schema:
                 $ref: '#/components/schemas/BookingSlotsResponse'
           description: ''
+  /api/v1/business-cases/:
+    get:
+      operationId: v1_business_cases_list
+      description: |-
+        A justificativa do investimento (FDD 053, ADR 0069).
+
+        Mesmo recorte da `SolutionHypothesisViewSet`, e pelo mesmo caminho: a conta chega pela
+        oportunidade, um hop. Não pende de projeto e por isso não entra em `PROJECT_OF`.
+
+        **Business case decidido é imutável.** Aprovar ou rejeitar encerra o registro: um investimento
+        aprovado cujo valor alguém edita depois é a mesma classe de defeito do case publicado que muda
+        de número sozinho (FDD 027) — quem citou a conta na reunião passa a estar dizendo outra coisa
+        sem saber. A recusa é **409** e não 400: o corpo está bem formado, o que impede é o estado, e é
+        ele que mudaria para o pedido passar (rascunho novo, não edição do decidido).
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BusinessCase'
+          description: ''
+    post:
+      operationId: v1_business_cases_create
+      description: |-
+        A justificativa do investimento (FDD 053, ADR 0069).
+
+        Mesmo recorte da `SolutionHypothesisViewSet`, e pelo mesmo caminho: a conta chega pela
+        oportunidade, um hop. Não pende de projeto e por isso não entra em `PROJECT_OF`.
+
+        **Business case decidido é imutável.** Aprovar ou rejeitar encerra o registro: um investimento
+        aprovado cujo valor alguém edita depois é a mesma classe de defeito do case publicado que muda
+        de número sozinho (FDD 027) — quem citou a conta na reunião passa a estar dizendo outra coisa
+        sem saber. A recusa é **409** e não 400: o corpo está bem formado, o que impede é o estado, e é
+        ele que mudaria para o pedido passar (rascunho novo, não edição do decidido).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessCase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BusinessCase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BusinessCase'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCase'
+          description: ''
+  /api/v1/business-cases/{id}/:
+    get:
+      operationId: v1_business_cases_retrieve
+      description: |-
+        A justificativa do investimento (FDD 053, ADR 0069).
+
+        Mesmo recorte da `SolutionHypothesisViewSet`, e pelo mesmo caminho: a conta chega pela
+        oportunidade, um hop. Não pende de projeto e por isso não entra em `PROJECT_OF`.
+
+        **Business case decidido é imutável.** Aprovar ou rejeitar encerra o registro: um investimento
+        aprovado cujo valor alguém edita depois é a mesma classe de defeito do case publicado que muda
+        de número sozinho (FDD 027) — quem citou a conta na reunião passa a estar dizendo outra coisa
+        sem saber. A recusa é **409** e não 400: o corpo está bem formado, o que impede é o estado, e é
+        ele que mudaria para o pedido passar (rascunho novo, não edição do decidido).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este business case.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCase'
+          description: ''
+    put:
+      operationId: v1_business_cases_update
+      description: |-
+        Recusa editar o que já foi decidido — **antes** de validar o corpo.
+
+        A guarda mora aqui e não em `perform_update` de propósito: lá ela só rodaria depois da
+        validação, e um corpo com erro de digitação sobre um business case aprovado devolveria 400
+        ("corrija o corpo") sobre uma operação que não existe mais. Cobre `PUT` e `PATCH`, porque
+        `partial_update` chama este método.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este business case.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessCase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BusinessCase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BusinessCase'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCase'
+          description: ''
+    patch:
+      operationId: v1_business_cases_partial_update
+      description: |-
+        A justificativa do investimento (FDD 053, ADR 0069).
+
+        Mesmo recorte da `SolutionHypothesisViewSet`, e pelo mesmo caminho: a conta chega pela
+        oportunidade, um hop. Não pende de projeto e por isso não entra em `PROJECT_OF`.
+
+        **Business case decidido é imutável.** Aprovar ou rejeitar encerra o registro: um investimento
+        aprovado cujo valor alguém edita depois é a mesma classe de defeito do case publicado que muda
+        de número sozinho (FDD 027) — quem citou a conta na reunião passa a estar dizendo outra coisa
+        sem saber. A recusa é **409** e não 400: o corpo está bem formado, o que impede é o estado, e é
+        ele que mudaria para o pedido passar (rascunho novo, não edição do decidido).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este business case.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBusinessCase'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBusinessCase'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBusinessCase'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCase'
+          description: ''
+    delete:
+      operationId: v1_business_cases_destroy
+      description: |-
+        A justificativa do investimento (FDD 053, ADR 0069).
+
+        Mesmo recorte da `SolutionHypothesisViewSet`, e pelo mesmo caminho: a conta chega pela
+        oportunidade, um hop. Não pende de projeto e por isso não entra em `PROJECT_OF`.
+
+        **Business case decidido é imutável.** Aprovar ou rejeitar encerra o registro: um investimento
+        aprovado cujo valor alguém edita depois é a mesma classe de defeito do case publicado que muda
+        de número sozinho (FDD 027) — quem citou a conta na reunião passa a estar dizendo outra coisa
+        sem saber. A recusa é **409** e não 400: o corpo está bem formado, o que impede é o estado, e é
+        ele que mudaria para o pedido passar (rascunho novo, não edição do decidido).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este business case.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/business-cases/{id}/decide/:
+    post:
+      operationId: v1_business_cases_decide_create
+      description: |-
+        Aprova ou rejeita o investimento, com autor e carimbo (FDD 053).
+
+        **Uma action, e não um `PATCH` de `status`**, pela razão de `journey.apply_gate` (ADR 0053)
+        e de `prove.start`: o que vale depende do **estado corrente** — se já houve decisão, se os
+        dois números existem, se outra aprovação viva já ocupa esta oportunidade —, e só quem
+        conhece esse estado pode fazer a pergunta. Um `PATCH` gravaria `approved` sem ela, e a
+        invariante viraria sugestão. É também o motivo de o trio `status`/`decided_at`/`decided_by`
+        ser read-only no serializer, como o trio do consentimento do `Case`.
+
+        Quatro recusas, cada uma com o status que merece:
+
+        - **400** quando `outcome` não é `approved` nem `rejected`: o pedido está malfeito;
+        - **409** quando já houve decisão: o corpo está bom, o que impede é o estado. Vem **antes**
+          da checagem dos números, senão um registro já rejeitado e sem valores pediria "registre
+          os números" — instrução que não se cumpre, porque editar decidido também é 409;
+        - **400** quando falta `investment` ou `expected_return_year` **e o desfecho é aprovar**:
+          não se aprova investimento sem os dois números, e um zero no lugar do nulo seria um
+          orçamento que ninguém fez. **Rejeitar não os exige** — recusa-se justamente o que não
+          fechou conta, e cobrá-los ali obrigaria a inventar valor para dizer "não";
+        - **409** quando outra aprovação viva já existe para a mesma oportunidade. A garantia é a
+          `UniqueConstraint` parcial, como em `SolutionHypothesis`; esta checagem existe para a
+          recusa ser legível em vez de subir como `IntegrityError` — e é 409, e não o 400 daquela,
+          porque aqui o corpo (`{"outcome": "approved"}`) está perfeitamente correto.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este business case.
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessCaseDecision'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BusinessCaseDecision'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BusinessCaseDecision'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessCase'
+          description: ''
+  /api/v1/business-cases/{id}/unarchive/:
+    post:
+      operationId: v1_business_cases_unarchive_create
+      description: Restaura um registro arquivado, devolvendo-o à listagem ativa.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este business case.
+        required: true
+      tags:
+      - v1
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unarchived'
+          description: ''
   /api/v1/cases/:
     get:
       operationId: v1_cases_list
@@ -13074,6 +13356,133 @@ components:
             format: date-time
       required:
       - slots
+    BusinessCase:
+      type: object
+      description: |-
+        A justificativa do investimento (FDD 053, ADR 0069).
+
+        A lista de `read_only_fields` é a entrega, e não burocracia — é a mesma do `CaseSerializer`
+        pelo mesmo motivo. `current_state_cost` e `current_state_cost_source` são a fotografia do
+        custo no instante da criação: mantê-los fora da escrita é o que faz "o número não muda depois
+        de congelado" ser verdade **por construção**, sem caminho de escrita em vez de com um caminho
+        que ninguém usa. `status`, `decided_at` e `decided_by` ficam de fora pelo motivo oposto: eles
+        *devem* mudar, mas só pela action `decide/`, que grava quem decidiu.
+
+        O `validate()` repete as duas guardas do `clean()` porque o serializer não chama `full_clean()`
+        — é a porta dupla que o `ImprovementOpportunitySerializer` já mantém para a mesma classe de
+        vínculo cruzado. Nenhuma constraint cobre estas duas: sem a repetição aqui, a recusa
+        simplesmente **não aconteceria** pela rota, e o `clean()` seguiria valendo só para shell,
+        admin e migração.
+
+        **O dinheiro sai como texto**: os três campos decimais passam por `ModelSerializer`, então o
+        `COERCE_DECIMAL_TO_STRING` do DRF os emite como string (ADR 0068). O `dict` cru de
+        `current_state_cost_source` não passa por lá — quem cuida dele é `business_case.dinheiro()`, na
+        origem.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        improvement_opportunity:
+          type: integer
+        account:
+          type: integer
+          readOnly: true
+        solution_hypothesis:
+          type: integer
+        priority_assessment:
+          type: integer
+        investment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        expected_return_year:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        payback_months:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        current_state_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        current_state_cost_source:
+          readOnly: true
+        rationale:
+          type: string
+        assumptions:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BusinessCaseStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account
+      - created_at
+      - current_state_cost
+      - current_state_cost_source
+      - decided_at
+      - decided_by
+      - id
+      - improvement_opportunity
+      - priority_assessment
+      - rationale
+      - solution_hypothesis
+      - status
+      - status_display
+      - updated_at
+    BusinessCaseDecision:
+      type: object
+      properties:
+        outcome:
+          $ref: '#/components/schemas/BusinessCaseDecisionOutcomeEnum'
+      required:
+      - outcome
+    BusinessCaseDecisionOutcomeEnum:
+      enum:
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `approved` - approved
+        * `rejected` - rejected
+    BusinessCaseStatusEnum:
+      enum:
+      - draft
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `draft` - Rascunho
+        * `approved` - Aprovado
+        * `rejected` - Rejeitado
     CalendarSyncResponse:
       type: object
       properties:
@@ -16689,6 +17098,93 @@ components:
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
+    PatchedBusinessCase:
+      type: object
+      description: |-
+        A justificativa do investimento (FDD 053, ADR 0069).
+
+        A lista de `read_only_fields` é a entrega, e não burocracia — é a mesma do `CaseSerializer`
+        pelo mesmo motivo. `current_state_cost` e `current_state_cost_source` são a fotografia do
+        custo no instante da criação: mantê-los fora da escrita é o que faz "o número não muda depois
+        de congelado" ser verdade **por construção**, sem caminho de escrita em vez de com um caminho
+        que ninguém usa. `status`, `decided_at` e `decided_by` ficam de fora pelo motivo oposto: eles
+        *devem* mudar, mas só pela action `decide/`, que grava quem decidiu.
+
+        O `validate()` repete as duas guardas do `clean()` porque o serializer não chama `full_clean()`
+        — é a porta dupla que o `ImprovementOpportunitySerializer` já mantém para a mesma classe de
+        vínculo cruzado. Nenhuma constraint cobre estas duas: sem a repetição aqui, a recusa
+        simplesmente **não aconteceria** pela rota, e o `clean()` seguiria valendo só para shell,
+        admin e migração.
+
+        **O dinheiro sai como texto**: os três campos decimais passam por `ModelSerializer`, então o
+        `COERCE_DECIMAL_TO_STRING` do DRF os emite como string (ADR 0068). O `dict` cru de
+        `current_state_cost_source` não passa por lá — quem cuida dele é `business_case.dinheiro()`, na
+        origem.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        improvement_opportunity:
+          type: integer
+        account:
+          type: integer
+          readOnly: true
+        solution_hypothesis:
+          type: integer
+        priority_assessment:
+          type: integer
+        investment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        expected_return_year:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        payback_months:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          nullable: true
+        current_state_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        current_state_cost_source:
+          readOnly: true
+        rationale:
+          type: string
+        assumptions:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BusinessCaseStatusEnum'
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        decided_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedCase:
       type: object
       description: |-
