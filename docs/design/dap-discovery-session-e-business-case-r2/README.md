@@ -256,27 +256,30 @@ para ato curto (`components/Modal.tsx`).
 A rota da SPA e a da API não precisam coincidir — e aqui a da SPA carrega contexto que o operador
 precisa ver no breadcrumb.
 
-### Decisão H — duas pessoas na mesma sessão · **recomendada: H1** ⭐ *(nova na r2)*
+### Decisão H — duas pessoas na mesma sessão · **decidida: H3** ✅ *(contra a recomendação)*
 
 | | |
 | --- | --- |
-| **H1** ⭐ | **Última escrita vence, e a tela avisa.** Se o bloco mudou no servidor desde que esta aba o carregou, aparece um aviso nomeando quem editou e quando, com o texto do outro à vista antes de qualquer sobrescrita. |
+| **H3** ✅ | **Última escrita vence, sem aviso.** A tela não compara versões e não avisa ninguém. |
+| H1 ⭐ (recusada) | Última escrita vence, e a tela avisa nomeando quem editou e quando. Era a recomendação. |
 | H2 | Bloqueio por bloco: quem abre primeiro edita, os demais leem. |
-| H3 | Última escrita vence, em silêncio. |
 
-**Por quê, e por que ela só existe agora.** Uma sessão de Discovery costuma ter dois da casa — um
-conduz, o outro anota. Com salvar-no-clique, duas abas colidiam raramente e o autor percebia. **Com
-autosave a cada 2 s, H3 é perda de dado invisível**: o bloco do colega desaparece sem que ninguém
-tenha visto acontecer, e o que se perde é a anotação de uma reunião que não se repete. A decisão D2
-criou esta pergunta; ela não existia na r1.
+**Por que ela só existe nesta revisão.** Com salvar-no-clique, duas abas colidiam raramente e o
+autor percebia. A decisão D2 criou a pergunta: salvamento a cada 2 s torna a colisão o caso comum de
+uma reunião com dois da casa anotando.
 
-H2 foi recusada por custo desproporcional: bloqueio exige heartbeat, expiração e uma tela para
-"destravar", e nada disso é barato num produto que até ontem não tinha escrita periódica. H1 aceita
-que a última escrita vença — mas nunca em silêncio, que é a única parte que importa.
+**A consequência aceita, escrita para não se perder.** Em H3 a anotação do colega desaparece **sem
+que ninguém veja acontecer**, e o que se perde é o registro de uma reunião que não se repete — o
+mesmo bem que a decisão D2 foi escolhida para proteger. As duas decisões apontam para lados opostos
+do mesmo risco, e isso está aqui como fato, não como objeção: **D2 protege contra a máquina, H3
+aceita o risco entre as pessoas.**
 
-**Contra-argumento registrado.** H1 não impede a sobrescrita, só a torna visível; dois consultores
-digitando no mesmo bloco ao mesmo tempo ainda produzem um resultado que nenhum dos dois escreveu por
-inteiro. A mitigação real é de uso (um bloco por pessoa), e o aviso é o que a torna possível.
+**O que torna isso administrável, e é o que se recomenda registrar no uso:** um bloco por pessoa
+durante a sessão. A mitigação é de combinado, não de código.
+
+**O caminho de volta é curto.** Se a perda aparecer em sessão real, H1 é uma issue pequena — comparar
+`updated_at` do bloco com o que a aba carregou e mostrar um aviso. Nada nesta decisão fecha essa
+porta; H2 é que seria caro depois.
 
 ---
 
@@ -296,7 +299,7 @@ inteiro. A mitigação real é de uso (um bloco por pessoa), e o aviso é o que 
 | Discovery Session | bloco em captura, salvo | sim | carimbo do último salvamento |
 | Discovery Session | **salvando** | sim | indicador discreto, campo nunca bloqueia (D2) |
 | Discovery Session | **falha ao salvar** | sim | alerta com a última versão salva + botão manual de volta (D2) |
-| Discovery Session | **editado por outra pessoa** | sim | aviso com autor e horário, sem descartar texto (H1) |
+| Discovery Session | ~~editado por outra pessoa~~ | **desenhado, não será construído** | ver a errata: a decisão H3 removeu este estado |
 | Discovery Session | sessão encerrada | sim | leitura, com a porta para estruturar |
 | Discovery Session | estruturação já feita | sim | selo e link para os processos gerados |
 
@@ -334,7 +337,7 @@ Discovery Session entra na matriz por uma linha.
 | **Cronometragem do shadowing** (ativo vs. espera, por marco) | desenha espaço apenas | issue própria | Existir onde gravar o par ativo/espera — hoje `ProcessStep.tempo` é texto livre |
 | **Sugestão de pergunta por IA ao vivo** (C3) | desenha como reserva | issue própria | A ADR 0031 autorizar canal novo e o custo por reunião ser medido |
 | **Autosave com estado visível e saída manual** (D2) | entrega | — | — |
-| **Aviso de edição concorrente** (H1) | entrega | — | — |
+| **Aviso de edição concorrente** (H1) | **não entrega** (H3) | issue própria | Perda por sobrescrita aparecer em sessão real |
 | **Fila offline e reenvio em ordem** | **não desenha** | issue própria | Rede intermitente aparecer em sessão real |
 | **Gráfico de retorno do Business Case** | **não desenha** | — | Nunca por padrão: dois números não pedem gráfico |
 
@@ -387,7 +390,24 @@ botão desligado, é bloco que anuncia o que virá.
 | Data | 2026-09-05 |
 | Revisão aprovada | r1 para A · B · C · E · F · G; **r2** para D e H |
 | Decisões escolhidas | **A1 · B1 · C1 · D2 · E1 · F1 · G1**; **H1** pendente |
-| Explicitamente não aprovado | O **desenho** desta revisão: `board-desktop.png` e `board-mobile.png` da r2 mudaram nos estados de salvamento e ainda não foram aprovados |
+| Explicitamente não aprovado | — |
+
+**As duas aprovações, nesta revisão:**
+
+| O que | Quem | Data | Sobre o quê |
+| --- | --- | --- | --- |
+| As oito decisões | Daniel Campos | 2026-09-05 | **A1 · B1 · C1 · D2 · E1 · F1 · G1 · H3** — D e H decididas contra a recomendação |
+| O desenho | Daniel Campos | 2026-09-05 | As capturas congeladas `board-desktop.png` e `board-mobile.png` **desta revisão** |
+
+## Errata — o estado que o board desenha e que não será construído
+
+O desenho foi aprovado **antes** da decisão H, e por isso a seção 3 do board mostra um sexto estado
+da Discovery Session: *"editado por outra pessoa"*, com o aviso nomeando autor e horário. **A decisão
+H3 o elimina.**
+
+O board fica como está, e a errata é o registro — recapturar depois da aprovação faria a evidência
+deixar de ser o que foi aprovado, que é o oposto do que o congelamento serve para garantir. Quem
+implementar **ignora aquele card**; os outros cinco estados da seção 3 valem como desenhados.
 
 Duas aprovações são distintas e devem ser registradas separadamente: **as sete decisões** (o texto
 acima) e **o desenho** (as capturas congeladas `board-desktop.png` e `board-mobile.png`, não uma
