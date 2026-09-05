@@ -288,3 +288,52 @@ do Google.
 **Clicksign.** O adaptador existe e não tem homologação — o `roadmap.md` creditava a ele a
 homologação que o Autentique ganhou (ADR 0007). A linha foi corrigida; homologar o Clicksign é
 item próprio.
+
+## Varredura do WhatsApp — antes da rodada
+
+No molde da varredura do Google (acima): antes de apontar credencial contra o WhatsApp — a única
+integração **em uso sem rodada de homologação** —, uma varredura de falhar-fechado percorreu
+`kickoff.py` e `whatsapp.py` procurando o mesmo padrão das quatro rodadas: uma linha gravada
+afirmando um efeito externo que não aconteceu.
+
+**O que se achou.** `abrir_grupo_de_whatsapp` (`kickoff.py`) tinha exatamente um ponto cego:
+`whatsapp.create_group` devolve `DELIVERED` — o grupo existe no WhatsApp, com o cliente já
+dentro —, e a gravação seguinte (`project.engagement.save()`) podia falhar por indisponibilidade
+do banco, lock ou timeout de conexão. A exceção subia até `finalize`, que a engolia no `except
+Exception` best-effort e seguia: `convite_do_grupo` ficava `""`, o e-mail e a notificação de
+kickoff saíam sem menção a grupo nenhum, e **ninguém ficava sabendo que existe um grupo com o
+cliente dentro** — nem o id, nem o link. A própria mensagem do log de `finalize` piorava o quadro,
+ao afirmar "grupo de WhatsApp não criado" — o contrário do que tinha acontecido.
+
+A assimetria que prova que era defeito e não decisão: o estado `UNCERTAIN`, em que o grupo *pode*
+não existir, notifica o dono do projeto (emenda da issue #117 na ADR 0062). Este caminho, em que o
+grupo *certamente* existe, não notificava ninguém. É a mesma classe do defeito que a varredura do
+Google achou em `booking.book` (reserva órfã), com a janela invertida — lá o registro vinha antes
+do efeito externo, aqui vem depois. Corrigido: a gravação ganhou tratamento próprio dentro de
+`abrir_grupo_de_whatsapp`, com log em nível `exception` carregando `group_id`/`invite_url` — a
+única coisa que sobrevive se o banco está fora — e aviso best-effort ao dono dizendo que o grupo
+**foi criado** (distinto do "pode haver um grupo criado" do `UNCERTAIN`). O convite continua sendo
+devolvido: o grupo existe, e é o que o e-mail de kickoff precisa para sair com o link. A mensagem
+do `except Exception` de `finalize` deixou de afirmar "grupo não criado", porque uma exceção que
+chegue até ali, depois da correção, não sabe mais se o grupo existe ou não.
+
+**O que se achou de limpo, e por que isso é resultado.** Diferente da IA (rodada 2) e do Google
+(varredura acima), a auditoria original desta superfície — issue #110 (o chamador nasceu), #117 (a
+dívida do `UNCERTAIN` sem destinatário fechada) e #119 (a referência migrou do projeto para o
+`Engagement`) — **não foi parcial**. O que ela deixou de pé se confirma aqui:
+
+- `_request`, em `whatsapp.py`, nunca levanta — classifica todo desfecho de rede nos quatro estados
+  da ADR 0062 (`DELIVERED`/`UNAVAILABLE`/`REFUSED`/`UNCERTAIN`), e é por isso que o ponto cego
+  achado acima estava no chamador, não no adaptador;
+- a gravação em `kickoff` já era estritamente **posterior** a `DELIVERED` — o defeito nunca foi
+  gravar antes de confirmar (o erro das rodadas 1, 3 e 4), foi não tratar a própria gravação como
+  um passo que pode falhar;
+- os cinco cenários de falha do adaptador (`DELIVERED`, `UNAVAILABLE`, `REFUSED`, `UNCERTAIN` cru e
+  `UNCERTAIN` reconciliado) já tinham teste em `test_whatsapp.py`.
+
+Registrar que a auditoria original não foi parcial é o que impede a próxima varredura de refazer o
+mesmo caminho achando que ninguém olhou: o achado desta rodada é um ramo sem cobertura que as três
+issues anteriores não tinham como cobrir — nenhuma delas exercitava uma falha na gravação depois de
+`DELIVERED` —, não uma classe inteira de defeito deixada passar.
+
+Ver ADR 0062, ADR 0064 e `docs/runbooks/homologacao-de-integracoes.md`, seção 7 (pendente).

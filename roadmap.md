@@ -154,7 +154,12 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 > externo continua atrás de `# pragma: no cover`. E desde 02/09/2026 há uma integração **em uso sem
 > rodada própria**: o WhatsApp ganhou chamador no kickoff (issue #110) e não tem seção no runbook —
 > o teto de 90 s da ADR 0064 nasceu de um caso observado contra o provedor real, não de uma
-> homologação, e a própria ADR registra que 90 é folga escolhida e não número apurado.
+> homologação, e a própria ADR registra que 90 é folga escolhida e não número apurado. Uma
+> **varredura de falhar-fechado** passou pelo módulo antes da rodada (FDD 024, "Varredura do
+> WhatsApp — antes da rodada"): achou e corrigiu o grupo criado e não registrado por falha na
+> gravação do mandato, e confirmou limpo o resto — os quatro estados da ADR 0062, a gravação
+> estritamente posterior à confirmação, e cinco cenários de falha já cobertos por teste. A rodada
+> com credencial de verdade (seção 7 do runbook) continua pendente.
 >
 > O que fica apagado numa instalação nova é **configuração, não código não exercitado** — e desde a
 > ADR 0018 é menos do que era: notificações/digest e assinatura eletrônica nascem ligadas (a

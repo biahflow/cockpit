@@ -683,3 +683,73 @@ docker compose exec api uv run python manage.py shell -c \
 
 Zerar os vetores basta: as peças e a curadoria (dono, carimbo de verificação) **devem** sobreviver,
 e a próxima ingestão reembeda o que faltar.
+
+---
+
+## 7. WhatsApp — **pendente**
+
+**Esta seção é roteiro, não relato.** As seis integrações acima já passaram por rodada (cinco
+homologadas, o Stripe pendente); o WhatsApp é a única que está **em uso sem nenhuma** — desde
+02/09/2026 o kickoff abre grupo de cliente de verdade (`kickoff.abrir_grupo_de_whatsapp`, issue
+#110), e o teto de 90s da ADR 0064 nasceu de um caso observado contra o provedor real, não de uma
+homologação. Uma varredura de falhar-fechado (FDD 024, "Varredura do WhatsApp — antes da rodada")
+passou pelo módulo antes de esta seção existir: achou e corrigiu o grupo criado e não registrado
+por falha na gravação do mandato (issue relacionada ao `Engagement.save()` de
+`abrir_grupo_de_whatsapp`), e confirmou limpo o resto — os quatro estados da ADR 0062, a gravação
+estritamente posterior à confirmação, e cinco cenários de falha já cobertos por teste em
+`test_whatsapp.py`. Falta a rodada com credencial de verdade.
+
+**Variáveis:** `WHATSAPP_ENABLED=true`, `WHATSAPP_PROVIDERS` (`zapi`, `uazapi`, ou os dois
+separados por vírgula — a ordem escrita é a ordem do fallback), `WHATSAPP_ZAPI_INSTANCE_ID`,
+`WHATSAPP_ZAPI_TOKEN`, `WHATSAPP_ZAPI_CLIENT_TOKEN` (opcional) e `WHATSAPP_UAZAPI_TOKEN`. Os dois
+tetos por operação da ADR 0064: `WHATSAPP_TIMEOUT_SECONDS` (default 15s, mensagem) e
+`WHATSAPP_GROUP_TIMEOUT_SECONDS` (default 90s, criação de grupo) — 90 é folga escolhida, não
+número apurado, e a rodada é a primeira chance de medir o de verdade.
+
+> **Os dois provedores são não oficiais** (ADR 0062): Z-API e UAZAPI operam por fora do protocolo
+> da Meta, e o risco assumido é o número ser banido. Use um número de teste dedicado, nunca um
+> número que fala com cliente de verdade — e, ao contrário do Stripe, aqui não existe "modo de
+> teste" para desfazer o risco.
+
+### O que preparar no provedor
+
+- Uma instância conectada em cada provedor a exercitar (Z-API e/ou UAZAPI), com o QR Code escaneado
+  por um número de teste dedicado — nunca o número que atende cliente.
+- Um segundo número de teste, fora da instância, para ser convidado ao grupo e confirmar que o
+  convite entrega de verdade.
+- Prefixe o nome de todo grupo criado com `[homologação]`, como nas rodadas do Google e do Drive, e
+  remova ao fim.
+
+### O que foi observado
+
+| Superfície | Gatilho | Resultado |
+| --- | --- | --- |
+| _(a rodada ainda não aconteceu — esta tabela nasce vazia)_ | | |
+
+### Provocar as falhas
+
+| | Provocação | Resultado esperado |
+| --- | --- | --- |
+| F1 | provedor fora do ar (instância desconectada, ou `API_BASE` apontando para host inexistente) | `UNAVAILABLE` — cai para o próximo provedor da lista |
+| F2 | timeout no `create_group` (segurar a resposta além de `WHATSAPP_GROUP_TIMEOUT_SECONDS`) | `UNCERTAIN` — a reconciliação da ADR 0064 tenta achar o grupo pelo nome exato; achando **um só**, o resultado sobe a `DELIVERED` com o `group_id` recuperado |
+| F3 | 4xx do provedor (número mal formado, payload rejeitado) | `REFUSED` — não cai para o próximo provedor |
+| F4 | 5xx do provedor | `UNCERTAIN` — mesmo tratamento do F2 |
+| F5 | **grupo criado com falha ao registrar** (o defeito que esta fatia corrigiu): derrubar a conexão com o banco entre `create_group` responder `DELIVERED` e `project.engagement.save()` gravar a referência | o kickoff não levanta; o dono do projeto recebe notificação (`kind="whatsapp"`) dizendo que o grupo **foi criado**, com o convite; o log registra `group_id` e `invite_url` em nível `exception` |
+
+F1–F4 exercitam o adaptador (`whatsapp.py`), que esta fatia não tocou. F5 exercita o chamador
+(`kickoff.py`) e é o item novo desta rodada.
+
+### Limpar
+
+Apague, **no próprio WhatsApp** (não só no painel do provedor), todo grupo prefixado com
+`[homologação]` — o número de teste continua dentro do grupo até alguém sair ou apagar. Confira a
+lista de grupos depois, no espírito do "confira, não presuma" da rodada 3.
+
+```bash
+docker compose exec api uv run python manage.py shell -c \
+  "from apps.core.models import Engagement; \
+Engagement.objects.filter(whatsapp_group_id__gt='').update(whatsapp_group_id='', whatsapp_group_invite_url='')"
+```
+
+Restrinja o filtro à referência gravada durante a rodada antes de rodar isto — não é para tocar
+dado de produção.

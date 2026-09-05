@@ -5,8 +5,8 @@ import pytest
 from django.test import override_settings
 from django.utils import timezone
 
-from apps.core import kickoff, whatsapp
-from apps.core.models import Contact, Milestone, Notification, Project, Service, Task
+from apps.core import kickoff, notifications, whatsapp
+from apps.core.models import Contact, Engagement, Milestone, Notification, Project, Service, Task
 
 from .factories import EngagementFactory, ProjectFactory, ServiceFactory, UserFactory
 
@@ -420,6 +420,103 @@ def test_delivered_nao_avisa_o_dono_do_projeto(grupo):
     kickoff.finalize(project)
 
     assert not Notification.objects.filter(user=project.owner, kind="whatsapp").exists()
+
+
+# --- O grupo criado e não registrado (varredura de falhar-fechado, FDD 024) --------------------
+#
+# `whatsapp.create_group` devolve `DELIVERED` — o grupo existe no WhatsApp e o cliente já está
+# dentro —, mas o `project.engagement.save()` que grava a referência pode falhar por
+# indisponibilidade do banco, lock ou timeout de conexão. Antes desta correção, a exceção subia
+# até `finalize`, que a engolia no `except Exception`: `convite_do_grupo` ficava `""`, o e-mail e
+# a notificação de kickoff saíam sem mencionar grupo nenhum, e **ninguém ficava sabendo que existe
+# um grupo com o cliente dentro** — nem o id, nem o link. A assimetria que prova que é defeito e
+# não decisão: `UNCERTAIN` (o grupo *pode* não existir) notifica o dono; este caminho, em que o
+# grupo *certamente* existe, não notificava ninguém.
+
+
+def _falha_ao_gravar_o_mandato(self, *args, **kwargs):
+    raise ConnectionError("banco fora do ar")
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_grupo_criado_e_nao_registrado_avisa_o_dono(grupo, monkeypatch, mailoutbox):
+    """Sem a correção, o grupo criado ficava órfão em silêncio: nenhuma notificação saía, e o
+    e-mail de kickoff não mencionava grupo nenhum apesar de ele existir no WhatsApp."""
+    grupo()
+    project = _projeto_com_contatos()
+    monkeypatch.setattr(Engagement, "save", _falha_ao_gravar_o_mandato)
+
+    kickoff.finalize(project)
+
+    aviso = Notification.objects.get(user=project.owner, kind="whatsapp")
+    assert "foi criado" in aviso.message
+    assert "https://chat.whatsapp.com/GONwbGG" in aviso.message
+    # Distinta da mensagem do `UNCERTAIN`: lá o grupo *pode* não existir; aqui ele *existe*.
+    assert "incerta" not in aviso.message
+    kickoff_mail = next(mail for mail in mailoutbox if project.name in mail.subject)
+    assert "https://chat.whatsapp.com/GONwbGG" in kickoff_mail.body
+    project.engagement.refresh_from_db()
+    assert project.engagement.whatsapp_group_id == ""
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_o_log_da_falha_de_registro_carrega_o_id_e_o_convite(grupo, monkeypatch, caplog):
+    """Protege a reconstrução manual: se o banco está fora, o log é a única coisa que sobrevive,
+    e sem `group_id`/`invite_url` ninguém consegue vincular o grupo à mão depois."""
+    grupo()
+    project = _projeto_com_contatos()
+    monkeypatch.setattr(Engagement, "save", _falha_ao_gravar_o_mandato)
+
+    with caplog.at_level(logging.ERROR, logger="apps.core.kickoff"):
+        kickoff.finalize(project)
+
+    mensagens = [registro.message for registro in caplog.records]
+    assert any("120363431743499021@g.us" in mensagem for mensagem in mensagens)
+    assert any("https://chat.whatsapp.com/GONwbGG" in mensagem for mensagem in mensagens)
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_notificacao_que_tambem_falha_nao_derruba_o_kickoff(grupo, monkeypatch, mailoutbox):
+    """Best-effort dentro do best-effort: `notifications.notify` também grava no banco, e se o
+    banco caiu para o `Engagement`, cai para a notificação do mesmo jeito — o kickoff termina
+    mesmo assim, com o log da gravação já emitido."""
+    grupo()
+    project = _projeto_com_contatos()
+    monkeypatch.setattr(Engagement, "save", _falha_ao_gravar_o_mandato)
+    notify_original = notifications.notify
+
+    def notify_falho(users, kind, *args, **kwargs):
+        if kind == "whatsapp":
+            raise ConnectionError("banco fora do ar")
+        return notify_original(users, kind, *args, **kwargs)
+
+    monkeypatch.setattr(notifications, "notify", notify_falho)
+
+    kickoff.finalize(project)  # não levanta
+
+    assert not Notification.objects.filter(user=project.owner, kind="whatsapp").exists()
+    # A notificação de kickoff (outro `kind`) segue saindo normalmente.
+    assert Notification.objects.filter(user=project.owner, kind="kickoff").exists()
+
+
+@pytest.mark.django_db
+@LIGADO_NO_WHATSAPP
+def test_excecao_crua_no_whatsapp_nao_derruba_o_kickoff(monkeypatch):
+    """O ramo `except Exception` de `finalize` para o WhatsApp, sem cobertura antes desta fatia:
+    uma exceção crua dentro de `abrir_grupo_de_whatsapp` (bug antes da chamada ao provedor, por
+    exemplo) não pode derrubar o kickoff inteiro."""
+    project = _projeto_com_contatos()
+    monkeypatch.setattr(
+        whatsapp, "create_group",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bug antes da chamada")),
+    )
+
+    kickoff.finalize(project)  # não levanta
+
+    assert Notification.objects.filter(user=project.owner, kind="kickoff").exists()
 
 
 # --- O grupo do mandato na tela (issue #116, DAP dap-grupo-de-whatsapp-r1) ---------------------
