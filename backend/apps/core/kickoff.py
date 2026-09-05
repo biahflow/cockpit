@@ -352,11 +352,43 @@ def abrir_grupo_de_whatsapp(project: Project) -> str:
                 project=project,
             )
         return ""
-    project.engagement.whatsapp_group_id = result.group_id
-    project.engagement.whatsapp_group_invite_url = result.invite_url
-    project.engagement.save(
-        update_fields=["whatsapp_group_id", "whatsapp_group_invite_url", "updated_at"]
-    )
+    try:
+        project.engagement.whatsapp_group_id = result.group_id
+        project.engagement.whatsapp_group_invite_url = result.invite_url
+        project.engagement.save(
+            update_fields=["whatsapp_group_id", "whatsapp_group_invite_url", "updated_at"]
+        )
+    except Exception:  # noqa: BLE001 - o grupo já existe no WhatsApp, com o cliente dentro; o
+        # que falhou foi só o vínculo no banco (indisponibilidade, lock, timeout de conexão), não
+        # o WhatsApp. **Logar primeiro**, com `group_id`/`invite_url` na mensagem: se o banco está
+        # fora, o log é a única coisa que sobrevive, e sem os dois valores ninguém vincula o grupo
+        # à mão depois. Telefone é mascarado por `whatsapp._mask` no log de sucesso abaixo; id e
+        # convite não são dado pessoal.
+        logger.exception(
+            "kickoff: grupo de WhatsApp do projeto %s foi criado (group_id=%s, invite_url=%s) mas "
+            "não foi possível registrá-lo no mandato %s",
+            project.pk, result.group_id, result.invite_url, project.engagement_id,
+        )
+        try:
+            # Best-effort **dentro do** best-effort: `notifications.notify` também grava no banco
+            # (`Notification.objects.bulk_create`), e se a gravação acima falhou por o banco estar
+            # fora, esta falha do mesmo jeito. O log já emitido acima é o que resta quando isto
+            # também falha.
+            notifications.notify(
+                [project.owner], "whatsapp",
+                f"O grupo de WhatsApp de '{nome}' foi criado, mas não ficou registrado no Pulse. "
+                f"Convite: {result.invite_url}",
+                f"/projetos/{project.id}",
+                project=project,
+            )
+        except Exception:  # noqa: BLE001 - ver comentário acima
+            logger.exception(
+                "kickoff: notificação do grupo criado e não registrado também falhou para o "
+                "projeto %s", project.pk,
+            )
+        # O convite é válido — o grupo existe. Devolvê-lo faz o e-mail de kickoff sair com o link,
+        # que é o que o cliente precisa; o que ficou faltando é só o vínculo no banco.
+        return result.invite_url
     logger.info(
         # Telefone em log é dado pessoal: quem identifica o suficiente são os quatro últimos
         # dígitos, e `whatsapp._mask` é a única definição desse corte.
@@ -407,9 +439,16 @@ def finalize(project: Project, origem: str = ORIGEM_PADRAO) -> None:
     try:
         convite_do_grupo = abrir_grupo_de_whatsapp(project)
     except Exception:  # noqa: BLE001 - best-effort: o kickoff não falha porque o WhatsApp caiu
-        # Mesmo desenho do Drive acima, e pela mesma razão de não ser `pass`: sem log, o projeto
-        # nasceria sem canal com o cliente e ninguém saberia por quê.
-        logger.exception("kickoff: grupo de WhatsApp não criado para o projeto %s", project.pk)
+        # Mesmo desenho do Drive acima, e pela mesma razão de não ser `pass`: sem log, ninguém
+        # saberia por quê. A gravação do grupo já tem tratamento próprio dentro de
+        # `abrir_grupo_de_whatsapp`, então uma exceção que chegue até aqui é de outra natureza —
+        # bug antes da chamada ao provedor, ou a própria notificação de erro que também falhou. A
+        # mensagem não afirma "grupo não criado": não se sabe se o grupo existe, e afirmar que não
+        # existe repetiria, na mensagem, o mesmo erro que esta fatia corrigiu no dado (no espírito
+        # do "cala quando não sabe" da guarda de telefone vazio, algumas linhas acima).
+        logger.exception(
+            "kickoff: falha inesperada ao tratar o grupo de WhatsApp do projeto %s", project.pk
+        )
     _send_kickoff_email(project, origem, convite_do_grupo)
     grupo = f" Grupo do cliente no WhatsApp: {convite_do_grupo}" if convite_do_grupo else ""
     notifications.notify(
