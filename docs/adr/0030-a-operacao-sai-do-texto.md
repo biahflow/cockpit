@@ -78,3 +78,22 @@ Onde esta ADR diz `Opportunity` — inclusive na regra "Account ≠ Opportunity"
 o modelo do Pulse hoje se chama `CommercialOpportunity` (ADR 0052, `language-map` §5). O
 qualificador existe porque `Opportunity` sozinho colide com a melhoria operacional do FDE, que a
 Fase 4 chama de `ImprovementOpportunity`. A migração do Notion continua **nomeada e não feita**.
+
+## Emenda (05/09/2026) — as quatro bases foram desligadas, não migradas
+
+A consequência que esta ADR deixou "nomeada e não feita" — *a migração dos dados do Notion (as
+databases Accounts/Contacts/Opportunities/Activities)* — **perdeu o objeto, e a linha morre aqui.**
+
+A ficha *Sistema Operacional — PULSE*, no Notion, declara desde 04/09/2026 que as quatro bases
+**não existem como database**: elas vivem no Pulse (ADR 0035), e o que ficou na página é a
+especificação do que este produto cobre. Uma varredura do workspace confirma — há prosa, verticais
+e playbook comercial; não há base de CRM.
+
+Não houve importação: houve **desligamento**. A diferença importa, porque um item de trabalho cujo
+objeto não existe é o oposto da "lacuna nomeada com o motivo escrito ao lado" que a ADR 0034
+defende — ele parece dívida e não é.
+
+O que sobrou de vivo no Notion não é dado operacional, é **conhecimento** (as *Discovery Questions*
+e as três Vertical Knowledge Bases). O destino dele é o corpus da FDD 029, como espelho no molde de
+`docs/ontology/` — nunca uma base editável aqui dentro, que faria a mesma pergunta divergir em dois
+lugares. Ver ADR 0069.
