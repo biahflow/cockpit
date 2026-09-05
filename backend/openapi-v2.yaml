@@ -3172,10 +3172,36 @@ paths:
               schema:
                 $ref: '#/components/schemas/Unarchived'
           description: ''
+  /api/v2/discovery-questions/:
+    get:
+      operationId: discovery_questions_retrieve
+      description: |-
+        A base de perguntas de Discovery, servida do backend (ADR 0069, decisão E1 do DAP).
+
+        `IsAuthenticated` e não `RolePermission`, como o `ConfigView`: não há objeto, não há escrita, e
+        o método é da casa inteira — quem conduz Discovery é das duas áreas (o mesmo argumento que põe
+        `process` e `evidence` nos dois conjuntos de papel). Um `resource` aqui teria de ser declarado
+        em `permissions.py` só para dizer "todo mundo lê", que é o que esta linha já diz.
+
+        O conteúdo é constante de módulo (`discovery_questions.BLOCKS`), espelho da ficha do Notion. A
+        rota existe para que a tela não precise de uma cópia das perguntas — o mesmo motivo pelo qual
+        E3 (constantes no frontend) foi recusada.
+      tags:
+      - discovery-questions
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryQuestionsResponse'
+          description: ''
   /api/v2/discovery-sessions/:
     get:
       operationId: discovery_sessions_list
-      description: As sessões de um Discovery (FDD 045).
+      description: As sessões de um Discovery (FDD 045), e a tela que conduz uma delas
+        (FDD 055).
       tags:
       - discovery-sessions
       security:
@@ -3191,7 +3217,8 @@ paths:
           description: ''
     post:
       operationId: discovery_sessions_create
-      description: As sessões de um Discovery (FDD 045).
+      description: As sessões de um Discovery (FDD 045), e a tela que conduz uma delas
+        (FDD 055).
       tags:
       - discovery-sessions
       requestBody:
@@ -3218,7 +3245,8 @@ paths:
   /api/v2/discovery-sessions/{id}/:
     get:
       operationId: discovery_sessions_retrieve
-      description: As sessões de um Discovery (FDD 045).
+      description: As sessões de um Discovery (FDD 045), e a tela que conduz uma delas
+        (FDD 055).
       parameters:
       - in: path
         name: id
@@ -3239,7 +3267,8 @@ paths:
           description: ''
     put:
       operationId: discovery_sessions_update
-      description: As sessões de um Discovery (FDD 045).
+      description: As sessões de um Discovery (FDD 045), e a tela que conduz uma delas
+        (FDD 055).
       parameters:
       - in: path
         name: id
@@ -3272,7 +3301,8 @@ paths:
           description: ''
     patch:
       operationId: discovery_sessions_partial_update
-      description: As sessões de um Discovery (FDD 045).
+      description: As sessões de um Discovery (FDD 045), e a tela que conduz uma delas
+        (FDD 055).
       parameters:
       - in: path
         name: id
@@ -3304,7 +3334,8 @@ paths:
           description: ''
     delete:
       operationId: discovery_sessions_destroy
-      description: As sessões de um Discovery (FDD 045).
+      description: As sessões de um Discovery (FDD 045), e a tela que conduz uma delas
+        (FDD 055).
       parameters:
       - in: path
         name: id
@@ -3319,6 +3350,111 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v2/discovery-sessions/{id}/estruturar/:
+    post:
+      operationId: discovery_sessions_estruturar_create
+      description: |-
+        Mapeia processos, etapas e achados do que foi anotado na sessão (FDD 055).
+
+        **Ato explícito, depois da sessão, e nunca durante** — é a decisão C1 do DAP: a tela captura
+        texto e não grava `Finding` em caminho nenhum. Quem grava é `grava_o_mapa_extraido`, o mesmo
+        coletor da `MeetingViewSet.estruturar`, e é por isso que "todo achado nasce hipótese" vale
+        igual nas duas origens sem ninguém precisar lembrar.
+
+        Três diferenças em relação à extração da reunião, e as três vêm da âncora:
+
+        * o insumo são as **anotações** (`ai.build_discovery_session_context`), com a transcrição
+          atrás quando houver — não uma transcrição solta;
+        * a `Evidence` aponta para a **sessão** (`source_session`) e para o Discovery, que é o que
+          permite dizer de qual passada do levantamento o achado veio (FDD 045);
+        * nasce uma `ProcessObservation` por processo. É o registro que a FDD 045 criou para o mapa
+          revisitado, e é ele que faz "esta sessão já foi estruturada" ser fato no schema em vez de
+          heurística — inclusive para o processo que não rendeu achado nenhum e por isso não tem
+          `Evidence`.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery session.
+        required: true
+      tags:
+      - discovery-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DiscoverySession'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySession'
+          description: ''
+  /api/v2/discovery-sessions/{id}/notes/:
+    post:
+      operationId: discovery_sessions_notes_create
+      description: |-
+        Grava as respostas de **um** bloco, preservando os outros (FDD 055).
+
+        **Action e não `PATCH` de `notes`**, pela razão de `POST /prove-experiments/{id}/start/` e
+        das duas portas de publicação: o que se escreve depende do estado corrente. Um `PATCH` do
+        campo inteiro apagaria os cinco blocos que não vieram no corpo — e apagaria em silêncio,
+        que é o único jeito de perder o registro de uma reunião que não se repete.
+
+        **O bloco é a unidade porque é o que torna a decisão H3 administrável.** Ela aceita que a
+        última escrita vença sem aviso, e registra a mitigação de uso: *um bloco por pessoa durante
+        a sessão*. Com a sessão inteira como unidade, essa mitigação não funcionaria — dois
+        consultores em blocos diferentes se apagariam mutuamente a cada dois segundos.
+
+        `select_for_update` pelo motivo do `convert-to-project`: a gravação é leitura-modificação-
+        escrita sobre um JSON, e sem o cadeado dois salvamentos simultâneos de **blocos
+        diferentes** perderiam um dos dois — a colisão que a decisão H3 não aceitou, porque ela
+        aceitou a de dentro do bloco.
+
+        Id de pergunta desconhecido é **400 e não descarte silencioso**: quem manda uma chave que a
+        base não tem está com a tela desatualizada, e gravar assim mesmo produziria resposta órfã
+        que nenhuma tela mostra. A recusa diz quais chaves não existem.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Um valor inteiro único que identifica este discovery session.
+        required: true
+      tags:
+      - discovery-sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoverySessionNotes'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DiscoverySessionNotes'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DiscoverySessionNotes'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySession'
+          description: ''
   /api/v2/discovery-sessions/{id}/unarchive/:
     post:
       operationId: discovery_sessions_unarchive_create
@@ -7329,6 +7465,10 @@ paths:
         havia também a `Evidencia` fundida; com o legado removido e o custo do estado atual lendo o
         `Finding`, sobra o par canônico. A resposta segue `{"processos": [...]}` e nenhuma tela
         precisou mudar por causa disso.
+
+        **A gravação em si mora em `grava_o_mapa_extraido`, e não mais aqui** (FDD 055). Desde a
+        Discovery Session há duas origens de extração, e a invariante 8 do mapa de linguagem não
+        pode depender de duas cópias concordarem — o porquê está escrito lá.
       parameters:
       - in: path
         name: id
@@ -14480,10 +14620,58 @@ components:
       - account
       - scheduled_at
       - slots
+    DiscoveryQuestionBlock:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        short_label:
+          type: string
+        note:
+          type: string
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoveryQuestionItem'
+      required:
+      - id
+      - label
+      - note
+      - questions
+      - short_label
+    DiscoveryQuestionItem:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+      required:
+      - id
+      - text
+    DiscoveryQuestionsResponse:
+      type: object
+      properties:
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoveryQuestionBlock'
+      required:
+      - blocks
     DiscoverySession:
       type: object
-      description: A sessão do Discovery (FDD 045) — reunião, visita ou leitura de
-        sistema.
+      description: |-
+        A sessão do Discovery (FDD 045) — reunião, visita ou leitura de sistema.
+
+        `notes` sai e **não entra por aqui** (FDD 055): a escrita é
+        `POST /discovery-sessions/{id}/notes/`, que grava **um bloco** e preserva os outros. A razão é
+        a mesma que faz `published_at` ser só de leitura — o que vale depende do estado corrente, e um
+        `PATCH` do campo inteiro apagaria em silêncio o bloco que o colega acabou de salvar. A decisão
+        H3 do DAP aceita a sobrescrita entre pessoas **dentro** de um bloco; a mitigação que ela
+        registra ("um bloco por pessoa durante a sessão") só funciona porque o bloco é a unidade de
+        escrita.
       properties:
         id:
           type: integer
@@ -14503,6 +14691,11 @@ components:
           nullable: true
         transcript:
           type: string
+        notes:
+          readOnly: true
+        structured_finding_count:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -14516,7 +14709,33 @@ components:
       - discovery
       - happened_at
       - id
+      - notes
+      - structured_finding_count
       - updated_at
+    DiscoverySessionNotes:
+      type: object
+      description: |-
+        O corpo de `POST /discovery-sessions/{id}/notes/`: **um** bloco e as respostas dele.
+
+        Não é `ModelSerializer` porque não há campo de modelo com esta forma — `notes` guarda os seis
+        blocos, e o que se escreve é um. É o mesmo desenho do serializer de entrada de qualquer action
+        com corpo próprio: o que ele valida é o pedido, não a linha.
+
+        **A validação é contra `discovery_questions.BLOCKS`, e olha só o que está sendo escrito.** O
+        que já está gravado nunca é revalidado: uma pergunta removida da base deixa de ser exibida e a
+        resposta dela continua no JSON, e revalidar o conjunto inteiro faria essa remoção travar o
+        salvamento de um bloco vizinho — apagando, na prática, o registro de uma reunião por causa de
+        uma edição de catálogo.
+      properties:
+        block:
+          type: string
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+      - answers
+      - block
     DiscoveryStatusEnum:
       enum:
       - planned
@@ -17554,8 +17773,16 @@ components:
           readOnly: true
     PatchedDiscoverySession:
       type: object
-      description: A sessão do Discovery (FDD 045) — reunião, visita ou leitura de
-        sistema.
+      description: |-
+        A sessão do Discovery (FDD 045) — reunião, visita ou leitura de sistema.
+
+        `notes` sai e **não entra por aqui** (FDD 055): a escrita é
+        `POST /discovery-sessions/{id}/notes/`, que grava **um bloco** e preserva os outros. A razão é
+        a mesma que faz `published_at` ser só de leitura — o que vale depende do estado corrente, e um
+        `PATCH` do campo inteiro apagaria em silêncio o bloco que o colega acabou de salvar. A decisão
+        H3 do DAP aceita a sobrescrita entre pessoas **dentro** de um bloco; a mitigação que ela
+        registra ("um bloco por pessoa durante a sessão") só funciona porque o bloco é a unidade de
+        escrita.
       properties:
         id:
           type: integer
@@ -17575,6 +17802,11 @@ components:
           nullable: true
         transcript:
           type: string
+        notes:
+          readOnly: true
+        structured_finding_count:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -18973,6 +19205,12 @@ components:
           type: integer
         process:
           type: integer
+        process_name:
+          type: string
+          readOnly: true
+        account:
+          type: integer
+          readOnly: true
         observed_at:
           type: string
           format: date
@@ -20300,6 +20538,12 @@ components:
           type: integer
         process:
           type: integer
+        process_name:
+          type: string
+          readOnly: true
+        account:
+          type: integer
+          readOnly: true
         observed_at:
           type: string
           format: date
@@ -20320,12 +20564,14 @@ components:
           format: date-time
           readOnly: true
       required:
+      - account
       - created_at
       - discovery
       - id
       - observation_type_display
       - observed_at
       - process
+      - process_name
       - updated_at
     ProcessStep:
       type: object

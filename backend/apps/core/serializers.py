@@ -14,7 +14,16 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, discovery_booking, drive, esign, kickoff, knowledge, publication
+from . import (
+    blueprints,
+    discovery_booking,
+    discovery_questions,
+    drive,
+    esign,
+    kickoff,
+    knowledge,
+    publication,
+)
 from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
@@ -1350,13 +1359,31 @@ class DiscoverySerializer(serializers.ModelSerializer[Discovery]):
 
 
 class DiscoverySessionSerializer(serializers.ModelSerializer[DiscoverySession]):
-    """A sessão do Discovery (FDD 045) — reunião, visita ou leitura de sistema."""
+    """A sessão do Discovery (FDD 045) — reunião, visita ou leitura de sistema.
+
+    `notes` sai e **não entra por aqui** (FDD 055): a escrita é
+    `POST /discovery-sessions/{id}/notes/`, que grava **um bloco** e preserva os outros. A razão é
+    a mesma que faz `published_at` ser só de leitura — o que vale depende do estado corrente, e um
+    `PATCH` do campo inteiro apagaria em silêncio o bloco que o colega acabou de salvar. A decisão
+    H3 do DAP aceita a sobrescrita entre pessoas **dentro** de um bloco; a mitigação que ela
+    registra ("um bloco por pessoa durante a sessão") só funciona porque o bloco é a unidade de
+    escrita.
+    """
+
+    # Quantos achados saíram desta sessão. Vem **anotado** pela queryset do viewset; o `getattr`
+    # com zero é para o caminho em que o objeto não veio de lá — a criação, que responde com a
+    # instância recém-salva e que não tem achado nenhum mesmo.
+    structured_finding_count = serializers.SerializerMethodField()
 
     class Meta:
         model = DiscoverySession
         fields = ["id", "discovery", "meeting", "happened_at", "participants", "source_artifact",
-                  "transcript", "created_at", "updated_at"]
-        read_only_fields = ["id", "created_at", "updated_at"]
+                  "transcript", "notes", "structured_finding_count", "created_at", "updated_at"]
+        read_only_fields = ["id", "notes", "created_at", "updated_at"]
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_structured_finding_count(self, obj: DiscoverySession) -> int:
+        return int(getattr(obj, "structured_finding_count", 0) or 0)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         discovery = cast(
@@ -1372,6 +1399,41 @@ class DiscoverySessionSerializer(serializers.ModelSerializer[DiscoverySession]):
         return attrs
 
 
+class DiscoverySessionNotesSerializer(serializers.Serializer):
+    """O corpo de `POST /discovery-sessions/{id}/notes/`: **um** bloco e as respostas dele.
+
+    Não é `ModelSerializer` porque não há campo de modelo com esta forma — `notes` guarda os seis
+    blocos, e o que se escreve é um. É o mesmo desenho do serializer de entrada de qualquer action
+    com corpo próprio: o que ele valida é o pedido, não a linha.
+
+    **A validação é contra `discovery_questions.BLOCKS`, e olha só o que está sendo escrito.** O
+    que já está gravado nunca é revalidado: uma pergunta removida da base deixa de ser exibida e a
+    resposta dela continua no JSON, e revalidar o conjunto inteiro faria essa remoção travar o
+    salvamento de um bloco vizinho — apagando, na prática, o registro de uma reunião por causa de
+    uma edição de catálogo.
+    """
+
+    block = serializers.CharField()
+    answers = serializers.DictField(child=serializers.CharField(allow_blank=True))
+
+    def validate_block(self, value: str) -> str:
+        if discovery_questions.block(value) is None:
+            raise serializers.ValidationError(
+                f"Bloco desconhecido: {value}. Os blocos são "
+                f"{', '.join(bloco.id for bloco in discovery_questions.BLOCKS)}."
+            )
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        conhecidas = discovery_questions.question_ids(cast(str, attrs["block"]))
+        desconhecidas = sorted(set(cast(dict, attrs["answers"])) - conhecidas)
+        if desconhecidas:
+            raise serializers.ValidationError(
+                {"answers": f"Pergunta desconhecida neste bloco: {', '.join(desconhecidas)}."}
+            )
+        return attrs
+
+
 class ProcessObservationSerializer(serializers.ModelSerializer[ProcessObservation]):
     """A observação de um processo dentro de um Discovery (FDD 045).
 
@@ -1383,12 +1445,21 @@ class ProcessObservationSerializer(serializers.ModelSerializer[ProcessObservatio
     observation_type_display = serializers.CharField(
         source="get_observation_type_display", read_only=True
     )
+    # O nome do processo observado e a conta dele, no molde de `ProcessSerializer.account_name`: a
+    # tela da Discovery Session lista o que saiu da estruturação e leva a quem o revisa (FDD 055),
+    # e sem os dois precisaria de uma segunda chamada por linha só para escrever um rótulo e um
+    # `href`. **O processo é da conta**, não do projeto — é a âncora da FDD 039, e é por isso que o
+    # caminho de revisão sai daqui e não do projeto que conduziu o Discovery.
+    process_name = serializers.CharField(source="process.name", read_only=True)
+    account = serializers.IntegerField(source="process.account_id", read_only=True)
 
     class Meta:
         model = ProcessObservation
-        fields = ["id", "discovery", "process", "observed_at", "observation_type",
-                  "observation_type_display", "source_session", "created_at", "updated_at"]
-        read_only_fields = ["id", "observation_type_display", "created_at", "updated_at"]
+        fields = ["id", "discovery", "process", "process_name", "account", "observed_at",
+                  "observation_type", "observation_type_display", "source_session", "created_at",
+                  "updated_at"]
+        read_only_fields = ["id", "process_name", "account", "observation_type_display",
+                            "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         discovery = cast(

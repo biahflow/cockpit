@@ -11,6 +11,11 @@
     "moduleDetection": "force",
     "noEmit": true
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "src/test/primitivas.test.ts"]
+  "include": [
+    "vite.config.ts",
+    "playwright.config.ts",
+    "src/test/primitivas.test.ts",
+    "src/test/tela-da-sessao-de-discovery.test.ts"
+  ]
 }
 

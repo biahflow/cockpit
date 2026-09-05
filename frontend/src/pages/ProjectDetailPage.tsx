@@ -1,14 +1,14 @@
 import { AlertTriangle, ArrowLeft, Bot, UsersRound, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, Circle, ExternalLink, Flag, FlaskConical, Gauge, History, Hourglass, Inbox, ListTodo, Lock, MapPin, Microscope, Pencil, Plus, Save, Scale, ShieldAlert, Sparkles, Trash2, Trophy, Video, Workflow, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
-import { api, listFeasibilityAssessments, listKpis, listMeasurements, listProveExperiments, listUsers, registerProveGapWaiver, startProveExperiment } from "../api";
+import { api, listDiscoveries, listDiscoverySessions, listFeasibilityAssessments, listKpis, listMeasurements, listProveExperiments, listUsers, registerProveGapWaiver, startProveExperiment } from "../api";
 import { useAuth } from "../auth";
 import { ArtifactsPanel } from "../components/ArtifactsPanel";
 import { ConfirmDialog, Modal } from "../components/Modal";
 import { HealthBadge } from "../components/StatusDot";
 import { mensagemDeFalha } from "../erros";
 import { CANONICAL_STAGE_LABEL, GATE_DECISION_LABEL, GATE_EFFECT, gateDecisionByEffect, gateDecisions, PHASE_EVENT_LABEL, SITUATION_LABEL, situationVariant, WAITING_PARTY_LABEL, WAITING_PARTY_OPTIONS } from "../journey";
-import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, FeasibilityAssessment, FeasibilityVerdict, GateDecision, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KPI, KpiDirection, KpiUnit, Measurement, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, ProveExperiment, ProveExperimentStatus, ProveMissingRequirement, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, SolutionHypothesis, Task, WaitingParty, WorkItemStatus } from "../types";
+import type { DigitalEmployee, DigitalEmployeeBlueprint, DigitalEmployeeStatus, DiscoverySession, FeasibilityAssessment, FeasibilityVerdict, GateDecision, GithubCiState, GithubDeliveryProjection, GithubIssueState, GithubProjectionState, GithubPullState, GithubReviewState, HealthAssessment, KPI, KpiDirection, KpiUnit, Measurement, Meeting, Milestone, Party, Decisao, Pendencia, Project, ProjectMember, ProjectPhase, ProjectTimeline, ProveExperiment, ProveExperimentStatus, ProveMissingRequirement, Risco, RiscoNivel, RiscoStatus, RiskAssessment, Service, SessionUser, SolutionHypothesis, Task, WaitingParty, WorkItemStatus } from "../types";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const roleLabel: Record<string, string> = { admin: "Administrador", sales: "Vendas", delivery: "Entrega" };
@@ -59,6 +59,8 @@ const kpiUnits: { value: KpiUnit; label: string }[] = [
 ];
 
 function formatDate(value: string): string { return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR"); }
+/** A sessão de Discovery tem **hora**, e não só data: duas sessões no mesmo dia são o caso comum. */
+function formatDateTime(value: string): string { return new Date(value).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
 
 export function ProjectDetailPage({ id }: { id: number }) {
   const { aiEnabled, calendarEnabled, user } = useAuth();
@@ -73,6 +75,7 @@ export function ProjectDetailPage({ id }: { id: number }) {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [sessoes, setSessoes] = useState<DiscoverySession[]>([]);
   const [pendencias, setPendencias] = useState<Pendencia[]>([]);
   const [decisoes, setDecisoes] = useState<Decisao[]>([]);
   const [riscos, setRiscos] = useState<Risco[]>([]);
@@ -151,6 +154,23 @@ export function ProjectDetailPage({ id }: { id: number }) {
   // mapeamento e a reconciliação (503 fail-closed); vazio quando não há referência.
   const loadProjections = useCallback(() => api<GithubDeliveryProjection[]>(`/github-projections/?project=${id}`).then(setProjections).catch(() => setProjections([])), [id]);
   useEffect(() => { void loadProjections(); }, [loadProjections]);
+
+  /**
+   * A porta da Discovery Session (FDD 055; DAP `dap-discovery-session-e-business-case-r2`, G1).
+   *
+   * Leitura à parte da carga principal, como a projeção do GitHub logo acima e pelo mesmo motivo:
+   * a seção de reuniões não deixa de renderizar porque o levantamento demorou.
+   *
+   * **Duas chamadas em vez de uma**, e a razão é o contrato: a sessão filtra por `discovery`, não
+   * por projeto. Pedir `?discovery__project=` publicaria um caminho do ORM como parâmetro da API —
+   * em `QueryParamFilterMixin` o nome do parâmetro **é** o caminho —, e um projeto tem um punhado
+   * de Discoveries, não uma carteira deles.
+   */
+  const carregarSessoes = useCallback(() => listDiscoveries(id)
+    .then(levantamentos => Promise.all(levantamentos.map(levantamento => listDiscoverySessions(levantamento.id))))
+    .then(listas => setSessoes(listas.flat().sort((a, b) => b.happened_at.localeCompare(a.happened_at))))
+    .catch(() => setSessoes([])), [id]);
+  useEffect(() => { void carregarSessoes(); }, [carregarSessoes]);
 
   /**
    * Os dois painéis da Fase 5, e **o que decide se eles existem é a jornada**.
@@ -788,6 +808,24 @@ export function ProjectDetailPage({ id }: { id: number }) {
             <button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void runAiScore(meeting)}><Gauge className="size-3.5 text-accent" />AI Score</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void extrairDecisoes(meeting)}><Sparkles className="size-3.5 text-accent" />Decisões</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-ink hover:border-accent disabled:opacity-60" disabled={aiLoading} onClick={() => void estruturarProcessos(meeting)}><Workflow className="size-3.5 text-accent" />Processos</button>
           </div>}
         </div>)}</div> : <p className="empty-state">Nenhuma reunião registrada.</p>}
+        {/* A porta da Discovery Session (DAP `dap-discovery-session-e-business-case-r2`, G1): um
+            link por sessão, aqui e não no menu lateral — a sessão é sempre *de um projeto*, e um
+            item de menu que abre perguntando "qual?" é o beco já recusado três vezes. A rota da
+            SPA carrega o projeto porque é ele que o rastro do topo precisa nomear; a rota da API
+            é `/discovery-sessions/` e as duas não precisam coincidir. */}
+        {sessoes.length > 0 && <div className="mt-4 border-t border-line pt-4">
+          <p className="mb-2 text-xs text-muted">Sessões de Discovery</p>
+          {/* `space-y-2` e não `grid gap-2`: item de grade tem largura mínima automática igual ao
+              próprio conteúdo, e a linha (ícone + selo + seta) empurrava a coluna inteira 42px
+              para fora em 390px — `e2e/responsive.spec.ts` mediu. Em fluxo de bloco a linha herda
+              a largura do painel e o `truncate` do meio faz o resto. */}
+          <div className="space-y-2">{sessoes.map(sessao => <a className="flex min-w-0 items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-50" key={sessao.id} href={`/projetos/${id}/sessoes/${sessao.id}`}>
+            <span className="metric-icon"><Microscope className="size-4" /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-ink">Sessão de {formatDateTime(sessao.happened_at)}</span><span className="mt-0.5 block truncate text-xs text-muted">{sessao.participants || "Sem participantes registrados."}</span></span>
+            {sessao.structured_finding_count > 0 && <span className="state state--active shrink-0">Estruturada</span>}
+            <ChevronRight className="size-4 shrink-0 text-muted" />
+          </a>)}</div>
+        </div>}
         {/* O mapa levantado não aparece nesta tela: ele pende do cliente e sobrevive a este
             projeto. A linha diz quantos vieram e para onde ir revisá-los — todos em hipótese. */}
         {processosMapeados > 0 && <p role="status" className="alert--ok">{processosMapeados} processo(s) mapeado(s) como hipótese. Abra o cliente para revisar e promover o que for fato.</p>}

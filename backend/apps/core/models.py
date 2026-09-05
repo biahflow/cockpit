@@ -1924,6 +1924,23 @@ class DiscoverySession(TimestampedModel):
         "Artifact", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     transcript = models.TextField(blank=True, default="")
+    # O que foi anotado **durante** a reunião, por bloco de pergunta (ADR 0069; DAP
+    # `dap-discovery-session-e-business-case-r2`, decisões C1 e E1). A forma é
+    # `{"<bloco>": {"<id da pergunta>": "<texto>"}}`, e os ids são os de
+    # `discovery_questions.BLOCKS` — nunca a posição, pelo motivo escrito lá.
+    #
+    # **JSON aqui, tabela na ADR 0019, e o contraste é a decisão.** Lá o que decidia não era
+    # economizar peças: era a `UniqueConstraint(blueprint, vertical)` — num JSON a chave duplicada
+    # não chega a existir, o último valor escrito apaga o anterior e ninguém fica sabendo. Aqui a
+    # chave **é** o id da pergunta dentro de um dicionário: duplicata é impossível por construção,
+    # não há segunda coluna para restringir, e nada consulta resposta isolada — o que se lê é a
+    # sessão inteira, na tela que a conduz e na extração que vem depois. Uma tabela
+    # `DiscoverySessionAnswer` seria três peças a mais para reproduzir uma unicidade que o tipo já
+    # dá de graça.
+    #
+    # `default=dict` e não `null=True`: sessão sem anotação é `{}` — "ninguém anotou ainda" —, e um
+    # nulo aqui criaria um segundo jeito de dizer a mesma coisa.
+    notes = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-happened_at", "-id"]
