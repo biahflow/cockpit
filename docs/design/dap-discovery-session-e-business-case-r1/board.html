@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAP — Discovery Session, Business Case e o próximo passo · revisão 1</title>
+<style>
+:root{
+  --ink:#12110f; --muted:#57534e; --line:#e7e5e4; --line-strong:#d6d3d1;
+  --canvas:#fafaf9; --surface:#fff; --surface-subtle:#f5f5f4;
+  --brand-50:#fdf1ec; --brand-100:#fadfd4; --brand-200:#dd8b62; --brand-500:#bd4a30;
+  --brand-600:#a8412a; --brand-700:#9c3c26; --brand-900:#5c2317;
+  --danger:#b91c1c; --danger-50:#fef2f2;
+  --success:#047857; --success-50:#ecfdf5;
+  --warning:#b45309; --warning-50:#fffbeb;
+  --info:#1d4ed8; --info-50:#eff6ff;
+  --slate-50:#f8fafc; --slate-100:#f1f5f9; --slate-200:#e2e8f0;
+  --slate-600:#475569; --slate-700:#334155;
+  --text-display:2rem; --lh-display:2.375rem;
+  --text-title:1rem; --lh-title:1.5rem;
+  --text-body:.875rem; --lh-body:1.375rem;
+  --text-label:.75rem; --lh-label:1rem;
+  --text-meta:.6875rem; --lh-meta:1rem;
+  --shadow-card:0 1px 2px rgba(18,17,15,.06);
+  --shadow-pop:0 16px 40px -16px rgba(18,17,15,.28);
+  --radius-control:8px; --radius-card:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);
+  font-family:"Inter Variable","Inter","Avenir Next",ui-sans-serif,system-ui,sans-serif;
+  font-size:var(--text-body);line-height:var(--lh-body)}
+.wrap{max-width:1140px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:var(--text-display);line-height:var(--lh-display);font-weight:650;letter-spacing:-.03em;margin:0 0 6px}
+h2{font-size:1.25rem;font-weight:650;margin:56px 0 6px;padding-top:24px;border-top:1px solid var(--line)}
+h3{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650;margin:28px 0 10px}
+.eyebrow{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--brand-500);margin:0 0 4px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 4px}
+.note{color:var(--muted);font-size:var(--text-body);max-width:72ch;margin:10px 0}
+code{background:var(--surface-subtle);padding:1px 5px;border-radius:4px;font-size:.8em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:var(--text-body)}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface-subtle);font-weight:650}
+.grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
+.grid--2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.spec{border:1px dashed var(--line-strong);border-radius:var(--radius-card);padding:14px;background:var(--surface)}
+.spec>figcaption{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.spec--pick{border-style:solid;border-color:var(--brand-200);box-shadow:0 0 0 3px rgba(221,139,98,.12)}
+.stage{background:var(--canvas);border-radius:var(--radius-card);padding:16px}
+
+/* ---- primitivas espelhadas de src/index.css (mesmo subconjunto do molde dap-priorizacao-r1) ---- */
+.panel{border-radius:var(--radius-card);border:1px solid var(--line);background:var(--surface);
+  padding:24px;box-shadow:var(--shadow-card)}
+/* `.panel--flush` real não redeclara borda/fundo — combina com `.panel` no markup (index.css:201). */
+.panel--flush{overflow:hidden;padding:0}
+.panel-heading{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.panel-heading h2{margin:0;font-size:var(--text-title);line-height:var(--lh-title);font-weight:600;
+  letter-spacing:-.02em;color:var(--ink);border:0;padding:0}
+.panel-rows>.row+.row{border-top:1px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px 24px}
+.row-main{min-width:0;flex:1;overflow-wrap:anywhere}
+.row-main strong{display:block;font-size:var(--text-body);font-weight:600;color:var(--ink)}
+.row-main span{display:block;margin-top:.125rem;font-size:var(--text-label);line-height:1.05rem;color:var(--muted)}
+/* O cluster de selos da linha, sempre numa linha própria dentro da mesma `.row`
+   (`flex:1 1 100%` força a quebra num `.row` `flex-wrap`). index.css:230. */
+.row-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1 1 100%;margin-top:2px}
+.metric-icon{display:grid;width:36px;height:36px;flex:0 0 auto;place-items:center;
+  border-radius:var(--radius-control);background:var(--brand-50);color:var(--brand-500)}
+.metric-card{display:grid;gap:8px;border-radius:var(--radius-card);border:1px solid var(--line);
+  background:var(--surface);padding:16px;box-shadow:var(--shadow-card)}
+.metric-card span{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500;color:var(--muted)}
+.metric-card strong{font-size:1.75rem;line-height:2rem;font-weight:650;letter-spacing:-.03em;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.state{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:4px 10px;
+  font-size:11px;line-height:1rem;font-weight:600;white-space:nowrap}
+.state--0{background:var(--info-50);color:var(--info)}
+.state--1{background:var(--success-50);color:var(--success)}
+.state--2{background:var(--warning-50);color:var(--warning)}
+.state--3{background:var(--danger-50);color:var(--danger)}
+.state--off{background:var(--slate-100);color:var(--slate-600)}
+/* O sólido escuro — `bg-ink text-white`, index.css:414. É o único selo sólido do produto, e é
+   isso (mais o ícone) que separa o de publicação dos dois pastel vizinhos. */
+.state--active{background:var(--ink);color:#fff}
+.field{width:100%;border-radius:var(--radius-control);border:1px solid var(--line-strong);
+  background:#fff;padding:12px;font-size:var(--text-body);color:var(--slate-700);font-family:inherit}
+.field::placeholder{color:#a8a29e}
+.form-label{display:grid;gap:8px;font-size:var(--text-body);font-weight:500;color:var(--slate-700)}
+.form-grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.btn{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--radius-control);background:var(--ink);padding:10px 16px;font-size:var(--text-body);
+  font-weight:600;color:#fff;border:1px solid transparent;cursor:default;font-family:inherit;white-space:nowrap}
+.btn--secondary{background:var(--surface);color:var(--ink);border-color:var(--line)}
+/* O único botão vermelho do produto: só o `ConfirmDialog` o usa (index.css:305). */
+.btn--danger{background:var(--danger);color:#fff;border-color:transparent}
+.btn--icon{width:44px;height:44px;min-height:0;padding:0;flex:0 0 auto}
+.btn[disabled],.btn--secondary[disabled]{border-color:var(--line);background:var(--line);color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;border-radius:var(--radius-card);
+  border:1px solid var(--line);background:var(--surface);padding:24px;box-shadow:var(--shadow-card)}
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;border-radius:9999px;
+  border:1px solid var(--line);background:#fff;padding:6px 12px;font-size:var(--text-body);
+  font-weight:600;color:var(--muted)}
+.filter-chip--on{border-color:var(--brand-500);background:var(--brand-50);color:var(--brand-700)}
+.empty-state{border-radius:var(--radius-card);border:1px dashed var(--line);
+  background:rgba(248,250,252,.6);padding:24px 16px;text-align:center;
+  font-size:var(--text-body);color:var(--muted)}
+.alert--error{border-radius:var(--radius-card);border:1px solid var(--danger-50);
+  background:var(--danger-50);padding:16px;font-size:var(--text-body);color:var(--danger);margin:0 0 16px}
+.type-title{font-size:var(--text-title);line-height:var(--lh-title);font-weight:650}
+.type-label{font-size:var(--text-label);line-height:var(--lh-label);font-weight:600}
+.type-meta{font-size:var(--text-meta);line-height:var(--lh-meta);font-weight:500}
+.ico{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.75;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--18{width:18px;height:18px}
+/* Ícone dentro de `.state`: `size-3` — o mesmo corpo de `PowerOff` em `CobrancaPage.tsx:467`
+   e de `Lock` em `ProjectDetailPage.tsx:941`, os dois já dentro de um selo. */
+.ico--12{width:12px;height:12px}
+.reserved{border:1px dashed var(--brand-200)!important;background:repeating-linear-gradient(
+  135deg,transparent,transparent 7px,rgba(221,139,98,.09) 7px,rgba(221,139,98,.09) 14px)}
+.skeleton{background:var(--slate-200);border-radius:12px}
+.sep{border:0;border-top:1px solid var(--line);margin:20px 0}
+.stack{display:grid;gap:16px}
+.actions{display:flex;gap:6px;flex:0 0 auto;margin-left:auto}
+.back-link{display:inline-flex;align-items:center;gap:8px;font-size:var(--text-body);font-weight:600;
+  color:var(--brand-600);text-decoration:none}
+.page-head{margin-bottom:24px;display:grid;gap:6px}
+.page-head p{margin:0;max-width:60ch;color:var(--slate-600);font-size:var(--text-body)}
+/* A hierarquia visual **é** a cadeia (decisão C1): recuo e filete à esquerda, e nada mais.
+   Posicionamento puro — nenhuma cor, raio ou corpo de texto próprio; o filete é `line` e o
+   fundo de nível é `canvas`/`surface-subtle`, os dois já da paleta. */
+.nest{border-top:1px solid var(--line);background:var(--canvas)}
+.nest+.row{border-top:1px solid var(--line)}
+.nest>.panel-rows>.row{padding-left:56px}
+.nest .nest{background:var(--surface-subtle)}
+.nest .nest>.panel-rows>.row{padding-left:88px}
+.check{width:16px;height:16px;flex:0 0 auto;accent-color:var(--brand-500)}
+/* O overlay do `ConfirmDialog`, desenhado sem JS: `bg-ink/45` + painel `rounded-2xl bg-white p-5
+   shadow-2xl` — cópia literal de `components/Modal.tsx:78-95`, não valor novo deste pacote. */
+.overlay{position:relative;display:grid;place-items:center;padding:32px 16px;
+  background:rgba(18,17,15,.45);border-radius:var(--radius-card)}
+.dialog{width:100%;max-width:32rem;border-radius:16px;background:#fff;padding:24px;
+  box-shadow:var(--shadow-pop)}
+.dialog h2{margin:0;font-size:1.125rem;line-height:1.75rem;font-weight:600;color:var(--ink);border:0;padding:0}
+.mobile{max-width:342px;margin:0 auto}
+.mobile .panel{padding:20px}
+.mobile .row{padding:16px 20px}
+.mobile .nest>.panel-rows>.row{padding-left:36px}
+.mobile .nest .nest>.panel-rows>.row{padding-left:52px}
+.mobile .form-grid{grid-template-columns:1fr}
+.mobile .filter-chip{flex:0 0 auto}
+.mobile .row .actions{width:100%}
+@media (max-width:560px){
+  .wrap{padding:28px 16px 64px}
+  .grid,.grid--2{grid-template-columns:minmax(0,1fr)}
+  .grid>*,.spec,.stage{min-width:0}
+  .form-grid{grid-template-columns:minmax(0,1fr)}
+  .stage{padding:10px}
+  .spec{padding:10px}
+  .panel-heading{flex-wrap:wrap}
+  .panel-heading>.btn{width:100%}
+  table{display:block;overflow-x:auto}
+  h1{font-size:1.5rem;line-height:1.875rem}
+}
+code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="eyebrow">Design Approval Package</p>
+<h1>Discovery Session, Business Case e o próximo passo da conta</h1>
+<p class="lede">Classificação <code>INTERFACE_CHANGE</code> · <code>BROWSER_REQUIRED</code> ·
+Revisão <strong>1</strong> · Status <strong>Aguardando aprovação</strong> · 2026-09-05 ·
+<strong>ADR 0069</strong></p>
+<p class="note">Renderização auto-contida: abre sem build, sem toolchain e sem rede — sem
+<code>&lt;script&gt;</code>. As primitivas abaixo são espelho de <code>frontend/src/index.css</code>;
+se as duas divergirem, a folha vence e este board está velho. Os dados são ilustrativos: nenhuma
+conta, processo, número ou pessoa aqui é real.</p>
+
+<p class="note"><strong>A tela não se chama “cockpit”.</strong> O termo é banido pela §5 do Language
+Map — era o nome antigo do One. A superfície conduz uma <code>DiscoverySession</code>, termo já
+canônico na tabela mestra.</p>
+
+<h2>As sete decisões deste pacote</h2>
+<table>
+<tr><th>#</th><th>Decisão</th><th>Recomendada</th><th>O que muda se for recusada</th></tr>
+<tr><td>A</td><td>Onde mora o Business Case</td><td><strong>A1</strong> — dentro da priorização</td><td>Rota nova <code>/contas/:id/business-cases</code></td></tr>
+<tr><td>B</td><td>Onde mora o próximo passo</td><td><strong>B1</strong> — painel no detalhe da conta</td><td>Continua só na lista de <code>/indicadores</code></td></tr>
+<tr><td>C</td><td>O que a Discovery Session faz</td><td><strong>C1</strong> — captura texto; estruturar segue ato explícito</td><td>A tela passa a gravar achado, e a invariante 8 perde a porta única</td></tr>
+<tr><td>D</td><td>Como o trabalho é salvo</td><td><strong>D1</strong> — salvar por bloco, com aviso de pendência</td><td>Autosave: mecanismo novo, com falha silenciosa a desenhar</td></tr>
+<tr><td>E</td><td>De onde vêm as perguntas</td><td><strong>E1</strong> — constante no backend, espelho do Notion</td><td>Base editável: a mesma pergunta em dois lugares</td></tr>
+<tr><td>F</td><td>A lacuna do custo</td><td><strong>F1</strong> — <code>—</code> com a frase do servidor</td><td><code>R$ 0,00</code>: a casa afirmando o oposto do que sabe</td></tr>
+<tr><td>G</td><td>Rota da Discovery Session</td><td><strong>G1</strong> — <code>/projetos/:id/sessoes/:id</code></td><td>Rota de primeiro nível ou modal de duas horas</td></tr>
+</table>
+
+<!-- ============================================================ 1 -->
+<h2>1 · Business Case — dentro da tela de priorização <span class="type-meta">(decisão A1)</span></h2>
+<p class="note">A cadeia já mora em <code>/contas/:id/priorizacao</code>. O business case é o elo
+seguinte, e a porta dele <strong>só existe quando há hipótese de solução escolhida</strong>.</p>
+
+<div class="grid grid--2">
+
+  <figure class="spec">
+    <figcaption>Estado 1 — priorizada, sem hipótese escolhida: não há porta</figcaption>
+    <div class="stage">
+      <div class="panel panel--flush">
+        <div class="panel-heading"><h2>Reconciliação manual de repasses</h2>
+          <span class="state state--0">Opportunity Score 78</span></div>
+        <div class="panel-rows">
+          <div class="row">
+            <div class="row-main">
+              <strong>Hipóteses de solução</strong>
+              <span>Duas propostas, nenhuma escolhida.</span>
+              <div class="row-meta">
+                <span class="state state--off">Proposta · OCR + conferência humana</span>
+                <span class="state state--off">Proposta · integração direta com o banco</span>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <strong>Business Case</strong>
+              <span>Escolha uma hipótese para montar o business case — é sobre a intervenção
+                escolhida que se orça.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Estado 2 — hipótese escolhida, sem business case: a porta aparece</figcaption>
+    <div class="stage">
+      <div class="panel panel--flush">
+        <div class="panel-heading"><h2>Reconciliação manual de repasses</h2>
+          <span class="state state--0">Opportunity Score 78</span></div>
+        <div class="panel-rows">
+          <div class="row">
+            <div class="row-main">
+              <strong>OCR + conferência humana</strong>
+              <span>Hipótese escolhida em 02/09/2026.</span>
+              <div class="row-meta"><span class="state state--1">Escolhida</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <strong>Business Case</strong>
+              <span>Nenhum registrado.</span>
+            </div>
+            <div class="actions"><button class="btn">Montar business case</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+</div>
+
+<div class="grid grid--2">
+
+  <figure class="spec spec--pick">
+    <figcaption>Estado 3 — rascunho, com custo do estado atual congelado</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-heading"><h2>Business Case</h2>
+          <span class="state state--off">Rascunho</span></div>
+        <div class="form-grid">
+          <label class="form-label">Investimento
+            <input class="field" value="R$ 42.000,00" readonly></label>
+          <label class="form-label">Retorno esperado (12 meses)
+            <input class="field" value="R$ 168.000,00" readonly></label>
+          <label class="form-label">Payback (meses)
+            <input class="field" value="4" readonly></label>
+          <label class="form-label">Custo do estado atual · congelado
+            <input class="field" value="R$ 19.400,00 / mês" readonly></label>
+        </div>
+        <hr class="sep">
+        <p class="type-meta" style="color:var(--muted);margin:0 0 10px">Congelado na criação, a
+          partir de 2 processos sustentados por fato. Editar os insumos depois não muda este
+          número.</p>
+        <label class="form-label">Justificativa
+          <textarea class="field" rows="2" readonly>Conferência hoje consome 3 pessoas em tempo parcial e a taxa de erro sustenta retrabalho medido.</textarea></label>
+        <div class="row" style="padding:16px 0 0">
+          <div class="actions" style="margin-left:0">
+            <button class="btn">Aprovar o investimento</button>
+            <button class="btn btn--secondary">Recusar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Estado 4 — <strong>custo não apurado</strong>: <code>—</code>, nunca zero (F1)</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-heading"><h2>Business Case</h2>
+          <span class="state state--off">Rascunho</span></div>
+        <div class="form-grid">
+          <label class="form-label">Investimento
+            <input class="field" value="R$ 42.000,00" readonly></label>
+          <label class="form-label">Retorno esperado (12 meses)
+            <input class="field" value="R$ 168.000,00" readonly></label>
+          <label class="form-label">Payback (meses)
+            <input class="field" placeholder="—" readonly></label>
+          <label class="form-label">Custo do estado atual · congelado
+            <input class="field" value="—" readonly></label>
+        </div>
+        <hr class="sep">
+        <div class="alert--warn" style="margin:0">Nenhum processo desta oportunidade tem custo
+          sustentado por fato. O número não é zero — não há insumo para dizer.</div>
+      </div>
+    </div>
+  </figure>
+
+</div>
+
+<div class="grid grid--2">
+
+  <figure class="spec">
+    <figcaption>Estado 5 — aprovado: imutável, com autor e carimbo</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-heading"><h2>Business Case</h2>
+          <span class="state state--1">Aprovado</span></div>
+        <div class="panel-rows" style="border-top:1px solid var(--line);margin-top:4px">
+          <div class="row" style="padding-left:0;padding-right:0">
+            <div class="row-main"><strong>R$ 42.000,00 investidos · R$ 168.000,00 esperados em 12 meses</strong>
+              <span>Payback em 4 meses · custo do estado atual R$ 19.400,00 / mês</span></div>
+          </div>
+          <div class="row" style="padding-left:0;padding-right:0">
+            <div class="row-main"><strong>Decisão registrada</strong>
+              <span>Aprovado por Ana Meireles em 05/09/2026, 14:12.</span></div>
+          </div>
+        </div>
+        <p class="type-meta" style="color:var(--muted);margin:14px 0 0">Business case decidido não
+          se edita. Repensar o investimento é montar outro.</p>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Estado 6 — recusado: a oportunidade aceita outro</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-heading"><h2>Business Case</h2>
+          <span class="state state--3">Recusado</span></div>
+        <div class="panel-rows" style="border-top:1px solid var(--line);margin-top:4px">
+          <div class="row" style="padding-left:0;padding-right:0">
+            <div class="row-main"><strong>R$ 42.000,00 investidos · R$ 61.000,00 esperados em 12 meses</strong>
+              <span>Payback em 9 meses.</span></div>
+          </div>
+          <div class="row" style="padding-left:0;padding-right:0">
+            <div class="row-main"><strong>Decisão registrada</strong>
+              <span>Recusado por Ana Meireles em 03/09/2026, 09:40.</span></div>
+          </div>
+        </div>
+        <div class="row" style="padding:16px 0 0">
+          <div class="actions" style="margin-left:0">
+            <button class="btn btn--secondary">Montar outro business case</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+</div>
+
+<!-- ============================================================ 2 -->
+<h2>2 · O próximo passo da conta <span class="type-meta">(decisão B1)</span></h2>
+<p class="note">Painel no detalhe da conta, acima de “Saúde da relação”. Mostra <strong>um</strong>
+degrau — o primeiro que falta. A função que responde devolve <strong>chave, nunca frase</strong>
+(molde de <code>prove.o_que_falta_para_iniciar</code>); os rótulos abaixo são da superfície.</p>
+
+<div class="grid">
+
+  <figure class="spec">
+    <figcaption>Degrau 1 — falta escolher a hipótese</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <p class="eyebrow">Próximo passo</p>
+        <div class="panel-heading" style="margin-top:6px"><h2>Reconciliação manual de repasses</h2></div>
+        <div class="row-meta" style="margin:0 0 12px">
+          <span class="state state--0">Opportunity Score 78</span>
+          <span class="state state--2">Escolher a hipótese</span>
+        </div>
+        <p class="type-meta" style="color:var(--muted);margin:0 0 14px">Duas hipóteses propostas,
+          nenhuma escolhida.</p>
+        <a class="back-link" href="#">Abrir a priorização →</a>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec spec--pick">
+    <figcaption>Degrau 2 — falta o business case</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <p class="eyebrow">Próximo passo</p>
+        <div class="panel-heading" style="margin-top:6px"><h2>Reconciliação manual de repasses</h2></div>
+        <div class="row-meta" style="margin:0 0 12px">
+          <span class="state state--0">Opportunity Score 78</span>
+          <span class="state state--2">Montar o business case</span>
+        </div>
+        <p class="type-meta" style="color:var(--muted);margin:0 0 14px">Hipótese escolhida em
+          02/09; falta orçar a intervenção.</p>
+        <a class="back-link" href="#">Abrir a priorização →</a>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Degrau 3 — falta decidir o investimento</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <p class="eyebrow">Próximo passo</p>
+        <div class="panel-heading" style="margin-top:6px"><h2>Reconciliação manual de repasses</h2></div>
+        <div class="row-meta" style="margin:0 0 12px">
+          <span class="state state--0">Opportunity Score 78</span>
+          <span class="state state--2">Decidir o investimento</span>
+        </div>
+        <p class="type-meta" style="color:var(--muted);margin:0 0 14px">Business case em rascunho
+          desde 04/09.</p>
+        <a class="back-link" href="#">Abrir a priorização →</a>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Degrau 4 — falta abrir a venda</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <p class="eyebrow">Próximo passo</p>
+        <div class="panel-heading" style="margin-top:6px"><h2>Reconciliação manual de repasses</h2></div>
+        <div class="row-meta" style="margin:0 0 12px">
+          <span class="state state--0">Opportunity Score 78</span>
+          <span class="state state--2">Abrir a venda</span>
+        </div>
+        <p class="type-meta" style="color:var(--muted);margin:0 0 14px">Investimento aprovado em
+          05/09 e nenhuma oportunidade comercial aberta nesta conta.</p>
+        <a class="back-link" href="#">Abrir o comercial →</a>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Vazio honesto — nada priorizado ainda</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <p class="eyebrow">Próximo passo</p>
+        <div class="empty-state" style="margin-top:10px">Nenhuma oportunidade de melhoria
+          priorizada nesta conta.<br>O próximo passo aparece quando houver avaliação.</div>
+        <div style="margin-top:14px"><a class="back-link" href="#">Abrir a priorização →</a></div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Neutro — tudo encaminhado, sem inventar urgência</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <p class="eyebrow">Próximo passo</p>
+        <div class="panel-heading" style="margin-top:6px"><h2>Nada pendente</h2></div>
+        <p class="type-meta" style="color:var(--muted);margin:0">As três oportunidades priorizadas
+          têm investimento decidido e venda aberta.</p>
+      </div>
+    </div>
+  </figure>
+
+</div>
+
+<!-- ============================================================ 3 -->
+<h2>3 · Discovery Session — a tela usada durante a reunião <span class="type-meta">(decisões C1, D1, E1, G1)</span></h2>
+<p class="note">Rota <code>/projetos/:id/sessoes/:sessionId</code>. Os seis blocos vêm do backend
+(E1), espelhando a ficha <em>Discovery Questions</em>. A tela <strong>captura texto</strong> — ela
+nunca grava <code>Finding</code> (C1).</p>
+
+<figure class="spec spec--pick">
+  <figcaption>Estado 1 — bloco em captura, tudo salvo</figcaption>
+  <div class="stage">
+    <a class="back-link" href="#">← Projeto · Discovery Sprint — Home Care XPTO</a>
+    <div class="page-head" style="margin-top:12px">
+      <p class="eyebrow">Discovery Session</p>
+      <h1 style="font-size:1.5rem;line-height:1.875rem">Sessão 2 · 05/09/2026, 14:00</h1>
+      <p>Entrevistas com a operação · Ana Meireles, Paulo Rangel e mais 2</p>
+    </div>
+    <div class="filter-bar" style="margin-bottom:16px">
+      <span class="filter-chip">A · Contexto executivo</span>
+      <span class="filter-chip filter-chip--on">B · Follow the work</span>
+      <span class="filter-chip">C · Sistemas e dados</span>
+      <span class="filter-chip">D · Sponsor e acesso</span>
+      <span class="filter-chip">E · Magnitude</span>
+      <span class="filter-chip">F · Fechamento</span>
+    </div>
+    <div class="panel">
+      <div class="panel-heading">
+        <h2>Bloco B — Follow the work (com quem executa)</h2>
+        <span class="state state--1">Salvo às 14:38</span>
+      </div>
+      <div class="stack">
+        <label class="form-label">Me leva por um caso real, do começo ao fim?
+          <textarea class="field" rows="2" readonly>Pega o repasse de sexta: chega por e-mail em PDF, a Cláudia imprime, confere contra o extrato…</textarea></label>
+        <label class="form-label">Onde alguém precisou interpretar, adivinhar ou ligar para outra pessoa?
+          <textarea class="field" rows="2" readonly>Quando o nome do prestador vem abreviado. Aí ela liga para o financeiro do hospital.</textarea></label>
+        <label class="form-label">Que planilha existe fora do sistema?
+          <textarea class="field" rows="1" placeholder="Anote as palavras exatas — elas voltam no Executive Readout." readonly></textarea></label>
+        <label class="form-label">Quantos casos desse tipo passam por aqui num mês?
+          <textarea class="field" rows="1" readonly>“Uns 400, mas em mês de fechamento passa de 600.”</textarea></label>
+      </div>
+      <hr class="sep">
+      <div class="row" style="padding:0">
+        <div class="row-main"><span>Tudo o que sai daqui entra como evidência declarada, nunca como
+          Baseline. Estruturar em processos e achados é ato à parte, depois da sessão.</span></div>
+        <div class="actions"><button class="btn btn--secondary">Salvar bloco</button></div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<div class="grid grid--2">
+
+  <figure class="spec">
+    <figcaption>Estado 2 — <strong>alteração não salva</strong> (D1): o aviso é visível, não silencioso</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-heading">
+          <h2>Bloco B — Follow the work</h2>
+          <span class="state state--2">Alterações não salvas</span>
+        </div>
+        <label class="form-label">O que volta para refazer, e por quê?
+          <textarea class="field" rows="2" readonly>Quando o valor não bate por centavos — aí volta tudo e refaz do zero.</textarea></label>
+        <hr class="sep">
+        <div class="row" style="padding:0">
+          <div class="row-main"><span>Sair da página com bloco pendente pede confirmação.</span></div>
+          <div class="actions"><button class="btn">Salvar bloco</button></div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Estado 3 — sessão encerrada: leitura, com a porta para estruturar</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-heading">
+          <h2>Sessão 2 · encerrada</h2>
+          <span class="state state--off">Encerrada</span>
+        </div>
+        <div class="panel-rows" style="border-top:1px solid var(--line)">
+          <div class="row" style="padding-left:0;padding-right:0">
+            <div class="row-main"><strong>Seis blocos, 14 respostas registradas</strong>
+              <span>Última edição às 16:07 por Ana Meireles.</span></div>
+          </div>
+          <div class="row" style="padding-left:0;padding-right:0">
+            <div class="row-main"><strong>Estruturar em processos e achados</strong>
+              <span>Todo achado nasce como hipótese e é revisado depois.</span></div>
+            <div class="actions"><button class="btn">Estruturar</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+</div>
+
+<div class="grid grid--2">
+
+  <figure class="spec">
+    <figcaption>Estado 4 — já estruturada: selo e caminho para o que saiu dela</figcaption>
+    <div class="stage">
+      <div class="panel">
+        <div class="panel-heading">
+          <h2>Sessão 2 · encerrada</h2>
+          <span class="state state--active">Estruturada</span>
+        </div>
+        <div class="panel-rows" style="border-top:1px solid var(--line)">
+          <div class="row" style="padding-left:0;padding-right:0">
+            <div class="row-main"><strong>3 processos · 11 achados</strong>
+              <span>Todos como hipótese, aguardando revisão.</span>
+              <div class="row-meta">
+                <span class="state state--off">Conferência de repasse</span>
+                <span class="state state--off">Cadastro de prestador</span>
+                <span class="state state--off">Fechamento mensal</span>
+              </div>
+            </div>
+            <div class="actions"><button class="btn btn--secondary">Ver os processos</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Reservado — cronometragem do shadowing e sugestão ao vivo (inerte, não é botão desligado)</figcaption>
+    <div class="stage">
+      <div class="panel reserved">
+        <div class="panel-heading"><h2>Cronometragem do caso</h2></div>
+        <p class="type-meta" style="color:var(--muted);margin:0 0 12px">Marco a marco, com cada
+          trecho classificado em <strong>ativo</strong> ou <strong>espera</strong> — o tempo de
+          espera costuma ser o achado que ninguém esperava.</p>
+        <div class="skeleton" style="height:12px;width:70%;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:12px;width:52%;margin-bottom:16px"></div>
+        <p class="type-meta" style="color:var(--muted);margin:0">Vira real quando existir onde
+          gravar o par ativo/espera — hoje <code>ProcessStep.tempo</code> é texto livre.</p>
+      </div>
+    </div>
+  </figure>
+
+</div>
+
+<!-- ============================================================ mobile -->
+<h2>4 · 390px — as três superfícies</h2>
+<p class="note">Mesma marcação, largura de celular. A faixa de blocos rola na horizontal dentro da
+própria faixa; a página não rola de lado.</p>
+
+<div class="grid">
+
+  <figure class="spec">
+    <figcaption>Business Case · rascunho</figcaption>
+    <div class="stage mobile">
+      <div class="panel">
+        <div class="panel-heading"><h2>Business Case</h2><span class="state state--off">Rascunho</span></div>
+        <div class="form-grid">
+          <label class="form-label">Investimento<input class="field" value="R$ 42.000,00" readonly></label>
+          <label class="form-label">Retorno esperado (12 meses)<input class="field" value="R$ 168.000,00" readonly></label>
+          <label class="form-label">Custo do estado atual<input class="field" value="—" readonly></label>
+        </div>
+        <hr class="sep">
+        <div class="alert--warn" style="margin:0">Nenhum processo com custo sustentado por fato.</div>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Próximo passo · degrau 2</figcaption>
+    <div class="stage mobile">
+      <div class="panel">
+        <p class="eyebrow">Próximo passo</p>
+        <div class="panel-heading" style="margin-top:6px"><h2>Reconciliação manual de repasses</h2></div>
+        <div class="row-meta" style="margin:0 0 12px">
+          <span class="state state--0">Score 78</span>
+          <span class="state state--2">Montar o business case</span>
+        </div>
+        <a class="back-link" href="#">Abrir a priorização →</a>
+      </div>
+    </div>
+  </figure>
+
+  <figure class="spec">
+    <figcaption>Discovery Session · bloco com pendência</figcaption>
+    <div class="stage mobile">
+      <div class="filter-bar" style="margin-bottom:12px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap">
+        <span class="filter-chip">A</span>
+        <span class="filter-chip filter-chip--on">B · Follow the work</span>
+        <span class="filter-chip">C</span>
+        <span class="filter-chip">D</span>
+      </div>
+      <div class="panel">
+        <div class="panel-heading"><h2>Bloco B</h2><span class="state state--2">Não salvo</span></div>
+        <label class="form-label">Quantos casos por mês?
+          <textarea class="field" rows="2" readonly>“Uns 400, mas em fechamento passa de 600.”</textarea></label>
+        <hr class="sep">
+        <button class="btn" style="width:100%">Salvar bloco</button>
+      </div>
+    </div>
+  </figure>
+
+</div>
+
+<h2>O que este board não decide</h2>
+<p class="note">O backend do <code>BusinessCase</code> (em construção, com aceite de API), a
+invariante de que todo achado nasce hipótese, a copy das perguntas (espelho do Notion, muda pela §8),
+regra de papel, e o que atravessa para o One — <code>BusinessCase</code> não atravessa.</p>
+<p class="note"><strong>Nenhum agente aprova design, inclusive o que o produziu.</strong></p>
+
+</div>
+</body>
+</html>
