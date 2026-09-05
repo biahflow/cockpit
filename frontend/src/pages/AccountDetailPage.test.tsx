@@ -156,10 +156,29 @@ let services: unknown[] = [
 // povoa o seu.
 let publicados = 0;
 
+/**
+ * O próximo passo da conta (FDD 054). **Vazio honesto por padrão**, pela razão das listas acima: os
+ * testes que não são sobre o painel não devem ganhar um título e dois selos a mais na tela para
+ * colidir com o texto dos vizinhos — e o vazio é o estado de toda conta que ainda não priorizou.
+ */
+let proximoPasso: unknown = { next_step: null, ranked_count: 0 };
+
+function degrau(overrides: Record<string, unknown> = {}) {
+  return {
+    next_step: {
+      improvement_opportunity: 77, title: "Reconciliação manual de repasses",
+      score: "78.00", assessment_version: 2, missing: "choose_hypothesis",
+      ...overrides,
+    },
+    ranked_count: 3,
+  };
+}
+
 function stub() {
   mocks.api.mockImplementation((path: string) => {
     if (path === "/accounts/1/") return Promise.resolve({ id: 1, name: "Cliente A", legal_name: "ACME SA", tax_id: "123", owner: 1, lifecycle_status: "active", vertical: null, vertical_name: "", published_count: publicados });
     if (path === "/verticals/") return Promise.resolve([{ id: 7, name: "Igrejas", slug: "igrejas", position: 0, active: true }]);
+    if (path === "/accounts/1/next-step/") return Promise.resolve(proximoPasso);
     if (path === "/accounts/1/overview/") return Promise.resolve({ client_id: 1, name: "Cliente A", lifecycle_status: "active", roi: { revenue: "1000.00", cost: "250.00", roi: 3 }, health: { score: 82, level: "saudável", project_id: 5 }, risk_level: "baixo", phase: { name: "Prove", status: "active" }, next_meeting: { title: "Comitê", date: "2026-09-10" }, ai_score: { maturity: 35, opportunity: 80, dimensions: [{ label: "Dados", score: 30 }], summary: "ok", scored_at: "2026-08-04T12:00:00Z" } });
     if (path.startsWith("/contacts")) return Promise.resolve(contacts);
     if (path.startsWith("/activities")) return Promise.resolve(atividades);
@@ -186,6 +205,7 @@ beforeEach(() => {
   opportunities = [oportunidade()];
   documents = [documento()];
   publicados = 0;
+  proximoPasso = { next_step: null, ranked_count: 0 };
   services = [
     servico(),
     servico({ id: 1, name: "Qualification Call", tier: "qualification_call", tier_display: "Qualification Call", category: "acquisition", category_display: "Aquisição", list_price: "0.00" }),
@@ -1028,4 +1048,82 @@ test("o aviso informa e não bloqueia: arquivar continua saindo como DELETE", as
   await user.click(screen.getByRole("button", { name: "Arquivar" }));
 
   await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("/accounts/1/", expect.objectContaining({ method: "DELETE" })));
+});
+
+/* ---------------------------------------------------------------------------------------------
+   O próximo passo da conta — FDD 054, DAP `dap-discovery-session-e-business-case-r2`, decisão B1.
+
+   A tela **não recalcula o degrau**: ela recebe a chave e escolhe o rótulo. É o que estes testes
+   afirmam, e é a razão de todos eles montarem a resposta do servidor em vez do estado do domínio.
+   --------------------------------------------------------------------------------------------- */
+
+test("o painel mostra o degrau que o servidor devolveu, com o score e a porta", async () => {
+  proximoPasso = degrau();
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  const painel = within(screen.getByTestId("next-step-panel"));
+  expect(painel.getByRole("heading", { name: "Reconciliação manual de repasses" })).toBeInTheDocument();
+  expect(painel.getByText("Opportunity Score 78")).toBeInTheDocument();
+  expect(painel.getByText("Escolher a hipótese")).toBeInTheDocument();
+  expect(painel.getByText("Nenhuma hipótese de solução foi escolhida para esta oportunidade.")).toBeInTheDocument();
+  expect(painel.getByRole("link", { name: /Abrir a priorização/ })).toHaveAttribute("href", "/contas/1/priorizacao");
+});
+
+test("cada degrau tem seu rótulo, e o de abrir a venda leva ao comercial", async () => {
+  const rotulos: ReadonlyArray<readonly [string, string, string]> = [
+    ["build_business_case", "Montar o business case", "/contas/1/priorizacao"],
+    ["decide_investment", "Decidir o investimento", "/contas/1/priorizacao"],
+    ["open_commercial_opportunity", "Abrir a venda", "/comercial"],
+  ];
+  for (const [chave, rotulo, destino] of rotulos) {
+    proximoPasso = degrau({ missing: chave });
+    render(<AccountDetailPage id={1} />);
+    await screen.findByRole("heading", { name: "Cliente A" });
+
+    const painel = within(screen.getByTestId("next-step-panel"));
+    expect(painel.getByText(rotulo)).toBeInTheDocument();
+    expect(painel.getByRole("link", { name: /Abrir (a priorização|o comercial)/ })).toHaveAttribute("href", destino);
+    cleanup();
+  }
+});
+
+test("conta sem nada priorizado mostra o vazio honesto, com a porta para a priorização", async () => {
+  proximoPasso = { next_step: null, ranked_count: 0 };
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  const painel = within(screen.getByTestId("next-step-panel"));
+  expect(painel.getByText(/Nenhuma oportunidade de melhoria priorizada nesta conta/)).toBeInTheDocument();
+  expect(painel.getByRole("link", { name: /Abrir a priorização/ })).toHaveAttribute("href", "/contas/1/priorizacao");
+  expect(painel.queryByText("Nada pendente")).not.toBeInTheDocument();
+});
+
+test("tudo encaminhado é o neutro, e não o vazio — os dois chegam como `next_step: null`", async () => {
+  proximoPasso = { next_step: null, ranked_count: 3 };
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  const painel = within(screen.getByTestId("next-step-panel"));
+  expect(painel.getByRole("heading", { name: "Nada pendente" })).toBeInTheDocument();
+  expect(painel.getByText("3 oportunidades priorizadas nesta conta, nenhuma com passo pendente.")).toBeInTheDocument();
+  expect(painel.queryByText(/Nenhuma oportunidade de melhoria priorizada/)).not.toBeInTheDocument();
+});
+
+test("com uma só priorizada o neutro fala no singular", async () => {
+  proximoPasso = { next_step: null, ranked_count: 1 };
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  expect(within(screen.getByTestId("next-step-panel")).getByText("1 oportunidade priorizada nesta conta, nenhuma com passo pendente.")).toBeInTheDocument();
+});
+
+test("o painel vem acima de «Saúde da relação» — a ordem é a decisão B1", async () => {
+  proximoPasso = degrau();
+  render(<AccountDetailPage id={1} />);
+  await screen.findByRole("heading", { name: "Cliente A" });
+
+  const painel = screen.getByTestId("next-step-panel");
+  const saude = screen.getByText("Saúde da relação");
+  expect(painel.compareDocumentPosition(saude) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });

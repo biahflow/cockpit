@@ -13,6 +13,7 @@ from .views import (
     BlueprintVariantViewSet,
     BookingCreateView,
     BookingSlotsView,
+    BusinessCaseViewSet,
     CalendarSyncView,
     CaseViewSet,
     CobrancaSuspensaoViewSet,
@@ -25,6 +26,7 @@ from .views import (
     DigitalEmployeeViewSet,
     DiscoveryBookingCreateView,
     DiscoveryBookingSlotsView,
+    DiscoveryQuestionsView,
     DiscoverySessionViewSet,
     DiscoveryViewSet,
     DocumentViewSet,
@@ -160,6 +162,13 @@ router.register("pain-points", PainPointViewSet)
 router.register("improvement-opportunities", ImprovementOpportunityViewSet)
 router.register("priority-assessments", PriorityAssessmentViewSet)
 router.register("solution-hypotheses", SolutionHypothesisViewSet)
+# A justificativa do investimento (FDD 053, ADR 0069), ao lado da cadeia que a sustenta: ela cita
+# a hipótese escolhida e a avaliação vigente da mesma oportunidade.
+#
+# `business-cases` e nunca `cases`: `/cases/` já é a prova social congelada (FDD 027), e o mapa de
+# linguagem §2 põe cada um no "nunca chamar de" do outro. Nome canônico e nenhum alias — não há
+# chave antiga que a `/api/v1/` tenha prometido.
+router.register("business-cases", BusinessCaseViewSet)
 # Feasibility, PROVE, KPI/Measurement e Value Ledger (FDD 049, ADR 0055). **Nomes canônicos e
 # nenhum alias**, como os quatro da Fase 4 e pelo mesmo motivo: alias existe para não quebrar chave
 # que a `/api/v1/` já prometeu, e estes cinco modelos nascem com o nome do mapa de linguagem.
@@ -256,6 +265,15 @@ def _rotas(router_da_versao: DefaultRouter, prefixo_do_nome: str) -> list[URLPat
             "booking/discovery/",
             DiscoveryBookingCreateView.as_view(),
             name=nome("discovery-booking-create"),
+        ),
+        # A base de perguntas de Discovery (ADR 0069, decisão E1 do DAP
+        # `dap-discovery-session-e-business-case-r2`). **Fora do router** porque não é recurso: é
+        # constante de método, como o `/config/` — não tem detalhe, não tem escrita e não tem
+        # linha em banco nenhum. Nome canônico e nenhum alias; nasce igual nas duas versões.
+        path(
+            "discovery-questions/",
+            DiscoveryQuestionsView.as_view(),
+            name=nome("discovery-questions"),
         ),
         path("tasks/sync/", TaskSyncIntakeView.as_view(), name=nome("task-sync")),
         path("esign/webhook/", EsignWebhookView.as_view(), name=nome("esign-webhook")),

@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
+import { moeda } from "../dinheiro";
 import { PriorizacaoPage } from "./PriorizacaoPage";
 
 const mocks = vi.hoisted(() => ({
@@ -10,11 +11,15 @@ const mocks = vi.hoisted(() => ({
   listImprovementOpportunities: vi.fn(),
   listPriorityAssessments: vi.fn(),
   listSolutionHypotheses: vi.fn(),
+  listBusinessCases: vi.fn(),
   createImprovementOpportunity: vi.fn(),
   createPriorityAssessment: vi.fn(),
   createSolutionHypothesis: vi.fn(),
+  createBusinessCase: vi.fn(),
   updateImprovementOpportunity: vi.fn(),
   updateSolutionHypothesis: vi.fn(),
+  updateBusinessCase: vi.fn(),
+  decideBusinessCase: vi.fn(),
   auth: { user: { id: 1, is_admin: true, role: "admin" } } as { user: { id: number; is_admin: boolean; role: string } },
 }));
 vi.mock("../api", () => ({
@@ -23,11 +28,15 @@ vi.mock("../api", () => ({
   listImprovementOpportunities: mocks.listImprovementOpportunities,
   listPriorityAssessments: mocks.listPriorityAssessments,
   listSolutionHypotheses: mocks.listSolutionHypotheses,
+  listBusinessCases: mocks.listBusinessCases,
   createImprovementOpportunity: mocks.createImprovementOpportunity,
   createPriorityAssessment: mocks.createPriorityAssessment,
   createSolutionHypothesis: mocks.createSolutionHypothesis,
+  createBusinessCase: mocks.createBusinessCase,
   updateImprovementOpportunity: mocks.updateImprovementOpportunity,
   updateSolutionHypothesis: mocks.updateSolutionHypothesis,
+  updateBusinessCase: mocks.updateBusinessCase,
+  decideBusinessCase: mocks.decideBusinessCase,
 }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
@@ -77,6 +86,21 @@ function hipotese(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function businessCase(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 51, improvement_opportunity: 21, account: 4,
+    solution_hypothesis: 41, priority_assessment: 31,
+    investment: "42000.00", expected_return_year: "168000.00", payback_months: 4,
+    current_state_cost: "19400.00",
+    current_state_cost_source: { processos: [{ id: 1, sustentacao: "sustentado", total: "19400.00", nao_apurado: [] }], somados: [1] },
+    rationale: "O leitor de nota se paga no primeiro trimestre.", assumptions: "",
+    status: "draft", status_display: "Rascunho",
+    decided_at: null, decided_by: null,
+    created_at: "2026-08-20T10:00:00Z", updated_at: "2026-08-20T10:00:00Z",
+    ...overrides,
+  };
+}
+
 const processo = {
   id: 1, account: 4, account_name: "Clínica Vale Verde", name: "Faturamento TISS",
   position: 1, source_project: null, source_meeting: null, registered_by: 1,
@@ -90,6 +114,7 @@ let dores: unknown[] = [];
 let oportunidades: unknown[] = [];
 let avaliacoes: unknown[] = [];
 let hipoteses: unknown[] = [];
+let businessCases: unknown[] = [];
 let conta: unknown = { id: 4, name: "Clínica Vale Verde", legal_name: "", tax_id: "", owner: 1, lifecycle_status: "active", status: "active", vertical: null, vertical_name: "" };
 
 function stub() {
@@ -102,11 +127,15 @@ function stub() {
   mocks.listImprovementOpportunities.mockImplementation(() => Promise.resolve(oportunidades));
   mocks.listPriorityAssessments.mockImplementation(() => Promise.resolve(avaliacoes));
   mocks.listSolutionHypotheses.mockImplementation(() => Promise.resolve(hipoteses));
+  mocks.listBusinessCases.mockImplementation(() => Promise.resolve(businessCases));
   mocks.createImprovementOpportunity.mockResolvedValue(oportunidade());
   mocks.createPriorityAssessment.mockResolvedValue(avaliacao());
   mocks.createSolutionHypothesis.mockResolvedValue(hipotese());
+  mocks.createBusinessCase.mockResolvedValue(businessCase());
   mocks.updateImprovementOpportunity.mockResolvedValue(oportunidade());
   mocks.updateSolutionHypothesis.mockResolvedValue(hipotese());
+  mocks.updateBusinessCase.mockResolvedValue(businessCase());
+  mocks.decideBusinessCase.mockResolvedValue(businessCase({ status: "approved", status_display: "Aprovado", decided_at: "2026-09-05T14:12:00Z", decided_by: 1 }));
 }
 
 /** A linha de lista que contém aquele texto — o selo e o botão são irmãos do `.row-main`. */
@@ -124,6 +153,7 @@ beforeEach(() => {
   oportunidades = [];
   avaliacoes = [];
   hipoteses = [];
+  businessCases = [];
   stub();
 });
 afterEach(cleanup);
@@ -342,4 +372,208 @@ test("o select da hipótese não repete o que a pílula já diz", async () => {
   expect(rotulos).toEqual(["Mudar para…", "Proposta", "Descartada"]);
   // "Escolhida" aparece **uma** vez na tela: na pílula, nunca também dentro do select.
   expect(screen.getAllByText("Escolhida")).toHaveLength(1);
+});
+
+/**
+ * O Business Case (FDD 053), governado pelo DAP `dap-discovery-session-e-business-case-r2` —
+ * decisões A1 e F1. Os seis estados do board, um por teste.
+ */
+async function abrirBusinessCase(): Promise<HTMLElement> {
+  const user = userEvent.setup();
+  render(<PriorizacaoPage accountId={4} />);
+  await user.click(await screen.findByRole("button", { name: /Abrir detalhe/ }));
+  const painel = await screen.findByText("Business Case");
+  return painel.closest(".panel") as HTMLElement;
+}
+
+test("estado 1 — sem hipótese escolhida, a porta do business case nem aparece", async () => {
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  hipoteses = [];  // nenhuma escolhida
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByText(/Escolha uma hipótese de solução para montar o business case/)).toBeInTheDocument();
+  expect(painel.queryByRole("button", { name: /Montar business case/ })).not.toBeInTheDocument();
+});
+
+test("estado 2 — hipótese escolhida, sem business case: a porta aparece", async () => {
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  hipoteses = [hipotese()];  // status `chosen`
+  businessCases = [];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByText("Nenhum registrado.")).toBeInTheDocument();
+  expect(painel.getByRole("button", { name: /Montar business case/ })).toBeInTheDocument();
+});
+
+test("estado 3 — rascunho, com o custo do estado atual congelado ao lado", async () => {
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase()];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByText("Rascunho")).toBeInTheDocument();
+  expect(await painel.findByDisplayValue("42000.00")).toBeInTheDocument();
+  expect(painel.getByDisplayValue("168000.00")).toBeInTheDocument();
+  expect(painel.getByDisplayValue("4")).toBeInTheDocument();
+  // Congelado — não é um campo editável, é leitura (input desabilitado).
+  const custo = painel.getByLabelText("Custo do estado atual · congelado");
+  expect(custo).toBeDisabled();
+  expect(custo).toHaveValue(`${moeda("19400.00")} / mês`);
+  expect(painel.getByRole("button", { name: "Aprovar o investimento" })).toBeEnabled();
+  expect(painel.getByRole("button", { name: "Recusar" })).toBeEnabled();
+});
+
+test("estado 4 — custo não apurado é —, com o alerta, e nenhum caminho escreve R$ 0,00", async () => {
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase({
+    current_state_cost: null,
+    current_state_cost_source: { processos: [{ id: 1, sustentacao: "hipotese", total: "0.00", nao_apurado: ["Volume", "Tempo"] }], somados: [] },
+  })];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByLabelText("Custo do estado atual · congelado")).toHaveValue("—");
+  const alerta = painel.getByRole("alert");
+  expect(alerta).toHaveClass("alert--warn");
+  expect(alerta).toHaveTextContent("Nenhum processo desta oportunidade tem custo sustentado por fato.");
+  // A decisão F1 inteira: a lacuna nunca é o número zero.
+  expect(screen.queryByText(/R\$\s?0,00/)).not.toBeInTheDocument();
+});
+
+test("estado 5 — aprovado: leitura, com o carimbo da decisão, e sem os botões de decisão", async () => {
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase({ status: "approved", status_display: "Aprovado", decided_at: "2026-09-05T14:12:00Z", decided_by: 1, decided_by_name: "Ana Meireles" })];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByText("Aprovado", { selector: ".state" })).toBeInTheDocument();
+  expect(painel.getByText(/R\$ 42\.000,00 investidos · R\$ 168\.000,00 esperados em 12 meses/)).toBeInTheDocument();
+  expect(painel.getByText(/Decisão registrada/)).toBeInTheDocument();
+  // Decidido não se edita: nem campo, nem botão de decisão, nem porta para montar outro.
+  expect(painel.queryByRole("button", { name: "Aprovar o investimento" })).not.toBeInTheDocument();
+  expect(painel.queryByRole("button", { name: "Recusar" })).not.toBeInTheDocument();
+  expect(painel.queryByRole("button", { name: /Montar outro business case/ })).not.toBeInTheDocument();
+  expect(painel.queryByRole("textbox")).not.toBeInTheDocument();
+});
+
+test("estado 6 — recusado: a oportunidade aceita outro", async () => {
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase({ status: "rejected", status_display: "Recusado", decided_at: "2026-09-03T09:40:00Z", decided_by: 1 })];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByText("Recusado", { selector: ".state" })).toBeInTheDocument();
+  expect(painel.getByRole("button", { name: /Montar outro business case/ })).toBeInTheDocument();
+  // Recusado não oferece campo de edição do registro decidido.
+  expect(painel.queryByRole("textbox")).not.toBeInTheDocument();
+});
+
+test("aprovar exige os dois números; recusar nunca fica desabilitado", async () => {
+  const user = userEvent.setup();
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase({ investment: null, expected_return_year: null })];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  const aprovar = painel.getByRole("button", { name: "Aprovar o investimento" });
+  const recusar = painel.getByRole("button", { name: "Recusar" });
+  expect(aprovar).toBeDisabled();
+  expect(recusar).toBeEnabled();
+
+  await user.type(painel.getByLabelText("Investimento"), "10000");
+  expect(aprovar).toBeDisabled();  // falta o segundo número
+  await user.type(painel.getByLabelText("Retorno esperado (12 meses)"), "40000");
+  expect(aprovar).toBeEnabled();
+});
+
+test("decidir salva o rascunho digitado antes de aprovar, e nunca via PATCH de status", async () => {
+  const user = userEvent.setup();
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase()];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  await user.click(painel.getByRole("button", { name: "Aprovar o investimento" }));
+
+  await waitFor(() => expect(mocks.updateBusinessCase).toHaveBeenCalledWith(51, {
+    investment: "42000.00", expected_return_year: "168000.00", payback_months: 4,
+    rationale: "O leitor de nota se paga no primeiro trimestre.",
+  }));
+  expect(mocks.decideBusinessCase).toHaveBeenCalledWith(51, "approved");
+});
+
+test("montar o business case cita a hipótese escolhida e a avaliação vigente — nunca zero no lugar do vazio", async () => {
+  const user = userEvent.setup();
+  dores = [dor()];
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  await user.click(painel.getByRole("button", { name: "Montar business case" }));
+  await user.type(painel.getByLabelText("Justificativa"), "O leitor de nota se paga sozinho.");
+  await user.click(painel.getByRole("button", { name: "Registrar o business case" }));
+
+  await waitFor(() => expect(mocks.createBusinessCase).toHaveBeenCalledWith({
+    improvement_opportunity: 21, solution_hypothesis: 41, priority_assessment: 31,
+    investment: null, expected_return_year: null, payback_months: null,
+    rationale: "O leitor de nota se paga sozinho.",
+  }));
+});
+
+test("diz quem decidiu, e cai para a forma sem nome quando o autor saiu", async () => {
+  // Decidir investir é ato **com autor** — é o que o `clean()` do modelo protege ao recusar
+  // `approved` sem `decided_by`, e é o que o board aprovado mostra. Uma tela que dissesse só
+  // "Aprovado em 05/09" devolveria à conversa a pergunta que este registro existe para responder.
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase({
+    status: "approved", status_display: "Aprovado",
+    decided_at: "2026-09-05T14:12:00Z", decided_by: 7, decided_by_name: "Ana Meireles",
+  })];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByText(/Aprovado por Ana Meireles em/)).toBeInTheDocument();
+});
+
+test("a decisão sem autor vivo degrada para a data, em vez de mentir", async () => {
+  // `decided_by` é `SET_NULL`: quem decidiu pode ter saído da casa. "Aprovado por " sem nome seria
+  // pior que a data sozinha — a frase encolhe, não inventa.
+  oportunidades = [oportunidade()];
+  avaliacoes = [avaliacao()];
+  hipoteses = [hipotese()];
+  businessCases = [businessCase({
+    status: "approved", status_display: "Aprovado",
+    decided_at: "2026-09-05T14:12:00Z", decided_by: null, decided_by_name: "",
+  })];
+  stub();
+  const painel = within(await abrirBusinessCase());
+
+  expect(painel.getByText(/^Aprovado em/)).toBeInTheDocument();
 });

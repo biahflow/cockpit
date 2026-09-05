@@ -14,7 +14,16 @@ from django.http import QueryDict
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from . import blueprints, discovery_booking, drive, esign, kickoff, knowledge, publication
+from . import (
+    blueprints,
+    discovery_booking,
+    discovery_questions,
+    drive,
+    esign,
+    kickoff,
+    knowledge,
+    publication,
+)
 from . import process as process_module
 from .exceptions import DriveUnavailable
 from .models import (
@@ -28,6 +37,7 @@ from .models import (
     Activity,
     Artifact,
     BlueprintVariant,
+    BusinessCase,
     Case,
     CobrancaSuspensao,
     CommercialOpportunity,
@@ -1349,13 +1359,31 @@ class DiscoverySerializer(serializers.ModelSerializer[Discovery]):
 
 
 class DiscoverySessionSerializer(serializers.ModelSerializer[DiscoverySession]):
-    """A sessão do Discovery (FDD 045) — reunião, visita ou leitura de sistema."""
+    """A sessão do Discovery (FDD 045) — reunião, visita ou leitura de sistema.
+
+    `notes` sai e **não entra por aqui** (FDD 055): a escrita é
+    `POST /discovery-sessions/{id}/notes/`, que grava **um bloco** e preserva os outros. A razão é
+    a mesma que faz `published_at` ser só de leitura — o que vale depende do estado corrente, e um
+    `PATCH` do campo inteiro apagaria em silêncio o bloco que o colega acabou de salvar. A decisão
+    H3 do DAP aceita a sobrescrita entre pessoas **dentro** de um bloco; a mitigação que ela
+    registra ("um bloco por pessoa durante a sessão") só funciona porque o bloco é a unidade de
+    escrita.
+    """
+
+    # Quantos achados saíram desta sessão. Vem **anotado** pela queryset do viewset; o `getattr`
+    # com zero é para o caminho em que o objeto não veio de lá — a criação, que responde com a
+    # instância recém-salva e que não tem achado nenhum mesmo.
+    structured_finding_count = serializers.SerializerMethodField()
 
     class Meta:
         model = DiscoverySession
         fields = ["id", "discovery", "meeting", "happened_at", "participants", "source_artifact",
-                  "transcript", "created_at", "updated_at"]
-        read_only_fields = ["id", "created_at", "updated_at"]
+                  "transcript", "notes", "structured_finding_count", "created_at", "updated_at"]
+        read_only_fields = ["id", "notes", "created_at", "updated_at"]
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_structured_finding_count(self, obj: DiscoverySession) -> int:
+        return int(getattr(obj, "structured_finding_count", 0) or 0)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         discovery = cast(
@@ -1371,6 +1399,41 @@ class DiscoverySessionSerializer(serializers.ModelSerializer[DiscoverySession]):
         return attrs
 
 
+class DiscoverySessionNotesSerializer(serializers.Serializer):
+    """O corpo de `POST /discovery-sessions/{id}/notes/`: **um** bloco e as respostas dele.
+
+    Não é `ModelSerializer` porque não há campo de modelo com esta forma — `notes` guarda os seis
+    blocos, e o que se escreve é um. É o mesmo desenho do serializer de entrada de qualquer action
+    com corpo próprio: o que ele valida é o pedido, não a linha.
+
+    **A validação é contra `discovery_questions.BLOCKS`, e olha só o que está sendo escrito.** O
+    que já está gravado nunca é revalidado: uma pergunta removida da base deixa de ser exibida e a
+    resposta dela continua no JSON, e revalidar o conjunto inteiro faria essa remoção travar o
+    salvamento de um bloco vizinho — apagando, na prática, o registro de uma reunião por causa de
+    uma edição de catálogo.
+    """
+
+    block = serializers.CharField()
+    answers = serializers.DictField(child=serializers.CharField(allow_blank=True))
+
+    def validate_block(self, value: str) -> str:
+        if discovery_questions.block(value) is None:
+            raise serializers.ValidationError(
+                f"Bloco desconhecido: {value}. Os blocos são "
+                f"{', '.join(bloco.id for bloco in discovery_questions.BLOCKS)}."
+            )
+        return value
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        conhecidas = discovery_questions.question_ids(cast(str, attrs["block"]))
+        desconhecidas = sorted(set(cast(dict, attrs["answers"])) - conhecidas)
+        if desconhecidas:
+            raise serializers.ValidationError(
+                {"answers": f"Pergunta desconhecida neste bloco: {', '.join(desconhecidas)}."}
+            )
+        return attrs
+
+
 class ProcessObservationSerializer(serializers.ModelSerializer[ProcessObservation]):
     """A observação de um processo dentro de um Discovery (FDD 045).
 
@@ -1382,12 +1445,21 @@ class ProcessObservationSerializer(serializers.ModelSerializer[ProcessObservatio
     observation_type_display = serializers.CharField(
         source="get_observation_type_display", read_only=True
     )
+    # O nome do processo observado e a conta dele, no molde de `ProcessSerializer.account_name`: a
+    # tela da Discovery Session lista o que saiu da estruturação e leva a quem o revisa (FDD 055),
+    # e sem os dois precisaria de uma segunda chamada por linha só para escrever um rótulo e um
+    # `href`. **O processo é da conta**, não do projeto — é a âncora da FDD 039, e é por isso que o
+    # caminho de revisão sai daqui e não do projeto que conduziu o Discovery.
+    process_name = serializers.CharField(source="process.name", read_only=True)
+    account = serializers.IntegerField(source="process.account_id", read_only=True)
 
     class Meta:
         model = ProcessObservation
-        fields = ["id", "discovery", "process", "observed_at", "observation_type",
-                  "observation_type_display", "source_session", "created_at", "updated_at"]
-        read_only_fields = ["id", "observation_type_display", "created_at", "updated_at"]
+        fields = ["id", "discovery", "process", "process_name", "account", "observed_at",
+                  "observation_type", "observation_type_display", "source_session", "created_at",
+                  "updated_at"]
+        read_only_fields = ["id", "process_name", "account", "observation_type_display",
+                            "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         discovery = cast(
@@ -1860,6 +1932,86 @@ class SolutionHypothesisSerializer(serializers.ModelSerializer[SolutionHypothesi
             raise serializers.ValidationError(
                 {"status": "Esta oportunidade já tem uma hipótese escolhida. Descarte a atual "
                            "antes de escolher outra."}
+            )
+        return attrs
+
+
+class BusinessCaseSerializer(serializers.ModelSerializer[BusinessCase]):
+    """A justificativa do investimento (FDD 053, ADR 0069).
+
+    A lista de `read_only_fields` é a entrega, e não burocracia — é a mesma do `CaseSerializer`
+    pelo mesmo motivo. `current_state_cost` e `current_state_cost_source` são a fotografia do
+    custo no instante da criação: mantê-los fora da escrita é o que faz "o número não muda depois
+    de congelado" ser verdade **por construção**, sem caminho de escrita em vez de com um caminho
+    que ninguém usa. `status`, `decided_at` e `decided_by` ficam de fora pelo motivo oposto: eles
+    *devem* mudar, mas só pela action `decide/`, que grava quem decidiu.
+
+    O `validate()` repete as duas guardas do `clean()` porque o serializer não chama `full_clean()`
+    — é a porta dupla que o `ImprovementOpportunitySerializer` já mantém para a mesma classe de
+    vínculo cruzado. Nenhuma constraint cobre estas duas: sem a repetição aqui, a recusa
+    simplesmente **não aconteceria** pela rota, e o `clean()` seguiria valendo só para shell,
+    admin e migração.
+
+    **O dinheiro sai como texto**: os três campos decimais passam por `ModelSerializer`, então o
+    `COERCE_DECIMAL_TO_STRING` do DRF os emite como string (ADR 0068). O `dict` cru de
+    `current_state_cost_source` não passa por lá — quem cuida dele é `business_case.dinheiro()`, na
+    origem.
+    """
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    # Derivado, e não campo: a conta chega pela oportunidade, um hop — o mesmo caminho que a
+    # queryset e a permissão de objeto percorrem. Publicá-lo poupa a tela de uma segunda chamada
+    # só para saber de quem é a linha.
+    account = serializers.IntegerField(
+        source="improvement_opportunity.account_id", read_only=True
+    )
+    # **`decided_by_name` existe porque a decisão de investir é ato com autor, e o id não o diz.**
+    # É a metade que o `clean()` protege — `approved` sem `decided_by` é recusado —, e uma tela que
+    # mostrasse "Aprovado em 05/09" sem dizer por quem devolveria à conversa a pergunta que este
+    # modelo existe para responder. O board aprovado mostra "Aprovado por {nome} em {data}".
+    # Mesmo `source="…get_full_name"` de `assessed_by_name` aqui ao lado, de `owner_name` em
+    # `KnowledgeArea` e de `user_name` em `ProjectMember`: derivado, só leitura, aditivo à v1 —
+    # resolver o nome pelo cliente exigiria `/users/`, que é fechada à Entrega.
+    decided_by_name = serializers.CharField(
+        source="decided_by.get_full_name", read_only=True, default=""
+    )
+
+    class Meta:
+        model = BusinessCase
+        fields = ["id", "improvement_opportunity", "account", "solution_hypothesis",
+                  "priority_assessment", "investment", "expected_return_year", "payback_months",
+                  "current_state_cost", "current_state_cost_source", "rationale", "assumptions",
+                  "status", "status_display", "decided_at", "decided_by", "decided_by_name",
+                  "created_at", "updated_at"]
+        read_only_fields = ["id", "account", "current_state_cost", "current_state_cost_source",
+                            "status", "status_display", "decided_at", "decided_by",
+                            "decided_by_name", "created_at", "updated_at"]
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        oportunidade = cast(
+            ImprovementOpportunity | None,
+            attrs.get(
+                "improvement_opportunity",
+                getattr(self.instance, "improvement_opportunity", None),
+            ),
+        )
+        hipotese = cast(
+            SolutionHypothesis | None,
+            attrs.get("solution_hypothesis", getattr(self.instance, "solution_hypothesis", None)),
+        )
+        avaliacao = cast(
+            PriorityAssessment | None,
+            attrs.get("priority_assessment", getattr(self.instance, "priority_assessment", None)),
+        )
+        if oportunidade is None:
+            return attrs
+        if hipotese is not None and hipotese.improvement_opportunity_id != oportunidade.pk:
+            raise serializers.ValidationError(
+                {"solution_hypothesis": "A hipótese deve ser da mesma oportunidade de melhoria."}
+            )
+        if avaliacao is not None and avaliacao.improvement_opportunity_id != oportunidade.pk:
+            raise serializers.ValidationError(
+                {"priority_assessment": "A avaliação deve ser da mesma oportunidade de melhoria."}
             )
         return attrs
 

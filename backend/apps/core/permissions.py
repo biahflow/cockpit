@@ -5,6 +5,7 @@ from rest_framework.permissions import BasePermission
 from .models import (
     KPI,
     Artifact,
+    BusinessCase,
     Case,
     CommercialOpportunity,
     Decisao,
@@ -158,6 +159,12 @@ class RolePermission(BasePermission):
             # Os cinco recursos do split (FDD 045) entram pelo mesmo argumento dos três da
             # FDD 039 logo acima, e é o mesmo levantamento: o Discovery começa na venda e
             # continua na entrega, e um achado que só metade da casa registra não é registrado.
+            # `business_case` (FDD 053) entra pelo mesmo argumento, com um a mais: a justificativa
+            # do investimento é a conversa que o comercial conduz com o cliente e que a entrega
+            # sustenta com o custo do estado atual — deixá-la para um dos dois faria o número
+            # existir sem o argumento, ou o argumento sem o número. Não confundir com `case`, logo
+            # acima, que é só-leitura para Vendas: aquele é a prova social da casa, e publicá-la é
+            # ato de admin.
             return resource in {"account", "contact", "commercial_opportunity", "engagement",
                                 "document", "lead", "analytics", "artifact", "activity",
                                 "cobranca_suspensao", "satisfaction_record", "process",
@@ -166,7 +173,8 @@ class RolePermission(BasePermission):
                                 "discovery", "discovery_session", "process_observation",
                                 "evidence", "finding",
                                 "pain_point", "improvement_opportunity",
-                                "priority_assessment", "solution_hypothesis"}
+                                "priority_assessment", "solution_hypothesis",
+                                "business_case"}
         if request.user.role == User.Role.DELIVERY:
             # `engagement` entra aqui **só de leitura**, e a assimetria com Vendas é a decisão: o
             # engajamento é o mandato comercial, e quem entrega precisa saber a que mandato o
@@ -214,6 +222,7 @@ class RolePermission(BasePermission):
                                 "evidence", "finding",
                                 "pain_point", "improvement_opportunity",
                                 "priority_assessment", "solution_hypothesis",
+                                "business_case",
                                 "feasibility_assessment", "prove_experiment", "kpi",
                                 "measurement", "value_ledger_entry",
                                 "engineering_handoff", "github_projection"}
@@ -251,7 +260,8 @@ class RolePermission(BasePermission):
             if isinstance(
                 obj,
                 Process | ProcessStep | Evidence | Finding | PainPoint
-                | ImprovementOpportunity | PriorityAssessment | SolutionHypothesis,
+                | ImprovementOpportunity | PriorityAssessment | SolutionHypothesis
+                | BusinessCase,
             ):
                 # Mesma pergunta do `SatisfactionRecord` acima, e **também fora de `PROJECT_OF`**
                 # — aqui não por o projeto ser opcional, mas por não existir: o processo mapeado é
@@ -269,9 +279,13 @@ class RolePermission(BasePermission):
                 # e `SolutionHypothesis` chegam a ela pela oportunidade — um hop, como a etapa
                 # chega pelo processo. Nenhum deles pende de projeto, então nenhum entra em
                 # `PROJECT_OF`.
+                #
+                # `BusinessCase` (FDD 053) faz o mesmo hop pela oportunidade, e **não** se confunde
+                # com o `Case` do `PROJECT_OF` lá em cima: aquele nasce de um projeto e herda a
+                # fronteira dele; este pende do levantamento, que é da conta e sobrevive à venda.
                 if isinstance(obj, Evidence | Finding | PainPoint | ImprovementOpportunity):
                     account = obj.account
-                elif isinstance(obj, PriorityAssessment | SolutionHypothesis):
+                elif isinstance(obj, PriorityAssessment | SolutionHypothesis | BusinessCase):
                     account = obj.improvement_opportunity.account
                 elif isinstance(obj, Process):
                     account = obj.account

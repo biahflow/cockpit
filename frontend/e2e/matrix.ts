@@ -25,6 +25,10 @@ export const ROUTES: readonly Screen[] = [
   { path: "/contas/1/publicacao", name: "Publicação do Discovery", role: "admin" },
   { path: "/projetos", name: "Projetos", role: "admin" },
   { path: "/projetos/1", name: "Detalhe do projeto", role: "admin" },
+  // A tela usada **durante** a reunião (FDD 055, DAP `dap-discovery-session-e-business-case-r2`).
+  // É a tela mais densa de campo do produto: seis blocos numa faixa que rola na horizontal, um
+  // `<textarea>` por pergunta e três painéis abaixo. 390px é onde ela quebra, se quebrar.
+  { path: "/projetos/1/sessoes/3", name: "Discovery Session", role: "admin" },
   { path: "/documentos", name: "Documentos", role: "admin" },
   { path: "/leads", name: "Leads", role: "admin" },
   { path: "/indicadores", name: "Indicadores", role: "admin" },
@@ -178,6 +182,29 @@ const processos = serie(3, index => ({
   created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
 }));
 
+const DISCOVERY = {
+  id: 7, project: 1, project_name: projetos[0].name, scope: "Faturamento, repasse e expedição",
+  status: "running", status_display: "Em andamento", started_at: VENCIDO, completed_at: null,
+  owner: 1, created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+};
+
+/** Duas sessões: a estruturada — que é a que a rota da matriz abre — e uma ainda em captura. */
+const sessoesDeDiscovery = [
+  { id: 3, structured_finding_count: 11, happened_at: `${HOJE}T17:00:00Z`,
+    notes: {
+      a: {
+        "negocio-hoje": "Cresceu uns 18% no ano, mas o time de faturamento é o mesmo de 2023.",
+        "o-que-mais-incomoda": "O fechamento sempre estoura o dia 5, e ninguém consegue dizer por quê.",
+      },
+      b: { "casos-por-mes": "“Uns 400, mas em mês de fechamento passa de 600.”" },
+    } },
+  { id: 4, structured_finding_count: 0, happened_at: `${VENCIDO}T14:00:00Z`, notes: {} },
+].map(registro => ({
+  discovery: 7, meeting: null, participants: "Ana Meireles, Paulo Rangel e mais 2",
+  source_artifact: null, transcript: "",
+  created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T17:38:00Z`, ...registro,
+}));
+
 const processoEtapas = serie(3, index => ({
   id: index, process: 1, processo: 1, position: index,
   name: `Etapa ${index} — conferência manual da nota fiscal no ERP`,
@@ -320,6 +347,17 @@ const FIXTURES: Record<string, unknown> = {
     risk_level: "alto", phase: { name: "Implantação assistida", status: "active" },
     next_meeting: { title: "Comitê quinzenal de acompanhamento", date: HOJE },
     ai_score: null,
+  },
+  // O próximo passo da conta (FDD 054, decisão B1). Um degrau de verdade, e não o vazio: o painel
+  // com conteúdo é o que a matriz precisa medir — dois selos e um título longo na mesma faixa é
+  // exatamente onde 390px quebra, e o vazio não exercitaria nem o contraste do par de pastilhas.
+  "/api/v2/accounts/1/next-step/": {
+    next_step: {
+      improvement_opportunity: 77,
+      title: "Reconciliação manual de repasses entre a operadora e as unidades",
+      score: "78.00", assessment_version: 2, missing: "choose_hypothesis",
+    },
+    ranked_count: 3,
   },
   "/api/v2/projects/": projetos,
   "/api/v2/projects/1/": projetos[0],
@@ -582,6 +620,22 @@ const FIXTURES: Record<string, unknown> = {
     improvement_opportunity: 1, intervention: "", assumptions: "", expected_effect: "",
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
+  // O Business Case (FDD 053), no rascunho com **custo não apurado** (decisão F1) — o estado que
+  // mais precisa passar pelo axe: é onde `.alert--warn` (cor âmbar) e o `—` do custo aparecem
+  // lado a lado com os dois números orçados, e nenhum caminho pode ter deslizado para `R$ 0,00`.
+  "/api/v2/business-cases/": [{
+    id: 1, improvement_opportunity: 1, account: 1, solution_hypothesis: 1, priority_assessment: 2,
+    investment: "85000.00", expected_return_year: "340000.00", payback_months: 3,
+    current_state_cost: null,
+    current_state_cost_source: {
+      processos: [{ id: 1, sustentacao: "hipotese", total: "0.00", nao_apurado: ["Retrabalho", "Erros"] }],
+      somados: [],
+    },
+    rationale: "A automação evita o retrabalho recorrente da conferência manual de documentos por convênio.",
+    assumptions: "", status: "draft", status_display: "Rascunho",
+    decided_at: null, decided_by: null,
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  }],
   // Feasibility, PROVE, KPI/medição e Value Ledger (FDD 049), nas superfícies que o DAP
   // `dap-prove-e-valor-r1` aprovou. **Uma linha de cada combinação que a tela sabe desenhar**: os
   // três vereditos do laudo, o experimento planejado com dois dos três requisitos faltando (as
@@ -646,6 +700,48 @@ const FIXTURES: Record<string, unknown> = {
       approved_by: null, approved_at: null },
   ].map(registro => ({
     engagement: 1, project: 1, quantity: null,
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
+  })),
+  // A Discovery Session (FDD 055) e a porta dela no detalhe do projeto. **Com anotação e já
+  // estruturada** de propósito: um mock vazio aprovaria a tela com os `<textarea>` em branco e sem
+  // o painel do que saiu dela — que é onde moram a faixa de pastilhas e o link, as duas superfícies
+  // que 390px aperta. As perguntas são as da ficha, no comprimento real: pergunta de Discovery é
+  // longa, e uma matriz alimentada com "Pergunta 1" passaria sem provar nada.
+  "/api/v2/discovery-questions/": {
+    blocks: [
+      { id: "a", label: "Contexto executivo", short_label: "Contexto executivo", note: "",
+        questions: [
+          { id: "negocio-hoje", text: "Como está o negócio hoje? Cresceu, encolheu ou estabilizou nos últimos 12 meses?" },
+          { id: "o-que-mais-incomoda", text: "Quando você olha o resultado do mês, o que mais te incomoda?" },
+        ] },
+      { id: "b", label: "Follow the work (com quem executa)", short_label: "Follow the work", note: "",
+        questions: [
+          { id: "caso-real-do-comeco-ao-fim", text: "Me leva por um caso real, do começo ao fim. Pega um caso recente — o que aconteceu, na ordem?" },
+          { id: "casos-por-mes", text: "Quantos casos desse tipo passam por aqui num mês?" },
+        ] },
+      { id: "c", label: "Sistemas e dados", short_label: "Sistemas e dados", note: "",
+        questions: [{ id: "sistemas-e-quem-usa", text: "Quais sistemas participam desse processo, e quem usa cada um?" }] },
+      { id: "d", label: "Sponsor, acesso e abertura a mudança", short_label: "Sponsor e acesso", note: "",
+        questions: [{ id: "quem-bate-o-martelo", text: "Se aparecer uma mudança de processo que exige decisão sua, você bate o martelo ou passa por mais alguém?" }] },
+      { id: "e", label: "Magnitude (ordem de grandeza)", short_label: "Magnitude",
+        note: "Faça para as duas ou três dores priorizadas. Não busque número perfeito — busque magnitude.",
+        questions: [{ id: "vezes-por-mes", text: "Quantas vezes isso acontece por mês?" }] },
+      { id: "f", label: "Fechamento e aprendizado", short_label: "Fechamento",
+        note: "Nunca pergunte “gostou do trabalho?”.",
+        questions: [{ id: "o-que-entendem-agora", text: "O que vocês entendem agora sobre a operação que não estava claro antes do Discovery?" }] },
+    ],
+  },
+  "/api/v2/discoveries/": [DISCOVERY],
+  "/api/v2/discoveries/7/": DISCOVERY,
+  "/api/v2/discovery-sessions/": sessoesDeDiscovery,
+  "/api/v2/discovery-sessions/3/": sessoesDeDiscovery[0],
+  "/api/v2/process-observations/": [
+    { id: 1, discovery: 7, process: 1, process_name: processos[0].name, account: 1 },
+    { id: 2, discovery: 7, process: 2, process_name: processos[1].name, account: 1 },
+    { id: 3, discovery: 7, process: 3, process_name: processos[2].name, account: 1 },
+  ].map(registro => ({
+    observed_at: HOJE, observation_type: "initial",
+    observation_type_display: "Primeira observação", source_session: 3,
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
   "/api/v2/processes/1/": processos[0],

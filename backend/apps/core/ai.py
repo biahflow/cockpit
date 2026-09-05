@@ -21,7 +21,16 @@ from django.utils import timezone
 from . import flags
 
 if TYPE_CHECKING:
-    from .models import Activity, CommercialOpportunity, Invoice, Lead, Meeting, Project, User
+    from .models import (
+        Activity,
+        CommercialOpportunity,
+        DiscoverySession,
+        Invoice,
+        Lead,
+        Meeting,
+        Project,
+        User,
+    )
 
 # Limite de caracteres da transcrição enviada ao modelo (controle de tokens/custo).
 MEETING_TRANSCRIPT_LIMIT = 12000
@@ -113,6 +122,46 @@ def build_meeting_context(meeting: Meeting) -> str:
         "Transcrição:",
         transcript,
     ]
+    return "\n".join(lines)
+
+
+def build_discovery_session_context(session: DiscoverySession) -> str:
+    """Contexto de uma sessão de Discovery: o que foi anotado, bloco a bloco (FDD 055).
+
+    A pergunta acompanha a resposta, e não é decoração: sem ela o modelo receberia uma lista de
+    frases soltas e teria de adivinhar o que cada uma responde. Pergunta sem resposta **não entra**
+    — mandar as 36 da base com trinta vazias gastaria o prompt descrevendo o que ninguém anotou.
+
+    A transcrição entra depois das anotações, quando existe, e sob o mesmo teto da reunião: os dois
+    caminhos mandam texto de reunião ao modelo, e um teto por caminho seria custo com dois donos.
+    """
+    from .discovery_questions import BLOCKS
+
+    respostas = session.notes if isinstance(session.notes, dict) else {}
+    lines = [
+        f"Discovery: {session.discovery.project.name}",
+        f"Sessão de: {session.happened_at:%d/%m/%Y %H:%M}",
+    ]
+    if session.participants:
+        lines.append(f"Participantes: {session.participants}")
+    for bloco in BLOCKS:
+        do_bloco = respostas.get(bloco.id)
+        if not isinstance(do_bloco, dict):
+            continue
+        anotadas = [
+            (pergunta.text, str(do_bloco[pergunta.id]).strip())
+            for pergunta in bloco.questions
+            if str(do_bloco.get(pergunta.id) or "").strip()
+        ]
+        if not anotadas:
+            continue
+        lines.append(f"Bloco {bloco.id.upper()} — {bloco.label}:")
+        lines += [f"- {texto}\n  {resposta}" for texto, resposta in anotadas]
+    transcript = session.transcript.strip()
+    if transcript:
+        if len(transcript) > MEETING_TRANSCRIPT_LIMIT:
+            transcript = transcript[:MEETING_TRANSCRIPT_LIMIT] + "\n[transcrição truncada]"
+        lines += ["Transcrição:", transcript]
     return "\n".join(lines)
 
 

@@ -71,6 +71,15 @@ for (const screen of ROUTES) {
       await expect(decisaoDaFase).toBeVisible();
     }
 
+    // O Business Case (FDD 053, DAP `dap-discovery-session-e-business-case-r2`) mora dentro do
+    // acordeão da oportunidade, que abre fechado: sem o clique, o `.alert--warn` do custo não
+    // apurado (decisão F1) e os dois botões de decisão nunca chegam ao DOM, e o axe mediria só a
+    // metade da tela que a decisão A1 acrescentou.
+    if (screen.path === "/contas/1/priorizacao") {
+      await page.getByLabel("Abrir detalhe: Padronizar o checklist de documentação exigida para faturamento TISS").click();
+      await expect(page.getByRole("alert").filter({ hasText: "Nenhum processo desta oportunidade tem custo sustentado por fato." })).toBeVisible();
+    }
+
     // A rodada de assinatura (DAP `dap-assinatura-com-papeis-r1`) só existe dentro de um diálogo,
     // e o `.alert--warn` do aviso E1 é **cor nova** — sem abrir o modal aqui, a única superfície
     // âmbar em forma de alerta do produto nunca passaria pela medição de contraste. O primeiro

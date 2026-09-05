@@ -20,6 +20,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db.models.query import QuerySet
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.models import (
@@ -35,6 +36,8 @@ from apps.core.recommendations import build_recommendations
 
 from .factories import (
     AccountFactory,
+    BusinessCaseFactory,
+    CommercialOpportunityFactory,
     EngagementFactory,
     EvidenceFactory,
     FindingFactory,
@@ -679,9 +682,18 @@ def test_o_recomendador_aponta_a_priorizada_de_maior_score() -> None:
     assert "100.00" in do_prioritize[0]["detail"]
 
 
-def test_o_recomendador_para_quando_a_hipotese_foi_escolhida() -> None:
-    """"Ainda não virou trabalho" é o que a fase permite observar: hipótese escolhida é o passo
-    seguinte, e continuar cobrando o mesmo item viraria ruído."""
+def test_o_recomendador_avanca_o_degrau_quando_a_hipotese_foi_escolhida() -> None:
+    """A cobrança não se repete — ela **avança**. Semântica revista pela ADR 0069 (FDD 054).
+
+    Este teste nasceu na FDD 048 afirmando que a recomendação **sumia** quando a hipótese era
+    escolhida, e o motivo escrito era *"continuar cobrando o mesmo item viraria ruído"*. O valor que
+    ele protegia continua protegido, e por um mecanismo melhor: o `kind` `prioritization` passou a
+    anunciar **o próximo passo da conta**, então escolher a hipótese não silencia a linha — troca a
+    frase dela pelo degrau seguinte, que a FDD 053 criou e que não existia quando este teste foi
+    escrito.
+
+    O que continua valendo, e está no teste seguinte: sem degrau pendente, silêncio.
+    """
     oportunidade = ImprovementOpportunityFactory(
         status=ImprovementOpportunity.Status.PRIORITIZED
     )
@@ -689,6 +701,32 @@ def test_o_recomendador_para_quando_a_hipotese_foi_escolhida() -> None:
     SolutionHypothesisFactory(
         improvement_opportunity=oportunidade, status=SolutionHypothesis.Status.CHOSEN
     )
+
+    itens = [rec for rec in build_recommendations() if rec["kind"] == "prioritization"]
+
+    assert len(itens) == 1
+    assert itens[0]["detail"].endswith("hipótese escolhida e ainda sem business case.")
+
+
+def test_o_recomendador_cala_quando_nao_ha_degrau_pendente() -> None:
+    """A metade da FDD 048 que sobrevive inteira: nada a cobrar, nada a dizer.
+
+    Hipótese escolhida, investimento aprovado e venda aberta na conta — a oportunidade percorreu a
+    cadeia toda. Insistir nela seria o ruído que o teste original recusava.
+    """
+    conta = AccountFactory()
+    oportunidade = ImprovementOpportunityFactory(
+        account=conta, status=ImprovementOpportunity.Status.PRIORITIZED
+    )
+    PriorityAssessmentFactory(improvement_opportunity=oportunidade)
+    SolutionHypothesisFactory(
+        improvement_opportunity=oportunidade, status=SolutionHypothesis.Status.CHOSEN
+    )
+    BusinessCaseFactory(
+        improvement_opportunity=oportunidade, status="approved",
+        decided_by=UserFactory(), decided_at=timezone.now(),
+    )
+    CommercialOpportunityFactory(account=conta)
 
     assert [rec for rec in build_recommendations() if rec["kind"] == "prioritization"] == []
 

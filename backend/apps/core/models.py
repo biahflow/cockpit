@@ -15,6 +15,7 @@ from django.utils import timezone
 from pgvector.django import VectorField
 
 from . import knowledge
+from .business_case import custo_congelavel
 from .priority import (
     DIMENSOES,
     FORMULA_PADRAO,
@@ -1923,6 +1924,23 @@ class DiscoverySession(TimestampedModel):
         "Artifact", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     transcript = models.TextField(blank=True, default="")
+    # O que foi anotado **durante** a reunião, por bloco de pergunta (ADR 0069; DAP
+    # `dap-discovery-session-e-business-case-r2`, decisões C1 e E1). A forma é
+    # `{"<bloco>": {"<id da pergunta>": "<texto>"}}`, e os ids são os de
+    # `discovery_questions.BLOCKS` — nunca a posição, pelo motivo escrito lá.
+    #
+    # **JSON aqui, tabela na ADR 0019, e o contraste é a decisão.** Lá o que decidia não era
+    # economizar peças: era a `UniqueConstraint(blueprint, vertical)` — num JSON a chave duplicada
+    # não chega a existir, o último valor escrito apaga o anterior e ninguém fica sabendo. Aqui a
+    # chave **é** o id da pergunta dentro de um dicionário: duplicata é impossível por construção,
+    # não há segunda coluna para restringir, e nada consulta resposta isolada — o que se lê é a
+    # sessão inteira, na tela que a conduz e na extração que vem depois. Uma tabela
+    # `DiscoverySessionAnswer` seria três peças a mais para reproduzir uma unicidade que o tipo já
+    # dá de graça.
+    #
+    # `default=dict` e não `null=True`: sessão sem anotação é `{}` — "ninguém anotou ainda" —, e um
+    # nulo aqui criaria um segundo jeito de dizer a mesma coisa.
+    notes = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-happened_at", "-id"]
@@ -2562,6 +2580,137 @@ class SolutionHypothesis(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.get_status_display()} — {self.statement[:60]}"
+
+
+class BusinessCase(TimestampedModel):
+    """A justificativa do investimento — o registro da decisão de investir (FDD 053, ADR 0069).
+
+    **Não é o `Case`, e o mapa de linguagem põe cada um no "nunca chamar de" do outro** (§2). O
+    `Case` é a prova social congelada: vem *depois*, é da casa, e só sai com autorização do cliente.
+    Este vem *antes*, é do cliente, e **não atravessa para o One** — investimento e retorno esperado
+    são internos, como preço de tabela e margem já são (`language-map` §3).
+
+    Três referências e uma cópia, e a assimetria é a decisão inteira:
+
+    - `solution_hypothesis` é `PROTECT` porque sem a aposta não há o que orçar — apagar a hipótese
+      por baixo do orçamento deixaria um número sem objeto;
+    - `priority_assessment` é **referenciada, não copiada**: ela já é imutável e versionada
+      (ADR 0054), então gravar o score aqui criaria a segunda definição que aquela ADR recusou —
+      e as duas divergiriam em silêncio no dia em que alguém repriorizasse;
+    - `current_state_cost` é **copiado**, pelo motivo inverso: ele sai de
+      `Process.custo_do_estado_atual`, que é função pura sobre os nove insumos de **agora**. Editar
+      um insumo amanhã reescreveria o "quanto custa hoje" de um business case já apresentado —
+      exatamente o defeito que o `Case` congelado existe para impedir (FDD 027).
+
+    **`None` em `current_state_cost` é "não apurado", nunca zero.** A regra é a do `nao_apurado` de
+    `process.py` e a do `kpi_baseline` nulável: zero afirmaria que operar daquele jeito não custa
+    nada, que é o oposto do que a casa sabe quando nenhum processo tem fato vivo por baixo. O que
+    ficou de fora está dito em `current_state_cost_source`, e é para isso que ela existe.
+
+    `investment` e `expected_return_year` são nuláveis pela mesma regra, um degrau adiante: o
+    business case se escreve em rascunho, e um zero ali seria um investimento que ninguém orçou.
+    Quem cobra os dois é a action `decide/` — não se decide investir sem eles.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        APPROVED = "approved", "Aprovado"
+        REJECTED = "rejected", "Rejeitado"
+
+    improvement_opportunity = models.ForeignKey(
+        ImprovementOpportunity, on_delete=models.CASCADE, related_name="business_cases"
+    )
+    solution_hypothesis = models.ForeignKey(
+        SolutionHypothesis, on_delete=models.PROTECT, related_name="business_cases"
+    )
+    priority_assessment = models.ForeignKey(
+        PriorityAssessment, on_delete=models.PROTECT, related_name="business_cases"
+    )
+    investment = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    expected_return_year = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    payback_months = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Congelado na criação pelo `save()` abaixo, e por isso read-only no serializer: não há caminho
+    # de escrita, em vez de haver um caminho que ninguém usa (o desenho do `Case`).
+    current_state_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    current_state_cost_source = models.JSONField(default=dict, blank=True)
+    rationale = models.TextField()
+    assumptions = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="business_cases_decided",
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            # Condicional ao arquivamento, no molde de `unique_chosen_solution_hypothesis`: um
+            # investimento aprovado e depois arquivado não pode travar a aprovação seguinte.
+            # Rejeitados não concorrem — recusar é o resultado normal e repetível de várias
+            # tentativas; aprovar duas vezes a mesma oportunidade é contradição.
+            models.UniqueConstraint(
+                fields=["improvement_opportunity"],
+                condition=Q(status="approved", archived_at__isnull=True),
+                name="unique_approved_business_case",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_status_display()} — {self.rationale[:60]}"
+
+    def clean(self) -> None:
+        """As duas pontas da mesma oportunidade, e a decisão como ato com autor.
+
+        No modelo e não só no serializer, pelo motivo de `CommercialOpportunity.clean()` e
+        `Project.clean()`: shell, admin e migração não passam por rota, e um business case cujo
+        orçamento cita a hipótese de outra oportunidade é um número sobre coisa nenhuma.
+        """
+        hipotese = self.solution_hypothesis if self.solution_hypothesis_id else None
+        if hipotese is not None and (
+            hipotese.improvement_opportunity_id != self.improvement_opportunity_id
+        ):
+            raise ValidationError(
+                {"solution_hypothesis": "A hipótese deve ser da mesma oportunidade de melhoria."}
+            )
+        avaliacao = self.priority_assessment if self.priority_assessment_id else None
+        if avaliacao is not None and (
+            avaliacao.improvement_opportunity_id != self.improvement_opportunity_id
+        ):
+            raise ValidationError(
+                {"priority_assessment": "A avaliação deve ser da mesma oportunidade de melhoria."}
+            )
+        # Aprovar é ato com autor e carimbo, como o trio de consentimento do `Case`: sem os dois,
+        # "a casa decidiu investir" é alegação de ninguém.
+        if self.status == self.Status.APPROVED and (
+            self.decided_by_id is None or self.decided_at is None
+        ):
+            raise ValidationError(
+                {"status": "Aprovar é ato com autor e carimbo: informe quem decidiu e quando."}
+            )
+
+    def save(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        """Congela o custo do estado atual **na criação**, e só nela.
+
+        É o único instante em que o número ainda é medição e não memória: os nove insumos do
+        processo continuam editáveis depois, e é justamente por isso que o business case de ontem
+        não pode passar a citar a conta de amanhã. Mesmo movimento de `cases.freeze` (FDD 027) e da
+        cópia dos pesos em `PriorityAssessment.save()` (ADR 0054).
+
+        Sem condição sobre o valor já presente, ao contrário do `weights` da avaliação: aqui não
+        existe caminho de escrita nenhum — o serializer publica os dois campos como read-only —,
+        então um `if not self.current_state_cost` só serviria para deixar shell e admin gravarem
+        um custo que a fórmula não produziu.
+        """
+        if self._state.adding:
+            self.current_state_cost, self.current_state_cost_source = custo_congelavel(
+                self.improvement_opportunity
+            )
+        super().save(*args, **kwargs)
 
 
 class Service(TimestampedModel):

@@ -21,7 +21,14 @@ const semFase5 = vi.hoisted(() => ({
   startProveExperiment: () => Promise.resolve({}),
   registerProveGapWaiver: () => Promise.resolve({}),
 }));
-vi.mock("../api", () => ({ api: mocks.api, listUsers: () => Promise.resolve(mocks.people), ...semFase5 }));
+// A porta da Discovery Session (FDD 055) também é carga paralela ao detalhe, e não é o assunto
+// destes arquivos: lista vazia mantém a seção fora do caminho. Quem a exercita é
+// `ProjectDetailDiscoverySessions.test.tsx`.
+const semSessoesDeDiscovery = vi.hoisted(() => ({
+  listDiscoveries: () => Promise.resolve([]),
+  listDiscoverySessions: () => Promise.resolve([]),
+}));
+vi.mock("../api", () => ({ api: mocks.api, listUsers: () => Promise.resolve(mocks.people), ...semFase5, ...semSessoesDeDiscovery }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 
 const artifact = () => ({

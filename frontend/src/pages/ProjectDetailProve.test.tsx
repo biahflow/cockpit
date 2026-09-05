@@ -34,6 +34,9 @@ vi.mock("../api", () => ({
   listMeasurements: mocks.listMeasurements,
   startProveExperiment: mocks.startProveExperiment,
   registerProveGapWaiver: mocks.registerProveGapWaiver,
+  // A porta da Discovery Session (FDD 055) é carga paralela e não é o assunto deste arquivo.
+  listDiscoveries: () => Promise.resolve([]),
+  listDiscoverySessions: () => Promise.resolve([]),
 }));
 vi.mock("../auth", () => ({ useAuth: () => mocks.auth }));
 

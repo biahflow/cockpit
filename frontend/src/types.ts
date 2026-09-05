@@ -156,9 +156,19 @@ export type ProcessStep = { id: number; process: number; name: string; position:
 // A regra de nome da ontologia vale aqui igual: termo canônico em inglês nas quatro superfícies.
 export type DiscoveryStatus = "planned" | "running" | "completed" | "cancelled";
 export type Discovery = { id: number; project: number; project_name: string; scope: string; status: DiscoveryStatus; status_display: string; started_at: string | null; completed_at: string | null; owner: number | null; created_at: string; updated_at: string };
-export type DiscoverySession = { id: number; discovery: number; meeting: number | null; happened_at: string; participants: string; source_artifact: number | null; transcript: string; created_at: string; updated_at: string };
+// `notes` guarda o que foi anotado **durante** a reunião (FDD 055), na forma
+// `{"<bloco>": {"<id da pergunta>": "<texto>"}}` — a chave é sempre o **id** da pergunta, nunca a
+// posição dela na lista. Sai no `GET` e não entra por `PATCH`: a escrita é
+// `POST /discovery-sessions/{id}/notes/`, que grava um bloco e preserva os outros.
+export type DiscoverySessionNotes = Record<string, Record<string, string>>;
+export type DiscoverySession = { id: number; discovery: number; meeting: number | null; happened_at: string; participants: string; source_artifact: number | null; transcript: string; notes: DiscoverySessionNotes; structured_finding_count: number; created_at: string; updated_at: string };
+// A base de perguntas, servida do backend (ADR 0069, decisão E1 do DAP
+// `dap-discovery-session-e-business-case-r2`). **Nenhuma pergunta é escrita aqui**: constantes no
+// frontend foi a alternativa E3, recusada porque o método precisa alcançar o corpus e os agentes.
+export type DiscoveryQuestion = { id: string; text: string };
+export type DiscoveryQuestionBlock = { id: string; label: string; short_label: string; note: string; questions: DiscoveryQuestion[] };
 export type ProcessObservationKind = "initial" | "revisit" | "validation";
-export type ProcessObservation = { id: number; discovery: number; process: number; observed_at: string; observation_type: ProcessObservationKind; observation_type_display: string; source_session: number | null; created_at: string; updated_at: string };
+export type ProcessObservation = { id: number; discovery: number; process: number; process_name: string; account: number; observed_at: string; observation_type: ProcessObservationKind; observation_type_display: string; source_session: number | null; created_at: string; updated_at: string };
 // As cinco formas de evidência, em inglês canônico (`docs/metodologia-fde.md:112-115`). São cinco
 // de propósito: um sexto valor aqui seria um conceito novo, não uma tradução.
 export type EvidenceKind = "interview" | "observation" | "artifact" | "system" | "data";
@@ -198,6 +208,32 @@ export type PriorityAssessment = { id: number; improvement_opportunity: number; 
 // Hipóteses concorrentes são o estado normal; **uma só `chosen` viva por oportunidade**.
 export type SolutionHypothesisStatus = "proposed" | "chosen" | "discarded";
 export type SolutionHypothesis = { id: number; improvement_opportunity: number; statement: string; intervention: string; assumptions: string; expected_effect: string; status: SolutionHypothesisStatus; status_display: string; created_at: string; updated_at: string };
+// A justificativa do investimento (FDD 053, ADR 0069), governada pelo DAP
+// `docs/design/dap-discovery-session-e-business-case-r2/` — decisões **A1** e **F1**.
+export type BusinessCaseStatus = "draft" | "approved" | "rejected";
+// A proveniência do congelamento (`business_case.custo_congelavel`): uma linha por processo
+// alcançado, com a mesma `sustentacao` de `CustoEstadoAtual`, e os ids que **de fato** entraram na
+// soma. Existe para a lacuna do `current_state_cost` nulo ser dita, nunca inventada pela tela.
+export type BusinessCaseCostSourceRow = { id: number; sustentacao: CustoEstadoAtual["sustentacao"]; total: string; nao_apurado: string[] };
+export type BusinessCaseCostSource = { processos: BusinessCaseCostSourceRow[]; somados: number[] };
+// `current_state_cost` nulo é "não apurado", nunca zero (decisão F1) — a mesma regra do
+// `impact_estimate` da dor e do `nao_apurado` do processo. `investment`/`expected_return_year`
+// nuláveis pela razão inversa: o rascunho existe antes de alguém orçar, e zero ali seria um
+// investimento que ninguém fez. `decided_by` sai só como id — o contrato não publica o nome de
+// quem decidiu, e inventá-lo aqui seria a tela afirmando o que não sabe.
+export type BusinessCase = { id: number; improvement_opportunity: number; account: number; solution_hypothesis: number; priority_assessment: number; investment: string | null; expected_return_year: string | null; payback_months: number | null; current_state_cost: string | null; current_state_cost_source: BusinessCaseCostSource; rationale: string; assumptions: string; status: BusinessCaseStatus; status_display: string; decided_at: string | null; decided_by: number | null; decided_by_name: string; created_at: string; updated_at: string };
+// O próximo passo da conta (FDD 054, ADR 0069), no molde de `ProveMissingRequirement` logo abaixo:
+// **o servidor devolve a chave e a tela tem o rótulo**. `missing` é o **primeiro** degrau que falta
+// na primeira oportunidade ranqueada com pendência — nunca a de maior score quando ela já está
+// encaminhada —, e a tela não recalcula nenhum dos dois: uma segunda expressão da regra faria o
+// painel discordar da recomendação de `/indicadores`, que lê a mesma função.
+//
+// `ranked_count` existe porque **os dois vazios não são o mesmo vazio**: `next_step: null` com
+// contagem zero é "nada avaliado nesta conta" (o vazio honesto, com a porta para a priorização) e
+// com contagem maior que zero é "nada pendente" (o neutro, que não inventa urgência).
+export type AccountNextStepMissing = "choose_hypothesis" | "build_business_case" | "decide_investment" | "open_commercial_opportunity";
+export type AccountNextStep = { improvement_opportunity: number; title: string; score: string; assessment_version: number; missing: AccountNextStepMissing };
+export type AccountNextStepResponse = { next_step: AccountNextStep | null; ranked_count: number };
 // Feasibility, PROVE, KPI/Measurement e Value Ledger (FDD 049, ADR 0055). **Nenhuma tela consome
 // estes tipos ainda**, exatamente como os da Fase 4 logo acima e pelo mesmo motivo: é o recorte da
 // fatia, não esquecimento — a superfície tem DAP aprovado (`docs/design/dap-prove-e-valor-r1/`,

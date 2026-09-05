@@ -14,6 +14,7 @@ import { CommercialPage } from "./pages/CommercialPage";
 import { ConhecimentoPage } from "./pages/ConhecimentoPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DesignSystemPage } from "./pages/DesignSystemPage";
+import { DiscoverySessionPage } from "./pages/DiscoverySessionPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { FinanceiroPage } from "./pages/FinanceiroPage";
 import { IndicadoresPage } from "./pages/IndicadoresPage";
@@ -51,6 +52,14 @@ function resolvePage(path: string): ReactNode {
   if (path === "/perfil") return <ProfilePage />;
   if (path === "/configuracoes") return <SettingsPage />;
   if (path === "/design-system") return <DesignSystemPage />;
+  // A sessão de Discovery é sempre **de um projeto**, e a rota espelha a posse: a
+  // `DiscoverySession` pende de `Discovery`, que pende de `Project` (DAP
+  // `dap-discovery-session-e-business-case-r2`, decisão G1). Fica acima da rota do projeto por
+  // especificidade, como as três telas que pendem da conta — as duas são ancoradas, então a ordem
+  // não decide nada hoje; ela é o que impede que afrouxar o `$` do `projectDetail` amanhã torne
+  // esta inalcançável em silêncio.
+  const sessaoDeDiscovery = path.match(/^\/projetos\/(\d+)\/sessoes\/(\d+)$/);
+  if (sessaoDeDiscovery) return <DiscoverySessionPage projectId={Number(sessaoDeDiscovery[1])} sessionId={Number(sessaoDeDiscovery[2])} />;
   const projectDetail = path.match(/^\/projetos\/(\d+)$/);
   if (projectDetail) return <ProjectDetailPage id={Number(projectDetail[1])} />;
   if (path === "/projetos") return <ProjectsPage />;

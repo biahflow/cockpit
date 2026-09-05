@@ -56,3 +56,6 @@ O índice abaixo é **derivado**: cada entrada repete, palavra por palavra, o `#
 - 050 — A cadeia de medição parava na fronteira do cliente
 - 051 — O Discovery chegava ao cliente como documento
 - 052 — Publicar o Discovery era uma chamada de API
+- 053 — A decisão de investir não tinha onde morar
+- 054 — O próximo passo existia e morava onde ninguém procura
+- 055 — A reunião de Discovery era conduzida no caderno

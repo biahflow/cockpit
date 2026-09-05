@@ -232,6 +232,26 @@ KB_SOURCES: tuple[tuple[str, str, str], ...] = (
     ("docs/metodologia-fde.md", Kind.REFERENCE, "entrega"),
     ("docs/operacao.md", Kind.PROCEDURE, "operacao"),
     ("docs/captacao-de-leads.md", Kind.REFERENCE, "comercial"),
+    # Os dois espelhos do Notion que a ADR 0069 trouxe (05/09/2026), e são a primeira fonte deste
+    # manifesto que **não nasce escrita aqui**: a página do Notion é a fonte, o arquivo é cópia
+    # fiel, e mudar uma pergunta é mudança lá — o mesmo regime de `docs/ontology/`, com a diferença
+    # que decide a entrada: isto **é** material de consulta para quem pergunta de negócio ao agente,
+    # e o mapa de linguagem não era.
+    #
+    # `discovery-questions.md` é condução de Discovery — os seis blocos por momento da jornada, que
+    # `metodologia-fde.md` não tinha (ele tem as 7 perguntas e o P-S-D-T-E-R). Área `entrega`, e não
+    # `comercial`, porque quatro dos seis blocos são de campo; os dois da Qualification Call chegam
+    # ao agente comercial pela busca, não pela área.
+    #
+    # `docs/verticais/` é o método de cada vertical: glossário, áreas de pressão, hipóteses,
+    # objeções e o que pedir. **A intel de conta não atravessa** — nome de cliente, números dele e
+    # situação comercial ficam no Notion (decisão de 05/09/2026). A razão é a mesma que mantém o
+    # contexto de build estreito: `docs/` é commitado **e** vira resposta citável, e um agente
+    # dizendo "segundo a KB, tal cliente está pressionado financeiramente" é vazamento que ninguém
+    # autorizou. O espelho carrega o que serve a qualquer conta da vertical; o que é de uma conta
+    # só, não.
+    ("docs/discovery-questions.md", Kind.REFERENCE, "entrega"),
+    ("docs/verticais", Kind.REFERENCE, "comercial"),
     ("PRD.md", Kind.REFERENCE, "produto"),
 )
 
