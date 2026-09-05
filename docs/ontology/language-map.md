@@ -1,4 +1,4 @@
-# Biahflow Language Map v1.4 — Pulse · One · Notion · Biahflow
+# Biahflow Language Map v1.5 — Pulse · One · Notion · Biahflow
 
 > Espelho do documento canônico no Notion: **Language Map — Pulse · One · Notion · Biahflow**
 > <https://app.notion.com/p/3ca82225ad278115bd44c2d90247f44e>
@@ -6,7 +6,9 @@
 > normativo para os rótulos por superfície. Em divergência de método, o repositório vence; em
 > divergência de vocabulário, a página do Notion vence.
 
-**Status:** normativo · **Depende de:** Biahflow Operating Ontology v1 · **Data:** 28/08/2026
+**Status:** normativo · **Depende de:** Biahflow Operating Ontology v1 · **Data:** 28/08/2026 ·
+**v1.5 (05/09/2026):** `BusinessCase` cunhado — a justificativa do investimento, distinta do `Case`
+(ADR 0069). Cunhado primeiro na página do Notion, como manda a §8, e espelhado aqui em seguida.
 
 A Ontology v1 define **o que cada termo significa**. Esta página define **onde cada termo aparece e com que nome**, nas quatro superfícies em que a Biahflow fala: Pulse, One, Notion e material de mercado. Quando as duas divergirem, a Ontology v1 vence no significado e esta página vence no rótulo.
 
@@ -67,6 +69,7 @@ Dez conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. C
 | **ImprovementOpportunity** | `ImprovementOpportunity` · `/improvement-opportunities` | Improvement Opportunity (no backlog) | Improvement Opportunity | oportunidade (no Opportunity Map) | Commercial Opportunity, Projeto |
 | **PriorityAssessment** | `PriorityAssessment` | Opportunity Score | Priority Assessment | Opportunity Score | Prioridade (campo), `ai_score` |
 | **SolutionHypothesis** | `SolutionHypothesis` | Solution Hypothesis | Solution Hypothesis | hipótese de solução | Solução, Proposta, Escopo |
+| **BusinessCase** | `BusinessCase` · `/business-cases` | — | Business Case | business case / justificativa do investimento | `Case` (a prova social), Proposta, ROI |
 | **FeasibilityAssessment** | `FeasibilityAssessment` | Technical Feasibility (o laudo) | Feasibility Assessment | Technical Feasibility Brief | Feasibility (a fase), POC |
 | **ProveExperiment** | `ProveExperiment` | PROVE | PROVE | PROVE | Piloto, POC, MVP |
 | **KPI** | `KPI` (extraído de `DigitalEmployee`) | KPI | KPI | indicador | Outcome, Meta |
@@ -78,7 +81,7 @@ Dez conflitos reais entre Pulse, Notion e material comercial, resolvidos aqui. C
 | **DigitalEmployee** | `DigitalEmployee` | Digital Employee | Funcionário Digital | Funcionário Digital | Solução, SolutionHypothesis, Agente |
 | **Service** | `Service` (catálogo de ofertas) | nome do produto contratado | degrau / produto | Discovery Sprint, PROVE… | Estágio, Fase, Tier de trabalho |
 | **JourneyPhase / ProjectPhase** | idem | timeline da fase | fase FDE | DISCOVER · PRIORITIZE · … | os agregados Feasibility/PROVE |
-| **Case** | `Case` | só com autorização | Case Library | Case | Outcome, Value |
+| **Case** | `Case` | só com autorização | Case Library | Case | Outcome, Value, `BusinessCase` |
 
 ---
 
@@ -93,7 +96,7 @@ O One é uma **projeção de leitura** do Pulse. Ele não tem vocabulário próp
 | Finding · PainPoint (revisados) | CommercialOpportunity, `PipelineStage`, valor, probabilidade |
 | Evidence marcada como revisada e publicável | Evidence não revisada, transcrição bruta |
 | ImprovementOpportunity + Opportunity Score | `PriorityAssessment.rationale` interno |
-| SolutionHypothesis · FeasibilityAssessment · GateDecision | preço de tabela, margem, `Service.price` |
+| SolutionHypothesis · FeasibilityAssessment · GateDecision | preço de tabela, margem, `Service.price`, `BusinessCase` |
 | ProveExperiment · KPI · Baseline · Outcome | Case de outros clientes |
 | Value Ledger · Deliverables · DigitalEmployee | qualquer dado de outra Account |
 
