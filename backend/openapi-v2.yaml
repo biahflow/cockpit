@@ -13460,6 +13460,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        decided_by_name:
+          type: string
+          readOnly: true
+          default: ''
         created_at:
           type: string
           format: date-time
@@ -13475,6 +13479,7 @@ components:
       - current_state_cost_source
       - decided_at
       - decided_by
+      - decided_by_name
       - id
       - improvement_opportunity
       - priority_assessment
@@ -17075,6 +17080,10 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        decided_by_name:
+          type: string
+          readOnly: true
+          default: ''
         created_at:
           type: string
           format: date-time

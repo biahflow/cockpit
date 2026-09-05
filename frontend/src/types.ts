@@ -198,6 +198,20 @@ export type PriorityAssessment = { id: number; improvement_opportunity: number; 
 // Hipóteses concorrentes são o estado normal; **uma só `chosen` viva por oportunidade**.
 export type SolutionHypothesisStatus = "proposed" | "chosen" | "discarded";
 export type SolutionHypothesis = { id: number; improvement_opportunity: number; statement: string; intervention: string; assumptions: string; expected_effect: string; status: SolutionHypothesisStatus; status_display: string; created_at: string; updated_at: string };
+// A justificativa do investimento (FDD 053, ADR 0069), governada pelo DAP
+// `docs/design/dap-discovery-session-e-business-case-r2/` — decisões **A1** e **F1**.
+export type BusinessCaseStatus = "draft" | "approved" | "rejected";
+// A proveniência do congelamento (`business_case.custo_congelavel`): uma linha por processo
+// alcançado, com a mesma `sustentacao` de `CustoEstadoAtual`, e os ids que **de fato** entraram na
+// soma. Existe para a lacuna do `current_state_cost` nulo ser dita, nunca inventada pela tela.
+export type BusinessCaseCostSourceRow = { id: number; sustentacao: CustoEstadoAtual["sustentacao"]; total: string; nao_apurado: string[] };
+export type BusinessCaseCostSource = { processos: BusinessCaseCostSourceRow[]; somados: number[] };
+// `current_state_cost` nulo é "não apurado", nunca zero (decisão F1) — a mesma regra do
+// `impact_estimate` da dor e do `nao_apurado` do processo. `investment`/`expected_return_year`
+// nuláveis pela razão inversa: o rascunho existe antes de alguém orçar, e zero ali seria um
+// investimento que ninguém fez. `decided_by` sai só como id — o contrato não publica o nome de
+// quem decidiu, e inventá-lo aqui seria a tela afirmando o que não sabe.
+export type BusinessCase = { id: number; improvement_opportunity: number; account: number; solution_hypothesis: number; priority_assessment: number; investment: string | null; expected_return_year: string | null; payback_months: number | null; current_state_cost: string | null; current_state_cost_source: BusinessCaseCostSource; rationale: string; assumptions: string; status: BusinessCaseStatus; status_display: string; decided_at: string | null; decided_by: number | null; decided_by_name: string; created_at: string; updated_at: string };
 // O próximo passo da conta (FDD 054, ADR 0069), no molde de `ProveMissingRequirement` logo abaixo:
 // **o servidor devolve a chave e a tela tem o rótulo**. `missing` é o **primeiro** degrau que falta
 // na primeira oportunidade ranqueada com pendência — nunca a de maior score quando ela já está

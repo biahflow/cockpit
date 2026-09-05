@@ -1,22 +1,29 @@
-import { ArrowLeft, ChevronDown, ChevronUp, FlaskConical, Flame, Gauge, Plus, Target } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Coins, FlaskConical, Flame, Gauge, Plus, Target } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import {
   api,
+  createBusinessCase,
   createImprovementOpportunity,
   createPriorityAssessment,
   createSolutionHypothesis,
+  decideBusinessCase,
+  listBusinessCases,
   listImprovementOpportunities,
   listPainPointsByAccount,
   listPriorityAssessments,
   listSolutionHypotheses,
+  updateBusinessCase,
   updateImprovementOpportunity,
   updateSolutionHypothesis,
 } from "../api";
 import { useAuth } from "../auth";
+import { moeda } from "../dinheiro";
 import { mensagemDeFalha } from "../erros";
 import type {
   Account,
+  BusinessCase,
+  BusinessCaseStatus,
   ImprovementOpportunity,
   ImprovementOpportunityStatus,
   PainPoint,
@@ -64,6 +71,34 @@ const HIPOTESE_LABEL: Record<SolutionHypothesisStatus, string> = {
   proposed: "Proposta", chosen: "Escolhida", discarded: "Descartada",
 };
 
+/** O Business Case (FDD 053), governado pelo DAP `dap-discovery-session-e-business-case-r2` —
+ * decisões **A1** e **F1**. Mapa de **variante**, nunca de cor (ADR 0026): rascunho é o neutro de
+ * sempre, aprovado é o mesmo verde de "Escolhida", recusado o mesmo vermelho de "Descartada". */
+const BUSINESS_CASE_BADGE: Record<BusinessCaseStatus, string> = {
+  draft: "state--off", approved: "state--1", rejected: "state--3",
+};
+
+/**
+ * O rascunho do business case abre **sem número escolhido**, pelo mesmo argumento de
+ * `blankAvaliacao`: um investimento pré-preenchido é a casa inventando o que ninguém orçou ainda.
+ */
+const blankBusinessCaseDraft = { investment: "", expected_return_year: "", payback_months: "", rationale: "" };
+
+/**
+ * Sincroniza o rascunho local com o que o servidor tem gravado — só para um rascunho vivo
+ * (decidido não se edita, e o formulário nem aparece nesse estado). Sem business case nenhum, o
+ * formulário de criação abre em branco, pelo mesmo argumento de `blankAvaliacao`.
+ */
+function rascunhoDoBusinessCase(businessCase: BusinessCase | undefined) {
+  if (!businessCase || businessCase.status !== "draft") return blankBusinessCaseDraft;
+  return {
+    investment: businessCase.investment ?? "",
+    expected_return_year: businessCase.expected_return_year ?? "",
+    payback_months: businessCase.payback_months === null ? "" : String(businessCase.payback_months),
+    rationale: businessCase.rationale,
+  };
+}
+
 /**
  * As cinco dimensões do Opportunity Score, **na ordem em que a pergunta é feita** — a mesma de
  * `backend/apps/core/priority.py`. Ela não se reordena: é ela que permite conferir "avaliei tudo?"
@@ -106,6 +141,31 @@ const dataCurta = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
 const scoreLegivel = (score: string | null) =>
   score === null ? "—" : Number(score).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
+/**
+ * O custo do estado atual congelado — decisão **F1**. `null` é "não apurado", nunca zero: a mesma
+ * regra do `nao_apurado` de `Process`, um nível acima. Nenhum caminho desta função pode devolver
+ * `moeda("0")` no lugar do `—`.
+ */
+const custoCongeladoLegivel = (custo: string | null) => custo === null ? "—" : `${moeda(custo)} / mês`;
+
+/** `investment`/`expected_return_year` nulos são "ninguém orçou ainda", nunca zero — a mesma regra
+ * um degrau acima, para o resumo do business case decidido. */
+const dinheiroOuTraco = (valor: string | null) => valor === null ? "—" : moeda(valor);
+
+/** Data **e** hora — a decisão é um carimbo, e "05/09/2026" sozinho não distingue duas decisões no
+ * mesmo dia. */
+const dataHoraCurta = (iso: string | null) =>
+  iso === null ? "—" : new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+/**
+ * A frase da lacuna (decisão **F1**), no vocabulário da própria decisão aprovada — não uma
+ * composição por processo: a proveniência (`current_state_cost_source`) existe para quem precisar
+ * conferir processo a processo, e esta frase é só o resumo que a decisão F1 já escreveu por
+ * extenso: *"`—`, com a frase do servidor dizendo por que, quando nenhum processo da oportunidade
+ * tem custo sustentado por fato."*
+ */
+const FRASE_DO_CUSTO_NAO_APURADO = "Nenhum processo desta oportunidade tem custo sustentado por fato. O número não é zero — não há insumo para dizer.";
+
 export function PriorizacaoPage({ accountId }: { accountId: number }) {
   const { user } = useAuth();
   const [account, setAccount] = useState<Account>();
@@ -114,6 +174,9 @@ export function PriorizacaoPage({ accountId }: { accountId: number }) {
   const [processos, setProcessos] = useState<Process[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<PriorityAssessment[]>([]);
   const [hipoteses, setHipoteses] = useState<SolutionHypothesis[]>([]);
+  const [businessCases, setBusinessCases] = useState<BusinessCase[]>([]);
+  const [businessCaseDraft, setBusinessCaseDraft] = useState(blankBusinessCaseDraft);
+  const [montandoBusinessCase, setMontandoBusinessCase] = useState(false);
   const [aberta, setAberta] = useState<number | null>(null);
   const [selecionadas, setSelecionadas] = useState<number[]>([]);
   const [agrupando, setAgrupando] = useState(false);
@@ -157,21 +220,26 @@ export function PriorizacaoPage({ accountId }: { accountId: number }) {
   const abrirDetalhe = useCallback(async (id: number) => {
     setError("");
     if (aberta === id) { setAberta(null); return; }
-    setAberta(id); setAvaliacoes([]); setHipoteses([]);
+    setAberta(id); setAvaliacoes([]); setHipoteses([]); setBusinessCases([]);
     setAvaliacaoDraft(blankAvaliacao); setRationale(""); setHipoteseDraft("");
+    setBusinessCaseDraft(blankBusinessCaseDraft); setMontandoBusinessCase(false);
     try {
-      const [loadedAvaliacoes, loadedHipoteses] = await Promise.all([
-        listPriorityAssessments(id), listSolutionHypotheses(id),
+      const [loadedAvaliacoes, loadedHipoteses, loadedBusinessCases] = await Promise.all([
+        listPriorityAssessments(id), listSolutionHypotheses(id), listBusinessCases(id),
       ]);
       setAvaliacoes(loadedAvaliacoes); setHipoteses(loadedHipoteses);
+      setBusinessCases(loadedBusinessCases);
+      setBusinessCaseDraft(rascunhoDoBusinessCase(loadedBusinessCases[0]));
     } catch (cause) { setError(mensagemDeFalha(cause)); }
   }, [aberta]);
 
   const recarregarDetalhe = useCallback(async (id: number) => {
-    const [loadedAvaliacoes, loadedHipoteses] = await Promise.all([
-      listPriorityAssessments(id), listSolutionHypotheses(id),
+    const [loadedAvaliacoes, loadedHipoteses, loadedBusinessCases] = await Promise.all([
+      listPriorityAssessments(id), listSolutionHypotheses(id), listBusinessCases(id),
     ]);
     setAvaliacoes(loadedAvaliacoes); setHipoteses(loadedHipoteses);
+    setBusinessCases(loadedBusinessCases);
+    setBusinessCaseDraft(rascunhoDoBusinessCase(loadedBusinessCases[0]));
   }, []);
 
   async function agrupar(event: FormEvent<HTMLFormElement>) {
@@ -237,6 +305,52 @@ export function PriorizacaoPage({ accountId }: { accountId: number }) {
     } catch (cause) { setError(mensagemDeFalha(cause)); }
   }
 
+  /** Alterna o formulário em branco — é a mesma porta do estado 2 ("Montar business case") e do
+   * estado 6 ("Montar outro business case"): a oportunidade aceita outro depois de um recusado. */
+  function alternarFormularioDeBusinessCase() {
+    if (!montandoBusinessCase) setBusinessCaseDraft(blankBusinessCaseDraft);
+    setMontandoBusinessCase(!montandoBusinessCase);
+  }
+
+  function payloadDoBusinessCaseDraft() {
+    return {
+      investment: businessCaseDraft.investment.trim() === "" ? null : businessCaseDraft.investment,
+      expected_return_year: businessCaseDraft.expected_return_year.trim() === "" ? null : businessCaseDraft.expected_return_year,
+      payback_months: businessCaseDraft.payback_months.trim() === "" ? null : Number(businessCaseDraft.payback_months),
+      rationale: businessCaseDraft.rationale,
+    };
+  }
+
+  async function criarBusinessCase(event: FormEvent<HTMLFormElement>, oportunidadeId: number, hipoteseId: number, avaliacaoId: number) {
+    event.preventDefault(); setError(""); setBusy(true);
+    try {
+      await createBusinessCase({
+        improvement_opportunity: oportunidadeId, solution_hypothesis: hipoteseId,
+        priority_assessment: avaliacaoId, ...payloadDoBusinessCaseDraft(),
+      });
+      setMontandoBusinessCase(false);
+      await recarregarDetalhe(oportunidadeId);
+    } catch (cause) { setError(mensagemDeFalha(cause)); }
+    finally { setBusy(false); }
+  }
+
+  /**
+   * Aprovar ou rejeitar é **action**, nunca um `PATCH` de `status` (FDD 053) — mas os dois números
+   * que a aprovação exige moram no rascunho local até este clique, porque o board não desenha um
+   * "Salvar" separado das duas portas de decisão. Por isso o `PATCH` do que foi digitado acontece
+   * **antes** da decisão, e com o mesmo corpo para as duas saídas: rejeitar não exige os números,
+   * mas salva o que a pessoa escreveu do mesmo jeito.
+   */
+  async function decidirBusinessCase(oportunidadeId: number, businessCase: BusinessCase, outcome: "approved" | "rejected") {
+    setError(""); setBusy(true);
+    try {
+      await updateBusinessCase(businessCase.id, payloadDoBusinessCaseDraft());
+      await decideBusinessCase(businessCase.id, outcome);
+      await recarregarDetalhe(oportunidadeId);
+    } catch (cause) { setError(mensagemDeFalha(cause)); }
+    finally { setBusy(false); }
+  }
+
   if (semAcesso) return <section className="space-y-7">
     <a href={`/contas/${accountId}`} className="back-link"><ArrowLeft className="size-4" />Voltar para a conta</a>
     <section className="panel"><p className="empty-state">Você não participa de nenhum projeto desta conta.</p></section>
@@ -259,6 +373,11 @@ export function PriorizacaoPage({ accountId }: { accountId: number }) {
     : null;
   const anteriores = avaliacoes.filter(avaliacao => avaliacao.id !== vigente?.id)
     .sort((a, b) => b.version - a.version);
+  // Uma só `chosen` viva por oportunidade (invariante da FDD 048) — é a porta do Business Case
+  // (decisão A1). `businessCases[0]` é o mais recente (o servidor já ordena por
+  // `-created_at, -id`): rejeitado não trava a próxima tentativa, e é o mais novo que a tela mostra.
+  const hipoteseEscolhida = hipoteses.find(candidata => candidata.status === "chosen") ?? null;
+  const businessCase = businessCases[0] ?? null;
 
   const notasDaAvaliacao = (avaliacao: PriorityAssessment) => DIMENSOES
     .map(([campo, rotulo]) => `${rotulo} ${avaliacao[campo]}`).join(" · ");
@@ -475,6 +594,115 @@ export function PriorizacaoPage({ accountId }: { accountId: number }) {
             </label>
             <button className="btn sm:col-span-2" type="submit" disabled={busy}><Plus className="size-4" />Registrar hipótese</button>
           </form>
+
+          {/* O Business Case (FDD 053, ADR 0069) — DAP `dap-discovery-session-e-business-case-r2`,
+              decisões **A1** e **F1**. Nasce dentro do próprio `.panel` (não `--flush`), como o
+              board desenha: um cartão próprio, com o selo de status no cabeçalho, e não mais uma
+              linha da lista. Os seis estados: sem hipótese escolhida a porta nem existe; hipótese
+              escolhida sem business case abre a porta; rascunho mostra os dois números com o custo
+              do estado atual congelado ao lado; custo não apurado é `—` com o alerta (nunca
+              `R$ 0,00`); decidido é leitura, com a decisão como ato — nunca um `PATCH` de `status`
+              —; e recusado aceita outro. */}
+          <div className="panel space-y-4">
+            <div className="panel-heading">
+              <h2 className="font-semibold text-ink">Business Case</h2>
+              {businessCase && !montandoBusinessCase && <span className={`state ${BUSINESS_CASE_BADGE[businessCase.status]}`}>{businessCase.status_display}</span>}
+            </div>
+            {!hipoteseEscolhida
+              ? <p className="empty-state">Escolha uma hipótese de solução para montar o business case — é sobre a intervenção escolhida que se orça.</p>
+              : montandoBusinessCase
+                ? <form className="form-grid" onSubmit={event => void criarBusinessCase(event, oportunidade.id, hipoteseEscolhida.id, vigente?.id ?? 0)}>
+                    <label className="form-label">
+                      Investimento
+                      <input className="field" type="number" min="0" step="0.01" inputMode="decimal" placeholder="Não orçado" value={businessCaseDraft.investment} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, investment: event.target.value })} />
+                    </label>
+                    <label className="form-label">
+                      Retorno esperado (12 meses)
+                      <input className="field" type="number" min="0" step="0.01" inputMode="decimal" placeholder="Não orçado" value={businessCaseDraft.expected_return_year} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, expected_return_year: event.target.value })} />
+                    </label>
+                    <label className="form-label">
+                      Payback (meses)
+                      <input className="field" type="number" min="0" step="1" inputMode="numeric" placeholder="Não orçado" value={businessCaseDraft.payback_months} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, payback_months: event.target.value })} />
+                    </label>
+                    <label className="form-label sm:col-span-2">
+                      Justificativa
+                      <textarea className="field min-h-20" value={businessCaseDraft.rationale} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, rationale: event.target.value })} placeholder="Por que este investimento, e o que ele assume" required />
+                    </label>
+                    {/* `priority_assessment` é obrigatório no servidor e não tem valor sem avaliação
+                        vigente — caso que a decisão A1 não previu porque, na prática, priorizar vem
+                        antes de escolher hipótese. A guarda é defensiva: nunca manda `0`. */}
+                    {!vigente && <p className="type-meta text-muted sm:col-span-2">Avalie esta oportunidade antes de registrar o business case — a avaliação vigente é o critério que ele cita.</p>}
+                    <button className="btn sm:col-span-2" type="submit" disabled={busy || !vigente}>
+                      <Coins className="size-4" />Registrar o business case
+                    </button>
+                  </form>
+                : !businessCase
+                  // Estado 2 — hipótese escolhida, sem business case: a porta aparece.
+                  ? <>
+                      <p className="text-sm text-slate-600">Nenhum registrado.</p>
+                      <button type="button" className="btn btn--secondary" onClick={alternarFormularioDeBusinessCase}><Coins className="size-4" />Montar business case</button>
+                    </>
+                  : businessCase.status === "draft"
+                    // Estados 3 e 4 — rascunho, com o custo congelado apurado ou `—` (F1).
+                    ? <>
+                        <div className="form-grid">
+                          <label className="form-label">
+                            Investimento
+                            <input className="field" type="number" min="0" step="0.01" inputMode="decimal" placeholder="Não orçado" value={businessCaseDraft.investment} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, investment: event.target.value })} />
+                          </label>
+                          <label className="form-label">
+                            Retorno esperado (12 meses)
+                            <input className="field" type="number" min="0" step="0.01" inputMode="decimal" placeholder="Não orçado" value={businessCaseDraft.expected_return_year} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, expected_return_year: event.target.value })} />
+                          </label>
+                          <label className="form-label">
+                            Payback (meses)
+                            <input className="field" type="number" min="0" step="1" inputMode="numeric" placeholder="Não orçado" value={businessCaseDraft.payback_months} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, payback_months: event.target.value })} />
+                          </label>
+                          {/* `disabled`, no molde do `select` de origem contratual do Engagement:
+                              o serializer não expõe caminho de escrita para este campo, e por isso
+                              a tela também não oferece um — não há por onde, em vez de haver um
+                              caminho que ninguém usa. */}
+                          <label className="form-label">
+                            Custo do estado atual · congelado
+                            <input className="field" type="text" value={custoCongeladoLegivel(businessCase.current_state_cost)} disabled />
+                          </label>
+                        </div>
+                        {/* Decisão F1: `—` nunca é silencioso — o alerta diz por quê, e não é o
+                            `.alert--error` (nada falhou) nem um selo (isto interrompe a leitura). */}
+                        {businessCase.current_state_cost === null
+                          ? <p role="alert" className="alert--warn">{FRASE_DO_CUSTO_NAO_APURADO}</p>
+                          : <p className="type-meta text-muted">Congelado na criação, a partir de {businessCase.current_state_cost_source.somados.length} {businessCase.current_state_cost_source.somados.length === 1 ? "processo sustentado" : "processos sustentados"} por fato. Editar os insumos depois não muda este número.</p>}
+                        <label className="form-label">
+                          Justificativa
+                          <textarea className="field min-h-20" value={businessCaseDraft.rationale} onChange={event => setBusinessCaseDraft({ ...businessCaseDraft, rationale: event.target.value })} required />
+                        </label>
+                        {/* Aprovar exige os dois números; recusar nunca fica bloqueado — recusa-se
+                            justamente o que não fechou conta (FDD 053). Os dois botões salvam o
+                            rascunho digitado antes de decidir: o board não desenha um "Salvar"
+                            próprio, e `decide/` lê os números já gravados, não o corpo da action. */}
+                        <div className="flex flex-wrap gap-3">
+                          <button type="button" className="btn" disabled={busy || !businessCaseDraft.investment.trim() || !businessCaseDraft.expected_return_year.trim()} onClick={() => void decidirBusinessCase(oportunidade.id, businessCase, "approved")}>Aprovar o investimento</button>
+                          <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void decidirBusinessCase(oportunidade.id, businessCase, "rejected")}>Recusar</button>
+                        </div>
+                      </>
+                    // Estados 5 e 6 — decidido: campos em leitura, botões de decisão somem (a tela
+                    // não oferece o que o servidor recusaria com 409).
+                    : <>
+                        <p className="text-sm font-semibold text-ink">{dinheiroOuTraco(businessCase.investment)} investidos · {dinheiroOuTraco(businessCase.expected_return_year)} esperados em 12 meses</p>
+                        <p className="type-meta text-muted">Payback em {businessCase.payback_months === null ? "—" : `${businessCase.payback_months} meses`} · custo do estado atual {custoCongeladoLegivel(businessCase.current_state_cost)}</p>
+                        <p className="type-label text-muted">Decisão registrada</p>
+                        {/* **Com autor**, como o board aprovado mostra: decidir investir é ato com
+                            autor e carimbo — é o que o `clean()` do modelo protege ao recusar
+                            `approved` sem `decided_by`. `decided_by_name` é derivado no servidor
+                            (o mesmo `get_full_name` de `assessed_by_name` logo acima nesta tela),
+                            e cai para a forma sem nome quando o autor foi removido: `SET_NULL`
+                            existe, e "por ninguém" seria pior que não dizer. */}
+                        <p className="text-sm text-ink">{businessCase.status === "approved" ? "Aprovado" : "Recusado"}{businessCase.decided_by_name ? ` por ${businessCase.decided_by_name}` : ""} em {dataHoraCurta(businessCase.decided_at)}.</p>
+                        {businessCase.status === "approved"
+                          ? <p className="type-meta text-muted">Business case decidido não se edita. Repensar o investimento é montar outro.</p>
+                          : <button type="button" className="btn btn--secondary" onClick={alternarFormularioDeBusinessCase}><Coins className="size-4" />Montar outro business case</button>}
+                      </>}
+          </div>
         </div>}
       </div>)}</div> : <p className="empty-state">Nenhuma Improvement Opportunity. Agrupe pain points para abrir a primeira.</p>}
     </section>

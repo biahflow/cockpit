@@ -1,5 +1,5 @@
 import { reportError, setLastRequestId } from "./observability";
-import type { AgentReply, AppConfig, Evidence, FeasibilityAssessment, Finding, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Process, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
+import type { AgentReply, AppConfig, BusinessCase, Evidence, FeasibilityAssessment, Finding, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Process, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL || "/api/v2";
 
@@ -322,6 +322,40 @@ export function createSolutionHypothesis(payload: SolutionHypothesisPayload): Pr
 /** Trocar para `chosen` com outra já escolhida viva é 400, não 500: a checagem mora no serializer. */
 export function updateSolutionHypothesis(id: number, payload: Partial<SolutionHypothesisPayload> & { status?: SolutionHypothesis["status"] }): Promise<SolutionHypothesis> {
   return api<SolutionHypothesis>(`/solution-hypotheses/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+// ---------- Business Case (FDD 053, ADR 0069) ----------
+// A justificativa do investimento, consumida por `PriorizacaoPage` (DAP
+// `dap-discovery-session-e-business-case-r2`, decisões A1 e F1). `current_state_cost` e
+// `current_state_cost_source` não têm caminho de escrita — o serializer os publica read-only —,
+// e por isso não entram no payload: não há por onde, em vez de haver um caminho que ninguém usa.
+
+export type BusinessCasePayload = {
+  improvement_opportunity: number;
+  solution_hypothesis: number;
+  priority_assessment: number;
+  investment: string | null;
+  expected_return_year: string | null;
+  payback_months: number | null;
+  rationale: string;
+};
+
+export function listBusinessCases(improvementOpportunity: number): Promise<BusinessCase[]> {
+  return api<BusinessCase[]>(`/business-cases/?improvement_opportunity=${improvementOpportunity}`);
+}
+
+export function createBusinessCase(payload: BusinessCasePayload): Promise<BusinessCase> {
+  return api<BusinessCase>("/business-cases/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+/** Sem efeito sobre linha decidida: a rota devolve 409, e a tela nunca oferece este caminho ali. */
+export function updateBusinessCase(id: number, payload: Partial<BusinessCasePayload>): Promise<BusinessCase> {
+  return api<BusinessCase>(`/business-cases/${id}/`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+/** Aprovar ou rejeitar, com autor e carimbo do lado do servidor — nunca um `PATCH` de `status`. */
+export function decideBusinessCase(id: number, outcome: "approved" | "rejected"): Promise<BusinessCase> {
+  return api<BusinessCase>(`/business-cases/${id}/decide/`, { method: "POST", body: JSON.stringify({ outcome }) });
 }
 
 // ---------- Feasibility, PROVE, KPI/Measurement e Value Ledger (FDD 049, ADR 0055) ----------

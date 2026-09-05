@@ -1894,17 +1894,27 @@ class BusinessCaseSerializer(serializers.ModelSerializer[BusinessCase]):
     account = serializers.IntegerField(
         source="improvement_opportunity.account_id", read_only=True
     )
+    # **`decided_by_name` existe porque a decisão de investir é ato com autor, e o id não o diz.**
+    # É a metade que o `clean()` protege — `approved` sem `decided_by` é recusado —, e uma tela que
+    # mostrasse "Aprovado em 05/09" sem dizer por quem devolveria à conversa a pergunta que este
+    # modelo existe para responder. O board aprovado mostra "Aprovado por {nome} em {data}".
+    # Mesmo `source="…get_full_name"` de `assessed_by_name` aqui ao lado, de `owner_name` em
+    # `KnowledgeArea` e de `user_name` em `ProjectMember`: derivado, só leitura, aditivo à v1 —
+    # resolver o nome pelo cliente exigiria `/users/`, que é fechada à Entrega.
+    decided_by_name = serializers.CharField(
+        source="decided_by.get_full_name", read_only=True, default=""
+    )
 
     class Meta:
         model = BusinessCase
         fields = ["id", "improvement_opportunity", "account", "solution_hypothesis",
                   "priority_assessment", "investment", "expected_return_year", "payback_months",
                   "current_state_cost", "current_state_cost_source", "rationale", "assumptions",
-                  "status", "status_display", "decided_at", "decided_by",
+                  "status", "status_display", "decided_at", "decided_by", "decided_by_name",
                   "created_at", "updated_at"]
         read_only_fields = ["id", "account", "current_state_cost", "current_state_cost_source",
                             "status", "status_display", "decided_at", "decided_by",
-                            "created_at", "updated_at"]
+                            "decided_by_name", "created_at", "updated_at"]
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         oportunidade = cast(

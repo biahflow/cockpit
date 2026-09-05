@@ -593,6 +593,22 @@ const FIXTURES: Record<string, unknown> = {
     improvement_opportunity: 1, intervention: "", assumptions: "", expected_effect: "",
     created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`, ...registro,
   })),
+  // O Business Case (FDD 053), no rascunho com **custo não apurado** (decisão F1) — o estado que
+  // mais precisa passar pelo axe: é onde `.alert--warn` (cor âmbar) e o `—` do custo aparecem
+  // lado a lado com os dois números orçados, e nenhum caminho pode ter deslizado para `R$ 0,00`.
+  "/api/v2/business-cases/": [{
+    id: 1, improvement_opportunity: 1, account: 1, solution_hypothesis: 1, priority_assessment: 2,
+    investment: "85000.00", expected_return_year: "340000.00", payback_months: 3,
+    current_state_cost: null,
+    current_state_cost_source: {
+      processos: [{ id: 1, sustentacao: "hipotese", total: "0.00", nao_apurado: ["Retrabalho", "Erros"] }],
+      somados: [],
+    },
+    rationale: "A automação evita o retrabalho recorrente da conferência manual de documentos por convênio.",
+    assumptions: "", status: "draft", status_display: "Rascunho",
+    decided_at: null, decided_by: null,
+    created_at: `${HOJE}T09:00:00Z`, updated_at: `${HOJE}T09:00:00Z`,
+  }],
   // Feasibility, PROVE, KPI/medição e Value Ledger (FDD 049), nas superfícies que o DAP
   // `dap-prove-e-valor-r1` aprovou. **Uma linha de cada combinação que a tela sabe desenhar**: os
   // três vereditos do laudo, o experimento planejado com dois dos três requisitos faltando (as

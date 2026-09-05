@@ -685,3 +685,39 @@ def test_rejeitar_nao_exige_os_numeros_que_aprovar_exige(api: APIClient) -> None
     assert recusado.status_code == 200, recusado.data
     assert recusado.json()["status"] == "rejected"
     assert recusado.json()["decided_by"] is not None
+
+
+@pytest.mark.django_db
+def test_o_nome_de_quem_decidiu_sai_no_contrato(api: APIClient) -> None:
+    """Decidir investir é ato **com autor**, e o id sozinho não diz quem foi.
+
+    A tela mostra "Aprovado por {nome} em {data}" (DAP r2, seção 1) e resolver o nome pelo cliente
+    exigiria `/users/`, que é fechada à Entrega — metade de quem lê a tela veria um número. Mesmo
+    campo derivado de `assessed_by_name` aqui ao lado.
+
+    Sem autor vivo — `decided_by` é `SET_NULL` — o campo sai vazio em vez de sumir: é a diferença
+    entre "não sabemos quem" e "não há decisão", e a tela degrada para a data.
+    """
+    oportunidade = ImprovementOpportunityFactory()
+    criado = api.post(reverse("businesscase-list"), _payload(oportunidade), format="json")
+    identificador = criado.json()["id"]
+
+    decidido = api.post(
+        reverse("businesscase-decide", args=[identificador]),
+        {"outcome": "approved"},
+        format="json",
+    )
+
+    assert decidido.status_code == 200, decidido.data
+    corpo = decidido.json()
+    assert corpo["decided_by"] is not None
+    assert corpo["decided_by_name"] == User.objects.get(pk=corpo["decided_by"]).get_full_name()
+
+    caso = BusinessCase.objects.get(pk=identificador)
+    caso.decided_by = None
+    caso.save(update_fields=["decided_by"])
+
+    lido = api.get(reverse("businesscase-detail", args=[identificador]))
+
+    assert lido.json()["decided_by"] is None
+    assert lido.json()["decided_by_name"] == ""
