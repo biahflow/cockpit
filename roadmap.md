@@ -573,9 +573,36 @@ Fase aprovada (blocos que o material já estabilizou):
 Este parágrafo registrava a lacuna antes das FDDs 048 e 049. `PainPoint`,
 `ImprovementOpportunity`, o `PriorityAssessment` que sustenta o rótulo Opportunity Score,
 `SolutionHypothesis`, `KPI`, `Measurement` e `ValueLedgerEntry` agora estão entregues, inclusive
-nas superfícies aprovadas pelas emendas de 29/08. Seguem adiados **Business Cases**, o **cockpit de
-reunião de Discovery**, **Next Best Opportunity** e a migração dos dados do Notion
-(Accounts/Contacts/CommercialOpportunities/Activities).
+nas superfícies aprovadas pelas emendas de 29/08.
+
+**As quatro que sobravam fecharam em 05/09/2026, pela ADR 0069** — e uma delas fechou por não ter
+objeto. A ADR decidiu construir as três restantes **sem o gatilho** que a ADR 0030 pedia, com o
+argumento de que ele era circular para duas: a Discovery Session é o instrumento que produz Discovery
+estruturado, e o Business Case é o registro da decisão de investir — esperar a prática para construir
+o instrumento é esperar que o processo estabilize sem instrumento. O que é aposta ficou declarado: os
+campos podem mudar depois dos primeiros Discoveries reais, e nenhuma das peças reescreve número de
+outra.
+
+- **`BusinessCase`** (FDD 053) — a justificativa do investimento, com a decisão registrada como ato
+  com autor e carimbo. O `PriorityAssessment` é **referenciado** (já é imutável e versionado) e o
+  custo do estado atual é **copiado** (sai de nove insumos editáveis). A tela veio depois, no DAP
+  aprovado.
+- **O próximo passo da conta** (FDD 054) — o que o material chama de *Next Best Opportunity*, e que
+  já existia pela metade: `ranking_da_conta` ordenava e `recommendations.py` emitia o `prioritization`
+  desde a FDD 048. Faltava o leitor, que responde **o que falta** em vez de repetir o ranking. O nome
+  do material não pôde virar identificador — `opportunity` sem qualificador é banido pela invariante 1.
+- **A Discovery Session** (FDD 055) — a tela usada durante a reunião, com os blocos A–F servidos do
+  espelho que entrou no corpus, e o primeiro mecanismo de escrita periódica do produto. **"Cockpit"
+  não sobrevive**: é termo banido pela §5, e era o nome antigo do One.
+- **A migração dos dados do Notion morreu por falta de objeto.** As quatro bases (Accounts ·
+  Contacts · Opportunities · Activities) foram **desligadas, não migradas** — a ficha do Notion
+  declara desde 04/09 que elas vivem no Pulse. O que sobrou lá é conhecimento, não dado operacional,
+  e entrou no corpus como espelho: as Discovery Questions e as três Vertical Knowledge Bases, **sem a
+  intel de conta**, que continua no Notion porque `docs/` é commitado e vira resposta citável.
+
+Ficam adiados, e agora a lista é outra: o **Founder Dashboard**, o **Opportunity Backlog como ritual
+mensal** e a **recomendação de melhorias pela IA** (a Fase 3 do material) — as três seguem sem lastro
+no teste da ADR 0030, e a ADR 0069 as nomeia ao recusar modelar o bloco inteiro.
 
 A issue #62 fecha a última lacuna material da invariante 13: todo Engagement novo nasce de uma
 CommercialOpportunity ganha ou de um Design Partner Agreement assinado. O legado permanece

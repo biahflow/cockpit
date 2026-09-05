@@ -36,8 +36,14 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core import ai, views
-from apps.core.models import Finding, Meeting, Process, User
-from apps.core.tests.factories import ProjectFactory, ProjectMemberFactory, UserFactory
+from apps.core.models import Evidence, Finding, Meeting, Process, User
+from apps.core.tests.factories import (
+    DiscoveryFactory,
+    DiscoverySessionFactory,
+    ProjectFactory,
+    ProjectMemberFactory,
+    UserFactory,
+)
 
 #: O modelo dizendo o contrário do que a casa impõe: rotulando como fato e alegando ter lido dado.
 RESPOSTA_ATREVIDA = json.dumps([{
@@ -158,6 +164,32 @@ def test_promover_a_fato_continua_sendo_ato_de_gente(api: APIClient, reuniao: Me
     assert achado.reviewed_by_id == revisor.pk
 
 
+@override_settings(AI_ENABLED=True, OPENAI_API_KEY="sk-teste")
+def test_a_extracao_da_sessao_de_discovery_nasce_igual(
+    api: APIClient, reuniao: Meeting
+) -> None:
+    """A **segunda origem** de extração (FDD 055), com o modelo dizendo o contrário do mesmo jeito.
+
+    Sem esta metade, a invariante estaria provada só no caminho da reunião — e é justamente por
+    haver dois caminhos que o coletor precisou virar função nomeada. O `Discovery` pende do mesmo
+    projeto, então a Entrega do fixture alcança a sessão pela mesma guarda de escopo.
+    """
+    discovery = DiscoveryFactory(project=reuniao.project)
+    sessao = DiscoverySessionFactory(
+        discovery=discovery,
+        notes={"b": {"casos-por-mes": "Umas quatrocentas notas por mês, e no fechamento passa."}},
+    )
+
+    resposta = api.post(reverse("discoverysession-estruturar", args=[sessao.pk]))
+
+    assert resposta.status_code == 200, resposta.data
+    achados = list(Finding.objects.all())
+    assert len(achados) == 2
+    assert {a.epistemic_status for a in achados} == {Finding.EpistemicStatus.HYPOTHESIS}
+    # E a evidência aponta para a sessão: é o que diz de qual passada do levantamento o achado veio.
+    assert Evidence.objects.filter(source_session=sessao).count() == 1
+
+
 # --------------------------------------------------------------------------------------------
 # Camada 2 — o que o código pede ao modelo.
 # --------------------------------------------------------------------------------------------
@@ -180,8 +212,29 @@ def test_o_coletor_impoe_a_classificacao_como_constante() -> None:
     É a única linha do fluxo que decide o que o achado vale, e ela o decide como constante — o
     `Finding` nasce `HYPOTHESIS` e a `Evidence` nasce `INTERVIEW`. Sem esta asserção, os dois testes
     negativos acima passariam mesmo que o coletor tivesse parado de impor coisa nenhuma.
+
+    O coletor era aninhado em `MeetingViewSet.estruturar` e virou função nomeada quando a Discovery
+    Session passou a ser a segunda origem de extração (FDD 055) — a asserção acompanhou o símbolo.
     """
-    coletor = _codigo_sem_docstring(views.MeetingViewSet.estruturar)
+    coletor = _codigo_sem_docstring(views.grava_o_mapa_extraido)
 
     assert "Finding.EpistemicStatus.HYPOTHESIS" in coletor
     assert "Evidence.Kind.INTERVIEW" in coletor
+
+
+def test_as_duas_origens_de_extracao_passam_pelo_mesmo_coletor() -> None:
+    """A terceira camada, e ela nasceu com a segunda origem (FDD 055, decisão C1 do DAP).
+
+    Enquanto havia uma action só, "o coletor impõe o rótulo" e "toda extração impõe o rótulo" eram
+    a mesma frase. Com duas, deixaram de ser: uma segunda porta de gravação faria a invariante 8 do
+    mapa de linguagem depender de **duas implementações concordarem**, e a divergência não deixaria
+    nada vermelho — o banco continuaria gravando e a tela continuaria desenhando.
+
+    Por isso a asserção é sobre a **forma do código** e nas duas direções: as duas actions chamam a
+    função nomeada, e nenhuma delas grava `Finding` ou `Evidence` por conta própria.
+    """
+    for action in (views.MeetingViewSet.estruturar, views.DiscoverySessionViewSet.estruturar):
+        corpo = _codigo_sem_docstring(action)
+        assert "grava_o_mapa_extraido(" in corpo, action.__qualname__
+        assert "Finding.objects.create" not in corpo, action.__qualname__
+        assert "Evidence.objects.create" not in corpo, action.__qualname__

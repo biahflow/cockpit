@@ -26,6 +26,7 @@ from .views import (
     DigitalEmployeeViewSet,
     DiscoveryBookingCreateView,
     DiscoveryBookingSlotsView,
+    DiscoveryQuestionsView,
     DiscoverySessionViewSet,
     DiscoveryViewSet,
     DocumentViewSet,
@@ -264,6 +265,15 @@ def _rotas(router_da_versao: DefaultRouter, prefixo_do_nome: str) -> list[URLPat
             "booking/discovery/",
             DiscoveryBookingCreateView.as_view(),
             name=nome("discovery-booking-create"),
+        ),
+        # A base de perguntas de Discovery (ADR 0069, decisão E1 do DAP
+        # `dap-discovery-session-e-business-case-r2`). **Fora do router** porque não é recurso: é
+        # constante de método, como o `/config/` — não tem detalhe, não tem escrita e não tem
+        # linha em banco nenhum. Nome canônico e nenhum alias; nasce igual nas duas versões.
+        path(
+            "discovery-questions/",
+            DiscoveryQuestionsView.as_view(),
+            name=nome("discovery-questions"),
         ),
         path("tasks/sync/", TaskSyncIntakeView.as_view(), name=nome("task-sync")),
         path("esign/webhook/", EsignWebhookView.as_view(), name=nome("esign-webhook")),

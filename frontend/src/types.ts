@@ -156,9 +156,19 @@ export type ProcessStep = { id: number; process: number; name: string; position:
 // A regra de nome da ontologia vale aqui igual: termo canônico em inglês nas quatro superfícies.
 export type DiscoveryStatus = "planned" | "running" | "completed" | "cancelled";
 export type Discovery = { id: number; project: number; project_name: string; scope: string; status: DiscoveryStatus; status_display: string; started_at: string | null; completed_at: string | null; owner: number | null; created_at: string; updated_at: string };
-export type DiscoverySession = { id: number; discovery: number; meeting: number | null; happened_at: string; participants: string; source_artifact: number | null; transcript: string; created_at: string; updated_at: string };
+// `notes` guarda o que foi anotado **durante** a reunião (FDD 055), na forma
+// `{"<bloco>": {"<id da pergunta>": "<texto>"}}` — a chave é sempre o **id** da pergunta, nunca a
+// posição dela na lista. Sai no `GET` e não entra por `PATCH`: a escrita é
+// `POST /discovery-sessions/{id}/notes/`, que grava um bloco e preserva os outros.
+export type DiscoverySessionNotes = Record<string, Record<string, string>>;
+export type DiscoverySession = { id: number; discovery: number; meeting: number | null; happened_at: string; participants: string; source_artifact: number | null; transcript: string; notes: DiscoverySessionNotes; structured_finding_count: number; created_at: string; updated_at: string };
+// A base de perguntas, servida do backend (ADR 0069, decisão E1 do DAP
+// `dap-discovery-session-e-business-case-r2`). **Nenhuma pergunta é escrita aqui**: constantes no
+// frontend foi a alternativa E3, recusada porque o método precisa alcançar o corpus e os agentes.
+export type DiscoveryQuestion = { id: string; text: string };
+export type DiscoveryQuestionBlock = { id: string; label: string; short_label: string; note: string; questions: DiscoveryQuestion[] };
 export type ProcessObservationKind = "initial" | "revisit" | "validation";
-export type ProcessObservation = { id: number; discovery: number; process: number; observed_at: string; observation_type: ProcessObservationKind; observation_type_display: string; source_session: number | null; created_at: string; updated_at: string };
+export type ProcessObservation = { id: number; discovery: number; process: number; process_name: string; account: number; observed_at: string; observation_type: ProcessObservationKind; observation_type_display: string; source_session: number | null; created_at: string; updated_at: string };
 // As cinco formas de evidência, em inglês canônico (`docs/metodologia-fde.md:112-115`). São cinco
 // de propósito: um sexto valor aqui seria um conceito novo, não uma tradução.
 export type EvidenceKind = "interview" | "observation" | "artifact" | "system" | "data";

@@ -1,5 +1,5 @@
 import { reportError, setLastRequestId } from "./observability";
-import type { AgentReply, AppConfig, BusinessCase, Evidence, FeasibilityAssessment, Finding, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Process, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
+import type { AgentReply, AppConfig, BusinessCase, Discovery, DiscoveryQuestionBlock, DiscoverySession, Evidence, FeasibilityAssessment, Finding, ImprovementOpportunity, IntegrationFlag, Invitation, KPI, Measurement, Notification, PainPoint, PriorityAssessment, Process, ProcessObservation, Project, ProveExperiment, SessionUser, SolutionHypothesis, ValueLedgerEntry } from "./types";
 
 const baseUrl = import.meta.env.VITE_API_URL || "/api/v2";
 
@@ -176,6 +176,54 @@ export type DiscoveryBookingConfirmation = { starts_at: string; link: string };
 
 export function bookDiscovery(payload: { token: string; slot_start: string }): Promise<DiscoveryBookingConfirmation> {
   return api<DiscoveryBookingConfirmation>("/booking/discovery/", { method: "POST", body: JSON.stringify(payload) });
+}
+
+// ---------- A Discovery Session (FDD 055, ADR 0069) ----------
+// A tela usada **durante** a reunião de Discovery (DAP `dap-discovery-session-e-business-case-r2`,
+// decisões C1 · D2 · E1 · G1 · H3), mais a porta dela no detalhe do projeto.
+//
+// **Nenhuma destas funções grava `Finding`**, e a ausência é a decisão C1: a tela captura texto, e
+// estruturar em `Process`/`Evidence`/`Finding` é ato explícito e à parte — `structureDiscoverySession`
+// logo abaixo, disparado depois da sessão. Uma segunda porta de gravação faria a invariante 8 do
+// mapa de linguagem depender de duas implementações concordarem.
+
+export function listDiscoveryQuestions(): Promise<DiscoveryQuestionBlock[]> {
+  return api<{ blocks: DiscoveryQuestionBlock[] }>("/discovery-questions/").then(payload => payload.blocks);
+}
+
+export function listDiscoveries(project: number): Promise<Discovery[]> {
+  return api<Discovery[]>(`/discoveries/?project=${project}`);
+}
+
+export function listDiscoverySessions(discovery: number): Promise<DiscoverySession[]> {
+  return api<DiscoverySession[]>(`/discovery-sessions/?discovery=${discovery}`);
+}
+
+export function getDiscoverySession(id: number): Promise<DiscoverySession> {
+  return api<DiscoverySession>(`/discovery-sessions/${id}/`);
+}
+
+/**
+ * Grava **um** bloco de respostas. Action e não `PATCH` de `notes`, pela razão de
+ * `startProveExperiment`: o que se escreve depende do estado corrente, e um `PATCH` do campo
+ * inteiro apagaria em silêncio os cinco blocos que não vieram no corpo.
+ *
+ * O bloco é a unidade porque é o que torna a decisão **H3** administrável — ela aceita que a
+ * última escrita vença sem aviso *dentro* de um bloco, e registra a mitigação de uso "um bloco por
+ * pessoa durante a sessão", que não existiria se a unidade fosse a sessão.
+ */
+export function saveDiscoverySessionBlock(id: number, block: string, answers: Record<string, string>): Promise<DiscoverySession> {
+  return api<DiscoverySession>(`/discovery-sessions/${id}/notes/`, { method: "POST", body: JSON.stringify({ block, answers }) });
+}
+
+/** O ato explícito, depois da sessão. Passa pelo **mesmo** coletor da extração por reunião. */
+export function structureDiscoverySession(id: number): Promise<{ processes: Process[] }> {
+  return api<{ processes: Process[] }>(`/discovery-sessions/${id}/estruturar/`, { method: "POST" });
+}
+
+/** O que saiu da estruturação desta sessão — com o nome do processo, para o caminho até ele. */
+export function listProcessObservations(session: number): Promise<ProcessObservation[]> {
+  return api<ProcessObservation[]>(`/process-observations/?source_session=${session}`);
 }
 
 // ---------- A cadeia do PRIORITIZE (FDD 048, ADR 0054) ----------

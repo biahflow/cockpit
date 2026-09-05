@@ -19,9 +19,9 @@
     "jsx": "react-jsx"
   },
   "include": ["src"],
-  // A guarda de primitivas lê `src/**` do disco com `node:fs` — é ferramenta e não código de
-  // tela, então fica no `tsconfig.node.json`. Alargar os tipos daqui levaria os globais do Node
-  // para dentro do bundle do navegador.
-  "exclude": ["src/test/primitivas.test.ts"]
+  // As guardas que lêem `src/**` do disco com `node:fs` são ferramenta e não código de tela,
+  // então ficam no `tsconfig.node.json`. Alargar os tipos daqui levaria os globais do Node para
+  // dentro do bundle do navegador.
+  "exclude": ["src/test/primitivas.test.ts", "src/test/tela-da-sessao-de-discovery.test.ts"]
 }
 

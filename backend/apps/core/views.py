@@ -49,6 +49,7 @@ from . import (
     cases,
     cobranca,
     discovery_booking,
+    discovery_questions,
     drive,
     engineering_provisioning,
     enrichment,
@@ -166,6 +167,7 @@ from .serializers import (
     DigitalEmployeeBlueprintSerializer,
     DigitalEmployeeSerializer,
     DiscoverySerializer,
+    DiscoverySessionNotesSerializer,
     DiscoverySessionSerializer,
     DocumentSerializer,
     DunningContactSerializer,
@@ -665,6 +667,78 @@ def processos_do_texto(text: str) -> list[dict]:
             "achados": _achados_do_bruto(item.get("achados")),
         })
     return extraidos
+
+
+def grava_o_mapa_extraido(
+    extraidos: list[dict],
+    *,
+    account: Account,
+    registered_by: User,
+    reference: str,
+    source_project: Project | None = None,
+    source_meeting: Meeting | None = None,
+    source_session: DiscoverySession | None = None,
+    discovery: Discovery | None = None,
+) -> list[Process]:
+    """Grava o mapa que a IA extraiu: `Process` → `ProcessStep` → `Evidence` → `Finding`.
+
+    **Função nomeada, e um só lugar de gravação — é a decisão C1 do DAP
+    `dap-discovery-session-e-business-case-r2` escrita em código.** Ela nasceu aninhada dentro de
+    `MeetingViewSet.estruturar`, quando a reunião era a única origem de extração; com a Discovery
+    Session (FDD 055) passaram a ser duas, e deixá-la lá obrigaria a segunda a ter um corpo próprio.
+    A invariante 8 do mapa de linguagem — *`Finding` criado por extração de IA nasce
+    `hypothesis`* — passaria a depender de **duas implementações concordarem**, e a divergência não
+    deixaria nada vermelho: o banco continuaria gravando, a tela continuaria desenhando, e o que
+    mudaria seria só o significado do rótulo.
+
+    **O que o modelo não decide, e por isso é constante aqui.** Todo achado nasce
+    `Finding.EpistemicStatus.HYPOTHESIS` e toda fonte nasce `Evidence.Kind.INTERVIEW`: o
+    `_PROMPT_PROCESSOS` não pergunta e o `processos_do_texto` não lê. Um modelo lendo o que se
+    anotou numa reunião produz *o que foi dito* — uma das cinco formas de evidência
+    (`docs/metodologia-fde.md`) —, não prova; promover a fato é ato de gente (§6.9).
+
+    **A `Evidence` é uma por processo e diz só de onde o achado veio.** `raw_excerpt` fica vazio de
+    propósito: o modelo devolve o achado já interpretado, nunca o trecho que o gerou, e gravar a
+    conclusão ali refaria a fusão que o split desfaz (FDD 045). `reference` é o localizador da
+    origem — a gravação da reunião, ou a sessão que produziu as anotações.
+
+    Não abre transação: quem chama já está dentro de uma (`_ai_run` é invocado sob `atomic`), e uma
+    transação aninhada aqui daria a impressão de que a gravação se resolve sozinha quando o
+    chamador escreve mais alguma coisa depois — que é exatamente o caso da Discovery Session.
+    """
+    # A extração entra **depois** do que já foi mapeado à mão: `position` é a ordem em que a
+    # operação acontece, e intercalar processos vindos de um modelo no meio de uma sequência que
+    # alguém montou reescreveria essa ordem sem pedir licença.
+    ultima = Process.objects.filter(account=account, archived_at__isnull=True).aggregate(
+        maior=Max("position")
+    )["maior"]
+    proxima = (ultima or 0) + 1
+    criados: list[Process] = []
+    for indice, bruto in enumerate(extraidos):
+        processo = Process.objects.create(
+            account=account, name=bruto["name"], source_project=source_project,
+            source_meeting=source_meeting, registered_by=registered_by,
+            position=proxima + indice,
+        )
+        ProcessStep.objects.bulk_create([
+            ProcessStep(process=processo, position=posicao, **etapa)
+            for posicao, etapa in enumerate(bruto["etapas"], start=1)
+        ])
+        if bruto["achados"]:
+            evidence = Evidence.objects.create(
+                account=account, discovery=discovery, process=processo,
+                kind=Evidence.Kind.INTERVIEW, reference=reference[:500],
+                source_meeting=source_meeting, source_session=source_session,
+                captured_by=registered_by,
+            )
+            for achado in bruto["achados"]:
+                achado_novo = Finding.objects.create(
+                    account=account, process=processo, statement=achado,
+                    epistemic_status=Finding.EpistemicStatus.HYPOTHESIS,
+                )
+                achado_novo.evidences.add(evidence)
+        criados.append(processo)
+    return criados
 
 
 # Tolerância de release (issue #122, fatia 5.2): o prompt de `classificar` passou a pedir os três
@@ -3251,6 +3325,10 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
         havia também a `Evidencia` fundida; com o legado removido e o custo do estado atual lendo o
         `Finding`, sobra o par canônico. A resposta segue `{"processos": [...]}` e nenhuma tela
         precisou mudar por causa disso.
+
+        **A gravação em si mora em `grava_o_mapa_extraido`, e não mais aqui** (FDD 055). Desde a
+        Discovery Session há duas origens de extração, e a invariante 8 do mapa de linguagem não
+        pode depender de duas cópias concordarem — o porquê está escrito lá.
         """
         meeting = self.get_object()
         if not meeting.transcript.strip():
@@ -3272,56 +3350,17 @@ class MeetingViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelView
                 # Mesma distinção do `extrair_decisoes`: sem lista não houve extração, e isso não
                 # é o mesmo que "a reunião não descreveu processo nenhum".
                 raise _ExtracaoSemResultado()
-            account = meeting.project.engagement.account
-            # A extração entra **depois** do que já foi mapeado à mão: `position` é a ordem em que
-            # a operação acontece, e intercalar processos vindos de um modelo no meio de uma
-            # sequência que alguém montou reescreveria essa ordem sem pedir licença.
-            ultima = Process.objects.filter(account=account, archived_at__isnull=True).aggregate(
-                maior=Max("position")
-            )["maior"]
-            proxima = (ultima or 0) + 1
-            criados: list[Process] = []
-            for indice, bruto in enumerate(extraidos):
-                processo = Process.objects.create(
-                    account=account, name=bruto["name"], source_project=meeting.project,
-                    source_meeting=meeting, registered_by=request.user,
-                    position=proxima + indice,
-                )
-                ProcessStep.objects.bulk_create([
-                    ProcessStep(process=processo, position=posicao, **etapa)
-                    for posicao, etapa in enumerate(bruto["etapas"], start=1)
-                ])
-                if bruto["achados"]:
-                    # **A fonte, uma por processo: a reunião.** `raw_excerpt` fica vazio de
-                    # propósito e o que sobra é o localizador — o modelo devolve o achado já
-                    # interpretado, nunca o trecho que o gerou, e gravar a conclusão aqui refaria
-                    # a fusão que o split desfaz (FDD 045). A linha por achado é o `Finding` logo
-                    # abaixo; a `Evidence` diz só de onde ele veio.
-                    evidence = Evidence.objects.create(
-                        account=account, process=processo, kind=Evidence.Kind.INTERVIEW,
-                        reference=(
-                            meeting.recording_url
-                            or f"Reunião #{meeting.pk} — {meeting.title}"
-                        )[:500],
-                        source_meeting=meeting, captured_by=request.user,
-                    )
-                    for achado in bruto["achados"]:
-                        # Um `Finding` por achado, sempre em `hypothesis` — o modelo lê *o que foi
-                        # dito*, não prova, e promover a fato é ato de gente (§6.9). A `Evidence`
-                        # logo acima diz de onde ele veio, e o `evidences.add` os liga: é essa
-                        # evidência viva que uma promoção futura vai exigir.
-                        #
-                        # Até a Fase 6 (ADR 0052) havia uma terceira gravação aqui — a `Evidencia`
-                        # fundida —, mantida porque o custo do estado atual e a tela liam dela. Com
-                        # o legado removido e o custo repontado para o `Finding` (`process.py`), a
-                        # gravação dupla deixou de existir: sobra o par do split, que é o dado
-                        # canônico.
-                        achado_novo = Finding.objects.create(
-                            account=account, process=processo, statement=achado,
-                            epistemic_status=Finding.EpistemicStatus.HYPOTHESIS,
-                        )
-                        achado_novo.evidences.add(evidence)
-                criados.append(processo)
+            # **A fonte é a reunião**, e é o que `reference` localiza: a gravação, quando existe, e
+            # o identificador dela quando não. O resto — o rótulo do achado, a forma da evidência,
+            # a posição do processo — é do coletor, um só para as duas origens.
+            criados = grava_o_mapa_extraido(
+                extraidos,
+                account=meeting.project.engagement.account,
+                registered_by=request.user,
+                reference=meeting.recording_url or f"Reunião #{meeting.pk} — {meeting.title}",
+                source_project=meeting.project,
+                source_meeting=meeting,
+            )
             # A chave do corpo **troca** por versão, em vez de conviver: duplicar a lista inteira
             # em duas chaves pagaria o corpo duas vezes, e aqui — ao contrário do resto do payload
             # legado — não há um par que saia junto. Na `/api/v1/` continua `processos`; na
@@ -3702,11 +3741,24 @@ class DiscoveryViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelVi
 
 
 class DiscoverySessionViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
-    """As sessões de um Discovery (FDD 045)."""
+    """As sessões de um Discovery (FDD 045), e a tela que conduz uma delas (FDD 055)."""
 
     resource = "discovery_session"
     queryset = DiscoverySession.objects.select_related(
         "discovery", "discovery__project", "meeting"
+    ).annotate(
+        # Quantos achados saíram desta sessão. O caminho é `Evidence.source_session` → `findings`,
+        # que é o único elo entre a sessão e o achado: `Finding` ancora na conta e não conhece
+        # sessão nenhuma (FDD 045). `distinct=True` porque a junção pelo M2M repete a linha da
+        # sessão uma vez por achado, e sem ele a contagem sairia inflada.
+        #
+        # Anotação e não `SerializerMethodField` com consulta própria: o detalhe do projeto lista
+        # as sessões, e uma consulta por linha seria N+1 numa tela que já faz quinze chamadas.
+        structured_finding_count=Count(
+            "evidence__findings",
+            filter=Q(evidence__findings__archived_at__isnull=True),
+            distinct=True,
+        ),
     ).all()
     serializer_class = DiscoverySessionSerializer
     project_path = "discovery__project"  # a sessão não carrega o projeto direto
@@ -3716,6 +3768,199 @@ class DiscoverySessionViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archive
     def scoped_project(self, validated_data: dict) -> Project | None:
         discovery = validated_data.get("discovery")
         return discovery.project if discovery else None
+
+    @extend_schema(
+        request=DiscoverySessionNotesSerializer,
+        responses=DiscoverySessionSerializer,
+    )
+    @action(detail=True, methods=["post"])
+    def notes(self, request: Request, pk: str | None = None) -> Response:
+        """Grava as respostas de **um** bloco, preservando os outros (FDD 055).
+
+        **Action e não `PATCH` de `notes`**, pela razão de `POST /prove-experiments/{id}/start/` e
+        das duas portas de publicação: o que se escreve depende do estado corrente. Um `PATCH` do
+        campo inteiro apagaria os cinco blocos que não vieram no corpo — e apagaria em silêncio,
+        que é o único jeito de perder o registro de uma reunião que não se repete.
+
+        **O bloco é a unidade porque é o que torna a decisão H3 administrável.** Ela aceita que a
+        última escrita vença sem aviso, e registra a mitigação de uso: *um bloco por pessoa durante
+        a sessão*. Com a sessão inteira como unidade, essa mitigação não funcionaria — dois
+        consultores em blocos diferentes se apagariam mutuamente a cada dois segundos.
+
+        `select_for_update` pelo motivo do `convert-to-project`: a gravação é leitura-modificação-
+        escrita sobre um JSON, e sem o cadeado dois salvamentos simultâneos de **blocos
+        diferentes** perderiam um dos dois — a colisão que a decisão H3 não aceitou, porque ela
+        aceitou a de dentro do bloco.
+
+        Id de pergunta desconhecido é **400 e não descarte silencioso**: quem manda uma chave que a
+        base não tem está com a tela desatualizada, e gravar assim mesmo produziria resposta órfã
+        que nenhuma tela mostra. A recusa diz quais chaves não existem.
+        """
+        sessao = self.get_object()
+        entrada = DiscoverySessionNotesSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        bloco_id = cast(str, entrada.validated_data["block"])
+        respostas = cast(dict, entrada.validated_data["answers"])
+        with transaction.atomic():
+            travada = DiscoverySession.objects.select_for_update().get(pk=sessao.pk)
+            anotacoes = dict(travada.notes or {})
+            anotacoes[bloco_id] = respostas
+            travada.notes = anotacoes
+            travada.save(update_fields=["notes", "updated_at"])
+        # Relido pela queryset anotada: a resposta é a mesma forma do `GET`, e a tela lê dela o
+        # `updated_at` que vira "última versão salva às 14:38".
+        return Response(self.get_serializer(self.get_queryset().get(pk=sessao.pk)).data)
+
+    @action(detail=True, methods=["post"])
+    def estruturar(self, request: Request, pk: str | None = None) -> Response:
+        """Mapeia processos, etapas e achados do que foi anotado na sessão (FDD 055).
+
+        **Ato explícito, depois da sessão, e nunca durante** — é a decisão C1 do DAP: a tela captura
+        texto e não grava `Finding` em caminho nenhum. Quem grava é `grava_o_mapa_extraido`, o mesmo
+        coletor da `MeetingViewSet.estruturar`, e é por isso que "todo achado nasce hipótese" vale
+        igual nas duas origens sem ninguém precisar lembrar.
+
+        Três diferenças em relação à extração da reunião, e as três vêm da âncora:
+
+        * o insumo são as **anotações** (`ai.build_discovery_session_context`), com a transcrição
+          atrás quando houver — não uma transcrição solta;
+        * a `Evidence` aponta para a **sessão** (`source_session`) e para o Discovery, que é o que
+          permite dizer de qual passada do levantamento o achado veio (FDD 045);
+        * nasce uma `ProcessObservation` por processo. É o registro que a FDD 045 criou para o mapa
+          revisitado, e é ele que faz "esta sessão já foi estruturada" ser fato no schema em vez de
+          heurística — inclusive para o processo que não rendeu achado nenhum e por isso não tem
+          `Evidence`.
+        """
+        sessao = self.get_object()
+        if not _tem_anotacao(sessao):
+            raise InvalidInput("A sessão não tem anotações nem transcrição para estruturar.")
+        # **Antes** da IA, como na reunião: recusar depois de chamar o provedor gastaria a cota
+        # diária de quem clicou por um trabalho que já se sabia que seria descartado.
+        ja_mapeados = ProcessObservation.objects.filter(
+            source_session=sessao, archived_at__isnull=True
+        ).count()
+        if ja_mapeados:
+            raise StateConflict(
+                f"Esta sessão já tem {ja_mapeados} processo(s) mapeado(s). "
+                "Arquive-os ou edite-os em vez de extrair de novo."
+            )
+
+        def grava(text: str, interaction) -> dict:  # type: ignore[no-untyped-def]
+            extraidos = processos_do_texto(text)
+            if not extraidos:
+                raise _ExtracaoSemResultado()
+            discovery = sessao.discovery
+            criados = grava_o_mapa_extraido(
+                extraidos,
+                account=discovery.project.engagement.account,
+                registered_by=request.user,
+                reference=f"Sessão de Discovery #{sessao.pk} — {sessao.happened_at:%d/%m/%Y}",
+                source_project=discovery.project,
+                source_meeting=sessao.meeting,
+                source_session=sessao,
+                discovery=discovery,
+            )
+            ProcessObservation.objects.bulk_create([
+                ProcessObservation(
+                    discovery=discovery, process=processo,
+                    observed_at=timezone.localtime(sessao.happened_at).date(),
+                    observation_type=ProcessObservation.Kind.INITIAL,
+                    source_session=sessao,
+                )
+                for processo in criados
+            ])
+            chave = "processes" if versao_de(request) == V2 else "processos"
+            return {chave: ProcessSerializer(criados, many=True).data}
+
+        try:
+            with transaction.atomic():
+                return _ai_run(
+                    request, "discovery_session_processos", _PROMPT_PROCESSOS,
+                    ai.build_discovery_session_context(sessao), project=sessao.discovery.project,
+                    formato=_FORMATO_JSON, coletor=grava,
+                )
+        except _ExtracaoSemResultado:
+            return Response(
+                {"detail": "A IA não devolveu processos em formato utilizável. Tente de novo."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+class DiscoveryQuestionsView(APIView):
+    """A base de perguntas de Discovery, servida do backend (ADR 0069, decisão E1 do DAP).
+
+    `IsAuthenticated` e não `RolePermission`, como o `ConfigView`: não há objeto, não há escrita, e
+    o método é da casa inteira — quem conduz Discovery é das duas áreas (o mesmo argumento que põe
+    `process` e `evidence` nos dois conjuntos de papel). Um `resource` aqui teria de ser declarado
+    em `permissions.py` só para dizer "todo mundo lê", que é o que esta linha já diz.
+
+    O conteúdo é constante de módulo (`discovery_questions.BLOCKS`), espelho da ficha do Notion. A
+    rota existe para que a tela não precise de uma cópia das perguntas — o mesmo motivo pelo qual
+    E3 (constantes no frontend) foi recusada.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses=inline_serializer(
+            "DiscoveryQuestionsResponse",
+            {
+                "blocks": inline_serializer(
+                    "DiscoveryQuestionBlock",
+                    {
+                        "id": serializers.CharField(),
+                        "label": serializers.CharField(),
+                        "short_label": serializers.CharField(),
+                        "note": serializers.CharField(allow_blank=True),
+                        "questions": inline_serializer(
+                            "DiscoveryQuestionItem",
+                            {
+                                # O id é **estável** e é a chave sob a qual a resposta é gravada
+                                # em `DiscoverySession.notes` — nunca a posição na lista.
+                                "id": serializers.CharField(),
+                                "text": serializers.CharField(),
+                            },
+                            many=True,
+                        ),
+                    },
+                    many=True,
+                ),
+            },
+        )
+    )
+    def get(self, request: Request) -> Response:
+        return Response({
+            "blocks": [
+                {
+                    "id": bloco.id,
+                    "label": bloco.label,
+                    "short_label": bloco.short_label,
+                    "note": bloco.note,
+                    "questions": [
+                        {"id": pergunta.id, "text": pergunta.text}
+                        for pergunta in bloco.questions
+                    ],
+                }
+                for bloco in discovery_questions.BLOCKS
+            ],
+        })
+
+
+def _tem_anotacao(sessao: DiscoverySession) -> bool:
+    """Há o que estruturar? Uma resposta escrita, ou uma transcrição.
+
+    Sessão aberta e vazia não vai à IA: a chamada custaria a cota de quem clicou para o modelo ler
+    seis blocos em branco e devolver `[]`, que a action já traduziria em 502.
+    """
+    if sessao.transcript.strip():
+        return True
+    respostas = sessao.notes if isinstance(sessao.notes, dict) else {}
+    return any(
+        str(texto or "").strip()
+        for do_bloco in respostas.values()
+        if isinstance(do_bloco, dict)
+        for texto in do_bloco.values()
+    )
 
 
 class ProcessObservationViewSet(ProjectScopedMixin, QueryParamFilterMixin, ArchiveModelViewSet):
@@ -3734,7 +3979,9 @@ class ProcessObservationViewSet(ProjectScopedMixin, QueryParamFilterMixin, Archi
     serializer_class = ProcessObservationSerializer
     project_path = "discovery__project"
     scope_payload_field = "discovery"
-    filter_fields = ("discovery", "process")
+    # `source_session` entra ao lado dos dois, como já está em `EvidenceViewSet`: é por ele que a
+    # tela da Discovery Session lista o que saiu da estruturação dela (FDD 055).
+    filter_fields = ("discovery", "process", "source_session")
     filter_exact_fields = ("observation_type",)
 
     def scoped_project(self, validated_data: dict) -> Project | None:
