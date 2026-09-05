@@ -1,8 +1,14 @@
 # Roadmap — Pulse (Biahflow)
 
-Atualizado em 31/08/2026. Esta é a fonte canônica de inventário e estado das features/work items
+Atualizado em 04/09/2026. Esta é a fonte canônica de inventário e estado das features/work items
 do projeto. Separa o que já compõe a plataforma do que falta, e aponta o norte (jornada de
 consultoria assistida por IA). Marcações: `[x]` entregue, `[~]` parcial, `[ ]` pendente.
+
+Nesta data **não há issue nem PR aberto** no repositório. O que resta está nomeado abaixo, e quase
+tudo é **decisão ou ato operacional, não código parado**: a homologação do Stripe (o gate para
+ligar a régua de cobrança), a do Clicksign, o sunset da `/api/v1/`, o pedido de indicação — que
+depende do portal do cliente — e os quatro blocos que seguem adiados por escolha (Business Cases,
+cockpit de reunião de Discovery, Next Best Opportunity e a migração dos dados do Notion).
 
 ## Inventário de features/work items
 
@@ -51,6 +57,9 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | FDD 037 | Satisfação do cliente e camada 5 (satisfação) | Entregue | 1 | `docs/fdd/037-a-satisfacao-que-ninguem-registrava.md` |
 | FDD 038 | Camada 5 (entrega) e o leitor do sinal da IA | Entregue | 1 | `docs/fdd/038-os-dois-sinais-que-ninguem-lia.md` |
 | FDD 039 | Discovery estruturado (P-S-D-T-E-R, evidência e custo do estado atual) | Entregue (recorte) | 1 | `docs/fdd/039-o-achado-que-nao-sobrevivia-a-reuniao.md` |
+| FDD 040 | Provisionamento de Issue GitHub a partir de um handoff Pulse | Entregue | — | `docs/fdd/040-provisionamento-de-issue-github.md` |
+| FDD 041 | Projeção de entrega GitHub (Issue/PR/CI) no Pulse | Entregue | — | `docs/fdd/041-projecao-de-entrega-github.md` |
+| FDD 042 | Linha do tempo operacional da entrega (Discover → Optimize) | Entregue | — | `docs/fdd/042-linha-do-tempo-operacional-da-entrega.md` |
 | FDD 043 | Perfil do próprio usuário (nome, senha e foto) | Entregue | — | `docs/fdd/043-perfil-do-proprio-usuario.md` |
 | FDD 044 | Qualification antes da CommercialOpportunity (fatia 1 da ontologia) | Entregue | — | `docs/fdd/044-a-qualificacao-que-virava-venda.md` |
 | FDD 045 | Split Evidence/Finding e Discovery (ontologia, fase 3) | Entregue | 1 | `docs/fdd/045-a-hipotese-e-a-prova-eram-a-mesma-linha.md` |
@@ -66,6 +75,14 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 | ADR 0060 | Publicabilidade é campo próprio, e publicar é o ato de revisão humana da §3 (issue #106) | Entregue | 1 | `docs/adr/0060-publicavel-e-campo-proprio-e-publicar-e-o-ato-de-revisao.md` |
 | FDD 051 | O Discovery no snapshot do portal, atrás da marca de publicável (issue #106) | Entregue | 1 | `docs/fdd/051-o-discovery-chegava-ao-cliente-como-documento.md` |
 | FDD 052 | Tela de publicação do Discovery e o campo derivado `publication_state` (issue #108) | Entregue | 1 | `docs/fdd/052-publicar-o-discovery-era-uma-chamada-de-api.md` |
+| ADR 0061 | A assinatura abre o mandato, e o que ela abre se declara antes (ciclo do Design Partner, PR #121) | Entregue | 1 | `docs/adr/0061-a-assinatura-abre-o-mandato-e-o-que-ela-abre-se-declara-antes.md` |
+| ADR 0062 | O fallback de WhatsApp não assume quando não sabe (issue #117, PR #121) | Entregue | 1 | `docs/adr/0062-o-fallback-de-whatsapp-nao-assume-quando-nao-sabe.md` |
+| ADR 0063 | O estado de publicação sai com a frase, porque o rótulo já mora no servidor (issue #108) | Entregue | 1 | `docs/adr/0063-o-estado-de-publicacao-sai-com-a-frase-porque-o-rotulo-ja-mora-aqui.md` |
+| ADR 0064 | O teto é por operação, e a resposta incerta se reconcilia (issue #111, PR #121) | Entregue | 1 | `docs/adr/0064-o-teto-e-por-operacao-e-a-resposta-incerta-se-reconcilia.md` |
+| ADR 0065 | A assinatura tem lugar na página, e é a rodada que fecha (issues #115 e #120, PR #121) | Entregue | 1 | `docs/adr/0065-a-assinatura-tem-lugar-na-pagina-e-a-rodada-e-que-fecha.md` |
+| ADR 0066 | A `/api/v2/` nasce por versão no caminho, e um mapa só governa o alias (issue #122) | Entregue | 1 | `docs/adr/0066-a-api-v2-nasce-por-versao-no-caminho-e-um-mapa-so-governa-o-alias.md` |
+| ADR 0067 | O ROI continua saindo do contratado, e o recebido ganha nome próprio | Entregue | — | `docs/adr/0067-o-roi-continua-saindo-do-contratado-e-o-recebido-ganha-nome-proprio.md` |
+| ADR 0068 | Dinheiro atravessa a API como texto, e índice calculado continua número | Entregue | — | `docs/adr/0068-dinheiro-atravessa-a-api-como-texto-e-indice-calculado-continua-numero.md` |
 
 ## Base atual — entregue
 
@@ -134,7 +151,10 @@ As regras detalhadas, aceite e regressões permanecem exclusivamente na FDD refe
 > rodadas de homologação foram feitas** — e-mail, IA, Google, assinatura (FDD 024) e base de
 > conhecimento (FDD 029) — e as cinco acharam defeito. A do **Stripe** (seção 5 do runbook) segue
 > pendente, e é o gate para ligar a régua de cobrança. Quase todo código que fala com provedor
-> externo continua atrás de `# pragma: no cover`.
+> externo continua atrás de `# pragma: no cover`. E desde 02/09/2026 há uma integração **em uso sem
+> rodada própria**: o WhatsApp ganhou chamador no kickoff (issue #110) e não tem seção no runbook —
+> o teto de 90 s da ADR 0064 nasceu de um caso observado contra o provedor real, não de uma
+> homologação, e a própria ADR registra que 90 é folga escolhida e não número apurado.
 >
 > O que fica apagado numa instalação nova é **configuração, não código não exercitado** — e desde a
 > ADR 0018 é menos do que era: notificações/digest e assinatura eletrônica nascem ligadas (a
@@ -570,6 +590,85 @@ Fase aprovada (blocos que o material já estabilizou):
       junto, com a metade simétrica que **não** ressuscita o que alguém removeu de propósito antes.
       Ver FDD 039 e ADR 0034.
 
+- [x] **O Pulse vê a engenharia, e a jornada canônica ganha histórico — FDD 040, 041 e 042.** Três
+      fatias entregues entre 24 e 27/08/2026 que este inventário não registrava. A **FDD 040**
+      provisiona a GitHub Issue a partir de um `EngineeringHandoff` estruturado (flag
+      `github_provisioning`): a transformação é determinística, **nenhum modelo de linguagem entra
+      no fluxo**, e a Issue provisionada é o Task Contract que o harness do EngineeringOS consome —
+      provisionar não é começar, e merge de PR não é Done. A **FDD 041** é a direção contrária e é
+      **só leitura** (flag `github_delivery`): `GithubDeliveryProjection` espelha estado da Issue,
+      do PR, SHA do head, prontidão de revisão e CI para dentro do projeto, com
+      `GithubWebhookDelivery` garantindo idempotência — o Pulse opera sem sair para o GitHub e sem
+      virar um segundo sistema de registro de engenharia; uma edição normal do Pulse não muda Issue
+      nem PR. A **FDD 042** dá à jornada as três coisas que a FDD 011 não tinha: a escada
+      **canônica** FDE (`Discover → Prioritize → [Feasibility] → Prove → Scale → Optimize`) separada
+      do vocabulário configurável, com a Feasibility como membro **explícito e opcional**; o
+      **histórico append-only** (`PhaseEvent`, emitido só por `journey.py`, nunca editado nem
+      apagado), que é a cópia que sobrevive ao que o estado corrente descarta — o gate fica
+      registrado *antes* de o REDESIGN/ITERATE apagá-lo de `ProjectPhase`; e **quem está esperando**
+      (`waiting_party` + `blocker_note`, escritos só pela action `set-waiting`), que antes só existia
+      dentro da nota crua. A `situation` é **derivada**, e a tela mapeia situação → variante de
+      `.state`, nunca a cor (ADR 0026).
+- [x] **O ciclo do Design Partner fecha — issues #110 a #120, PR #121.** A ADR 0058 tinha fechado a invariante 13
+      pela **origem** do mandato; o que ficou aberto foi o **movimento**, e ele terminava em três
+      becos encadeados: a **assinatura não tinha consequência** (o artefato de contrato fechava e o
+      mandato ficava esperando alguém lembrar), o **cliente não recebia nada** (nenhum e-mail
+      transacional saía em evento de contrato — o primeiro passo depois de assinar era um silêncio
+      que alguém quebrava por fora do produto) e o **mandato não virava projeto** (`Project.engagement`
+      é `NOT NULL`, e o único caminho na SPA era a conversão de venda ganha, que carimba `paid` —
+      Design Partner não passa por venda). Automatizar esbarrava no que não era implementação: **o
+      sistema não sabia o que era o documento assinado**, porque `Document` era genérico e o único
+      discriminador era o `original_name` digitado no upload. Agora a assinatura tem **consequência
+      de domínio**, e o que ela abre é **declarado antes** dela, nunca inferido depois (ADR 0061):
+      `Document.kind` nasce com **um** valor (`design_partner_agreement`), porque
+      valor sem chamador é a mesma dívida que classe sem chamador, e `Artifact.kind` não servia por
+      razão estrutural — o artefato exige âncora em oportunidade ou projeto, e o acordo vive na
+      **conta**. O `Engagement` nasce da conclusão da rodada, num lugar só. A **posição da assinatura
+      sai do próprio documento** (ADR 0065): todo pedido saía com «assinatura invisível» por falta de
+      `positions` (#115), e como nem a página nem as coordenadas são dedutíveis de qualquer dado que
+      a casa já tenha, entra `pypdf` — que **nunca levanta**: PDF ilegível volta ao comportamento de
+      antes, com o motivo no log, porque recusar seria pior que o defeito. O **WhatsApp ganha
+      chamador** — era adaptador completo sem nenhum (#110) — e o grupo é do **mandato**, não do
+      projeto, senão um cliente com três projetos ganharia três grupos do mesmo trabalho (#119). O
+      fallback tem **quatro estados e não um booleano** (ADR 0062), porque `None` indistinguível de
+      sucesso já produziu 201 para assinatura que nunca sairia: só `UNAVAILABLE` cai para o próximo
+      provedor, e `UNCERTAIN` — que **pode ter entregado** — se reconcilia em vez de reenviar, com
+      teto por operação (ADR 0064), já que teto maior não conserta, só torna o caso raro, e caso raro
+      não tratado é o pior tipo. Junto saíram os quatro defeitos que a mesma varredura tinha aberto:
+      `ESIGN_SANDBOX=true` com
+      `ESIGN_DELIVERY=email` não entregava convite e nada denunciava (#112), a pasta do documento
+      passou a sair da **finalidade** e não do vínculo (#113), arquivar a conta passou a **avisar o
+      que continua publicado** em vez de deixar o Discovery no ar (#114), e ligar uma integração sem
+      sonda derrubava o `check_integrations`.
+- [x] **A `/api/v2/` nasce, e a ontologia paga a última dívida que tinha prazo — issue #122.** A
+      versão vai **no caminho**, e um **mapa só** governa o alias (ADR 0066): o `AliasesDaV1Mixin`
+      passa a ser sensível à versão — na v1 a chave legada continua saindo e sendo aceita, na v2 ela
+      é **400 dizendo o nome canônico**. Em seis fatias morreram as rotas (`/clients/`,
+      `/opportunities/`, `/processos/`, `/satisfacoes/`), as chaves de payload e as quatro famílias
+      de valor de enum da decisão D10 — com três classes junto (`CobrancaSinal`→`DunningSignal`,
+      `Satisfacao`→`SatisfactionRecord`, `CobrancaContato`→`DunningContact`, as duas últimas com a
+      tabela). A allowlist de vocabulário caiu de **23 para 16**. A SPA atravessou junto, e é ela a
+      prova de que o contrato é completo: `frontend/src/api.ts` aponta para `/api/v2` e não há
+      `VITE_API_URL` no repositório — chave trocada só no servidor quebra a tela. Nasce o molde de
+      **migração de valor persistido com reversa simétrica** e o de **normalização de valor de
+      entrada na v1**, que o repositório não tinha.
+- [x] **A passada de dívida que fechou a série — PRs #124 a #127.** Quatro defeitos com guarda
+      faltando, o que a varredura seguinte achou por cima — contrato opaco, autorização sem teste e
+      citação que envelhece —, e as duas decisões que faltavam. A **ADR 0067** recusa trocar a fonte
+      do ROI: ele
+      continua saindo do **contratado** (`actual_value`), e o *recebido* — a soma das faturas pagas —
+      ganha nome próprio quando for construído, nunca o rótulo do ROI; nada mudou no código, e é esse
+      o ponto, porque a próxima pessoa a olhar `_roi` encontra a razão escrita em vez de um silêncio
+      que convida ao commit de terça. A **ADR 0068** faz **dinheiro atravessar a API como texto**,
+      com a conversão num lugar só (`apps/core/dinheiro.py`, gêmeo de `frontend/src/dinheiro.ts`): o
+      critério que separa dinheiro de índice é a **origem do número**, não o cifrão — soma de valores
+      gravados é dinheiro, divisão é índice, e por isso `avg_ticket` continua float. Quebra
+      deliberada da v1, declarada. A lição que se repetiu três vezes na série e vale como critério:
+      **o que não está descrito no contrato não é medido por guarda nenhuma** — `client_id`/`status`
+      sobreviveram invisíveis até o PR #125, e `roi.by_client` era emitido pela v2 desde que nasceu
+      sem nenhum teste ver, porque a guarda varre o `openapi-v2.yaml` e a chave não estava lá. Tipar
+      um `dict` cru não é documentação: é o que coloca as chaves sob as guardas que já existem.
+
 Este parágrafo registrava a lacuna antes das FDDs 048 e 049. `PainPoint`,
 `ImprovementOpportunity`, o `PriorityAssessment` que sustenta o rótulo Opportunity Score,
 `SolutionHypothesis`, `KPI`, `Measurement` e `ValueLedgerEntry` agora estão entregues, inclusive
@@ -580,8 +679,20 @@ reunião de Discovery**, **Next Best Opportunity** e a migração dos dados do N
 A issue #62 fecha a última lacuna material da invariante 13: todo Engagement novo nasce de uma
 CommercialOpportunity ganha ou de um Design Partner Agreement assinado. O legado permanece
 válido com `needs_review`, sem inferência nem contrato retroativo (ADR 0058). As 15 invariantes do
-Language Map têm agora representação e regressão no Pulse; a retirada dos aliases históricos
-continua deliberadamente reservada para `/api/v2/`.
+Language Map têm agora representação e regressão no Pulse; a retirada dos aliases históricos, que
+ficou reservada para a `/api/v2/`, **foi paga** nela (issue #122 e as fatias 4c/4d, PRs #125 e
+#126) — não sobra chave «client» na v2.
+
+O que continua aberto na ontologia **não é código parado**, e por isso está nomeado aqui em vez de
+virar item de lista: o **sunset da `/api/v1/`** não tem prazo, e decidi-lo é ato de quem mantém o
+produto, não implementação; as chaves **sem coinagem** — `nivel`/`fonte` da satisfação e os dicts
+crus do painel de cobrança — não morrem na v2 porque não existe nome canônico para onde ir, e o
+caminho delas é o da §8 (o termo entra na página do Notion, depois no espelho, depois no código); a
+família `Cobranca*` restante, mais `Pendencia`, `Decisao` e `Risco`, está fora do que a Ontology v1
+cobre; e `DunningSignal`/`DunningContact` foram **coinagem do espelho**, autorizada pelo precedente
+do campo já cunhado — **a página do Notion ainda não recebeu esses dois nomes**. Os prazos e o teto
+da allowlist (**16**) continuam em `docs/ontology/aliases.md` e
+`docs/ontology/legacy-allowlist.txt`.
 
 ## Princípios de entrega
 
